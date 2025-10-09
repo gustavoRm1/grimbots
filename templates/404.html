@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block title %}Página Não Encontrada - grimbots{% endblock %}
+
+{% block content %}
+<div class="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+    <div class="max-w-md w-full text-center">
+        <i class="fas fa-exclamation-triangle text-6xl text-yellow-500"></i>
+        <h1 class="mt-6 text-6xl font-bold text-gray-900">404</h1>
+        <h2 class="mt-2 text-2xl font-semibold text-gray-700">Página Não Encontrada</h2>
+        <p class="mt-2 text-gray-600">A página que você procura não existe.</p>
+        <div class="mt-6">
+            <a href="{{ url_for('dashboard') if current_user.is_authenticated else url_for('index') }}" 
+               class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700">
+                <i class="fas fa-home mr-2"></i>
+                Voltar ao Início
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+

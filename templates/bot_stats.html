@@ -1,0 +1,416 @@
+{% extends "base.html" %}
+
+{% block title %}Estatísticas - {{ bot.name }} - grimbots{% endblock %}
+
+{% block extra_head %}
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" x-data="botStatsApp()" x-init="init()">
+    
+    <!-- Header -->
+    <div class="mb-8">
+        <div class="flex items-center gap-3 mb-2">
+            <a href="/dashboard" class="text-textSecondary hover:text-textPrimary transition">
+                <i class="fas fa-arrow-left"></i>
+            </a>
+            <h1 class="text-3xl font-bold text-textPrimary flex items-center gap-3">
+                📊 Estatísticas: <span class="text-accent500">{{ bot.name }}</span>
+                <!-- Status -->
+                <span x-show="isUpdating" class="inline-flex items-center gap-2 text-sm font-normal text-accent500">
+                    <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Atualizando...
+                </span>
+            </h1>
+        </div>
+        <p class="mt-1 text-sm text-textSecondary ml-12">Análise detalhada de performance e vendas</p>
+    </div>
+    
+    <!-- Estatísticas Gerais -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+        <!-- Total Usuários -->
+        <div class="card !p-6">
+            <div class="flex justify-between items-start mb-4">
+                <div>
+                    <p class="text-sm font-semibold text-textSecondary uppercase tracking-wider">Usuários</p>
+                    <p class="mt-2 text-3xl font-bold text-textPrimary" x-text="stats.general.total_users"></p>
+                </div>
+                <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center">
+                    <i class="fas fa-users text-white text-lg"></i>
+                </div>
+            </div>
+            <p class="text-sm text-textSecondary">
+                <span class="text-blue-400 font-semibold" x-text="stats.general.conversion_rate + '%'"></span> taxa de conversão
+            </p>
+        </div>
+        
+        <!-- Total Vendas -->
+        <div class="card !p-6">
+            <div class="flex justify-between items-start mb-4">
+                <div>
+                    <p class="text-sm font-semibold text-textSecondary uppercase tracking-wider">Vendas</p>
+                    <p class="mt-2 text-3xl font-bold text-textPrimary" x-text="stats.general.total_sales"></p>
+                </div>
+                <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-green-500 to-green-700 flex items-center justify-center">
+                    <i class="fas fa-shopping-cart text-white text-lg"></i>
+                </div>
+            </div>
+            <p class="text-sm text-textSecondary">
+                <span class="text-yellow-400 font-semibold" x-text="stats.general.pending_sales"></span> pendentes
+            </p>
+        </div>
+        
+        <!-- Receita Total -->
+        <div class="card !p-6">
+            <div class="flex justify-between items-start mb-4">
+                <div>
+                    <p class="text-sm font-semibold text-textSecondary uppercase tracking-wider">Receita</p>
+                    <p class="mt-2 text-3xl font-bold text-textPrimary" x-text="'R$ ' + stats.general.total_revenue.toFixed(2)"></p>
+                </div>
+                <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-purple-700 flex items-center justify-center">
+                    <i class="fas fa-dollar-sign text-white text-lg"></i>
+                </div>
+            </div>
+            <p class="text-sm text-textSecondary">
+                Ticket médio: <span class="text-purple-400 font-semibold" x-text="'R$ ' + stats.general.avg_ticket.toFixed(2)"></span>
+            </p>
+        </div>
+    </div>
+    
+    <!-- Gráfico e Produtos -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        
+        <!-- Gráfico de Vendas (2/3) -->
+        <div class="lg:col-span-2 card !p-6">
+            <h3 class="text-lg font-semibold text-textPrimary mb-6">Vendas e Receita (Últimos 7 dias)</h3>
+            <div class="relative" style="height: 300px;">
+                <canvas id="salesChart"></canvas>
+            </div>
+        </div>
+        
+        <!-- Top Produtos (1/3) -->
+        <div class="card !p-6">
+            <h3 class="text-lg font-semibold text-textPrimary mb-6">🏆 Top Produtos (30d)</h3>
+            <div class="space-y-4">
+                <template x-for="(product, index) in stats.products.slice(0, 5)" :key="index">
+                    <div class="p-4 bg-bg900 rounded-lg">
+                        <div class="flex justify-between items-start mb-2">
+                            <p class="text-sm font-semibold text-textPrimary truncate" x-text="product.product"></p>
+                            <span class="text-xs text-accent500 font-bold" x-text="'#' + (index + 1)"></span>
+                        </div>
+                        <div class="flex justify-between items-center text-xs">
+                            <span class="text-textSecondary" x-text="product.sales + ' vendas'"></span>
+                            <span class="text-green-400 font-semibold" x-text="'R$ ' + product.revenue.toFixed(2)"></span>
+                        </div>
+                    </div>
+                </template>
+                <template x-if="stats.products.length === 0">
+                    <div class="text-center py-8 text-textSecondary">
+                        <i class="fas fa-box-open text-4xl mb-2"></i>
+                        <p class="text-sm">Nenhum produto vendido ainda</p>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Performance: Order Bumps e Downsells -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        
+        <!-- Order Bumps -->
+        <div class="card !p-6">
+            <h3 class="text-lg font-semibold text-textPrimary mb-6">🎁 Performance de Order Bumps</h3>
+            <div class="space-y-4">
+                <div class="flex justify-between items-center p-4 bg-bg900 rounded-lg">
+                    <div>
+                        <p class="text-sm text-textSecondary">Exibidos</p>
+                        <p class="text-2xl font-bold text-textPrimary" x-text="stats.order_bumps.shown"></p>
+                    </div>
+                    <i class="fas fa-eye text-blue-500 text-2xl"></i>
+                </div>
+                
+                <div class="flex justify-between items-center p-4 bg-bg900 rounded-lg">
+                    <div>
+                        <p class="text-sm text-textSecondary">Aceitos</p>
+                        <p class="text-2xl font-bold text-textPrimary" x-text="stats.order_bumps.accepted"></p>
+                    </div>
+                    <i class="fas fa-check-circle text-green-500 text-2xl"></i>
+                </div>
+                
+                <div class="p-4 bg-gradient-to-r from-green-500/10 to-green-700/10 rounded-lg border border-green-500/20">
+                    <p class="text-sm text-textSecondary mb-2">Taxa de Aceitação</p>
+                    <div class="flex items-center gap-3">
+                        <div class="flex-1 bg-bg900 rounded-full h-3 overflow-hidden">
+                            <div class="bg-gradient-to-r from-green-500 to-green-700 h-full transition-all duration-500"
+                                 :style="`width: ${stats.order_bumps.acceptance_rate}%`"></div>
+                        </div>
+                        <span class="text-2xl font-bold text-green-400" x-text="stats.order_bumps.acceptance_rate + '%'"></span>
+                    </div>
+                </div>
+                
+                <div class="flex justify-between items-center p-4 bg-gradient-to-r from-purple-500/10 to-purple-700/10 rounded-lg border border-purple-500/20">
+                    <div>
+                        <p class="text-sm text-textSecondary">Receita de Order Bumps</p>
+                        <p class="text-2xl font-bold text-purple-400" x-text="'R$ ' + stats.order_bumps.revenue.toFixed(2)"></p>
+                    </div>
+                    <i class="fas fa-dollar-sign text-purple-500 text-2xl"></i>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Downsells -->
+        <div class="card !p-6">
+            <h3 class="text-lg font-semibold text-textPrimary mb-6">🔄 Performance de Downsells</h3>
+            <div class="space-y-4">
+                <div class="flex justify-between items-center p-4 bg-bg900 rounded-lg">
+                    <div>
+                        <p class="text-sm text-textSecondary">Enviados</p>
+                        <p class="text-2xl font-bold text-textPrimary" x-text="stats.downsells.sent"></p>
+                    </div>
+                    <i class="fas fa-paper-plane text-blue-500 text-2xl"></i>
+                </div>
+                
+                <div class="flex justify-between items-center p-4 bg-bg900 rounded-lg">
+                    <div>
+                        <p class="text-sm text-textSecondary">Convertidos</p>
+                        <p class="text-2xl font-bold text-textPrimary" x-text="stats.downsells.converted"></p>
+                    </div>
+                    <i class="fas fa-check-circle text-green-500 text-2xl"></i>
+                </div>
+                
+                <div class="p-4 bg-gradient-to-r from-orange-500/10 to-orange-700/10 rounded-lg border border-orange-500/20">
+                    <p class="text-sm text-textSecondary mb-2">Taxa de Conversão</p>
+                    <div class="flex items-center gap-3">
+                        <div class="flex-1 bg-bg900 rounded-full h-3 overflow-hidden">
+                            <div class="bg-gradient-to-r from-orange-500 to-orange-700 h-full transition-all duration-500"
+                                 :style="`width: ${stats.downsells.conversion_rate}%`"></div>
+                        </div>
+                        <span class="text-2xl font-bold text-orange-400" x-text="stats.downsells.conversion_rate + '%'"></span>
+                    </div>
+                </div>
+                
+                <div class="flex justify-between items-center p-4 bg-gradient-to-r from-purple-500/10 to-purple-700/10 rounded-lg border border-purple-500/20">
+                    <div>
+                        <p class="text-sm text-textSecondary">Receita de Downsells</p>
+                        <p class="text-2xl font-bold text-purple-400" x-text="'R$ ' + stats.downsells.revenue.toFixed(2)"></p>
+                    </div>
+                    <i class="fas fa-dollar-sign text-purple-500 text-2xl"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Horários de Pico e Últimas Vendas -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        <!-- Horários de Pico (1/3) -->
+        <div class="card !p-6">
+            <h3 class="text-lg font-semibold text-textPrimary mb-6">⏰ Horários de Pico</h3>
+            <div class="space-y-3">
+                <template x-for="(hour, index) in stats.peak_hours" :key="index">
+                    <div class="flex items-center gap-3 p-3 bg-bg900 rounded-lg">
+                        <div class="w-8 h-8 rounded-full bg-accent500 flex items-center justify-center text-black font-bold text-sm"
+                             x-text="index + 1"></div>
+                        <div class="flex-1">
+                            <p class="text-sm font-semibold text-textPrimary" x-text="hour.hour"></p>
+                        </div>
+                        <span class="text-sm font-bold text-accent500" x-text="hour.sales + ' vendas'"></span>
+                    </div>
+                </template>
+                <template x-if="stats.peak_hours.length === 0">
+                    <div class="text-center py-8 text-textSecondary">
+                        <i class="fas fa-clock text-4xl mb-2"></i>
+                        <p class="text-sm">Sem dados ainda</p>
+                    </div>
+                </template>
+            </div>
+        </div>
+        
+        <!-- Últimas Vendas (2/3) -->
+        <div class="lg:col-span-2 card !p-6">
+            <h3 class="text-lg font-semibold text-textPrimary mb-6">📝 Últimas Vendas</h3>
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead>
+                        <tr class="border-b border-white border-opacity-10">
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-textSecondary uppercase tracking-wider">Cliente</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-textSecondary uppercase tracking-wider">Produto</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-textSecondary uppercase tracking-wider">Valor</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-textSecondary uppercase tracking-wider">Status</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-textSecondary uppercase tracking-wider">Tipo</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-white divide-opacity-5">
+                        <template x-for="sale in stats.recent_sales" :key="sale.id">
+                            <tr class="hover:bg-white hover:bg-opacity-5 transition">
+                                <td class="px-4 py-3 text-sm text-textPrimary" x-text="sale.customer_name"></td>
+                                <td class="px-4 py-3 text-sm text-textSecondary" x-text="sale.product_name"></td>
+                                <td class="px-4 py-3 text-sm font-semibold text-green-400" x-text="'R$ ' + sale.amount.toFixed(2)"></td>
+                                <td class="px-4 py-3">
+                                    <span :class="sale.status === 'paid' ? 'badge-success' : 'badge-warning'" 
+                                          x-text="sale.status === 'paid' ? 'Pago' : 'Pendente'"></span>
+                                </td>
+                                <td class="px-4 py-3">
+                                    <template x-if="sale.is_downsell">
+                                        <span class="badge-info">Downsell</span>
+                                    </template>
+                                    <template x-if="!sale.is_downsell && sale.order_bump_accepted">
+                                        <span class="badge-success">c/ Bump</span>
+                                    </template>
+                                    <template x-if="!sale.is_downsell && !sale.order_bump_accepted">
+                                        <span class="badge-default">Normal</span>
+                                    </template>
+                                </td>
+                            </tr>
+                        </template>
+                        <template x-if="stats.recent_sales.length === 0">
+                            <tr>
+                                <td colspan="5" class="px-4 py-8 text-center text-textSecondary">
+                                    <i class="fas fa-inbox text-4xl mb-2"></i>
+                                    <p class="text-sm">Nenhuma venda ainda</p>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function botStatsApp() {
+    return {
+        botId: {{ bot.id }},
+        isUpdating: false,
+        stats: {
+            general: {
+                total_users: 0,
+                total_sales: 0,
+                total_revenue: 0,
+                pending_sales: 0,
+                conversion_rate: 0,
+                avg_ticket: 0
+            },
+            products: [],
+            order_bumps: {
+                shown: 0,
+                accepted: 0,
+                acceptance_rate: 0,
+                revenue: 0
+            },
+            downsells: {
+                sent: 0,
+                converted: 0,
+                conversion_rate: 0,
+                revenue: 0
+            },
+            daily_chart: [],
+            peak_hours: [],
+            recent_sales: []
+        },
+        chart: null,
+        
+        async init() {
+            await this.loadStats();
+            this.initChart();
+            
+            // Auto-refresh a cada 30 segundos
+            setInterval(() => this.loadStats(), 30000);
+        },
+        
+        async loadStats() {
+            this.isUpdating = true;
+            try {
+                const response = await fetch(`/api/bots/${this.botId}/stats`);
+                if (response.ok) {
+                    this.stats = await response.json();
+                    this.updateChart();
+                }
+            } catch (error) {
+                console.error('Erro ao carregar estatísticas:', error);
+            } finally {
+                this.isUpdating = false;
+            }
+        },
+        
+        initChart() {
+            const ctx = document.getElementById('salesChart').getContext('2d');
+            this.chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Vendas',
+                        data: [],
+                        borderColor: 'rgb(255, 199, 0)',
+                        backgroundColor: 'rgba(255, 199, 0, 0.1)',
+                        tension: 0.4,
+                        fill: true,
+                        yAxisID: 'y'
+                    }, {
+                        label: 'Receita (R$)',
+                        data: [],
+                        borderColor: 'rgb(34, 197, 94)',
+                        backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                        tension: 0.4,
+                        fill: true,
+                        yAxisID: 'y1'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    plugins: {
+                        legend: {
+                            labels: { color: '#FAFAFA', font: { size: 12 } }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: { color: '#A0A0A0' },
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' }
+                        },
+                        y: {
+                            type: 'linear',
+                            position: 'left',
+                            ticks: { color: '#FFC700', stepSize: 1 },
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' }
+                        },
+                        y1: {
+                            type: 'linear',
+                            position: 'right',
+                            ticks: { color: '#22C55E', callback: (value) => 'R$ ' + value.toFixed(2) },
+                            grid: { drawOnChartArea: false }
+                        }
+                    }
+                }
+            });
+        },
+        
+        updateChart() {
+            if (!this.chart) return;
+            
+            this.chart.data.labels = this.stats.daily_chart.map(d => d.date);
+            this.chart.data.datasets[0].data = this.stats.daily_chart.map(d => d.sales);
+            this.chart.data.datasets[1].data = this.stats.daily_chart.map(d => d.revenue);
+            this.chart.update();
+        }
+    }
+}
+</script>
+{% endblock %}
+
+

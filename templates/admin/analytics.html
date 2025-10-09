@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+
+{% block title %}Analytics Global - Admin{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    
+    <!-- Header -->
+    <div class="mb-8 flex justify-between items-center">
+        <div>
+            <h1 class="text-3xl font-bold text-textPrimary flex items-center gap-3">
+                <i class="fas fa-chart-line text-accent500"></i>
+                Analytics Global
+            </h1>
+            <p class="mt-1 text-sm text-textSecondary">Gráficos e relatórios completos da plataforma</p>
+        </div>
+        <a href="/admin" class="btn-secondary">
+            <i class="fas fa-arrow-left mr-2"></i> Voltar
+        </a>
+    </div>
+    
+    <!-- Cards de Métricas Chave -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <div class="card !p-6">
+            <div class="flex justify-between items-center">
+                <div>
+                    <p class="text-sm font-semibold text-textSecondary uppercase">Taxa de Conversão Média</p>
+                    <p class="mt-2 text-4xl font-bold text-accent500">{{ data.conversion_rate }}%</p>
+                </div>
+                <i class="fas fa-percentage text-accent500 text-3xl"></i>
+            </div>
+        </div>
+        
+        <div class="card !p-6">
+            <div class="flex justify-between items-center">
+                <div>
+                    <p class="text-sm font-semibold text-textSecondary uppercase">Ticket Médio</p>
+                    <p class="mt-2 text-4xl font-bold text-green-400">R$ {{ "%.2f"|format(data.avg_ticket) }}</p>
+                </div>
+                <i class="fas fa-receipt text-green-500 text-3xl"></i>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Gráficos -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        
+        <!-- Novos Usuários (12 meses) -->
+        <div class="card !p-6">
+            <h3 class="text-lg font-semibold text-textPrimary mb-6">📈 Novos Usuários (12 meses)</h3>
+            <div class="relative" style="height: 300px;">
+                <canvas id="newUsersChart"></canvas>
+            </div>
+        </div>
+        
+        <!-- Receita da Plataforma (12 meses) -->
+        <div class="card !p-6">
+            <h3 class="text-lg font-semibold text-textPrimary mb-6">💰 Receita da Plataforma (12 meses)</h3>
+            <div class="relative" style="height: 300px;">
+                <canvas id="revenueChart"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Vendas e Produtos -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        <!-- Vendas (30 dias) -->
+        <div class="lg:col-span-2 card !p-6">
+            <h3 class="text-lg font-semibold text-textPrimary mb-6">📊 Vendas (Últimos 30 dias)</h3>
+            <div class="relative" style="height: 300px;">
+                <canvas id="salesChart"></canvas>
+            </div>
+        </div>
+        
+        <!-- Top 10 Produtos -->
+        <div class="card !p-6">
+            <h3 class="text-lg font-semibold text-textPrimary mb-6">🏆 Top Produtos</h3>
+            <div class="space-y-3">
+                {% for product in data.top_products[:5] %}
+                <div class="p-3 bg-bg900 rounded-lg">
+                    <div class="flex justify-between items-start mb-2">
+                        <p class="text-sm font-semibold text-textPrimary truncate">{{ product.product }}</p>
+                        <span class="text-xs text-accent500 font-bold">#{{ loop.index }}</span>
+                    </div>
+                    <div class="flex justify-between text-xs">
+                        <span class="text-textSecondary">{{ product.sales }} vendas</span>
+                        <span class="text-green-400 font-semibold">R$ {{ "%.2f"|format(product.revenue) }}</span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const chartData = {{ data|tojson|safe }};
+
+// Gráfico 1: Novos Usuários
+const newUsersCtx = document.getElementById('newUsersChart').getContext('2d');
+new Chart(newUsersCtx, {
+    type: 'bar',
+    data: {
+        labels: chartData.new_users_chart.map(d => d.month),
+        datasets: [{
+            label: 'Novos Usuários',
+            data: chartData.new_users_chart.map(d => d.count),
+            backgroundColor: 'rgba(59, 130, 246, 0.8)',
+            borderColor: 'rgb(59, 130, 246)',
+            borderWidth: 2
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { labels: { color: '#FAFAFA' } }
+        },
+        scales: {
+            x: { ticks: { color: '#A0A0A0' }, grid: { color: 'rgba(255, 255, 255, 0.05)' } },
+            y: { ticks: { color: '#A0A0A0', stepSize: 1 }, grid: { color: 'rgba(255, 255, 255, 0.05)' } }
+        }
+    }
+});
+
+// Gráfico 2: Receita da Plataforma
+const revenueCtx = document.getElementById('revenueChart').getContext('2d');
+new Chart(revenueCtx, {
+    type: 'line',
+    data: {
+        labels: chartData.revenue_chart.map(d => d.month),
+        datasets: [{
+            label: 'Receita (R$)',
+            data: chartData.revenue_chart.map(d => d.revenue),
+            borderColor: 'rgb(255, 199, 0)',
+            backgroundColor: 'rgba(255, 199, 0, 0.1)',
+            tension: 0.4,
+            fill: true
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { labels: { color: '#FAFAFA' } }
+        },
+        scales: {
+            x: { ticks: { color: '#A0A0A0' }, grid: { color: 'rgba(255, 255, 255, 0.05)' } },
+            y: { ticks: { color: '#FFC700', callback: (value) => 'R$ ' + value.toFixed(2) }, grid: { color: 'rgba(255, 255, 255, 0.05)' } }
+        }
+    }
+});
+
+// Gráfico 3: Vendas (30 dias)
+const salesCtx = document.getElementById('salesChart').getContext('2d');
+new Chart(salesCtx, {
+    type: 'line',
+    data: {
+        labels: chartData.sales_chart.map(d => d.date),
+        datasets: [{
+            label: 'Vendas',
+            data: chartData.sales_chart.map(d => d.sales),
+            borderColor: 'rgb(34, 197, 94)',
+            backgroundColor: 'rgba(34, 197, 94, 0.1)',
+            tension: 0.4,
+            fill: true
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { labels: { color: '#FAFAFA' } }
+        },
+        scales: {
+            x: { ticks: { color: '#A0A0A0' }, grid: { color: 'rgba(255, 255, 255, 0.05)' } },
+            y: { ticks: { color: '#22C55E', stepSize: 1 }, grid: { color: 'rgba(255, 255, 255, 0.05)' } }
+        }
+    }
+});
+</script>
+{% endblock %}
+

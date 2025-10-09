@@ -1,0 +1,490 @@
+/* grimbots - Estilos Customizados */
+/* Tema Escuro Profissional com Destaques Amarelo/Dourado */
+
+/* ===============================================
+   DESIGN TOKENS - Fonte Única de Verdade
+   =============================================== */
+:root {
+    /* Cores de Fundo */
+    --bg-900: #000000;
+    --bg-850: #080808;
+    --surface-800: #0a0a0a;
+    
+    /* Cores de Texto */
+    --text-primary: #FFFFFF;
+    --text-secondary: #d1d1d1;
+    --muted: #9a9a9a;
+    
+    /* Cores de Destaque (CTA) */
+    --accent-500: #FFC300;
+    --accent-600: #FFB000;
+    --accent-400: #F9B233;
+    
+    /* Alertas / Estado */
+    --danger: #C0392B;
+    --success: #10B981;
+    --warning: #F59E0B;
+    
+    /* Sombras e Brilho */
+    --glow-accent: 0 8px 24px rgba(255, 195, 0, 0.12);
+    --card-border: rgba(255, 195, 0, 0.06);
+    --card-border-hover: rgba(255, 195, 0, 0.18);
+    
+    /* Tipografia */
+    --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+/* ===============================================
+   BASE STYLES
+   =============================================== */
+html, body {
+    height: 100%;
+    background: var(--bg-900);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    line-height: 1.5;
+}
+
+body {
+    background: linear-gradient(180deg, var(--bg-900) 0%, var(--bg-850) 100%);
+}
+
+/* ===============================================
+   COMPONENTES REUTILIZÁVEIS
+   =============================================== */
+
+/* Navbar */
+.navbar {
+    background: linear-gradient(180deg, var(--bg-900) 0%, var(--bg-850) 100%);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+}
+
+.navbar .logo {
+    filter: brightness(1.1);
+}
+
+/* Botões */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    font-weight: 600;
+    padding: 10px 14px;
+    cursor: pointer;
+    transition: all 0.14s ease;
+}
+
+.btn--primary {
+    background: linear-gradient(90deg, var(--accent-500), var(--accent-600));
+    color: #000;
+    box-shadow: var(--glow-accent);
+}
+
+.btn--primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 32px rgba(255, 195, 0, 0.24);
+}
+
+.btn--ghost {
+    border: 1px solid rgba(255, 195, 0, 0.18);
+    color: var(--accent-500);
+    background: transparent;
+}
+
+.btn--ghost:hover {
+    background: rgba(255, 195, 0, 0.06);
+    border-color: var(--accent-500);
+}
+
+.btn--danger {
+    background: var(--danger);
+    color: #fff;
+}
+
+.btn--danger:hover {
+    background: #A93226;
+}
+
+/* Cards */
+.card {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.01));
+    border-radius: 12px;
+    padding: 20px;
+    border: 1px solid var(--card-border);
+    transition: transform 0.14s ease, box-shadow 0.14s ease;
+}
+
+.card:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), var(--glow-accent);
+    border-color: var(--card-border-hover);
+}
+
+/* Inputs e Forms */
+input:not([type="checkbox"]):not([type="radio"]),
+textarea,
+select {
+    background: var(--surface-800);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: var(--text-primary);
+}
+
+input:not([type="checkbox"]):not([type="radio"]):focus,
+textarea:focus,
+select:focus {
+    outline: none;
+    border-color: var(--accent-500);
+    box-shadow: 0 0 0 3px rgba(255, 195, 0, 0.12);
+}
+
+input::placeholder,
+textarea::placeholder {
+    color: var(--muted);
+}
+
+/* Focus Visible (Acessibilidade) */
+*:focus-visible {
+    outline: 3px solid rgba(255, 195, 0, 0.28);
+    outline-offset: 2px;
+}
+
+/* Badges e Tags */
+.badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 12px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.badge--accent {
+    background: rgba(255, 195, 0, 0.12);
+    color: var(--accent-500);
+    border: 1px solid rgba(255, 195, 0, 0.18);
+}
+
+.badge--success {
+    background: rgba(16, 185, 129, 0.12);
+    color: var(--success);
+    border: 1px solid rgba(16, 185, 129, 0.18);
+}
+
+.badge--danger {
+    background: rgba(192, 57, 43, 0.12);
+    color: var(--danger);
+    border: 1px solid rgba(192, 57, 43, 0.18);
+}
+
+/* Stats Cards */
+.stat-card {
+    background: linear-gradient(135deg, var(--surface-800), rgba(255, 195, 0, 0.03));
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    padding: 24px;
+    transition: all 0.2s ease;
+}
+
+.stat-card:hover {
+    border-color: var(--card-border-hover);
+    box-shadow: var(--glow-accent);
+}
+
+.stat-card .stat-icon {
+    color: var(--accent-500);
+}
+
+.stat-card .stat-value {
+    color: var(--text-primary);
+    font-size: 2rem;
+    font-weight: 700;
+}
+
+.stat-card .stat-label {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+}
+
+/* Tabelas */
+table {
+    background: var(--surface-800);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+thead {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02));
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+thead th {
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+}
+
+tbody tr {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+tbody tr:hover {
+    background: rgba(255, 195, 0, 0.04);
+}
+
+tbody td {
+    color: var(--text-primary);
+}
+
+/* Modals */
+.modal-backdrop {
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(4px);
+}
+
+.modal-content {
+    background: var(--surface-800);
+    border: 1px solid var(--card-border);
+    border-radius: 16px;
+}
+
+/* Tabs */
+.tab-button {
+    color: var(--text-secondary);
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s ease;
+}
+
+.tab-button:hover {
+    color: var(--text-primary);
+    border-color: rgba(255, 195, 0, 0.3);
+}
+
+.tab-button.active {
+    color: var(--accent-500);
+    border-color: var(--accent-500);
+}
+
+/* Animações */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.fade-in {
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+/* Loading Spinner */
+.spinner {
+    border: 3px solid rgba(255, 255, 255, 0.1);
+    border-top: 3px solid var(--accent-500);
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--surface-800);
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(255, 195, 0, 0.3);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--accent-500);
+}
+
+/* Pulse Animation for Online Status */
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}
+
+.animate-pulse {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Toast Notifications */
+.toast {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 9999;
+    min-width: 250px;
+    padding: 16px;
+    border-radius: 8px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+    animation: slideInRight 0.3s ease-out;
+}
+
+@keyframes slideInRight {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+/* Card Hover Effects */
+.card-hover {
+    transition: all 0.3s ease;
+}
+
+.card-hover:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.1);
+}
+
+/* Button Loading State */
+.btn-loading {
+    position: relative;
+    pointer-events: none;
+}
+
+.btn-loading::after {
+    content: "";
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    top: 50%;
+    left: 50%;
+    margin-left: -8px;
+    margin-top: -8px;
+    border: 2px solid #ffffff;
+    border-radius: 50%;
+    border-top-color: transparent;
+    animation: spin 0.6s linear infinite;
+}
+
+/* Gradient Backgrounds */
+.gradient-blue {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.gradient-green {
+    background: linear-gradient(135deg, #0ba360 0%, #3cba92 100%);
+}
+
+.gradient-orange {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+}
+
+/* Modal Backdrop Blur */
+.backdrop-blur {
+    backdrop-filter: blur(4px);
+}
+
+/* Skeleton Loading */
+.skeleton {
+    background: linear-gradient(90deg, rgba(255,255,255,0.05) 25%, rgba(255,255,255,0.02) 50%, rgba(255,255,255,0.05) 75%);
+    background-size: 200% 100%;
+    animation: loading 1.5s ease-in-out infinite;
+}
+
+@keyframes loading {
+    0% {
+        background-position: 200% 0;
+    }
+    100% {
+        background-position: -200% 0;
+    }
+}
+
+/* ===============================================
+   OVERRIDES GLOBAIS - Tema Escuro
+   =============================================== */
+
+/* Forçar cores de texto padrão para dark */
+.text-gray-900 { color: var(--text-primary) !important; }
+.text-gray-800 { color: var(--text-primary) !important; }
+.text-gray-700 { color: var(--text-secondary) !important; }
+.text-gray-600 { color: var(--text-secondary) !important; }
+.text-gray-500 { color: var(--muted) !important; }
+.text-gray-400 { color: var(--muted) !important; }
+
+/* Fundos */
+.bg-gray-50 { background-color: var(--bg-900) !important; }
+.bg-gray-100 { background-color: var(--surface-800) !important; }
+.bg-gray-200 { background-color: rgba(255, 255, 255, 0.05) !important; }
+
+/* Bordas */
+.border-gray-200 { border-color: rgba(255, 255, 255, 0.05) !important; }
+.border-gray-300 { border-color: rgba(255, 255, 255, 0.1) !important; }
+.border-gray-400 { border-color: rgba(255, 255, 255, 0.15) !important; }
+
+/* Gradientes coloridos para amarelo/dourado */
+.gradient-blue,
+.bg-blue-100,
+.text-blue-600,
+.text-blue-800 {
+    background: linear-gradient(135deg, rgba(255, 195, 0, 0.1), rgba(255, 195, 0, 0.05)) !important;
+    color: var(--accent-500) !important;
+}
+
+/* Notificações de Sucesso */
+.showNotification,
+.notification {
+    background: var(--surface-800) !important;
+    border: 1px solid var(--card-border) !important;
+    color: var(--text-primary) !important;
+}
+
+/* Ajustes específicos para botões */
+button:not(.btn):not(.tab-button) {
+    transition: all 0.2s ease;
+}
+
+/* Labels de formulário */
+label {
+    color: var(--text-secondary);
+}
+
+/* Custom Focus States (sobrescrito pelos estilos de input acima) */
+
+/* Responsive Tables */
+@media (max-width: 640px) {
+    .responsive-table {
+        display: block;
+        overflow-x: auto;
+        white-space: nowrap;
+    }
+}
+
+/* Print Styles */
+@media print {
+    .no-print {
+        display: none !important;
+    }
+}
+
+

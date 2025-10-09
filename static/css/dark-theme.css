@@ -1,0 +1,1938 @@
+/* ===================================================
+   GRIMBOTS - TEMA ESCURO PROFISSIONAL
+   Paleta Corrigida: Confortável + Hierarquia Visual
+   =================================================== */
+
+/* ===== DESIGN TOKENS (Paleta Otimizada) ===== */
+:root {
+    /* Fundos com Hierarquia Visível */
+    --bg-950: #0d0d0d;        /* Base (não preto puro) */
+    --bg-900: #161616;        /* Elevação 1 */
+    --bg-850: #1e1e1e;        /* Elevação 2 */
+    --surface-800: #262626;   /* Cards */
+    --surface-700: #2d2d2d;   /* Cards hover */
+    --surface-600: #353535;   /* Modais */
+    
+    /* Textos com Contraste Otimizado */
+    --text-primary: #FAFAFA;      /* Texto principal */
+    --text-secondary: #B8B8B8;    /* Labels e subtítulos */
+    --text-tertiary: #8A8A8A;     /* Texto auxiliar */
+    --text-disabled: #5A5A5A;     /* Desabilitado */
+    
+    /* Amarelo Menos Agressivo */
+    --accent-500: #FFBA08;        /* Principal (menos saturado) */
+    --accent-600: #E6A800;        /* Hover */
+    --accent-400: #FFD23F;        /* Suave */
+    --accent-300: #FFE180;        /* Background */
+    
+    /* Alertas/Estado Refinados */
+    --danger-500: #EF4444;
+    --danger-600: #DC2626;
+    --success-500: #22C55E;
+    --success-600: #16A34A;
+    --warning-500: #F59E0B;
+    --info-500: #60A5FA;
+    
+    /* Bordas Visíveis */
+    --border-subtle: rgba(255, 255, 255, 0.08);
+    --border-default: rgba(255, 255, 255, 0.12);
+    --border-strong: rgba(255, 255, 255, 0.18);
+    --border-accent: rgba(255, 186, 8, 0.3);
+    
+    /* Sombras com Profundidade */
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 4px 8px rgba(0, 0, 0, 0.5);
+    --shadow-lg: 0 12px 24px rgba(0, 0, 0, 0.6);
+    --shadow-accent: 0 8px 20px rgba(255, 186, 8, 0.25);
+    
+    /* Overlays */
+    --overlay-light: rgba(255, 255, 255, 0.04);
+    --overlay-medium: rgba(255, 255, 255, 0.08);
+    --overlay-strong: rgba(255, 255, 255, 0.12);
+    
+    /* Tipografia */
+    --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+/* ===== BASE STYLES ===== */
+html,
+body {
+    background-color: var(--bg-950);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    line-height: 1.5;
+    font-weight: 400;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    color: var(--text-primary);
+    font-weight: 700;
+}
+
+/* ===== OVERRIDES TAILWIND - BACKGROUNDS ===== */
+.bg-gray-50 { background-color: var(--bg-950) !important; }
+.bg-gray-100 { background-color: var(--bg-900) !important; }
+.bg-gray-200 { background-color: var(--bg-850) !important; }
+.bg-white { background-color: var(--surface-800) !important; }
+
+/* ===== OVERRIDES TAILWIND - TEXTOS ===== */
+.text-gray-900,
+.text-gray-800 { color: var(--text-primary) !important; }
+
+.text-gray-700,
+.text-gray-600 { color: var(--text-secondary) !important; }
+
+.text-gray-500 { color: var(--text-tertiary) !important; }
+
+.text-gray-400 { color: var(--text-tertiary) !important; }
+
+/* ===== OVERRIDES TAILWIND - CORES PRIMÁRIAS (Azul → Amarelo) ===== */
+.bg-blue-600,
+.bg-blue-700 {
+    background: linear-gradient(135deg, var(--accent-500), var(--accent-600)) !important;
+    color: #000000 !important;
+    box-shadow: var(--shadow-accent) !important;
+    border: none !important;
+    font-weight: 600 !important;
+}
+
+.bg-blue-600:hover,
+.bg-blue-700:hover {
+    box-shadow: 0 12px 32px rgba(255, 186, 8, 0.35) !important;
+    transform: translateY(-2px);
+}
+
+.text-blue-600,
+.text-blue-500 { color: var(--accent-500) !important; }
+
+.text-blue-800 { color: var(--accent-600) !important; }
+
+.text-blue-900 { color: var(--accent-500) !important; }
+
+.border-blue-500 { border-color: var(--accent-500) !important; }
+
+.border-blue-200,
+.border-blue-300 { border-color: var(--border-accent) !important; }
+
+.bg-blue-50,
+.bg-blue-100 {
+    background-color: rgba(255, 186, 8, 0.08) !important;
+    border: 1px solid rgba(255, 186, 8, 0.2) !important;
+}
+
+/* ===== OVERRIDES TAILWIND - DANGER ===== */
+.bg-red-600,
+.bg-red-700 {
+    background-color: var(--danger-500) !important;
+    color: var(--text-primary) !important;
+    border: none !important;
+}
+
+.bg-red-600:hover,
+.bg-red-700:hover {
+    background-color: var(--danger-600) !important;
+}
+
+.text-red-600,
+.text-red-700,
+.text-red-800 { color: var(--danger-500) !important; }
+
+.text-red-500 { color: var(--danger-500) !important; }
+
+.border-red-300 { border-color: rgba(239, 68, 68, 0.3) !important; }
+
+.bg-red-50,
+.bg-red-100 {
+    background-color: rgba(239, 68, 68, 0.08) !important;
+}
+
+.border-red-200 { border-color: rgba(239, 68, 68, 0.25) !important; }
+
+.text-red-400 { color: var(--danger-500) !important; }
+
+/* ===== OVERRIDES TAILWIND - SUCCESS ===== */
+.bg-green-600,
+.bg-green-700 {
+    background-color: var(--success-500) !important;
+    color: var(--text-primary) !important;
+}
+
+.bg-green-600:hover,
+.bg-green-700:hover {
+    background-color: var(--success-600) !important;
+}
+
+.text-green-600,
+.text-green-700,
+.text-green-800 { color: var(--success-500) !important; }
+
+.bg-green-50,
+.bg-green-100 {
+    background-color: rgba(34, 197, 94, 0.08) !important;
+}
+
+.border-green-200 { border-color: rgba(34, 197, 94, 0.25) !important; }
+
+.text-green-400,
+.text-green-500 { color: var(--success-500) !important; }
+
+/* ===== OVERRIDES TAILWIND - WARNING/YELLOW ===== */
+.bg-yellow-50 {
+    background-color: rgba(255, 186, 8, 0.08) !important;
+}
+
+.bg-yellow-100 {
+    background-color: rgba(255, 186, 8, 0.1) !important;
+}
+
+.border-yellow-200,
+.border-yellow-300,
+.border-yellow-400 { border-color: rgba(255, 186, 8, 0.35) !important; }
+
+.text-yellow-600,
+.text-yellow-800 { color: var(--accent-500) !important; }
+
+.text-yellow-400,
+.text-yellow-500 { color: var(--accent-400) !important; }
+
+/* ===== OVERRIDES TAILWIND - BORDAS ===== */
+.border-gray-200 { border-color: var(--border-default) !important; }
+.border-gray-300 { border-color: var(--border-strong) !important; }
+.border-transparent { border-color: transparent !important; }
+
+/* ===== COMPONENTS - CARDS ===== */
+.card {
+    background: linear-gradient(145deg, var(--surface-800), var(--bg-850)) !important;
+    border: 1.5px solid var(--border-default) !important;
+    border-radius: 12px;
+    box-shadow: 
+        0 4px 12px rgba(0, 0, 0, 0.5),
+        inset 0 1px 0 rgba(255, 255, 255, 0.04),
+        0 0 0 1px rgba(255, 186, 8, 0.08) !important;
+    transition: all 0.2s ease;
+}
+
+.card:hover {
+    background: var(--surface-700) !important;
+    border-color: var(--border-accent) !important;
+    box-shadow: 
+        0 8px 20px rgba(0, 0, 0, 0.6),
+        0 0 24px rgba(255, 186, 8, 0.18),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+    transform: translateY(-4px);
+}
+
+/* ===== COMPONENTS - STAT CARDS ===== */
+.stat-card {
+    background: linear-gradient(135deg, var(--surface-800), var(--bg-850));
+    border: 1px solid var(--border-default);
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: var(--shadow-md);
+    transition: all 0.2s ease;
+}
+
+.stat-card:hover {
+    border-color: var(--border-accent);
+    box-shadow: var(--shadow-accent);
+    transform: translateY(-2px);
+}
+
+.stat-icon {
+    color: var(--accent-500);
+}
+
+.stat-value {
+    color: var(--text-primary);
+    font-size: 2rem;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.stat-label {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+/* ===== COMPONENTS - BUTTONS ===== */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    font-weight: 600;
+    padding: 10px 16px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: none;
+}
+
+.btn--primary {
+    background: linear-gradient(135deg, var(--accent-500), var(--accent-600));
+    color: #000000;
+    box-shadow: var(--shadow-accent);
+}
+
+.btn--primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 32px rgba(255, 186, 8, 0.35);
+}
+
+.btn--secondary {
+    background: transparent;
+    border: 1.5px solid var(--border-accent);
+    color: var(--accent-500);
+}
+
+.btn--secondary:hover {
+    background: rgba(255, 186, 8, 0.08);
+    border-color: var(--accent-500);
+}
+
+.btn--danger {
+    background: var(--danger-500);
+    color: var(--text-primary);
+}
+
+.btn--danger:hover {
+    background: var(--danger-600);
+}
+
+.btn--success {
+    background: var(--success-500);
+    color: var(--text-primary);
+}
+
+.btn--success:hover {
+    background: var(--success-600);
+}
+
+/* ===== COMPONENTS - BADGES ===== */
+.badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    border: 1.5px solid transparent;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+.badge--accent {
+    background: rgba(255, 186, 8, 0.18);
+    color: var(--accent-500);
+    border-color: rgba(255, 186, 8, 0.4);
+}
+
+.badge--success {
+    background: rgba(34, 197, 94, 0.18);
+    color: var(--success-500);
+    border-color: rgba(34, 197, 94, 0.4);
+    font-weight: 700;
+}
+
+.badge--danger {
+    background: rgba(239, 68, 68, 0.18);
+    color: var(--danger-500);
+    border-color: rgba(239, 68, 68, 0.4);
+}
+
+/* Badge Pendente/Warning (específico) - FORÇA MÁXIMA */
+.bg-yellow-500,
+.bg-yellow-500.bg-opacity-10,
+span.bg-yellow-500,
+span.bg-yellow-500.bg-opacity-10,
+.badge.bg-yellow-500 {
+    background: rgba(255, 186, 8, 0.25) !important;
+    padding: 6px 14px !important;
+    border-radius: 8px !important;
+    font-weight: 700 !important;
+    opacity: 1 !important;
+}
+
+.text-yellow-500,
+span.text-yellow-500,
+.badge .text-yellow-500 {
+    color: #FFBA08 !important;
+    font-weight: 700 !important;
+    opacity: 1 !important;
+}
+
+.border-yellow-500,
+.border-yellow-500.border-opacity-20,
+span.border-yellow-500,
+span.border-yellow-500.border-opacity-20 {
+    border: 1.5px solid rgba(255, 186, 8, 0.5) !important;
+}
+
+/* SUPER FORÇA - badge completo com todas as classes */
+span.bg-yellow-500.bg-opacity-10.text-yellow-500.border-yellow-500.border-opacity-20 {
+    background: rgba(255, 186, 8, 0.25) !important;
+    color: #FFBA08 !important;
+    border: 1.5px solid rgba(255, 186, 8, 0.5) !important;
+    padding: 6px 14px !important;
+    border-radius: 8px !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.03em !important;
+    opacity: 1 !important;
+}
+
+/* ===== COMPONENTS - TABS ===== */
+.tab-button {
+    color: var(--text-tertiary);
+    border-bottom: 2px solid transparent;
+    padding: 16px 8px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.tab-button:hover {
+    color: var(--text-primary);
+    border-color: rgba(255, 186, 8, 0.4);
+}
+
+.tab-button.active {
+    color: var(--accent-500);
+    border-color: var(--accent-500);
+    font-weight: 600;
+}
+
+/* ===== FORMS ===== */
+input:not([type="checkbox"]):not([type="radio"]),
+textarea,
+select {
+    background-color: var(--bg-900) !important;
+    border: 1.5px solid var(--border-default) !important;
+    color: var(--text-primary) !important;
+    border-radius: 8px;
+    padding: 10px 12px;
+    transition: all 0.2s ease;
+}
+
+input:not([type="checkbox"]):not([type="radio"]):hover,
+textarea:hover,
+select:hover {
+    border-color: var(--border-strong) !important;
+}
+
+input:not([type="checkbox"]):not([type="radio"]):focus,
+textarea:focus,
+select:focus {
+    border-color: var(--accent-500) !important;
+    box-shadow: 0 0 0 3px rgba(255, 186, 8, 0.15) !important;
+    outline: none !important;
+    background-color: var(--surface-800) !important;
+}
+
+input::placeholder,
+textarea::placeholder {
+    color: var(--text-tertiary) !important;
+    opacity: 0.8 !important;
+}
+
+input:disabled,
+textarea:disabled,
+select:disabled {
+    background-color: var(--bg-850) !important;
+    color: var(--text-disabled) !important;
+    border-color: var(--border-subtle) !important;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+/* Checkbox e Radio */
+input[type="checkbox"],
+input[type="radio"] {
+    accent-color: var(--accent-500);
+    cursor: pointer;
+}
+
+/* Select Options */
+select option {
+    background-color: var(--surface-800);
+    color: var(--text-primary);
+    padding: 8px;
+}
+
+/* Labels */
+label {
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+/* ===== TABELAS ===== */
+table {
+    background-color: transparent !important;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+thead {
+    background: var(--surface-700) !important;
+    border-bottom: 1px solid var(--border-default) !important;
+}
+
+thead th {
+    color: var(--accent-400) !important;
+    font-weight: 700 !important;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 0.7rem !important;
+    padding: 16px 24px !important;
+}
+
+tbody tr {
+    border-bottom: 1px solid var(--border-subtle);
+    transition: all 0.15s ease;
+}
+
+tbody tr:hover {
+    background-color: rgba(255, 186, 8, 0.12) !important;
+    border-left: 3px solid var(--accent-500);
+    transform: translateX(2px);
+}
+
+tbody td {
+    color: var(--text-primary) !important;
+    padding: 16px 24px;
+    font-size: 0.875rem;
+}
+
+/* Valores monetários na tabela - DESTAQUE */
+.font-semibold.text-accent500,
+tbody .font-semibold.text-accent500 {
+    color: var(--accent-400) !important;
+    font-weight: 700 !important;
+    font-size: 0.95rem !important;
+    filter: brightness(1.15);
+}
+
+/* Valores monetários na tabela */
+tbody td.text-accent500,
+tbody td .text-accent500 {
+    color: var(--accent-400) !important;
+    font-weight: 700 !important;
+    font-size: 0.95rem !important;
+}
+
+/* ===== NAVBAR ===== */
+nav {
+    background: linear-gradient(180deg, var(--bg-900), var(--bg-850)) !important;
+    border-bottom: 1px solid var(--border-subtle) !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* ===== FOOTER ===== */
+footer {
+    background-color: var(--bg-900) !important;
+    border-top: 1px solid var(--border-subtle) !important;
+}
+
+/* ===== SOMBRAS ===== */
+.shadow { box-shadow: var(--shadow-sm) !important; }
+.shadow-lg { box-shadow: var(--shadow-lg) !important; }
+.shadow-xl { box-shadow: var(--shadow-lg) !important; }
+
+/* ===== SCROLLBAR ===== */
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-900);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(255, 186, 8, 0.5);
+    border-radius: 4px;
+    border: 2px solid var(--bg-900);
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--accent-500);
+}
+
+/* ===== FOCUS VISIBLE (Acessibilidade WCAG 2.1) ===== */
+*:focus-visible {
+    outline: 3px solid rgba(255, 186, 8, 0.5);
+    outline-offset: 2px;
+}
+
+/* ===== TRANSITIONS GLOBAIS ===== */
+button,
+a,
+input,
+textarea,
+select,
+.card,
+.badge {
+    transition: all 0.2s ease;
+}
+
+/* ===== CLASSES CUSTOMIZADAS FALTANTES ===== */
+
+/* Classe text-muted (usada no login/register) */
+.text-muted {
+    color: var(--text-tertiary) !important;
+}
+
+/* Classes de cores customizadas para Tailwind */
+.text-accent500 { color: var(--accent-500) !important; }
+.bg-accent500 { background-color: var(--accent-500) !important; }
+.border-accent500 { border-color: var(--accent-500) !important; }
+
+.text-textPrimary { color: var(--text-primary) !important; }
+.text-textSecondary { color: var(--text-secondary) !important; }
+
+.bg-surface800 { background-color: var(--surface-800) !important; }
+.bg-bg900 { background-color: var(--bg-900) !important; }
+
+.border-white {
+    border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Border opacity helpers */
+.border-opacity-5 { border-color: rgba(255, 255, 255, 0.05) !important; }
+.border-opacity-10 { border-color: rgba(255, 255, 255, 0.1) !important; }
+.border-opacity-20 { border-color: rgba(255, 255, 255, 0.2) !important; }
+.border-opacity-30 { border-color: rgba(255, 186, 8, 0.3) !important; }
+
+/* Background opacity helpers */
+.bg-opacity-5 { opacity: 0.05; }
+.bg-opacity-10 { opacity: 0.1; }
+.bg-opacity-50 { opacity: 0.5; }
+
+/* ===== GRADIENTES ===== */
+.bg-gradient-to-r {
+    background: linear-gradient(90deg, var(--bg-900), var(--bg-850)) !important;
+}
+
+.from-accent500 { --tw-gradient-from: var(--accent-500); }
+.to-accent600 { --tw-gradient-to: var(--accent-600); }
+
+/* Gradiente amarelo funcional */
+.from-accent500.to-accent600,
+[class*="from-accent500"][class*="to-accent600"] {
+    background: linear-gradient(135deg, var(--accent-500), var(--accent-600)) !important;
+    color: #000000 !important;
+}
+
+/* Gradiente Order Bump */
+.from-yellow-50 { --tw-gradient-from: rgba(255, 186, 8, 0.08); }
+.to-orange-50 { --tw-gradient-to: rgba(255, 186, 8, 0.05); }
+
+.from-yellow-50.to-orange-50 {
+    background: linear-gradient(135deg, rgba(255, 186, 8, 0.08), rgba(255, 186, 8, 0.05)) !important;
+}
+
+/* ===== SHADOWS CUSTOMIZADAS ===== */
+.shadow-accent-glow {
+    box-shadow: var(--shadow-accent) !important;
+}
+
+.hover\:shadow-accent-glow:hover {
+    box-shadow: var(--shadow-accent) !important;
+}
+
+/* ===== MODAIS ===== */
+.modal-backdrop {
+    background: rgba(0, 0, 0, 0.85) !important;
+    backdrop-filter: blur(8px);
+}
+
+.modal-content {
+    background: var(--surface-600) !important;
+    border: 1px solid var(--border-strong) !important;
+    box-shadow: var(--shadow-lg), 0 0 0 1px rgba(255, 186, 8, 0.1) !important;
+}
+
+/* ===== ESTADOS DE HOVER ===== */
+.hover\:bg-gray-50:hover { background-color: var(--overlay-light) !important; }
+.hover\:bg-red-50:hover { background-color: rgba(239, 68, 68, 0.08) !important; }
+.hover\:bg-green-50:hover { background-color: rgba(34, 197, 94, 0.08) !important; }
+.hover\:bg-yellow-50:hover { background-color: rgba(255, 186, 8, 0.08) !important; }
+.hover\:bg-blue-50:hover { background-color: rgba(255, 186, 8, 0.08) !important; }
+.hover\:bg-red-100:hover { background-color: rgba(239, 68, 68, 0.12) !important; }
+.hover\:bg-green-100:hover { background-color: rgba(34, 197, 94, 0.12) !important; }
+.hover\:bg-yellow-100:hover { background-color: rgba(255, 186, 8, 0.12) !important; }
+.hover\:bg-blue-100:hover { background-color: rgba(255, 186, 8, 0.12) !important; }
+
+.hover\:text-gray-700:hover { color: var(--text-primary) !important; }
+.hover\:border-gray-300:hover { border-color: var(--border-strong) !important; }
+
+.hover\:text-red-800:hover { color: var(--danger-600) !important; }
+
+/* ===== ESTADOS DISABLED ===== */
+button:disabled,
+a.disabled,
+[disabled] {
+    opacity: 0.5 !important;
+    cursor: not-allowed !important;
+    pointer-events: none;
+}
+
+/* ===== LOADING STATE ===== */
+.cursor-not-allowed {
+    cursor: not-allowed !important;
+}
+
+/* ===== UTILITY CLASSES ===== */
+.opacity-50 { opacity: 0.5 !important; }
+
+/* ===== AUMENTAR VIBRANCE DOS ÍCONES E TEXTOS ===== */
+.text-accent500,
+i.text-accent500,
+.fas.text-accent500 {
+    color: var(--accent-500) !important;
+    filter: brightness(1.1);
+}
+
+.text-textPrimary {
+    color: var(--text-primary) !important;
+    font-weight: 500;
+}
+
+.text-textSecondary {
+    color: var(--text-secondary) !important;
+}
+
+.text-muted,
+.text-gray-500 {
+    color: var(--text-tertiary) !important;
+}
+
+/* Valores numéricos em destaque */
+.font-semibold.text-textPrimary {
+    color: var(--text-primary) !important;
+    font-weight: 600 !important;
+}
+
+.font-semibold.text-accent500 {
+    color: var(--accent-400) !important;
+    font-weight: 600 !important;
+    filter: brightness(1.15);
+}
+
+/* Labels precisam ser mais visíveis */
+.text-xs.text-textSecondary {
+    color: var(--text-secondary) !important;
+    font-weight: 500;
+    opacity: 0.95;
+}
+
+/* ===== CORREÇÕES ESPECÍFICAS ===== */
+
+/* bg-white DENTRO de order bump precisa ter contraste */
+.bg-gradient-to-r .bg-white,
+[class*="from-yellow"] .bg-white {
+    background-color: var(--surface-700) !important;
+    border: 1px solid var(--border-default) !important;
+}
+
+/* Textos dentro de backgrounds amarelos */
+.bg-gradient-to-r.from-yellow-50 * {
+    color: var(--text-primary);
+}
+
+/* bg-gray-50 usado para disabled inputs */
+.bg-gray-50.text-gray-500 {
+    background-color: var(--bg-850) !important;
+    color: var(--text-disabled) !important;
+}
+
+/* ===== CARDS DE BOTS (Dashboard) ===== */
+/* Corrigir cards muito transparentes */
+.bg-surface800 {
+    background-color: var(--surface-800) !important;
+}
+
+.bg-surface800.bg-opacity-50 {
+    background: linear-gradient(145deg, var(--surface-800), var(--bg-850)) !important;
+    opacity: 1 !important;
+    box-shadow: 
+        0 4px 12px rgba(0, 0, 0, 0.5),
+        inset 0 1px 0 rgba(255, 255, 255, 0.05),
+        0 0 0 1px rgba(255, 186, 8, 0.12) !important;
+}
+
+.bg-surface800.bg-opacity-50:hover {
+    background: var(--surface-700) !important;
+    box-shadow: 
+        0 8px 20px rgba(0, 0, 0, 0.6),
+        0 0 20px rgba(255, 186, 8, 0.15),
+        inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Badge offline precisa ser visível */
+.bg-white.bg-opacity-5 {
+    background-color: rgba(255, 255, 255, 0.08) !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+}
+
+/* Botão "Configurar" precisa mais destaque */
+.border-white.border-opacity-20 {
+    border-color: rgba(255, 186, 8, 0.35) !important;
+}
+
+a.border-white.border-opacity-20,
+button.border-white.border-opacity-20 {
+    color: var(--accent-500) !important;
+}
+
+a.border-white.border-opacity-20:hover,
+button.border-white.border-opacity-20:hover {
+    background-color: rgba(255, 186, 8, 0.12) !important;
+    border-color: var(--accent-500) !important;
+    color: var(--text-primary) !important;
+}
+
+/* Border-opacity helpers corrigidos */
+.border-opacity-10 {
+    border-color: rgba(255, 186, 8, 0.2) !important;
+}
+
+.border-opacity-20 {
+    border-color: rgba(255, 186, 8, 0.35) !important;
+}
+
+.border-opacity-30 {
+    border-color: rgba(255, 186, 8, 0.4) !important;
+}
+
+/* Hover em cards com border-white */
+.hover\:border-opacity-20:hover {
+    border-color: rgba(255, 186, 8, 0.5) !important;
+}
+
+/* Background hover sutil mas visível */
+.hover\:bg-white:hover {
+    background-color: rgba(255, 186, 8, 0.08) !important;
+}
+
+.hover\:bg-opacity-5:hover {
+    background-color: rgba(255, 186, 8, 0.12) !important;
+}
+
+/* ===== BOTÃO DANGER COM BORDA ===== */
+.border-danger.border-opacity-30 {
+    border-color: rgba(239, 68, 68, 0.45) !important;
+}
+
+.border-danger:hover {
+    background-color: rgba(239, 68, 68, 0.15) !important;
+    border-color: var(--danger-500) !important;
+}
+
+/* ===== PRINT STYLES ===== */
+@media print {
+    .no-print {
+        display: none !important;
+    }
+}
+
+/* ===== LOGIN PAGE - ESTILOS ESPECÍFICOS ===== */
+
+/* Logo container com glow */
+.border-opacity-20 {
+    border-color: rgba(255, 186, 8, 0.2) !important;
+}
+
+/* Input group hover effect */
+.group:hover .text-muted {
+    color: var(--text-secondary) !important;
+}
+
+/* Border opacity 8 */
+.border-opacity-8 {
+    border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Garantir que classes do login funcionem */
+.rounded-2xl {
+    border-radius: 16px !important;
+}
+
+.rounded-xl {
+    border-radius: 12px !important;
+}
+
+/* Padding específicos (8pt grid) */
+.py-3\.5 {
+    padding-top: 14px !important;
+    padding-bottom: 14px !important;
+}
+
+.pl-11 {
+    padding-left: 44px !important;
+}
+
+.pr-12 {
+    padding-right: 48px !important;
+}
+
+/* Ring offset para modais/cards escuros */
+.ring-offset-surface800 {
+    --tw-ring-offset-color: var(--surface-800);
+}
+
+/* Hover em links */
+a.underline {
+    text-decoration-thickness: 1px;
+    text-underline-offset: 2px;
+}
+
+a.underline:hover {
+    text-decoration-thickness: 2px;
+}
+
+/* Badge FREE */
+.bg-opacity-20 {
+    opacity: 0.2;
+}
+
+span.bg-accent500.bg-opacity-20 {
+    background-color: rgba(255, 186, 8, 0.2) !important;
+    opacity: 1 !important;
+}
+
+.text-accent400 {
+    color: var(--accent-400) !important;
+}
+
+/* Success icon e classes */
+.text-success-500 {
+    color: var(--success-500) !important;
+}
+
+.border-success-500 {
+    border-color: var(--success-500) !important;
+}
+
+.hover\:border-success-500:hover {
+    border-color: var(--success-500) !important;
+}
+
+.hover\:border-opacity-30:hover {
+    border-opacity: 0.3;
+}
+
+/* Info color (blue) */
+.text-info-500 {
+    color: var(--info-500) !important;
+    font-weight: 700 !important;
+}
+
+.bg-info-500 {
+    background-color: var(--info-500) !important;
+}
+
+.border-info-500 {
+    border-color: var(--info-500) !important;
+}
+
+.hover\:border-info-500:hover {
+    border-color: var(--info-500) !important;
+}
+
+/* Backgrounds com opacity para ícones */
+.bg-info-500.bg-opacity-15 {
+    background-color: rgba(59, 130, 246, 0.20) !important;
+    opacity: 1 !important;
+}
+
+.bg-info-500.bg-opacity-8 {
+    background-color: rgba(59, 130, 246, 0.08) !important;
+    opacity: 1 !important;
+}
+
+.bg-info-500.bg-opacity-20 {
+    background-color: rgba(59, 130, 246, 0.20) !important;
+    opacity: 1 !important;
+}
+
+.border-info-500.border-opacity-30 {
+    border-color: rgba(59, 130, 246, 0.30) !important;
+}
+
+/* Ícone dentro do badge info */
+.bg-info-500.bg-opacity-15 .text-info-500,
+.bg-info-500.bg-opacity-20 .text-info-500 {
+    color: #60A5FA !important;
+    filter: brightness(1.3) !important;
+}
+
+/* Ícones específicos info */
+i.fa-bullhorn.text-info-500,
+i.fa-sparkles.text-info-500 {
+    color: #60A5FA !important;
+    filter: brightness(1.3) drop-shadow(0 2px 6px rgba(59, 130, 246, 0.5)) !important;
+}
+
+/* Strong text-info-500 dentro do FAQ e remarketing */
+strong.text-info-500 {
+    color: #60A5FA !important;
+    font-weight: 900 !important;
+    filter: brightness(1.15);
+    text-shadow: 0 0 8px rgba(59, 130, 246, 0.3);
+}
+
+.bg-success-500.bg-opacity-15 {
+    background-color: rgba(34, 197, 94, 0.20) !important;
+    opacity: 1 !important;
+}
+
+/* Ícone dentro do badge success */
+.bg-success-500.bg-opacity-15 .text-success-500 {
+    color: #22C55E !important;
+    filter: brightness(1.15) !important;
+}
+
+/* Strong text-success-500 dentro do FAQ */
+strong.text-success-500 {
+    color: #22C55E !important;
+    font-weight: 900 !important;
+    filter: brightness(1.15);
+    text-shadow: 0 0 8px rgba(34, 197, 94, 0.3);
+}
+
+.bg-accent500.bg-opacity-15 {
+    background-color: rgba(255, 186, 8, 0.20) !important;
+    opacity: 1 !important;
+}
+
+/* Ícone dentro do badge accent */
+.bg-accent500.bg-opacity-15 .text-accent500,
+.bg-accent500.bg-opacity-15 i.text-accent500 {
+    color: var(--accent-500) !important;
+    filter: brightness(1.15) drop-shadow(0 0 4px rgba(255, 186, 8, 0.4)) !important;
+}
+
+/* Ícones dos benefits cards */
+.bg-surface800 .bg-accent500.bg-opacity-15 i,
+.bg-surface800 .bg-success-500.bg-opacity-15 i,
+.bg-surface800 .bg-info-500.bg-opacity-15 i {
+    font-size: 1.125rem !important;
+}
+
+/* Strong text-accent500 dentro do FAQ */
+strong.text-accent500 {
+    color: var(--accent-400) !important;
+    font-weight: 900 !important;
+    filter: brightness(1.2);
+    text-shadow: 0 0 8px rgba(255, 186, 8, 0.3);
+}
+
+/* ===== GATEWAYS PAGE COLORS ===== */
+
+/* Purple for PushynPay */
+.text-purple-500 {
+    color: #A855F7 !important;
+}
+
+.bg-purple-500 {
+    background-color: #A855F7 !important;
+}
+
+.border-purple-500 {
+    border-color: #A855F7 !important;
+}
+
+.hover\:border-purple-500:hover {
+    border-color: #A855F7 !important;
+}
+
+.from-purple-500 {
+    --tw-gradient-from: #A855F7;
+}
+
+.to-purple-700 {
+    --tw-gradient-to: #7E22CE;
+}
+
+.ring-purple-500 {
+    --tw-ring-color: #A855F7;
+}
+
+.bg-purple-500.bg-opacity-15 {
+    background-color: rgba(168, 85, 247, 0.20) !important;
+    opacity: 1 !important;
+}
+
+.bg-purple-500.bg-opacity-15 .text-purple-500 {
+    color: #A855F7 !important;
+    filter: brightness(1.2) !important;
+}
+
+.border-purple-500.border-opacity-25 {
+    border-color: rgba(168, 85, 247, 0.25) !important;
+}
+
+/* Warning for not configured */
+.text-warning-500 {
+    color: var(--warning-500) !important;
+    font-weight: 700 !important;
+}
+
+.bg-warning-500 {
+    background-color: var(--warning-500) !important;
+}
+
+.border-warning-500 {
+    border-color: var(--warning-500) !important;
+}
+
+.bg-warning-500.bg-opacity-15 {
+    background-color: rgba(245, 158, 11, 0.15) !important;
+    opacity: 1 !important;
+}
+
+.bg-warning-500.bg-opacity-12 {
+    background-color: rgba(245, 158, 11, 0.15) !important;
+    opacity: 1 !important;
+}
+
+.bg-warning-500.bg-opacity-20 {
+    background-color: rgba(245, 158, 11, 0.25) !important;
+    opacity: 1 !important;
+}
+
+/* Badge warning com ícone clock */
+.bg-warning-500.bg-opacity-20 .text-warning-500 {
+    color: #FBBF24 !important;
+}
+
+.border-warning-500.border-opacity-30 {
+    border-color: rgba(245, 158, 11, 0.30) !important;
+}
+
+/* Ícone clock warning */
+i.fa-clock.text-warning-500 {
+    color: #FBBF24 !important;
+    filter: brightness(1.3) drop-shadow(0 2px 6px rgba(251, 191, 36, 0.5)) !important;
+}
+
+strong.text-warning-500 {
+    color: #FBBF24 !important;
+    font-weight: 900 !important;
+    filter: brightness(1.15);
+}
+
+/* Warning alert title */
+h4.text-warning-500 {
+    color: #FBBF24 !important;
+    font-weight: 700 !important;
+    filter: brightness(1.15);
+}
+
+/* Warning border-l-4 */
+.border-l-4.border-warning-500 {
+    border-left-color: #F59E0B !important;
+}
+
+.border-l-4.border-success-500 {
+    border-left-color: var(--success-500) !important;
+}
+
+/* Grid cols-12 */
+.grid-cols-12 {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+}
+
+.col-span-4 {
+    grid-column: span 4 / span 4;
+}
+
+.col-span-1 {
+    grid-column: span 1 / span 1;
+}
+
+/* Text-xs ícones */
+.text-xs {
+    font-size: 0.75rem;
+}
+
+/* mb-1.5 */
+.mb-1\.5 {
+    margin-bottom: 6px;
+}
+
+/* pb-0.5 */
+.pb-0\.5 {
+    padding-bottom: 2px;
+}
+
+/* h-10 */
+.h-10 {
+    height: 40px !important;
+}
+
+/* Ring-1 */
+.focus\:ring-1:focus {
+    --tw-ring-offset-shadow: 0 0 0 0px transparent;
+    --tw-ring-shadow: 0 0 0 1px var(--tw-ring-color);
+    box-shadow: var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000);
+}
+
+/* Border dashed success */
+.border-dashed {
+    border-style: dashed;
+}
+
+.border-success-500.border-opacity-25 {
+    border-color: rgba(34, 197, 94, 0.25) !important;
+}
+
+.hover\:border-opacity-40:hover {
+    border-opacity: 0.4;
+}
+
+.group:hover .group-hover\:scale-110 {
+    transform: scale(1.1);
+}
+
+.transition-transform {
+    transition-property: transform;
+}
+
+/* Success bg-opacity-10 */
+.bg-success-500.bg-opacity-10 {
+    background-color: rgba(34, 197, 94, 0.15) !important;
+    opacity: 1 !important;
+}
+
+.bg-success-500.bg-opacity-8 {
+    background-color: rgba(34, 197, 94, 0.08) !important;
+    opacity: 1 !important;
+}
+
+/* Ícone bolt success */
+i.fa-bolt.text-success-500 {
+    color: #22C55E !important;
+    filter: brightness(1.2) !important;
+}
+
+/* Border danger-500 */
+.border-danger-500 {
+    border-color: var(--danger-500) !important;
+}
+
+.border-danger-500.border-opacity-30 {
+    border-color: rgba(239, 68, 68, 0.30) !important;
+}
+
+.hover\:border-opacity-50:hover {
+    border-opacity: 0.5;
+}
+
+.text-danger-500 {
+    color: var(--danger-500) !important;
+}
+
+.hover\:bg-danger-500:hover {
+    background-color: var(--danger-500) !important;
+}
+
+.bg-danger-500.bg-opacity-15 {
+    background-color: rgba(239, 68, 68, 0.15) !important;
+    opacity: 1 !important;
+}
+
+.bg-danger-500.bg-opacity-10 {
+    background-color: rgba(239, 68, 68, 0.12) !important;
+    opacity: 1 !important;
+}
+
+.focus\:border-danger-500:focus {
+    border-color: var(--danger-500) !important;
+}
+
+.focus\:ring-danger-500:focus {
+    --tw-ring-color: var(--danger-500) !important;
+}
+
+/* Icon colors */
+i.fas.text-accent500 {
+    color: var(--accent-500) !important;
+}
+
+i.fas.text-success-500 {
+    color: var(--success-500) !important;
+}
+
+i.fa-dollar-sign.text-success-500,
+i.fa-plus-circle.text-success-500,
+i.fa-shopping-bag.text-success-500 {
+    filter: brightness(1.15) !important;
+}
+
+i.fa-gift.text-accent500,
+i.fa-tag.text-accent500,
+i.fa-award.text-accent500,
+i.fa-lightbulb.text-accent500,
+i.fa-home.text-accent500 {
+    filter: brightness(1.15) drop-shadow(0 2px 4px rgba(255, 186, 8, 0.3)) !important;
+}
+
+/* Green gradient button (Adicionar Botão) */
+.from-success-500.to-green-700 {
+    background: linear-gradient(90deg, #22C55E, #15803D) !important;
+}
+
+/* Form radio purple */
+.form-radio {
+    appearance: none;
+    width: 1rem;
+    height: 1rem;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    background-color: var(--bg-900);
+}
+
+.form-radio:checked {
+    background-color: currentColor;
+    background-image: url("data:image/svg+xml,%3csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3e%3ccircle cx='8' cy='8' r='3'/%3e%3c/svg%3e");
+}
+
+.form-radio.text-accent500:checked {
+    background-color: var(--accent-500);
+    border-color: var(--accent-500);
+}
+
+.form-radio.text-purple-500:checked {
+    background-color: #A855F7;
+    border-color: #A855F7;
+}
+
+/* Checkbox accent500 */
+input[type="checkbox"].text-accent500 {
+    accent-color: var(--accent-500);
+}
+
+/* H-5 W-5 */
+.h-5 {
+    height: 20px;
+}
+
+.w-5 {
+    width: 20px;
+}
+
+/* Cursor pointer */
+.cursor-pointer {
+    cursor: pointer;
+}
+
+/* Border accent500 opacity 30 for checkbox */
+.border-accent500.border-opacity-30 {
+    border-color: rgba(255, 186, 8, 0.30) !important;
+}
+
+/* Border success-500 opacity 20 */
+.border-success-500.border-opacity-20 {
+    border-color: rgba(34, 197, 94, 0.20) !important;
+}
+
+/* Border warning-500 opacity 20 */
+.border-warning-500.border-opacity-20 {
+    border-color: rgba(245, 158, 11, 0.20) !important;
+}
+
+/* Border info-500 opacity 20 */
+.border-info-500.border-opacity-20 {
+    border-color: rgba(59, 130, 246, 0.20) !important;
+}
+
+/* Icon hourglass-half */
+i.fa-hourglass-half.text-warning-500 {
+    color: #FBBF24 !important;
+    filter: brightness(1.2) !important;
+}
+
+/* Icon fa-code */
+i.fa-code.text-success-500,
+i.fa-code.text-warning-500,
+i.fa-code.text-accent500 {
+    filter: brightness(1.1) !important;
+}
+
+/* Focus ring warning */
+.focus\:ring-warning-500:focus {
+    --tw-ring-color: var(--warning-500) !important;
+}
+
+.focus\:border-warning-500:focus {
+    border-color: var(--warning-500) !important;
+}
+
+/* Icon external-link-alt */
+i.fa-external-link-alt.text-info-500,
+i.fa-external-link-alt.text-muted {
+    font-size: 0.875rem;
+}
+
+/* mt-1.5 */
+.mt-1\.5 {
+    margin-top: 6px;
+}
+
+/* Text purple-500 */
+.text-purple-500 {
+    color: #A855F7 !important;
+}
+
+i.fas.text-purple-500 {
+    filter: brightness(1.2) !important;
+}
+
+/* Success badges for verified */
+.bg-success-500.bg-opacity-20 {
+    background-color: rgba(34, 197, 94, 0.20) !important;
+    opacity: 1 !important;
+}
+
+.border-success-500.border-opacity-40 {
+    border-color: rgba(34, 197, 94, 0.40) !important;
+}
+
+/* Info (blue) for SyncPay and Remarketing */
+.from-info-500 {
+    --tw-gradient-from: #3B82F6;
+}
+
+.to-blue-600 {
+    --tw-gradient-to: #2563EB;
+}
+
+/* Gradiente from-info-500 to-blue-600 */
+.from-info-500.to-blue-600 {
+    background: linear-gradient(90deg, #3B82F6, #2563EB) !important;
+}
+
+.from-info-500.to-blue-600:hover {
+    background: linear-gradient(90deg, #2563EB, #1D4ED8) !important;
+}
+
+.ring-info-500 {
+    --tw-ring-color: #3B82F6;
+}
+
+.focus\:border-info-500:focus {
+    border-color: var(--info-500) !important;
+}
+
+.focus\:ring-info-500:focus {
+    --tw-ring-color: var(--info-500) !important;
+}
+
+.focus\:border-purple-500:focus {
+    border-color: #A855F7 !important;
+}
+
+.focus\:ring-purple-500:focus {
+    --tw-ring-color: #A855F7 !important;
+}
+
+.focus\:border-success-500:focus {
+    border-color: var(--success-500) !important;
+}
+
+.focus\:ring-success-500:focus {
+    --tw-ring-color: var(--success-500) !important;
+}
+
+/* Green gradient for Paradise */
+.from-success-500 {
+    --tw-gradient-from: #22C55E;
+}
+
+.to-green-700 {
+    --tw-gradient-to: #15803D;
+}
+
+.ring-success-500 {
+    --tw-ring-color: #22C55E;
+}
+
+/* Gateway cards hover effects */
+.gateway-card {
+    transition: all 0.3s ease;
+}
+
+.gateway-card:hover {
+    transform: translateY(-2px);
+}
+
+/* ===== BOT CARDS - BUTTONS ===== */
+
+/* Botão Configurar */
+a.border-white.border-opacity-20:hover,
+button.border-white.border-opacity-20:hover {
+    border-color: rgba(255, 255, 255, 0.30) !important;
+    background-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Botão Remarketing - força gradiente azul */
+.bg-gradient-to-r.from-info-500.to-blue-600 {
+    background: linear-gradient(90deg, #3B82F6, #2563EB) !important;
+    font-weight: 700 !important;
+}
+
+.bg-gradient-to-r.from-info-500.to-blue-600:hover {
+    background: linear-gradient(90deg, #60A5FA, #3B82F6) !important;
+    box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4) !important;
+}
+
+/* Botão Iniciar (verde) */
+.bg-green-600 {
+    background-color: #16A34A !important;
+}
+
+.bg-green-600:hover {
+    background-color: #15803D !important;
+}
+
+/* Botão Parar (vermelho) */
+.bg-danger {
+    background-color: var(--danger-500) !important;
+}
+
+.bg-danger:hover {
+    background-color: var(--danger-600) !important;
+}
+
+/* Space-x helpers */
+.space-x-4 > * + * {
+    margin-left: 16px !important;
+}
+
+/* Blur md */
+.blur-md {
+    filter: blur(12px);
+}
+
+/* Blur lg */
+.blur-lg {
+    filter: blur(16px);
+}
+
+/* h-16 w-16 */
+.h-16 {
+    height: 64px !important;
+}
+
+.w-16 {
+    width: 64px !important;
+}
+
+/* Border-2 */
+.border-2 {
+    border-width: 2px !important;
+}
+
+/* Grid cols-5 */
+.grid-cols-5 {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+/* Col span */
+.col-span-2 {
+    grid-column: span 2 / span 2;
+}
+
+.col-span-3 {
+    grid-column: span 3 / span 3;
+}
+
+/* Resize none */
+.resize-none {
+    resize: none !important;
+}
+
+/* Rounded-2xl */
+.rounded-2xl {
+    border-radius: 16px !important;
+}
+
+.rounded-t-2xl {
+    border-top-left-radius: 16px !important;
+    border-top-right-radius: 16px !important;
+}
+
+.rounded-r-xl {
+    border-top-right-radius: 12px !important;
+    border-bottom-right-radius: 12px !important;
+}
+
+/* Border opacity 40 */
+.border-opacity-40 {
+    border-opacity: 0.4 !important;
+}
+
+/* Max-w-4xl */
+.max-w-4xl {
+    max-width: 896px;
+}
+
+/* Border-l-4 accent e info */
+.border-l-4 {
+    border-left-width: 4px;
+}
+
+.border-l-4.border-accent500 {
+    border-left-color: var(--accent-500) !important;
+}
+
+.border-l-4.border-info-500 {
+    border-left-color: var(--info-500) !important;
+}
+
+/* Ícone fa-lock no título */
+.fa-lock.text-accent500 {
+    color: var(--accent-500) !important;
+    filter: brightness(1.2) drop-shadow(0 2px 4px rgba(255, 186, 8, 0.3));
+}
+
+/* Ícones check-circle success */
+i.fa-check-circle.text-success-500 {
+    color: #22C55E !important;
+    filter: brightness(1.2) !important;
+}
+
+/* Text danger-500 */
+.text-danger-500 {
+    color: var(--danger-500) !important;
+    font-weight: 700 !important;
+}
+
+strong.text-danger-500 {
+    color: #EF4444 !important;
+    font-weight: 900 !important;
+}
+
+/* Badge grande do shield */
+.bg-accent500.bg-opacity-20 {
+    background-color: rgba(255, 186, 8, 0.25) !important;
+    opacity: 1 !important;
+}
+
+.bg-accent500.bg-opacity-20 .text-accent500 {
+    color: #FFD23F !important;
+    filter: brightness(1.4) drop-shadow(0 2px 8px rgba(255, 186, 8, 0.6)) !important;
+}
+
+/* Ícone fa-shield-alt especificamente */
+i.fa-shield-alt.text-accent500 {
+    color: #FFD23F !important;
+    font-weight: 900 !important;
+    filter: brightness(1.5) drop-shadow(0 2px 8px rgba(255, 186, 8, 0.7)) !important;
+}
+
+.border-accent500.border-opacity-30 {
+    border-color: rgba(255, 186, 8, 0.40) !important;
+}
+
+/* ===== SUCCESS ALERT (Forgot Password) ===== */
+.bg-success-500.bg-opacity-10 {
+    background-color: rgba(34, 197, 94, 0.15) !important;
+    opacity: 1 !important;
+}
+
+.border-success-500.border-opacity-30 {
+    border: 1.5px solid rgba(34, 197, 94, 0.4) !important;
+}
+
+/* Texto dentro do success alert */
+.text-success-500 {
+    color: #22C55E !important;
+    font-weight: 700 !important;
+}
+
+/* Success alert - garantir que o texto secundário seja visível */
+.bg-success-500.bg-opacity-10 .text-textSecondary {
+    color: #D1FAE5 !important;
+}
+
+/* Info alert (amarelo) */
+.bg-accent500.bg-opacity-8 {
+    background-color: rgba(255, 186, 8, 0.12) !important;
+    opacity: 1 !important;
+}
+
+.border-accent500.border-opacity-20 {
+    border: 1.5px solid rgba(255, 186, 8, 0.3) !important;
+}
+
+/* Active state para botões */
+button:active,
+a:active {
+    transform: translateY(0) !important;
+}
+
+/* Tracking tight */
+.tracking-tight {
+    letter-spacing: -0.02em;
+}
+
+/* ===== ANIMAÇÕES SUTIS ===== */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.max-w-md {
+    animation: fadeInUp 0.6s ease-out;
+}
+
+/* Hover scale para ícones */
+.group-hover\:scale-110:hover {
+    transform: scale(1.1);
+}
+
+/* Password Strength Indicator */
+.h-1\.5 {
+    height: 6px !important;
+}
+
+/* Warning color */
+.text-warning-500,
+.bg-warning-500 {
+    color: var(--warning-500) !important;
+    background-color: var(--warning-500) !important;
+}
+
+/* Danger e Success já definidos */
+.bg-danger-500 {
+    background-color: var(--danger-500) !important;
+}
+
+.text-danger-500 {
+    color: var(--danger-500) !important;
+}
+
+.bg-success-500 {
+    background-color: var(--success-500) !important;
+}
+
+/* Features grid na página de registro */
+.grid-cols-2 > div {
+    transition: all 0.2s ease;
+}
+
+.grid-cols-2 > div:hover {
+    background-color: rgba(255, 186, 8, 0.08) !important;
+    border-color: rgba(255, 186, 8, 0.2) !important;
+    transform: translateY(-2px);
+}
+
+/* Background opacity 8 */
+.bg-opacity-8 {
+    background-color: rgba(255, 186, 8, 0.08) !important;
+    opacity: 1 !important;
+}
+
+.bg-surface800.bg-opacity-50 {
+    background-color: var(--surface-800) !important;
+    opacity: 0.5;
+}
+
+/* Ajuste para os cards de features */
+div.bg-surface800.bg-opacity-50:not(.card) {
+    background-color: rgba(38, 38, 38, 0.5) !important;
+}
+
+/* Leading relaxed */
+.leading-relaxed {
+    line-height: 1.75;
+}
+
+/* Grid gap */
+.gap-3 {
+    gap: 12px;
+}
+
+/* Space y */
+.space-y-4 > * + * {
+    margin-top: 16px;
+}
+
+.space-y-5 > * + * {
+    margin-top: 20px;
+}
+
+/* ===== MODAL BACKDROP ===== */
+.bg-opacity-90 {
+    background-color: rgba(0, 0, 0, 0.9) !important;
+}
+
+.backdrop-blur-sm {
+    backdrop-filter: blur(8px);
+}
+
+/* ===== MODAL - SURFACE 600/700 ===== */
+.bg-surface600 {
+    background-color: var(--surface-600) !important;
+}
+
+.bg-surface700 {
+    background-color: var(--surface-700) !important;
+}
+
+.from-surface700 {
+    --tw-gradient-from: var(--surface-700);
+}
+
+.to-surface600 {
+    --tw-gradient-to: var(--surface-600);
+}
+
+.from-surface700.to-surface600 {
+    background: linear-gradient(180deg, var(--surface-700), var(--surface-600)) !important;
+}
+
+/* Ring offset para modais mais escuros */
+.ring-offset-surface600 {
+    --tw-ring-offset-color: var(--surface-600);
+}
+
+/* ===== CODE TAG ===== */
+code {
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 0.85em;
+}
+
+/* Font mono para inputs de token */
+.font-mono {
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace !important;
+}
+
+/* ===== HELPERS VISUAIS ===== */
+/* Info box amarelo no modal */
+.bg-accent500.bg-opacity-8 h4 {
+    color: var(--accent-500) !important;
+    font-weight: 700;
+}
+
+.bg-accent500.bg-opacity-8 strong {
+    color: var(--accent-400) !important;
+}
+
+/* Blur effect no glow */
+.blur-xl {
+    filter: blur(24px);
+}
+
+/* Shadow 2xl */
+.shadow-2xl {
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.9) !important;
+}
+
+/* Opacity helpers */
+.opacity-60 {
+    opacity: 0.6 !important;
+}
+
+.opacity-20 {
+    opacity: 0.2;
+}
+
+/* Border opacity 25 */
+.border-opacity-25 {
+    border-color: rgba(255, 186, 8, 0.25) !important;
+}
+
+/* MT helpers */
+.mt-0\.5 {
+    margin-top: 2px !important;
+}
+
+/* ===== PÁGINA DE SETTINGS - PLAN TAB ===== */
+
+/* Card "Bots Ilimitados" dentro do gradiente verde */
+.bg-white.bg-opacity-10 {
+    background-color: rgba(255, 255, 255, 0.18) !important;
+    opacity: 1 !important;
+}
+
+.border-white.border-opacity-20 {
+    border-color: rgba(255, 255, 255, 0.35) !important;
+}
+
+/* Texto dentro do card branco translúcido */
+.bg-white.bg-opacity-10 .text-green-50 {
+    color: #FFFFFF !important;
+    font-weight: 700 !important;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+
+.bg-white.bg-opacity-10 .text-green-100 {
+    color: #D1FAE5 !important;
+    font-weight: 600 !important;
+}
+
+/* Backdrop blur */
+.backdrop-blur-sm {
+    backdrop-filter: blur(8px) !important;
+}
+
+/* Text shadow para o "4%" */
+.text-white.font-black {
+    text-shadow: 0 2px 12px rgba(0,0,0,0.3) !important;
+}
+
+/* Textos no gradiente verde */
+.text-green-100 {
+    color: #D1FAE5 !important;
+}
+
+.text-green-50 {
+    color: #F0FDF4 !important;
+}
+
+/* Badge "apenas" */
+.text-green-100.font-semibold {
+    color: #F0FDF4 !important;
+    font-weight: 700 !important;
+}
+
+/* Tracking wider */
+.tracking-wider {
+    letter-spacing: 0.1em;
+}
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 640px) {
+    .stat-card {
+        padding: 16px;
+    }
+    
+    .stat-value {
+        font-size: 1.5rem;
+    }
+    
+    /* Login mobile adjustments */
+    .max-w-md {
+        max-width: 100%;
+    }
+    
+    h1 {
+        font-size: 2.5rem;
+    }
+    
+    /* Modal mobile */
+    .sm\:max-w-lg {
+        max-width: calc(100vw - 32px);
+    }
+}
+

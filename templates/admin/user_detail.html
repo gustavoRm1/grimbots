@@ -1,0 +1,308 @@
+{% extends "base.html" %}
+
+{% block title %}{{ user.email }} - Perfil Completo - Admin{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" x-data="userDetailApp()">
+    
+    <!-- Header -->
+    <div class="mb-8 flex justify-between items-center">
+        <div>
+            <h1 class="text-3xl font-bold text-textPrimary flex items-center gap-3">
+                <i class="fas fa-user-circle text-accent500"></i>
+                {{ user.email }}
+                {% if user.is_banned %}
+                <span class="badge-danger">BANIDO</span>
+                {% endif %}
+            </h1>
+            <p class="mt-1 text-sm text-textSecondary">ID: #{{ user.id }} | Cadastro: {{ user.created_at.strftime('%d/%m/%Y %H:%M') if user.created_at else '-' }}</p>
+        </div>
+        <div class="flex gap-3">
+            <a href="/admin/users" class="btn-secondary">
+                <i class="fas fa-arrow-left mr-2"></i> Voltar
+            </a>
+            {% if not user.is_banned %}
+            <button @click="banUser()" class="bg-danger text-white px-4 py-2 rounded-lg hover:bg-opacity-90">
+                <i class="fas fa-ban mr-2"></i> Banir Usuário
+            </button>
+            {% else %}
+            <button @click="unbanUser()" class="bg-success text-white px-4 py-2 rounded-lg hover:bg-opacity-90">
+                <i class="fas fa-check-circle mr-2"></i> Desbanir
+            </button>
+            {% endif %}
+        </div>
+    </div>
+    
+    <!-- Grid Principal -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        
+        <!-- Informações Pessoais -->
+        <div class="card !p-6">
+            <h3 class="text-lg font-semibold text-textPrimary mb-4">
+                <i class="fas fa-id-card text-blue-500 mr-2"></i> Informações
+            </h3>
+            <div class="space-y-3 text-sm">
+                <div>
+                    <p class="text-textSecondary">Email</p>
+                    <p class="text-textPrimary font-semibold">{{ user.email }}</p>
+                </div>
+                <div>
+                    <p class="text-textSecondary">Username</p>
+                    <p class="text-textPrimary">@{{ user.username }}</p>
+                </div>
+                <div>
+                    <p class="text-textSecondary">Nome Completo</p>
+                    <p class="text-textPrimary">{{ user.full_name or '-' }}</p>
+                </div>
+                <div>
+                    <p class="text-textSecondary">Telefone</p>
+                    <p class="text-textPrimary">{{ user.phone or '-' }}</p>
+                </div>
+                <div>
+                    <p class="text-textSecondary">CPF/CNPJ</p>
+                    <p class="text-textPrimary">{{ user.cpf_cnpj or '-' }}</p>
+                </div>
+                <div>
+                    <p class="text-textSecondary">Último IP</p>
+                    <p class="text-textPrimary font-mono text-xs">{{ user.last_ip or '-' }}</p>
+                </div>
+                <div>
+                    <p class="text-textSecondary">Último Login</p>
+                    <p class="text-textPrimary">{{ user.last_login.strftime('%d/%m/%Y %H:%M') if user.last_login else 'Nunca' }}</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Financeiro -->
+        <div class="card !p-6">
+            <h3 class="text-lg font-semibold text-textPrimary mb-4">
+                <i class="fas fa-dollar-sign text-green-500 mr-2"></i> Financeiro
+            </h3>
+            <div class="space-y-4">
+                <div class="p-5 rounded-lg border-2"
+                     style="background: #1F2937; border-color: #10B981; box-shadow: 0 4px 16px rgba(16, 185, 129, 0.25), inset 0 0 0 1px rgba(34, 197, 94, 0.2);">
+                    <p class="text-xs mb-2" style="color: #6EE7B7; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em;">Receita Gerada pelo Usuário</p>
+                    <p class="font-black mb-2" style="color: #A7F3D0; font-size: 2rem; text-shadow: 0 2px 12px rgba(167, 243, 208, 0.5), 0 0 20px rgba(110, 231, 183, 0.3);">R$ {{ "%.2f"|format(financial_stats.total_revenue) }}</p>
+                    <div class="flex items-center gap-2 mt-3 pt-3 border-t" style="border-color: rgba(16, 185, 129, 0.3);">
+                        <i class="fas fa-shopping-cart text-base" style="color: #34D399; filter: drop-shadow(0 0 4px rgba(52, 211, 153, 0.6));"></i>
+                        <p class="text-sm" style="color: #F3F4F6; font-weight: 600;">{{ financial_stats.total_sales }} vendas</p>
+                    </div>
+                </div>
+                <div class="p-5 rounded-lg border-2"
+                     style="background: #1F2937; border-color: #F59E0B; box-shadow: 0 4px 16px rgba(245, 158, 11, 0.25), inset 0 0 0 1px rgba(255, 186, 8, 0.2);">
+                    <p class="text-xs mb-2" style="color: #FCD34D; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em;">Receita da Plataforma (Split)</p>
+                    <p class="font-black mb-2" style="color: #FDE68A; font-size: 2rem; text-shadow: 0 2px 12px rgba(253, 224, 71, 0.5), 0 0 20px rgba(252, 211, 77, 0.3);">R$ {{ "%.2f"|format(financial_stats.commission_paid) }}</p>
+                    <div class="flex items-center gap-2 mt-3 pt-3 border-t" style="border-color: rgba(245, 158, 11, 0.3);">
+                        <i class="fas fa-money-bill-wave text-base" style="color: #34D399; filter: drop-shadow(0 0 4px rgba(52, 211, 153, 0.6));"></i>
+                        <p class="text-sm" style="color: #F3F4F6; font-weight: 600;">Pago automaticamente via split</p>
+                    </div>
+                </div>
+                <div class="p-5 rounded-lg border-2"
+                     style="background: #1F2937; border-color: #3B82F6; box-shadow: 0 4px 16px rgba(59, 130, 246, 0.2);">
+                    <p class="text-xs mb-4 flex items-center gap-2" style="color: #93C5FD; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em;">
+                        <i class="fas fa-chart-pie" style="color: #60A5FA; filter: drop-shadow(0 0 4px rgba(96, 165, 250, 0.5));"></i>
+                        Breakdown
+                    </p>
+                    <div class="space-y-3 text-sm">
+                        <div class="flex justify-between items-center">
+                            <span style="color: #E5E7EB; font-weight: 500;">Taxa por venda:</span>
+                            <span class="font-bold px-3 py-1 rounded" style="color: #FDE68A; background: rgba(253, 230, 138, 0.15); border: 1px solid rgba(252, 211, 77, 0.3);">R$ 0,75</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span style="color: #E5E7EB; font-weight: 500;">Percentual split:</span>
+                            <span class="font-bold px-3 py-1 rounded" style="color: #FDE68A; background: rgba(253, 230, 138, 0.15); border: 1px solid rgba(252, 211, 77, 0.3);">4%</span>
+                        </div>
+                        <div class="flex justify-between items-center pt-2 border-t" style="border-color: rgba(59, 130, 246, 0.3);">
+                            <span style="color: #F3F4F6; font-weight: 700;">Total vendas:</span>
+                            <span class="font-black text-lg" style="color: #6EE7B7; text-shadow: 0 0 8px rgba(110, 231, 183, 0.4);">{{ financial_stats.total_sales }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Ações Rápidas -->
+        <div class="card !p-6">
+            <h3 class="text-lg font-semibold text-textPrimary mb-4">
+                <i class="fas fa-bolt text-accent500 mr-2"></i> Ações
+            </h3>
+            <div class="space-y-2">
+                <button @click="impersonate()" class="w-full px-4 py-3 bg-gradient-to-r from-purple-500/10 to-purple-700/10 border border-purple-500/20 rounded-lg hover:border-purple-500/40 transition text-left">
+                    <i class="fas fa-user-secret text-purple-400 mr-2"></i>
+                    <span class="font-semibold text-textPrimary">Logar como Usuário</span>
+                </button>
+                <button class="w-full px-4 py-3 bg-gradient-to-r from-blue-500/10 to-blue-700/10 border border-blue-500/20 rounded-lg hover:border-blue-500/40 transition text-left">
+                    <i class="fas fa-envelope text-blue-400 mr-2"></i>
+                    <span class="font-semibold text-textPrimary">Enviar Email</span>
+                </button>
+                <button class="w-full px-4 py-3 bg-gradient-to-r from-green-500/10 to-green-700/10 border border-green-500/20 rounded-lg hover:border-green-500/40 transition text-left">
+                    <i class="fas fa-key text-green-400 mr-2"></i>
+                    <span class="font-semibold text-textPrimary">Resetar Senha</span>
+                </button>
+                <button class="w-full px-4 py-3 bg-gradient-to-r from-red-500/10 to-red-700/10 border border-red-500/20 rounded-lg hover:border-red-500/40 transition text-left">
+                    <i class="fas fa-trash text-red-400 mr-2"></i>
+                    <span class="font-semibold text-textPrimary">Deletar Conta</span>
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Bots do Usuário -->
+    <div class="card !p-6 mb-8">
+        <h3 class="text-lg font-semibold text-textPrimary mb-6">
+            <i class="fas fa-robot text-purple-500 mr-2"></i> Bots ({{ bots|length }})
+        </h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {% for bot_item in bots %}
+            <div class="p-4 bg-bg900 rounded-lg border border-white border-opacity-10 hover:border-opacity-20 transition">
+                <div class="flex justify-between items-start mb-3">
+                    <div>
+                        <p class="font-semibold text-textPrimary">{{ bot_item.bot.name }}</p>
+                        <p class="text-xs text-textSecondary">@{{ bot_item.bot.username or '-' }}</p>
+                    </div>
+                    {% if bot_item.bot.is_running %}
+                    <span class="badge-success">Online</span>
+                    {% else %}
+                    <span class="badge-default">Offline</span>
+                    {% endif %}
+                </div>
+                <div class="grid grid-cols-3 gap-2 text-xs mb-3">
+                    <div>
+                        <p class="text-textSecondary">Usuários</p>
+                        <p class="text-textPrimary font-semibold">{{ bot_item.users }}</p>
+                    </div>
+                    <div>
+                        <p class="text-textSecondary">Vendas</p>
+                        <p class="text-textPrimary font-semibold">{{ bot_item.sales }}</p>
+                    </div>
+                    <div>
+                        <p class="text-textSecondary">Receita</p>
+                        <p class="text-green-400 font-semibold">R$ {{ "%.0f"|format(bot_item.revenue) }}</p>
+                    </div>
+                </div>
+                {% if bot_item.config %}
+                <div class="text-xs text-textSecondary">
+                    <p>• {{ bot_item.config.get_main_buttons()|length }} botões principais</p>
+                    <p>• {{ 'Downsells ativados' if bot_item.config.downsells_enabled else 'Sem downsells' }}</p>
+                    <p>• {{ bot_item.remarketing_campaigns }} campanha(s) de remarketing</p>
+                </div>
+                {% endif %}
+            </div>
+            {% else %}
+            <p class="text-center text-textSecondary col-span-2 py-8">Usuário não possui bots cadastrados</p>
+            {% endfor %}
+        </div>
+    </div>
+    
+    <!-- Últimas Vendas -->
+    <div class="card !p-6">
+        <h3 class="text-lg font-semibold text-textPrimary mb-6">
+            <i class="fas fa-shopping-cart text-green-500 mr-2"></i> Últimas Vendas
+        </h3>
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead class="border-b border-white border-opacity-10">
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-textSecondary uppercase">Data</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-textSecondary uppercase">Cliente</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-textSecondary uppercase">Produto</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-textSecondary uppercase">Valor</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-textSecondary uppercase">Status</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-white divide-opacity-5">
+                    {% for sale in recent_sales %}
+                    <tr class="hover:bg-white hover:bg-opacity-5">
+                        <td class="px-4 py-3 text-xs text-textSecondary">{{ sale.created_at.strftime('%d/%m %H:%M') if sale.created_at else '-' }}</td>
+                        <td class="px-4 py-3 text-sm text-textPrimary">{{ sale.customer_name }}</td>
+                        <td class="px-4 py-3 text-sm text-textSecondary">{{ sale.product_name }}</td>
+                        <td class="px-4 py-3 text-sm font-semibold text-green-400">R$ {{ "%.2f"|format(sale.amount) }}</td>
+                        <td class="px-4 py-3">
+                            {% if sale.status == 'paid' %}
+                            <span class="badge-success">Pago</span>
+                            {% else %}
+                            <span class="badge-warning">Pendente</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="px-4 py-8 text-center text-textSecondary">Nenhuma venda ainda</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function userDetailApp() {
+    return {
+        async impersonate() {
+            if (!confirm('Você vai logar como este usuário. Continuar?')) return;
+            
+            try {
+                const response = await fetch('/admin/users/{{ user.id }}/impersonate', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'}
+                });
+                
+                const data = await response.json();
+                if (response.ok && data.redirect) {
+                    window.location.href = data.redirect;
+                } else {
+                    alert(data.error || 'Erro');
+                }
+            } catch (error) {
+                alert('Erro ao impersonar');
+            }
+        },
+        
+        async banUser() {
+            const reason = prompt('Motivo do banimento:');
+            if (!reason) return;
+            
+            try {
+                const response = await fetch('/admin/users/{{ user.id }}/ban', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({reason})
+                });
+                
+                if (response.ok) {
+                    alert('Usuário banido!');
+                    location.reload();
+                } else {
+                    alert('Erro ao banir');
+                }
+            } catch (error) {
+                alert('Erro');
+            }
+        },
+        
+        async unbanUser() {
+            if (!confirm('Desbanir este usuário?')) return;
+            
+            try {
+                const response = await fetch('/admin/users/{{ user.id }}/unban', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'}
+                });
+                
+                if (response.ok) {
+                    alert('Usuário desbanido!');
+                    location.reload();
+                }
+            } catch (error) {
+                alert('Erro');
+            }
+        }
+    }
+}
+</script>
+{% endblock %}
+

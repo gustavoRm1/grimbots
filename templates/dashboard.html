@@ -1,0 +1,1125 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - grimbots{% endblock %}
+
+{% block extra_head %}
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" x-data="dashboardApp()" x-init="init()">
+    
+    <!-- Header com Filtros -->
+    <div class="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+            <h1 class="text-3xl font-bold text-textPrimary flex items-center gap-3">
+                Dashboard
+                <!-- Indicador de Atualização -->
+                <span x-show="isUpdating" class="inline-flex items-center gap-2 text-sm font-normal text-accent500">
+                    <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Atualizando...
+                </span>
+                <!-- Status Online -->
+                <span x-show="!isUpdating" class="inline-flex items-center gap-2 text-sm font-normal text-green-400">
+                    <span class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+                    Em tempo real
+                </span>
+            </h1>
+            <p class="mt-1 text-sm text-textSecondary">Gerencie seus bots do Telegram</p>
+        </div>
+        
+        <!-- Filtros -->
+        <div class="flex gap-2">
+            <select x-model="filters.period" @change="loadChartData()" 
+                    class="px-4 py-2 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary text-sm focus:outline-none focus:border-accent500">
+                <option value="7">Últimos 7 dias</option>
+                <option value="30">Últimos 30 dias</option>
+                <option value="90">Últimos 90 dias</option>
+            </select>
+            
+            <button @click="refreshStats()" :disabled="isUpdating"
+                    :class="{'opacity-50 cursor-not-allowed': isUpdating}"
+                    class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-semibold text-black bg-gradient-to-r from-accent500 to-accent600 hover:shadow-accent-glow transition-all">
+                <i class="fas fa-sync-alt mr-2" :class="{'fa-spin': isUpdating}"></i>
+                Atualizar
+            </button>
+        </div>
+    </div>
+
+    <!-- Card de Ranking (Destaque) -->
+    <div class="card !p-0 mb-8 overflow-hidden border-2" style="border-color: #F59E0B; box-shadow: 0 0 30px rgba(245, 158, 11, 0.3), 0 8px 24px rgba(0, 0, 0, 0.4);">
+        <div class="px-6 py-5 flex justify-between items-center" style="background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);">
+            <div class="flex items-center gap-4">
+                <i class="fas fa-trophy text-3xl" style="color: #451A03; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));"></i>
+                <div>
+                    <h3 class="text-lg font-black" style="color: #1C1917; text-shadow: 0 1px 2px rgba(255, 255, 255, 0.2);">Sua Posição no Ranking</h3>
+                    <p class="text-sm font-semibold" style="color: #292524;">Compete com outros vendedores!</p>
+                </div>
+            </div>
+            <a href="/ranking" class="px-5 py-2.5 font-bold rounded-lg transition-all hover:scale-105"
+               style="background: rgba(0, 0, 0, 0.25); color: #FFFFFF; border: 1px solid rgba(0, 0, 0, 0.2); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);">
+                Ver Ranking Completo →
+            </a>
+        </div>
+        <div class="p-8" style="background: #1F2937;">
+            <div class="grid grid-cols-3 gap-8">
+                <div class="text-center">
+                    <div class="mb-3" style="font-size: 3.5rem; font-weight: 900; color: #FDE68A; text-shadow: 0 2px 16px rgba(253, 230, 138, 0.5), 0 0 30px rgba(252, 211, 77, 0.4); line-height: 1;">
+                        #{{ current_user.ranking_points }}
+                    </div>
+                    <p class="text-sm font-semibold" style="color: #D1D5DB;">Pontos</p>
+                </div>
+                <div class="text-center">
+                    <div class="mb-3 flex items-center justify-center gap-2" style="font-size: 3.5rem; font-weight: 900; line-height: 1;">
+                        {% if current_user.current_streak > 0 %}
+                        <i class="fas fa-fire" style="color: #FB923C; filter: drop-shadow(0 0 12px rgba(251, 146, 60, 0.8));"></i>
+                        <span style="color: #FDBA74; text-shadow: 0 2px 16px rgba(253, 186, 116, 0.5);">{{ current_user.current_streak }}</span>
+                        {% else %}
+                        <i class="fas fa-moon" style="color: #94A3B8;"></i>
+                        <span style="color: #CBD5E1;">{{ current_user.current_streak }}</span>
+                        {% endif %}
+                    </div>
+                    <p class="text-sm font-semibold" style="color: #D1D5DB;">Streak (dias)</p>
+                </div>
+                <div class="text-center">
+                    <div class="mb-3" style="font-size: 3.5rem; font-weight: 900; color: #C4B5FD; text-shadow: 0 2px 16px rgba(196, 181, 253, 0.5), 0 0 30px rgba(167, 139, 250, 0.4); line-height: 1;">
+                        {{ current_user.achievements|length }}
+                    </div>
+                    <p class="text-sm font-semibold" style="color: #D1D5DB;">Conquistas</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-8">
+        <div class="stat-card group">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-users text-3xl stat-icon group-hover:scale-110 transition-transform"></i>
+                    </div>
+                    <div class="ml-5">
+                        <dl>
+                            <dt class="stat-label">Total de Usuários</dt>
+                            <dd class="stat-value" x-text="formatNumber(stats.total_users)">{{ stats.total_users }}</dd>
+                            <dd class="text-xs text-muted mt-1">Usuários únicos</dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="stat-card group">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-shopping-cart text-3xl text-green-400 group-hover:scale-110 transition-transform"></i>
+                    </div>
+                    <div class="ml-5">
+                        <dl>
+                            <dt class="stat-label">Vendas Confirmadas</dt>
+                            <dd class="stat-value" x-text="formatNumber(stats.total_sales)">{{ stats.total_sales }}</dd>
+                            <dd class="text-xs text-yellow-500 mt-1">
+                                <span x-text="stats.pending_sales"></span> pendentes
+                            </dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="stat-card group">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-dollar-sign text-3xl stat-icon group-hover:scale-110 transition-transform"></i>
+                    </div>
+                    <div class="ml-5">
+                        <dl>
+                            <dt class="stat-label">Receita Total</dt>
+                            <dd class="stat-value" x-text="'R$ ' + formatMoney(stats.total_revenue)">R$ {{ "%.2f"|format(stats.total_revenue) }}</dd>
+                            <dd class="text-xs text-muted mt-1">Pagamentos confirmados</dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="stat-card group">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-robot text-3xl text-accent500 group-hover:scale-110 transition-transform"></i>
+                    </div>
+                    <div class="ml-5">
+                        <dl>
+                            <dt class="stat-label">Bots Ativos</dt>
+                            <dd class="stat-value" x-text="stats.running_bots">{{ stats.running_bots }}</dd>
+                            <dd class="text-xs text-muted mt-1">
+                                de <span x-text="stats.total_bots"></span> total
+                            </dd>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Analytics e Métricas -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        <!-- Gráfico de Vendas -->
+        <div class="lg:col-span-2 card !p-6">
+            <div class="flex justify-between items-center mb-6">
+                <div>
+                    <h3 class="text-lg font-semibold text-textPrimary">Vendas e Receita</h3>
+                    <p class="text-sm text-textSecondary">Últimos 7 dias</p>
+                </div>
+                <div class="flex gap-4 text-sm">
+                    <div class="flex items-center gap-2">
+                        <div class="w-3 h-3 bg-accent500 rounded"></div>
+                        <span class="text-textSecondary">Vendas</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <div class="w-3 h-3 bg-green-400 rounded"></div>
+                        <span class="text-textSecondary">Receita</span>
+                    </div>
+                </div>
+            </div>
+            <div class="relative" style="height: 300px;">
+                <canvas id="salesChart"></canvas>
+            </div>
+        </div>
+        
+        <!-- Métricas Chave -->
+        <div class="card !p-6">
+            <h3 class="text-lg font-semibold text-textPrimary mb-6">Métricas Chave</h3>
+            
+            <!-- Taxa de Conversão -->
+            <div class="mb-6">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-sm text-textSecondary">Taxa de Conversão</span>
+                    <span class="text-lg font-bold text-accent500" x-text="analytics.conversion_rate + '%'">0%</span>
+                </div>
+                <div class="w-full bg-bg900 rounded-full h-2">
+                    <div class="bg-accent500 h-2 rounded-full transition-all" :style="`width: ${analytics.conversion_rate}%`"></div>
+                </div>
+                <p class="text-xs text-muted mt-1">Usuários que compraram</p>
+            </div>
+            
+            <!-- Ticket Médio -->
+            <div class="mb-6 pb-6 border-b border-white border-opacity-10">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-sm text-textSecondary">Ticket Médio</span>
+                    <span class="text-lg font-bold text-green-400">R$ <span x-text="formatMoney(analytics.avg_ticket)">0</span></span>
+                </div>
+                <p class="text-xs text-muted">Valor médio por venda</p>
+            </div>
+            
+            <!-- Total Vendas Hoje -->
+            <div>
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-sm text-textSecondary">Vendas Hoje</span>
+                    <span class="text-lg font-bold text-accent500" x-text="analytics.today_sales || 0">0</span>
+                </div>
+                <p class="text-xs text-muted">Total de vendas de hoje</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Performance de Upsells -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <!-- Order Bumps -->
+        <div class="card !p-6">
+            <h3 class="text-lg font-semibold text-textPrimary mb-6">Performance de Order Bumps</h3>
+            
+            <div class="grid grid-cols-2 gap-4 mb-6">
+                <div class="text-center p-4 bg-bg900 rounded-lg">
+                    <p class="text-2xl font-bold text-accent500" x-text="analytics.order_bump_stats.shown || 0">0</p>
+                    <p class="text-xs text-textSecondary mt-1">Exibidos</p>
+                </div>
+                <div class="text-center p-4 bg-bg900 rounded-lg">
+                    <p class="text-2xl font-bold text-green-400" x-text="analytics.order_bump_stats.accepted || 0">0</p>
+                    <p class="text-xs text-textSecondary mt-1">Aceitos</p>
+                </div>
+            </div>
+            
+            <div class="mb-4">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-sm text-textSecondary">Taxa de Aceitação</span>
+                    <span class="text-xl font-bold text-accent500" x-text="(analytics.order_bump_stats.acceptance_rate || 0) + '%'">0%</span>
+                </div>
+                <div class="w-full bg-bg900 rounded-full h-3">
+                    <div class="bg-gradient-to-r from-accent500 to-accent600 h-3 rounded-full transition-all" 
+                         :style="`width: ${analytics.order_bump_stats.acceptance_rate || 0}%`"></div>
+                </div>
+            </div>
+            
+            <div class="border-t border-white border-opacity-10 pt-4">
+                <div class="flex justify-between items-center">
+                    <span class="text-sm text-textSecondary">Receita de Order Bumps</span>
+                    <span class="text-lg font-bold text-green-400">R$ <span x-text="formatMoney(analytics.order_bump_stats.total_revenue || 0)">0</span></span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Downsells -->
+        <div class="card !p-6">
+            <h3 class="text-lg font-semibold text-textPrimary mb-6">Performance de Downsells</h3>
+            
+            <div class="grid grid-cols-2 gap-4 mb-6">
+                <div class="text-center p-4 bg-bg900 rounded-lg">
+                    <p class="text-2xl font-bold text-blue-400" x-text="analytics.downsell_stats.sent || 0">0</p>
+                    <p class="text-xs text-textSecondary mt-1">Enviados</p>
+                </div>
+                <div class="text-center p-4 bg-bg900 rounded-lg">
+                    <p class="text-2xl font-bold text-green-400" x-text="analytics.downsell_stats.converted || 0">0</p>
+                    <p class="text-xs text-textSecondary mt-1">Convertidos</p>
+                </div>
+            </div>
+            
+            <div class="mb-4">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-sm text-textSecondary">Taxa de Conversão</span>
+                    <span class="text-xl font-bold text-blue-400" x-text="(analytics.downsell_stats.conversion_rate || 0) + '%'">0%</span>
+                </div>
+                <div class="w-full bg-bg900 rounded-full h-3">
+                    <div class="bg-gradient-to-r from-blue-400 to-blue-600 h-3 rounded-full transition-all" 
+                         :style="`width: ${analytics.downsell_stats.conversion_rate || 0}%`"></div>
+                </div>
+            </div>
+            
+            <div class="border-t border-white border-opacity-10 pt-4">
+                <div class="flex justify-between items-center">
+                    <span class="text-sm text-textSecondary">Receita de Downsells</span>
+                    <span class="text-lg font-bold text-green-400">R$ <span x-text="formatMoney(analytics.downsell_stats.total_revenue || 0)">0</span></span>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Horários de Pico -->
+    <div class="card !p-6 mb-8">
+        <div class="flex justify-between items-center mb-6">
+            <div>
+                <h3 class="text-lg font-semibold text-textPrimary">Horários de Pico de Vendas</h3>
+                <p class="text-sm text-textSecondary">Top 5 horários com mais conversões</p>
+            </div>
+        </div>
+        
+        <template x-if="analytics.peak_hours.length > 0">
+            <div class="grid grid-cols-5 gap-4">
+                <template x-for="(peak, index) in analytics.peak_hours" :key="index">
+                    <div class="relative text-center p-4 bg-bg900 rounded-lg hover:bg-opacity-80 transition-all group">
+                        <!-- Badge de posição -->
+                        <div class="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-accent500 text-white text-xs font-bold flex items-center justify-center">
+                            <span x-text="index + 1"></span>
+                        </div>
+                        <p class="text-2xl font-bold text-accent500" x-text="peak.hour">00:00</p>
+                        <p class="text-sm text-textSecondary mt-2" x-text="peak.sales">0</p>
+                        <p class="text-xs text-muted">vendas</p>
+                    </div>
+                </template>
+            </div>
+        </template>
+        
+        <template x-if="analytics.peak_hours.length === 0">
+            <div class="text-center py-8 text-textSecondary">
+                <i class="fas fa-clock text-4xl opacity-30 mb-3"></i>
+                <p class="text-sm">Nenhuma venda confirmada ainda</p>
+            </div>
+        </template>
+    </div>
+
+    <!-- Filtros de Bots e Vendas -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+        <div>
+            <label class="block text-sm font-medium text-textSecondary mb-2">Buscar Bot</label>
+            <input type="text" x-model="filters.botSearch" @input="filterBots()"
+                   placeholder="Nome do bot..."
+                   class="w-full px-4 py-2 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary placeholder-muted focus:outline-none focus:border-accent500">
+        </div>
+        
+        <div>
+            <label class="block text-sm font-medium text-textSecondary mb-2">Status do Bot</label>
+            <select x-model="filters.botStatus" @change="filterBots()"
+                    class="w-full px-4 py-2 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary focus:outline-none focus:border-accent500">
+                <option value="all">Todos</option>
+                <option value="online">Online</option>
+                <option value="offline">Offline</option>
+            </select>
+        </div>
+        
+        <div>
+            <label class="block text-sm font-medium text-textSecondary mb-2">Status de Vendas</label>
+            <select x-model="filters.saleStatus" @change="filterSales()"
+                    class="w-full px-4 py-2 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary focus:outline-none focus:border-accent500">
+                <option value="all">Todas</option>
+                <option value="paid">Pagas</option>
+                <option value="pending">Pendentes</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- Bots Section -->
+    <div class="card !p-0 border border-white border-opacity-10 mb-8">
+        <div class="px-6 py-5 border-b border-white border-opacity-5 flex justify-between items-center">
+            <div>
+                <h3 class="text-lg leading-6 font-semibold text-textPrimary">Meus Bots</h3>
+                <p class="mt-1 text-sm text-textSecondary">
+                    <span x-text="filteredBots.length"></span> bot(s) encontrado(s)
+                </p>
+            </div>
+            <button @click="showAddBotModal = true" 
+                    :disabled="!{{ 'true' if stats.can_add_bot else 'false' }}"
+                    class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-semibold text-black bg-gradient-to-r from-accent500 to-accent600 hover:shadow-accent-glow transition-all">
+                <i class="fas fa-plus mr-2"></i>
+                Adicionar Bot
+            </button>
+        </div>
+
+        <div class="px-4 py-5 sm:p-6">
+            <template x-if="filteredBots.length > 0">
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    <template x-for="bot in filteredBots" :key="bot.id">
+                        <div class="border border-white border-opacity-10 rounded-lg p-4 hover:border-opacity-20 hover:shadow-accent-glow transition-all bg-surface800 bg-opacity-50">
+                    <div class="flex items-start justify-between">
+                        <div class="flex items-center">
+                                    <i class="fas fa-robot text-2xl text-accent500"></i>
+                            <div class="ml-3">
+                                        <h4 class="text-sm font-medium text-textPrimary" x-text="bot.name"></h4>
+                                        <p class="text-xs text-textSecondary">@<span x-text="bot.username"></span></p>
+                            </div>
+                        </div>
+                                <span class="badge" 
+                                      :class="bot.is_running ? 'badge--success' : 'bg-white bg-opacity-5 text-muted border-white border-opacity-10'">
+                                    <span class="w-2 h-2 mr-1 rounded-full" 
+                                          :class="bot.is_running ? 'bg-green-400 animate-pulse' : 'bg-gray-500'"></span>
+                                    <span x-text="bot.is_running ? 'Online' : 'Offline'"></span>
+                        </span>
+                    </div>
+                    
+                    <div class="mt-4 grid grid-cols-3 gap-2 text-center">
+                        <div>
+                                    <p class="text-xs text-textSecondary">Usuários</p>
+                                    <p class="text-sm font-semibold text-textPrimary" x-text="bot.total_users"></p>
+                        </div>
+                        <div>
+                                    <p class="text-xs text-textSecondary">Vendas</p>
+                                    <p class="text-sm font-semibold text-textPrimary" x-text="bot.total_sales"></p>
+                        </div>
+                        <div>
+                                    <p class="text-xs text-textSecondary">Receita</p>
+                                    <p class="text-sm font-semibold text-accent500">R$ <span x-text="formatMoney(bot.total_revenue)"></span></p>
+                        </div>
+                    </div>
+
+                            <div class="mt-4 space-y-2">
+                                <!-- Linha 1: Estatísticas (destaque) -->
+                                <div>
+                                    <a :href="`/bots/${bot.id}/stats`" 
+                                       class="w-full inline-flex justify-center items-center px-4 py-2.5 border-2 border-accent500 text-sm font-bold rounded-lg text-black bg-gradient-to-r from-accent500 to-accent600 hover:shadow-accent-glow transition-all transform hover:-translate-y-0.5">
+                                        <i class="fas fa-chart-line mr-2"></i> Ver Estatísticas Detalhadas
+                                    </a>
+                                </div>
+                                
+                                <!-- Linha 2: Configurar e Remarketing -->
+                                <div class="flex space-x-2">
+                                    <a :href="`/bots/${bot.id}/config`" 
+                                       class="flex-1 inline-flex justify-center items-center px-3 py-2 border border-white border-opacity-20 text-xs font-medium rounded-lg text-textSecondary bg-transparent hover:bg-white hover:bg-opacity-5 hover:text-textPrimary transition-all">
+                            <i class="fas fa-cog mr-1"></i> Configurar
+                        </a>
+                        
+                                    <a :href="`/bots/${bot.id}/remarketing`" 
+                                       class="flex-1 inline-flex justify-center items-center px-3 py-2 border border-transparent text-xs font-semibold rounded-lg text-white bg-gradient-to-r from-info-500 to-blue-600 hover:shadow-lg transition-all transform hover:-translate-y-0.5"
+                                       style="box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);">
+                                        <i class="fas fa-bullhorn mr-1"></i> Remarketing
+                                    </a>
+                                </div>
+                                
+                                <!-- Linha 3: Iniciar/Parar e Deletar -->
+                                <div class="flex space-x-2">
+                                    <template x-if="bot.is_running">
+                                        <button @click="stopBot(bot.id)"
+                                                class="flex-1 inline-flex justify-center items-center px-3 py-2 border border-transparent text-xs font-medium rounded-lg text-white bg-danger hover:bg-opacity-90 transition-all">
+                            <i class="fas fa-stop mr-1"></i> Parar
+                        </button>
+                                    </template>
+                                    <template x-if="!bot.is_running">
+                                        <button @click="startBot(bot.id)"
+                                                class="flex-1 inline-flex justify-center items-center px-3 py-2 border border-transparent text-xs font-medium rounded-lg text-white bg-green-600 hover:bg-green-700 transition-all">
+                            <i class="fas fa-play mr-1"></i> Iniciar
+                        </button>
+                                    </template>
+                        
+                                    <button @click="deleteBot(bot.id, bot.name)"
+                                            class="inline-flex items-center px-3 py-2 border border-danger border-opacity-30 text-xs font-medium rounded-lg text-danger bg-transparent hover:bg-danger hover:bg-opacity-10 transition-all">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+                        </div>
+                    </template>
+            </div>
+            </template>
+            
+            <template x-if="filteredBots.length === 0">
+            <div class="text-center py-12">
+                    <i class="fas fa-robot text-6xl text-muted opacity-30"></i>
+                    <h3 class="mt-2 text-sm font-medium text-textPrimary">Nenhum bot encontrado</h3>
+                    <p class="mt-1 text-sm text-textSecondary">Tente ajustar os filtros ou adicione um novo bot.</p>
+                </div>
+            </template>
+        </div>
+    </div>
+
+    <!-- Recent Payments -->
+    <div class="card !p-0 border border-white border-opacity-10">
+        <div class="px-6 py-5 border-b border-white border-opacity-5 flex justify-between items-center">
+            <div>
+                <h3 class="text-lg leading-6 font-semibold text-textPrimary">Últimas Vendas</h3>
+                <p class="text-sm text-textSecondary">
+                    <span x-text="filteredPayments.length"></span> venda(s) encontrada(s)
+                </p>
+            </div>
+            <button @click="exportSales()"
+                    class="inline-flex items-center px-3 py-2 border border-white border-opacity-20 text-sm font-medium rounded-lg text-textSecondary hover:bg-white hover:bg-opacity-5 transition-all">
+                <i class="fas fa-download mr-2"></i>
+                Exportar CSV
+            </button>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full !bg-transparent">
+                <thead>
+                    <tr>
+                        <th class="px-6 py-3 text-left text-textSecondary">ID</th>
+                        <th class="px-6 py-3 text-left text-textSecondary">Cliente</th>
+                        <th class="px-6 py-3 text-left text-textSecondary">Produto</th>
+                        <th class="px-6 py-3 text-left text-textSecondary">Valor</th>
+                        <th class="px-6 py-3 text-left text-textSecondary">Status</th>
+                        <th class="px-6 py-3 text-left text-textSecondary">Data</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="payment in filteredPayments" :key="payment.id">
+                        <tr class="hover:bg-white hover:bg-opacity-5 transition-colors">
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-textPrimary">
+                                #<span x-text="payment.id"></span>
+                        </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-textSecondary" x-text="payment.customer_name || 'N/A'"></td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-textSecondary" x-text="payment.product_name || 'Produto'"></td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold text-accent500">
+                                R$ <span x-text="formatMoney(payment.amount)"></span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="badge" 
+                                      :class="{
+                                          'badge--success': payment.status === 'paid',
+                                          'bg-yellow-500 bg-opacity-10 text-yellow-500 border-yellow-500 border-opacity-20': payment.status === 'pending',
+                                          'badge--danger': payment.status !== 'paid' && payment.status !== 'pending'
+                                      }">
+                                    <span x-text="payment.status === 'paid' ? 'Pago' : (payment.status === 'pending' ? 'Pendente' : 'Cancelado')"></span>
+                            </span>
+                        </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-textSecondary" x-text="formatDate(payment.created_at)"></td>
+                    </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Add Bot Modal - Redesign Profissional -->
+    <div x-show="showAddBotModal" 
+         x-cloak
+         class="fixed z-50 inset-0 overflow-y-auto"
+         @keydown.escape.window="showAddBotModal = false">
+        
+        <div class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:p-0">
+            <!-- Backdrop -->
+            <div x-show="showAddBotModal" 
+                 x-transition:enter="ease-out duration-300"
+                 x-transition:enter-start="opacity-0"
+                 x-transition:enter-end="opacity-100"
+                 x-transition:leave="ease-in duration-200"
+                 x-transition:leave-start="opacity-100"
+                 x-transition:leave-end="opacity-0"
+                 class="fixed inset-0 bg-black bg-opacity-90 backdrop-blur-sm transition-opacity" 
+                 @click="showAddBotModal = false"></div>
+
+            <!-- Modal Content -->
+            <div x-show="showAddBotModal"
+                 x-transition:enter="ease-out duration-300"
+                 x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+                 x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100"
+                 x-transition:leave="ease-in duration-200"
+                 x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100"
+                 x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+                 class="relative inline-block align-middle bg-surface600 rounded-2xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:max-w-lg sm:w-full"
+                 style="box-shadow: 0 20px 60px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,186,8,0.15);">
+                
+                <!-- Header com Ícone -->
+                <div class="bg-gradient-to-b from-surface700 to-surface600 px-8 pt-8 pb-6 border-b border-white border-opacity-8">
+                    <div class="flex items-start">
+                        <!-- Ícone com Glow -->
+                        <div class="flex-shrink-0">
+                            <div class="relative">
+                                <div class="absolute -inset-2 bg-accent500 rounded-full opacity-20 blur-xl"></div>
+                                <div class="relative flex items-center justify-center h-14 w-14 rounded-2xl bg-surface800 border border-accent500 border-opacity-25">
+                                    <i class="fas fa-plus-circle text-accent500 text-3xl" style="filter: drop-shadow(0 2px 8px rgba(255,186,8,0.4));"></i>
+                                </div>
+                            </div>
+                    </div>
+                        
+                        <!-- Título e Descrição -->
+                        <div class="ml-5 flex-1">
+                            <h3 class="text-2xl font-bold text-textPrimary">
+                                Adicionar Bot
+                        </h3>
+                            <p class="mt-2 text-sm text-textSecondary leading-relaxed">
+                                Configure um novo bot do Telegram para começar a vender
+                            </p>
+                        </div>
+                        
+                        <!-- Botão Fechar -->
+                        <button @click="showAddBotModal = false" 
+                                class="ml-3 text-muted hover:text-textPrimary transition-colors focus:outline-none">
+                            <i class="fas fa-times text-xl"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Info Helper -->
+                <div class="px-8 pt-6 pb-4">
+                    <div class="bg-accent500 bg-opacity-8 border border-accent500 border-opacity-20 rounded-xl p-4">
+                        <div class="flex">
+                            <div class="flex-shrink-0">
+                                <i class="fas fa-lightbulb text-accent500 text-lg"></i>
+                            </div>
+                            <div class="ml-3">
+                                <h4 class="text-sm font-semibold text-accent500">Como obter o token?</h4>
+                                <p class="mt-1 text-xs text-textSecondary leading-relaxed">
+                                    1. Abra o <strong class="text-accent400">@BotFather</strong> no Telegram<br>
+                                    2. Envie <code class="px-1.5 py-0.5 bg-bg900 rounded text-accent400">/newbot</code> ou use um bot existente<br>
+                                    3. Copie o token fornecido
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                </div>
+
+                <!-- Form -->
+                <form @submit.prevent="addBot()" class="px-8 pb-8 space-y-5">
+                    
+                    <!-- Token Field -->
+                    <div class="space-y-2">
+                        <label for="bot_token" class="block text-sm font-semibold text-textSecondary">
+                            Token do Bot
+                            <span class="text-danger-500">*</span>
+                        </label>
+                        <div class="relative group">
+                            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                <i class="fas fa-key text-muted group-hover:text-textSecondary transition-colors"></i>
+                            </div>
+                            <input 
+                                id="bot_token"
+                                type="text" 
+                               x-model="newBotToken" 
+                               required
+                                class="appearance-none block w-full pl-11 pr-4 py-3.5 bg-bg900 border border-white border-opacity-10 rounded-xl text-textPrimary placeholder-muted focus:outline-none focus:border-accent500 focus:ring-2 focus:ring-accent500 focus:ring-opacity-20 hover:border-opacity-15 sm:text-sm transition-all font-mono" 
+                               placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz">
+                    </div>
+                        <p class="text-xs text-muted ml-1">
+                            Formato: número:letras_e_numeros
+                        </p>
+                    </div>
+                    
+                    <!-- Nome Field -->
+                    <div class="space-y-2">
+                        <label for="bot_name" class="block text-sm font-semibold text-textSecondary">
+                            Nome do Bot
+                            <span class="text-muted font-normal ml-1">(opcional)</span>
+                        </label>
+                        <div class="relative group">
+                            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                <i class="fas fa-robot text-muted group-hover:text-textSecondary transition-colors"></i>
+                            </div>
+                            <input 
+                                id="bot_name"
+                                type="text" 
+                               x-model="newBotName" 
+                                class="appearance-none block w-full pl-11 pr-4 py-3.5 bg-bg900 border border-white border-opacity-10 rounded-xl text-textPrimary placeholder-muted focus:outline-none focus:border-accent500 focus:ring-2 focus:ring-accent500 focus:ring-opacity-20 hover:border-opacity-15 sm:text-sm transition-all" 
+                                placeholder="Ex: Bot de Vendas FGTS">
+                        </div>
+                        <p class="text-xs text-muted ml-1">
+                            Se deixar vazio, usaremos o nome configurado no @BotFather
+                        </p>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="pt-4 grid grid-cols-2 gap-3">
+                        <!-- Cancelar (col 1) -->
+                        <button 
+                            type="button" 
+                            @click="showAddBotModal = false" 
+                            class="w-full inline-flex justify-center items-center py-3.5 px-4 border-2 border-white border-opacity-10 rounded-xl text-sm font-semibold text-textSecondary bg-transparent hover:bg-white hover:bg-opacity-8 hover:text-textPrimary hover:border-opacity-20 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-surface600 focus:ring-accent500 transition-all">
+                            <i class="fas fa-times mr-2"></i>
+                            Cancelar
+                        </button>
+                        
+                        <!-- Adicionar (col 2) -->
+                        <button 
+                            type="submit" 
+                                :disabled="loading"
+                            :class="{ 'opacity-60 cursor-not-allowed': loading }"
+                            class="group relative w-full inline-flex justify-center items-center py-3.5 px-4 border border-transparent rounded-xl text-sm font-bold text-black bg-gradient-to-r from-accent500 to-accent600 hover:from-accent400 hover:to-accent500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-surface600 focus:ring-accent500 transition-all transform hover:-translate-y-0.5 active:translate-y-0 disabled:transform-none"
+                            style="box-shadow: 0 8px 24px rgba(255,186,8,0.25);">
+                            <span x-show="!loading" class="flex items-center">
+                                <i class="fas fa-plus mr-2"></i>
+                                Adicionar Bot
+                            </span>
+                            <span x-show="loading" class="flex items-center">
+                                <i class="fas fa-spinner fa-spin mr-2"></i>
+                                Validando...
+                            </span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function dashboardApp() {
+    return {
+        // Estado
+        showAddBotModal: false,
+        newBotToken: '',
+        newBotName: '',
+        loading: false,
+        isUpdating: false,
+        
+        // Dados
+        stats: {
+            total_users: {{ stats.total_users }},
+            total_sales: {{ stats.total_sales }},
+            total_revenue: {{ stats.total_revenue }},
+            pending_sales: {{ stats.pending_sales }},
+            running_bots: {{ stats.running_bots }},
+            total_bots: {{ stats.total_bots }}
+        },
+        
+        bots: {{ bots|tojson|safe }},
+        payments: {{ recent_payments|tojson|safe }},
+        
+        filteredBots: [],
+        filteredPayments: [],
+        
+        // Analytics
+        analytics: {
+            conversion_rate: 0,
+            avg_ticket: 0,
+            today_sales: 0,
+            order_bump_stats: {
+                shown: 0,
+                accepted: 0,
+                acceptance_rate: 0,
+                total_revenue: 0
+            },
+            downsell_stats: {
+                sent: 0,
+                converted: 0,
+                conversion_rate: 0,
+                total_revenue: 0
+            },
+            peak_hours: []
+        },
+        
+        // Filtros
+        filters: {
+            botSearch: '',
+            botStatus: 'all',
+            saleStatus: 'all',
+            period: '7'
+        },
+        
+        // WebSocket
+        socket: null,
+        
+        // Chart
+        salesChart: null,
+
+        init() {
+            this.filteredBots = this.bots;
+            this.filteredPayments = this.payments;
+            
+            // Conectar WebSocket
+            this.connectWebSocket();
+            
+            // Carregar gráfico
+            this.initChart();
+            this.loadChartData();
+            
+            // Carregar analytics
+            this.loadAnalytics();
+            
+            // Auto-refresh a cada 30 segundos
+            setInterval(() => {
+                this.refreshStats();
+                this.loadAnalytics();
+            }, 30000);
+        },
+        
+        connectWebSocket() {
+            this.socket = io();
+            
+            this.socket.on('connect', () => {
+                console.log('✅ WebSocket conectado');
+            });
+
+            this.socket.on('bot_status_update', (data) => {
+                console.log('🤖 Status do bot atualizado:', data);
+                this.refreshStats();
+            });
+            
+            this.socket.on('new_sale', (data) => {
+                console.log('💰 Nova venda:', data);
+                
+                // Tocar som
+                this.playNotificationSound();
+                
+                // Atualizar stats
+                this.stats.total_sales += 1;
+                this.stats.total_revenue += data.amount;
+                
+                // Adicionar na tabela
+                this.payments.unshift(data);
+                this.filterSales();
+                
+                // Atualizar gráfico e analytics
+                this.loadChartData();
+                this.loadAnalytics();
+                
+                // Mostrar notificação
+                this.showNotification(`💰 Nova venda: R$ ${this.formatMoney(data.amount)}`);
+            });
+        },
+        
+        async refreshStats() {
+            if (this.isUpdating) return;
+            
+            this.isUpdating = true;
+            try {
+                const response = await fetch('/api/dashboard/stats');
+                const data = await response.json();
+                
+                // Atualizar stats
+                this.stats.total_users = data.total_users;
+                this.stats.total_sales = data.total_sales;
+                this.stats.total_revenue = data.total_revenue;
+                this.stats.pending_sales = data.pending_sales;
+                this.stats.running_bots = data.running_bots;
+                
+                // Atualizar bots
+                this.bots = data.bots;
+                this.filterBots();
+                
+                console.log('✅ Stats atualizadas');
+            } catch (error) {
+                console.error('❌ Erro ao atualizar stats:', error);
+            } finally {
+                this.isUpdating = false;
+            }
+        },
+        
+        initChart() {
+            const ctx = document.getElementById('salesChart').getContext('2d');
+            this.salesChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                        {
+                            label: 'Vendas',
+                            data: [],
+                            borderColor: '#8B5CF6',
+                            backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                            tension: 0.4,
+                            fill: true,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: 'Receita (R$)',
+                            data: [],
+                            borderColor: '#10B981',
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            tension: 0.4,
+                            fill: true,
+                            yAxisID: 'y1'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(17, 24, 39, 0.9)',
+                            titleColor: '#F9FAFB',
+                            bodyColor: '#D1D5DB',
+                            borderColor: 'rgba(139, 92, 246, 0.2)',
+                            borderWidth: 1,
+                            padding: 12,
+                            displayColors: true
+                        }
+                    },
+                    scales: {
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.05)'
+                            },
+                            ticks: {
+                                color: '#9CA3AF',
+                                callback: function(value) {
+                                    return Math.floor(value);
+                                }
+                            }
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            grid: {
+                                drawOnChartArea: false
+                            },
+                            ticks: {
+                                color: '#9CA3AF',
+                                callback: function(value) {
+                                    return 'R$ ' + value.toFixed(0);
+                                }
+                            }
+                        },
+                        x: {
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.05)'
+                            },
+                            ticks: {
+                                color: '#9CA3AF'
+                            }
+                        }
+                    }
+                }
+            });
+        },
+        
+        async loadChartData() {
+            try {
+                const response = await fetch('/api/dashboard/sales-chart');
+                const data = await response.json();
+                
+                this.salesChart.data.labels = data.map(d => d.date);
+                this.salesChart.data.datasets[0].data = data.map(d => d.sales);
+                this.salesChart.data.datasets[1].data = data.map(d => d.revenue);
+                this.salesChart.update();
+            } catch (error) {
+                console.error('❌ Erro ao carregar gráfico:', error);
+            }
+        },
+        
+        async loadAnalytics() {
+            try {
+                const response = await fetch('/api/dashboard/analytics');
+                const data = await response.json();
+                
+                this.analytics = data;
+                console.log('📊 Analytics carregados:', data);
+            } catch (error) {
+                console.error('❌ Erro ao carregar analytics:', error);
+            }
+        },
+        
+        filterBots() {
+            this.filteredBots = this.bots.filter(bot => {
+                const matchesSearch = bot.name.toLowerCase().includes(this.filters.botSearch.toLowerCase());
+                const matchesStatus = this.filters.botStatus === 'all' || 
+                    (this.filters.botStatus === 'online' && bot.is_running) ||
+                    (this.filters.botStatus === 'offline' && !bot.is_running);
+                return matchesSearch && matchesStatus;
+            });
+        },
+        
+        filterSales() {
+            this.filteredPayments = this.payments.filter(payment => {
+                return this.filters.saleStatus === 'all' || payment.status === this.filters.saleStatus;
+            });
+        },
+
+        async addBot() {
+            if (!this.newBotToken) {
+                alert('Insira o token do bot');
+                return;
+            }
+
+            this.loading = true;
+            try {
+                const response = await fetch('/api/bots', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        token: this.newBotToken,
+                        name: this.newBotName
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    this.showNotification('Bot adicionado com sucesso!');
+                    location.reload();
+                } else {
+                    alert('Erro: ' + data.error);
+                }
+            } catch (error) {
+                alert('Erro ao adicionar bot: ' + error.message);
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async startBot(botId) {
+            if (!confirm('Deseja iniciar este bot?')) return;
+
+            try {
+                const response = await fetch(`/api/bots/${botId}/start`, {method: 'POST'});
+                const data = await response.json();
+
+                if (response.ok) {
+                    this.showNotification('Bot iniciado!');
+                    await this.refreshStats();
+                } else {
+                    alert('Erro: ' + data.error);
+                }
+            } catch (error) {
+                alert('Erro: ' + error.message);
+            }
+        },
+
+        async stopBot(botId) {
+            if (!confirm('Deseja parar este bot?')) return;
+
+            try {
+                const response = await fetch(`/api/bots/${botId}/stop`, {method: 'POST'});
+                const data = await response.json();
+
+                if (response.ok) {
+                    this.showNotification('Bot parado!');
+                    await this.refreshStats();
+                } else {
+                    alert('Erro: ' + data.error);
+                }
+            } catch (error) {
+                alert('Erro: ' + error.message);
+            }
+        },
+
+        async deleteBot(botId, botName) {
+            if (!confirm(`Deletar "${botName}"? Esta ação não pode ser desfeita.`)) return;
+
+            try {
+                const response = await fetch(`/api/bots/${botId}`, {method: 'DELETE'});
+                const data = await response.json();
+
+                if (response.ok) {
+                    this.showNotification('Bot deletado!');
+                    location.reload();
+                } else {
+                    alert('Erro: ' + data.error);
+                }
+            } catch (error) {
+                alert('Erro: ' + error.message);
+            }
+        },
+        
+        exportSales() {
+            const csv = this.generateCSV();
+            this.downloadCSV(csv, 'vendas.csv');
+        },
+        
+        generateCSV() {
+            const headers = ['ID', 'Cliente', 'Produto', 'Valor', 'Status', 'Data'];
+            const rows = this.filteredPayments.map(p => [
+                p.id,
+                p.customer_name || 'N/A',
+                p.product_name || 'Produto',
+                `R$ ${this.formatMoney(p.amount)}`,
+                p.status === 'paid' ? 'Pago' : (p.status === 'pending' ? 'Pendente' : 'Cancelado'),
+                this.formatDate(p.created_at)
+            ]);
+            
+            return [headers, ...rows].map(row => row.join(',')).join('\n');
+        },
+        
+        downloadCSV(csv, filename) {
+            const blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = filename;
+            link.click();
+        },
+        
+        playNotificationSound() {
+            try {
+                const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBjCS0vLPeSsFI3bI8N2RQAEA+B8AAEAfAAABAAgA');
+                audio.play().catch(() => {});
+            } catch (e) {}
+        },
+
+        showNotification(message) {
+            const notification = document.createElement('div');
+            notification.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 animate-bounce';
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            setTimeout(() => notification.remove(), 3000);
+        },
+        
+        formatNumber(num) {
+            return new Intl.NumberFormat('pt-BR').format(num);
+        },
+        
+        formatMoney(value) {
+            return new Intl.NumberFormat('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2}).format(value);
+        },
+        
+        formatDate(dateStr) {
+            const date = new Date(dateStr);
+            return date.toLocaleString('pt-BR', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+    }
+}
+</script>
+{% endblock %}
+

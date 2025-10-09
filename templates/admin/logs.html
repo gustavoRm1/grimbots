@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block title %}Logs de Auditoria - Admin{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    
+    <!-- Header -->
+    <div class="mb-8 flex justify-between items-center">
+        <div>
+            <h1 class="text-3xl font-bold text-textPrimary flex items-center gap-3">
+                <i class="fas fa-history text-accent500"></i>
+                Logs de Auditoria
+            </h1>
+            <p class="mt-1 text-sm text-textSecondary">Últimas {{ logs|length }} ações dos administradores</p>
+        </div>
+        <a href="/admin" class="btn-secondary">
+            <i class="fas fa-arrow-left mr-2"></i> Voltar
+        </a>
+    </div>
+    
+    <!-- Filtros -->
+    <div class="card !p-6 mb-6">
+        <div class="flex flex-wrap gap-4">
+            <select onchange="applyFilters()" id="actionFilter"
+                    class="px-4 py-2 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary">
+                <option value="all">Todas as ações</option>
+                {% for action in actions %}
+                <option value="{{ action }}" {{ 'selected' if action == action_filter }}>{{ action }}</option>
+                {% endfor %}
+            </select>
+            
+            <select onchange="applyFilters()" id="limitFilter"
+                    class="px-4 py-2 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary">
+                <option value="100" {{ 'selected' if limit == 100 }}>Últimos 100</option>
+                <option value="500" {{ 'selected' if limit == 500 }}>Últimos 500</option>
+                <option value="1000" {{ 'selected' if limit == 1000 }}>Últimos 1000</option>
+            </select>
+        </div>
+    </div>
+    
+    <!-- Timeline de Logs -->
+    <div class="card !p-6">
+        <div class="space-y-4">
+            {% for log in logs %}
+            <div class="flex gap-4 p-4 bg-bg900 rounded-lg border border-white border-opacity-10 hover:border-opacity-20 transition">
+                <div class="flex-shrink-0">
+                    <div class="w-10 h-10 rounded-full bg-gradient-to-br from-accent500 to-accent600 flex items-center justify-center">
+                        {% if log.action == 'ban_user' %}
+                        <i class="fas fa-ban text-black"></i>
+                        {% elif log.action == 'unban_user' %}
+                        <i class="fas fa-check-circle text-black"></i>
+                        {% elif log.action == 'impersonate' %}
+                        <i class="fas fa-user-secret text-black"></i>
+                        {% elif log.action == 'edit_user' %}
+                        <i class="fas fa-edit text-black"></i>
+                        {% else %}
+                        <i class="fas fa-bolt text-black"></i>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="flex-1">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-sm font-semibold text-textPrimary">{{ log.description }}</p>
+                            <div class="flex items-center gap-4 mt-1 text-xs text-textSecondary">
+                                <span><i class="fas fa-user mr-1"></i> {{ log.admin.email if log.admin else '-' }}</span>
+                                {% if log.target_user %}
+                                <span><i class="fas fa-arrow-right mr-1"></i> {{ log.target_user.email }}</span>
+                                {% endif %}
+                                <span><i class="fas fa-network-wired mr-1"></i> {{ log.ip_address or '-' }}</span>
+                            </div>
+                        </div>
+                        <span class="text-xs text-textSecondary">{{ log.created_at.strftime('%d/%m/%Y %H:%M:%S') if log.created_at else '-' }}</span>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <p class="text-center text-textSecondary py-12">Nenhum log encontrado</p>
+            {% endfor %}
+        </div>
+    </div>
+    
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function applyFilters() {
+    const action = document.getElementById('actionFilter').value;
+    const limit = document.getElementById('limitFilter').value;
+    window.location.href = `/admin/logs?action=${action}&limit=${limit}`;
+}
+</script>
+{% endblock %}
+

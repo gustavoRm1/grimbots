@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+
+{% block title %}Receita da Plataforma - Admin{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    
+    <!-- Header -->
+    <div class="mb-8 flex justify-between items-center">
+        <div>
+            <h1 class="text-3xl font-bold text-textPrimary flex items-center gap-3">
+                <i class="fas fa-piggy-bank text-accent500"></i>
+                Receita da Plataforma
+            </h1>
+            <p class="mt-1 text-sm text-textSecondary">💰 Via Split Payment (SyncPay) - Automático e em tempo real</p>
+        </div>
+        <a href="/admin" class="btn-secondary">
+            <i class="fas fa-arrow-left mr-2"></i> Voltar
+        </a>
+    </div>
+    
+    <!-- Info sobre Split Payment -->
+    <div class="bg-gradient-to-r from-blue-500/10 to-purple-500/10 border-l-4 border-blue-500 p-4 mb-8 rounded-lg">
+        <div class="flex items-start gap-3">
+            <i class="fas fa-info-circle text-blue-500 text-xl"></i>
+            <div>
+                <p class="font-semibold text-blue-400 mb-1">Como funciona o Split Payment?</p>
+                <p class="text-sm text-textSecondary">
+                    A cada venda confirmada, <strong class="text-accent500">4%</strong> do valor total é transferido automaticamente para sua conta SyncPay.
+                    Você recebe <strong class="text-accent500">R$ 0,75</strong> por venda (em vendas de ~R$ 19).
+                    <strong class="text-green-400">Não há comissões pendentes - tudo cai na hora!</strong>
+                </p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Cards de Resumo -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div class="card !p-6">
+            <div class="flex justify-between items-start">
+                <div>
+                    <p class="text-sm font-semibold text-textSecondary uppercase">Hoje</p>
+                    <p class="mt-2 text-3xl font-bold text-accent500">R$ {{ "%.2f"|format(stats.revenue_today) }}</p>
+                </div>
+                <i class="fas fa-calendar-day text-accent500 text-2xl"></i>
+            </div>
+        </div>
+        
+        <div class="card !p-6">
+            <div class="flex justify-between items-start">
+                <div>
+                    <p class="text-sm font-semibold text-textSecondary uppercase">Esta Semana</p>
+                    <p class="mt-2 text-3xl font-bold text-blue-400">R$ {{ "%.2f"|format(stats.revenue_week) }}</p>
+                </div>
+                <i class="fas fa-calendar-week text-blue-500 text-2xl"></i>
+            </div>
+        </div>
+        
+        <div class="card !p-6">
+            <div class="flex justify-between items-start">
+                <div>
+                    <p class="text-sm font-semibold text-textSecondary uppercase">Este Mês</p>
+                    <p class="mt-2 text-3xl font-bold text-purple-400">R$ {{ "%.2f"|format(stats.revenue_month) }}</p>
+                </div>
+                <i class="fas fa-calendar-alt text-purple-500 text-2xl"></i>
+            </div>
+        </div>
+        
+        <div class="card !p-6">
+            <div class="flex justify-between items-start">
+                <div>
+                    <p class="text-sm font-semibold text-textSecondary uppercase">Total</p>
+                    <p class="mt-2 text-3xl font-bold text-green-400">R$ {{ "%.2f"|format(stats.total_revenue) }}</p>
+                </div>
+                <i class="fas fa-chart-line text-green-500 text-2xl"></i>
+            </div>
+            <p class="text-xs text-textSecondary mt-2">{{ stats.total_transactions }} transações</p>
+        </div>
+    </div>
+    
+    <!-- Tabela de Receita por Usuário (últimos 30 dias) -->
+    <div class="card !p-6">
+        <h3 class="text-lg font-semibold text-textPrimary mb-6">
+            📊 Receita por Usuário (Últimos 30 dias)
+        </h3>
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead class="bg-bg900">
+                    <tr>
+                        <th class="px-6 py-4 text-left text-xs font-semibold text-textSecondary uppercase">Usuário</th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold text-textSecondary uppercase">Transações</th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold text-textSecondary uppercase">Receita do Usuário</th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold text-textSecondary uppercase">Sua Receita (4%)</th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold text-textSecondary uppercase">% Contribuição</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-white divide-opacity-5">
+                    {% for item in revenue_by_user %}
+                    <tr class="hover:bg-white hover:bg-opacity-5 transition">
+                        <td class="px-6 py-4">
+                            <p class="text-sm font-semibold text-textPrimary">{{ item.user.email }}</p>
+                            <p class="text-xs text-textSecondary">@{{ item.user.username }}</p>
+                        </td>
+                        <td class="px-6 py-4 text-sm text-textPrimary">{{ item.transactions }}</td>
+                        <td class="px-6 py-4 text-sm font-semibold text-blue-400">R$ {{ "%.2f"|format(item.user_revenue) }}</td>
+                        <td class="px-6 py-4 text-sm font-semibold text-accent500">R$ {{ "%.2f"|format(item.platform_revenue) }}</td>
+                        <td class="px-6 py-4">
+                            <div class="flex items-center gap-2">
+                                <div class="flex-1 bg-bg900 rounded-full h-2 overflow-hidden max-w-24">
+                                    <div class="bg-gradient-to-r from-accent500 to-accent600 h-full"
+                                         style="width: {{ (item.platform_revenue / stats.total_revenue * 100)|int if stats.total_revenue > 0 else 0 }}%"></div>
+                                </div>
+                                <span class="text-xs text-textSecondary">{{ "%.1f"|format(item.platform_revenue / stats.total_revenue * 100 if stats.total_revenue > 0 else 0) }}%</span>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="px-6 py-12 text-center text-textSecondary">
+                            <i class="fas fa-inbox text-4xl mb-2"></i>
+                            <p>Nenhuma receita registrada ainda</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+</div>
+{% endblock %}
+

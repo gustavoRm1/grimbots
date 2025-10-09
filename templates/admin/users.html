@@ -1,0 +1,244 @@
+{% extends "base.html" %}
+
+{% block title %}Gerenciar Usuários - Admin{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" x-data="adminUsersApp()">
+    
+    <!-- Header -->
+    <div class="mb-8 flex justify-between items-center">
+        <div>
+            <h1 class="text-3xl font-bold text-textPrimary flex items-center gap-3">
+                <i class="fas fa-users text-accent500"></i>
+                Gerenciar Usuários
+            </h1>
+            <p class="mt-1 text-sm text-textSecondary">Total: {{ users|length }} usuário(s)</p>
+        </div>
+        <a href="/admin" class="btn-secondary">
+            <i class="fas fa-arrow-left mr-2"></i> Voltar
+        </a>
+    </div>
+    
+    <!-- Filtros -->
+    <div class="card !p-6 mb-6">
+        <div class="flex flex-wrap gap-4">
+            <div class="flex-1 min-w-64">
+                <input type="text" id="searchInput" placeholder="Buscar por nome, email..." 
+                       class="w-full px-4 py-2 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary focus:border-accent500">
+            </div>
+            <select id="statusFilter" onchange="applyFilters()" 
+                    class="px-4 py-2 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary">
+                <option value="all" {{ 'selected' if status_filter == 'all' }}>Todos</option>
+                <option value="active" {{ 'selected' if status_filter == 'active' }}>Ativos</option>
+                <option value="banned" {{ 'selected' if status_filter == 'banned' }}>Banidos</option>
+                <option value="inactive" {{ 'selected' if status_filter == 'inactive' }}>Inativos</option>
+            </select>
+        </div>
+    </div>
+    
+    <!-- Tabela de Usuários -->
+    <div class="card !p-0 overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead class="bg-bg900">
+                    <tr>
+                        <th class="px-6 py-4 text-left text-xs font-semibold text-textSecondary uppercase">ID</th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold text-textSecondary uppercase">Usuário</th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold text-textSecondary uppercase">Status</th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold text-textSecondary uppercase">Bots</th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold text-textSecondary uppercase">Vendas</th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold text-textSecondary uppercase">Receita</th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold text-textSecondary uppercase">Sua Receita</th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold text-textSecondary uppercase">Cadastro</th>
+                        <th class="px-6 py-4 text-left text-xs font-semibold text-textSecondary uppercase">Ações</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-white divide-opacity-5">
+                    {% for item in users %}
+                    <tr class="hover:bg-white hover:bg-opacity-5 transition">
+                        <td class="px-6 py-4 text-sm text-textSecondary">#{{ item.user.id }}</td>
+                        <td class="px-6 py-4">
+                            <div>
+                                <p class="text-sm font-semibold text-textPrimary">{{ item.user.email }}</p>
+                                <p class="text-xs text-textSecondary">@{{ item.user.username }}</p>
+                            </div>
+                        </td>
+                        <td class="px-6 py-4">
+                            {% if item.user.is_banned %}
+                                <span class="badge-danger">Banido</span>
+                            {% elif item.user.is_active %}
+                                <span class="badge-success">Ativo</span>
+                            {% else %}
+                                <span class="badge-default">Inativo</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 text-sm text-textPrimary">{{ item.bots_count }}</td>
+                        <td class="px-6 py-4 text-sm text-textPrimary">{{ item.sales_count }}</td>
+                        <td class="px-6 py-4 text-sm font-semibold text-green-400">R$ {{ "%.2f"|format(item.revenue) }}</td>
+                        <td class="px-6 py-4 text-sm font-semibold text-accent500">R$ {{ "%.2f"|format(item.user.total_commission_paid) }}</td>
+                        <td class="px-6 py-4 text-xs text-textSecondary">{{ item.user.created_at.strftime('%d/%m/%Y') if item.user.created_at else '-' }}</td>
+                        <td class="px-6 py-4">
+                            <div class="flex gap-2">
+                                <a href="/admin/users/{{ item.user.id }}" 
+                                   class="text-blue-400 hover:text-blue-300" title="Ver detalhes">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                                {% if not item.user.is_banned %}
+                                <button @click="banUser({{ item.user.id }}, '{{ item.user.email }}')"
+                                        class="text-red-400 hover:text-red-300" title="Banir">
+                                    <i class="fas fa-ban"></i>
+                                </button>
+                                <button @click="impersonate({{ item.user.id }}, '{{ item.user.email }}')"
+                                        class="text-purple-400 hover:text-purple-300" title="Logar como">
+                                    <i class="fas fa-user-secret"></i>
+                                </button>
+                                {% else %}
+                                <button @click="unbanUser({{ item.user.id }}, '{{ item.user.email }}')"
+                                        class="text-green-400 hover:text-green-300" title="Desbanir">
+                                    <i class="fas fa-check-circle"></i>
+                                </button>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="9" class="px-6 py-12 text-center text-textSecondary">
+                            <i class="fas fa-inbox text-4xl mb-2"></i>
+                            <p>Nenhum usuário encontrado</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <!-- Modal de Banimento -->
+    <div x-show="showBanModal" x-cloak class="fixed inset-0 z-50 overflow-y-auto" style="display: none;">
+        <div class="flex items-center justify-center min-h-screen px-4">
+            <div class="fixed inset-0 bg-black bg-opacity-75 transition-opacity" @click="showBanModal = false"></div>
+            
+            <div class="relative bg-surface800 rounded-xl shadow-2xl max-w-md w-full p-6">
+                <h3 class="text-xl font-bold text-textPrimary mb-4">Banir Usuário</h3>
+                <p class="text-sm text-textSecondary mb-4">Você está prestes a banir: <strong x-text="selectedUserEmail"></strong></p>
+                
+                <textarea x-model="banReason" placeholder="Motivo do banimento..." rows="3"
+                          class="w-full px-4 py-2 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary mb-4"></textarea>
+                
+                <div class="flex gap-3">
+                    <button @click="showBanModal = false" class="flex-1 btn-secondary">Cancelar</button>
+                    <button @click="confirmBan()" class="flex-1 bg-danger text-white px-4 py-2 rounded-lg hover:bg-opacity-90">
+                        <i class="fas fa-ban mr-2"></i> Confirmar Banimento
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function adminUsersApp() {
+    return {
+        showBanModal: false,
+        selectedUserId: null,
+        selectedUserEmail: '',
+        banReason: '',
+        
+        async banUser(userId, email) {
+            this.selectedUserId = userId;
+            this.selectedUserEmail = email;
+            this.banReason = '';
+            this.showBanModal = true;
+        },
+        
+        async confirmBan() {
+            if (!this.banReason.trim()) {
+                alert('Por favor, informe o motivo do banimento');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/admin/users/${this.selectedUserId}/ban`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({reason: this.banReason})
+                });
+                
+                if (response.ok) {
+                    alert('Usuário banido com sucesso!');
+                    location.reload();
+                } else {
+                    alert('Erro ao banir usuário');
+                }
+            } catch (error) {
+                console.error(error);
+                alert('Erro ao banir usuário');
+            }
+        },
+        
+        async unbanUser(userId, email) {
+            if (!confirm(`Deseja desbanir ${email}?`)) return;
+            
+            try {
+                const response = await fetch(`/admin/users/${userId}/unban`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'}
+                });
+                
+                if (response.ok) {
+                    alert('Usuário desbanido com sucesso!');
+                    location.reload();
+                } else {
+                    alert('Erro ao desbanir usuário');
+                }
+            } catch (error) {
+                console.error(error);
+                alert('Erro ao desbanir usuário');
+            }
+        },
+        
+        async impersonate(userId, email) {
+            if (!confirm(`ATENÇÃO: Você vai logar como ${email}. Continuar?`)) return;
+            
+            try {
+                const response = await fetch(`/admin/users/${userId}/impersonate`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'}
+                });
+                
+                const data = await response.json();
+                if (response.ok && data.redirect) {
+                    window.location.href = data.redirect;
+                } else {
+                    alert(data.error || 'Erro ao impersonar usuário');
+                }
+            } catch (error) {
+                console.error(error);
+                alert('Erro ao impersonar usuário');
+            }
+        }
+    }
+}
+
+function applyFilters() {
+    const status = document.getElementById('statusFilter').value;
+    const search = document.getElementById('searchInput').value;
+    window.location.href = `/admin/users?status=${status}&search=${encodeURIComponent(search)}`;
+}
+
+// Busca em tempo real
+document.addEventListener('DOMContentLoaded', () => {
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) {
+        searchInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') applyFilters();
+        });
+    }
+});
+</script>
+{% endblock %}
+

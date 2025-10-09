@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+
+{% block title %}Painel de Administração - grimbots{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    
+    <!-- Header Admin -->
+    <div class="mb-8 flex justify-between items-center">
+        <div>
+            <h1 class="text-3xl font-bold text-textPrimary flex items-center gap-3">
+                <i class="fas fa-shield-alt text-accent500"></i>
+                Painel de Administração
+            </h1>
+            <p class="mt-1 text-sm text-textSecondary">Visão completa da plataforma</p>
+        </div>
+        <div class="flex gap-3">
+            <a href="/dashboard" class="btn-secondary">
+                <i class="fas fa-arrow-left mr-2"></i> Voltar ao Dashboard
+            </a>
+        </div>
+    </div>
+    
+    <!-- Alert de Admin -->
+    <div class="bg-gradient-to-r from-red-500/10 to-orange-500/10 border-l-4 border-red-500 p-4 mb-8 rounded-lg">
+        <div class="flex items-center gap-3">
+            <i class="fas fa-exclamation-triangle text-red-500 text-xl"></i>
+            <div>
+                <p class="font-semibold text-red-400">Modo Administrador Ativo</p>
+                <p class="text-sm text-textSecondary">Você tem acesso total ao sistema. Use com responsabilidade.</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Estatísticas Gerais -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <!-- Total Usuários -->
+        <div class="card !p-6">
+            <div class="flex justify-between items-start mb-4">
+                <div>
+                    <p class="text-xs font-semibold text-textSecondary uppercase tracking-wider">Usuários Totais</p>
+                    <p class="mt-2 text-3xl font-bold text-textPrimary">{{ stats.total_users }}</p>
+                </div>
+                <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center">
+                    <i class="fas fa-users text-white text-lg"></i>
+                </div>
+            </div>
+            <div class="flex items-center gap-4 text-xs">
+                <span class="text-green-400">{{ stats.active_users }} ativos</span>
+                <span class="text-red-400">{{ stats.banned_users }} banidos</span>
+            </div>
+        </div>
+        
+        <!-- Total Bots -->
+        <div class="card !p-6">
+            <div class="flex justify-between items-start mb-4">
+                <div>
+                    <p class="text-xs font-semibold text-textSecondary uppercase tracking-wider">Bots Totais</p>
+                    <p class="mt-2 text-3xl font-bold text-textPrimary">{{ stats.total_bots }}</p>
+                </div>
+                <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-purple-700 flex items-center justify-center">
+                    <i class="fas fa-robot text-white text-lg"></i>
+                </div>
+            </div>
+            <p class="text-xs text-textSecondary">
+                <span class="text-green-400">{{ stats.running_bots }}</span> online agora
+            </p>
+        </div>
+        
+        <!-- Receita Total -->
+        <div class="card !p-6">
+            <div class="flex justify-between items-start mb-4">
+                <div>
+                    <p class="text-xs font-semibold text-textSecondary uppercase tracking-wider">Receita Total</p>
+                    <p class="mt-2 text-2xl font-bold text-textPrimary">R$ {{ "%.2f"|format(stats.total_revenue) }}</p>
+                </div>
+                <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-green-500 to-green-700 flex items-center justify-center">
+                    <i class="fas fa-dollar-sign text-white text-lg"></i>
+                </div>
+            </div>
+            <p class="text-xs text-textSecondary">{{ stats.paid_payments }} vendas confirmadas</p>
+        </div>
+        
+        <!-- Receita da Plataforma (via Split) -->
+        <div class="card !p-6">
+            <div class="flex justify-between items-start mb-4">
+                <div>
+                    <p class="text-xs font-semibold text-textSecondary uppercase tracking-wider">Sua Receita (Split)</p>
+                    <p class="mt-2 text-2xl font-bold text-textPrimary">R$ {{ "%.2f"|format(stats.platform_revenue_total) }}</p>
+                </div>
+                <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-500 to-orange-700 flex items-center justify-center">
+                    <i class="fas fa-piggy-bank text-white text-lg"></i>
+                </div>
+            </div>
+            <p class="text-xs text-textSecondary">R$ {{ "%.2f"|format(stats.platform_revenue_month) }} este mês</p>
+        </div>
+    </div>
+    
+    <!-- Grid: Métricas e Top Usuários -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        
+        <!-- Métricas Adicionais (2/3) -->
+        <div class="lg:col-span-2 card !p-6">
+            <h3 class="text-lg font-semibold text-textPrimary mb-6">📊 Métricas da Plataforma</h3>
+            <div class="grid grid-cols-2 gap-4">
+                <div class="p-4 bg-bg900 rounded-lg">
+                    <p class="text-sm text-textSecondary">Novos Usuários (30d)</p>
+                    <p class="text-2xl font-bold text-accent500 mt-2">{{ stats.new_users_30d }}</p>
+                </div>
+                <div class="p-4 bg-bg900 rounded-lg">
+                    <p class="text-sm text-textSecondary">Total de Leads</p>
+                    <p class="text-2xl font-bold text-accent500 mt-2">{{ stats.total_bot_users }}</p>
+                </div>
+                <div class="p-4 bg-bg900 rounded-lg">
+                    <p class="text-sm text-textSecondary">Total de Pagamentos</p>
+                    <p class="text-2xl font-bold text-accent500 mt-2">{{ stats.total_payments }}</p>
+                </div>
+                <div class="p-4 bg-bg900 rounded-lg">
+                    <p class="text-sm text-textSecondary">Taxa de Conversão</p>
+                    <p class="text-2xl font-bold text-accent500 mt-2">
+                        {{ "%.1f"|format((stats.paid_payments / stats.total_payments * 100) if stats.total_payments > 0 else 0) }}%
+                    </p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Top Usuários (1/3) -->
+        <div class="card !p-6">
+            <h3 class="text-lg font-semibold text-textPrimary mb-6">🏆 Top 10 Usuários</h3>
+            <div class="space-y-3">
+                {% for item in top_users[:5] %}
+                <div class="flex items-center gap-3 p-3 bg-bg900 rounded-lg">
+                    <div class="w-8 h-8 rounded-full bg-accent500 flex items-center justify-center text-black font-bold text-sm">
+                        {{ loop.index }}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm font-semibold text-textPrimary truncate">{{ item.user.email }}</p>
+                        <p class="text-xs text-green-400">R$ {{ "%.2f"|format(item.revenue) }}</p>
+                    </div>
+                </div>
+                {% else %}
+                <p class="text-center text-textSecondary text-sm py-8">Nenhum dado disponível</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Ações Rápidas -->
+    <div class="card !p-6">
+        <h3 class="text-lg font-semibold text-textPrimary mb-6">⚡ Ações Rápidas</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <a href="/admin/users" class="p-4 bg-gradient-to-br from-blue-500/10 to-blue-700/10 border border-blue-500/20 rounded-lg hover:border-blue-500/40 transition-all">
+                <i class="fas fa-users text-blue-500 text-2xl mb-2"></i>
+                <p class="font-semibold text-textPrimary">Gerenciar Usuários</p>
+                <p class="text-xs text-textSecondary mt-1">Ver, editar e banir</p>
+            </a>
+            
+            <a href="/admin/revenue" class="p-4 bg-gradient-to-br from-green-500/10 to-green-700/10 border border-green-500/20 rounded-lg hover:border-green-500/40 transition-all">
+                <i class="fas fa-piggy-bank text-green-500 text-2xl mb-2"></i>
+                <p class="font-semibold text-textPrimary">Receita da Plataforma</p>
+                <p class="text-xs text-textSecondary mt-1">Split payment automático</p>
+            </a>
+            
+            <a href="/admin/logs" class="p-4 bg-gradient-to-br from-purple-500/10 to-purple-700/10 border border-purple-500/20 rounded-lg hover:border-purple-500/40 transition-all">
+                <i class="fas fa-history text-purple-500 text-2xl mb-2"></i>
+                <p class="font-semibold text-textPrimary">Logs de Auditoria</p>
+                <p class="text-xs text-textSecondary mt-1">Ações dos admins</p>
+            </a>
+            
+            <a href="/admin/analytics" class="p-4 bg-gradient-to-br from-orange-500/10 to-orange-700/10 border border-orange-500/20 rounded-lg hover:border-orange-500/40 transition-all">
+                <i class="fas fa-chart-line text-orange-500 text-2xl mb-2"></i>
+                <p class="font-semibold text-textPrimary">Analytics Global</p>
+                <p class="text-xs text-textSecondary mt-1">Gráficos e relatórios</p>
+            </a>
+        </div>
+    </div>
+    
+</div>
+{% endblock %}
+
