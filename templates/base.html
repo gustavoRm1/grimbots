@@ -98,6 +98,9 @@
                         <a href="{{ url_for('ranking') }}" class="{% if request.endpoint == 'ranking' %}border-accent500 text-gray-900{% else %}border-transparent hover:border-accent500 hover:text-gray-700{% endif %} inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium text-accent500">
                             <i class="fas fa-trophy mr-2"></i> Ranking 🔥
                         </a>
+                        <a href="{{ url_for('redirect_pools_page') }}" class="{% if request.endpoint == 'redirect_pools_page' %}border-blue-500 text-gray-900{% else %}border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700{% endif %} inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                            <i class="fas fa-network-wired mr-2"></i> Redirecionador
+                        </a>
                         {% if current_user.is_admin and not session.get('impersonate_admin_id') %}
                         <a href="{{ url_for('admin_dashboard') }}" class="{% if request.endpoint is not none and 'admin' in request.endpoint %}border-orange-500 text-gray-900{% else %}border-transparent text-orange-500 hover:border-orange-300 hover:text-orange-700{% endif %} inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
                             <i class="fas fa-shield-alt mr-2"></i> Painel Admin

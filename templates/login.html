@@ -50,6 +50,45 @@
                     Acesse seu painel de gerenciamento
                 </p>
             </div>
+
+            <!-- Flash Messages -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                <div class="px-8 pt-4">
+                    {% for category, message in messages %}
+                    <div class="rounded-xl p-4 mb-3 animate-fadeInDown" 
+                         style="{% if category == 'error' %}background: rgba(239, 68, 68, 0.12); border: 2px solid #EF4444;{% elif category == 'success' %}background: rgba(34, 197, 94, 0.12); border: 2px solid #22C55E;{% elif category == 'warning' %}background: rgba(245, 158, 11, 0.12); border: 2px solid #F59E0B;{% else %}background: rgba(59, 130, 246, 0.12); border: 2px solid #3B82F6;{% endif %}"
+                         x-data="{show: true}" 
+                         x-show="show" 
+                         x-init="setTimeout(() => show = false, 5000)"
+                         x-transition:enter="transition ease-out duration-300"
+                         x-transition:enter-start="opacity-0 transform scale-95"
+                         x-transition:enter-end="opacity-100 transform scale-100"
+                         x-transition:leave="transition ease-in duration-200"
+                         x-transition:leave-start="opacity-100 transform scale-100"
+                         x-transition:leave-end="opacity-0 transform scale-95">
+                        <div class="flex items-start">
+                            <div class="flex-shrink-0">
+                                <i class="{% if category == 'error' %}fas fa-times-circle{% elif category == 'success' %}fas fa-check-circle{% elif category == 'warning' %}fas fa-exclamation-triangle{% else %}fas fa-info-circle{% endif %} text-xl"
+                                   style="{% if category == 'error' %}color: #FCA5A5; filter: drop-shadow(0 0 6px rgba(252, 165, 165, 0.5));{% elif category == 'success' %}color: #6EE7B7; filter: drop-shadow(0 0 6px rgba(110, 231, 183, 0.5));{% elif category == 'warning' %}color: #FCD34D; filter: drop-shadow(0 0 6px rgba(252, 211, 77, 0.5));{% else %}color: #93C5FD; filter: drop-shadow(0 0 6px rgba(147, 197, 253, 0.5));{% endif %}"></i>
+                            </div>
+                            <div class="ml-3 flex-1">
+                                <p class="text-sm font-bold" 
+                                   style="{% if category == 'error' %}color: #FCA5A5;{% elif category == 'success' %}color: #6EE7B7;{% elif category == 'warning' %}color: #FCD34D;{% else %}color: #93C5FD;{% endif %}">
+                                    {{ message }}
+                                </p>
+                            </div>
+                            <button @click="show = false" 
+                                    class="ml-3 flex-shrink-0 hover:scale-110 transition-transform"
+                                    style="{% if category == 'error' %}color: #FCA5A5;{% elif category == 'success' %}color: #6EE7B7;{% elif category == 'warning' %}color: #FCD34D;{% else %}color: #93C5FD;{% endif %}">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            {% endwith %}
             
             <!-- Form -->
             <form class="px-8 pb-8 pt-6 space-y-6" method="POST" action="{{ url_for('login') }}" x-data="{ showPassword: false }">
@@ -104,19 +143,29 @@
 
                 <!-- Remember Me + Forgot Password -->
                 <div class="flex items-center justify-between">
-                    <div class="flex items-center">
-                        <input 
-                            id="remember" 
-                            name="remember" 
-                            type="checkbox" 
-                            class="h-4 w-4 rounded border-white border-opacity-20 bg-bg900 text-accent500 focus:ring-accent500 focus:ring-offset-0 focus:ring-2 cursor-pointer transition-all">
-                        <label for="remember" class="ml-2 block text-sm text-textSecondary cursor-pointer select-none hover:text-textPrimary transition-colors">
+                    <label for="remember" class="flex items-center cursor-pointer group">
+                        <div class="relative">
+                            <input 
+                                id="remember" 
+                                name="remember" 
+                                type="checkbox" 
+                                class="peer sr-only">
+                            <div class="w-5 h-5 rounded transition-all duration-200 peer-checked:scale-110"
+                                 style="background: #111827; border: 2px solid rgba(245, 158, 11, 0.3);">
+                            </div>
+                            <div class="absolute inset-0 flex items-center justify-center opacity-0 peer-checked:opacity-100 transition-opacity duration-200 pointer-events-none">
+                                <i class="fas fa-check text-xs font-black" style="color: #FDE68A; filter: drop-shadow(0 0 4px rgba(253, 230, 138, 0.6));"></i>
+                            </div>
+                        </div>
+                        <span class="ml-3 text-sm font-semibold select-none transition-colors group-hover:scale-105 transition-transform" 
+                              style="color: #D1D5DB;">
                             Lembrar-me
-                        </label>
-                    </div>
+                        </span>
+                    </label>
 
                     <div class="text-sm">
-                        <a href="{{ url_for('forgot_password') }}" class="font-medium text-accent500 hover:text-accent400 transition-colors">
+                        <a href="{{ url_for('forgot_password') }}" class="font-semibold hover:scale-105 transition-transform inline-block" 
+                           style="color: #FDE68A;">
                             Esqueceu a senha?
                         </a>
                     </div>
@@ -166,9 +215,9 @@
         <div class="text-center space-y-3">
             <p class="text-xs text-textSecondary">
                 Ao continuar, você concorda com os 
-                <a href="#" class="text-accent500 hover:text-accent400 underline">Termos de Uso</a>
+                <a href="/termos-de-uso" target="_blank" class="text-accent500 hover:text-accent400 underline">Termos de Uso</a>
                 e
-                <a href="#" class="text-accent500 hover:text-accent400 underline">Política de Privacidade</a>
+                <a href="/politica-privacidade" target="_blank" class="text-accent500 hover:text-accent400 underline">Política de Privacidade</a>
             </p>
             
             <!-- Social Proof Sutil -->

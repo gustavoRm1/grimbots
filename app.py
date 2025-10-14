@@ -6,9 +6,9 @@ Sistema de gerenciamento de bots do Telegram com painel web
 from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, abort, session
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from flask_socketio import SocketIO, emit, join_room, leave_room
-from models import db, User, Bot, BotConfig, Gateway, Payment, AuditLog, Achievement, UserAchievement, BotUser
+from models import db, User, Bot, BotConfig, Gateway, Payment, AuditLog, Achievement, UserAchievement, BotUser, RedirectPool, PoolBot
 from bot_manager import BotManager
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import wraps
 import os
 import logging
@@ -289,6 +289,18 @@ def logout():
     logout_user()
     flash('Logout realizado com sucesso!', 'info')
     return redirect(url_for('login'))
+
+# ==================== DOCUMENTOS JURÍDICOS ====================
+
+@app.route('/termos-de-uso')
+def termos_de_uso():
+    """Página de Termos de Uso"""
+    return render_template('termos_de_uso.html')
+
+@app.route('/politica-privacidade')
+def politica_privacidade():
+    """Página de Política de Privacidade"""
+    return render_template('politica_privacidade.html')
 
 # ==================== DASHBOARD ====================
 
@@ -640,6 +652,78 @@ def get_bot(bot_id):
     bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
     return jsonify(bot.to_dict())
 
+@app.route('/api/bots/<int:bot_id>/token', methods=['PUT'])
+@login_required
+def update_bot_token(bot_id):
+    """
+    Atualiza o token de um bot (CRÍTICO para recuperação de bot banido)
+    
+    REQUISITOS:
+    - Bot deve estar parado
+    - Token novo obrigatório
+    - Validação do token com Telegram
+    - Token deve ser único no sistema
+    - Atualiza bot_id e username automaticamente
+    - Mantém TODAS as configurações do fluxo
+    """
+    bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
+    
+    data = request.get_json()
+    new_token = data.get('token', '').strip()
+    
+    # VALIDAÇÃO 1: Token obrigatório
+    if not new_token:
+        return jsonify({'error': 'Token é obrigatório'}), 400
+    
+    # VALIDAÇÃO 2: Bot deve estar parado
+    if bot.is_running:
+        return jsonify({'error': 'Pare o bot antes de trocar o token'}), 400
+    
+    # VALIDAÇÃO 3: Token diferente do atual
+    if new_token == bot.token:
+        return jsonify({'error': 'Este token já está em uso neste bot'}), 400
+    
+    # VALIDAÇÃO 4: Token único no sistema (exceto o bot atual)
+    existing_bot = Bot.query.filter(Bot.token == new_token, Bot.id != bot_id).first()
+    if existing_bot:
+        return jsonify({'error': 'Este token já está cadastrado em outro bot'}), 400
+    
+    try:
+        # VALIDAÇÃO 5: Token válido no Telegram
+        bot_info = bot_manager.validate_token(new_token)
+        
+        # Armazenar dados antigos para log
+        old_token_preview = bot.token[:10] + '...'
+        old_username = bot.username
+        old_bot_id = bot.bot_id
+        
+        # ATUALIZAR BOT (mantém todas as configurações)
+        bot.token = new_token
+        bot.username = bot_info.get('username')
+        bot.bot_id = str(bot_info.get('id'))
+        
+        db.session.commit()
+        
+        logger.info(f"Token atualizado: Bot {bot.name} | @{old_username} → @{bot.username} | ID {old_bot_id} → {bot.bot_id} | por {current_user.email}")
+        
+        return jsonify({
+            'message': 'Token atualizado com sucesso!',
+            'bot': bot.to_dict(),
+            'changes': {
+                'old_username': old_username,
+                'new_username': bot.username,
+                'old_bot_id': old_bot_id,
+                'new_bot_id': bot.bot_id,
+                'configurations_preserved': True,
+                'can_start': True
+            }
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao atualizar token do bot {bot_id}: {e}")
+        return jsonify({'error': str(e)}), 400
+
 @app.route('/api/bots/<int:bot_id>', methods=['DELETE'])
 @login_required
 def delete_bot(bot_id):
@@ -656,6 +740,102 @@ def delete_bot(bot_id):
     
     logger.info(f"Bot deletado: {bot_name} por {current_user.email}")
     return jsonify({'message': 'Bot deletado com sucesso'})
+
+@app.route('/api/bots/<int:bot_id>/duplicate', methods=['POST'])
+@login_required
+def duplicate_bot(bot_id):
+    """
+    Duplica um bot com todas as configurações
+    
+    REQUISITOS:
+    - Token novo obrigatório
+    - Validação do token com Telegram
+    - Verificação de token único
+    - Copia todo o fluxo (mensagens, Order Bumps, Downsells, Remarketing)
+    """
+    bot_original = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
+    
+    data = request.get_json()
+    new_token = data.get('token', '').strip()
+    new_name = data.get('name', '').strip()
+    
+    # VALIDAÇÃO 1: Token obrigatório
+    if not new_token:
+        return jsonify({'error': 'Token do novo bot é obrigatório'}), 400
+    
+    # VALIDAÇÃO 2: Token diferente do original
+    if new_token == bot_original.token:
+        return jsonify({'error': 'O novo token deve ser diferente do bot original'}), 400
+    
+    # VALIDAÇÃO 3: Token único no sistema
+    if Bot.query.filter_by(token=new_token).first():
+        return jsonify({'error': 'Este token já está cadastrado no sistema'}), 400
+    
+    try:
+        # VALIDAÇÃO 4: Token válido no Telegram
+        bot_info = bot_manager.validate_token(new_token)
+        
+        # Criar nome automático se não fornecido
+        if not new_name:
+            new_name = f"{bot_original.name} (Cópia)"
+        
+        # CRIAR NOVO BOT
+        new_bot = Bot(
+            user_id=current_user.id,
+            token=new_token,
+            name=new_name,
+            username=bot_info.get('username'),
+            bot_id=str(bot_info.get('id')),
+            is_active=True,
+            is_running=False  # Não iniciar automaticamente
+        )
+        
+        db.session.add(new_bot)
+        db.session.flush()  # Garante que new_bot.id esteja disponível
+        
+        # DUPLICAR CONFIGURAÇÕES
+        if bot_original.config:
+            config_original = bot_original.config
+            
+            new_config = BotConfig(
+                bot_id=new_bot.id,
+                welcome_message=config_original.welcome_message,
+                welcome_media_url=config_original.welcome_media_url,
+                welcome_media_type=config_original.welcome_media_type,
+                main_buttons=config_original.main_buttons,  # JSON com Order Bumps
+                downsells=config_original.downsells,  # JSON
+                downsells_enabled=config_original.downsells_enabled,
+                access_link=config_original.access_link
+            )
+            
+            db.session.add(new_config)
+        else:
+            # Criar config padrão se original não tiver
+            new_config = BotConfig(bot_id=new_bot.id)
+            db.session.add(new_config)
+        
+        db.session.commit()
+        
+        logger.info(f"Bot duplicado: {bot_original.name} → {new_bot.name} (@{new_bot.username}) por {current_user.email}")
+        
+        return jsonify({
+            'message': 'Bot duplicado com sucesso!',
+            'bot': new_bot.to_dict(),
+            'copied_features': {
+                'welcome_message': bool(bot_original.config and bot_original.config.welcome_message),
+                'welcome_media': bool(bot_original.config and bot_original.config.welcome_media_url),
+                'main_buttons': len(bot_original.config.get_main_buttons()) if bot_original.config else 0,
+                'order_bumps': sum(1 for btn in (bot_original.config.get_main_buttons() if bot_original.config else []) 
+                                  if btn.get('order_bump', {}).get('enabled')),
+                'downsells': len(bot_original.config.get_downsells()) if bot_original.config else 0,
+                'access_link': bool(bot_original.config and bot_original.config.access_link)
+            }
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao duplicar bot {bot_id}: {e}")
+        return jsonify({'error': str(e)}), 400
 
 @app.route('/api/bots/<int:bot_id>/start', methods=['POST'])
 @login_required
@@ -1567,6 +1747,10 @@ def update_bot_config(bot_id):
         if 'main_buttons' in data:
             config.set_main_buttons(data['main_buttons'])
         
+        # Botões de redirecionamento
+        if 'redirect_buttons' in data:
+            config.set_redirect_buttons(data['redirect_buttons'])
+        
         # Order bump
         if 'order_bump_enabled' in data:
             config.order_bump_enabled = data['order_bump_enabled']
@@ -1602,6 +1786,317 @@ def update_bot_config(bot_id):
         db.session.rollback()
         logger.error(f"Erro ao atualizar configuração: {e}")
         return jsonify({'error': str(e)}), 500
+
+# ==================== LOAD BALANCER / REDIRECT POOLS ====================
+
+@app.route('/go/<slug>')
+def public_redirect(slug):
+    """
+    Endpoint PÚBLICO de redirecionamento com Load Balancing
+    
+    URL: /go/{slug} (ex: /go/red1)
+    
+    FUNCIONALIDADES:
+    - Busca pool pelo slug
+    - Seleciona bot online (estratégia configurada)
+    - Health check em cache (não valida em tempo real)
+    - Failover automático
+    - Circuit breaker
+    - Métricas de uso
+    """
+    from datetime import datetime
+    
+    # Buscar pool ativo
+    pool = RedirectPool.query.filter_by(slug=slug, is_active=True).first()
+    
+    if not pool:
+        abort(404, f'Pool "{slug}" não encontrado ou inativo')
+    
+    # Selecionar bot usando estratégia configurada
+    pool_bot = pool.select_bot()
+    
+    if not pool_bot:
+        # Nenhum bot online - tentar bot degradado como fallback
+        degraded = pool.pool_bots.filter_by(
+            is_enabled=True,
+            status='degraded'
+        ).order_by(PoolBot.consecutive_failures.asc()).first()
+        
+        if degraded:
+            pool_bot = degraded
+            logger.warning(f"Pool {slug}: Usando bot degradado @{pool_bot.bot.username}")
+        else:
+            abort(503, 'Nenhum bot disponível no momento. Tente novamente em instantes.')
+    
+    # Incrementar métricas
+    pool_bot.total_redirects += 1
+    pool.total_redirects += 1
+    db.session.commit()
+    
+    # Log
+    logger.info(f"Redirect: /go/{slug} → @{pool_bot.bot.username} | Estratégia: {pool.distribution_strategy} | Total: {pool_bot.total_redirects}")
+    
+    # Emitir evento WebSocket para o dono do pool
+    socketio.emit('pool_redirect', {
+        'pool_id': pool.id,
+        'pool_name': pool.name,
+        'bot_username': pool_bot.bot.username,
+        'total_redirects': pool.total_redirects
+    }, room=f'user_{pool.user_id}')
+    
+    # Redirect 302 para Telegram
+    redirect_url = f"https://t.me/{pool_bot.bot.username}?start=acesso"
+    return redirect(redirect_url, code=302)
+
+
+@app.route('/redirect-pools')
+@login_required
+def redirect_pools_page():
+    """Página de gerenciamento de pools"""
+    return render_template('redirect_pools.html')
+
+
+@app.route('/api/redirect-pools', methods=['GET'])
+@login_required
+def get_redirect_pools():
+    """Lista todos os pools do usuário"""
+    pools = RedirectPool.query.filter_by(user_id=current_user.id).all()
+    return jsonify([pool.to_dict() for pool in pools])
+
+
+@app.route('/api/redirect-pools', methods=['POST'])
+@login_required
+def create_redirect_pool():
+    """
+    Cria novo pool de redirecionamento
+    
+    VALIDAÇÕES:
+    - Nome obrigatório
+    - Slug único por usuário
+    - Slug alfanumérico (a-z, 0-9, -, _)
+    """
+    data = request.get_json()
+    
+    name = data.get('name', '').strip()
+    slug = data.get('slug', '').strip().lower()
+    description = data.get('description', '').strip()
+    strategy = data.get('distribution_strategy', 'round_robin')
+    
+    # VALIDAÇÃO 1: Nome obrigatório
+    if not name:
+        return jsonify({'error': 'Nome do pool é obrigatório'}), 400
+    
+    # VALIDAÇÃO 2: Slug obrigatório
+    if not slug:
+        return jsonify({'error': 'Slug é obrigatório (ex: red1, red2)'}), 400
+    
+    # VALIDAÇÃO 3: Slug alfanumérico
+    import re
+    if not re.match(r'^[a-z0-9_-]+$', slug):
+        return jsonify({'error': 'Slug deve conter apenas letras minúsculas, números, - e _'}), 400
+    
+    # VALIDAÇÃO 4: Slug único para este usuário
+    existing = RedirectPool.query.filter_by(user_id=current_user.id, slug=slug).first()
+    if existing:
+        return jsonify({'error': f'Você já tem um pool com slug "{slug}"'}), 400
+    
+    # VALIDAÇÃO 5: Estratégia válida
+    valid_strategies = ['round_robin', 'least_connections', 'random', 'weighted']
+    if strategy not in valid_strategies:
+        return jsonify({'error': f'Estratégia inválida. Use: {", ".join(valid_strategies)}'}), 400
+    
+    try:
+        pool = RedirectPool(
+            user_id=current_user.id,
+            name=name,
+            slug=slug,
+            description=description,
+            distribution_strategy=strategy
+        )
+        
+        db.session.add(pool)
+        db.session.commit()
+        
+        logger.info(f"Pool criado: {name} ({slug}) por {current_user.email}")
+        
+        return jsonify({
+            'message': 'Pool criado com sucesso!',
+            'pool': pool.to_dict()
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao criar pool: {e}")
+        return jsonify({'error': str(e)}), 400
+
+
+@app.route('/api/redirect-pools/<int:pool_id>', methods=['GET'])
+@login_required
+def get_redirect_pool(pool_id):
+    """Obtém detalhes de um pool"""
+    pool = RedirectPool.query.filter_by(id=pool_id, user_id=current_user.id).first_or_404()
+    
+    # Incluir lista de bots
+    pool_data = pool.to_dict()
+    pool_data['bots'] = [pb.to_dict() for pb in pool.pool_bots.all()]
+    
+    return jsonify(pool_data)
+
+
+@app.route('/api/redirect-pools/<int:pool_id>', methods=['PUT'])
+@login_required
+def update_redirect_pool(pool_id):
+    """Atualiza configurações do pool"""
+    pool = RedirectPool.query.filter_by(id=pool_id, user_id=current_user.id).first_or_404()
+    
+    data = request.get_json()
+    
+    if 'name' in data:
+        pool.name = data['name'].strip()
+    
+    if 'description' in data:
+        pool.description = data['description'].strip()
+    
+    if 'distribution_strategy' in data:
+        valid_strategies = ['round_robin', 'least_connections', 'random', 'weighted']
+        if data['distribution_strategy'] in valid_strategies:
+            pool.distribution_strategy = data['distribution_strategy']
+    
+    if 'is_active' in data:
+        pool.is_active = data['is_active']
+    
+    db.session.commit()
+    
+    logger.info(f"Pool atualizado: {pool.name} por {current_user.email}")
+    
+    return jsonify({
+        'message': 'Pool atualizado com sucesso!',
+        'pool': pool.to_dict()
+    })
+
+
+@app.route('/api/redirect-pools/<int:pool_id>', methods=['DELETE'])
+@login_required
+def delete_redirect_pool(pool_id):
+    """Deleta um pool"""
+    pool = RedirectPool.query.filter_by(id=pool_id, user_id=current_user.id).first_or_404()
+    
+    pool_name = pool.name
+    db.session.delete(pool)
+    db.session.commit()
+    
+    logger.info(f"Pool deletado: {pool_name} por {current_user.email}")
+    
+    return jsonify({'message': 'Pool deletado com sucesso'})
+
+
+@app.route('/api/redirect-pools/<int:pool_id>/bots', methods=['POST'])
+@login_required
+def add_bot_to_pool(pool_id):
+    """
+    Adiciona bot ao pool
+    
+    VALIDAÇÕES:
+    - Bot pertence ao usuário
+    - Bot não está em outro pool do mesmo usuário (opcional)
+    - Weight e priority válidos
+    """
+    pool = RedirectPool.query.filter_by(id=pool_id, user_id=current_user.id).first_or_404()
+    
+    data = request.get_json()
+    bot_id = data.get('bot_id')
+    weight = data.get('weight', 1)
+    priority = data.get('priority', 0)
+    
+    # VALIDAÇÃO 1: Bot ID obrigatório
+    if not bot_id:
+        return jsonify({'error': 'Bot ID é obrigatório'}), 400
+    
+    # VALIDAÇÃO 2: Bot pertence ao usuário
+    bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first()
+    if not bot:
+        return jsonify({'error': 'Bot não encontrado ou não pertence a você'}), 404
+    
+    # VALIDAÇÃO 3: Bot já está neste pool?
+    existing = PoolBot.query.filter_by(pool_id=pool_id, bot_id=bot_id).first()
+    if existing:
+        return jsonify({'error': 'Bot já está neste pool'}), 400
+    
+    try:
+        pool_bot = PoolBot(
+            pool_id=pool_id,
+            bot_id=bot_id,
+            weight=max(1, int(weight)),
+            priority=int(priority)
+        )
+        
+        db.session.add(pool_bot)
+        db.session.commit()
+        
+        # Atualizar saúde do pool
+        pool.update_health()
+        db.session.commit()
+        
+        logger.info(f"Bot @{bot.username} adicionado ao pool {pool.name} por {current_user.email}")
+        
+        return jsonify({
+            'message': 'Bot adicionado ao pool!',
+            'pool_bot': pool_bot.to_dict()
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao adicionar bot ao pool: {e}")
+        return jsonify({'error': str(e)}), 400
+
+
+@app.route('/api/redirect-pools/<int:pool_id>/bots/<int:pool_bot_id>', methods=['DELETE'])
+@login_required
+def remove_bot_from_pool(pool_id, pool_bot_id):
+    """Remove bot do pool"""
+    pool = RedirectPool.query.filter_by(id=pool_id, user_id=current_user.id).first_or_404()
+    pool_bot = PoolBot.query.filter_by(id=pool_bot_id, pool_id=pool_id).first_or_404()
+    
+    bot_username = pool_bot.bot.username
+    db.session.delete(pool_bot)
+    db.session.commit()
+    
+    # Atualizar saúde do pool
+    pool.update_health()
+    db.session.commit()
+    
+    logger.info(f"Bot @{bot_username} removido do pool {pool.name} por {current_user.email}")
+    
+    return jsonify({'message': 'Bot removido do pool'})
+
+
+@app.route('/api/redirect-pools/<int:pool_id>/bots/<int:pool_bot_id>', methods=['PUT'])
+@login_required
+def update_pool_bot_config(pool_id, pool_bot_id):
+    """Atualiza configurações do bot no pool (weight, priority, enabled)"""
+    pool = RedirectPool.query.filter_by(id=pool_id, user_id=current_user.id).first_or_404()
+    pool_bot = PoolBot.query.filter_by(id=pool_bot_id, pool_id=pool_id).first_or_404()
+    
+    data = request.get_json()
+    
+    if 'weight' in data:
+        pool_bot.weight = max(1, int(data['weight']))
+    
+    if 'priority' in data:
+        pool_bot.priority = int(data['priority'])
+    
+    if 'is_enabled' in data:
+        pool_bot.is_enabled = data['is_enabled']
+    
+    db.session.commit()
+    
+    logger.info(f"Configurações do bot @{pool_bot.bot.username} no pool {pool.name} atualizadas")
+    
+    return jsonify({
+        'message': 'Configurações atualizadas!',
+        'pool_bot': pool_bot.to_dict()
+    })
+
 
 # ==================== GATEWAYS DE PAGAMENTO ====================
 
@@ -2188,6 +2683,100 @@ def init_db():
     with app.app_context():
         db.create_all()
         logger.info("Banco de dados inicializado")
+
+
+# ==================== HEALTH CHECK DE POOLS (Background Job) ====================
+
+def health_check_all_pools():
+    """
+    Health Check de todos os bots em todos os pools ativos
+    
+    Executa a cada 15 segundos via APScheduler
+    
+    FUNCIONALIDADES:
+    - Valida token com Telegram API
+    - Atualiza status (online, offline, degraded)
+    - Circuit Breaker (3 falhas = bloqueio 2min)
+    - Atualiza métricas do pool
+    - Notifica usuário se pool ficar crítico
+    """
+    with app.app_context():
+        try:
+            pools = RedirectPool.query.filter_by(is_active=True).all()
+            
+            for pool in pools:
+                for pool_bot in pool.pool_bots.filter_by(is_enabled=True).all():
+                    try:
+                        # Verificar circuit breaker
+                        if pool_bot.circuit_breaker_until:
+                            if pool_bot.circuit_breaker_until > datetime.now():
+                                continue  # Ainda bloqueado
+                            else:
+                                pool_bot.circuit_breaker_until = None  # Liberado
+                        
+                        # Health check no Telegram
+                        health = bot_manager.validate_token(pool_bot.bot.token)
+                        
+                        # Bot está saudável
+                        pool_bot.status = 'online'
+                        pool_bot.consecutive_failures = 0
+                        pool_bot.last_error = None
+                        pool_bot.last_health_check = datetime.now()
+                        
+                    except Exception as e:
+                        # Bot falhou
+                        pool_bot.consecutive_failures += 1
+                        pool_bot.last_error = str(e)
+                        pool_bot.last_health_check = datetime.now()
+                        
+                        if pool_bot.consecutive_failures >= 3:
+                            # 3 falhas = offline + circuit breaker
+                            pool_bot.status = 'offline'
+                            pool_bot.circuit_breaker_until = datetime.now() + timedelta(minutes=2)
+                            
+                            logger.error(f"Bot @{pool_bot.bot.username} no pool {pool.name} OFFLINE (3 falhas)")
+                            
+                            # Emitir evento WebSocket
+                            socketio.emit('pool_bot_down', {
+                                'pool_id': pool.id,
+                                'pool_name': pool.name,
+                                'bot_username': pool_bot.bot.username,
+                                'error': str(e)
+                            }, room=f'user_{pool.user_id}')
+                        else:
+                            pool_bot.status = 'degraded'
+                
+                # Atualizar saúde geral do pool
+                pool.update_health()
+                
+                # Alerta se pool crítico (< 50% saúde)
+                if pool.health_percentage < 50 and pool.total_bots_count > 0:
+                    logger.warning(f"Pool {pool.name} CRÍTICO: {pool.health_percentage}% saúde")
+                    
+                    socketio.emit('pool_critical', {
+                        'pool_id': pool.id,
+                        'pool_name': pool.name,
+                        'health': pool.health_percentage,
+                        'online_bots': pool.healthy_bots_count,
+                        'total_bots': pool.total_bots_count
+                    }, room=f'user_{pool.user_id}')
+            
+            db.session.commit()
+            
+        except Exception as e:
+            logger.error(f"Erro no health check de pools: {e}")
+            db.session.rollback()
+
+
+# Agendar health check a cada 15 segundos
+scheduler.add_job(
+    id='health_check_pools',
+    func=health_check_all_pools,
+    trigger='interval',
+    seconds=15,
+    replace_existing=True
+)
+
 
 if __name__ == '__main__':
     init_db()

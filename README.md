@@ -35,22 +35,24 @@ python app.py
 
 ---
 
-## 📚 DOCUMENTAÇÃO COMPLETA
+## 📚 DOCUMENTAÇÃO
 
-Toda a documentação está organizada na pasta `/docs`:
+Documentação organizada na pasta `/docs`:
 
 | Documento | Descrição |
 |-----------|-----------|
-| **[DEPLOY_PM2_NPM.md](docs/DEPLOY_PM2_NPM.md)** | 🚀 **DEPLOY COM PM2 + NGINX PROXY MANAGER** |
-| **[COMANDOS_RAPIDOS.md](docs/COMANDOS_RAPIDOS.md)** | ⚡ **COMANDOS ÚTEIS PARA PRODUÇÃO** |
-| [GITHUB_SETUP.md](docs/GITHUB_SETUP.md) | Guia para subir no GitHub |
-| [README.md](docs/README.md) | Visão geral do sistema |
-| [QUICKSTART.md](docs/QUICKSTART.md) | Guia rápido de uso |
-| [SISTEMA_PRONTO.md](docs/SISTEMA_PRONTO.md) | Funcionalidades implementadas |
-| [ORDER_BUMP_COMPLETO.md](docs/ORDER_BUMP_COMPLETO.md) | Guia de Order Bumps |
-| [REMARKETING_GUIA.md](docs/REMARKETING_GUIA.md) | Sistema de Remarketing |
-| [BADGES_DISTINCAO_SOCIAL.md](docs/BADGES_DISTINCAO_SOCIAL.md) | Badges e Gamificação |
-| [ANALYTICS_COMPLETO.md](docs/ANALYTICS_COMPLETO.md) | Dashboard e Analytics |
+| **[DEPLOY_PM2_NPM.md](docs/DEPLOY_PM2_NPM.md)** | 🚀 Deploy com PM2 + Nginx Proxy Manager |
+| **[COMANDOS_RAPIDOS.md](docs/COMANDOS_RAPIDOS.md)** | ⚡ Comandos úteis para produção |
+| **[ARQUITETURA_LOAD_BALANCER.md](docs/ARQUITETURA_LOAD_BALANCER.md)** | 🔄 Sistema de Load Balancer/Pools |
+| **[CHECKLIST_PRODUCAO.md](docs/CHECKLIST_PRODUCAO.md)** | ✅ Checklist completo de deploy |
+| [DEPLOY_GUIDE.md](docs/DEPLOY_GUIDE.md) | Deploy com Docker Compose |
+| [GITHUB_SETUP.md](docs/GITHUB_SETUP.md) | Guia para GitHub |
+| [QUICKSTART.md](docs/QUICKSTART.md) | Início rápido |
+| [SISTEMA_PRONTO.md](docs/SISTEMA_PRONTO.md) | Funcionalidades |
+| [ORDER_BUMP_COMPLETO.md](docs/ORDER_BUMP_COMPLETO.md) | Order Bumps |
+| [REMARKETING_GUIA.md](docs/REMARKETING_GUIA.md) | Remarketing |
+| [BADGES_DISTINCAO_SOCIAL.md](docs/BADGES_DISTINCAO_SOCIAL.md) | Gamificação |
+| [ANALYTICS_COMPLETO.md](docs/ANALYTICS_COMPLETO.md) | Analytics |
 
 ---
 
@@ -81,6 +83,15 @@ Toda a documentação está organizada na pasta `/docs`:
 - ✅ Campanhas com mídia e botões
 - ✅ Taxa de conversão e métricas
 - ✅ Blacklist automática
+
+### 🔄 Alta Disponibilidade
+- ✅ **Load Balancer com Pools de Bots**
+- ✅ **4 estratégias de distribuição** (Round Robin, Least Connections, Random, Weighted)
+- ✅ **Health Check automático** (15 em 15s)
+- ✅ **Circuit Breaker** (3 falhas = bloqueio 2min)
+- ✅ **Failover automático** (bot cai, outro assume)
+- ✅ **Métricas em tempo real** (redirects, saúde, uptime)
+- ✅ **Alertas WebSocket** (bot offline, pool crítico)
 
 ### 🏆 Gamificação
 - ✅ **Ranking público** com pódio visual

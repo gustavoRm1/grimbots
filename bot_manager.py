@@ -445,14 +445,23 @@ class BotManager:
             welcome_media_url = config.get('welcome_media_url')
             welcome_media_type = config.get('welcome_media_type', 'video')
             main_buttons = config.get('main_buttons', [])
+            redirect_buttons = config.get('redirect_buttons', [])
             
-            # Preparar botões (incluir índice para identificar qual botão tem order bump)
+            # Preparar botões de venda (incluir índice para identificar qual botão tem order bump)
             buttons = []
             for index, btn in enumerate(main_buttons):
                 if btn.get('text') and btn.get('price'):
                     buttons.append({
                         'text': btn['text'],
                         'callback_data': f"buy_{btn.get('price')}_{btn.get('description', 'Produto')}_{index}"
+                    })
+            
+            # Adicionar botões de redirecionamento (com URL)
+            for btn in redirect_buttons:
+                if btn.get('text') and btn.get('url'):
+                    buttons.append({
+                        'text': btn['text'],
+                        'url': btn['url']  # Botão com URL abre direto no navegador
                     })
             
             # Verificar se URL de mídia é válida (não pode ser canal privado)

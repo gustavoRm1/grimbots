@@ -232,6 +232,10 @@ class BotConfig(db.Model):
     #   "order_bump": {"enabled": true, "message": "...", "price": 5, "description": "..."}}]
     main_buttons = db.Column(db.Text)
     
+    # Botões de redirecionamento (JSON) - SEM PAGAMENTO
+    # [{"text": "...", "url": "https://..."}]
+    redirect_buttons = db.Column(db.Text)
+    
     # Downsells (JSON)
     downsells = db.Column(db.Text)  # [{"delay_minutes": 5, "message": "...", "media_url": "...", "buttons": [...]}]
     downsells_enabled = db.Column(db.Boolean, default=False)
@@ -268,6 +272,19 @@ class BotConfig(db.Model):
         """Define downsells"""
         self.downsells = json.dumps(downsells)
     
+    def get_redirect_buttons(self):
+        """Retorna botões de redirecionamento parseados"""
+        if self.redirect_buttons:
+            try:
+                return json.loads(self.redirect_buttons)
+            except:
+                return []
+        return []
+    
+    def set_redirect_buttons(self, buttons):
+        """Define botões de redirecionamento"""
+        self.redirect_buttons = json.dumps(buttons)
+    
     def to_dict(self):
         """Retorna configuração em formato dict"""
         return {
@@ -276,9 +293,183 @@ class BotConfig(db.Model):
             'welcome_media_url': self.welcome_media_url,
             'welcome_media_type': self.welcome_media_type,
             'main_buttons': self.get_main_buttons(),
+            'redirect_buttons': self.get_redirect_buttons(),
             'downsells_enabled': self.downsells_enabled,
             'downsells': self.get_downsells(),
             'access_link': self.access_link
+        }
+
+
+class RedirectPool(db.Model):
+    """Pool de redirecionamento (grupo de bots com load balancing)"""
+    __tablename__ = 'redirect_pools'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    
+    # Identificação
+    name = db.Column(db.String(100), nullable=False)
+    slug = db.Column(db.String(50), nullable=False, index=True)  # "red1", "red2", etc
+    description = db.Column(db.Text)
+    
+    # Configuração
+    is_active = db.Column(db.Boolean, default=True, index=True)
+    distribution_strategy = db.Column(db.String(20), default='round_robin')
+    # Estratégias: round_robin, least_connections, random, weighted
+    
+    # Controle round robin
+    last_bot_index = db.Column(db.Integer, default=0)
+    
+    # Métricas agregadas (cache)
+    total_redirects = db.Column(db.Integer, default=0)
+    healthy_bots_count = db.Column(db.Integer, default=0)
+    total_bots_count = db.Column(db.Integer, default=0)
+    
+    # Health do pool (0-100)
+    health_percentage = db.Column(db.Integer, default=0)
+    last_health_check = db.Column(db.DateTime)
+    
+    # Timestamps
+    created_at = db.Column(db.DateTime, default=get_brazil_time)
+    updated_at = db.Column(db.DateTime, default=get_brazil_time, onupdate=get_brazil_time)
+    
+    # Relacionamentos
+    pool_bots = db.relationship('PoolBot', backref='pool', lazy='dynamic', cascade='all, delete-orphan')
+    
+    # Constraint único: slug por usuário
+    __table_args__ = (
+        db.UniqueConstraint('user_id', 'slug', name='unique_user_pool_slug'),
+    )
+    
+    def get_online_bots(self):
+        """Retorna bots online deste pool"""
+        from datetime import datetime
+        now = datetime.now()
+        
+        return self.pool_bots.join(Bot).filter(
+            PoolBot.is_enabled == True,
+            PoolBot.status == 'online',
+            db.or_(
+                PoolBot.circuit_breaker_until.is_(None),
+                PoolBot.circuit_breaker_until < now
+            )
+        ).all()
+    
+    def select_bot(self):
+        """Seleciona bot baseado na estratégia configurada"""
+        online_bots = self.get_online_bots()
+        
+        if not online_bots:
+            return None
+        
+        if self.distribution_strategy == 'round_robin':
+            # Round robin circular
+            self.last_bot_index = (self.last_bot_index + 1) % len(online_bots)
+            return online_bots[self.last_bot_index]
+        
+        elif self.distribution_strategy == 'least_connections':
+            # Bot com menos redirects
+            return min(online_bots, key=lambda x: x.total_redirects)
+        
+        elif self.distribution_strategy == 'random':
+            # Aleatório
+            import random
+            return random.choice(online_bots)
+        
+        elif self.distribution_strategy == 'weighted':
+            # Weighted random
+            import random
+            total_weight = sum(pb.weight for pb in online_bots)
+            r = random.uniform(0, total_weight)
+            upto = 0
+            for pb in online_bots:
+                if upto + pb.weight >= r:
+                    return pb
+                upto += pb.weight
+            return online_bots[-1]
+        
+        return online_bots[0]
+    
+    def update_health(self):
+        """Atualiza métricas de saúde do pool"""
+        total = self.pool_bots.count()
+        online = self.pool_bots.filter_by(status='online', is_enabled=True).count()
+        
+        self.total_bots_count = total
+        self.healthy_bots_count = online
+        self.health_percentage = int((online / total * 100)) if total > 0 else 0
+        self.last_health_check = get_brazil_time()
+    
+    def to_dict(self):
+        """Retorna dados do pool em formato dict"""
+        return {
+            'id': self.id,
+            'name': self.name,
+            'slug': self.slug,
+            'description': self.description,
+            'is_active': self.is_active,
+            'distribution_strategy': self.distribution_strategy,
+            'total_redirects': self.total_redirects,
+            'healthy_bots': self.healthy_bots_count,
+            'total_bots': self.total_bots_count,
+            'health_percentage': self.health_percentage,
+            'public_url': f'/go/{self.slug}',
+            'last_health_check': self.last_health_check.isoformat() if self.last_health_check else None,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+
+
+class PoolBot(db.Model):
+    """Associação entre Pool e Bot (many-to-many com configurações)"""
+    __tablename__ = 'pool_bots'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    pool_id = db.Column(db.Integer, db.ForeignKey('redirect_pools.id'), nullable=False, index=True)
+    bot_id = db.Column(db.Integer, db.ForeignKey('bots.id'), nullable=False, index=True)
+    
+    # Configuração específica
+    weight = db.Column(db.Integer, default=1)  # Para weighted load balancing
+    priority = db.Column(db.Integer, default=0)  # 1=preferencial, 0=normal, -1=backup
+    is_enabled = db.Column(db.Boolean, default=True, index=True)
+    
+    # Health check
+    status = db.Column(db.String(20), default='checking', index=True)  # online, offline, degraded, checking
+    last_health_check = db.Column(db.DateTime)
+    consecutive_failures = db.Column(db.Integer, default=0)
+    last_error = db.Column(db.Text)
+    
+    # Circuit breaker
+    circuit_breaker_until = db.Column(db.DateTime, index=True)
+    
+    # Métricas
+    total_redirects = db.Column(db.Integer, default=0)
+    avg_response_time = db.Column(db.Integer, default=0)  # ms
+    
+    # Timestamps
+    added_at = db.Column(db.DateTime, default=get_brazil_time)
+    
+    # Relacionamentos
+    bot = db.relationship('Bot', backref='pool_associations')
+    
+    # Constraints
+    __table_args__ = (
+        db.UniqueConstraint('pool_id', 'bot_id', name='unique_pool_bot'),
+    )
+    
+    def to_dict(self):
+        """Retorna dados do pool_bot em formato dict"""
+        return {
+            'id': self.id,
+            'bot': self.bot.to_dict() if self.bot else None,
+            'weight': self.weight,
+            'priority': self.priority,
+            'is_enabled': self.is_enabled,
+            'status': self.status,
+            'consecutive_failures': self.consecutive_failures,
+            'total_redirects': self.total_redirects,
+            'avg_response_time': self.avg_response_time,
+            'circuit_breaker_active': self.circuit_breaker_until and self.circuit_breaker_until > get_brazil_time(),
+            'last_health_check': self.last_health_check.isoformat() if self.last_health_check else None
         }
 
 
