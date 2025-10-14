@@ -2795,5 +2795,5 @@ if __name__ == '__main__':
     print("="*60)
     print("Aguardando acoes...\n")
     
-    socketio.run(app, debug=debug, host='0.0.0.0', port=port, log_output=False)
+    socketio.run(app, debug=debug, host='0.0.0.0', port=port, log_output=False, allow_unsafe_werkzeug=True)
 
