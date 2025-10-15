@@ -8,6 +8,7 @@ venv/
 env/
 ENV/
 *.egg-info/
+.eggs/
 dist/
 build/
 
@@ -20,9 +21,14 @@ instance/
 # Environment
 .env
 .env.local
-.env.production
+.env.*.local
 
-# IDEs
+# Logs
+*.log
+logs/
+*.log.*
+
+# IDE
 .vscode/
 .idea/
 *.swp
@@ -33,22 +39,20 @@ instance/
 .DS_Store
 Thumbs.db
 
-# Logs
-*.log
-logs/
-
 # Backups
-*.bak
 *.backup
-backup/
+*.bak
 backups/
 
-# Temporary
-*.tmp
-*.temp
-temp/
-tmp/
+# Uploads
+uploads/
+static/uploads/
 
-# Node (caso use npm no futuro)
+# Node (se usar)
 node_modules/
 package-lock.json
+
+# Certificates
+*.pem
+*.key
+*.crt

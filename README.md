@@ -179,16 +179,41 @@ grpay/
 
 ### 📖 Guias Disponíveis:
 
-1. **[PM2 + Nginx Proxy Manager](docs/DEPLOY_PM2_NPM.md)** ⭐ **RECOMENDADO**
+1. **[VPS Ubuntu + Nginx + Systemd](DEPLOY_VPS.md)** ⭐ **RECOMENDADO PARA PRODUÇÃO**
+   - Deploy tradicional e estável
+   - Nginx como reverse proxy
+   - SSL/HTTPS com Certbot gratuito
+   - Systemd para auto-restart
+   - Backup automático
+   - **Tempo:** ~60 minutos
+   - **Deploy script:** `./deploy_to_vps.sh usuario@ip_vps`
+
+2. **[PM2 + Nginx Proxy Manager](docs/DEPLOY_PM2_NPM.md)**
    - Interface visual para configurar SSL
    - PM2 para gerenciar processo Python
    - Zero-downtime deployments
    - **Tempo:** ~40 minutos
 
-2. **[Docker Compose](docs/DEPLOY_GUIDE.md)**
+3. **[Docker Compose](docs/DEPLOY_GUIDE.md)**
    - Deploy containerizado completo
    - Mais isolado
    - **Tempo:** ~30 minutos
+
+### ⚡ Deploy Rápido (VPS Ubuntu):
+
+```bash
+# 1. Fazer deploy do Windows para VPS
+chmod +x deploy_to_vps.sh
+./deploy_to_vps.sh grimbots@SEU_IP_VPS
+
+# 2. Na VPS, configurar .env
+ssh grimbots@SEU_IP_VPS
+cd ~/grimbots-app
+nano .env  # Adicionar SECRET_KEY forte
+
+# 3. Seguir guia completo
+cat DEPLOY_VPS.md
+```
 
 ### ⚡ Deploy Rápido (PM2 + NPM):
 
