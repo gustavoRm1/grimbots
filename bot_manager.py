@@ -460,7 +460,7 @@ class BotManager:
                 if btn.get('text') and btn.get('price'):
                     buttons.append({
                         'text': btn['text'],
-                        'callback_data': f"buy_{btn.get('price')}_{btn.get('description', 'Produto')}_{index}"
+                        'callback_data': f"buy_{index}"  # ✅ CORREÇÃO: Usar apenas o índice (max 10 bytes)
                     })
             
             # Adicionar botões de redirecionamento (com URL)
@@ -567,40 +567,32 @@ class BotManager:
                 
                 self._handle_verify_payment(bot_id, token, chat_id, payment_id, user_info)
             
-            # Botão de REMARKETING (compra via remarketing)
-            elif '_remarketing_' in callback_data:
+            # ✅ NOVO: Botão de REMARKETING (formato simplificado)
+            elif callback_data.startswith('rmkt_'):
+                # Formato: rmkt_CAMPAIGN_ID_BUTTON_INDEX
+                parts = callback_data.replace('rmkt_', '').split('_')
+                campaign_id = int(parts[0])
+                btn_idx = int(parts[1])
+                
                 # Responder callback
                 requests.post(url, json={
                     'callback_query_id': callback_id,
                     'text': '🔄 Gerando PIX da oferta...'
                 }, timeout=3)
                 
-                # Extrair dados: buy_PRICE|DESCRIPTION|remarketing_CAMPAIGN_ID
-                try:
-                    # Remove "buy_" e separa por "|remarketing_"
-                    data_part = callback_data.replace('buy_', '')
-                    if '|remarketing_' in data_part:
-                        parts = data_part.split('|remarketing_')
-                        # Divide price|description
-                        price_and_desc = parts[0].split('|')
-                        price = float(price_and_desc[0])
-                        description = price_and_desc[1] if len(price_and_desc) > 1 else 'Produto Remarketing'
-                        campaign_id = int(parts[1]) if len(parts) > 1 else 0
+                # Buscar dados da campanha e botão
+                from app import app, db
+                from models import RemarketingCampaign
+                
+                with app.app_context():
+                    campaign = RemarketingCampaign.query.get(campaign_id)
+                    if campaign and campaign.buttons and btn_idx < len(campaign.buttons):
+                        btn = campaign.buttons[btn_idx]
+                        price = float(btn.get('price', 0))
+                        description = btn.get('description', 'Produto Remarketing')
                     else:
-                        # Fallback para formato antigo (compatibilidade)
-                        parts = data_part.split('_remarketing_')
-                        price_and_desc = parts[0].rsplit('_', 1)
-                        price = float(price_and_desc[0])
-                        description = price_and_desc[1] if len(price_and_desc) > 1 else 'Produto Remarketing'
-                        campaign_id = int(parts[1]) if len(parts) > 1 else 0
-                except Exception as e:
-                    logger.error(f"❌ Erro ao parsear callback de remarketing: {callback_data} - {e}")
-                    self.send_telegram_message(
-                        token=token,
-                        chat_id=str(chat_id),
-                        message="❌ Erro ao processar sua solicitação. Entre em contato com o suporte."
-                    )
-                    return
+                        price = 0
+                        description = 'Produto Remarketing'
                 
                 logger.info(f"📢 COMPRA VIA REMARKETING | Campanha: {campaign_id} | Produto: {description} | Valor: R$ {price:.2f}")
                 
@@ -664,10 +656,21 @@ class BotManager:
                     'text': '✅ Order bump adicionado! Gerando PIX...'
                 }, timeout=3)
                 
-                parts = callback_data.replace('bump_yes_', '').split('_', 3)
-                original_price = float(parts[0])
-                bump_price = float(parts[1])
-                description = parts[2]
+                # ✅ NOVO FORMATO: bump_yes_INDEX
+                button_index = int(callback_data.replace('bump_yes_', ''))
+                
+                # Buscar dados do botão e order bump pela configuração
+                main_buttons = config.get('main_buttons', [])
+                if button_index < len(main_buttons):
+                    button_data = main_buttons[button_index]
+                    original_price = float(button_data.get('price', 0))
+                    description = button_data.get('description', 'Produto')
+                    order_bump = button_data.get('order_bump', {})
+                    bump_price = float(order_bump.get('price', 0))
+                else:
+                    original_price = 0
+                    bump_price = 0
+                    description = 'Produto'
                 
                 total_price = original_price + bump_price
                 final_description = f"{description} + Bônus"
@@ -747,9 +750,18 @@ class BotManager:
                     'text': '🔄 Gerando PIX do valor original...'
                 }, timeout=3)
                 
-                parts = callback_data.replace('bump_no_', '').split('_', 2)
-                price = float(parts[0])
-                description = parts[1]
+                # ✅ NOVO FORMATO: bump_no_INDEX
+                button_index = int(callback_data.replace('bump_no_', ''))
+                
+                # Buscar dados do botão pela configuração
+                main_buttons = config.get('main_buttons', [])
+                if button_index < len(main_buttons):
+                    button_data = main_buttons[button_index]
+                    price = float(button_data.get('price', 0))
+                    description = button_data.get('description', 'Produto')
+                else:
+                    price = 0
+                    description = 'Produto'
                 
                 logger.info(f"❌ Cliente RECUSOU order bump. Gerando PIX do valor original...")
                 
@@ -818,46 +830,102 @@ class BotManager:
                     else:
                         logger.info(f"ℹ️ Downsells desabilitados ou não configurados (bump_no)")
             
+            # ✅ NOVO: Downsell com formato simplificado
+            elif callback_data.startswith('downsell_'):
+                # Formato: downsell_INDEX_PRICE_CENTAVOS
+                parts = callback_data.replace('downsell_', '').split('_')
+                downsell_idx = int(parts[0])
+                price = float(parts[1]) / 100  # Converter centavos para reais
+                description = f"Downsell {downsell_idx + 1}"
+                button_index = -1  # Sinalizar que é downsell
+                
+                logger.info(f"💰 DOWNSELL CLICADO | Índice: {downsell_idx} | Valor: R$ {price:.2f}")
+                
+                # Responder callback
+                requests.post(url, json={
+                    'callback_query_id': callback_id,
+                    'text': '🔄 Gerando pagamento PIX...'
+                }, timeout=3)
+                
+                # Gerar PIX do downsell
+                pix_data = self._generate_pix_payment(
+                    bot_id=bot_id,
+                    amount=price,
+                    description=description,
+                    customer_name=user_info.get('first_name', ''),
+                    customer_username=user_info.get('username', ''),
+                    customer_user_id=str(user_info.get('id', '')),
+                    is_downsell=True,
+                    downsell_index=downsell_idx
+                )
+                
+                if pix_data and pix_data.get('pix_code'):
+                    payment_message = f"""
+🎯 <b>Produto:</b> {description}
+💰 <b>Valor:</b> R$ {price:.2f}
+
+📱 <b>PIX Copia e Cola:</b>
+<code>{pix_data['pix_code']}</code>
+
+<i>👆 Toque para copiar o código PIX</i>
+
+⏰ <b>Válido por:</b> 30 minutos
+
+💡 <b>Após pagar, clique no botão abaixo para verificar e receber seu acesso!</b>
+                    """
+                    
+                    buttons = [{
+                        'text': '✅ Verificar Pagamento',
+                        'callback_data': f'verify_{pix_data.get("payment_id")}'
+                    }]
+                    
+                    self.send_telegram_message(
+                        token=token,
+                        chat_id=str(chat_id),
+                        message=payment_message.strip(),
+                        buttons=buttons
+                    )
+                    
+                    logger.info(f"✅ PIX DOWNSELL ENVIADO! ID: {pix_data.get('payment_id')}")
+                else:
+                    self.send_telegram_message(
+                        token=token,
+                        chat_id=str(chat_id),
+                        message="❌ Erro ao gerar PIX. Entre em contato com o suporte."
+                    )
+            
             # Botão de compra (VERIFICAR SE TEM ORDER BUMP)
             elif callback_data.startswith('buy_'):
-                # Verificar se é um downsell (formato: buy_PRICE_PAYMENT_ID_downsell_INDEX)
-                if '_downsell_' in callback_data:
-                    # Formato: buy_10.0_BOT1_123_downsell_0
-                    parts = callback_data.split('_')
-                    price = float(parts[1])
-                    # O description é o payment_id original (para rastreamento)
-                    description = f"Downsell {parts[-1]}"
-                    button_index = -1  # Sinalizar que é downsell
-                    
-                    logger.info(f"💰 DOWNSELL CLICADO | Valor: R$ {price:.2f}")
-                else:
-                    # Formato normal: buy_PRICE_DESCRIPTION_BUTTON_INDEX
-                    parts = callback_data.split('_', 3)
-                    price = float(parts[1]) if len(parts) > 1 else 0
-                    description = parts[2] if len(parts) > 2 else 'Produto'
-                    button_index = int(parts[3]) if len(parts) > 3 else 0
-                    
-                    logger.info(f"💰 Produto: {description} | Valor: R$ {price:.2f} | Botão: {button_index}")
+                # ✅ NOVO FORMATO: buy_INDEX (mais simples, evita BUTTON_DATA_INVALID)
+                # Extrair índice do botão
+                button_index = int(callback_data.replace('buy_', ''))
                 
-                # VERIFICAR SE TEM ORDER BUMP PARA ESTE BOTÃO (somente se não for downsell)
+                # Buscar dados do botão pela configuração
                 main_buttons = config.get('main_buttons', [])
-                order_bump = None
-                
-                if button_index >= 0 and button_index < len(main_buttons):
+                if button_index < len(main_buttons):
                     button_data = main_buttons[button_index]
-                    order_bump = button_data.get('order_bump', {})
+                    price = float(button_data.get('price', 0))
+                    description = button_data.get('description', 'Produto')
+                else:
+                    price = 0
+                    description = 'Produto'
+                
+                logger.info(f"💰 Produto: {description} | Valor: R$ {price:.2f} | Botão: {button_index}")
+                
+                # VERIFICAR SE TEM ORDER BUMP PARA ESTE BOTÃO
+                order_bump = button_data.get('order_bump', {}) if button_index < len(main_buttons) else None
+                
+                if order_bump and order_bump.get('enabled'):
+                    # Responder callback - AGUARDANDO order bump
+                    requests.post(url, json={
+                        'callback_query_id': callback_id,
+                        'text': '🎁 Oferta especial para você!'
+                    }, timeout=3)
                     
-                    if order_bump and order_bump.get('enabled'):
-                        # Responder callback - AGUARDANDO order bump
-                        requests.post(url, json={
-                            'callback_query_id': callback_id,
-                            'text': '🎁 Oferta especial para você!'
-                        }, timeout=3)
-                        
-                        logger.info(f"🎁 Order Bump detectado para este botão!")
-                        self._show_order_bump(bot_id, token, chat_id, user_info, 
-                                             price, description, button_index, order_bump)
-                        return  # Aguarda resposta do order bump
+                    logger.info(f"🎁 Order Bump detectado para este botão!")
+                    self._show_order_bump(bot_id, token, chat_id, user_info, 
+                                         price, description, button_index, order_bump)
+                    return  # Aguarda resposta do order bump
                 
                 # SEM ORDER BUMP - Gerar PIX direto
                 # Responder callback
@@ -866,25 +934,14 @@ class BotManager:
                     'text': '🔄 Gerando pagamento PIX...'
                 }, timeout=3)
                 
-                # Verificar se é downsell
-                is_downsell_purchase = '_downsell_' in callback_data
-                downsell_idx = None
-                if is_downsell_purchase:
-                    # Extrair índice do downsell do callback_data
-                    parts = callback_data.split('_downsell_')
-                    if len(parts) > 1:
-                        downsell_idx = int(parts[1])
-                
-                logger.info(f"📝 {'DOWNSELL' if is_downsell_purchase else 'Sem order bump'} - gerando PIX direto...")
+                logger.info(f"📝 Sem order bump - gerando PIX direto...")
                 pix_data = self._generate_pix_payment(
                     bot_id=bot_id,
                     amount=price,
                     description=description,
                     customer_name=user_info.get('first_name', ''),
                     customer_username=user_info.get('username', ''),
-                    customer_user_id=str(user_info.get('id', '')),
-                    is_downsell=is_downsell_purchase,
-                    downsell_index=downsell_idx
+                    customer_user_id=str(user_info.get('id', ''))
                 )
                 
                 if pix_data and pix_data.get('pix_code'):
@@ -1188,11 +1245,11 @@ Seu pagamento ainda não foi confirmado.
             buttons = [
                 {
                     'text': accept_button_text,
-                    'callback_data': f'bump_yes_{original_price}_{bump_price}_{original_description}_{button_index}'
+                    'callback_data': f'bump_yes_{button_index}'  # ✅ CORREÇÃO: Apenas índice (< 15 bytes)
                 },
                 {
                     'text': decline_button_text,
-                    'callback_data': f'bump_no_{original_price}_{original_description}_{button_index}'
+                    'callback_data': f'bump_no_{button_index}'  # ✅ CORREÇÃO: Apenas índice (< 15 bytes)
                 }
             ]
             
@@ -2093,9 +2150,10 @@ Seu pagamento ainda não foi confirmado.
             logger.info(f"  - media_url: {media_url}")
             
             # Criar botão de compra para o downsell
+            # ✅ CORREÇÃO: Usar apenas price e index (< 25 bytes)
             buttons = [{
                 'text': button_text,
-                'callback_data': f'buy_{price}_{payment_id}_downsell_{index}'
+                'callback_data': f'downsell_{index}_{int(price*100)}'  # price em centavos para evitar float
             }]
             
             logger.info(f"📨 Enviando downsell {index+1} para chat {chat_id}")
@@ -2315,13 +2373,13 @@ Seu pagamento ainda não foi confirmado.
                             # Preparar botões (converter para formato de callback_data)
                             remarketing_buttons = []
                             if campaign.buttons:
-                                for btn in campaign.buttons:
+                                for btn_idx, btn in enumerate(campaign.buttons):
                                     if btn.get('price') and btn.get('description'):
                                         # Botão de compra - gera PIX
-                                        # Formato: buy_PRICE|DESCRIPTION|remarketing_CAMPAIGN_ID
+                                        # ✅ NOVO FORMATO: rmkt_CAMPAIGN_BTN_INDEX (< 20 bytes)
                                         remarketing_buttons.append({
                                             'text': btn.get('text', 'Comprar'),
-                                            'callback_data': f"buy_{btn.get('price')}|{btn.get('description')}|remarketing_{campaign.id}"
+                                            'callback_data': f"rmkt_{campaign.id}_{btn_idx}"
                                         })
                                     elif btn.get('url'):
                                         # Botão de URL
