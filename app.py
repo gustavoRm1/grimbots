@@ -30,11 +30,30 @@ logger = logging.getLogger(__name__)
 # Inicializar Flask
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///saas_bot_manager.db')
+
+# ✅ CORREÇÃO: Usar caminho ABSOLUTO para SQLite (compatível com threads)
+import os
+from pathlib import Path
+
+# Diretório base do projeto
+BASE_DIR = Path(__file__).resolve().parent
+
+# Caminho absoluto para o banco de dados
+DB_PATH = BASE_DIR / 'instance' / 'saas_bot_manager.db'
+
+# Criar pasta instance se não existir
+DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+
+# URI com caminho absoluto
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get(
+    'DATABASE_URL', 
+    f'sqlite:///{DB_PATH}'
+)
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
     'pool_pre_ping': True,
     'pool_recycle': 300,
+    'connect_args': {'check_same_thread': False}  # ✅ Permitir acesso de múltiplas threads
 }
 
 # Inicializar extensões
