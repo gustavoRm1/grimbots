@@ -534,13 +534,62 @@
                                            class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                                            placeholder="https://t.me/canal/789">
                                 </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700">Preço (R$)</label>
-                                    <input type="number" 
-                                           x-model="downsell.price" 
-                                           step="0.01"
-                                           class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                                           placeholder="14.97">
+                                <!-- ✅ NOVO: Modo de Precificação -->
+                                <div class="bg-gradient-to-r from-purple-50 to-blue-50 p-4 rounded-lg border-2 border-purple-200">
+                                    <label class="block text-sm font-bold text-purple-900 mb-3">
+                                        <i class="fas fa-calculator mr-2"></i>Modo de Precificação
+                                    </label>
+                                    
+                                    <div class="grid grid-cols-2 gap-3 mb-4">
+                                        <button type="button"
+                                                @click="downsell.pricing_mode = 'fixed'"
+                                                :class="(downsell.pricing_mode || 'fixed') === 'fixed' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300'"
+                                                class="flex items-center justify-center gap-2 px-4 py-3 border-2 rounded-lg font-semibold text-sm transition-all">
+                                            <i class="fas fa-dollar-sign"></i>
+                                            Preço Fixo
+                                        </button>
+                                        <button type="button"
+                                                @click="downsell.pricing_mode = 'percentage'"
+                                                :class="downsell.pricing_mode === 'percentage' ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-700 border-gray-300'"
+                                                class="flex items-center justify-center gap-2 px-4 py-3 border-2 rounded-lg font-semibold text-sm transition-all">
+                                            <i class="fas fa-percent"></i>
+                                            Desconto %
+                                        </button>
+                                    </div>
+                                    
+                                    <!-- Modo: Preço Fixo -->
+                                    <div x-show="(downsell.pricing_mode || 'fixed') === 'fixed'">
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">Preço Fixo (R$)</label>
+                                        <input type="number" 
+                                               x-model="downsell.price" 
+                                               step="0.01"
+                                               class="block w-full border-2 border-blue-300 rounded-md shadow-sm py-3 px-4 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm font-bold text-center"
+                                               placeholder="14.97">
+                                        <p class="mt-2 text-xs text-gray-600">
+                                            <i class="fas fa-info-circle mr-1"></i>
+                                            Valor fixo do downsell
+                                        </p>
+                                    </div>
+                                    
+                                    <!-- Modo: Desconto Percentual -->
+                                    <div x-show="downsell.pricing_mode === 'percentage'">
+                                        <label class="block text-sm font-medium text-gray-700 mb-2">Desconto Percentual (%)</label>
+                                        <input type="number" 
+                                               x-model="downsell.discount_percentage" 
+                                               min="1"
+                                               max="95"
+                                               step="1"
+                                               class="block w-full border-2 border-purple-300 rounded-md shadow-sm py-3 px-4 focus:outline-none focus:ring-purple-500 focus:border-purple-500 text-sm font-bold text-center"
+                                               placeholder="50">
+                                        <p class="mt-2 text-xs text-purple-700 bg-purple-100 p-2 rounded">
+                                            <i class="fas fa-magic mr-1"></i>
+                                            <strong>Exemplo:</strong> 50% de R$ 19,97 = R$ 9,99 (calculado automaticamente baseado no botão clicado)
+                                        </p>
+                                        <p class="mt-1 text-xs text-gray-600">
+                                            <i class="fas fa-info-circle mr-1"></i>
+                                            O desconto será aplicado sobre o preço do botão que o cliente clicou
+                                        </p>
+                                    </div>
                                 </div>
                                 
                                 <!-- Personalização do Botão -->

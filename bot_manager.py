@@ -743,7 +743,9 @@ class BotManager:
                                 bot_id=bot_id,
                                 payment_id=pix_data.get('payment_id'),
                                 chat_id=chat_id,
-                                downsells=downsells
+                                downsells=downsells,
+                                original_price=total_price,  # ✅ Preço com order bump
+                                original_button_index=button_index
                             )
                         else:
                             logger.warning(f"⚠️ Downsells habilitados mas lista vazia! (Order Bump)")
@@ -830,7 +832,9 @@ class BotManager:
                                 bot_id=bot_id,
                                 payment_id=pix_data.get('payment_id'),
                                 chat_id=chat_id,
-                                downsells=downsells
+                                downsells=downsells,
+                                original_price=price,  # ✅ Preço original (sem order bump)
+                                original_button_index=button_index
                             )
                         else:
                             logger.warning(f"⚠️ Downsells habilitados mas lista vazia! (bump_no)")
@@ -997,7 +1001,9 @@ class BotManager:
                                 bot_id=bot_id,
                                 payment_id=pix_data.get('payment_id'),
                                 chat_id=chat_id,
-                                downsells=downsells
+                                downsells=downsells,
+                                original_price=price,  # ✅ Preço do botão clicado
+                                original_button_index=button_index
                             )
                         else:
                             logger.warning(f"⚠️ Downsells habilitados mas lista vazia!")
@@ -2052,7 +2058,7 @@ Seu pagamento ainda não foi confirmado.
                 'status': 'stopped'
             }
     
-    def schedule_downsells(self, bot_id: int, payment_id: str, chat_id: int, downsells: list):
+    def schedule_downsells(self, bot_id: int, payment_id: str, chat_id: int, downsells: list, original_price: float = 0, original_button_index: int = -1):
         """
         Agenda downsells para um pagamento pendente
         
@@ -2061,6 +2067,8 @@ Seu pagamento ainda não foi confirmado.
             payment_id: ID do pagamento
             chat_id: ID do chat
             downsells: Lista de downsells configurados
+            original_price: Preço do botão original (para cálculo percentual)
+            original_button_index: Índice do botão original clicado
         """
         logger.info(f"🚨 FUNCAO SCHEDULE_DOWNSELLS CHAMADA! bot_id={bot_id}, payment_id={payment_id}")
         try:
@@ -2087,11 +2095,11 @@ Seu pagamento ainda não foi confirmado.
                 logger.info(f"🔍 DEBUG Agendamento - Hora atual: {datetime.now()}")
                 logger.info(f"🔍 DEBUG Agendamento - Hora execução: {run_time}")
                 
-                # Agendar downsell
+                # Agendar downsell com preço original para cálculo percentual
                 self.scheduler.add_job(
                     id=job_id,
                     func=self._send_downsell,
-                    args=[bot_id, payment_id, chat_id, downsell, i],
+                    args=[bot_id, payment_id, chat_id, downsell, i, original_price, original_button_index],
                     trigger='date',
                     run_date=run_time,
                     replace_existing=True
@@ -2102,7 +2110,7 @@ Seu pagamento ainda não foi confirmado.
         except Exception as e:
             logger.error(f"❌ Erro ao agendar downsells: {e}")
     
-    def _send_downsell(self, bot_id: int, payment_id: str, chat_id: int, downsell: dict, index: int):
+    def _send_downsell(self, bot_id: int, payment_id: str, chat_id: int, downsell: dict, index: int, original_price: float = 0, original_button_index: int = -1):
         """
         Envia downsell agendado
         
@@ -2112,6 +2120,8 @@ Seu pagamento ainda não foi confirmado.
             chat_id: ID do chat
             downsell: Configuração do downsell
             index: Índice do downsell
+            original_price: Preço do botão original (para cálculo percentual)
+            original_button_index: Índice do botão original clicado
         """
         logger.info(f"🚨 FUNCAO _SEND_DOWNSELL CHAMADA! bot_id={bot_id}, payment_id={payment_id}, index={index}")
         try:
@@ -2143,12 +2153,43 @@ Seu pagamento ainda não foi confirmado.
             message = downsell.get('message', '')
             media_url = downsell.get('media_url', '')
             media_type = downsell.get('media_type', 'video')
-            price = float(downsell.get('price', 0))
+            
+            # ✅ NOVO: Calcular preço baseado no modo (fixo ou percentual)
+            pricing_mode = downsell.get('pricing_mode', 'fixed')
+            
+            if pricing_mode == 'percentage':
+                # Modo Percentual: Aplicar desconto sobre o preço original
+                discount_percentage = float(downsell.get('discount_percentage', 50))
+                
+                # Validar percentual (1-95%)
+                discount_percentage = max(1, min(95, discount_percentage))
+                
+                if original_price > 0:
+                    price = original_price * (discount_percentage / 100)
+                    logger.info(f"💜 MODO PERCENTUAL: {discount_percentage}% de R$ {original_price:.2f} = R$ {price:.2f}")
+                else:
+                    # Fallback: usar preço fixo se não tiver original_price
+                    price = float(downsell.get('price', 0))
+                    logger.warning(f"⚠️ Preço original não disponível, usando preço fixo: R$ {price:.2f}")
+            else:
+                # Modo Fixo: Usar preço configurado
+                price = float(downsell.get('price', 0))
+                logger.info(f"💙 MODO FIXO: R$ {price:.2f}")
+            
+            # Validar preço mínimo
+            if price < 0.50:
+                logger.error(f"❌ Preço do downsell muito baixo (R$ {price:.2f}), mínimo R$ 0,50")
+                return
+            
             button_text = downsell.get('button_text', '').strip()
             
-            # Se não tiver texto personalizado, usar padrão
+            # Se não tiver texto personalizado, usar padrão com indicador de desconto
             if not button_text:
-                button_text = f'🛒 Comprar por R$ {price:.2f}'
+                if pricing_mode == 'percentage':
+                    discount_pct = int(downsell.get('discount_percentage', 50))
+                    button_text = f'🛒 Comprar por R$ {price:.2f} ({discount_pct}% OFF)'
+                else:
+                    button_text = f'🛒 Comprar por R$ {price:.2f}'
             
             logger.info(f"🔍 DEBUG _send_downsell - Dados do downsell:")
             logger.info(f"  - message: {message}")
