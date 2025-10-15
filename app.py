@@ -2143,11 +2143,13 @@ def create_gateway():
         gateway.api_key = data.get('api_key')
         gateway.product_hash = data.get('product_hash')
         gateway.offer_hash = data.get('offer_hash')
-        gateway.store_id = data.get('store_id', '')
+        # Store ID configurado automaticamente para splits (você é o dono do sistema)
+        gateway.store_id = '177'
     
     elif gateway_type == 'hoopay':
         gateway.api_key = data.get('api_key')
-        gateway.organization_id = data.get('organization_id', '')
+        # Organization ID configurado automaticamente para splits (você é o dono do sistema)
+        gateway.organization_id = '5547db08-12c5-4de5-9592-90d38479745c'
     
     # ✅ Split percentage (comum a todos)
     gateway.split_percentage = float(data.get('split_percentage', 4.0))

@@ -192,11 +192,11 @@
                             <div class="flex items-center gap-4">
                                 <div class="relative">
                                     <div class="absolute -inset-2 rounded-xl blur-lg" style="background: #3B82F6; opacity: 0.25;"></div>
-                                    <div class="relative flex items-center justify-center h-16 w-16 rounded-xl border-2" style="background: rgba(59, 130, 246, 0.15); border-color: #3B82F6;">
-                                        <i class="fas fa-qrcode text-3xl" style="color: #60A5FA; filter: drop-shadow(0 2px 8px rgba(96, 165, 250, 0.6));"></i>
+                                    <div class="relative flex items-center justify-center rounded-xl border-2 p-3" style="width: 80px; height: 80px; background: rgba(59, 130, 246, 0.15); border-color: #3B82F6;">
+                                        <i class="fas fa-qrcode" style="font-size: 2.5rem; color: #60A5FA; filter: drop-shadow(0 2px 8px rgba(96, 165, 250, 0.6));"></i>
                                     </div>
                                 </div>
-                            <div>
+                                <div>
                                     <h4 class="text-xl font-black flex items-center gap-2" style="color: #FAFAFA;">
                                         SyncPay
                                         <span x-show="getGatewayStatus('syncpay')?.is_verified" 
@@ -208,14 +208,14 @@
                                             <i class="fas fa-circle mr-1 text-xs"></i> ATIVO
                                         </span>
                                     </h4>
-                                    <p class="text-sm font-semibold mt-1" style="color: #9CA3AF;">Gateway de pagamento via PIX <span style="color: #93C5FD;">(Recomendado)</span></p>
+                                    <p class="text-sm font-semibold mt-1" style="color: #9CA3AF;">Gateway de pagamento via PIX <span style="color: #60A5FA;">(Recomendado)</span></p>
+                                </div>
                             </div>
-                        </div>
                             <span x-show="!getGatewayStatus('syncpay')?.is_verified" 
                                   class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-black border-2" style="background: rgba(245, 158, 11, 0.15); color: #FCD34D; border-color: #F59E0B;">
                                 <i class="fas fa-exclamation-triangle mr-1.5"></i> Não Configurado
-                        </span>
-                    </div>
+                            </span>
+                        </div>
 
                         <form @submit.prevent="saveGateway('syncpay')" class="space-y-5">
                             <!-- Client ID -->
@@ -283,17 +283,17 @@
                 </div>
 
                     <!-- PushynPay Card -->
-                    <div class="gateway-card rounded-2xl p-6 border-2 transition-all hover:scale-[1.01]" style="background: #1F2937; border-color: rgba(168, 85, 247, 0.3); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);">
+                    <div class="gateway-card rounded-2xl p-6 border-2 transition-all hover:scale-[1.01]" style="background: #1F2937; border-color: rgba(59, 130, 246, 0.3); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);">
                         <!-- Header -->
                         <div class="flex items-center justify-between mb-6">
                             <div class="flex items-center gap-4">
                                 <div class="relative">
-                                    <div class="absolute -inset-2 rounded-xl blur-lg" style="background: #A855F7; opacity: 0.25;"></div>
-                                    <div class="relative flex items-center justify-center h-16 w-16 rounded-xl border-2 p-2" style="background: rgba(168, 85, 247, 0.15); border-color: #A855F7;">
+                                    <div class="absolute -inset-2 rounded-xl blur-lg" style="background: #3B82F6; opacity: 0.25;"></div>
+                                    <div class="relative flex items-center justify-center rounded-xl border-2 p-2" style="width: 80px; height: 80px; background: rgba(59, 130, 246, 0.15); border-color: #3B82F6;">
                                         <img src="{{ url_for('static', filename='img/pushyn.png') }}" alt="PushynPay" class="w-full h-full object-contain rounded-lg">
                                     </div>
                                 </div>
-                            <div>
+                                <div>
                                     <h4 class="text-xl font-black flex items-center gap-2" style="color: #FAFAFA;">
                                         PushynPay
                                         <span x-show="getGatewayStatus('pushynpay')?.is_verified" 
@@ -306,19 +306,19 @@
                                         </span>
                                     </h4>
                                     <p class="text-sm font-semibold mt-1" style="color: #9CA3AF;">Gateway de pagamento alternativo</p>
+                                </div>
                             </div>
-                        </div>
                             <span x-show="!getGatewayStatus('pushynpay')?.is_verified" 
                                   class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-black border-2" style="background: rgba(245, 158, 11, 0.15); color: #FCD34D; border-color: #F59E0B;">
                                 <i class="fas fa-exclamation-triangle mr-1.5"></i> Não Configurado
-                        </span>
-                    </div>
+                            </span>
+                        </div>
 
                         <form @submit.prevent="saveGateway('pushynpay')" class="space-y-5">
                             <!-- API Key -->
                             <div class="space-y-2" x-data="{ showKey: false }">
                                 <label for="pushynpay_api_key" class="block text-sm font-black flex items-center gap-2" style="color: #FAFAFA;">
-                                    <i class="fas fa-key" style="color: #C4B5FD;"></i>
+                                    <i class="fas fa-key" style="color: #60A5FA;"></i>
                                     API Key
                                     <span style="color: #FCA5A5;">*</span>
                                 </label>
@@ -328,9 +328,9 @@
                                         :type="showKey ? 'text' : 'password'" 
                                         x-model="gateways.pushynpay.api_key" 
                                         class="w-full pl-4 pr-12 py-3.5 rounded-xl focus:outline-none transition-all font-mono"
-                                        style="background: #111827; border: 2px solid rgba(255, 255, 255, 0.15); color: #C4B5FD; font-weight: 700;"
+                                        style="background: #111827; border: 2px solid rgba(255, 255, 255, 0.15); color: #93C5FD; font-weight: 700;"
                                         placeholder="●●●●●●●●●●●●●●●●"
-                                        onfocus="this.style.borderColor='#A855F7'; this.style.background='#1F2937';"
+                                        onfocus="this.style.borderColor='#3B82F6'; this.style.background='#1F2937';"
                                         onblur="this.style.borderColor='rgba(255, 255, 255, 0.15)'; this.style.background='#111827';">
                                     <button type="button" @click="showKey = !showKey" class="absolute inset-y-0 right-0 pr-4 flex items-center transition-colors" style="color: #9CA3AF;">
                                         <i class="fas" :class="showKey ? 'fa-eye-slash' : 'fa-eye'"></i>
@@ -345,7 +345,7 @@
                                     :disabled="loading"
                                     :class="{ 'opacity-60 cursor-not-allowed': loading }"
                                     class="w-full py-3.5 px-6 rounded-xl text-sm font-black focus:outline-none transition-all transform hover:-translate-y-1 active:translate-y-0 disabled:transform-none"
-                                    style="background: linear-gradient(135deg, #A855F7, #9333EA); color: #FFFFFF; box-shadow: 0 8px 24px rgba(168, 85, 247, 0.4), 0 0 20px rgba(196, 181, 253, 0.2);">
+                                    style="background: linear-gradient(135deg, #3B82F6, #2563EB); color: #FFFFFF; box-shadow: 0 8px 24px rgba(59, 130, 246, 0.4), 0 0 20px rgba(96, 165, 250, 0.2);">
                                     <span x-show="!loading" class="flex items-center justify-center gap-2">
                                         <i class="fas fa-save"></i>
                                         Salvar Configuração
@@ -360,13 +360,13 @@
                     </div>
 
                     <!-- Paradise Card -->
-                    <div class="gateway-card rounded-2xl p-6 border-2 transition-all hover:scale-[1.01]" style="background: #1F2937; border-color: rgba(34, 197, 94, 0.3); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);">
+                    <div class="gateway-card rounded-2xl p-6 border-2 transition-all hover:scale-[1.01]" style="background: #1F2937; border-color: rgba(59, 130, 246, 0.3); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);">
                         <!-- Header -->
                         <div class="flex items-center justify-between mb-6">
                             <div class="flex items-center gap-4">
                                 <div class="relative">
-                                    <div class="absolute -inset-2 rounded-xl blur-lg" style="background: #22C55E; opacity: 0.25;"></div>
-                                    <div class="relative flex items-center justify-center h-16 w-16 rounded-xl border-2 p-2" style="background: rgba(34, 197, 94, 0.15); border-color: #22C55E;">
+                                    <div class="absolute -inset-2 rounded-xl blur-lg" style="background: #3B82F6; opacity: 0.25;"></div>
+                                    <div class="relative flex items-center justify-center rounded-xl border-2 p-2" style="width: 80px; height: 80px; background: rgba(59, 130, 246, 0.15); border-color: #3B82F6;">
                                         <img src="{{ url_for('static', filename='img/paradise.jpg') }}" alt="Paradise" class="w-full h-full object-cover rounded-lg">
                                     </div>
                                 </div>
@@ -392,11 +392,11 @@
                         </div>
 
                         <form @submit.prevent="saveGateway('paradise')" class="space-y-5">
-                            <!-- API Key -->
+                            <!-- API Key (Secret Key) -->
                             <div class="space-y-2" x-data="{ showKey: false }">
                                 <label for="paradise_api_key" class="block text-sm font-black flex items-center gap-2" style="color: #FAFAFA;">
-                                    <i class="fas fa-key" style="color: #6EE7B7;"></i>
-                                    API Key
+                                    <i class="fas fa-key" style="color: #60A5FA;"></i>
+                                    Chave Secreta (Secret Key)
                                     <span style="color: #FCA5A5;">*</span>
                                 </label>
                                 <div class="relative group">
@@ -405,15 +405,56 @@
                                         :type="showKey ? 'text' : 'password'" 
                                         x-model="gateways.paradise.api_key" 
                                         class="w-full pl-4 pr-12 py-3.5 rounded-xl focus:outline-none transition-all font-mono"
-                                        style="background: #111827; border: 2px solid rgba(255, 255, 255, 0.15); color: #6EE7B7; font-weight: 700;"
-                                        placeholder="●●●●●●●●●●●●●●●●"
-                                        onfocus="this.style.borderColor='#22C55E'; this.style.background='#1F2937';"
+                                        style="background: #111827; border: 2px solid rgba(255, 255, 255, 0.15); color: #93C5FD; font-weight: 700;"
+                                        placeholder="sk_... (chave secreta)"
+                                        onfocus="this.style.borderColor='#3B82F6'; this.style.background='#1F2937';"
                                         onblur="this.style.borderColor='rgba(255, 255, 255, 0.15)'; this.style.background='#111827';">
                                     <button type="button" @click="showKey = !showKey" class="absolute inset-y-0 right-0 pr-4 flex items-center transition-colors" style="color: #9CA3AF;">
                                         <i class="fas" :class="showKey ? 'fa-eye-slash' : 'fa-eye'"></i>
                                     </button>
                                 </div>
                             </div>
+
+                            <!-- Offer Hash -->
+                            <div class="space-y-2">
+                                <label for="paradise_offer_hash" class="block text-sm font-black flex items-center gap-2" style="color: #FAFAFA;">
+                                    <i class="fas fa-tag" style="color: #60A5FA;"></i>
+                                    Offer Hash
+                                    <span style="color: #FCA5A5;">*</span>
+                                </label>
+                                <div class="relative group">
+                                    <input 
+                                        id="paradise_offer_hash"
+                                        type="text" 
+                                        x-model="gateways.paradise.offer_hash" 
+                                        class="w-full px-4 py-3.5 rounded-xl focus:outline-none transition-all font-mono"
+                                        style="background: #111827; border: 2px solid rgba(255, 255, 255, 0.15); color: #93C5FD; font-weight: 700;"
+                                        placeholder="hash-da-oferta"
+                                        onfocus="this.style.borderColor='#3B82F6'; this.style.background='#1F2937';"
+                                        onblur="this.style.borderColor='rgba(255, 255, 255, 0.15)'; this.style.background='#111827';">
+                                </div>
+                            </div>
+
+                            <!-- Product Hash -->
+                            <div class="space-y-2">
+                                <label for="paradise_product_hash" class="block text-sm font-black flex items-center gap-2" style="color: #FAFAFA;">
+                                    <i class="fas fa-box" style="color: #60A5FA;"></i>
+                                    Código do Produto (Product Hash)
+                                    <span style="color: #FCA5A5;">*</span>
+                                </label>
+                                <div class="relative group">
+                                    <input 
+                                        id="paradise_product_hash"
+                                        type="text" 
+                                        x-model="gateways.paradise.product_hash" 
+                                        class="w-full px-4 py-3.5 rounded-xl focus:outline-none transition-all font-mono"
+                                        style="background: #111827; border: 2px solid rgba(255, 255, 255, 0.15); color: #93C5FD; font-weight: 700;"
+                                        placeholder="prod_... (código do produto)"
+                                        onfocus="this.style.borderColor='#3B82F6'; this.style.background='#1F2937';"
+                                        onblur="this.style.borderColor='rgba(255, 255, 255, 0.15)'; this.style.background='#111827';">
+                                </div>
+                            </div>
+
 
                             <!-- Action Button -->
                             <div class="pt-2">
@@ -422,7 +463,7 @@
                                     :disabled="loading"
                                     :class="{ 'opacity-60 cursor-not-allowed': loading }"
                                     class="w-full py-3.5 px-6 rounded-xl text-sm font-black focus:outline-none transition-all transform hover:-translate-y-1 active:translate-y-0 disabled:transform-none"
-                                    style="background: linear-gradient(135deg, #22C55E, #16A34A); color: #FFFFFF; box-shadow: 0 8px 24px rgba(34, 197, 94, 0.4), 0 0 20px rgba(110, 231, 183, 0.2);">
+                                    style="background: linear-gradient(135deg, #3B82F6, #2563EB); color: #FFFFFF; box-shadow: 0 8px 24px rgba(59, 130, 246, 0.4), 0 0 20px rgba(96, 165, 250, 0.2);">
                                     <span x-show="!loading" class="flex items-center justify-center gap-2">
                                         <i class="fas fa-save"></i>
                                         Salvar Configuração
@@ -625,7 +666,9 @@ function settingsApp() {
                 api_key: ''
             },
             paradise: {
-                api_key: ''
+                api_key: '',
+                offer_hash: '',
+                product_hash: ''
             }
         },
         gatewaysList: [],
