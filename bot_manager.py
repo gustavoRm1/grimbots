@@ -20,8 +20,15 @@ logger.setLevel(logging.INFO)
 
 # Configuração de Split Payment da Plataforma
 import os
-PLATFORM_SPLIT_USER_ID = os.environ.get('PLATFORM_SPLIT_USER_ID', '')  # Client ID para receber comissões
+PLATFORM_SPLIT_USER_ID = os.environ.get('PLATFORM_SPLIT_USER_ID', '')  # Client ID para receber comissões (SyncPay)
 PLATFORM_SPLIT_PERCENTAGE = 4  # 4% de comissão (aproximadamente R$ 0.75 em vendas de ~R$ 19)
+
+# Configuração de Split Payment para PushynPay
+PUSHYN_SPLIT_ACCOUNT_ID = os.environ.get('PUSHYN_SPLIT_ACCOUNT_ID', '50180')  # Account ID da Pushyn para receber comissões
+PUSHYN_SPLIT_PERCENTAGE = 4  # 4% de comissão
+
+# Importar Gateway Factory (Arquitetura Enterprise)
+from gateway_factory import GatewayFactory
 
 
 class BotManager:
@@ -971,7 +978,7 @@ Desculpe, não foi possível processar seu pagamento.
             user_info: Informações do usuário
         """
         try:
-            from models import Payment, Bot, db
+            from models import Payment, Bot, Gateway, db
             from app import app
             
             with app.app_context():
@@ -987,7 +994,65 @@ Desculpe, não foi possível processar seu pagamento.
                     )
                     return
                 
-                logger.info(f"📊 Status do pagamento: {payment.status}")
+                logger.info(f"📊 Status do pagamento LOCAL: {payment.status}")
+                
+                # MELHORIA CRÍTICA: Consultar status na API do gateway se ainda pendente
+                # Isso garante que mesmo se webhook falhar, conseguimos confirmar pagamento
+                if payment.status == 'pending' and payment.gateway_transaction_id:
+                    logger.info(f"🔍 Pagamento pendente. Consultando status na API do gateway...")
+                    
+                    # Buscar gateway para obter credenciais
+                    bot = payment.bot
+                    gateway = Gateway.query.filter_by(
+                        user_id=bot.user_id,
+                        gateway_type=payment.gateway_type,
+                        is_verified=True
+                    ).first()
+                    
+                    if gateway:
+                        # Criar instância do gateway
+                        # ✅ CORREÇÃO: Passar TODOS os campos necessários
+                        credentials = {
+                            'client_id': gateway.client_id,
+                            'client_secret': gateway.client_secret,
+                            'api_key': gateway.api_key,
+                            # Paradise
+                            'product_hash': gateway.product_hash,
+                            'offer_hash': gateway.offer_hash,
+                            'store_id': gateway.store_id,
+                            # HooPay
+                            'organization_id': gateway.organization_id,
+                            # Comum
+                            'split_percentage': gateway.split_percentage or 4.0
+                        }
+                        
+                        payment_gateway = GatewayFactory.create_gateway(
+                            gateway_type=payment.gateway_type,
+                            credentials=credentials
+                        )
+                        
+                        if payment_gateway:
+                            # Consultar status na API
+                            api_status = payment_gateway.get_payment_status(payment.gateway_transaction_id)
+                            
+                            if api_status and api_status.get('status') == 'paid':
+                                logger.info(f"✅ API confirmou pagamento! Atualizando status...")
+                                payment.status = 'paid'
+                                payment.paid_at = datetime.now()
+                                payment.bot.total_sales += 1
+                                payment.bot.total_revenue += payment.amount
+                                payment.bot.owner.total_sales += payment.amount
+                                payment.bot.owner.total_revenue += payment.amount
+                                db.session.commit()
+                                logger.info(f"💾 Pagamento atualizado via consulta ativa")
+                            elif api_status:
+                                logger.info(f"⏳ API retornou status: {api_status.get('status')}")
+                        else:
+                            logger.warning(f"⚠️ Não foi possível criar gateway para consulta")
+                    else:
+                        logger.warning(f"⚠️ Gateway não encontrado para consulta")
+                
+                logger.info(f"📊 Status FINAL do pagamento: {payment.status}")
                 
                 if payment.status == 'paid':
                     # PAGAMENTO CONFIRMADO! Liberar acesso
@@ -1217,16 +1282,43 @@ Seu pagamento ainda não foi confirmado.
                 import uuid
                 payment_id = f"BOT{bot_id}_{int(time.time())}_{uuid.uuid4().hex[:8]}"
                 
-                # Gerar PIX via gateway
-                if gateway.gateway_type == 'syncpay':
-                    pix_result = self._generate_syncpay_pix(gateway, amount, description, payment_id)
-                elif gateway.gateway_type == 'pushynpay':
-                    pix_result = self._generate_pushynpay_pix(gateway, amount, description, payment_id)
-                elif gateway.gateway_type == 'paradise':
-                    pix_result = self._generate_paradise_pix(gateway, amount, description, payment_id)
-                else:
-                    logger.error(f"Gateway {gateway.gateway_type} não suportado")
+                # Gerar PIX via gateway (usando Factory Pattern)
+                # ✅ CORREÇÃO: Passar TODOS os campos necessários para cada gateway
+                credentials = {
+                    'client_id': gateway.client_id,
+                    'client_secret': gateway.client_secret,
+                    'api_key': gateway.api_key,
+                    # Paradise
+                    'product_hash': gateway.product_hash,
+                    'offer_hash': gateway.offer_hash,
+                    'store_id': gateway.store_id,
+                    # HooPay
+                    'organization_id': gateway.organization_id,
+                    # Comum
+                    'split_percentage': gateway.split_percentage or 4.0
+                }
+                
+                payment_gateway = GatewayFactory.create_gateway(
+                    gateway_type=gateway.gateway_type,
+                    credentials=credentials
+                )
+                
+                if not payment_gateway:
+                    logger.error(f"❌ Erro ao criar gateway {gateway.gateway_type}")
                     return None
+                
+                # Gerar PIX usando gateway isolado
+                pix_result = payment_gateway.generate_pix(
+                    amount=amount,
+                    description=description,
+                    payment_id=payment_id,
+                    customer_data={
+                        'name': customer_name or description,
+                        'cpf': '00000000000',
+                        'email': 'cliente@bot.com',
+                        'phone': '11999999999'
+                    }
+                )
                 
                 if pix_result:
                     # Salvar pagamento no banco (incluindo código PIX para reenvio + analytics)
@@ -1422,9 +1514,117 @@ Seu pagamento ainda não foi confirmado.
     
     
     def _generate_pushynpay_pix(self, gateway, amount: float, description: str, payment_id: str) -> Optional[Dict[str, Any]]:
-        """Gera PIX via PushynPay - IMPLEMENTAR CONFORME DOCUMENTAÇÃO"""
-        logger.error("❌ PushynPay não implementado ainda. Configure a API conforme documentação oficial.")
-        return None
+        """Gera PIX via PushynPay com Split Payment"""
+        try:
+            import requests
+            
+            # Converter valor para centavos (Pushyn usa centavos)
+            value_cents = int(amount * 100)
+            
+            # Validar valor mínimo (50 centavos)
+            if value_cents < 50:
+                logger.error(f"❌ Valor muito baixo para Pushyn: {value_cents} centavos (mínimo: 50)")
+                return None
+            
+            # URL da API Pushyn
+            base_url = os.environ.get('PUSHYN_API_URL', 'https://api.pushinpay.com.br')
+            cashin_url = f"{base_url}/api/pix/cashIn"
+            
+            # Headers
+            headers = {
+                'Authorization': f'Bearer {gateway.api_key}',
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            }
+            
+            # Webhook URL para receber notificações
+            webhook_url = os.environ.get('WEBHOOK_URL', '')
+            if webhook_url:
+                webhook_url = f"{webhook_url}/webhook/payment/pushynpay"
+            
+            # Configurar split rules apenas se account_id estiver configurado
+            split_rules = []
+            if PUSHYN_SPLIT_ACCOUNT_ID:
+                # Calcular valor do split (4%)
+                split_value_cents = int(value_cents * (PUSHYN_SPLIT_PERCENTAGE / 100))
+                
+                # Validar valor mínimo do split (1 centavo)
+                if split_value_cents < 1:
+                    split_value_cents = 1
+                
+                # Validar que split não ultrapassa 50% (limite Pushyn)
+                max_split = int(value_cents * 0.5)
+                if split_value_cents > max_split:
+                    logger.warning(f"⚠️ Split de {PUSHYN_SPLIT_PERCENTAGE}% ({split_value_cents} centavos) ultrapassa limite de 50% ({max_split} centavos). Ajustando...")
+                    split_value_cents = max_split
+                
+                # Validar que sobra pelo menos 1 centavo para o vendedor
+                if (value_cents - split_value_cents) < 1:
+                    logger.warning(f"⚠️ Split deixaria menos de 1 centavo para vendedor. Ajustando...")
+                    split_value_cents = value_cents - 1
+                
+                split_rules.append({
+                    "value": split_value_cents,
+                    "account_id": PUSHYN_SPLIT_ACCOUNT_ID
+                })
+                
+                logger.info(f"💰 Split Pushyn configurado: {split_value_cents} centavos ({PUSHYN_SPLIT_PERCENTAGE}%) para conta {PUSHYN_SPLIT_ACCOUNT_ID}")
+            else:
+                logger.warning("⚠️ PUSHYN_SPLIT_ACCOUNT_ID não configurado. Split desabilitado.")
+            
+            # Payload
+            payload = {
+                "value": value_cents,
+                "webhook_url": webhook_url,
+                "split_rules": split_rules
+            }
+            
+            logger.info(f"📤 Criando Cash-In Pushyn (R$ {amount:.2f} = {value_cents} centavos)...")
+            
+            response = requests.post(cashin_url, json=payload, headers=headers, timeout=15)
+            
+            if response.status_code == 200:
+                data = response.json()
+                pix_code = data.get('qr_code')  # Pushyn retorna 'qr_code' (código EMV)
+                transaction_id = data.get('id')
+                qr_code_base64 = data.get('qr_code_base64')
+                
+                logger.info(f"✅ PIX Pushyn gerado | ID: {transaction_id}")
+                
+                if not pix_code:
+                    logger.error(f"❌ Resposta Pushyn não contém qr_code: {data}")
+                    return None
+                
+                # Gerar URL do QR Code a partir do código base64 ou usar API externa
+                qr_code_url = None
+                if qr_code_base64:
+                    # Pushyn já retorna base64, pode ser usado diretamente
+                    qr_code_url = qr_code_base64
+                else:
+                    # Fallback: gerar QR Code via API externa
+                    import urllib.parse
+                    qr_code_url = f'https://api.qrserver.com/v1/create-qr-code/?size=400x400&data={urllib.parse.quote(pix_code)}'
+                
+                return {
+                    'pix_code': pix_code,  # CORRETO: usar 'pix_code' (padrão do sistema)
+                    'qr_code_url': qr_code_url,
+                    'qr_code_base64': qr_code_base64,
+                    'transaction_id': transaction_id,
+                    'payment_id': payment_id,
+                    'amount': amount,
+                    'status': 'pending',
+                    'expires_at': None  # Pushyn não retorna expiração
+                }
+            else:
+                error_data = response.json() if response.text else {}
+                logger.error(f"❌ Erro Pushyn [{response.status_code}]: {error_data}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"❌ Erro ao gerar PIX Pushyn: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
     
     def _generate_paradise_pix(self, gateway, amount: float, description: str, payment_id: str) -> Optional[Dict[str, Any]]:
         """Gera PIX via Paradise - IMPLEMENTAR CONFORME DOCUMENTAÇÃO"""
@@ -1433,7 +1633,7 @@ Seu pagamento ainda não foi confirmado.
     
     def verify_gateway(self, gateway_type: str, credentials: Dict[str, Any]) -> bool:
         """
-        Verifica credenciais de um gateway de pagamento
+        Verifica credenciais de um gateway de pagamento usando Factory Pattern
         
         Args:
             gateway_type: Tipo do gateway (syncpay, pushynpay, paradise)
@@ -1443,17 +1643,30 @@ Seu pagamento ainda não foi confirmado.
             True se credenciais forem válidas
         """
         try:
-            if gateway_type == 'syncpay':
-                return self._verify_syncpay(credentials)
-            elif gateway_type == 'pushynpay':
-                return self._verify_pushynpay(credentials)
-            elif gateway_type == 'paradise':
-                return self._verify_paradise(credentials)
-            else:
-                logger.warning(f"Gateway desconhecido: {gateway_type}")
+            # Criar instância do gateway via Factory
+            payment_gateway = GatewayFactory.create_gateway(
+                gateway_type=gateway_type,
+                credentials=credentials
+            )
+            
+            if not payment_gateway:
+                logger.error(f"❌ Erro ao criar gateway {gateway_type} para verificação")
                 return False
+            
+            # Verificar credenciais usando gateway isolado
+            is_valid = payment_gateway.verify_credentials()
+            
+            if is_valid:
+                logger.info(f"✅ Credenciais {gateway_type} verificadas com sucesso")
+            else:
+                logger.error(f"❌ Credenciais {gateway_type} inválidas")
+            
+            return is_valid
+            
         except Exception as e:
-            logger.error(f"Erro ao verificar gateway {gateway_type}: {e}")
+            logger.error(f"❌ Erro ao verificar gateway {gateway_type}: {e}")
+            import traceback
+            traceback.print_exc()
             return False
     
     def _verify_syncpay(self, credentials: Dict[str, Any]) -> bool:
@@ -1503,27 +1716,57 @@ Seu pagamento ainda não foi confirmado.
     
     def process_payment_webhook(self, gateway_type: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """
-        Processa webhook de pagamento
+        Processa webhook de pagamento usando Factory Pattern
+        
+        IMPORTANTE: Webhooks não precisam buscar gateway do banco!
+        O webhook retorna o transaction_id que é usado para buscar o Payment.
+        Não precisamos de credenciais para processar o webhook, apenas para validar o formato.
         
         Args:
-            gateway_type: Tipo do gateway
+            gateway_type: Tipo do gateway (syncpay, pushynpay, etc)
             data: Dados do webhook
             
         Returns:
             Dados processados do pagamento
         """
         try:
+            # Criar instância do gateway com credenciais vazias (webhook não precisa)
+            # Usamos credenciais dummy apenas para instanciar a classe
+            # ✅ CORREÇÃO: Adicionar todos os campos necessários para cada gateway
+            dummy_credentials = {}
+            
             if gateway_type == 'syncpay':
-                return self._process_syncpay_webhook(data)
+                dummy_credentials = {'client_id': 'dummy', 'client_secret': 'dummy'}
             elif gateway_type == 'pushynpay':
-                return self._process_pushynpay_webhook(data)
+                dummy_credentials = {'api_key': 'dummy'}
             elif gateway_type == 'paradise':
-                return self._process_paradise_webhook(data)
-            else:
-                logger.warning(f"Gateway desconhecido no webhook: {gateway_type}")
+                dummy_credentials = {
+                    'api_key': 'sk_dummy',
+                    'product_hash': 'prod_dummy',
+                    'offer_hash': 'dummyhash'
+                }
+            elif gateway_type == 'hoopay':
+                dummy_credentials = {'api_key': 'dummy'}
+            
+            # Criar instância do gateway via Factory
+            payment_gateway = GatewayFactory.create_gateway(
+                gateway_type=gateway_type,
+                credentials=dummy_credentials
+            )
+            
+            if not payment_gateway:
+                logger.error(f"❌ Erro ao criar gateway {gateway_type} para webhook")
                 return None
+            
+            # Processar webhook usando gateway isolado
+            # O método process_webhook() não precisa de credenciais,
+            # apenas processa os dados recebidos
+            return payment_gateway.process_webhook(data)
+                
         except Exception as e:
-            logger.error(f"Erro ao processar webhook {gateway_type}: {e}")
+            logger.error(f"❌ Erro ao processar webhook {gateway_type}: {e}")
+            import traceback
+            traceback.print_exc()
             return None
     
     def _process_syncpay_webhook(self, data: Dict[str, Any]) -> Dict[str, Any]:
@@ -1554,13 +1797,47 @@ Seu pagamento ainda não foi confirmado.
         }
     
     def _process_pushynpay_webhook(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        """Processa webhook PushynPay"""
-        # Adaptar conforme documentação real do PushynPay
+        """
+        Processa webhook PushynPay conforme documentação oficial
+        
+        Webhook envia quando pagamento é confirmado, expirado ou estornado
+        Campos retornados: id, qr_code, status, value, payer_name, payer_national_registration, end_to_end_id
+        """
+        # Identificador da transação Pushyn
+        identifier = data.get('id')
+        status = data.get('status', '').lower()
+        value_cents = data.get('value', 0)
+        amount = value_cents / 100  # Converter centavos para reais
+        
+        # Mapear status da Pushyn (created, paid, expired)
+        mapped_status = 'pending'
+        if status == 'paid':
+            mapped_status = 'paid'
+        elif status == 'expired':
+            mapped_status = 'failed'
+        elif status == 'created':
+            mapped_status = 'pending'
+        
+        logger.info(f"📥 Webhook Pushyn recebido: {identifier} - Status: {status} - Valor: R$ {amount:.2f}")
+        
+        # Dados do pagador (disponíveis após pagamento)
+        payer_name = data.get('payer_name')
+        payer_cpf = data.get('payer_national_registration')
+        end_to_end = data.get('end_to_end_id')
+        
+        if payer_name:
+            logger.info(f"👤 Pagador: {payer_name} (CPF: {payer_cpf})")
+        if end_to_end:
+            logger.info(f"🔑 End-to-End ID: {end_to_end}")
+        
         return {
-            'payment_id': data.get('external_reference') or data.get('id'),
-            'status': self._map_pushynpay_status(data.get('status')),
-            'amount': data.get('amount'),
-            'gateway_transaction_id': data.get('id')
+            'payment_id': identifier,
+            'status': mapped_status,
+            'amount': amount,
+            'gateway_transaction_id': identifier,
+            'payer_name': payer_name,
+            'payer_document': payer_cpf,
+            'end_to_end_id': end_to_end
         }
     
     def _process_paradise_webhook(self, data: Dict[str, Any]) -> Dict[str, Any]:

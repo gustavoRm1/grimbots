@@ -481,12 +481,23 @@ class Gateway(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
     
     # Tipo de gateway
-    gateway_type = db.Column(db.String(30), nullable=False)  # syncpay, pushynpay, paradise
+    gateway_type = db.Column(db.String(30), nullable=False)  # syncpay, pushynpay, paradise, hoopay
     
     # Credenciais (criptografadas)
     client_id = db.Column(db.String(255))
     client_secret = db.Column(db.String(255))
     api_key = db.Column(db.String(255))
+    
+    # Campos específicos Paradise
+    product_hash = db.Column(db.String(255))  # prod_... (código do produto)
+    offer_hash = db.Column(db.String(255))    # ID da oferta (extraído da URL)
+    store_id = db.Column(db.String(50))       # ID da conta no Paradise para split
+    
+    # Campos específicos HooPay
+    organization_id = db.Column(db.String(255))  # UUID da organização para split
+    
+    # Split configuration (padrão 4%)
+    split_percentage = db.Column(db.Float, default=4.0)
     
     # Status
     is_active = db.Column(db.Boolean, default=True)

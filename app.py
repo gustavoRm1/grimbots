@@ -2114,7 +2114,8 @@ def create_gateway():
     data = request.json
     gateway_type = data.get('gateway_type')
     
-    if gateway_type not in ['syncpay', 'pushynpay', 'paradise']:
+    # ✅ CORREÇÃO: Adicionar hoopay aos tipos válidos
+    if gateway_type not in ['syncpay', 'pushynpay', 'paradise', 'hoopay']:
         return jsonify({'error': 'Tipo de gateway inválido'}), 400
     
     # Verificar se já existe gateway deste tipo
@@ -2130,14 +2131,40 @@ def create_gateway():
         )
         db.session.add(gateway)
     
-    # Atualizar credenciais
+    # ✅ CORREÇÃO: Atualizar credenciais específicas de cada gateway
     if gateway_type == 'syncpay':
         gateway.client_id = data.get('client_id')
         gateway.client_secret = data.get('client_secret')
-    elif gateway_type in ['pushynpay', 'paradise']:
+    
+    elif gateway_type == 'pushynpay':
         gateway.api_key = data.get('api_key')
     
-    gateway.is_active = True
+    elif gateway_type == 'paradise':
+        gateway.api_key = data.get('api_key')
+        gateway.product_hash = data.get('product_hash')
+        gateway.offer_hash = data.get('offer_hash')
+        gateway.store_id = data.get('store_id', '')
+    
+    elif gateway_type == 'hoopay':
+        gateway.api_key = data.get('api_key')
+        gateway.organization_id = data.get('organization_id', '')
+    
+    # ✅ Split percentage (comum a todos)
+    gateway.split_percentage = float(data.get('split_percentage', 4.0))
+    
+    # IMPORTANTE: Desativar outros gateways do usuário antes de ativar este
+    # Regra de negócio: Apenas 1 gateway ativo por usuário
+    if data.get('is_active', True):  # Se requisição pede para ativar
+        # Desativar todos outros gateways do usuário
+        Gateway.query.filter(
+            Gateway.user_id == current_user.id,
+            Gateway.id != gateway.id  # Exceto o atual
+        ).update({'is_active': False})
+        
+        gateway.is_active = True
+        logger.info(f"✅ Gateway {gateway_type} ativado para {current_user.email} (outros desativados)")
+    else:
+        gateway.is_active = data.get('is_active', False)
     
     # Verificar credenciais
     try:
@@ -2795,5 +2822,5 @@ if __name__ == '__main__':
     print("="*60)
     print("Aguardando acoes...\n")
     
-    socketio.run(app, debug=debug, host='0.0.0.0', port=port, log_output=False)
+    socketio.run(app, debug=debug, host='0.0.0.0', port=port, log_output=False, allow_unsafe_werkzeug=True)
 
