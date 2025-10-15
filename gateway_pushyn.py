@@ -286,3 +286,4 @@ class PushynGateway(PaymentGateway):
             logger.error(f"❌ [{self.get_gateway_name()}] Erro ao consultar status: {e}")
             return None
 
+

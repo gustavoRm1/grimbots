@@ -251,3 +251,4 @@ class SyncPayGateway(PaymentGateway):
         logger.warning(f"⚠️ [{self.get_gateway_name()}] Consulta de status não implementada (endpoint não documentado)")
         return None
 
+

@@ -150,3 +150,4 @@ class PaymentGateway(ABC):
         """
         return f"R$ {amount:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
+
