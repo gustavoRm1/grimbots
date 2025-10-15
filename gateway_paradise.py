@@ -145,7 +145,8 @@ class ParadisePaymentGateway(PaymentGateway):
             if self.offer_hash:
                 payload["offerHash"] = self.offer_hash
             
-            logger.debug(f"📤 Paradise Payload: {payload}")
+            # ✅ LOG DETALHADO para debug
+            logger.info(f"📤 Paradise Payload: {payload}")
             
             # Headers Paradise (X-API-Key)
             headers = {
@@ -153,6 +154,9 @@ class ParadisePaymentGateway(PaymentGateway):
                 'Accept': 'application/json',
                 'X-API-Key': self.api_key  # ✅ AUTENTICAÇÃO
             }
+            
+            logger.info(f"📤 Paradise URL: {self.transaction_url}")
+            logger.info(f"📤 Paradise Headers: Content-Type=application/json, X-API-Key={self.api_key[:10]}...")
             
             # Requisição para Paradise
             response = requests.post(
@@ -163,9 +167,11 @@ class ParadisePaymentGateway(PaymentGateway):
             )
             
             logger.info(f"📡 Paradise Response: Status {response.status_code}")
+            logger.info(f"📡 Paradise Response Body: {response.text}")
             
             if response.status_code != 200:
-                logger.error(f"❌ Paradise API Error: {response.status_code} - {response.text}")
+                logger.error(f"❌ Paradise API Error: {response.status_code}")
+                logger.error(f"❌ Response: {response.text}")
                 return None
             
             data = response.json()
