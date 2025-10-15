@@ -197,7 +197,7 @@ class Bot(db.Model):
     # Relacionamentos
     config = db.relationship('BotConfig', backref='bot', uselist=False, cascade='all, delete-orphan')
     payments = db.relationship('Payment', backref='bot', lazy='dynamic', cascade='all, delete-orphan')
-    pool_associations = db.relationship('PoolBot', backref='bot', lazy='dynamic', cascade='all, delete-orphan')  # ✅ DELETE CASCADE
+    pool_associations = db.relationship('PoolBot', backref='associated_bot', lazy='dynamic', cascade='all, delete-orphan')  # ✅ DELETE CASCADE
     
     def to_dict(self):
         """Retorna dados do bot em formato dict"""
@@ -450,7 +450,8 @@ class PoolBot(db.Model):
     added_at = db.Column(db.DateTime, default=get_brazil_time)
     
     # Relacionamentos
-    bot = db.relationship('Bot', backref='pool_associations')
+    # ✅ Não usar backref aqui, pois Bot já define pool_associations
+    bot = db.relationship('Bot')
     
     # Constraints
     __table_args__ = (

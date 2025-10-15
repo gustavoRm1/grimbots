@@ -2570,7 +2570,7 @@ Aproveite! 🚀
 # ==================== WEBSOCKET EVENTS ====================
 
 @socketio.on('connect')
-def handle_connect():
+def handle_connect(auth=None):
     """Cliente conectado via WebSocket"""
     if current_user.is_authenticated:
         join_room(f'user_{current_user.id}')

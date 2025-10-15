@@ -924,17 +924,23 @@ function poolsApp() {
                 iconClass = 'fas fa-info-circle';
             }
             
-            toast.innerHTML = `
-                <div class="flex items-center gap-4 px-6 py-4 rounded-xl backdrop-blur-sm border-2 shadow-2xl min-w-[300px] max-w-[500px]"
-                     style="background: ${bgColor}; border-color: ${borderColor}; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);">
-                    <i class="${iconClass} text-2xl text-white"></i>
-                    <p class="text-white font-semibold text-sm flex-1">${message}</p>
-                    <button onclick="this.closest('#pool-toast').remove()" 
-                            class="text-white hover:text-gray-200 transition-colors">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
+            // ✅ SEGURANÇA: Criar elementos via DOM API para evitar XSS
+            const toastDiv = document.createElement('div');
+            toastDiv.className = 'flex items-center gap-4 px-6 py-4 rounded-xl backdrop-blur-sm border-2 shadow-2xl min-w-[300px] max-w-[500px]';
+            toastDiv.style.cssText = `background: ${bgColor}; border-color: ${borderColor}; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);`;
+            
+            toastDiv.innerHTML = `
+                <i class="${iconClass} text-2xl text-white"></i>
+                <p class="text-white font-semibold text-sm flex-1"></p>
+                <button onclick="this.closest('#pool-toast').remove()" class="text-white hover:text-gray-200 transition-colors">
+                    <i class="fas fa-times"></i>
+                </button>
             `;
+            
+            // Setar texto de forma segura (sem HTML parsing)
+            toastDiv.querySelector('p').textContent = message;
+            
+            toast.appendChild(toastDiv);
             
             document.body.appendChild(toast);
             
