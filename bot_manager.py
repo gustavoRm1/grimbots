@@ -607,17 +607,18 @@ class BotManager:
                 )
                 
                 if pix_data and pix_data.get('pix_code'):
-                    payment_message = f"""
-🎯 <b>Produto:</b> {description}
+                    # ✅ PIX em linha única dentro de <code> para copiar com um toque
+                    payment_message = f"""🎯 <b>Produto:</b> {description}
 💰 <b>Valor:</b> R$ {price:.2f}
 
-📋 <b>PIX Copia e Cola:</b>
+📱 <b>PIX Copia e Cola:</b>
 <code>{pix_data.get('pix_code')}</code>
+
+<i>👆 Toque no código acima para copiar</i>
 
 ⏰ <b>Válido por:</b> 30 minutos
 
-👇 <b>Clique no botão abaixo para verificar o pagamento:</b>
-"""
+💡 <b>Após pagar, clique no botão abaixo para verificar e receber seu acesso!</b>"""
                     
                     verify_button = [{
                         'text': '✅ Verificar Pagamento',
@@ -691,19 +692,18 @@ class BotManager:
                 )
                 
                 if pix_data and pix_data.get('pix_code'):
-                    payment_message = f"""
-🎯 <b>Produto:</b> {final_description}
+                    # ✅ PIX em linha única dentro de <code> para copiar com um toque
+                    payment_message = f"""🎯 <b>Produto:</b> {final_description}
 💰 <b>Valor:</b> R$ {total_price:.2f}
 
 📱 <b>PIX Copia e Cola:</b>
 <code>{pix_data['pix_code']}</code>
 
-<i>👆 Toque para copiar o código PIX</i>
+<i>👆 Toque no código acima para copiar</i>
 
 ⏰ <b>Válido por:</b> 30 minutos
 
-💡 <b>Após pagar, clique no botão abaixo para verificar e receber seu acesso!</b>
-                    """
+💡 <b>Após pagar, clique no botão abaixo para verificar e receber seu acesso!</b>"""
                     
                     buttons = [{
                         'text': '✅ Verificar Pagamento',
@@ -779,19 +779,18 @@ class BotManager:
                 )
                 
                 if pix_data and pix_data.get('pix_code'):
-                    payment_message = f"""
-🎯 <b>Produto:</b> {description}
+                    # ✅ PIX em linha única dentro de <code> para copiar com um toque
+                    payment_message = f"""🎯 <b>Produto:</b> {description}
 💰 <b>Valor:</b> R$ {price:.2f}
 
 📱 <b>PIX Copia e Cola:</b>
 <code>{pix_data['pix_code']}</code>
 
-<i>👆 Toque para copiar o código PIX</i>
+<i>👆 Toque no código acima para copiar</i>
 
 ⏰ <b>Válido por:</b> 30 minutos
 
-💡 <b>Após pagar, clique no botão abaixo para verificar e receber seu acesso!</b>
-                    """
+💡 <b>Após pagar, clique no botão abaixo para verificar e receber seu acesso!</b>"""
                     
                     buttons = [{
                         'text': '✅ Verificar Pagamento',
@@ -860,19 +859,18 @@ class BotManager:
                 )
                 
                 if pix_data and pix_data.get('pix_code'):
-                    payment_message = f"""
-🎯 <b>Produto:</b> {description}
+                    # ✅ PIX em linha única dentro de <code> para copiar com um toque
+                    payment_message = f"""🎯 <b>Produto:</b> {description}
 💰 <b>Valor:</b> R$ {price:.2f}
 
 📱 <b>PIX Copia e Cola:</b>
 <code>{pix_data['pix_code']}</code>
 
-<i>👆 Toque para copiar o código PIX</i>
+<i>👆 Toque no código acima para copiar</i>
 
 ⏰ <b>Válido por:</b> 30 minutos
 
-💡 <b>Após pagar, clique no botão abaixo para verificar e receber seu acesso!</b>
-                    """
+💡 <b>Após pagar, clique no botão abaixo para verificar e receber seu acesso!</b>"""
                     
                     buttons = [{
                         'text': '✅ Verificar Pagamento',
@@ -1171,21 +1169,22 @@ Desculpe, não foi possível processar seu pagamento.
                         pending_message = pending_message.replace('{produto}', payment.product_name or 'Produto')
                         pending_message = pending_message.replace('{valor}', f'R$ {payment.amount:.2f}')
                     else:
-                        pending_message = f"""
-⏳ <b>Pagamento ainda não identificado</b>
+                        # ✅ PIX em linha única dentro de <code> para copiar com um toque
+                        pending_message = f"""⏳ <b>Pagamento ainda não identificado</b>
 
 Seu pagamento ainda não foi confirmado.
 
 📱 <b>PIX Copia e Cola:</b>
 <code>{pix_code}</code>
 
+<i>👆 Toque no código acima para copiar</i>
+
 💡 <b>O que fazer:</b>
 1. Verifique se você realmente pagou o PIX
 2. Aguarde alguns minutos (pode levar até 5 min)
 3. Clique novamente em "Verificar Pagamento"
 
-⏰ Se já pagou, aguarde a confirmação automática!
-                        """
+⏰ Se já pagou, aguarde a confirmação automática!"""
                     
                     # Reenviar botão de verificar
                     buttons = [{
