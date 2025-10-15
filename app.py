@@ -53,7 +53,12 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
     'pool_pre_ping': True,
     'pool_recycle': 300,
-    'connect_args': {'check_same_thread': False}  # ✅ Permitir acesso de múltiplas threads
+    'pool_size': 20,  # ✅ Pool maior para múltiplos usuários simultâneos
+    'max_overflow': 10,  # ✅ Permitir até 30 conexões totais (20 + 10)
+    'connect_args': {
+        'check_same_thread': False,  # ✅ Permitir acesso de múltiplas threads
+        'timeout': 30  # ✅ Timeout maior para evitar lock em alta carga
+    }
 }
 
 # Inicializar extensões
@@ -2428,6 +2433,13 @@ def telegram_webhook(bot_id):
     """Webhook para receber updates do Telegram"""
     try:
         update = request.json
+        
+        # ✅ SEGURANÇA: Validar que bot_id existe e pertence a algum usuário
+        bot = Bot.query.get(bot_id)
+        if not bot:
+            logger.warning(f"⚠️ Webhook recebido para bot inexistente: {bot_id}")
+            return jsonify({'status': 'ok'}), 200  # Retornar 200 para não revelar estrutura
+        
         logger.info(f"Update recebido do Telegram para bot {bot_id}")
         
         # Processar update

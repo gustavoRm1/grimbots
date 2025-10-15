@@ -40,6 +40,10 @@ class BotManager:
         self.active_bots: Dict[int, Dict[str, Any]] = {}
         self.bot_threads: Dict[int, threading.Thread] = {}
         self.polling_jobs: Dict[int, str] = {}  # bot_id -> job_id
+        
+        # ✅ THREAD SAFETY: Lock para acesso concorrente
+        self._bots_lock = threading.RLock()  # RLock permite re-entrada na mesma thread
+        
         logger.info("BotManager inicializado")
     
     def validate_token(self, token: str) -> Dict[str, Any]:
@@ -84,20 +88,21 @@ class BotManager:
             token: Token do bot
             config: Configuração do bot
         """
-        if bot_id in self.active_bots:
-            logger.warning(f"Bot {bot_id} já está ativo")
-            return
-        
-        # Configurar webhook para receber mensagens do Telegram
-        self._setup_webhook(token, bot_id)
-        
-        # Armazenar bot ativo
-        self.active_bots[bot_id] = {
-            'token': token,
-            'config': config,
-            'started_at': datetime.now(),
-            'status': 'running'
-        }
+        with self._bots_lock:  # ✅ THREAD SAFE
+            if bot_id in self.active_bots:
+                logger.warning(f"Bot {bot_id} já está ativo")
+                return
+            
+            # Configurar webhook para receber mensagens do Telegram
+            self._setup_webhook(token, bot_id)
+            
+            # Armazenar bot ativo
+            self.active_bots[bot_id] = {
+                'token': token,
+                'config': config,
+                'started_at': datetime.now(),
+                'status': 'running'
+            }
         
         # Iniciar thread de monitoramento
         thread = threading.Thread(
@@ -117,14 +122,15 @@ class BotManager:
         Args:
             bot_id: ID do bot no banco
         """
-        if bot_id not in self.active_bots:
-            logger.warning(f"Bot {bot_id} não está ativo")
-            return
+        with self._bots_lock:  # ✅ THREAD SAFE
+            if bot_id not in self.active_bots:
+                logger.warning(f"Bot {bot_id} não está ativo")
+                return
+            
+            # Marcar como parado
+            self.active_bots[bot_id]['status'] = 'stopped'
         
-        # Marcar como parado
-        self.active_bots[bot_id]['status'] = 'stopped'
-        
-        # Remover job do scheduler se existir
+        # Remover job do scheduler se existir (fora do lock)
         if bot_id in self.polling_jobs and self.scheduler:
             try:
                 self.scheduler.remove_job(self.polling_jobs[bot_id])
@@ -134,7 +140,9 @@ class BotManager:
                 logger.error(f"Erro ao remover job: {e}")
         
         # Remover da lista de ativos
-        del self.active_bots[bot_id]
+        with self._bots_lock:  # ✅ THREAD SAFE
+            if bot_id in self.active_bots:
+                del self.active_bots[bot_id]
         
         # Thread será encerrada automaticamente
         if bot_id in self.bot_threads:

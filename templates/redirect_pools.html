@@ -243,7 +243,7 @@
                                         Use em Anúncios
                                     </span>
                                 </label>
-                                <button @click="copyToClipboard(`https://seu-dominio.com${pool.public_url}`)"
+                                <button @click="copyToClipboard(`${window.location.origin}${pool.public_url}`)"
                                         class="inline-flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm text-black transition-all transform hover:scale-105"
                                         style="background: linear-gradient(135deg, #FCD34D 0%, #F59E0B 100%); box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);">
                                     <i class="fas fa-copy"></i>
@@ -255,7 +255,7 @@
                                  @click="$event.currentTarget.querySelector('input').select()">
                                 <i class="fas fa-globe text-accent500"></i>
                                 <input type="text" 
-                                       :value="`https://seu-dominio.com${pool.public_url}`"
+                                       :value="`${window.location.origin}${pool.public_url}`"
                                        readonly
                                        class="flex-1 bg-transparent border-none text-textPrimary font-mono text-sm focus:outline-none cursor-pointer"
                                        @click="$event.target.select()">

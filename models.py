@@ -197,6 +197,7 @@ class Bot(db.Model):
     # Relacionamentos
     config = db.relationship('BotConfig', backref='bot', uselist=False, cascade='all, delete-orphan')
     payments = db.relationship('Payment', backref='bot', lazy='dynamic', cascade='all, delete-orphan')
+    pool_associations = db.relationship('PoolBot', backref='bot', lazy='dynamic', cascade='all, delete-orphan')  # ✅ DELETE CASCADE
     
     def to_dict(self):
         """Retorna dados do bot em formato dict"""
@@ -424,8 +425,8 @@ class PoolBot(db.Model):
     __tablename__ = 'pool_bots'
     
     id = db.Column(db.Integer, primary_key=True)
-    pool_id = db.Column(db.Integer, db.ForeignKey('redirect_pools.id'), nullable=False, index=True)
-    bot_id = db.Column(db.Integer, db.ForeignKey('bots.id'), nullable=False, index=True)
+    pool_id = db.Column(db.Integer, db.ForeignKey('redirect_pools.id', ondelete='CASCADE'), nullable=False, index=True)
+    bot_id = db.Column(db.Integer, db.ForeignKey('bots.id', ondelete='CASCADE'), nullable=False, index=True)
     
     # Configuração específica
     weight = db.Column(db.Integer, default=1)  # Para weighted load balancing
