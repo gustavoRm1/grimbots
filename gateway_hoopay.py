@@ -83,7 +83,7 @@ class HoopayPaymentGateway(PaymentGateway):
             logger.error(f"❌ HooPay: Erro ao verificar credenciais: {e}")
             return False
     
-    def generate_pix(self, amount: float, description: str, payment_id: int) -> Optional[Dict]:
+    def generate_pix(self, amount: float, description: str, payment_id: int, customer_data: Optional[Dict] = None) -> Optional[Dict]:
         """
         Gera um código PIX via HooPay
         
@@ -91,6 +91,7 @@ class HoopayPaymentGateway(PaymentGateway):
             amount: Valor em reais (ex: 10.50)
             description: Descrição do pagamento
             payment_id: ID do pagamento no banco local
+            customer_data: Dados do cliente (opcional, não usado pelo HooPay)
         
         Returns:
             Dict com pix_code, qr_code_url, transaction_id, payment_id
@@ -104,13 +105,21 @@ class HoopayPaymentGateway(PaymentGateway):
                 logger.error(f"❌ HooPay: Valor mínimo é R$ 0,50 (recebido: {amount})")
                 return None
             
-            # Dados fictícios do cliente
-            customer_data = {
-                "email": "cliente@bot.com",
-                "name": description if len(description) <= 50 else description[:50],
-                "phone": "11999999999",
-                "document": "00000000000"
+            # ✅ PRODUÇÃO: Preparar dados do cliente (com fallback funcional se não fornecidos)
+            if not customer_data:
+                logger.warning("⚠️ HooPay: customer_data não fornecido, usando fallback")
+                customer_data = {}
+            
+            # Preparar dados do cliente com validação de tamanho
+            customer_name = customer_data.get('name') or (description[:50] if description else 'Cliente Digital')
+            customer_payload = {
+                "email": customer_data.get('email') or f"pix{payment_id}@bot.digital",
+                "name": customer_name if len(customer_name) <= 50 else customer_name[:50],
+                "phone": str(customer_data.get('phone') or '11999999999'),
+                "document": str(customer_data.get('document') or f"{payment_id:011d}")  # Payment ID como CPF
             }
+            
+            logger.info(f"👤 HooPay: Cliente - {customer_payload['name']} | {customer_payload['email']}")
             
             # Produtos (HooPay exige array de produtos)
             products = [
@@ -132,7 +141,7 @@ class HoopayPaymentGateway(PaymentGateway):
             # Payload HooPay
             payload = {
                 "amount": amount,  # ✅ REAIS (não centavos!)
-                "customer": customer_data,
+                "customer": customer_payload,  # ✅ DADOS REAIS DO CLIENTE
                 "products": products,
                 "payments": payments,
                 "data": {

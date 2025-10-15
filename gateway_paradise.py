@@ -93,7 +93,7 @@ class ParadisePaymentGateway(PaymentGateway):
             logger.error(f"❌ Paradise: Erro ao verificar credenciais: {e}")
             return False
     
-    def generate_pix(self, amount: float, description: str, payment_id: int) -> Optional[Dict]:
+    def generate_pix(self, amount: float, description: str, payment_id: int, customer_data: Optional[Dict] = None) -> Optional[Dict]:
         """
         Gera um código PIX via Paradise
         
@@ -101,6 +101,7 @@ class ParadisePaymentGateway(PaymentGateway):
             amount: Valor em reais (ex: 10.50)
             description: Descrição do pagamento
             payment_id: ID do pagamento no banco local
+            customer_data: Dados do cliente (opcional, não usado pelo Paradise)
         
         Returns:
             Dict com pix_code, qr_code_url, transaction_id, payment_id
@@ -116,13 +117,20 @@ class ParadisePaymentGateway(PaymentGateway):
             
             logger.info(f"💰 Paradise: Gerando PIX - R$ {amount:.2f} ({amount_cents} centavos)")
             
-            # Dados fictícios do cliente (Paradise aceita sem validação para produtos digitais)
-            customer_data = {
-                "name": description,
-                "email": "cliente@bot.com",
-                "phone": "11999999999",
-                "document": "00000000000"
+            # ✅ PRODUÇÃO: Preparar dados do cliente (com fallback funcional se não fornecidos)
+            if not customer_data:
+                logger.warning("⚠️ Paradise: customer_data não fornecido, usando fallback")
+                customer_data = {}
+            
+            # Garantir que todos os campos obrigatórios existem
+            customer_payload = {
+                "name": customer_data.get('name') or description[:30] if description else 'Cliente Digital',
+                "email": customer_data.get('email') or f"pix{payment_id}@bot.digital",
+                "phone": str(customer_data.get('phone') or '11999999999'),
+                "document": str(customer_data.get('document') or f"{payment_id:011d}")  # Payment ID como CPF
             }
+            
+            logger.info(f"👤 Paradise: Cliente - {customer_payload['name']} | {customer_payload['email']}")
             
             # Payload Paradise (baseado no paradise.php)
             payload = {
@@ -130,7 +138,7 @@ class ParadisePaymentGateway(PaymentGateway):
                 "description": description,
                 "reference": f"BOT-{payment_id}",
                 "productHash": self.product_hash,  # ✅ OBRIGATÓRIO
-                "customer": customer_data
+                "customer": customer_payload  # ✅ DADOS REAIS DO CLIENTE
             }
             
             # Se offerHash foi configurado, adiciona

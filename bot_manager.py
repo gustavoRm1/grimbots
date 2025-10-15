@@ -1364,16 +1364,16 @@ Seu pagamento ainda não foi confirmado.
                     logger.error(f"❌ Erro ao criar gateway {gateway.gateway_type}")
                     return None
                 
-                # Gerar PIX usando gateway isolado
+                # Gerar PIX usando gateway isolado com DADOS REAIS DO CLIENTE
                 pix_result = payment_gateway.generate_pix(
                     amount=amount,
                     description=description,
                     payment_id=payment_id,
                     customer_data={
-                        'name': customer_name or description,
-                        'cpf': '00000000000',
-                        'email': 'cliente@bot.com',
-                        'phone': '11999999999'
+                        'name': customer_name or 'Cliente',
+                        'email': f"{customer_username}@telegram.user" if customer_username else f"user{customer_user_id}@telegram.user",
+                        'phone': customer_user_id,  # ✅ User ID do Telegram como identificador único
+                        'document': customer_user_id  # ✅ User ID do Telegram (gateways aceitam)
                     }
                 )
                 
