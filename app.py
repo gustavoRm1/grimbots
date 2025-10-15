@@ -2170,11 +2170,18 @@ def create_gateway():
     
     # Verificar credenciais
     try:
-        is_valid = bot_manager.verify_gateway(gateway_type, {
+        # Montar credenciais conforme o gateway
+        credentials = {
             'client_id': gateway.client_id,
             'client_secret': gateway.client_secret,
-            'api_key': gateway.api_key
-        })
+            'api_key': gateway.api_key,
+            'product_hash': gateway.product_hash,  # Paradise
+            'offer_hash': gateway.offer_hash,      # Paradise
+            'store_id': gateway.store_id,          # Paradise
+            'organization_id': gateway.organization_id  # HooPay
+        }
+        
+        is_valid = bot_manager.verify_gateway(gateway_type, credentials)
         
         if is_valid:
             gateway.is_verified = True
