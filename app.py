@@ -336,6 +336,8 @@ def dashboard():
     from models import BotUser
     
     # Query única otimizada para todas as estatísticas dos bots
+    # ✅ CORREÇÃO: Usar os campos já calculados do modelo Bot ao invés de JOIN
+    # Isso evita produto cartesiano quando há múltiplos BotUsers e Payments
     bot_stats = db.session.query(
         Bot.id,
         Bot.name,
@@ -343,14 +345,14 @@ def dashboard():
         Bot.is_running,
         Bot.is_active,
         Bot.created_at,
+        Bot.total_sales,  # ✅ Campo já calculado corretamente
+        Bot.total_revenue,  # ✅ Campo já calculado corretamente
         func.count(func.distinct(BotUser.telegram_user_id)).label('total_users'),
-        func.count(case((Payment.status == 'paid', Payment.id))).label('total_sales'),
-        func.coalesce(func.sum(case((Payment.status == 'paid', Payment.amount))), 0).label('total_revenue'),
-        func.count(case((Payment.status == 'pending', Payment.id))).label('pending_sales')
+        func.count(func.distinct(case((Payment.status == 'pending', Payment.id)))).label('pending_sales')
     ).outerjoin(BotUser, Bot.id == BotUser.bot_id)\
      .outerjoin(Payment, Bot.id == Payment.bot_id)\
      .filter(Bot.user_id == current_user.id)\
-     .group_by(Bot.id, Bot.name, Bot.username, Bot.is_running, Bot.is_active, Bot.created_at)\
+     .group_by(Bot.id, Bot.name, Bot.username, Bot.is_running, Bot.is_active, Bot.created_at, Bot.total_sales, Bot.total_revenue)\
      .order_by(Bot.created_at.desc())\
      .all()
     
@@ -417,18 +419,19 @@ def api_dashboard_stats():
     from models import BotUser
     
     # Query otimizada
+    # ✅ CORREÇÃO: Usar campos calculados do modelo para evitar produto cartesiano
     bot_stats = db.session.query(
         Bot.id,
         Bot.name,
         Bot.is_running,
+        Bot.total_sales,  # ✅ Campo já calculado
+        Bot.total_revenue,  # ✅ Campo já calculado
         func.count(func.distinct(BotUser.telegram_user_id)).label('total_users'),
-        func.count(case((Payment.status == 'paid', Payment.id))).label('total_sales'),
-        func.coalesce(func.sum(case((Payment.status == 'paid', Payment.amount))), 0).label('total_revenue'),
-        func.count(case((Payment.status == 'pending', Payment.id))).label('pending_sales')
+        func.count(func.distinct(case((Payment.status == 'pending', Payment.id)))).label('pending_sales')
     ).outerjoin(BotUser, Bot.id == BotUser.bot_id)\
      .outerjoin(Payment, Bot.id == Payment.bot_id)\
      .filter(Bot.user_id == current_user.id)\
-     .group_by(Bot.id, Bot.name, Bot.is_running)\
+     .group_by(Bot.id, Bot.name, Bot.is_running, Bot.total_sales, Bot.total_revenue)\
      .all()
     
     return jsonify({
