@@ -175,18 +175,26 @@ class ParadisePaymentGateway(PaymentGateway):
                 return None
             
             data = response.json()
-            logger.debug(f"📥 Paradise Data: {data}")
+            logger.info(f"📥 Paradise CREATE Response: {data}")
             
             # Paradise retorna estrutura aninhada: {transaction: {...}}
             transaction_data = data.get('transaction', data)
+            logger.info(f"📥 Paradise Transaction Data: {transaction_data}")
             
             # Extrai dados do PIX
             pix_code = transaction_data.get('qr_code')  # ✅ Campo: qr_code
             transaction_id = transaction_data.get('id')  # ✅ Campo: id
             qr_code_base64 = transaction_data.get('qr_code_base64')  # ✅ QR Code em base64
             
+            logger.info(f"🔍 Extracted - PIX Code: {pix_code[:50] if pix_code else None}...")
+            logger.info(f"🔍 Extracted - Transaction ID: {transaction_id}")
+            logger.info(f"🔍 Extracted - QR Code Base64: {'presente' if qr_code_base64 else 'ausente'}")
+            
             if not pix_code or not transaction_id:
                 logger.error(f"❌ Paradise: Resposta incompleta - pix_code ou id ausente")
+                logger.error(f"❌ PIX Code: {pix_code}")
+                logger.error(f"❌ Transaction ID: {transaction_id}")
+                logger.error(f"❌ Transaction Data completo: {transaction_data}")
                 return None
             
             logger.info(f"✅ Paradise: PIX gerado | ID: {transaction_id}")
