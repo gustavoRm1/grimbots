@@ -2285,8 +2285,9 @@ def create_gateway():
     elif gateway_type == 'wiinpay':
         # ✅ WIINPAY
         gateway.api_key = data.get('api_key')
-        # Split User ID configurado automaticamente para splits (você é o dono do sistema)
-        gateway.split_user_id = data.get('split_user_id', '6877edeba3c39f8451ba5bdd')  # Seu ID WiinPay
+        # Split User ID da plataforma (4% de comissão pelos serviços de automação)
+        # Fallback para o ID da plataforma se não fornecido
+        gateway.split_user_id = data.get('split_user_id', '6877edeba3c39f8451ba5bdd')
     
     # ✅ Split percentage (comum a todos)
     gateway.split_percentage = float(data.get('split_percentage', 4.0))

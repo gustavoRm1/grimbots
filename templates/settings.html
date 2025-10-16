@@ -625,19 +625,19 @@
 
                         <div class="space-y-2">
                             <label class="block text-sm font-black flex items-center gap-2" style="color: var(--text-primary);">
-                                <i class="fas fa-user" style="color: #10B981;"></i>
-                                Split User ID
-                                <span class="text-xs font-normal" style="color: var(--text-tertiary);">(opcional)</span>
+                                <i class="fas fa-handshake" style="color: var(--brand-gold-400);"></i>
+                                Split User ID da Plataforma
+                                <span class="text-xs font-normal px-2 py-0.5 rounded" style="background: var(--brand-emerald-500); color: white;">4% Plataforma</span>
                             </label>
                             <input 
                                 type="text" 
                                 x-model="gateways.wiinpay.split_user_id" 
                                 class="w-full px-4 py-3.5 rounded-xl focus:outline-none transition-all font-mono"
-                                style="background: var(--bg-primary); border: 2px solid var(--border-subtle); color: #6EE7B7; font-weight: 700;"
-                                placeholder="1234567890 (seu user_id na WiinPay)">
+                                style="background: var(--bg-primary); border: 2px solid var(--border-subtle); color: var(--brand-gold-400); font-weight: 700;"
+                                placeholder="6877edeba3c39f8451ba5bdd (ID da plataforma)">
                             <p class="text-xs mt-1" style="color: var(--text-tertiary);">
                                 <i class="fas fa-info-circle mr-1"></i>
-                                Seu user_id na WiinPay para receber splits (4%)
+                                ID da plataforma para receber os <strong style="color: var(--brand-gold-400);">4% de comissão</strong> pelos serviços de automação (conforme plano contratado)
                             </p>
                         </div>
 
