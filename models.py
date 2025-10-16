@@ -252,6 +252,10 @@ class BotConfig(db.Model):
     # Link de acesso após pagamento
     access_link = db.Column(db.String(500))
     
+    # Mensagens personalizadas
+    success_message = db.Column(db.Text)  # Mensagem quando pagamento é aprovado
+    pending_message = db.Column(db.Text)  # Mensagem quando pagamento está pendente
+    
     # Datas
     updated_at = db.Column(db.DateTime, default=get_brazil_time, onupdate=get_brazil_time)
     

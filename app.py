@@ -1904,6 +1904,12 @@ def update_bot_config(bot_id):
         if 'access_link' in data:
             config.access_link = data['access_link']
         
+        # Mensagens personalizadas
+        if 'success_message' in data:
+            config.success_message = data['success_message']
+        if 'pending_message' in data:
+            config.pending_message = data['pending_message']
+        
         db.session.commit()
         
         # Se bot está rodando, atualizar configuração em tempo real

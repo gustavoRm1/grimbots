@@ -445,6 +445,56 @@
         </template>
     </div>
 
+    <!-- Botões de Redirecionamento (dentro da tab Produtos) -->
+    <div x-show="activeTab === 'buttons'" x-cloak class="mt-8">
+        <div class="border-t border-gray-800 pt-8">
+            <div class="flex justify-between items-center mb-6">
+                <div>
+                    <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                        <i class="fas fa-external-link-alt text-blue-500"></i>
+                        Botões de Link
+                    </h2>
+                    <p class="text-sm text-gray-500 mt-1">Botões que levam para links externos (sem pagamento)</p>
+                </div>
+                <button @click="addRedirectButton()" 
+                        class="px-4 py-2 bg-blue-500 bg-opacity-10 border border-blue-500 rounded-lg text-blue-400 font-semibold hover:bg-opacity-20 transition-all">
+                    <i class="fas fa-plus mr-2"></i>
+                    Adicionar Link
+                </button>
+            </div>
+
+            <template x-if="config.redirect_buttons.length > 0">
+                <div class="space-y-3">
+                    <template x-for="(button, index) in config.redirect_buttons" :key="index">
+                        <div class="flex items-center gap-3 p-4 bg-gray-900 border border-gray-800 rounded-lg">
+                            <i class="fas fa-link text-blue-500"></i>
+                            <input type="text" 
+                                   x-model="button.text" 
+                                   class="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded text-white text-sm"
+                                   placeholder="Texto do botão">
+                            <input type="url" 
+                                   x-model="button.url" 
+                                   class="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded text-white text-sm font-mono"
+                                   placeholder="https://...">
+                            <button @click="removeRedirectButton(index)" 
+                                    class="w-10 h-10 flex items-center justify-center rounded border border-red-500 text-red-400 hover:bg-red-500 hover:bg-opacity-10">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </template>
+                </div>
+            </template>
+
+            <template x-if="config.redirect_buttons.length === 0">
+                <div class="text-center py-8 border-2 border-dashed border-gray-800 rounded-lg">
+                    <i class="fas fa-external-link-alt text-4xl text-gray-700 mb-2"></i>
+                    <p class="text-sm text-gray-500">Nenhum botão de link configurado</p>
+                    <p class="text-xs text-gray-600 mt-1">Use para grupos, canais, sites externos, etc.</p>
+                </div>
+            </template>
+        </div>
+    </div>
+
     <!-- Tab Content: Downsells -->
     <div x-show="activeTab === 'downsells'" x-cloak>
         <div class="config-section">
@@ -752,6 +802,17 @@ function botConfigApp() {
             if (confirm('Remover este produto?')) {
                 this.config.main_buttons.splice(index, 1);
             }
+        },
+        
+        addRedirectButton() {
+            this.config.redirect_buttons.push({
+                text: '',
+                url: ''
+            });
+        },
+        
+        removeRedirectButton(index) {
+            this.config.redirect_buttons.splice(index, 1);
         },
         
         addDownsell() {
