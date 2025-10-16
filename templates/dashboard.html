@@ -47,7 +47,7 @@
 <span class="px-3 py-1 rounded-full text-xs font-bold" style="background: rgba(59, 130, 246, 0.15); color: var(--brand-blue-300); border: 1px solid var(--brand-blue-500);">BOTS</span>
 </div>
 <div class="text-4xl font-black mb-2" style="color: var(--brand-blue-300);">{{ stats.running_bots }}</div>
-<div class="text-sm font-medium" style="color: var(--text-tertiary);">Bots ativos <span style="color: var(--text-muted);">(de {{ stats.total_bots }})</span></div>
+<div class="text-sm font-medium" style="color: var(--text-tertiary);">Bots ativos <span style="color: var(--text-gray-400);">(de {{ stats.total_bots }})</span></div>
 </div>
 </div>
 <div class="text-center mt-8">
@@ -83,18 +83,18 @@
     </div>
         <!-- Filtros -->
         <div class="flex gap-2">
-<select x-model="filters.period" @change="loadChartData()" class="px-4 py-2 bg-bg900 border border-white border-opacity-10 rounded-lg text-sm focus:outline-none" style="color: var(--text-primary);">
+<select x-model="filters.period" @change="loadChartData()" class="px-4 py-2 bg-gray-900 border border-white border-opacity-10 rounded-lg text-sm focus:outline-none" style="color: var(--text-primary);">
                 <option value="7">Últimos 7 dias</option>
                 <option value="30">Últimos 30 dias</option>
                 <option value="90">Últimos 90 dias</option>
             </select>
-<button @click="refreshStats()" :disabled="isUpdating" :class="{'opacity-50 cursor-not-allowed': isUpdating} inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-semibold text-black bg-gradient-to-r from-[#F59E0B] to-[#D97706] hover:shadow-xl transition-all">
+<button @click="refreshStats()" :disabled="isUpdating" :class="{'opacity-50 cursor-not-allowed': isUpdating} inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-semibold text-gray-900 bg-gradient-to-r from-yellow-600 to-yellow-700 hover:shadow-xl transition-all">
 <i class="fas fa-sync-alt mr-2" :class="{'fa-spin': isUpdating}"></i> Atualizar </button>
         </div>
     </div>
     <!-- Card de Ranking (Destaque) -->
 <div class="card !p-0 mb-8 overflow-hidden border-2" style="border-color: var(--brand-gold-500); box-shadow: 0 0 30px rgba(245, 158, 11, 0.3), 0 8px 24px rgba(0, 0, 0, 0.4);">
-<div class="px-6 py-5 flex justify-between items-center" style="background: linear-gradient(135deg, var(--brand-gold-500) 0%, var(--brand-gold-600) 100%);">
+<div class="px-6 py-5 flex justify-between items-center" style="background: linear-gradient(135deg, var(--brand-gold-500) 0%, var(--brand-gold-700) 100%);">
             <div class="flex items-center gap-4">
 <i class="fas fa-trophy text-3xl" style="color: var(--brand-gold-900); filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));"></i>
                 <div>
@@ -135,7 +135,7 @@
                         <dl>
                             <dt class="stat-label">Total de Usuários</dt>
                             <dd class="stat-value" x-text="formatNumber(stats.total_users)">{{ stats.total_users }}</dd>
-                            <dd class="text-xs text-muted mt-1">Usuários únicos</dd>
+                            <dd class="text-xs text-gray-400 mt-1">Usuários únicos</dd>
                         </dl>
                     </div>
                 </div>
@@ -168,7 +168,7 @@
                         <dl>
                             <dt class="stat-label">Receita Total</dt>
                             <dd class="stat-value" x-text="'R$ ' + formatMoney(stats.total_revenue)">R$ {{ "%.2f"|format(stats.total_revenue) }}</dd>
-                            <dd class="text-xs text-muted mt-1">Pagamentos confirmados</dd>
+                            <dd class="text-xs text-gray-400 mt-1">Pagamentos confirmados</dd>
                         </dl>
                     </div>
                 </div>
@@ -184,7 +184,7 @@
                         <dl>
                             <dt class="stat-label">Bots Ativos</dt>
                             <dd class="stat-value" x-text="stats.running_bots">{{ stats.running_bots }}</dd>
-<dd class="text-xs text-muted mt-1"> de <span x-text="stats.total_bots"></span> total </dd>
+<dd class="text-xs text-gray-400 mt-1"> de <span x-text="stats.total_bots"></span> total </dd>
                         </dl>
                     </div>
                 </div>
@@ -224,10 +224,10 @@
 <span class="text-sm" style="color: var(--text-secondary);">Taxa de Conversão</span>
 <span class="text-lg font-bold" style="color: var(--brand-gold-500);" x-text="analytics.conversion_rate + '%'">0%</span>
                 </div>
-                <div class="w-full bg-bg900 rounded-full h-2">
-                    <div class="bg-[#F59E0B] h-2 rounded-full transition-all" :style="`width: ${analytics.conversion_rate}%`"></div>
+                <div class="w-full bg-gray-900 rounded-full h-2">
+                    <div class="bg-yellow-600 h-2 rounded-full transition-all" :style="`width: ${analytics.conversion_rate}%`"></div>
                 </div>
-                <p class="text-xs text-muted mt-1">Usuários que compraram</p>
+                <p class="text-xs text-gray-400 mt-1">Usuários que compraram</p>
             </div>
             <!-- Ticket Médio -->
             <div class="mb-6 pb-6 border-b border-white border-opacity-10">
@@ -235,7 +235,7 @@
 <span class="text-sm" style="color: var(--text-secondary);">Ticket Médio</span>
 <span class="text-lg font-bold" style="color: var(--brand-green-300);">R$ <span x-text="formatMoney(analytics.avg_ticket)">0</span></span>
                 </div>
-                <p class="text-xs text-muted">Valor médio por venda</p>
+                <p class="text-xs text-gray-400">Valor médio por venda</p>
             </div>
             <!-- Total Vendas Hoje -->
             <div>
@@ -243,7 +243,7 @@
 <span class="text-sm" style="color: var(--text-secondary);">Vendas Hoje</span>
 <span class="text-lg font-bold" style="color: var(--brand-gold-500);" x-text="analytics.today_sales || 0">0</span>
                 </div>
-                <p class="text-xs text-muted">Total de vendas de hoje</p>
+                <p class="text-xs text-gray-400">Total de vendas de hoje</p>
             </div>
         </div>
     </div>
@@ -253,11 +253,11 @@
         <div class="card !p-6">
 <h3 class="text-lg font-semibold mb-6" style="color: var(--text-primary);">Performance de Order Bumps</h3>
             <div class="grid grid-cols-2 gap-4 mb-6">
-                <div class="text-center p-4 bg-bg900 rounded-lg">
+                <div class="text-center p-4 bg-gray-900 rounded-lg">
 <p class="text-2xl font-bold" style="color: var(--brand-gold-500);" x-text="analytics.order_bump_stats.shown || 0">0</p>
 <p class="text-xs mt-1" style="color: var(--text-secondary);">Exibidos</p>
                 </div>
-                <div class="text-center p-4 bg-bg900 rounded-lg">
+                <div class="text-center p-4 bg-gray-900 rounded-lg">
 <p class="text-2xl font-bold currency-value" x-text="analytics.order_bump_stats.accepted || 0">0</p>
 <p class="text-xs mt-1" style="color: var(--text-secondary);">Aceitos</p>
                 </div>
@@ -267,8 +267,8 @@
 <span class="text-sm" style="color: var(--text-secondary);">Taxa de Aceitação</span>
 <span class="text-xl font-bold" style="color: var(--brand-gold-500);" x-text="(analytics.order_bump_stats.acceptance_rate || 0) + '%'">0%</span>
                 </div>
-                <div class="w-full bg-bg900 rounded-full h-3">
-<div class="bg-gradient-to-r from-[#F59E0B] to-[#D97706] h-3 rounded-full transition-all" :style="`width: ${analytics.order_bump_stats.acceptance_rate || 0}%`"></div>
+                <div class="w-full bg-gray-900 rounded-full h-3">
+<div class="bg-gradient-to-r from-yellow-600 to-yellow-700 h-3 rounded-full transition-all" :style="`width: ${analytics.order_bump_stats.acceptance_rate || 0}%`"></div>
                 </div>
             </div>
             <div class="border-t border-white border-opacity-10 pt-4">
@@ -282,11 +282,11 @@
         <div class="card !p-6">
 <h3 class="text-lg font-semibold mb-6" style="color: var(--text-primary);">Performance de Downsells</h3>
             <div class="grid grid-cols-2 gap-4 mb-6">
-                <div class="text-center p-4 bg-bg900 rounded-lg">
+                <div class="text-center p-4 bg-gray-900 rounded-lg">
 <p class="text-2xl font-bold text-trust-300" x-text="analytics.downsell_stats.sent || 0">0</p>
 <p class="text-xs mt-1" style="color: var(--text-secondary);">Enviados</p>
                 </div>
-                <div class="text-center p-4 bg-bg900 rounded-lg">
+                <div class="text-center p-4 bg-gray-900 rounded-lg">
 <p class="text-2xl font-bold currency-value" x-text="analytics.downsell_stats.converted || 0">0</p>
 <p class="text-xs mt-1" style="color: var(--text-secondary);">Convertidos</p>
                 </div>
@@ -296,7 +296,7 @@
 <span class="text-sm" style="color: var(--text-secondary);">Taxa de Conversão</span>
 <span class="text-xl font-bold text-trust-300" x-text="(analytics.downsell_stats.conversion_rate || 0) + '%'">0%</span>
                 </div>
-                <div class="w-full bg-bg900 rounded-full h-3">
+                <div class="w-full bg-gray-900 rounded-full h-3">
 <div class="bg-gradient-to-r from-blue-400 to-blue-600 h-3 rounded-full transition-all" :style="`width: ${analytics.downsell_stats.conversion_rate || 0}%`"></div>
                 </div>
             </div>
@@ -319,14 +319,14 @@
         <template x-if="analytics.peak_hours.length > 0">
             <div class="grid grid-cols-5 gap-4">
                 <template x-for="(peak, index) in analytics.peak_hours" :key="index">
-                    <div class="relative text-center p-4 bg-bg900 rounded-lg hover:bg-opacity-80 transition-all group">
+                    <div class="relative text-center p-4 bg-gray-900 rounded-lg hover:bg-opacity-80 transition-all group">
                         <!-- Badge de posição -->
-                        <div class="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-[#F59E0B] text-white text-xs font-bold flex items-center justify-center">
+                        <div class="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-yellow-600 text-white text-xs font-bold flex items-center justify-center">
                             <span x-text="index + 1"></span>
                         </div>
 <p class="text-2xl font-bold" style="color: var(--brand-gold-500);" x-text="peak.hour">00:00</p>
 <p class="text-sm mt-2" style="color: var(--text-secondary);" x-text="peak.sales">0</p>
-                        <p class="text-xs text-muted">vendas</p>
+                        <p class="text-xs text-gray-400">vendas</p>
                     </div>
                 </template>
             </div>
@@ -342,11 +342,11 @@
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
         <div>
 <label class="block text-sm font-medium mb-2" style="color: var(--text-secondary);">Buscar Bot</label>
-<input type="text" x-model="filters.botSearch" @input="filterBots()" placeholder="Nome do bot..." class="w-full px-4 py-2 bg-bg900 border border-white border-opacity-10 rounded-lg placeholder-muted focus:outline-none" style="color: var(--text-primary);">
+<input type="text" x-model="filters.botSearch" @input="filterBots()" placeholder="Nome do bot..." class="w-full px-4 py-2 bg-gray-900 border border-white border-opacity-10 rounded-lg placeholder-gray-500 focus:outline-none" style="color: var(--text-primary);">
         </div>
         <div>
 <label class="block text-sm font-medium mb-2" style="color: var(--text-secondary);">Status do Bot</label>
-<select x-model="filters.botStatus" @change="filterBots()" class="w-full px-4 py-2 bg-bg900 border border-white border-opacity-10 rounded-lg focus:outline-none" style="color: var(--text-primary);">
+<select x-model="filters.botStatus" @change="filterBots()" class="w-full px-4 py-2 bg-gray-900 border border-white border-opacity-10 rounded-lg focus:outline-none" style="color: var(--text-primary);">
                 <option value="all">Todos</option>
                 <option value="online">Online</option>
                 <option value="offline">Offline</option>
@@ -354,7 +354,7 @@
         </div>
         <div>
 <label class="block text-sm font-medium mb-2" style="color: var(--text-secondary);">Status de Vendas</label>
-<select x-model="filters.saleStatus" @change="filterSales()" class="w-full px-4 py-2 bg-bg900 border border-white border-opacity-10 rounded-lg focus:outline-none" style="color: var(--text-primary);">
+<select x-model="filters.saleStatus" @change="filterSales()" class="w-full px-4 py-2 bg-gray-900 border border-white border-opacity-10 rounded-lg focus:outline-none" style="color: var(--text-primary);">
                 <option value="all">Todas</option>
                 <option value="paid">Pagas</option>
                 <option value="pending">Pendentes</option>
@@ -369,14 +369,14 @@
 <p class="mt-1 text-sm" style="color: var(--text-secondary);">
 <span x-text="filteredBots.length"></span> bot(s) encontrado(s)</p>
             </div>
-<button @click="showAddBotModal = true" :disabled="!{{ 'true' if stats.can_add_bot else 'false' }}" class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-semibold text-black bg-gradient-to-r from-[#F59E0B] to-[#D97706] hover:shadow-xl transition-all">
+<button @click="showAddBotModal = true" :disabled="!{{ 'true' if stats.can_add_bot else 'false' }}" class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-semibold text-gray-900 bg-gradient-to-r from-yellow-600 to-yellow-700 hover:shadow-xl transition-all">
 <i class="fas fa-plus mr-2"></i> Adicionar Bot </button>
         </div>
         <div class="px-4 py-5 sm:p-6">
             <template x-if="filteredBots.length > 0">
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     <template x-for="bot in filteredBots" :key="bot.id">
-                        <div class="border border-white border-opacity-10 rounded-lg p-4 hover:border-opacity-20 hover:shadow-xl transition-all bg-surface800 bg-opacity-50">
+                        <div class="border border-white border-opacity-10 rounded-lg p-4 hover:border-opacity-20 hover:shadow-xl transition-all bg-gray-800 bg-opacity-50">
                     <div class="flex items-start justify-between">
                         <div class="flex items-center">
 <i class="fas fa-robot text-2xl" style="color: var(--brand-gold-500);"></i>
@@ -385,7 +385,7 @@
 <p class="text-xs" style="color: var(--text-secondary);">@<span x-text="bot.username"></span></p>
                             </div>
                         </div>
-<span class="badge" :class="bot.is_running ? 'badge--success' : 'card-premium bg-opacity-5 text-muted border-white border-opacity-10'">
+<span class="badge" :class="bot.is_running ? 'badge-online' : 'bg-gray-800 bg-opacity-50 text-gray-400 border-white border-opacity-10'">
 <span class="w-2 h-2 mr-1 rounded-full animate-pulse" :style="bot.is_running ? 'background: var(--brand-green-300);' : 'background: var(--surface-mid);'"></span>
                                     <span x-text="bot.is_running ? 'Online' : 'Offline'"></span>
                         </span>
@@ -407,7 +407,7 @@
                             <div class="mt-4 space-y-2">
                                 <!-- Linha 1: Estatísticas (destaque) -->
                                 <div>
-<a :href="`/bots/${bot.id}/stats`" class="w-full inline-flex justify-center items-center px-4 py-2.5 border-2 text-sm font-bold rounded-lg text-black bg-gradient-to-r from-[#F59E0B] to-[#D97706] hover:shadow-xl transition-all transform hover:-translate-y-0.5" style="border-color: var(--brand-gold-500);">
+<a :href="`/bots/${bot.id}/stats`" class="w-full inline-flex justify-center items-center px-4 py-2.5 border-2 text-sm font-bold rounded-lg text-gray-900 bg-gradient-to-r from-yellow-600 to-yellow-700 hover:shadow-xl transition-all transform hover:-translate-y-0.5" style="border-color: var(--brand-gold-500);">
 <i class="fas fa-chart-line mr-2"></i> Ver Estatísticas Detalhadas </a>
                                 </div>
                                 <!-- Linha 2: Configurar, Trocar Token e Remarketing -->
@@ -444,7 +444,7 @@
             </template>
             <template x-if="filteredBots.length === 0">
             <div class="text-center py-12">
-                    <i class="fas fa-robot text-6xl text-muted opacity-30"></i>
+                    <i class="fas fa-robot text-6xl text-gray-400 opacity-30"></i>
 <h3 class="mt-2 text-sm font-medium" style="color: var(--text-primary);">Nenhum bot encontrado</h3>
 <p class="mt-1 text-sm" style="color: var(--text-secondary);">Tente ajustar os filtros ou adicione um novo bot.</p>
                 </div>
@@ -501,15 +501,15 @@
             <!-- Backdrop -->
 <div x-show="showAddBotModal" x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="ease-in duration-200" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 bg-black bg-opacity-90 backdrop-blur-sm transition-opacity" @click="showAddBotModal = false"></div>
             <!-- Modal Content -->
-<div x-show="showAddBotModal" x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100" x-transition:leave="ease-in duration-200" x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100" x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" class="relative inline-block align-middle bg-surface600 rounded-2xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:max-w-lg sm:w-full" style="box-shadow: 0 20px 60px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,186,8,0.15);">
+<div x-show="showAddBotModal" x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100" x-transition:leave="ease-in duration-200" x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100" x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" class="relative inline-block align-middle bg-gray-700 rounded-2xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:max-w-lg sm:w-full" style="box-shadow: 0 20px 60px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,186,8,0.15);">
                 <!-- Header com Ícone -->
                 <div class="bg-gradient-to-b from-surface700 to-surface600 px-8 pt-8 pb-6 border-b border-white border-opacity-8">
                     <div class="flex items-start">
                         <!-- Ícone com Glow -->
                         <div class="flex-shrink-0">
                             <div class="relative">
-                                <div class="absolute -inset-2 bg-[#F59E0B] rounded-full opacity-20 blur-xl"></div>
-<div class="relative flex items-center justify-center h-14 w-14 rounded-2xl bg-surface800 border border-opacity-25" style="border-color: var(--brand-gold-500);">
+                                <div class="absolute -inset-2 bg-yellow-600 rounded-full opacity-20 blur-xl"></div>
+<div class="relative flex items-center justify-center h-14 w-14 rounded-2xl bg-gray-800 border border-opacity-25" style="border-color: var(--brand-gold-500);">
 <i class="fas fa-plus-circle text-3xl" style="color: var(--brand-gold-500); filter: drop-shadow(0 2px 8px rgba(255,186,8,0.4));" ></i>
                     </div>
                             </div>
@@ -520,21 +520,21 @@
 <p class="mt-2 text-sm leading-relaxed" style="color: var(--text-secondary);"> Configure um novo bot do Telegram para começar a vender </p>
                         </div>
                         <!-- Botão Fechar -->
-<button @click="showAddBotModal = false" class="ml-3 text-muted hover:text-txt-primary transition-colors focus:outline-none">
+<button @click="showAddBotModal = false" class="ml-3 text-gray-400 hover:text-txt-primary transition-colors focus:outline-none">
                             <i class="fas fa-times text-xl"></i>
                         </button>
                     </div>
                 </div>
                 <!-- Info Helper -->
                 <div class="px-8 pt-6 pb-4">
-<div class="bg-[#F59E0B] bg-opacity-8 border border-opacity-20 rounded-xl p-4" style="border-color: var(--brand-gold-500);">
+<div class="bg-yellow-600 bg-opacity-8 border border-opacity-20 rounded-xl p-4" style="border-color: var(--brand-gold-500);">
                         <div class="flex">
                             <div class="flex-shrink-0">
 <i class="fas fa-lightbulb text-lg" style="color: var(--brand-gold-500);"></i>
                             </div>
                             <div class="ml-3">
 <h4 class="text-sm font-semibold" style="color: var(--brand-gold-500)">Como obter o token?</h4>
-<p class="mt-1 text-xs leading-relaxed" style="color: var(--text-secondary);"> 1. Abra o <strong class="text-[#FBBF24]">@BotFather</strong> no Telegram<br> 2. Envie <code class="px-1.5 py-0.5 bg-bg900 rounded text-[#FBBF24]">/newbot</code> ou use um bot existente<br> 3. Copie o token fornecido </p>
+<p class="mt-1 text-xs leading-relaxed" style="color: var(--text-secondary);"> 1. Abra o <strong class="text-yellow-400">@BotFather</strong> no Telegram<br> 2. Envie <code class="px-1.5 py-0.5 bg-gray-900 rounded text-yellow-400">/newbot</code> ou use um bot existente<br> 3. Copie o token fornecido </p>
                         </div>
                     </div>
                 </div>
@@ -547,31 +547,31 @@
                         </label>
                         <div class="relative group">
                             <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-<i class="fas fa-key text-muted group-hover:text-txt-secondary transition-colors"></i>
+<i class="fas fa-key text-gray-400 group-hover:text-txt-secondary transition-colors"></i>
                             </div>
-<input id="bot_token" type="text" x-model="newBotToken" required class="appearance-none block w-full pl-11 pr-4 py-3.5 bg-bg900 border border-white border-opacity-10 rounded-xl placeholder-muted focus:outline-none color: var(--text-primary); border-color: var(--brand-gold-500);" focus:ring-2 focus:ring-[#F59E0B] focus:ring-opacity-20 hover:border-opacity-15 sm:text-sm transition-all font-mono" placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz">
+<input id="bot_token" type="text" x-model="newBotToken" required class="appearance-none block w-full pl-11 pr-4 py-3.5 bg-gray-900 border border-white border-opacity-10 rounded-xl placeholder-gray-500 focus:outline-none" style="color: var(--text-primary); border-color: var(--brand-gold-500);" focus:ring-2 focus:ring-yellow-600 focus:ring-opacity-20 hover:border-opacity-15 sm:text-sm transition-all font-mono" placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz">
                     </div>
-<p class="text-xs text-muted ml-1"> Formato: número:letras_e_numeros </p>
+<p class="text-xs text-gray-400 ml-1"> Formato: número:letras_e_numeros </p>
                     </div>
                     <!-- Nome Field -->
                     <div class="space-y-2">
-<label for="bot_name" class="block text-sm font-semibold" style="color: var(--text-secondary);"> Nome do Bot <span class="text-muted font-normal ml-1">(opcional)</span>
+<label for="bot_name" class="block text-sm font-semibold" style="color: var(--text-secondary);"> Nome do Bot <span class="text-gray-400 font-normal ml-1">(opcional)</span>
                         </label>
                         <div class="relative group">
                             <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-<i class="fas fa-robot text-muted group-hover:text-txt-secondary transition-colors"></i>
+<i class="fas fa-robot text-gray-400 group-hover:text-txt-secondary transition-colors"></i>
                             </div>
-<input id="bot_name" type="text" x-model="newBotName" class="appearance-none block w-full pl-11 pr-4 py-3.5 bg-bg900 border border-white border-opacity-10 rounded-xl placeholder-muted focus:outline-none color: var(--text-primary); border-color: var(--brand-gold-500);" focus:ring-2 focus:ring-[#F59E0B] focus:ring-opacity-20 hover:border-opacity-15 sm:text-sm transition-all" placeholder="Ex: Bot de Vendas FGTS">
+<input id="bot_name" type="text" x-model="newBotName" class="appearance-none block w-full pl-11 pr-4 py-3.5 bg-gray-900 border border-white border-opacity-10 rounded-xl placeholder-gray-500 focus:outline-none" style="color: var(--text-primary); border-color: var(--brand-gold-500);" focus:ring-2 focus:ring-yellow-600 focus:ring-opacity-20 hover:border-opacity-15 sm:text-sm transition-all" placeholder="Ex: Bot de Vendas FGTS">
                     </div>
-<p class="text-xs text-muted ml-1"> Se deixar vazio, usaremos o nome configurado no @BotFather </p>
+<p class="text-xs text-gray-400 ml-1"> Se deixar vazio, usaremos o nome configurado no @BotFather </p>
                     </div>
                     <!-- Action Buttons -->
                     <div class="pt-4 grid grid-cols-2 gap-3">
                         <!-- Cancelar (col 1) -->
-<button type="button" @click="showAddBotModal = false" class="w-full inline-flex justify-center items-center py-3.5 px-4 border-2 border-white border-opacity-10 rounded-xl text-sm font-semibold bg-transparent hover:bg-white hover:bg-opacity-8 hover:style=" style="color: var(--text-secondary);"color: var(--text-primary);" hover:border-opacity-20 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-surface600 focus:ring-[#F59E0B] transition-all">
+<button type="button" @click="showAddBotModal = false" class="w-full inline-flex justify-center items-center py-3.5 px-4 border-2 border-white border-opacity-10 rounded-xl text-sm font-semibold bg-transparent hover:bg-white hover:bg-opacity-8 hover:style=" style="color: var(--text-secondary);"color: var(--text-primary);" hover:border-opacity-20 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-surface600 focus:ring-yellow-600 transition-all">
 <i class="fas fa-times mr-2"></i> Cancelar </button>
                         <!-- Adicionar (col 2) -->
-<button type="submit" :disabled="loading" :class="{ 'opacity-60 cursor-not-allowed': loading } group relative w-full inline-flex justify-center items-center py-3.5 px-4 border border-transparent rounded-xl text-sm font-bold text-black bg-gradient-to-r from-[#F59E0B] to-[#D97706] hover:from-[#FBBF24] hover:to-[#F59E0B] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-surface600 focus:ring-[#F59E0B] transition-all transform hover:-translate-y-0.5 active:translate-y-0 disabled:transform-none" style="box-shadow: 0 8px 24px rgba(255,186,8,0.25);">
+<button type="submit" :disabled="loading" :class="{ 'opacity-60 cursor-not-allowed': loading } group relative w-full inline-flex justify-center items-center py-3.5 px-4 border border-transparent rounded-xl text-sm font-bold text-gray-900 bg-gradient-to-r from-yellow-600 to-yellow-700 hover:from-yellow-500 hover:to-yellow-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-surface600 focus:ring-yellow-600 transition-all transform hover:-translate-y-0.5 active:translate-y-0 disabled:transform-none" style="box-shadow: 0 8px 24px rgba(255,186,8,0.25);">
                             <span x-show="!loading" class="flex items-center">
 <i class="fas fa-plus mr-2"></i> Adicionar Bot </span>
                             <span x-show="loading" class="flex items-center">
@@ -588,14 +588,14 @@
             <!-- Backdrop -->
 <div x-show="showDuplicateBotModal" x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="ease-in duration-200" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 bg-black bg-opacity-90 backdrop-blur-sm transition-opacity" @click="showDuplicateBotModal = false"></div>
             <!-- Modal Content -->
-<div x-show="showDuplicateBotModal" x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100" x-transition:leave="ease-in duration-200" x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100" x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" class="relative inline-block align-middle bg-surface600 rounded-2xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:max-w-2xl sm:w-full" style="box-shadow: 0 20px 60px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,186,8,0.15);">
+<div x-show="showDuplicateBotModal" x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100" x-transition:leave="ease-in duration-200" x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100" x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" class="relative inline-block align-middle bg-gray-700 rounded-2xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:max-w-2xl sm:w-full" style="box-shadow: 0 20px 60px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,186,8,0.15);">
                 <!-- Header -->
                 <div class="bg-gradient-to-b from-surface700 to-surface600 px-8 pt-8 pb-6 border-b border-white border-opacity-5">
                     <div class="flex items-start">
                         <div class="flex-shrink-0">
                             <div class="relative">
-                                <div class="absolute -inset-2 bg-[#F59E0B] rounded-full opacity-20 blur-xl"></div>
-<div class="relative flex items-center justify-center h-14 w-14 rounded-2xl bg-surface800 border border-opacity-25" style="border-color: var(--brand-gold-500);">
+                                <div class="absolute -inset-2 bg-yellow-600 rounded-full opacity-20 blur-xl"></div>
+<div class="relative flex items-center justify-center h-14 w-14 rounded-2xl bg-gray-800 border border-opacity-25" style="border-color: var(--brand-gold-500);">
 <i class="fas fa-clone text-3xl" style="color: var(--brand-gold-500); filter: drop-shadow(0 2px 8px rgba(255,186,8,0.4));" ></i>
                                 </div>
                             </div>
@@ -604,7 +604,7 @@
 <h3 class="text-2xl font-bold" style="color: var(--text-primary);"> Duplicar Bot (Contingência) </h3>
 <p class="mt-2 text-sm leading-relaxed" style="color: var(--text-secondary);"> Crie uma cópia de <strong class="style="color: var(--brand-gold-500)" x-text="botToDuplicate?.name"></strong> com todas as configurações </p>
                         </div>
-<button @click="showDuplicateBotModal = false" class="ml-3 text-muted hover:text-txt-primary transition-colors focus:outline-none">
+<button @click="showDuplicateBotModal = false" class="ml-3 text-gray-400 hover:text-txt-primary transition-colors focus:outline-none">
                             <i class="fas fa-times text-xl"></i>
                         </button>
                     </div>
@@ -618,14 +618,14 @@
                             </div>
                             <div class="ml-3">
 <h4 class="text-sm font-semibold text-gold-500">Token diferente obrigatório!</h4>
-<p class="mt-1 text-xs leading-relaxed" style="color: var(--text-secondary);"> Você <strong>DEVE</strong> usar um token diferente do bot original para evitar conflitos.<br> Crie um novo bot no <strong class="text-[#FBBF24]">@BotFather</strong> e cole o token abaixo. </p>
+<p class="mt-1 text-xs leading-relaxed" style="color: var(--text-secondary);"> Você <strong>DEVE</strong> usar um token diferente do bot original para evitar conflitos.<br> Crie um novo bot no <strong class="text-yellow-400">@BotFather</strong> e cole o token abaixo. </p>
                             </div>
                         </div>
                     </div>
                 </div>
                 <!-- Preview do que será copiado -->
                 <div class="px-8 pb-4">
-                    <div class="bg-surface800 bg-opacity-50 border border-white border-opacity-10 rounded-xl p-5">
+                    <div class="bg-gray-800 bg-opacity-50 border border-white border-opacity-10 rounded-xl p-5">
 <h4 class="text-sm font-semibold mb-3 flex items-center" style="color: var(--text-primary);">
 <i class="fas fa-list-check mr-2" style="color: var(--brand-gold-500);"></i> O que será duplicado: </h4>
                         <div class="grid grid-cols-2 gap-3 text-xs">
@@ -654,7 +654,7 @@
                                 <span>Link de acesso</span>
                             </div>
                         </div>
-                        <div class="mt-4 pt-4 border-t border-white border-opacity-5 text-xs text-muted">
+                        <div class="mt-4 pt-4 border-t border-white border-opacity-5 text-xs text-gray-400">
                             <i class="fas fa-info-circle mr-1"></i>
 <strong>Nota:</strong> O bot duplicado NÃO será iniciado automaticamente. Configure e teste antes de colocar online. </div>
                         </div>
@@ -666,31 +666,31 @@
 <label for="duplicateBotToken" class="block text-sm font-semibold" style="color: var(--text-primary);"> Token do Novo Bot <span style="color: var(--brand-red-500);">*</span>
                         </label>
                         <div class="relative">
-<input type="text" id="duplicateBotToken" x-model="duplicateBotToken" required placeholder="1234567890:ABCdefGHIjklMNOpqrsTUVwxyz" class="w-full px-4 py-3.5 pl-11 bg-bg900 border-2 border-white border-opacity-10 rounded-xl placeholder-muted focus:outline-none color: var(--text-primary); border-color: var(--brand-gold-500);" focus:bg-surface800 transition-all text-sm" style="font-family: 'Courier New', monospace;">
+<input type="text" id="duplicateBotToken" x-model="duplicateBotToken" required placeholder="1234567890:ABCdefGHIjklMNOpqrsTUVwxyz" class="w-full px-4 py-3.5 pl-11 bg-gray-900 border-2 border-white border-opacity-10 rounded-xl placeholder-gray-500 focus:outline-none" style="color: var(--text-primary); border-color: var(--brand-gold-500);" focus:bg-gray-800 transition-all text-sm" style="font-family: 'Courier New', monospace;">
                             <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
 <i class="fas fa-key opacity-60" style="color: var(--brand-gold-500);"></i>
                             </div>
                         </div>
-                        <p class="text-xs text-muted mt-1">
+                        <p class="text-xs text-gray-400 mt-1">
 <i class="fas fa-info-circle mr-1"></i> Crie um novo bot no @BotFather antes de duplicar </p>
                     </div>
                     <!-- Nome Field (OPCIONAL) -->
                     <div class="space-y-2">
-<label for="duplicateBotName" class="block text-sm font-semibold" style="color: var(--text-primary);"> Nome do Bot <span class="text-muted text-xs">(opcional)</span>
+<label for="duplicateBotName" class="block text-sm font-semibold" style="color: var(--text-primary);"> Nome do Bot <span class="text-gray-400 text-xs">(opcional)</span>
                         </label>
                         <div class="relative">
-<input type="text" id="duplicateBotName" x-model="duplicateBotName" :placeholder="`${botToDuplicate?.name || ''} (Cópia)`" class="w-full px-4 py-3.5 pl-11 bg-bg900 border-2 border-white border-opacity-10 rounded-xl placeholder-muted focus:outline-none color: var(--text-primary); border-color: var(--brand-gold-500);" focus:bg-surface800 transition-all text-sm">
+<input type="text" id="duplicateBotName" x-model="duplicateBotName" :placeholder="`${botToDuplicate?.name || ''} (Cópia)`" class="w-full px-4 py-3.5 pl-11 bg-gray-900 border-2 border-white border-opacity-10 rounded-xl placeholder-gray-500 focus:outline-none" style="color: var(--text-primary); border-color: var(--brand-gold-500);" focus:bg-gray-800 transition-all text-sm">
                             <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
 <i class="fas fa-robot opacity-60" style="color: var(--brand-gold-500);"></i>
                             </div>
                         </div>
-<p class="text-xs text-muted mt-1"> Se vazio, será gerado automaticamente: "<span x-text="botToDuplicate?.name"></span> (Cópia)" </p>
+<p class="text-xs text-gray-400 mt-1"> Se vazio, será gerado automaticamente: "<span x-text="botToDuplicate?.name"></span> (Cópia)" </p>
                     </div>
                     <!-- Botões -->
                     <div class="grid grid-cols-2 gap-4 pt-4">
 <button type="button" @click="showDuplicateBotModal = false" class="w-full inline-flex justify-center items-center py-3.5 px-4 border-2 border-white border-opacity-10 rounded-xl text-sm font-semibold bg-transparent hover:bg-white hover:bg-opacity-5 hover:style=" style="color: var(--text-secondary);"color: var(--text-primary);" hover:border-opacity-20 focus:outline-none transition-all">
 <i class="fas fa-times mr-2"></i> Cancelar </button>
-<button type="submit" :disabled="loading || !duplicateBotToken" :class="{ 'opacity-60 cursor-not-allowed': loading || !duplicateBotToken } w-full inline-flex justify-center items-center py-3.5 px-4 border border-transparent rounded-xl text-sm font-bold text-black bg-gradient-to-r from-[#F59E0B] to-[#D97706] hover:from-[#FBBF24] hover:to-[#F59E0B] focus:outline-none transition-all transform hover:-translate-y-0.5 active:translate-y-0 disabled:transform-none" style="box-shadow: 0 8px 24px rgba(255,186,8,0.25);">
+<button type="submit" :disabled="loading || !duplicateBotToken" :class="{ 'opacity-60 cursor-not-allowed': loading || !duplicateBotToken } w-full inline-flex justify-center items-center py-3.5 px-4 border border-transparent rounded-xl text-sm font-bold text-gray-900 bg-gradient-to-r from-yellow-600 to-yellow-700 hover:from-yellow-500 hover:to-yellow-600 focus:outline-none transition-all transform hover:-translate-y-0.5 active:translate-y-0 disabled:transform-none" style="box-shadow: 0 8px 24px rgba(255,186,8,0.25);">
                             <span x-show="!loading" class="flex items-center">
 <i class="fas fa-clone mr-2"></i> Duplicar Bot </span>
                             <span x-show="loading" class="flex items-center">
@@ -801,7 +801,7 @@
                     <div class="grid grid-cols-2 gap-4 pt-4">
 <button type="button" @click="showChangeTokenModal = false" class="w-full inline-flex justify-center items-center py-3.5 px-4 rounded-xl text-sm font-bold focus:outline-none transition-all hover:scale-105" style="background: transparent; border: 2px solid rgba(255, 255, 255, 0.15); color: var(--txt-secondary);">
 <i class="fas fa-times mr-2"></i> Cancelar </button>
-<button type="submit" :disabled="loading || !changeTokenInput || !confirmChangeToken || botToChangeToken?.is_running" :class="{ 'opacity-60 cursor-not-allowed': loading || !changeTokenInput || !confirmChangeToken || botToChangeToken?.is_running } w-full inline-flex justify-center items-center py-3.5 px-4 rounded-xl text-sm font-black focus:outline-none transition-all transform hover:-translate-y-1 active:translate-y-0 disabled:transform-none" style="background: linear-gradient(135deg, var(--brand-gold-500), var(--brand-gold-600)); color: #000000; box-shadow: 0 8px 24px rgba(245, 158, 11, 0.4), 0 0 20px rgba(252, 211, 77, 0.2);">
+<button type="submit" :disabled="loading || !changeTokenInput || !confirmChangeToken || botToChangeToken?.is_running" :class="{ 'opacity-60 cursor-not-allowed': loading || !changeTokenInput || !confirmChangeToken || botToChangeToken?.is_running } w-full inline-flex justify-center items-center py-3.5 px-4 rounded-xl text-sm font-black focus:outline-none transition-all transform hover:-translate-y-1 active:translate-y-0 disabled:transform-none" style="background: linear-gradient(135deg, var(--brand-gold-500), var(--brand-gold-700)); color: #000000; box-shadow: 0 8px 24px rgba(245, 158, 11, 0.4), 0 0 20px rgba(252, 211, 77, 0.2);">
                             <span x-show="!loading" class="flex items-center">
 <i class="fas fa-sync-alt mr-2"></i> Trocar Token </span>
                             <span x-show="loading" class="flex items-center">
