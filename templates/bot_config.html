@@ -783,13 +783,26 @@ function botConfigApp() {
                         });
                     }
                     
-                    // Garantir que cada downsell tenha button_text
+                    // ✅ Garantir que cada downsell tenha TODOS os campos necessários
                     if (Array.isArray(this.config.downsells)) {
                         this.config.downsells.forEach(downsell => {
-                            if (!downsell.button_text) {
-                                downsell.button_text = '';
-                            }
+                            // Campos básicos
+                            if (!downsell.hasOwnProperty('button_text')) downsell.button_text = '';
+                            if (!downsell.hasOwnProperty('media_type')) downsell.media_type = 'video';
+                            if (!downsell.hasOwnProperty('delay_minutes')) downsell.delay_minutes = 5;
+                            if (!downsell.hasOwnProperty('message')) downsell.message = '';
+                            if (!downsell.hasOwnProperty('media_url')) downsell.media_url = '';
+                            
+                            // ✅ NOVO: Campos de precificação (compatibilidade com downsells antigos)
+                            if (!downsell.hasOwnProperty('pricing_mode')) downsell.pricing_mode = 'fixed';
+                            if (!downsell.hasOwnProperty('discount_percentage')) downsell.discount_percentage = 50;
+                            if (!downsell.hasOwnProperty('price')) downsell.price = 0;
                         });
+                    }
+                    
+                    // ✅ Garantir que config.downsells existe (mesmo que vazio)
+                    if (!this.config.downsells) {
+                        this.config.downsells = [];
                     }
                 }
             } catch (error) {
@@ -860,7 +873,10 @@ function botConfigApp() {
                 delay_minutes: 5,
                 message: '',
                 media_url: '',
-                price: 0,
+                media_type: 'video',  // ✅ Tipo de mídia
+                pricing_mode: 'fixed',  // ✅ Modo padrão: preço fixo
+                price: 0,  // Para modo fixo
+                discount_percentage: 50,  // Para modo percentual (default 50%)
                 button_text: ''
             });
         },
