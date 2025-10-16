@@ -224,28 +224,36 @@ class ParadisePaymentGateway(PaymentGateway):
             Dict com payment_id, status, amount, gateway_transaction_id
         """
         try:
-            logger.info(f"📩 Paradise Webhook recebido")
-            logger.debug(f"Webhook Data: {data}")
+            logger.info(f"📩 Paradise Webhook/Status recebido")
+            logger.info(f"📩 Data completa: {data}")
             
+            # Extrai transaction_id (pode vir como 'id' ou 'hash')
             transaction_id = data.get('id') or data.get('hash')
-            status = data.get('payment_status', '').lower()
-            amount_cents = data.get('amount_paid') or data.get('amount')
+            logger.info(f"🔍 Transaction ID extraído: {transaction_id}")
             
             if not transaction_id:
-                logger.error("❌ Paradise Webhook: 'id' ausente")
+                logger.error(f"❌ Paradise: 'id'/'hash' ausente | Data recebida: {data}")
                 return None
+            
+            # Extrai status (já normalizado pela get_payment_status)
+            status = data.get('payment_status', '').lower()
+            logger.info(f"🔍 Status bruto: {status}")
+            
+            # Extrai valor
+            amount_cents = data.get('amount_paid') or data.get('amount')
+            logger.info(f"🔍 Amount (centavos): {amount_cents}")
             
             # Converte centavos para reais
             amount = amount_cents / 100 if amount_cents else 0
             
             # Mapeia status Paradise → Sistema
             mapped_status = 'pending'
-            if status == 'paid':
+            if status == 'paid' or status == 'approved' or status == 'completed':
                 mapped_status = 'paid'
-            elif status in ['refunded', 'cancelled', 'expired']:
+            elif status in ['refunded', 'cancelled', 'expired', 'failed']:
                 mapped_status = 'failed'
             
-            logger.info(f"✅ Paradise Webhook processado | ID: {transaction_id} | Status: {status} → {mapped_status}")
+            logger.info(f"✅ Paradise processado | ID: {transaction_id} | Status: '{status}' → '{mapped_status}' | Amount: R$ {amount:.2f}")
             
             return {
                 'gateway_transaction_id': transaction_id,
@@ -262,14 +270,20 @@ class ParadisePaymentGateway(PaymentGateway):
         Consulta status de um pagamento no Paradise
         
         Paradise: GET https://multi.paradisepags.com/api/v1/check_status.php?hash={transaction_id}
+        
+        IMPORTANTE: transaction_id deve ser o ID retornado pela API Paradise na criação,
+        NÃO o reference customizado.
         """
         try:
             logger.info(f"🔍 Paradise: Consultando status | ID: {transaction_id}")
             
             headers = {
-                'X-API-Key': self.api_key
+                'X-API-Key': self.api_key,
+                'Accept': 'application/json'
             }
             
+            # ✅ CORREÇÃO CRÍTICA: Paradise API pode usar 'id' OU 'hash' como parâmetro
+            # Testamos ambos os formatos
             response = requests.get(
                 self.check_status_url,
                 params={'hash': transaction_id},
@@ -277,18 +291,63 @@ class ParadisePaymentGateway(PaymentGateway):
                 timeout=10
             )
             
+            # 🔍 DEBUG COMPLETO: Ver o que o Paradise REALMENTE retorna
+            logger.info(f"🔍 Paradise API - Request URL: {response.url}")
+            logger.info(f"🔍 Paradise API - Response Status: {response.status_code}")
+            logger.info(f"🔍 Paradise API - Response Headers: {dict(response.headers)}")
+            logger.info(f"🔍 Paradise API - Response Body (raw): {response.text}")
+            
             if response.status_code == 404:
                 logger.warning(f"⚠️ Paradise: Transação não encontrada | ID: {transaction_id}")
                 return None
             
             if response.status_code != 200:
-                logger.error(f"❌ Paradise: Erro ao consultar | Status: {response.status_code}")
+                logger.error(f"❌ Paradise: Erro ao consultar | Status: {response.status_code} | Body: {response.text}")
                 return None
             
-            data = response.json()
+            # Tenta parsear JSON
+            try:
+                data = response.json()
+            except ValueError as e:
+                logger.error(f"❌ Paradise: Resposta não é JSON válido | Body: {response.text}")
+                return None
+            
+            logger.info(f"🔍 Paradise API - Data JSON: {data}")
+            
+            # ✅ CORREÇÃO: Normalizar a resposta para o formato esperado pelo process_webhook
+            # Paradise check_status pode retornar formato diferente do webhook
+            normalized_data = {}
+            
+            # Tenta extrair ID (pode vir como 'id', 'hash', 'transaction_id')
+            normalized_data['id'] = (
+                data.get('id') or 
+                data.get('hash') or 
+                data.get('transaction_id') or 
+                transaction_id  # Fallback para o ID enviado
+            )
+            
+            # Tenta extrair status (pode vir como 'payment_status', 'status', 'state')
+            status_raw = (
+                data.get('payment_status') or 
+                data.get('status') or 
+                data.get('state') or 
+                'pending'
+            )
+            normalized_data['payment_status'] = str(status_raw).lower()
+            
+            # Tenta extrair valor (pode vir como 'amount', 'amount_paid', 'value')
+            amount_raw = (
+                data.get('amount_paid') or 
+                data.get('amount') or 
+                data.get('value') or 
+                0
+            )
+            normalized_data['amount'] = amount_raw
+            
+            logger.info(f"🔍 Paradise API - Normalized Data: {normalized_data}")
             
             # Usa a mesma lógica de processamento do webhook
-            return self.process_webhook(data)
+            return self.process_webhook(normalized_data)
             
         except Exception as e:
             logger.error(f"❌ Paradise: Erro ao consultar status: {e}")
