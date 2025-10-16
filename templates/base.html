@@ -20,51 +20,51 @@
                         // PALETA V2.0 - PROFISSIONAL (PNL + Persuasão)
                         // DOURADO - Dinheiro e Sucesso
                         gold: {
-                            900: '#B8860B',
-                            700: '#DAA520',
-                            500: '#FFB800', // Principal
-                            300: '#FFC933',
-                            100: '#FFE680',
+                            900: 'var(--brand-gold-600)',
+                            700: 'var(--brand-gold-500)',
+                            500: 'var(--brand-gold-500)', // Principal
+                            300: 'var(--brand-gold-400)',
+                            100: 'var(--brand-gold-200)',
                         },
                         // VERDE ESMERALDA - Crescimento e Aprovação
                         emerald: {
-                            900: '#047857',
-                            700: '#059669',
-                            500: '#10B981', // Principal
-                            300: '#34D399',
-                            100: '#6EE7B7',
+                            900: 'var(--brand-emerald-700)',
+                            700: 'var(--brand-emerald-600)',
+                            500: 'var(--brand-emerald-500)', // Principal
+                            300: 'var(--brand-emerald-400)',
+                            100: 'var(--brand-emerald-300)',
                         },
                         // PRETO PREMIUM - Base
                         dark: {
-                            primary: '#0A0A0A',
-                            secondary: '#141414',
-                            tertiary: '#1A1A1A',
-                            surface: '#1F1F1F',
-                            surfaceMid: '#262626',
-                            surfaceHigh: '#2D2D2D',
+                            primary: 'var(--dark-950)',
+                            secondary: 'var(--dark-950)',
+                            tertiary: 'var(--dark-900)',
+                            surface: 'var(--dark-900)',
+                            surfaceMid: 'var(--dark-800)',
+                            surfaceHigh: 'var(--dark-800)',
                         },
                         // AZUL CONFIANÇA
                         trust: {
-                            900: '#1E3A8A',
-                            700: '#1E40AF',
-                            500: '#3B82F6',
-                            300: '#60A5FA',
-                            100: '#93C5FD',
+                            900: 'var(--trust-800)',
+                            700: 'var(--trust-700)',
+                            500: 'var(--trust-500)',
+                            300: 'var(--trust-400)',
+                            100: 'var(--trust-300)',
                         },
                         // VERMELHO CORAL
                         alert: {
-                            900: '#991B1B',
-                            700: '#B91C1C',
-                            500: '#EF4444',
-                            300: '#F87171',
-                            100: '#FCA5A5',
+                            900: 'var(--alert-800)',
+                            700: 'var(--alert-700)',
+                            500: 'var(--alert-500)',
+                            300: 'var(--alert-400)',
+                            100: 'var(--alert-300)',
                         },
                         // TEXTOS
                         txt: {
-                            primary: '#FFFFFF',
-                            secondary: '#D1D1D1',
-                            tertiary: '#9CA3AF',
-                            muted: '#6B7280',
+                            primary: 'var(--txt-primary)',
+                            secondary: 'var(--txt-secondary)',
+                            tertiary: 'var(--txt-tertiary)',
+                            muted: 'var(--txt-muted)',
                         },
                     },
                     boxShadow: {
@@ -154,7 +154,7 @@
                             </div>
                         </a>
                         {% if current_user.is_admin and not session.get('impersonate_admin_id') %}
-                        <a href="{{ url_for('admin_dashboard') }}" class="nav-link {% if request.endpoint is not none and 'admin' in request.endpoint %}nav-link-active{% endif %} inline-flex items-center px-1 pt-1 border-b-2 text-sm font-semibold transition-all" style="color: #F59E0B;">
+                        <a href="{{ url_for('admin_dashboard') }}" class="nav-link {% if request.endpoint is not none and 'admin' in request.endpoint %}nav-link-active{% endif %} inline-flex items-center px-1 pt-1 border-b-2 text-sm font-semibold transition-all" style="color: var(--brand-gold-500);">
                             <i class="fas fa-shield-alt mr-2"></i> Painel Admin
                         </a>
                         {% endif %}
@@ -168,13 +168,13 @@
                         <span class="text-sm font-semibold" style="color: var(--text-secondary);">
                             <i class="fas fa-user" style="color: var(--brand-gold-500);"></i> {{ current_user.username }}
                             {% if current_user.is_admin %}
-                            <span class="ml-2 px-2 py-1 text-xs font-bold rounded" style="background: rgba(245, 158, 11, 0.15); color: #F59E0B; border: 1px solid #F59E0B;">
+                            <span class="ml-2 px-2 py-1 text-xs font-bold rounded" style="background: rgba(245, 158, 11, 0.15); color: var(--brand-gold-500); border: 1px solid var(--brand-gold-500);">
                                 <i class="fas fa-shield-alt mr-1"></i> ADMIN
                             </span>
                             {% endif %}
                         </span>
                     </div>
-                    <a href="{{ url_for('logout') }}" class="px-4 py-2 text-sm font-semibold rounded-lg transition-all" style="background: var(--brand-red-500); color: #FFFFFF;" onmouseover="this.style.background='var(--brand-red-700)'" onmouseout="this.style.background='var(--brand-red-500)'">
+                    <a href="{{ url_for('logout') }}" class="px-4 py-2 text-sm font-semibold rounded-lg transition-all" style="background: var(--brand-red-500); color: var(--txt-primary);" onmouseover="this.style.background='var(--brand-red-700)'" onmouseout="this.style.background='var(--brand-red-500)'">
                         <i class="fas fa-sign-out-alt mr-1"></i> Sair
                     </a>
                 </div>
@@ -189,22 +189,22 @@
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
             {% for category, message in messages %}
             <div class="rounded-xl p-4 mb-4" 
-                 style="{% if category == 'error' %}background: rgba(239, 68, 68, 0.1); border: 1px solid var(--brand-red-500);{% elif category == 'success' %}background: rgba(16, 185, 129, 0.1); border: 1px solid var(--brand-green-500);{% elif category == 'warning' %}background: rgba(245, 158, 11, 0.1); border: 1px solid #F59E0B;{% else %}background: rgba(59, 130, 246, 0.1); border: 1px solid var(--brand-blue-500);{% endif %}" 
+                 style="{% if category == 'error' %}background: rgba(239, 68, 68, 0.1); border: 1px solid var(--brand-red-500);{% elif category == 'success' %}background: rgba(16, 185, 129, 0.1); border: 1px solid var(--brand-green-500);{% elif category == 'warning' %}background: rgba(245, 158, 11, 0.1); border: 1px solid var(--brand-gold-500);{% else %}background: rgba(59, 130, 246, 0.1); border: 1px solid var(--brand-blue-500);{% endif %}" 
                  x-data="{show: true}" x-show="show" x-cloak>
                 <div class="flex items-start gap-3">
                     <div class="flex-shrink-0">
                         <i class="{% if category == 'error' %}fas fa-exclamation-circle{% elif category == 'success' %}fas fa-check-circle{% elif category == 'warning' %}fas fa-exclamation-triangle{% else %}fas fa-info-circle{% endif %} text-lg" 
-                           style="{% if category == 'error' %}color: var(--brand-red-300);{% elif category == 'success' %}color: var(--brand-green-300);{% elif category == 'warning' %}color: #FCD34D;{% else %}color: var(--brand-blue-300);{% endif %}"></i>
+                           style="{% if category == 'error' %}color: var(--brand-red-300);{% elif category == 'success' %}color: var(--brand-green-300);{% elif category == 'warning' %}color: var(--brand-gold-300);{% else %}color: var(--brand-blue-300);{% endif %}"></i>
                     </div>
                     <div class="flex-1">
                         <p class="text-sm font-semibold" 
-                           style="{% if category == 'error' %}color: var(--brand-red-100);{% elif category == 'success' %}color: var(--brand-green-100);{% elif category == 'warning' %}color: #FCD34D;{% else %}color: var(--brand-blue-100);{% endif %}">
+                           style="{% if category == 'error' %}color: var(--brand-red-100);{% elif category == 'success' %}color: var(--brand-green-100);{% elif category == 'warning' %}color: var(--brand-gold-300);{% else %}color: var(--brand-blue-100);{% endif %}">
                             {{ message }}
                         </p>
                     </div>
                     <div class="flex-shrink-0">
                         <button @click="show = false" class="inline-flex rounded-md p-1.5 transition-all hover:opacity-70" 
-                                style="{% if category == 'error' %}color: var(--brand-red-300);{% elif category == 'success' %}color: var(--brand-green-300);{% elif category == 'warning' %}color: #FCD34D;{% else %}color: var(--brand-blue-300);{% endif %}">
+                                style="{% if category == 'error' %}color: var(--brand-red-300);{% elif category == 'success' %}color: var(--brand-green-300);{% elif category == 'warning' %}color: var(--brand-gold-300);{% else %}color: var(--brand-blue-300);{% endif %}">
                             <i class="fas fa-times"></i>
                         </button>
                     </div>

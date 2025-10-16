@@ -70,7 +70,7 @@
                 <div class="px-8 pt-4">
                     {% for category, message in messages %}
                     <div class="rounded-xl p-4 mb-3 animate-fadeInDown" 
-                         style="{% if category == 'error' %}background: rgba(239, 68, 68, 0.12); border: 2px solid #EF4444;{% elif category == 'success' %}background: rgba(34, 197, 94, 0.12); border: 2px solid #22C55E;{% elif category == 'warning' %}background: rgba(245, 158, 11, 0.12); border: 2px solid #F59E0B;{% else %}background: rgba(59, 130, 246, 0.12); border: 2px solid #3B82F6;{% endif %}"
+                         style="{% if category == 'error' %}background: rgba(239, 68, 68, 0.12); border: 2px solid var(--alert-500);{% elif category == 'success' %}background: rgba(34, 197, 94, 0.12); border: 2px solid var(--brand-emerald-500);{% elif category == 'warning' %}background: rgba(245, 158, 11, 0.12); border: 2px solid var(--brand-gold-500);{% else %}background: rgba(59, 130, 246, 0.12); border: 2px solid var(--trust-500);{% endif %}"
                          x-data="{show: true}" 
                          x-show="show" 
                          x-init="setTimeout(() => show = false, 5000)"
@@ -83,17 +83,17 @@
                         <div class="flex items-start">
                             <div class="flex-shrink-0">
                                 <i class="{% if category == 'error' %}fas fa-times-circle{% elif category == 'success' %}fas fa-check-circle{% elif category == 'warning' %}fas fa-exclamation-triangle{% else %}fas fa-info-circle{% endif %} text-xl"
-                                   style="{% if category == 'error' %}color: #FCA5A5; filter: drop-shadow(0 0 6px rgba(252, 165, 165, 0.5));{% elif category == 'success' %}color: #6EE7B7; filter: drop-shadow(0 0 6px rgba(110, 231, 183, 0.5));{% elif category == 'warning' %}color: #FCD34D; filter: drop-shadow(0 0 6px rgba(252, 211, 77, 0.5));{% else %}color: #93C5FD; filter: drop-shadow(0 0 6px rgba(147, 197, 253, 0.5));{% endif %}"></i>
+                                   style="{% if category == 'error' %}color: var(--alert-300); filter: drop-shadow(0 0 6px rgba(252, 165, 165, 0.5));{% elif category == 'success' %}color: var(--brand-emerald-300); filter: drop-shadow(0 0 6px rgba(110, 231, 183, 0.5));{% elif category == 'warning' %}color: var(--brand-gold-300); filter: drop-shadow(0 0 6px rgba(252, 211, 77, 0.5));{% else %}color: var(--trust-300); filter: drop-shadow(0 0 6px rgba(147, 197, 253, 0.5));{% endif %}"></i>
                             </div>
                             <div class="ml-3 flex-1">
                                 <p class="text-sm font-bold" 
-                                   style="{% if category == 'error' %}color: #FCA5A5;{% elif category == 'success' %}color: #6EE7B7;{% elif category == 'warning' %}color: #FCD34D;{% else %}color: #93C5FD;{% endif %}">
+                                   style="{% if category == 'error' %}color: var(--alert-300);{% elif category == 'success' %}color: var(--brand-emerald-300);{% elif category == 'warning' %}color: var(--brand-gold-300);{% else %}color: var(--trust-300);{% endif %}">
                                     {{ message }}
                                 </p>
                             </div>
                             <button @click="show = false" 
                                     class="ml-3 flex-shrink-0 hover:scale-110 transition-transform"
-                                    style="{% if category == 'error' %}color: #FCA5A5;{% elif category == 'success' %}color: #6EE7B7;{% elif category == 'warning' %}color: #FCD34D;{% else %}color: #93C5FD;{% endif %}">
+                                    style="{% if category == 'error' %}color: var(--alert-300);{% elif category == 'success' %}color: var(--brand-emerald-300);{% elif category == 'warning' %}color: var(--brand-gold-300);{% else %}color: var(--trust-300);{% endif %}">
                                 <i class="fas fa-times"></i>
                             </button>
                         </div>

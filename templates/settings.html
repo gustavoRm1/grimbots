@@ -150,17 +150,17 @@
             <div x-show="activeTab === 'gateways'" x-cloak>
                 <div class="mb-8">
                     <h3 class="text-3xl font-black flex items-center gap-3" style="color: var(--text-primary);">
-                        <i class="fas fa-plug" style="color: #F59E0B; filter: drop-shadow(0 2px 8px rgba(245, 158, 11, 0.6));"></i>
+                        <i class="fas fa-plug" style="color: var(--brand-gold-500); filter: drop-shadow(0 2px 8px rgba(245, 158, 11, 0.6));"></i>
                         Gateways de Pagamento
                     </h3>
-                    <p class="text-sm font-semibold mt-2" style="color: #D1D5DB;">Configure suas credenciais para receber pagamentos via PIX</p>
+                    <p class="text-sm font-semibold mt-2" style="color: var(--txt-secondary);">Configure suas credenciais para receber pagamentos via PIX</p>
                 </div>
 
                 <!-- Info Helper Box -->
-                <div class="mb-6 p-5 border-l-4 rounded-r-xl" style="background: rgba(245, 158, 11, 0.12); border-color: #F59E0B;">
+                <div class="mb-6 p-5 border-l-4 rounded-r-xl" style="background: rgba(245, 158, 11, 0.12); border-color: var(--brand-gold-500);">
                     <div class="flex items-start gap-3">
                         <div class="flex-shrink-0">
-                            <i class="fas fa-info-circle text-xl" style="color: #FCD34D; filter: drop-shadow(0 0 6px rgba(252, 211, 77, 0.5));"></i>
+                            <i class="fas fa-info-circle text-xl" style="color: var(--brand-gold-300); filter: drop-shadow(0 0 6px rgba(252, 211, 77, 0.5));"></i>
                         </div>
                         <div class="flex-1">
                             <h4 class="text-sm font-black mb-2" style="color: var(--brand-gold-300);">Por que configurar um gateway?</h4>
@@ -172,18 +172,18 @@
                 </div>
 
                 <!-- Alert: Apenas 1 Gateway Ativo -->
-                <div class="mb-6 p-5 border-l-4 rounded-r-xl" style="background: rgba(239, 68, 68, 0.12); border-color: #EF4444;">
+                <div class="mb-6 p-5 border-l-4 rounded-r-xl" style="background: rgba(239, 68, 68, 0.12); border-color: var(--alert-500);">
                     <div class="flex items-start gap-3">
                         <div class="flex-shrink-0">
-                            <i class="fas fa-exclamation-triangle text-xl" style="color: #FCA5A5; filter: drop-shadow(0 0 6px rgba(252, 165, 165, 0.5));"></i>
+                            <i class="fas fa-exclamation-triangle text-xl" style="color: var(--alert-300); filter: drop-shadow(0 0 6px rgba(252, 165, 165, 0.5));"></i>
                         </div>
                         <div class="flex-1">
-                            <h4 class="text-sm font-black mb-2 flex items-center gap-2" style="color: #FCA5A5;">
+                            <h4 class="text-sm font-black mb-2 flex items-center gap-2" style="color: var(--alert-300);">
                                 <span>⚠️ Atenção: Apenas 1 Gateway Ativo por Vez</span>
                             </h4>
-                            <p class="text-sm font-semibold leading-relaxed" style="color: #E5E7EB;">
-                                <strong style="color: #FCA5A5; font-weight: 900;">TODOS os seus bots</strong> usarão o gateway que estiver <span style="color: var(--brand-gold-300); font-weight: 900;">ATIVO</span>. 
-                                Ao salvar e ativar um gateway, os outros serão <strong style="color: #FCA5A5; font-weight: 900;">desativados automaticamente</strong>. 
+                            <p class="text-sm font-semibold leading-relaxed" style="color: var(--txt-secondary);">
+                                <strong style="color: var(--alert-300); font-weight: 900;">TODOS os seus bots</strong> usarão o gateway que estiver <span style="color: var(--brand-gold-300); font-weight: 900;">ATIVO</span>. 
+                                Ao salvar e ativar um gateway, os outros serão <strong style="color: var(--alert-300); font-weight: 900;">desativados automaticamente</strong>. 
                                 Use isso para trocar rapidamente entre gateways (contingência, alertas de fraude, etc).
                             </p>
                         </div>
@@ -196,14 +196,14 @@
                         <div class="flex items-center gap-4">
                             <div class="flex-shrink-0">
                                 <div class="relative">
-                                    <div class="absolute -inset-2 rounded-xl blur-lg" style="background: #22C55E; opacity: 0.3;"></div>
-                                    <div class="relative flex items-center justify-center h-14 w-14 rounded-xl border-2" style="background: rgba(34, 197, 94, 0.2); border-color: #22C55E;">
+                                    <div class="absolute -inset-2 rounded-xl blur-lg" style="background: var(--brand-emerald-500); opacity: 0.3;"></div>
+                                    <div class="relative flex items-center justify-center h-14 w-14 rounded-xl border-2" style="background: rgba(34, 197, 94, 0.2); border-color: var(--brand-emerald-500);">
                                         <i class="fas fa-bolt text-2xl" style="color: var(--brand-gold-300); filter: drop-shadow(0 2px 8px rgba(110, 231, 183, 0.6));"></i>
                                     </div>
                                 </div>
                             </div>
                             <div>
-                                <h4 class="text-xs font-bold mb-1" style="color: #9CA3AF; text-transform: uppercase; letter-spacing: 0.05em;">Gateway Em Uso Agora:</h4>
+                                <h4 class="text-xs font-bold mb-1" style="color: var(--txt-tertiary); text-transform: uppercase; letter-spacing: 0.05em;">Gateway Em Uso Agora:</h4>
                                 <template x-if="gatewaysList.find(g => g.is_active && g.is_verified)">
                                     <p class="text-xl font-black flex items-center gap-2" style="color: var(--brand-gold-300); text-shadow: 0 0 8px rgba(110, 231, 183, 0.4);">
                                         <i class="fas fa-circle text-xs animate-pulse"></i>
@@ -211,7 +211,7 @@
                                     </p>
                                 </template>
                                 <template x-if="!gatewaysList.find(g => g.is_active && g.is_verified)">
-                                    <p class="text-xl font-black flex items-center gap-2" style="color: #FCA5A5; text-shadow: 0 0 8px rgba(252, 165, 165, 0.4);">
+                                    <p class="text-xl font-black flex items-center gap-2" style="color: var(--alert-300); text-shadow: 0 0 8px rgba(252, 165, 165, 0.4);">
                                         <i class="fas fa-exclamation-circle text-sm"></i>
                                         Nenhum Gateway Ativo
                                     </p>
@@ -219,7 +219,7 @@
                             </div>
                         </div>
                         <div class="text-right">
-                            <p class="text-xs font-bold" style="color: #D1D5DB;">Seus bots usarão este gateway</p>
+                            <p class="text-xs font-bold" style="color: var(--txt-secondary);">Seus bots usarão este gateway</p>
                             <p class="text-xs font-semibold mt-1" style="color: var(--text-tertiary);">para gerar pagamentos PIX</p>
                         </div>
                     </div>
@@ -289,7 +289,7 @@
                             </div>
                         </div>
                             <span x-show="!getGatewayStatus('syncpay')?.is_verified" 
-                                  class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-black border-2" style="background: rgba(245, 158, 11, 0.15); color: #FCD34D; border-color: #F59E0B;">
+                                  class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-black border-2" style="background: rgba(245, 158, 11, 0.15); color: var(--brand-gold-300); border-color: var(--brand-gold-500);">
                                 <i class="fas fa-exclamation-triangle mr-1.5"></i> Não Configurado
                         </span>
                     </div>
@@ -301,7 +301,7 @@
                                 <label for="syncpay_client_id" class="block text-sm font-black flex items-center gap-2" style="color: var(--text-primary);">
                                     <i class="fas fa-user" style="color: var(--brand-gold-300);"></i>
                                     Client ID
-                                    <span style="color: #FCA5A5;">*</span>
+                                    <span style="color: var(--alert-300);">*</span>
                                 </label>
                                 <div class="relative group">
                                     <input 
@@ -309,10 +309,10 @@
                                         type="text" 
                                    x-model="gateways.syncpay.client_id" 
                                         class="w-full px-4 py-3.5 rounded-xl focus:outline-none transition-all font-mono"
-                                        style="background: var(--bg-primary); border: 2px solid var(--border-subtle); color: #93C5FD; font-weight: 700;"
+                                        style="background: var(--bg-primary); border: 2px solid var(--border-subtle); color: var(--trust-300); font-weight: 700;"
                                         placeholder="seu-client-id"
-                                        onfocus="this.style.borderColor='#3B82F6'; this.style.background='#1F2937';"
-                                        onblur="this.style.borderColor='rgba(255, 255, 255, 0.15)'; this.style.background='#111827';">
+                                        onfocus="this.style.borderColor='var(--trust-500)'; this.style.background='var(--dark-800)';"
+                                        onblur="this.style.borderColor='rgba(255, 255, 255, 0.15)'; this.style.background='var(--dark-900)';">
                                 </div>
                         </div>
 
@@ -321,7 +321,7 @@
                                 <label for="syncpay_client_secret" class="block text-sm font-black flex items-center gap-2" style="color: var(--text-primary);">
                                     <i class="fas fa-lock" style="color: var(--brand-gold-300);"></i>
                                     Client Secret
-                                    <span style="color: #FCA5A5;">*</span>
+                                    <span style="color: var(--alert-300);">*</span>
                                 </label>
                                 <div class="relative group">
                                     <input 
@@ -329,10 +329,10 @@
                                         :type="showSecret ? 'text' : 'password'" 
                                    x-model="gateways.syncpay.client_secret" 
                                         class="w-full pl-4 pr-12 py-3.5 rounded-xl focus:outline-none transition-all font-mono"
-                                        style="background: var(--bg-primary); border: 2px solid var(--border-subtle); color: #93C5FD; font-weight: 700;"
+                                        style="background: var(--bg-primary); border: 2px solid var(--border-subtle); color: var(--trust-300); font-weight: 700;"
                                         placeholder="●●●●●●●●●●●●●●●●"
-                                        onfocus="this.style.borderColor='#3B82F6'; this.style.background='#1F2937';"
-                                        onblur="this.style.borderColor='rgba(255, 255, 255, 0.15)'; this.style.background='#111827';">
+                                        onfocus="this.style.borderColor='var(--trust-500)'; this.style.background='var(--dark-800)';"
+                                        onblur="this.style.borderColor='rgba(255, 255, 255, 0.15)'; this.style.background='var(--dark-900)';">
                                     <button type="button" @click="showSecret = !showSecret" class="absolute inset-y-0 right-0 pr-4 flex items-center transition-colors" style="color: var(--text-tertiary);">
                                         <i class="fas" :class="showSecret ? 'fa-eye-slash' : 'fa-eye'"></i>
                                     </button>
@@ -389,7 +389,7 @@
                             </div>
                         </div>
                             <span x-show="!getGatewayStatus('pushynpay')?.is_verified" 
-                                  class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-black border-2" style="background: rgba(245, 158, 11, 0.15); color: #FCD34D; border-color: #F59E0B;">
+                                  class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-black border-2" style="background: rgba(245, 158, 11, 0.15); color: var(--brand-gold-300); border-color: var(--brand-gold-500);">
                                 <i class="fas fa-exclamation-triangle mr-1.5"></i> Não Configurado
                         </span>
                     </div>
@@ -400,7 +400,7 @@
                                 <label for="pushynpay_api_key" class="block text-sm font-black flex items-center gap-2" style="color: var(--text-primary);">
                                     <i class="fas fa-key" style="color: var(--brand-gold-300);"></i>
                                     API Key
-                                    <span style="color: #FCA5A5;">*</span>
+                                    <span style="color: var(--alert-300);">*</span>
                                 </label>
                                 <div class="relative group">
                                     <input 
@@ -408,10 +408,10 @@
                                         :type="showKey ? 'text' : 'password'" 
                                    x-model="gateways.pushynpay.api_key" 
                                         class="w-full pl-4 pr-12 py-3.5 rounded-xl focus:outline-none transition-all font-mono"
-                                        style="background: var(--bg-primary); border: 2px solid var(--border-subtle); color: #93C5FD; font-weight: 700;"
+                                        style="background: var(--bg-primary); border: 2px solid var(--border-subtle); color: var(--trust-300); font-weight: 700;"
                                         placeholder="●●●●●●●●●●●●●●●●"
-                                        onfocus="this.style.borderColor='#3B82F6'; this.style.background='#1F2937';"
-                                        onblur="this.style.borderColor='rgba(255, 255, 255, 0.15)'; this.style.background='#111827';">
+                                        onfocus="this.style.borderColor='var(--trust-500)'; this.style.background='var(--dark-800)';"
+                                        onblur="this.style.borderColor='rgba(255, 255, 255, 0.15)'; this.style.background='var(--dark-900)';">
                                     <button type="button" @click="showKey = !showKey" class="absolute inset-y-0 right-0 pr-4 flex items-center transition-colors" style="color: var(--text-tertiary);">
                                         <i class="fas" :class="showKey ? 'fa-eye-slash' : 'fa-eye'"></i>
                                     </button>
@@ -468,7 +468,7 @@
                             </div>
                         </div>
                             <span x-show="!getGatewayStatus('paradise')?.is_verified" 
-                                  class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-black border-2" style="background: rgba(245, 158, 11, 0.15); color: #FCD34D; border-color: #F59E0B;">
+                                  class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-black border-2" style="background: rgba(245, 158, 11, 0.15); color: var(--brand-gold-300); border-color: var(--brand-gold-500);">
                                 <i class="fas fa-exclamation-triangle mr-1.5"></i> Não Configurado
                         </span>
                     </div>
@@ -479,7 +479,7 @@
                                 <label for="paradise_api_key" class="block text-sm font-black flex items-center gap-2" style="color: var(--text-primary);">
                                     <i class="fas fa-key" style="color: var(--brand-gold-300);"></i>
                                     Chave Secreta (Secret Key)
-                                    <span style="color: #FCA5A5;">*</span>
+                                    <span style="color: var(--alert-300);">*</span>
                                 </label>
                                 <div class="relative group">
                                     <input 
@@ -487,10 +487,10 @@
                                         :type="showKey ? 'text' : 'password'" 
                                    x-model="gateways.paradise.api_key" 
                                         class="w-full pl-4 pr-12 py-3.5 rounded-xl focus:outline-none transition-all font-mono"
-                                        style="background: var(--bg-primary); border: 2px solid var(--border-subtle); color: #93C5FD; font-weight: 700;"
+                                        style="background: var(--bg-primary); border: 2px solid var(--border-subtle); color: var(--trust-300); font-weight: 700;"
                                         placeholder="sk_... (chave secreta)"
-                                        onfocus="this.style.borderColor='#3B82F6'; this.style.background='#1F2937';"
-                                        onblur="this.style.borderColor='rgba(255, 255, 255, 0.15)'; this.style.background='#111827';">
+                                        onfocus="this.style.borderColor='var(--trust-500)'; this.style.background='var(--dark-800)';"
+                                        onblur="this.style.borderColor='rgba(255, 255, 255, 0.15)'; this.style.background='var(--dark-900)';">
                                     <button type="button" @click="showKey = !showKey" class="absolute inset-y-0 right-0 pr-4 flex items-center transition-colors" style="color: var(--text-tertiary);">
                                         <i class="fas" :class="showKey ? 'fa-eye-slash' : 'fa-eye'"></i>
                                     </button>
@@ -502,7 +502,7 @@
                                 <label for="paradise_offer_hash" class="block text-sm font-black flex items-center gap-2" style="color: var(--text-primary);">
                                     <i class="fas fa-tag" style="color: var(--brand-gold-300);"></i>
                                     Offer Hash
-                                    <span style="color: #FCA5A5;">*</span>
+                                    <span style="color: var(--alert-300);">*</span>
                                 </label>
                                 <div class="relative group">
                                     <input 
@@ -510,10 +510,10 @@
                                         type="text" 
                                         x-model="gateways.paradise.offer_hash" 
                                         class="w-full px-4 py-3.5 rounded-xl focus:outline-none transition-all font-mono"
-                                        style="background: var(--bg-primary); border: 2px solid var(--border-subtle); color: #93C5FD; font-weight: 700;"
+                                        style="background: var(--bg-primary); border: 2px solid var(--border-subtle); color: var(--trust-300); font-weight: 700;"
                                         placeholder="hash-da-oferta"
-                                        onfocus="this.style.borderColor='#3B82F6'; this.style.background='#1F2937';"
-                                        onblur="this.style.borderColor='rgba(255, 255, 255, 0.15)'; this.style.background='#111827';">
+                                        onfocus="this.style.borderColor='var(--trust-500)'; this.style.background='var(--dark-800)';"
+                                        onblur="this.style.borderColor='rgba(255, 255, 255, 0.15)'; this.style.background='var(--dark-900)';">
                                 </div>
                             </div>
 
@@ -522,7 +522,7 @@
                                 <label for="paradise_product_hash" class="block text-sm font-black flex items-center gap-2" style="color: var(--text-primary);">
                                     <i class="fas fa-box" style="color: var(--brand-gold-300);"></i>
                                     Código do Produto (Product Hash)
-                                    <span style="color: #FCA5A5;">*</span>
+                                    <span style="color: var(--alert-300);">*</span>
                                 </label>
                                 <div class="relative group">
                                     <input 
@@ -530,10 +530,10 @@
                                         type="text" 
                                         x-model="gateways.paradise.product_hash" 
                                         class="w-full px-4 py-3.5 rounded-xl focus:outline-none transition-all font-mono"
-                                        style="background: var(--bg-primary); border: 2px solid var(--border-subtle); color: #93C5FD; font-weight: 700;"
+                                        style="background: var(--bg-primary); border: 2px solid var(--border-subtle); color: var(--trust-300); font-weight: 700;"
                                         placeholder="prod_... (código do produto)"
-                                        onfocus="this.style.borderColor='#3B82F6'; this.style.background='#1F2937';"
-                                        onblur="this.style.borderColor='rgba(255, 255, 255, 0.15)'; this.style.background='#111827';">
+                                        onfocus="this.style.borderColor='var(--trust-500)'; this.style.background='var(--dark-800)';"
+                                        onblur="this.style.borderColor='rgba(255, 255, 255, 0.15)'; this.style.background='var(--dark-900)';">
                                 </div>
                         </div>
 
@@ -584,7 +584,7 @@
                             </div>
                         </div>
                         <span x-show="!getGatewayStatus('hoopay')?.is_verified" 
-                              class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-black border-2" style="background: rgba(245, 158, 11, 0.15); color: #FCD34D; border-color: #F59E0B;">
+                              class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-black border-2" style="background: rgba(245, 158, 11, 0.15); color: var(--brand-gold-300); border-color: var(--brand-gold-500);">
                             <i class="fas fa-exclamation-triangle mr-1.5"></i> Não Configurado
                         </span>
                     </div>
@@ -594,14 +594,14 @@
                             <label class="block text-sm font-black flex items-center gap-2" style="color: var(--text-primary);">
                                 <i class="fas fa-key" style="color: var(--brand-gold-300);"></i>
                                 API Key
-                                <span style="color: #FCA5A5;">*</span>
+                                <span style="color: var(--alert-300);">*</span>
                             </label>
                             <div class="relative group">
                                 <input 
                                     :type="showKey ? 'text' : 'password'" 
                                     x-model="gateways.hoopay.api_key" 
                                     class="w-full pl-4 pr-12 py-3.5 rounded-xl focus:outline-none transition-all font-mono"
-                                    style="background: var(--bg-primary); border: 2px solid var(--border-subtle); color: #93C5FD; font-weight: 700;"
+                                    style="background: var(--bg-primary); border: 2px solid var(--border-subtle); color: var(--trust-300); font-weight: 700;"
                                     placeholder="sua_api_key_hoopay">
                                 <button type="button" @click="showKey = !showKey" class="absolute inset-y-0 right-0 pr-4 flex items-center">
                                     <i class="fas" :class="showKey ? 'fa-eye-slash' : 'fa-eye'"></i>
@@ -609,7 +609,7 @@
                             </div>
                         </div>
                         <div class="pt-2">
-                            <button type="submit" :disabled="loading" class="w-full py-3.5 px-6 rounded-xl text-sm font-black" style="background: linear-gradient(135deg, #3B82F6, #2563EB); color: #FFFFFF;">
+                            <button type="submit" :disabled="loading" class="w-full py-3.5 px-6 rounded-xl text-sm font-black" style="background: linear-gradient(135deg, var(--trust-500), var(--trust-600)); color: var(--txt-primary);">
                                 <span x-show="!loading"><i class="fas fa-save mr-2"></i>Salvar</span>
                                 <span x-show="loading"><i class="fas fa-spinner fa-spin mr-2"></i>Salvando...</span>
                             </button>
@@ -642,7 +642,7 @@
                             </div>
                         </div>
                         <span x-show="!getGatewayStatus('wiinpay')?.is_verified" 
-                              class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-black border-2" style="background: rgba(245, 158, 11, 0.15); color: #FCD34D; border-color: #F59E0B;">
+                              class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-black border-2" style="background: rgba(245, 158, 11, 0.15); color: var(--brand-gold-300); border-color: var(--brand-gold-500);">
                             <i class="fas fa-exclamation-triangle mr-1.5"></i> Não Configurado
                         </span>
                     </div>
@@ -650,44 +650,26 @@
                     <form @submit.prevent="saveGateway('wiinpay')" class="space-y-5">
                         <div class="space-y-2" x-data="{ showKey: false }">
                             <label class="block text-sm font-black flex items-center gap-2" style="color: var(--text-primary);">
-                                <i class="fas fa-key" style="color: #10B981;"></i>
+                                <i class="fas fa-key" style="color: var(--brand-gold-400);"></i>
                                 API Key
-                                <span style="color: #FCA5A5;">*</span>
+                                <span style="color: var(--alert-500);">*</span>
                             </label>
                             <div class="relative group">
                                 <input 
                                     :type="showKey ? 'text' : 'password'" 
                                     x-model="gateways.wiinpay.api_key" 
                                     class="w-full pl-4 pr-12 py-3.5 rounded-xl focus:outline-none transition-all font-mono"
-                                    style="background: var(--bg-primary); border: 2px solid var(--border-subtle); color: #6EE7B7; font-weight: 700;"
+                                    style="background: var(--bg-primary); border: 2px solid var(--border-subtle); color: var(--brand-emerald-400); font-weight: 700;"
                                     placeholder="sua_api_key_wiinpay">
-                                <button type="button" @click="showKey = !showKey" class="absolute inset-y-0 right-0 pr-4 flex items-center">
+                                <button type="button" @click="showKey = !showKey" class="absolute inset-y-0 right-0 pr-4 flex items-center" style="color: var(--text-secondary);">
                                     <i class="fas" :class="showKey ? 'fa-eye-slash' : 'fa-eye'"></i>
                                 </button>
                             </div>
                         </div>
 
-                        <!-- ✅ Info sobre a taxa de 4% (split configurado automaticamente no backend) -->
-                        <div class="p-4 rounded-xl border-2" style="background: rgba(var(--brand-emerald-rgb), 0.1); border-color: var(--brand-emerald-500);">
-                            <div class="flex items-start gap-3">
-                                <div class="flex-shrink-0 mt-0.5">
-                                    <i class="fas fa-handshake text-2xl" style="color: var(--brand-emerald-400);"></i>
-                                </div>
-                                <div>
-                                    <h5 class="text-sm font-black mb-1 flex items-center gap-2" style="color: var(--brand-emerald-300);">
-                                        Taxa de Serviço da Plataforma
-                                        <span class="px-2 py-0.5 rounded text-xs" style="background: var(--brand-emerald-500); color: white;">4%</span>
-                                    </h5>
-                                    <p class="text-xs leading-relaxed" style="color: var(--text-secondary);">
-                                        <strong style="color: var(--brand-gold-400);">4% de cada venda</strong> é destinado à plataforma pelos serviços de automação. 
-                                        Configurado automaticamente - <strong>você não precisa fazer nada!</strong>
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-
+                        <!-- Info sobre valor mínimo -->
                         <div class="bg-info-500 bg-opacity-10 p-4 rounded-lg border border-info-500 border-opacity-30">
-                            <p class="text-xs" style="color: #93C5FD;">
+                            <p class="text-xs" style="color: var(--trust-300);">
                                 <i class="fas fa-exclamation-circle mr-1"></i>
                                 <strong>Valor mínimo:</strong> R$ 3,00. Produtos abaixo deste valor não podem usar WiinPay.
                             </p>
@@ -714,24 +696,24 @@
                 </div>
 
                 <!-- Final Info Box -->
-                <div class="mt-8 p-6 border-l-4 rounded-r-2xl" style="background: rgba(245, 158, 11, 0.12); border-color: #F59E0B;">
+                <div class="mt-8 p-6 border-l-4 rounded-r-2xl" style="background: rgba(245, 158, 11, 0.12); border-color: var(--brand-gold-500);">
                     <div class="flex items-start gap-4">
                         <div class="flex-shrink-0">
                             <div class="relative">
-                                <div class="absolute -inset-2 rounded-xl blur-xl" style="background: #F59E0B; opacity: 0.3;"></div>
-                                <div class="relative flex items-center justify-center h-16 w-16 rounded-xl border-2" style="background: rgba(245, 158, 11, 0.2); border-color: #F59E0B;">
-                                    <i class="fas fa-shield-alt" style="font-size: 2rem; color: #FCD34D; filter: drop-shadow(0 2px 10px rgba(252, 211, 77, 0.7));"></i>
+                                <div class="absolute -inset-2 rounded-xl blur-xl" style="background: var(--brand-gold-500); opacity: 0.3;"></div>
+                                <div class="relative flex items-center justify-center h-16 w-16 rounded-xl border-2" style="background: rgba(245, 158, 11, 0.2); border-color: var(--brand-gold-500);">
+                                    <i class="fas fa-shield-alt" style="font-size: 2rem; color: var(--brand-gold-300); filter: drop-shadow(0 2px 10px rgba(252, 211, 77, 0.7));"></i>
                                 </div>
                             </div>
                         </div>
                         <div class="flex-1">
                             <h4 class="text-lg font-black mb-2 flex items-center gap-2" style="color: var(--text-primary);">
-                                <i class="fas fa-lock" style="color: #FCD34D; filter: drop-shadow(0 0 4px rgba(252, 211, 77, 0.5));"></i>
+                                <i class="fas fa-lock" style="color: var(--brand-gold-300); filter: drop-shadow(0 0 4px rgba(252, 211, 77, 0.5));"></i>
                                 Segurança das Credenciais
                             </h4>
-                            <p class="text-sm font-semibold leading-relaxed" style="color: #E5E7EB;">
+                            <p class="text-sm font-semibold leading-relaxed" style="color: var(--txt-secondary);">
                                 Suas credenciais são <strong style="color: var(--brand-gold-300); font-weight: 900;">criptografadas</strong> e armazenadas com segurança. Nunca compartilhamos seus dados com terceiros. 
-                                Você precisa de <strong style="color: #FCD34D; font-weight: 900;">pelo menos um gateway verificado</strong> para que seus bots possam processar vendas.
+                                Você precisa de <strong style="color: var(--brand-gold-300); font-weight: 900;">pelo menos um gateway verificado</strong> para que seus bots possam processar vendas.
                             </p>
                         </div>
                     </div>
@@ -747,7 +729,7 @@
 
                 <!-- Card Principal - Redesenhado -->
                 <div class="relative rounded-2xl p-8 mb-8 overflow-hidden"
-                     style="background: linear-gradient(135deg, #22C55E, #16A34A);
+                     style="background: linear-gradient(135deg, var(--brand-emerald-500), var(--brand-emerald-600));
                             box-shadow: 0 12px 40px rgba(34, 197, 94, 0.3), 0 0 0 1px rgba(255,255,255,0.1);">
                     <!-- Pattern decorativo -->
                     <div class="absolute inset-0 opacity-10" style="background-image: radial-gradient(circle at 20% 50%, rgba(255,255,255,0.2) 1px, transparent 1px); background-size: 24px 24px;"></div>

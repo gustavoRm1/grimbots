@@ -30,35 +30,35 @@
     </div>
 
     <!-- Info Card -->
-    <div class="mb-8 p-6 rounded-2xl border-2" style="background: rgba(59, 130, 246, 0.12); border-color: #3B82F6; box-shadow: 0 4px 16px rgba(59, 130, 246, 0.2);">
+    <div class="mb-8 p-6 rounded-2xl border-2" style="background: rgba(59, 130, 246, 0.12); border-color: var(--trust-500); box-shadow: 0 4px 16px rgba(59, 130, 246, 0.2);">
         <div class="flex items-start gap-4">
             <div class="flex-shrink-0">
-                <i class="fas fa-lightbulb text-3xl" style="color: #60A5FA; filter: drop-shadow(0 0 8px rgba(96, 165, 250, 0.6));"></i>
+                <i class="fas fa-lightbulb text-3xl" style="color: var(--trust-400); filter: drop-shadow(0 0 8px rgba(96, 165, 250, 0.6));"></i>
             </div>
             <div class="flex-1">
-                <h3 class="text-lg font-black mb-3 flex items-center gap-2" style="color: #93C5FD;">
+                <h3 class="text-lg font-black mb-3 flex items-center gap-2" style="color: var(--trust-300);">
                     O que são Pools de Redirecionamento?
                 </h3>
-                <p class="text-sm leading-relaxed mb-4" style="color: #E5E7EB; font-weight: 500;">
-                    Um <strong style="color: #FDE68A; font-weight: 900;">Pool</strong> é um grupo de bots que compartilham o mesmo link de entrada (<code class="px-2 py-1 rounded font-mono" style="background: #111827; color: #FDE68A; font-weight: 700; border: 1px solid rgba(245, 158, 11, 0.3);">/go/red1</code>). 
+                <p class="text-sm leading-relaxed mb-4" style="color: var(--txt-secondary); font-weight: 500;">
+                    Um <strong style="color: var(--brand-gold-200); font-weight: 900;">Pool</strong> é um grupo de bots que compartilham o mesmo link de entrada (<code class="px-2 py-1 rounded font-mono" style="background: var(--dark-900); color: var(--brand-gold-200); font-weight: 700; border: 1px solid rgba(245, 158, 11, 0.3);">/go/red1</code>). 
                     O sistema distribui automaticamente o tráfego entre os bots disponíveis, garantindo:
                 </p>
                         <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                             <div class="flex items-center gap-2 px-3 py-2 rounded-lg" style="background: rgba(34, 197, 94, 0.12); border: 1px solid rgba(34, 197, 94, 0.3);">
-                                <i class="fas fa-check-circle" style="color: #6EE7B7; filter: drop-shadow(0 0 4px rgba(110, 231, 183, 0.5));"></i>
-                                <span class="text-sm font-bold" style="color: #E5E7EB;">Alta disponibilidade</span>
+                                <i class="fas fa-check-circle" style="color: var(--brand-emerald-300); filter: drop-shadow(0 0 4px rgba(110, 231, 183, 0.5));"></i>
+                                <span class="text-sm font-bold" style="color: var(--txt-secondary);">Alta disponibilidade</span>
                             </div>
                             <div class="flex items-center gap-2 px-3 py-2 rounded-lg" style="background: rgba(34, 197, 94, 0.12); border: 1px solid rgba(34, 197, 94, 0.3);">
-                                <i class="fas fa-check-circle" style="color: #6EE7B7; filter: drop-shadow(0 0 4px rgba(110, 231, 183, 0.5));"></i>
-                                <span class="text-sm font-bold" style="color: #E5E7EB;">Recuperação automática</span>
+                                <i class="fas fa-check-circle" style="color: var(--brand-emerald-300); filter: drop-shadow(0 0 4px rgba(110, 231, 183, 0.5));"></i>
+                                <span class="text-sm font-bold" style="color: var(--txt-secondary);">Recuperação automática</span>
                             </div>
                             <div class="flex items-center gap-2 px-3 py-2 rounded-lg" style="background: rgba(34, 197, 94, 0.12); border: 1px solid rgba(34, 197, 94, 0.3);">
-                                <i class="fas fa-check-circle" style="color: #6EE7B7; filter: drop-shadow(0 0 4px rgba(110, 231, 183, 0.5));"></i>
-                                <span class="text-sm font-bold" style="color: #E5E7EB;">Escalabilidade</span>
+                                <i class="fas fa-check-circle" style="color: var(--brand-emerald-300); filter: drop-shadow(0 0 4px rgba(110, 231, 183, 0.5));"></i>
+                                <span class="text-sm font-bold" style="color: var(--txt-secondary);">Escalabilidade</span>
                             </div>
                             <div class="flex items-center gap-2 px-3 py-2 rounded-lg" style="background: rgba(34, 197, 94, 0.12); border: 1px solid rgba(34, 197, 94, 0.3);">
-                                <i class="fas fa-check-circle" style="color: #6EE7B7; filter: drop-shadow(0 0 4px rgba(110, 231, 183, 0.5));"></i>
-                                <span class="text-sm font-bold" style="color: #E5E7EB;">Sempre disponível</span>
+                                <i class="fas fa-check-circle" style="color: var(--brand-emerald-300); filter: drop-shadow(0 0 4px rgba(110, 231, 183, 0.5));"></i>
+                                <span class="text-sm font-bold" style="color: var(--txt-secondary);">Sempre disponível</span>
                             </div>
                         </div>
             </div>
@@ -67,19 +67,19 @@
 
     <!-- Quick Start Tutorial (First time only) -->
     <div x-show="pools.length === 0 && !loading && !tutorialDismissed" x-cloak class="mb-6">
-        <div class="relative rounded-2xl border-2 overflow-hidden" style="background: linear-gradient(135deg, rgba(251, 191, 36, 0.15) 0%, rgba(245, 158, 11, 0.08) 100%); border-color: #F59E0B; box-shadow: 0 4px 20px rgba(245, 158, 11, 0.25);">
+        <div class="relative rounded-2xl border-2 overflow-hidden" style="background: linear-gradient(135deg, rgba(251, 191, 36, 0.15) 0%, rgba(245, 158, 11, 0.08) 100%); border-color: var(--brand-gold-500); box-shadow: 0 4px 20px rgba(245, 158, 11, 0.25);">
             <div class="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-yellow-500 to-orange-500 opacity-10 blur-3xl"></div>
             <div class="relative p-8">
                 <div class="flex items-start justify-between mb-6">
                     <div class="flex items-center gap-4">
                         <div class="flex-shrink-0">
-                            <div class="h-16 w-16 rounded-2xl flex items-center justify-center" style="background: linear-gradient(135deg, #FCD34D 0%, #F59E0B 100%); box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);">
+                            <div class="h-16 w-16 rounded-2xl flex items-center justify-center" style="background: linear-gradient(135deg, var(--brand-gold-300) 0%, var(--brand-gold-500) 100%); box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);">
                                 <i class="fas fa-rocket text-3xl text-black"></i>
                             </div>
                         </div>
                         <div>
                             <h3 class="text-2xl font-black text-white mb-1">Tutorial Rápido: Redirecionador</h3>
-                            <p class="text-sm font-medium" style="color: #FCD34D;">Configure seu primeiro redirecionador em 3 passos simples</p>
+                            <p class="text-sm font-medium" style="color: var(--brand-gold-300);">Configure seu primeiro redirecionador em 3 passos simples</p>
                         </div>
                     </div>
                     <button @click="tutorialDismissed = true" class="text-gold-300 hover:text-white transition-colors">
@@ -89,35 +89,35 @@
                 
                         <div class="grid md:grid-cols-3 gap-6">
                             <div class="relative">
-                                <div class="absolute -left-2 -top-2 w-10 h-10 rounded-full flex items-center justify-center font-black text-lg text-black" style="background: linear-gradient(135deg, #FCD34D 0%, #F59E0B 100%); box-shadow: 0 2px 8px rgba(245, 158, 11, 0.5);">
+                                <div class="absolute -left-2 -top-2 w-10 h-10 rounded-full flex items-center justify-center font-black text-lg text-black" style="background: linear-gradient(135deg, var(--brand-gold-300) 0%, var(--brand-gold-500) 100%); box-shadow: 0 2px 8px rgba(245, 158, 11, 0.5);">
                                     1
                                 </div>
                                 <div class="pt-10 px-5 pb-6 rounded-xl h-full" style="background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(252, 211, 77, 0.2);">
-                                    <i class="fas fa-plus-circle text-3xl mb-3" style="color: #FCD34D;"></i>
+                                    <i class="fas fa-plus-circle text-3xl mb-3" style="color: var(--brand-gold-300);"></i>
                                     <h4 class="text-lg font-bold text-white mb-2">Criar Redirecionador</h4>
-                                    <p class="text-sm" style="color: #D1D5DB;">Dê um nome e escolha um identificador único (ex: red1)</p>
+                                    <p class="text-sm" style="color: var(--txt-secondary);">Dê um nome e escolha um identificador único (ex: red1)</p>
                                 </div>
                             </div>
                             
                             <div class="relative">
-                                <div class="absolute -left-2 -top-2 w-10 h-10 rounded-full flex items-center justify-center font-black text-lg text-black" style="background: linear-gradient(135deg, #FCD34D 0%, #F59E0B 100%); box-shadow: 0 2px 8px rgba(245, 158, 11, 0.5);">
+                                <div class="absolute -left-2 -top-2 w-10 h-10 rounded-full flex items-center justify-center font-black text-lg text-black" style="background: linear-gradient(135deg, var(--brand-gold-300) 0%, var(--brand-gold-500) 100%); box-shadow: 0 2px 8px rgba(245, 158, 11, 0.5);">
                                     2
                                 </div>
                                 <div class="pt-10 px-5 pb-6 rounded-xl h-full" style="background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(252, 211, 77, 0.2);">
-                                    <i class="fas fa-robot text-3xl mb-3" style="color: #FCD34D;"></i>
+                                    <i class="fas fa-robot text-3xl mb-3" style="color: var(--brand-gold-300);"></i>
                                     <h4 class="text-lg font-bold text-white mb-2">Adicionar Bots</h4>
-                                    <p class="text-sm" style="color: #D1D5DB;">Adicione 2 ou mais bots ao redirecionador</p>
+                                    <p class="text-sm" style="color: var(--txt-secondary);">Adicione 2 ou mais bots ao redirecionador</p>
                                 </div>
                             </div>
                             
                             <div class="relative">
-                                <div class="absolute -left-2 -top-2 w-10 h-10 rounded-full flex items-center justify-center font-black text-lg text-black" style="background: linear-gradient(135deg, #FCD34D 0%, #F59E0B 100%); box-shadow: 0 2px 8px rgba(245, 158, 11, 0.5);">
+                                <div class="absolute -left-2 -top-2 w-10 h-10 rounded-full flex items-center justify-center font-black text-lg text-black" style="background: linear-gradient(135deg, var(--brand-gold-300) 0%, var(--brand-gold-500) 100%); box-shadow: 0 2px 8px rgba(245, 158, 11, 0.5);">
                                     3
                                 </div>
                                 <div class="pt-10 px-5 pb-6 rounded-xl h-full" style="background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(252, 211, 77, 0.2);">
-                                    <i class="fas fa-link text-3xl mb-3" style="color: #FCD34D;"></i>
+                                    <i class="fas fa-link text-3xl mb-3" style="color: var(--brand-gold-300);"></i>
                                     <h4 class="text-lg font-bold text-white mb-2">Copiar Link</h4>
-                                    <p class="text-sm" style="color: #D1D5DB;">Use o link público em anúncios e páginas de venda</p>
+                                    <p class="text-sm" style="color: var(--txt-secondary);">Use o link público em anúncios e páginas de venda</p>
                                 </div>
                             </div>
                         </div>
@@ -125,7 +125,7 @@
                 <div class="mt-6 text-center">
                     <button @click="showCreatePoolModal = true" 
                             class="inline-flex items-center px-8 py-4 rounded-xl font-bold text-lg text-black transition-all transform hover:scale-105" 
-                            style="background: linear-gradient(135deg, #FCD34D 0%, #F59E0B 100%); box-shadow: 0 4px 16px rgba(245, 158, 11, 0.4);">
+                            style="background: linear-gradient(135deg, var(--brand-gold-300) 0%, var(--brand-gold-500) 100%); box-shadow: 0 4px 16px rgba(245, 158, 11, 0.4);">
                         <i class="fas fa-magic mr-3"></i>
                         Começar Agora
                     </button>
@@ -232,11 +232,11 @@
                     </div>
 
                     <!-- Link Público (DESTAQUE) -->
-                    <div class="mb-5 p-5 rounded-xl border-2 relative overflow-hidden" style="background: linear-gradient(135deg, rgba(251, 191, 36, 0.12) 0%, rgba(245, 158, 11, 0.05) 100%); border-color: #F59E0B;">
+                    <div class="mb-5 p-5 rounded-xl border-2 relative overflow-hidden" style="background: linear-gradient(135deg, rgba(251, 191, 36, 0.12) 0%, rgba(245, 158, 11, 0.05) 100%); border-color: var(--brand-gold-500);">
                         <div class="absolute top-0 right-0 w-32 h-32 bg-gold-500 opacity-5 blur-2xl"></div>
                         <div class="relative">
                             <div class="flex items-center justify-between mb-3">
-                                <label class="flex items-center gap-2 text-sm font-bold" style="color: #FCD34D;">
+                                <label class="flex items-center gap-2 text-sm font-bold" style="color: var(--brand-gold-300);">
                                     <i class="fas fa-link"></i>
                                     <span>Link Público</span>
                                     <span class="px-2 py-0.5 text-xs rounded-full bg-gold-500 bg-opacity-20 text-gold-300 border border-gold-500 border-opacity-30">
@@ -245,7 +245,7 @@
                                 </label>
                                 <button @click="copyToClipboard(`${window.location.origin}${pool.public_url}`)"
                                         class="inline-flex items-center gap-2 px-4 py-2 rounded-lg font-bold text-sm text-black transition-all transform hover:scale-105"
-                                        style="background: linear-gradient(135deg, #FCD34D 0%, #F59E0B 100%); box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);">
+                                        style="background: linear-gradient(135deg, var(--brand-gold-300) 0%, var(--brand-gold-500) 100%); box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);">
                                     <i class="fas fa-copy"></i>
                                     <span>Copiar</span>
                                 </button>
@@ -357,25 +357,25 @@
                     
                     <!-- Nome -->
                     <div class="space-y-2">
-                        <label class="block text-sm font-black flex items-center gap-2" style="color: #FAFAFA;">
-                            <i class="fas fa-tag" style="color: #60A5FA;"></i>
-                            Nome do Pool <span style="color: #FCA5A5;">*</span>
+                        <label class="block text-sm font-black flex items-center gap-2" style="color: var(--txt-primary);">
+                            <i class="fas fa-tag" style="color: var(--trust-400);"></i>
+                            Nome do Pool <span style="color: var(--alert-300);">*</span>
                         </label>
                         <input type="text" 
                                x-model="newPool.name"
                                required
                                placeholder="INSS Principal"
                                class="w-full px-4 py-3 rounded-xl focus:outline-none transition-all"
-                               style="background: #111827; border: 2px solid rgba(255, 255, 255, 0.15); color: #FAFAFA; font-weight: 600;"
-                               onfocus="this.style.borderColor='#3B82F6'; this.style.background='#1F2937';"
-                               onblur="this.style.borderColor='rgba(255, 255, 255, 0.15)'; this.style.background='#111827';">
+                               style="background: var(--dark-900); border: 2px solid rgba(255, 255, 255, 0.15); color: var(--txt-primary); font-weight: 600;"
+                               onfocus="this.style.borderColor='var(--trust-500)'; this.style.background='var(--dark-800)';"
+                               onblur="this.style.borderColor='rgba(255, 255, 255, 0.15)'; this.style.background='var(--dark-900)';">
                     </div>
 
                     <!-- Slug -->
                     <div class="space-y-2">
-                        <label class="block text-sm font-black flex items-center gap-2" style="color: #FAFAFA;">
-                            <i class="fas fa-link" style="color: #60A5FA;"></i>
-                            Slug (identificador) <span style="color: #FCA5A5;">*</span>
+                        <label class="block text-sm font-black flex items-center gap-2" style="color: var(--txt-primary);">
+                            <i class="fas fa-link" style="color: var(--trust-400);"></i>
+                            Slug (identificador) <span style="color: var(--alert-300);">*</span>
                         </label>
                         <input type="text" 
                                x-model="newPool.slug"
@@ -383,11 +383,11 @@
                                pattern="[a-z0-9_-]+"
                                placeholder="red1"
                                class="w-full px-4 py-3 rounded-xl focus:outline-none transition-all font-mono"
-                               style="background: #111827; border: 2px solid rgba(255, 255, 255, 0.15); color: #93C5FD; font-weight: 700;"
+                               style="background: var(--dark-900); border: 2px solid rgba(255, 255, 255, 0.15); color: var(--trust-300); font-weight: 700;"
                                @input="newPool.slug = newPool.slug.toLowerCase()"
-                               onfocus="this.style.borderColor='#3B82F6'; this.style.background='#1F2937';"
-                               onblur="this.style.borderColor='rgba(255, 255, 255, 0.15)'; this.style.background='#111827';">
-                        <p class="text-xs font-semibold flex items-center gap-1.5" style="color: #9CA3AF;">
+                               onfocus="this.style.borderColor='var(--trust-500)'; this.style.background='var(--dark-800)';"
+                               onblur="this.style.borderColor='rgba(255, 255, 255, 0.15)'; this.style.background='var(--dark-900)';">
+                        <p class="text-xs font-semibold flex items-center gap-1.5" style="color: var(--txt-tertiary);">
                             <i class="fas fa-info-circle"></i>
                             Apenas letras minúsculas, números, - e _. Ex: red1, pool-inss, backup_01
                         </p>
@@ -395,8 +395,8 @@
 
                     <!-- Estratégia (com cards visuais) -->
                     <div class="space-y-3">
-                        <label class="block text-sm font-black flex items-center gap-2" style="color: #FAFAFA;">
-                            <i class="fas fa-random" style="color: #60A5FA;"></i>
+                        <label class="block text-sm font-black flex items-center gap-2" style="color: var(--txt-primary);">
+                            <i class="fas fa-random" style="color: var(--trust-400);"></i>
                             <span>Estratégia de Distribuição</span>
                         </label>
                         
@@ -404,97 +404,97 @@
                             <button type="button" 
                                     @click="newPool.strategy = 'round_robin'"
                                     class="relative p-4 rounded-xl border-2 text-left transition-all hover:scale-105"
-                                    :style="newPool.strategy === 'round_robin' ? 'background: rgba(59, 130, 246, 0.15); border-color: #3B82F6;' : 'background: rgba(17, 24, 39, 0.6); border-color: rgba(255, 255, 255, 0.15);'">
+                                    :style="newPool.strategy === 'round_robin' ? 'background: rgba(59, 130, 246, 0.15); border-color: var(--trust-500);' : 'background: rgba(17, 24, 39, 0.6); border-color: rgba(255, 255, 255, 0.15);'">
                                 <div class="flex items-start gap-3">
                                     <div class="flex-shrink-0 mt-0.5">
-                                        <i class="fas fa-circle-notch text-lg" :style="newPool.strategy === 'round_robin' ? 'color: #93C5FD;' : 'color: #6B7280;'"></i>
+                                        <i class="fas fa-circle-notch text-lg" :style="newPool.strategy === 'round_robin' ? 'color: var(--trust-300);' : 'color: var(--txt-muted);'"></i>
                                     </div>
                                     <div class="flex-1">
-                                        <h4 class="text-sm font-black mb-1" :style="newPool.strategy === 'round_robin' ? 'color: #FAFAFA;' : 'color: #D1D5DB;'">
+                                        <h4 class="text-sm font-black mb-1" :style="newPool.strategy === 'round_robin' ? 'color: var(--txt-primary);' : 'color: var(--txt-secondary);'">
                                             Rodízio
                                         </h4>
-                                        <p class="text-xs font-semibold" style="color: #9CA3AF;">Distribuição igual e justa</p>
+                                        <p class="text-xs font-semibold" style="color: var(--txt-tertiary);">Distribuição igual e justa</p>
                                     </div>
-                                    <i x-show="newPool.strategy === 'round_robin'" class="fas fa-check-circle absolute top-2 right-2" style="color: #6EE7B7;"></i>
+                                    <i x-show="newPool.strategy === 'round_robin'" class="fas fa-check-circle absolute top-2 right-2" style="color: var(--brand-emerald-300);"></i>
                                 </div>
                             </button>
                             
                             <button type="button" 
                                     @click="newPool.strategy = 'least_connections'"
                                     class="relative p-4 rounded-xl border-2 text-left transition-all hover:scale-105"
-                                    :style="newPool.strategy === 'least_connections' ? 'background: rgba(59, 130, 246, 0.15); border-color: #3B82F6;' : 'background: rgba(17, 24, 39, 0.6); border-color: rgba(255, 255, 255, 0.15);'">
+                                    :style="newPool.strategy === 'least_connections' ? 'background: rgba(59, 130, 246, 0.15); border-color: var(--trust-500);' : 'background: rgba(17, 24, 39, 0.6); border-color: rgba(255, 255, 255, 0.15);'">
                                 <div class="flex items-start gap-3">
                                     <div class="flex-shrink-0 mt-0.5">
-                                        <i class="fas fa-balance-scale text-lg" :style="newPool.strategy === 'least_connections' ? 'color: #93C5FD;' : 'color: #6B7280;'"></i>
+                                        <i class="fas fa-balance-scale text-lg" :style="newPool.strategy === 'least_connections' ? 'color: var(--trust-300);' : 'color: var(--txt-muted);'"></i>
                                     </div>
                                     <div class="flex-1">
-                                        <h4 class="text-sm font-black mb-1" :style="newPool.strategy === 'least_connections' ? 'color: #FAFAFA;' : 'color: #D1D5DB;'">
+                                        <h4 class="text-sm font-black mb-1" :style="newPool.strategy === 'least_connections' ? 'color: var(--txt-primary);' : 'color: var(--txt-secondary);'">
                                             Menos Carga
                                         </h4>
-                                        <p class="text-xs font-semibold" style="color: #9CA3AF;">Bot com menos carga</p>
+                                        <p class="text-xs font-semibold" style="color: var(--txt-tertiary);">Bot com menos carga</p>
                                     </div>
-                                    <i x-show="newPool.strategy === 'least_connections'" class="fas fa-check-circle absolute top-2 right-2" style="color: #6EE7B7;"></i>
+                                    <i x-show="newPool.strategy === 'least_connections'" class="fas fa-check-circle absolute top-2 right-2" style="color: var(--brand-emerald-300);"></i>
                                 </div>
                             </button>
                             
                             <button type="button" 
                                     @click="newPool.strategy = 'random'"
                                     class="relative p-4 rounded-xl border-2 text-left transition-all hover:scale-105"
-                                    :style="newPool.strategy === 'random' ? 'background: rgba(59, 130, 246, 0.15); border-color: #3B82F6;' : 'background: rgba(17, 24, 39, 0.6); border-color: rgba(255, 255, 255, 0.15);'">
+                                    :style="newPool.strategy === 'random' ? 'background: rgba(59, 130, 246, 0.15); border-color: var(--trust-500);' : 'background: rgba(17, 24, 39, 0.6); border-color: rgba(255, 255, 255, 0.15);'">
                                 <div class="flex items-start gap-3">
                                     <div class="flex-shrink-0 mt-0.5">
-                                        <i class="fas fa-dice text-lg" :style="newPool.strategy === 'random' ? 'color: #93C5FD;' : 'color: #6B7280;'"></i>
+                                        <i class="fas fa-dice text-lg" :style="newPool.strategy === 'random' ? 'color: var(--trust-300);' : 'color: var(--txt-muted);'"></i>
                                     </div>
                                     <div class="flex-1">
-                                        <h4 class="text-sm font-black mb-1" :style="newPool.strategy === 'random' ? 'color: #FAFAFA;' : 'color: #D1D5DB;'">
+                                        <h4 class="text-sm font-black mb-1" :style="newPool.strategy === 'random' ? 'color: var(--txt-primary);' : 'color: var(--txt-secondary);'">
                                             Aleatório
                                         </h4>
-                                        <p class="text-xs font-semibold" style="color: #9CA3AF;">Escolha aleatória</p>
+                                        <p class="text-xs font-semibold" style="color: var(--txt-tertiary);">Escolha aleatória</p>
                                     </div>
-                                    <i x-show="newPool.strategy === 'random'" class="fas fa-check-circle absolute top-2 right-2" style="color: #6EE7B7;"></i>
+                                    <i x-show="newPool.strategy === 'random'" class="fas fa-check-circle absolute top-2 right-2" style="color: var(--brand-emerald-300);"></i>
                                 </div>
                             </button>
                             
                             <button type="button" 
                                     @click="newPool.strategy = 'weighted'"
                                     class="relative p-4 rounded-xl border-2 text-left transition-all hover:scale-105"
-                                    :style="newPool.strategy === 'weighted' ? 'background: rgba(59, 130, 246, 0.15); border-color: #3B82F6;' : 'background: rgba(17, 24, 39, 0.6); border-color: rgba(255, 255, 255, 0.15);'">
+                                    :style="newPool.strategy === 'weighted' ? 'background: rgba(59, 130, 246, 0.15); border-color: var(--trust-500);' : 'background: rgba(17, 24, 39, 0.6); border-color: rgba(255, 255, 255, 0.15);'">
                                 <div class="flex items-start gap-3">
                                     <div class="flex-shrink-0 mt-0.5">
-                                        <i class="fas fa-weight text-lg" :style="newPool.strategy === 'weighted' ? 'color: #93C5FD;' : 'color: #6B7280;'"></i>
+                                        <i class="fas fa-weight text-lg" :style="newPool.strategy === 'weighted' ? 'color: var(--trust-300);' : 'color: var(--txt-muted);'"></i>
                                     </div>
                                     <div class="flex-1">
-                                        <h4 class="text-sm font-black mb-1" :style="newPool.strategy === 'weighted' ? 'color: #FAFAFA;' : 'color: #D1D5DB;'">
+                                        <h4 class="text-sm font-black mb-1" :style="newPool.strategy === 'weighted' ? 'color: var(--txt-primary);' : 'color: var(--txt-secondary);'">
                                             Ponderado
                                         </h4>
-                                        <p class="text-xs font-semibold" style="color: #9CA3AF;">Por peso configurado</p>
+                                        <p class="text-xs font-semibold" style="color: var(--txt-tertiary);">Por peso configurado</p>
                                     </div>
-                                    <i x-show="newPool.strategy === 'weighted'" class="fas fa-check-circle absolute top-2 right-2" style="color: #6EE7B7;"></i>
+                                    <i x-show="newPool.strategy === 'weighted'" class="fas fa-check-circle absolute top-2 right-2" style="color: var(--brand-emerald-300);"></i>
                                 </div>
                             </button>
                         </div>
                         
-                        <div x-show="newPool.strategy === 'round_robin'" class="p-4 rounded-xl border-2" style="background: rgba(34, 197, 94, 0.12); border-color: #22C55E;">
-                            <p class="text-sm font-semibold flex items-start gap-2" style="color: #E5E7EB;">
-                                <i class="fas fa-info-circle mt-0.5" style="color: #6EE7B7; filter: drop-shadow(0 0 4px rgba(110, 231, 183, 0.5));"></i>
-                                <span><strong style="color: #6EE7B7;">Recomendado:</strong> Distribui tráfego igualmente entre todos os bots online</span>
+                        <div x-show="newPool.strategy === 'round_robin'" class="p-4 rounded-xl border-2" style="background: rgba(34, 197, 94, 0.12); border-color: var(--brand-emerald-500);">
+                            <p class="text-sm font-semibold flex items-start gap-2" style="color: var(--txt-secondary);">
+                                <i class="fas fa-info-circle mt-0.5" style="color: var(--brand-emerald-300); filter: drop-shadow(0 0 4px rgba(110, 231, 183, 0.5));"></i>
+                                <span><strong style="color: var(--brand-emerald-300);">Recomendado:</strong> Distribui tráfego igualmente entre todos os bots online</span>
                             </p>
                         </div>
-                        <div x-show="newPool.strategy === 'least_connections'" class="p-4 rounded-xl border-2" style="background: rgba(59, 130, 246, 0.12); border-color: #3B82F6;">
-                            <p class="text-sm font-semibold flex items-start gap-2" style="color: #E5E7EB;">
-                                <i class="fas fa-info-circle mt-0.5" style="color: #93C5FD; filter: drop-shadow(0 0 4px rgba(147, 197, 253, 0.5));"></i>
+                        <div x-show="newPool.strategy === 'least_connections'" class="p-4 rounded-xl border-2" style="background: rgba(59, 130, 246, 0.12); border-color: var(--trust-500);">
+                            <p class="text-sm font-semibold flex items-start gap-2" style="color: var(--txt-secondary);">
+                                <i class="fas fa-info-circle mt-0.5" style="color: var(--trust-300); filter: drop-shadow(0 0 4px rgba(147, 197, 253, 0.5));"></i>
                                 <span>Direciona para o bot com menos redirecionamentos acumulados (ideal para alta performance)</span>
                             </p>
                         </div>
                         <div x-show="newPool.strategy === 'random'" class="p-4 rounded-xl border-2" style="background: rgba(168, 85, 247, 0.12); border-color: #A855F7;">
-                            <p class="text-sm font-semibold flex items-start gap-2" style="color: #E5E7EB;">
-                                <i class="fas fa-info-circle mt-0.5" style="color: #C4B5FD; filter: drop-shadow(0 0 4px rgba(196, 181, 253, 0.5));"></i>
+                            <p class="text-sm font-semibold flex items-start gap-2" style="color: var(--txt-secondary);">
+                                <i class="fas fa-info-circle mt-0.5" style="color: var(--trust-300); filter: drop-shadow(0 0 4px rgba(196, 181, 253, 0.5));"></i>
                                 <span>Escolhe bot aleatoriamente (dificulta detecção de padrões por sistemas de segurança)</span>
                             </p>
                         </div>
-                        <div x-show="newPool.strategy === 'weighted'" class="p-4 rounded-xl border-2" style="background: rgba(245, 158, 11, 0.12); border-color: #F59E0B;">
-                            <p class="text-sm font-semibold flex items-start gap-2" style="color: #E5E7EB;">
-                                <i class="fas fa-info-circle mt-0.5" style="color: #FCD34D; filter: drop-shadow(0 0 4px rgba(252, 211, 77, 0.5));"></i>
+                        <div x-show="newPool.strategy === 'weighted'" class="p-4 rounded-xl border-2" style="background: rgba(245, 158, 11, 0.12); border-color: var(--brand-gold-500);">
+                            <p class="text-sm font-semibold flex items-start gap-2" style="color: var(--txt-secondary);">
+                                <i class="fas fa-info-circle mt-0.5" style="color: var(--brand-gold-300); filter: drop-shadow(0 0 4px rgba(252, 211, 77, 0.5));"></i>
                                 <span>Distribui baseado no peso configurado de cada bot (você configura depois ao adicionar os bots)</span>
                             </p>
                         </div>
@@ -502,17 +502,17 @@
 
                     <!-- Descrição -->
                     <div class="space-y-2">
-                        <label class="block text-sm font-black flex items-center gap-2" style="color: #FAFAFA;">
-                            <i class="fas fa-align-left" style="color: #60A5FA;"></i>
-                            Descrição <span class="text-xs font-semibold" style="color: #6B7280;">(opcional)</span>
+                        <label class="block text-sm font-black flex items-center gap-2" style="color: var(--txt-primary);">
+                            <i class="fas fa-align-left" style="color: var(--trust-400);"></i>
+                            Descrição <span class="text-xs font-semibold" style="color: var(--txt-muted);">(opcional)</span>
                         </label>
                         <textarea x-model="newPool.description"
                                   rows="2"
                                   placeholder="Pool principal para campanha de INSS..."
                                   class="w-full px-4 py-3 rounded-xl focus:outline-none transition-all resize-none"
-                                  style="background: #111827; border: 2px solid rgba(255, 255, 255, 0.15); color: #E5E7EB; font-weight: 500;"
-                                  onfocus="this.style.borderColor='#3B82F6'; this.style.background='#1F2937';"
-                                  onblur="this.style.borderColor='rgba(255, 255, 255, 0.15)'; this.style.background='#111827';"></textarea>
+                                  style="background: var(--dark-900); border: 2px solid rgba(255, 255, 255, 0.15); color: var(--txt-secondary); font-weight: 500;"
+                                  onfocus="this.style.borderColor='var(--trust-500)'; this.style.background='var(--dark-800)';"
+                                  onblur="this.style.borderColor='rgba(255, 255, 255, 0.15)'; this.style.background='var(--dark-900)';"></textarea>
                     </div>
 
                     <!-- Botões -->
@@ -520,7 +520,7 @@
                         <button type="button"
                                 @click="showCreatePoolModal = false"
                                 class="w-full px-4 py-3 rounded-xl text-sm font-bold focus:outline-none transition-all hover:scale-105"
-                                style="background: transparent; border: 2px solid rgba(255, 255, 255, 0.15); color: #D1D5DB;">
+                                style="background: transparent; border: 2px solid rgba(255, 255, 255, 0.15); color: var(--txt-secondary);">
                             <i class="fas fa-times mr-2"></i>
                             Cancelar
                         </button>
@@ -529,7 +529,7 @@
                                 :disabled="loading"
                                 :class="{ 'opacity-60 cursor-not-allowed': loading }"
                                 class="w-full px-4 py-3 rounded-xl text-sm font-black focus:outline-none transition-all transform hover:-translate-y-1 active:translate-y-0 disabled:transform-none"
-                                style="background: linear-gradient(135deg, #3B82F6, #2563EB); color: #FFFFFF; box-shadow: 0 8px 24px rgba(59, 130, 246, 0.4), 0 0 20px rgba(96, 165, 250, 0.2);">
+                                style="background: linear-gradient(135deg, var(--trust-500), var(--trust-600)); color: var(--txt-primary); box-shadow: 0 8px 24px rgba(59, 130, 246, 0.4), 0 0 20px rgba(96, 165, 250, 0.2);">
                             <span x-show="!loading" class="flex items-center justify-center gap-2">
                                 <i class="fas fa-plus-circle"></i>
                                 Criar Pool
@@ -912,15 +912,15 @@ function poolsApp() {
             let bgColor, borderColor, iconClass;
             if (type === 'success') {
                 bgColor = 'rgba(34, 197, 94, 0.95)';
-                borderColor = '#22C55E';
+                borderColor = 'var(--brand-emerald-500)';
                 iconClass = 'fas fa-check-circle';
             } else if (type === 'error') {
                 bgColor = 'rgba(239, 68, 68, 0.95)';
-                borderColor = '#EF4444';
+                borderColor = 'var(--alert-500)';
                 iconClass = 'fas fa-exclamation-circle';
             } else {
                 bgColor = 'rgba(59, 130, 246, 0.95)';
-                borderColor = '#3B82F6';
+                borderColor = 'var(--trust-500)';
                 iconClass = 'fas fa-info-circle';
             }
             

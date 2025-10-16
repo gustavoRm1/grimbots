@@ -375,7 +375,7 @@ function botStatsApp() {
                     },
                     plugins: {
                         legend: {
-                            labels: { color: '#FAFAFA', font: { size: 12 } }
+                            labels: { color: 'var(--txt-primary)', font: { size: 12 } }
                         }
                     },
                     scales: {
@@ -392,7 +392,7 @@ function botStatsApp() {
                         y1: {
                             type: 'linear',
                             position: 'right',
-                            ticks: { color: '#22C55E', callback: (value) => 'R$ ' + value.toFixed(2) },
+                            ticks: { color: 'var(--brand-emerald-500)', callback: (value) => 'R$ ' + value.toFixed(2) },
                             grid: { drawOnChartArea: false }
                         }
                     }

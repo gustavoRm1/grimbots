@@ -15,7 +15,7 @@
 <div class="flex items-center justify-between flex-wrap gap-4">
 <div>
 <div class="text-5xl mb-4">🤖</div>
-<h2 class="text-3xl font-black mb-2" style="color: #000000;">Crie seu primeiro bot de vendas!</h2>
+<h2 class="text-3xl font-black mb-2" style="color: var(--dark-950);">Crie seu primeiro bot de vendas!</h2>
 <p class="text-lg font-semibold" style="color: rgba(0, 0, 0, 0.7);">Em menos de 5 minutos você estará vendendo</p>
 </div>
 <a href="/bot/create" class="btn-primary px-8 py-4 text-lg shadow-lg">
@@ -93,32 +93,32 @@
 </div>
 </div>
 <!-- Card de Ranking (Destaque) -->
-<div class="card !p-0 mb-8 overflow-hidden border-2" style="border-color: #F59E0B; box-shadow: 0 0 30px rgba(245, 158, 11, 0.3), 0 8px 24px rgba(0, 0, 0, 0.4);">
-<div class="px-6 py-5 flex justify-between items-center" style="background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);">
+<div class="card !p-0 mb-8 overflow-hidden border-2" style="border-color: var(--brand-gold-500); box-shadow: 0 0 30px rgba(245, 158, 11, 0.3), 0 8px 24px rgba(0, 0, 0, 0.4);">
+<div class="px-6 py-5 flex justify-between items-center" style="background: linear-gradient(135deg, var(--brand-gold-500) 0%, var(--brand-gold-600) 100%);">
 <div class="flex items-center gap-4">
-<i class="fas fa-trophy text-3xl" style="color: #451A03; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));"></i>
+<i class="fas fa-trophy text-3xl" style="color: var(--brand-gold-900); filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));"></i>
 <div>
-<h3 class="text-lg font-black" style="color: #1C1917; text-shadow: 0 1px 2px rgba(255, 255, 255, 0.2);">Sua Posição no Ranking</h3>
-<p class="text-sm font-semibold" style="color: #292524;">Compete com outros vendedores!</p>
+<h3 class="text-lg font-black" style="color: var(--dark-900); text-shadow: 0 1px 2px rgba(255, 255, 255, 0.2);">Sua Posição no Ranking</h3>
+<p class="text-sm font-semibold" style="color: var(--dark-800);">Compete com outros vendedores!</p>
 </div>
 </div>
-<a href="/ranking" class="px-5 py-2.5 font-bold rounded-lg transition-all hover:scale-105" style="background: rgba(0, 0, 0, 0.25); color: #FFFFFF; border: 1px solid rgba(0, 0, 0, 0.2); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);"> Ver Ranking Completo → </a>
+<a href="/ranking" class="px-5 py-2.5 font-bold rounded-lg transition-all hover:scale-105" style="background: rgba(0, 0, 0, 0.25); color: var(--txt-primary); border: 1px solid rgba(0, 0, 0, 0.2); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);"> Ver Ranking Completo → </a>
 </div>
-<div class="p-8" style="background: #1F2937;">
+<div class="p-8" style="background: var(--dark-800);">
 <div class="grid grid-cols-3 gap-8">
 <div class="text-center">
-<div class="mb-3" style="font-size: 3.5rem; font-weight: 900; color: #FDE68A; text-shadow: 0 2px 16px rgba(253, 230, 138, 0.5), 0 0 30px rgba(252, 211, 77, 0.4); line-height: 1;"> #{{ current_user.ranking_points }} </div>
-<p class="text-sm font-semibold" style="color: #D1D5DB;">Pontos</p>
+<div class="mb-3" style="font-size: 3.5rem; font-weight: 900; color: var(--brand-gold-200); text-shadow: 0 2px 16px rgba(253, 230, 138, 0.5), 0 0 30px rgba(252, 211, 77, 0.4); line-height: 1;"> #{{ current_user.ranking_points }} </div>
+<p class="text-sm font-semibold" style="color: var(--txt-secondary);">Pontos</p>
 </div>
 <div class="text-center">
-<div class="mb-3 flex items-center justify-center gap-2" style="font-size: 3.5rem; font-weight: 900; line-height: 1;"> {% if current_user.current_streak > 0 %} <i class="fas fa-fire" style="color: #FB923C; filter: drop-shadow(0 0 12px rgba(251, 146, 60, 0.8));"></i>
-<span style="color: #FDBA74; text-shadow: 0 2px 16px rgba(253, 186, 116, 0.5);">{{ current_user.current_streak }}</span> {% else %} <i class="fas fa-moon" style="color: #94A3B8;"></i>
-<span style="color: #CBD5E1;">{{ current_user.current_streak }}</span> {% endif %} </div>
-<p class="text-sm font-semibold" style="color: #D1D5DB;">Streak (dias)</p>
+<div class="mb-3 flex items-center justify-center gap-2" style="font-size: 3.5rem; font-weight: 900; line-height: 1;"> {% if current_user.current_streak > 0 %} <i class="fas fa-fire" style="color: var(--brand-gold-400); filter: drop-shadow(0 0 12px rgba(251, 146, 60, 0.8));"></i>
+<span style="color: var(--brand-gold-300); text-shadow: 0 2px 16px rgba(253, 186, 116, 0.5);">{{ current_user.current_streak }}</span> {% else %} <i class="fas fa-moon" style="color: var(--txt-tertiary);"></i>
+<span style="color: var(--txt-tertiary);">{{ current_user.current_streak }}</span> {% endif %} </div>
+<p class="text-sm font-semibold" style="color: var(--txt-secondary);">Streak (dias)</p>
 </div>
 <div class="text-center">
-<div class="mb-3" style="font-size: 3.5rem; font-weight: 900; color: #C4B5FD; text-shadow: 0 2px 16px rgba(196, 181, 253, 0.5), 0 0 30px rgba(167, 139, 250, 0.4); line-height: 1;"> {{ current_user.achievements|length }} </div>
-<p class="text-sm font-semibold" style="color: #D1D5DB;">Conquistas</p>
+<div class="mb-3" style="font-size: 3.5rem; font-weight: 900; color: var(--trust-300); text-shadow: 0 2px 16px rgba(196, 181, 253, 0.5), 0 0 30px rgba(167, 139, 250, 0.4); line-height: 1;"> {{ current_user.achievements|length }} </div>
+<p class="text-sm font-semibold" style="color: var(--txt-secondary);">Conquistas</p>
 </div>
 </div>
 </div>
@@ -484,7 +484,7 @@
 <td class="px-6 py-4 whitespace-nowrap text-sm font-bold" style="color: var(--brand-gold-300);"> R$ <span x-text="formatMoney(payment.amount)"></span>
 </td>
 <td class="px-6 py-4 whitespace-nowrap">
-<span class="px-3 py-1 rounded-full text-xs font-bold" :class="{ 'bg-emerald-500 bg-opacity-15 border border-emerald-500': payment.status === 'paid', 'bg-gold-500 bg-opacity-15 border border-gold-500': payment.status === 'pending', 'bg-alert-500 bg-opacity-15 border border-alert-500': payment.status !== 'paid' && payment.status !== 'pending' }" :style="{ color: payment.status === 'paid' ? 'var(--brand-green-300)' : (payment.status === 'pending' ? '#FCD34D' : 'var(--brand-red-300)') }">
+<span class="px-3 py-1 rounded-full text-xs font-bold" :class="{ 'bg-emerald-500 bg-opacity-15 border border-emerald-500': payment.status === 'paid', 'bg-gold-500 bg-opacity-15 border border-gold-500': payment.status === 'pending', 'bg-alert-500 bg-opacity-15 border border-alert-500': payment.status !== 'paid' && payment.status !== 'pending' }" :style="{ color: payment.status === 'paid' ? 'var(--brand-green-300)' : (payment.status === 'pending' ? 'var(--brand-gold-300)' : 'var(--brand-red-300)') }">
 <span x-text="payment.status === 'paid' ? 'Pago' : (payment.status === 'pending' ? 'Pendente' : 'Cancelado')"></span>
 </span>
 </td>
@@ -707,23 +707,23 @@
 <!-- Backdrop -->
 <div x-show="showChangeTokenModal" x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0" x-transition:enter-end="opacity-100" x-transition:leave="ease-in duration-200" x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0" class="fixed inset-0 bg-black bg-opacity-90 backdrop-blur-sm transition-opacity" @click="showChangeTokenModal = false"></div>
 <!-- Modal Content -->
-<div x-show="showChangeTokenModal" x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100" x-transition:leave="ease-in duration-200" x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100" x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" class="relative inline-block align-middle rounded-2xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:max-w-lg sm:w-full" style="background: #1F2937; box-shadow: 0 20px 60px rgba(0,0,0,0.9), 0 0 0 2px rgba(245, 158, 11, 0.2), 0 0 40px rgba(245, 158, 11, 0.1);">
+<div x-show="showChangeTokenModal" x-transition:enter="ease-out duration-300" x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100" x-transition:leave="ease-in duration-200" x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100" x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95" class="relative inline-block align-middle rounded-2xl text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:max-w-lg sm:w-full" style="background: var(--dark-800); box-shadow: 0 20px 60px rgba(0,0,0,0.9), 0 0 0 2px rgba(245, 158, 11, 0.2), 0 0 40px rgba(245, 158, 11, 0.1);">
 <!-- Header -->
-<div class="px-8 pt-8 pb-6 border-b" style="background: linear-gradient(180deg, #374151, #1F2937); border-bottom-color: rgba(255, 255, 255, 0.1);">
+<div class="px-8 pt-8 pb-6 border-b" style="background: linear-gradient(180deg, var(--dark-700), var(--dark-800)); border-bottom-color: rgba(255, 255, 255, 0.1);">
 <div class="flex items-start">
 <div class="flex-shrink-0">
 <div class="relative">
-<div class="absolute -inset-2 rounded-full blur-xl" style="background: #F59E0B; opacity: 0.25;"></div>
-<div class="relative flex items-center justify-center h-14 w-14 rounded-2xl border-2" style="background: #1F2937; border-color: #F59E0B;">
-<i class="fas fa-key text-3xl" style="color: #FCD34D; filter: drop-shadow(0 2px 8px rgba(252, 211, 77, 0.6));"></i>
+<div class="absolute -inset-2 rounded-full blur-xl" style="background: var(--brand-gold-500); opacity: 0.25;"></div>
+<div class="relative flex items-center justify-center h-14 w-14 rounded-2xl border-2" style="background: var(--dark-800); border-color: var(--brand-gold-500);">
+<i class="fas fa-key text-3xl" style="color: var(--brand-gold-300); filter: drop-shadow(0 2px 8px rgba(252, 211, 77, 0.6));"></i>
 </div>
 </div>
 </div>
 <div class="ml-5 flex-1">
-<h3 class="text-2xl font-black" style="color: #FAFAFA;"> Trocar Token do Bot </h3>
-<p class="mt-2 text-sm font-semibold leading-relaxed" style="color: #D1D5DB;"> Atualize o token de <strong style="color: #FDE68A; font-weight: 900;" x-text="botToChangeToken?.name"></strong> sem perder suas configurações </p>
+<h3 class="text-2xl font-black" style="color: var(--txt-primary);"> Trocar Token do Bot </h3>
+<p class="mt-2 text-sm font-semibold leading-relaxed" style="color: var(--txt-secondary);"> Atualize o token de <strong style="color: var(--brand-gold-200); font-weight: 900;" x-text="botToChangeToken?.name"></strong> sem perder suas configurações </p>
 </div>
-<button @click="showChangeTokenModal = false" class="ml-3 transition-colors focus:outline-none hover:scale-110" style="color: #9CA3AF;">
+<button @click="showChangeTokenModal = false" class="ml-3 transition-colors focus:outline-none hover:scale-110" style="color: var(--txt-tertiary);">
 <i class="fas fa-times text-xl"></i>
 </button>
 </div>
@@ -733,30 +733,30 @@
 <div class="rounded-xl p-5 mb-4 border-2" style="background: rgba(239, 68, 68, 0.12); border-color: var(--brand-red-500);">
 <div class="flex gap-3">
 <div class="flex-shrink-0">
-<i class="fas fa-exclamation-circle text-xl" style="color: #FCA5A5; filter: drop-shadow(0 0 6px rgba(252, 165, 165, 0.5));"></i>
+<i class="fas fa-exclamation-circle text-xl" style="color: var(--alert-300); filter: drop-shadow(0 0 6px rgba(252, 165, 165, 0.5));"></i>
 </div>
 <div class="flex-1">
-<h4 class="text-sm font-black" style="color: #FCA5A5;">Bot Banido ou com Problema?</h4>
-<p class="mt-2 text-xs font-semibold leading-relaxed" style="color: #E5E7EB;"> Esta função é para recuperação de bot banido ou com problemas.<br> O bot será atualizado com o novo token <strong style="color: #FCA5A5; font-weight: 900;">mantendo TODAS as configurações</strong>. </p>
+<h4 class="text-sm font-black" style="color: var(--alert-300);">Bot Banido ou com Problema?</h4>
+<p class="mt-2 text-xs font-semibold leading-relaxed" style="color: var(--txt-secondary);"> Esta função é para recuperação de bot banido ou com problemas.<br> O bot será atualizado com o novo token <strong style="color: var(--alert-300); font-weight: 900;">mantendo TODAS as configurações</strong>. </p>
 </div>
 </div>
 </div>
-<div class="rounded-xl p-5 border-2" style="background: rgba(245, 158, 11, 0.12); border-color: #F59E0B;">
+<div class="rounded-xl p-5 border-2" style="background: rgba(245, 158, 11, 0.12); border-color: var(--brand-gold-500);">
 <div class="flex gap-3">
 <div class="flex-shrink-0">
-<i class="fas fa-shield-alt text-xl" style="color: #FCD34D; filter: drop-shadow(0 0 6px rgba(252, 211, 77, 0.5));"></i>
+<i class="fas fa-shield-alt text-xl" style="color: var(--brand-gold-300); filter: drop-shadow(0 0 6px rgba(252, 211, 77, 0.5));"></i>
 </div>
 <div class="flex-1">
-<h4 class="text-sm font-black mb-3" style="color: #FDE68A;">O que será preservado:</h4>
-<ul class="text-xs font-semibold space-y-2" style="color: #E5E7EB;">
+<h4 class="text-sm font-black mb-3" style="color: var(--brand-gold-200);">O que será preservado:</h4>
+<ul class="text-xs font-semibold space-y-2" style="color: var(--txt-secondary);">
 <li class="flex items-center gap-2">
-<i class="fas fa-check-circle" style="color: #6EE7B7;"></i> Todas as mensagens configuradas </li>
+<i class="fas fa-check-circle" style="color: var(--brand-emerald-300);"></i> Todas as mensagens configuradas </li>
 <li class="flex items-center gap-2">
-<i class="fas fa-check-circle" style="color: #6EE7B7;"></i> Order Bumps e Downsells </li>
+<i class="fas fa-check-circle" style="color: var(--brand-emerald-300);"></i> Order Bumps e Downsells </li>
 <li class="flex items-center gap-2">
-<i class="fas fa-check-circle" style="color: #6EE7B7;"></i> Links e mídias </li>
+<i class="fas fa-check-circle" style="color: var(--brand-emerald-300);"></i> Links e mídias </li>
 <li class="flex items-center gap-2">
-<i class="fas fa-check-circle" style="color: #6EE7B7;"></i> Histórico de vendas e usuários </li>
+<i class="fas fa-check-circle" style="color: var(--brand-emerald-300);"></i> Histórico de vendas e usuários </li>
 </ul>
 </div>
 </div>
@@ -766,42 +766,42 @@
 <form @submit.prevent="changeToken()" class="px-8 pb-8 space-y-5">
 <!-- Token Atual (Readonly) -->
 <div class="space-y-2">
-<label class="block text-sm font-bold" style="color: #9CA3AF;"> Token Atual </label>
+<label class="block text-sm font-bold" style="color: var(--txt-tertiary);"> Token Atual </label>
 <div class="relative">
-<input type="text" :value="botToChangeToken?.token ? botToChangeToken.token.substring(0, 15) + '...' : ''" readonly class="w-full px-4 py-3 pl-11 rounded-xl cursor-not-allowed text-sm" style="background: rgba(17, 24, 39, 0.5); border: 1px solid rgba(255, 255, 255, 0.1); color: #9CA3AF; font-family: 'Courier New', monospace;">
+<input type="text" :value="botToChangeToken?.token ? botToChangeToken.token.substring(0, 15) + '...' : ''" readonly class="w-full px-4 py-3 pl-11 rounded-xl cursor-not-allowed text-sm" style="background: rgba(17, 24, 39, 0.5); border: 1px solid rgba(255, 255, 255, 0.1); color: var(--txt-tertiary); font-family: 'Courier New', monospace;">
 <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-<i class="fas fa-lock" style="color: #6B7280;"></i>
+<i class="fas fa-lock" style="color: var(--txt-muted);"></i>
 </div>
 </div>
-<p class="text-xs font-semibold flex items-center gap-1.5" style="color: #A3A3A3;">
+<p class="text-xs font-semibold flex items-center gap-1.5" style="color: var(--txt-tertiary);">
 <i class="fas fa-info-circle"></i> Username: @<span x-text="botToChangeToken?.username"></span>
 </p>
 </div>
 <!-- Token Novo (OBRIGATÓRIO) -->
 <div class="space-y-2">
-<label for="changeTokenInput" class="block text-sm font-black" style="color: #FAFAFA;"> Novo Token <span style="color: #FCA5A5;">*</span>
+<label for="changeTokenInput" class="block text-sm font-black" style="color: var(--txt-primary);"> Novo Token <span style="color: var(--alert-300);">*</span>
 </label>
 <div class="relative">
-<input type="text" id="changeTokenInput" x-model="changeTokenInput" required placeholder="1234567890:ABCdefGHIjklMNOpqrsTUVwxyz" class="w-full px-4 py-3.5 pl-11 rounded-xl focus:outline-none transition-all text-sm" style="background: #111827; border: 2px solid rgba(255, 255, 255, 0.15); color: #FDE68A; font-family: 'Courier New', monospace; font-weight: 600;" onfocus="this.style.borderColor='#F59E0B'; this.style.background='#1F2937';" onblur="this.style.borderColor='rgba(255, 255, 255, 0.15)'; this.style.background='#111827';">
+<input type="text" id="changeTokenInput" x-model="changeTokenInput" required placeholder="1234567890:ABCdefGHIjklMNOpqrsTUVwxyz" class="w-full px-4 py-3.5 pl-11 rounded-xl focus:outline-none transition-all text-sm" style="background: var(--dark-900); border: 2px solid rgba(255, 255, 255, 0.15); color: var(--brand-gold-200); font-family: 'Courier New', monospace; font-weight: 600;" onfocus="this.style.borderColor='var(--brand-gold-500)'; this.style.background='var(--dark-800)';" onblur="this.style.borderColor='rgba(255, 255, 255, 0.15)'; this.style.background='var(--dark-900)';">
 <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-<i class="fas fa-key" style="color: #FCD34D;"></i>
+<i class="fas fa-key" style="color: var(--brand-gold-300);"></i>
 </div>
 </div>
-<p class="text-xs font-semibold flex items-center gap-1.5 mt-2" style="color: #A3A3A3;">
+<p class="text-xs font-semibold flex items-center gap-1.5 mt-2" style="color: var(--txt-tertiary);">
 <i class="fas fa-info-circle"></i> Crie um novo bot no @BotFather e cole o token aqui </p>
 </div>
 <!-- Confirmação -->
 <div class="rounded-xl p-5 border-2" style="background: rgba(59, 130, 246, 0.08); border-color: rgba(59, 130, 246, 0.3);">
 <label class="flex items-start cursor-pointer">
-<input type="checkbox" x-model="confirmChangeToken" class="mt-1 h-4 w-4 rounded focus:ring-2" style="background: #111827; border: 2px solid #60A5FA; color: var(--brand-blue-500);">
-<span class="ml-3 text-xs font-semibold leading-relaxed" style="color: #E5E7EB;"> Confirmo que o bot está <strong style="color: #FDE68A; font-weight: 900;">PARADO</strong> e entendo que o token será substituído mantendo todas as configurações. </span>
+<input type="checkbox" x-model="confirmChangeToken" class="mt-1 h-4 w-4 rounded focus:ring-2" style="background: var(--dark-900); border: 2px solid var(--trust-400); color: var(--brand-blue-500);">
+<span class="ml-3 text-xs font-semibold leading-relaxed" style="color: var(--txt-secondary);"> Confirmo que o bot está <strong style="color: var(--brand-gold-200); font-weight: 900;">PARADO</strong> e entendo que o token será substituído mantendo todas as configurações. </span>
 </label>
 </div>
 <!-- Botões -->
 <div class="grid grid-cols-2 gap-4 pt-4">
-<button type="button" @click="showChangeTokenModal = false" class="w-full inline-flex justify-center items-center py-3.5 px-4 rounded-xl text-sm font-bold focus:outline-none transition-all hover:scale-105" style="background: transparent; border: 2px solid rgba(255, 255, 255, 0.15); color: #D1D5DB;">
+<button type="button" @click="showChangeTokenModal = false" class="w-full inline-flex justify-center items-center py-3.5 px-4 rounded-xl text-sm font-bold focus:outline-none transition-all hover:scale-105" style="background: transparent; border: 2px solid rgba(255, 255, 255, 0.15); color: var(--txt-secondary);">
 <i class="fas fa-times mr-2"></i> Cancelar </button>
-<button type="submit" :disabled="loading || !changeTokenInput || !confirmChangeToken || botToChangeToken?.is_running" :class="{ 'opacity-60 cursor-not-allowed': loading || !changeTokenInput || !confirmChangeToken || botToChangeToken?.is_running }" class="w-full inline-flex justify-center items-center py-3.5 px-4 rounded-xl text-sm font-black focus:outline-none transition-all transform hover:-translate-y-1 active:translate-y-0 disabled:transform-none" style="background: linear-gradient(135deg, #F59E0B, #D97706); color: #1C1917; box-shadow: 0 8px 24px rgba(245, 158, 11, 0.4), 0 0 20px rgba(252, 211, 77, 0.2);">
+<button type="submit" :disabled="loading || !changeTokenInput || !confirmChangeToken || botToChangeToken?.is_running" :class="{ 'opacity-60 cursor-not-allowed': loading || !changeTokenInput || !confirmChangeToken || botToChangeToken?.is_running }" class="w-full inline-flex justify-center items-center py-3.5 px-4 rounded-xl text-sm font-black focus:outline-none transition-all transform hover:-translate-y-1 active:translate-y-0 disabled:transform-none" style="background: linear-gradient(135deg, var(--brand-gold-500), var(--brand-gold-600)); color: var(--dark-900); box-shadow: 0 8px 24px rgba(245, 158, 11, 0.4), 0 0 20px rgba(252, 211, 77, 0.2);">
 <span x-show="!loading" class="flex items-center">
 <i class="fas fa-sync-alt mr-2"></i> Trocar Token </span>
 <span x-show="loading" class="flex items-center">
@@ -969,13 +969,23 @@ function dashboardApp() {
         initChart() {
             const ctx = document.getElementById('salesChart');
             if (!ctx) {
-                console.log('⚠️ Elemento salesChart não encontrado');
+                console.error('❌ Elemento salesChart não encontrado');
+                return;
+            }
+            
+            // Verificar se Chart.js está disponível
+            if (typeof Chart === 'undefined') {
+                console.error('❌ Chart.js não carregado ainda! Tentando novamente em 500ms...');
+                setTimeout(() => this.initChart(), 500);
                 return;
             }
             
             try {
+                console.log('📈 Inicializando Chart.js...');
+                
                 // Destruir chart existente se houver
                 if (this.salesChart) {
+                    console.log('🔄 Destruindo chart existente...');
                     this.salesChart.destroy();
                     this.salesChart = null;
                 }
@@ -987,16 +997,16 @@ function dashboardApp() {
                         datasets: [{
                             label: 'Vendas',
                             data: [],
-                            borderColor: '#8B5CF6',
-                            backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                            borderColor: 'var(--trust-500)',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
                             tension: 0.4,
                             fill: true,
                             yAxisID: 'y'
                         }, {
                             label: 'Receita (R$)',
                             data: [],
-                            borderColor: 'var(--brand-green-500)',
-                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            borderColor: 'var(--brand-gold-500)',
+                            backgroundColor: 'rgba(245, 158, 11, 0.1)',
                             tension: 0.4,
                             fill: true,
                             yAxisID: 'y1'
@@ -1007,15 +1017,25 @@ function dashboardApp() {
                         maintainAspectRatio: false,
                         interaction: { mode: 'index', intersect: false },
                         plugins: {
-                            legend: { display: false },
+                            legend: { 
+                                display: true,
+                                position: 'bottom',
+                                labels: {
+                                    color: 'var(--txt-secondary)',
+                                    padding: 15,
+                                    font: { size: 12, weight: 'bold' }
+                                }
+                            },
                             tooltip: {
-                                backgroundColor: 'rgba(17, 24, 39, 0.9)',
-                                titleColor: '#F9FAFB',
-                                bodyColor: '#D1D5DB',
-                                borderColor: 'rgba(139, 92, 246, 0.2)',
-                                borderWidth: 1,
+                                backgroundColor: 'rgba(17, 24, 39, 0.95)',
+                                titleColor: 'var(--txt-primary)',
+                                bodyColor: 'var(--txt-secondary)',
+                                borderColor: 'var(--brand-gold-500)',
+                                borderWidth: 2,
                                 padding: 12,
-                                displayColors: true
+                                displayColors: true,
+                                titleFont: { size: 13, weight: 'bold' },
+                                bodyFont: { size: 12 }
                             }
                         },
                         scales: {
@@ -1024,18 +1044,18 @@ function dashboardApp() {
                                 display: true,
                                 position: 'left',
                                 grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                                ticks: { color: '#9CA3AF', callback: function(value) { return Math.floor(value); } }
+                                ticks: { color: 'var(--txt-tertiary)', callback: function(value) { return Math.floor(value); } }
                             },
                             y1: {
                                 type: 'linear',
                                 display: true,
                                 position: 'right',
                                 grid: { drawOnChartArea: false },
-                                ticks: { color: '#9CA3AF', callback: function(value) { return 'R$ ' + value.toFixed(0); } }
+                                ticks: { color: 'var(--txt-tertiary)', callback: function(value) { return 'R$ ' + value.toFixed(0); } }
                             },
                             x: {
                                 grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                                ticks: { color: '#9CA3AF' }
+                                ticks: { color: 'var(--txt-tertiary)' }
                             }
                         }
                     }
@@ -1048,14 +1068,19 @@ function dashboardApp() {
         
         async loadChartData() {
             try {
+                console.log('📡 Carregando dados do gráfico...');
                 const response = await fetch('/api/dashboard/sales-chart');
                 const data = await response.json();
+                console.log('📊 Dados recebidos:', data);
+                
                 if (this.salesChart) {
                     this.salesChart.data.labels = data.map(d => d.date);
                     this.salesChart.data.datasets[0].data = data.map(d => d.sales);
                     this.salesChart.data.datasets[1].data = data.map(d => d.revenue);
                     this.salesChart.update();
-                    console.log('📊 Dados do gráfico carregados');
+                    console.log('✅ Gráfico atualizado com sucesso!');
+                } else {
+                    console.error('❌ salesChart não existe!');
                 }
             } catch (error) {
                 console.error('❌ Erro ao carregar gráfico:', error);
