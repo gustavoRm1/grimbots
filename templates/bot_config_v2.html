@@ -1,0 +1,802 @@
+{% extends "base.html" %}
+{% block title %}Configurar Bot - {{ bot.name }}{% endblock %}
+
+{% block extra_head %}
+<style>
+/* Bot Config V2.0 - Design System */
+
+.config-section {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.02) 0%, rgba(255, 255, 255, 0.01) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 24px;
+}
+
+.config-section-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.config-section-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #FFFFFF;
+}
+
+.config-section-description {
+    font-size: 0.875rem;
+    color: #9CA3AF;
+    margin-top: 4px;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #D1D1D1;
+    margin-bottom: 8px;
+}
+
+.form-input {
+    width: 100%;
+    padding: 12px 16px;
+    background: #1A1A1A;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    color: #FFFFFF;
+    font-size: 0.875rem;
+    transition: all 0.2s ease;
+}
+
+.form-input:focus {
+    outline: none;
+    border-color: #FFB800;
+    box-shadow: 0 0 0 3px rgba(255, 184, 0, 0.1);
+}
+
+.form-textarea {
+    width: 100%;
+    padding: 12px 16px;
+    background: #1A1A1A;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    color: #FFFFFF;
+    font-size: 0.875rem;
+    resize: vertical;
+    min-height: 100px;
+    transition: all 0.2s ease;
+}
+
+.form-textarea:focus {
+    outline: none;
+    border-color: #FFB800;
+    box-shadow: 0 0 0 3px rgba(255, 184, 0, 0.1);
+}
+
+.tab-nav {
+    display: flex;
+    gap: 0;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.08);
+    margin-bottom: 32px;
+}
+
+.tab-button {
+    padding: 16px 24px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #9CA3AF;
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+    top: 2px;
+}
+
+.tab-button:hover {
+    color: #D1D1D1;
+}
+
+.tab-button.active {
+    color: #FFB800;
+    border-bottom-color: #FFB800;
+}
+
+.button-card {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.01) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+}
+
+.button-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.button-index {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    font-weight: 700;
+    color: #6EE7B7;
+}
+
+.info-box {
+    padding: 16px;
+    background: rgba(59, 130, 246, 0.05);
+    border-left: 4px solid #3B82F6;
+    border-radius: 0 8px 8px 0;
+    margin-top: 12px;
+}
+
+.info-box-success {
+    background: rgba(16, 185, 129, 0.05);
+    border-left-color: #10B981;
+}
+
+.info-box-warning {
+    background: rgba(255, 184, 0, 0.05);
+    border-left-color: #FFB800;
+}
+
+.order-bump-section {
+    background: rgba(255, 184, 0, 0.03);
+    border: 1px solid rgba(255, 184, 0, 0.15);
+    border-radius: 12px;
+    padding: 20px;
+    margin-top: 20px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8" x-data="botConfigApp()" x-init="init()">
+    
+    <!-- Header -->
+    <div class="mb-8 flex items-center justify-between">
+        <div class="flex items-center gap-4">
+            <a href="{{ url_for('dashboard') }}" 
+               class="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-700 text-gray-400 hover:text-white hover:border-yellow-500 transition-all">
+                <i class="fas fa-arrow-left"></i>
+            </a>
+            <div>
+                <h1 class="text-3xl font-bold text-white">{{ bot.name }}</h1>
+                <p class="text-sm text-gray-500 mt-1">@{{ bot.username }}</p>
+            </div>
+        </div>
+        <button @click="saveConfig()" 
+                :disabled="loading"
+                :class="{'opacity-50 cursor-not-allowed': loading}"
+                class="btn-action btn-action-primary">
+            <span x-show="!loading">
+                <i class="fas fa-save mr-2"></i>
+                Salvar Configurações
+            </span>
+            <span x-show="loading">
+                <i class="fas fa-spinner fa-spin mr-2"></i>
+                Salvando...
+            </span>
+        </button>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tab-nav">
+        <button @click="activeTab = 'welcome'" 
+                :class="{'active': activeTab === 'welcome'}"
+                class="tab-button">
+            <i class="fas fa-home mr-2"></i>Boas-vindas
+        </button>
+        <button @click="activeTab = 'buttons'" 
+                :class="{'active': activeTab === 'buttons'}"
+                class="tab-button">
+            <i class="fas fa-shopping-cart mr-2"></i>Produtos
+        </button>
+        <button @click="activeTab = 'downsells'" 
+                :class="{'active': activeTab === 'downsells'}"
+                class="tab-button">
+            <i class="fas fa-arrow-down mr-2"></i>Downsells
+        </button>
+        <button @click="activeTab = 'upsells'" 
+                :class="{'active': activeTab === 'upsells'}"
+                class="tab-button">
+            <i class="fas fa-arrow-up mr-2"></i>Upsells
+        </button>
+        <button @click="activeTab = 'access'" 
+                :class="{'active': activeTab === 'access'}"
+                class="tab-button">
+            <i class="fas fa-key mr-2"></i>Acesso
+        </button>
+    </div>
+
+    <!-- Tab Content: Welcome -->
+    <div x-show="activeTab === 'welcome'" x-cloak>
+        <div class="config-section">
+            <div class="config-section-header">
+                <i class="fas fa-home text-2xl" style="color: var(--brand-gold-500);"></i>
+                <div>
+                    <div class="config-section-title">Mensagem de Boas-vindas</div>
+                    <div class="config-section-description">Primeira impressão quando o usuário inicia o bot</div>
+                </div>
+            </div>
+
+            <!-- Mensagem -->
+            <div class="form-group">
+                <label class="form-label">
+                    <i class="fas fa-comment-dots mr-2 text-yellow-500"></i>
+                    Mensagem de Texto
+                </label>
+                <textarea x-model="config.welcome_message" 
+                          class="form-textarea"
+                          placeholder="Olá! Bem-vindo ao nosso bot de vendas...&#10;&#10;Escolha uma das opções abaixo:"></textarea>
+                <div class="info-box-warning info-box mt-3">
+                    <p class="text-sm text-gray-300">
+                        <i class="fas fa-lightbulb mr-2 text-yellow-500"></i>
+                        <strong>Dica:</strong> Use HTML para formatação: <code class="px-2 py-0.5 bg-gray-900 rounded text-yellow-400 text-xs">&lt;b&gt;negrito&lt;/b&gt;</code>
+                    </p>
+                </div>
+            </div>
+
+            <!-- Mídia -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="form-group">
+                    <label class="form-label">
+                        <i class="fas fa-link mr-2 text-blue-500"></i>
+                        URL da Mídia
+                    </label>
+                    <input type="url" 
+                           x-model="config.welcome_media_url" 
+                           class="form-input"
+                           placeholder="https://t.me/canal/123">
+                    <p class="text-xs text-gray-500 mt-2">Link do Telegram (vídeo ou foto)</p>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">
+                        <i class="fas fa-image mr-2 text-blue-500"></i>
+                        Tipo de Mídia
+                    </label>
+                    <div class="flex gap-3 mt-2">
+                        <label class="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer hover:border-blue-500 transition-colors"
+                               :class="{'border-blue-500 bg-blue-500 bg-opacity-10': config.welcome_media_type === 'video'}">
+                            <input type="radio" x-model="config.welcome_media_type" value="video" class="text-blue-500">
+                            <i class="fas fa-video text-blue-500"></i>
+                            <span class="text-sm text-white">Vídeo</span>
+                        </label>
+                        <label class="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer hover:border-blue-500 transition-colors"
+                               :class="{'border-blue-500 bg-blue-500 bg-opacity-10': config.welcome_media_type === 'photo'}">
+                            <input type="radio" x-model="config.welcome_media_type" value="photo" class="text-blue-500">
+                            <i class="fas fa-camera text-blue-500"></i>
+                            <span class="text-sm text-white">Foto</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab Content: Buttons -->
+    <div x-show="activeTab === 'buttons'" x-cloak>
+        <div class="flex justify-between items-center mb-6">
+            <div>
+                <h2 class="text-2xl font-bold text-white">Produtos de Venda</h2>
+                <p class="text-sm text-gray-500 mt-1">Botões que geram PIX automaticamente</p>
+            </div>
+            <button @click="addButton()" class="btn-action btn-action-success">
+                <i class="fas fa-plus mr-2"></i>
+                Adicionar Produto
+            </button>
+        </div>
+
+        <!-- Lista de Botões -->
+        <template x-if="config.main_buttons.length > 0">
+            <div class="space-y-4">
+                <template x-for="(button, index) in config.main_buttons" :key="index">
+                    <div class="button-card">
+                        <!-- Header -->
+                        <div class="button-card-header">
+                            <div class="flex items-center gap-3">
+                                <div class="button-index" x-text="index + 1"></div>
+                                <div>
+                                    <h3 class="text-sm font-bold text-white">Produto <span x-text="index + 1"></span></h3>
+                                    <p class="text-xs text-gray-500">Configure preço e order bump</p>
+                                </div>
+                            </div>
+                            <button @click="removeButton(index)" 
+                                    class="w-10 h-10 flex items-center justify-center rounded-lg border border-red-500 text-red-400 hover:bg-red-500 hover:bg-opacity-10 transition-all">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+
+                        <!-- Campos Principais -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                            <div class="form-group">
+                                <label class="form-label">
+                                    <i class="fas fa-tag mr-2 text-yellow-500"></i>
+                                    Texto do Botão
+                                </label>
+                                <input type="text" 
+                                       x-model="button.text" 
+                                       class="form-input"
+                                       placeholder="Comprar por R$ 19,97">
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">
+                                    <i class="fas fa-dollar-sign mr-2 text-green-500"></i>
+                                    Preço (R$)
+                                </label>
+                                <input type="number" 
+                                       x-model="button.price" 
+                                       step="0.01"
+                                       class="form-input text-center font-mono"
+                                       placeholder="19.97">
+                            </div>
+
+                            <div class="form-group md:col-span-2">
+                                <label class="form-label">
+                                    <i class="fas fa-box mr-2 text-blue-500"></i>
+                                    Descrição do Produto
+                                </label>
+                                <input type="text" 
+                                       x-model="button.description" 
+                                       class="form-input"
+                                       placeholder="Curso Completo de...">
+                            </div>
+                        </div>
+
+                        <!-- Order Bump -->
+                        <div class="order-bump-section">
+                            <div class="flex items-center justify-between mb-4">
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" 
+                                           x-model="button.order_bump.enabled"
+                                           class="w-5 h-5 rounded border-gray-600 bg-gray-800 text-yellow-500">
+                                    <span class="text-sm font-bold text-white">
+                                        <i class="fas fa-gift mr-2 text-yellow-500"></i>
+                                        Order Bump (Oferta Extra)
+                                    </span>
+                                </label>
+                                <span x-show="button.order_bump.enabled" 
+                                      class="px-3 py-1 bg-green-500 bg-opacity-20 border border-green-500 rounded-full text-xs font-bold text-green-400">
+                                    ATIVO
+                                </span>
+                            </div>
+
+                            <div x-show="button.order_bump.enabled" class="space-y-4">
+                                <div class="form-group">
+                                    <label class="form-label">Mensagem da Oferta</label>
+                                    <textarea x-model="button.order_bump.message" 
+                                              class="form-textarea"
+                                              placeholder="🎁 Oferta Especial!&#10;&#10;Adicione este bônus por apenas +R$ 5!"></textarea>
+                                </div>
+
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div class="form-group">
+                                        <label class="form-label">Preço Adicional (R$)</label>
+                                        <input type="number" 
+                                               x-model="button.order_bump.price" 
+                                               step="0.01"
+                                               class="form-input text-center font-mono"
+                                               placeholder="5.00">
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label class="form-label">Descrição do Bônus</label>
+                                        <input type="text" 
+                                               x-model="button.order_bump.description" 
+                                               class="form-input"
+                                               placeholder="Acesso Vitalício">
+                                    </div>
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="form-label">URL da Mídia (opcional)</label>
+                                    <input type="url" 
+                                           x-model="button.order_bump.media_url" 
+                                           class="form-input"
+                                           placeholder="https://t.me/canal/123">
+                                </div>
+
+                                <div class="info-box-warning info-box">
+                                    <p class="text-sm text-gray-300">
+                                        <i class="fas fa-chart-line mr-2 text-yellow-500"></i>
+                                        <strong>Conversão:</strong> Order bumps com mídia convertem até 40% mais!
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </template>
+
+        <!-- Empty State -->
+        <template x-if="config.main_buttons.length === 0">
+            <div class="text-center py-16">
+                <div class="text-6xl mb-4">🛍️</div>
+                <h3 class="text-xl font-bold text-white mb-2">Nenhum produto criado</h3>
+                <p class="text-gray-500 mb-6">Adicione seus primeiros produtos de venda</p>
+                <button @click="addButton()" class="btn-action btn-action-success">
+                    <i class="fas fa-plus mr-2"></i>
+                    Adicionar Primeiro Produto
+                </button>
+            </div>
+        </template>
+    </div>
+
+    <!-- Tab Content: Downsells -->
+    <div x-show="activeTab === 'downsells'" x-cloak>
+        <div class="config-section">
+            <div class="config-section-header">
+                <i class="fas fa-arrow-down text-2xl text-red-400"></i>
+                <div>
+                    <div class="config-section-title">Downsells</div>
+                    <div class="config-section-description">Ofertas enviadas quando o pagamento não é confirmado</div>
+                </div>
+                <label class="ml-auto flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" 
+                           x-model="config.downsells_enabled"
+                           class="w-5 h-5 rounded border-gray-600 bg-gray-800 text-yellow-500">
+                    <span class="text-sm font-bold text-white">Habilitar</span>
+                </label>
+            </div>
+
+            <div x-show="config.downsells_enabled" class="space-y-4">
+                <template x-for="(downsell, index) in config.downsells" :key="index">
+                    <div class="button-card">
+                        <div class="button-card-header">
+                            <h4 class="text-sm font-bold text-white">Downsell <span x-text="index + 1"></span></h4>
+                            <button @click="removeDownsell(index)" class="text-red-400 hover:text-red-300">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+
+                        <div class="space-y-4">
+                            <div class="form-group">
+                                <label class="form-label">Delay (minutos)</label>
+                                <input type="number" x-model="downsell.delay_minutes" class="form-input" placeholder="5">
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">Mensagem</label>
+                                <textarea x-model="downsell.message" class="form-textarea" placeholder="Oferta especial!"></textarea>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-4">
+                                <div class="form-group">
+                                    <label class="form-label">Preço (R$)</label>
+                                    <input type="number" x-model="downsell.price" step="0.01" class="form-input" placeholder="14.97">
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="form-label">URL da Mídia</label>
+                                    <input type="url" x-model="downsell.media_url" class="form-input" placeholder="https://...">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+
+                <button @click="addDownsell()" class="w-full py-3 border-2 border-dashed border-gray-700 rounded-lg text-gray-400 hover:border-yellow-500 hover:text-yellow-500 transition-all">
+                    <i class="fas fa-plus mr-2"></i>
+                    Adicionar Downsell
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab Content: Upsells -->
+    <div x-show="activeTab === 'upsells'" x-cloak>
+        <div class="config-section">
+            <div class="config-section-header">
+                <i class="fas fa-arrow-up text-2xl text-green-400"></i>
+                <div>
+                    <div class="config-section-title">Upsells</div>
+                    <div class="config-section-description">Ofertas enviadas APÓS compra aprovada</div>
+                </div>
+                <label class="ml-auto flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" 
+                           x-model="config.upsells_enabled"
+                           class="w-5 h-5 rounded border-gray-600 bg-gray-800 text-green-500">
+                    <span class="text-sm font-bold text-white">Habilitar</span>
+                </label>
+            </div>
+
+            <div x-show="config.upsells_enabled" class="space-y-4">
+                <template x-for="(upsell, index) in config.upsells" :key="index">
+                    <div class="button-card">
+                        <div class="button-card-header">
+                            <h4 class="text-sm font-bold text-white">Upsell <span x-text="index + 1"></span></h4>
+                            <button @click="removeUpsell(index)" class="text-red-400 hover:text-red-300">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+
+                        <div class="space-y-4">
+                            <div class="form-group">
+                                <label class="form-label">Produto Trigger (opcional)</label>
+                                <input type="text" x-model="upsell.trigger_product" class="form-input" placeholder="Ex: INSS Básico (vazio = todos)">
+                                <p class="text-xs text-gray-500 mt-1">Deixe vazio para disparar em todas as compras</p>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">Mensagem</label>
+                                <textarea x-model="upsell.message" class="form-textarea" placeholder="🔥 Upgrade para Premium!"></textarea>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-4">
+                                <div class="form-group">
+                                    <label class="form-label">Nome do Produto</label>
+                                    <input type="text" x-model="upsell.product_name" class="form-input" placeholder="INSS Premium">
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="form-label">Preço (R$)</label>
+                                    <input type="number" x-model="upsell.price" step="0.01" class="form-input" placeholder="97.00">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+
+                <button @click="addUpsell()" class="w-full py-3 border-2 border-dashed border-gray-700 rounded-lg text-gray-400 hover:border-green-500 hover:text-green-500 transition-all">
+                    <i class="fas fa-plus mr-2"></i>
+                    Adicionar Upsell
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab Content: Access -->
+    <div x-show="activeTab === 'access'" x-cloak>
+        <div class="config-section">
+            <div class="config-section-header">
+                <i class="fas fa-key text-2xl" style="color: var(--brand-gold-500);"></i>
+                <div>
+                    <div class="config-section-title">Acesso ao Produto</div>
+                    <div class="config-section-description">Link de entrega e mensagens</div>
+                </div>
+            </div>
+
+            <div class="space-y-6">
+                <!-- Link -->
+                <div class="form-group">
+                    <label class="form-label">
+                        <i class="fas fa-link mr-2 text-blue-500"></i>
+                        Link de Acesso
+                    </label>
+                    <input type="url" 
+                           x-model="config.access_link" 
+                           class="form-input"
+                           placeholder="https://t.me/+seugrupo">
+                    <div class="info-box mt-2">
+                        <p class="text-sm text-gray-300">
+                            <i class="fas fa-info-circle mr-2 text-blue-500"></i>
+                            Pode ser grupo/canal do Telegram, área de membros, etc.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Mensagem Sucesso -->
+                <div class="form-group">
+                    <label class="form-label">
+                        <i class="fas fa-check-circle mr-2 text-green-500"></i>
+                        Mensagem de Pagamento Aprovado
+                    </label>
+                    <textarea x-model="config.success_message" 
+                              class="form-textarea"
+                              placeholder="✅ Pagamento confirmado!&#10;&#10;Acesse seu produto: {link}"></textarea>
+                    <div class="info-box-success info-box mt-2">
+                        <p class="text-sm text-gray-300">
+                            <strong class="text-green-400">Variáveis:</strong>
+                            <code class="ml-2 px-2 py-1 bg-gray-900 rounded text-yellow-400 text-xs">{produto}</code>
+                            <code class="ml-1 px-2 py-1 bg-gray-900 rounded text-yellow-400 text-xs">{valor}</code>
+                            <code class="ml-1 px-2 py-1 bg-gray-900 rounded text-yellow-400 text-xs">{link}</code>
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Mensagem Pendente -->
+                <div class="form-group">
+                    <label class="form-label">
+                        <i class="fas fa-clock mr-2 text-yellow-500"></i>
+                        Mensagem de Pagamento Pendente
+                    </label>
+                    <textarea x-model="config.pending_message" 
+                              class="form-textarea"
+                              placeholder="⏳ Aguardando confirmação do pagamento..."></textarea>
+                    <div class="info-box-warning info-box mt-2">
+                        <p class="text-sm text-gray-300">
+                            <strong class="text-yellow-400">Variável:</strong>
+                            <code class="ml-2 px-2 py-1 bg-gray-900 rounded text-yellow-400 text-xs">{pix_code}</code>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function botConfigApp() {
+    return {
+        activeTab: 'welcome',
+        loading: false,
+        
+        config: {
+            welcome_message: '',
+            welcome_media_url: '',
+            welcome_media_type: 'video',
+            main_buttons: [],
+            redirect_buttons: [],
+            downsells_enabled: false,
+            downsells: [],
+            upsells_enabled: false,
+            upsells: [],
+            access_link: '',
+            success_message: '',
+            pending_message: ''
+        },
+        
+        async init() {
+            console.log('🔧 Bot Config V2.0 inicializando...');
+            await this.loadConfig();
+            console.log('✅ Config carregado!');
+        },
+        
+        async loadConfig() {
+            try {
+                const response = await fetch('/api/bots/{{ bot.id }}/config');
+                const data = await response.json();
+                
+                if (response.ok) {
+                    this.config = {
+                        ...this.config,
+                        ...data
+                    };
+                    
+                    // Inicializar order_bump em cada botão
+                    if (Array.isArray(this.config.main_buttons)) {
+                        this.config.main_buttons.forEach(button => {
+                            if (!button.order_bump) {
+                                button.order_bump = {
+                                    enabled: false,
+                                    message: '',
+                                    media_url: '',
+                                    media_type: 'video',
+                                    price: 0,
+                                    description: '',
+                                    accept_text: '',
+                                    decline_text: ''
+                                };
+                            }
+                        });
+                    }
+                    
+                    // Garantir arrays existem
+                    if (!this.config.downsells) this.config.downsells = [];
+                    if (!this.config.upsells) this.config.upsells = [];
+                }
+            } catch (error) {
+                console.error('Erro ao carregar config:', error);
+            }
+        },
+        
+        async saveConfig() {
+            this.loading = true;
+            
+            try {
+                const response = await fetch('/api/bots/{{ bot.id }}/config', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(this.config)
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    this.showNotification('✅ Configurações salvas!', 'success');
+                } else {
+                    alert('Erro: ' + data.error);
+                }
+            } catch (error) {
+                alert('Erro: ' + error.message);
+            } finally {
+                this.loading = false;
+            }
+        },
+        
+        addButton() {
+            this.config.main_buttons.push({
+                text: '',
+                price: 0,
+                description: '',
+                order_bump: {
+                    enabled: false,
+                    message: '',
+                    media_url: '',
+                    media_type: 'video',
+                    price: 0,
+                    description: '',
+                    accept_text: '',
+                    decline_text: ''
+                }
+            });
+        },
+        
+        removeButton(index) {
+            if (confirm('Remover este produto?')) {
+                this.config.main_buttons.splice(index, 1);
+            }
+        },
+        
+        addDownsell() {
+            this.config.downsells.push({
+                delay_minutes: 5,
+                message: '',
+                media_url: '',
+                media_type: 'video',
+                pricing_mode: 'fixed',
+                price: 0,
+                discount_percentage: 50,
+                button_text: ''
+            });
+        },
+        
+        removeDownsell(index) {
+            this.config.downsells.splice(index, 1);
+        },
+        
+        addUpsell() {
+            this.config.upsells.push({
+                trigger_product: '',
+                delay_minutes: 0,
+                message: '',
+                media_url: '',
+                media_type: 'video',
+                product_name: '',
+                price: 0,
+                button_text: ''
+            });
+        },
+        
+        removeUpsell(index) {
+            this.config.upsells.splice(index, 1);
+        },
+        
+        showNotification(message, type = 'success') {
+            const notification = document.createElement('div');
+            notification.className = `fixed top-4 right-4 px-6 py-3 rounded-lg shadow-2xl z-50 text-white font-bold ${type === 'success' ? 'bg-green-500' : 'bg-red-500'}`;
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            setTimeout(() => notification.remove(), 3000);
+        }
+    };
+}
+</script>
+{% endblock %}
+
