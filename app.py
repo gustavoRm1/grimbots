@@ -498,7 +498,7 @@ def dashboard():
         'created_at': p.created_at.isoformat()
     } for p in recent_payments]
     
-    return render_template('dashboard.html', stats=stats, recent_payments=payments_list, bots=bots_list)
+    return render_template('dashboard_v2.html', stats=stats, recent_payments=payments_list, bots=bots_list)
 
 
 # ==================== API DE ESTATÍSTICAS ====================
