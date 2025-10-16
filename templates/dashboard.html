@@ -816,7 +816,12 @@
 {% endblock %}
 {% block extra_scripts %}
 <script>
+// TESTE SIMPLES
+console.log('🔍 Testando Alpine.js...');
+console.log('Alpine disponível:', typeof Alpine !== 'undefined');
+
 function dashboardApp() {
+    console.log('🚀 dashboardApp() chamada!');
     return {
         // Estado
         showAdvanced: localStorage.getItem('dashboard_mode') === 'advanced',
@@ -884,6 +889,10 @@ function dashboardApp() {
         // Inicialização
         init() {
             console.log('🚀 Dashboard inicializando...');
+            console.log('📊 Stats:', this.stats);
+            console.log('🤖 Bots:', this.bots);
+            console.log('💰 Payments:', this.payments);
+            
             this.filteredBots = this.bots;
             this.filteredPayments = this.payments;
             
@@ -908,25 +917,29 @@ function dashboardApp() {
         
         // WebSocket
         connectWebSocket() {
-            this.socket = io();
-            this.socket.on('connect', () => {
-                console.log('✅ WebSocket conectado');
-            });
-            this.socket.on('bot_status_update', (data) => {
-                console.log('🤖 Status do bot atualizado:', data);
-                this.refreshStats();
-            });
-            this.socket.on('new_sale', (data) => {
-                console.log('💰 Nova venda:', data);
-                this.playNotificationSound();
-                this.stats.total_sales += 1;
-                this.stats.total_revenue += data.amount;
-                this.payments.unshift(data);
-                this.filterSales();
-                this.loadChartData();
-                this.loadAnalytics();
-                this.showNotification(`💰 Nova venda: R$ ${this.formatMoney(data.amount)}`);
-            });
+            try {
+                this.socket = io();
+                this.socket.on('connect', () => {
+                    console.log('✅ WebSocket conectado');
+                });
+                this.socket.on('bot_status_update', (data) => {
+                    console.log('🤖 Status do bot atualizado:', data);
+                    this.refreshStats();
+                });
+                this.socket.on('new_sale', (data) => {
+                    console.log('💰 Nova venda:', data);
+                    this.playNotificationSound();
+                    this.stats.total_sales += 1;
+                    this.stats.total_revenue += data.amount;
+                    this.payments.unshift(data);
+                    this.filterSales();
+                    this.loadChartData();
+                    this.loadAnalytics();
+                    this.showNotification(`💰 Nova venda: R$ ${this.formatMoney(data.amount)}`);
+                });
+            } catch (error) {
+                console.error('❌ Erro WebSocket:', error);
+            }
         },
         
         // Refresh stats
@@ -954,68 +967,76 @@ function dashboardApp() {
         // Chart
         initChart() {
             const ctx = document.getElementById('salesChart');
-            if (!ctx) return;
+            if (!ctx) {
+                console.log('⚠️ Elemento salesChart não encontrado');
+                return;
+            }
             
-            this.salesChart = new Chart(ctx.getContext('2d'), {
-                type: 'line',
-                data: {
-                    labels: [],
-                    datasets: [{
-                        label: 'Vendas',
-                        data: [],
-                        borderColor: '#8B5CF6',
-                        backgroundColor: 'rgba(139, 92, 246, 0.1)',
-                        tension: 0.4,
-                        fill: true,
-                        yAxisID: 'y'
-                    }, {
-                        label: 'Receita (R$)',
-                        data: [],
-                        borderColor: 'var(--brand-green-500)',
-                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                        tension: 0.4,
-                        fill: true,
-                        yAxisID: 'y1'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    interaction: { mode: 'index', intersect: false },
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            backgroundColor: 'rgba(17, 24, 39, 0.9)',
-                            titleColor: '#F9FAFB',
-                            bodyColor: '#D1D5DB',
-                            borderColor: 'rgba(139, 92, 246, 0.2)',
-                            borderWidth: 1,
-                            padding: 12,
-                            displayColors: true
-                        }
+            try {
+                this.salesChart = new Chart(ctx.getContext('2d'), {
+                    type: 'line',
+                    data: {
+                        labels: [],
+                        datasets: [{
+                            label: 'Vendas',
+                            data: [],
+                            borderColor: '#8B5CF6',
+                            backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                            tension: 0.4,
+                            fill: true,
+                            yAxisID: 'y'
+                        }, {
+                            label: 'Receita (R$)',
+                            data: [],
+                            borderColor: 'var(--brand-green-500)',
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            tension: 0.4,
+                            fill: true,
+                            yAxisID: 'y1'
+                        }]
                     },
-                    scales: {
-                        y: {
-                            type: 'linear',
-                            display: true,
-                            position: 'left',
-                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                            ticks: { color: '#9CA3AF', callback: function(value) { return Math.floor(value); } }
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: { mode: 'index', intersect: false },
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                backgroundColor: 'rgba(17, 24, 39, 0.9)',
+                                titleColor: '#F9FAFB',
+                                bodyColor: '#D1D5DB',
+                                borderColor: 'rgba(139, 92, 246, 0.2)',
+                                borderWidth: 1,
+                                padding: 12,
+                                displayColors: true
+                            }
                         },
-                        y1: {
-                            type: 'linear',
-                            display: true,
-                            position: 'right',
-                            grid: { drawOnChartArea: false },
-                            ticks: { color: '#9CA3AF', callback: function(value) { return 'R$ ' + value.toFixed(0); } }
-                        },
-                        x: {
-                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                            ticks: { color: '#9CA3AF' }
+                        scales: {
+                            y: {
+                                type: 'linear',
+                                display: true,
+                                position: 'left',
+                                grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                                ticks: { color: '#9CA3AF', callback: function(value) { return Math.floor(value); } }
+                            },
+                            y1: {
+                                type: 'linear',
+                                display: true,
+                                position: 'right',
+                                grid: { drawOnChartArea: false },
+                                ticks: { color: '#9CA3AF', callback: function(value) { return 'R$ ' + value.toFixed(0); } }
+                            },
+                            x: {
+                                grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                                ticks: { color: '#9CA3AF' }
+                            }
                         }
                     }
-                }
-            });
+                });
+                console.log('📈 Chart inicializado');
+            } catch (error) {
+                console.error('❌ Erro ao inicializar chart:', error);
+            }
         },
         
         async loadChartData() {
@@ -1027,6 +1048,7 @@ function dashboardApp() {
                     this.salesChart.data.datasets[0].data = data.map(d => d.sales);
                     this.salesChart.data.datasets[1].data = data.map(d => d.revenue);
                     this.salesChart.update();
+                    console.log('📊 Dados do gráfico carregados');
                 }
             } catch (error) {
                 console.error('❌ Erro ao carregar gráfico:', error);
@@ -1149,6 +1171,9 @@ function dashboardApp() {
         }
     };
 }
+
+// TESTE FINAL
+console.log('🔍 dashboardApp definida:', typeof dashboardApp);
 </script>
 </div>
 <!-- Fim Modo Avançado -->
