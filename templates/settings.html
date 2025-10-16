@@ -7,26 +7,26 @@
     
     <!-- Header -->
     <div class="mb-8">
-        <h1 class="text-3xl font-bold text-gray-900">Configurações</h1>
-        <p class="mt-1 text-sm text-gray-600">Gerencie seu perfil e gateways de pagamento</p>
+        <h1 class="text-3xl font-bold text-txt-primary">Configurações</h1>
+        <p class="mt-1 text-sm text-txt-secondary">Gerencie seu perfil e gateways de pagamento</p>
     </div>
 
     <!-- Tabs -->
     <div class="bg-white shadow rounded-lg">
-        <div class="border-b border-gray-200">
+        <div class="border-b border-white border-opacity-5">
             <nav class="-mb-px flex space-x-8 px-6" aria-label="Tabs">
                 <button @click="activeTab = 'profile'" 
-                        :class="activeTab === 'profile' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                        :class="activeTab === 'profile' ? 'border-trust-500 text-trust-500' : 'border-transparent text-txt-tertiary hover:text-txt-secondary hover:border-white border-opacity-10'"
                         class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
                     <i class="fas fa-user mr-2"></i>Perfil
                 </button>
                 <button @click="activeTab = 'gateways'" 
-                        :class="activeTab === 'gateways' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                        :class="activeTab === 'gateways' ? 'border-trust-500 text-trust-500' : 'border-transparent text-txt-tertiary hover:text-txt-secondary hover:border-white border-opacity-10'"
                         class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
                     <i class="fas fa-credit-card mr-2"></i>Gateways de Pagamento
                 </button>
                 <button @click="activeTab = 'plan'" 
-                        :class="activeTab === 'plan' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'"
+                        :class="activeTab === 'plan' ? 'border-trust-500 text-trust-500' : 'border-transparent text-txt-tertiary hover:text-txt-secondary hover:border-white border-opacity-10'"
                         class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
                     <i class="fas fa-crown mr-2"></i>Plano
                 </button>
@@ -36,47 +36,47 @@
         <div class="p-6">
             <!-- Profile Tab -->
             <div x-show="activeTab === 'profile'" x-cloak>
-                <h3 class="text-lg font-medium text-gray-900 mb-4">Informações do Perfil</h3>
+                <h3 class="text-lg font-medium text-txt-primary mb-4">Informações do Perfil</h3>
 
                 <form @submit.prevent="updateProfile()" class="space-y-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 flex items-center gap-2">
+                        <label class="block text-sm font-medium text-txt-secondary flex items-center gap-2">
                             Nome Completo
-                            <button type="button" class="text-blue-500 hover:text-blue-600" data-tooltip="Seu nome completo como aparecerá no sistema">
+                            <button type="button" class="text-trust-500 hover:text-trust-500" data-tooltip="Seu nome completo como aparecerá no sistema">
                                 <i class="fas fa-question-circle text-xs"></i>
                             </button>
                         </label>
                         <input type="text" 
                                x-model="profile.full_name" 
-                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                               class="mt-1 block w-full border border-white border-opacity-10 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-trust-500 sm:text-sm"
                                placeholder="João Silva">
                     </div>
 
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 flex items-center gap-2">
+                        <label class="block text-sm font-medium text-txt-secondary flex items-center gap-2">
                             Email
-                            <button type="button" class="text-blue-500 hover:text-blue-600" data-tooltip="Email para login e notificações importantes">
+                            <button type="button" class="text-trust-500 hover:text-trust-500" data-tooltip="Email para login e notificações importantes">
                                 <i class="fas fa-question-circle text-xs"></i>
                             </button>
                         </label>
                         <input type="email" 
                                x-model="profile.email" 
-                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                               class="mt-1 block w-full border border-white border-opacity-10 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-trust-500 sm:text-sm"
                                placeholder="seu@email.com">
                     </div>
 
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 flex items-center gap-2">
+                        <label class="block text-sm font-medium text-txt-secondary flex items-center gap-2">
                             Username
-                            <button type="button" class="text-gray-400" data-tooltip="Nome de usuário único no sistema. Não pode ser alterado por segurança.">
+                            <button type="button" class="text-txt-muted" data-tooltip="Nome de usuário único no sistema. Não pode ser alterado por segurança.">
                                 <i class="fas fa-question-circle text-xs"></i>
                             </button>
                         </label>
                         <input type="text" 
                                x-model="profile.username" 
                                disabled
-                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 bg-gray-50 text-gray-500 cursor-not-allowed sm:text-sm">
-                        <p class="mt-1 text-xs text-gray-500">
+                               class="mt-1 block w-full border border-white border-opacity-10 rounded-md shadow-sm py-2 px-3 bg-dark-primary text-txt-tertiary cursor-not-allowed sm:text-sm">
+                        <p class="mt-1 text-xs text-txt-tertiary">
                             <i class="fas fa-lock text-xs mr-1"></i>
                             Username não pode ser alterado por segurança
                         </p>
@@ -86,7 +86,7 @@
                         <button type="submit" 
                                 :disabled="loading"
                                 :class="{'opacity-50 cursor-not-allowed': loading}"
-                                class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">
+                                class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-trust-500 hover:bg-trust-700">
                             <span x-show="!loading" class="flex items-center">
                                 <i class="fas fa-save mr-2"></i>
                                 Salvar Alterações
@@ -102,34 +102,34 @@
                     </div>
                 </form>
 
-                <div class="mt-8 pt-8 border-t border-gray-200">
-                    <h3 class="text-lg font-medium text-gray-900 mb-4">Alterar Senha</h3>
+                <div class="mt-8 pt-8 border-t border-white border-opacity-5">
+                    <h3 class="text-lg font-medium text-txt-primary mb-4">Alterar Senha</h3>
                     <form @submit.prevent="updatePassword()" class="space-y-4">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 flex items-center gap-2">
+                            <label class="block text-sm font-medium text-txt-secondary flex items-center gap-2">
                                 Senha Atual
-                                <button type="button" class="text-blue-500 hover:text-blue-600" data-tooltip="Digite sua senha atual para confirmar sua identidade">
+                                <button type="button" class="text-trust-500 hover:text-trust-500" data-tooltip="Digite sua senha atual para confirmar sua identidade">
                                     <i class="fas fa-question-circle text-xs"></i>
                                 </button>
                             </label>
                             <input type="password" 
                                    x-model="password.current" 
-                                   class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                   class="mt-1 block w-full border border-white border-opacity-10 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-trust-500 sm:text-sm"
                                    placeholder="Digite sua senha atual">
                         </div>
 
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 flex items-center gap-2">
+                            <label class="block text-sm font-medium text-txt-secondary flex items-center gap-2">
                                 Nova Senha
-                                <button type="button" class="text-blue-500 hover:text-blue-600" data-tooltip="Mínimo 6 caracteres. Recomendamos 12+ com letras, números e símbolos">
+                                <button type="button" class="text-trust-500 hover:text-trust-500" data-tooltip="Mínimo 6 caracteres. Recomendamos 12+ com letras, números e símbolos">
                                     <i class="fas fa-question-circle text-xs"></i>
                                 </button>
                             </label>
                             <input type="password" 
                                    x-model="password.new" 
                                    minlength="6"
-                                   class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                   class="mt-1 block w-full border border-white border-opacity-10 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-trust-500 sm:text-sm"
                                    placeholder="Digite sua nova senha (mín. 6 caracteres)">
                         </div>
 
@@ -137,7 +137,7 @@
                             <button type="submit" 
                                     :disabled="loading"
                                     :class="{'opacity-50 cursor-not-allowed': loading}"
-                                    class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">
+                                    class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-trust-500 hover:bg-trust-700">
                                 <i class="fas fa-lock mr-2"></i>
                                 Alterar Senha
                             </button>
@@ -698,14 +698,14 @@
                     
                     <div class="relative flex flex-col md:flex-row items-center md:items-start justify-between">
                         <div class="text-center md:text-left mb-6 md:mb-0">
-                            <p class="text-green-100 text-xs uppercase font-bold tracking-wider mb-3">
+                            <p class="text-emerald-100 text-xs uppercase font-bold tracking-wider mb-3">
                                 Sua Taxa Atual
                             </p>
                             <div class="flex items-baseline justify-center md:justify-start">
                                 <h4 class="text-6xl md:text-7xl font-black text-white" style="text-shadow: 0 2px 12px rgba(0,0,0,0.3);">
                                     4%
                                 </h4>
-                                <span class="ml-2 text-2xl font-semibold text-green-100">apenas</span>
+                                <span class="ml-2 text-2xl font-semibold text-emerald-100">apenas</span>
                             </div>
                             <p class="text-green-50 mt-3 text-base font-medium">
                                 de cada venda confirmada
@@ -713,9 +713,9 @@
                             
                             <!-- Exemplo de cálculo -->
                             <div class="mt-6 inline-flex items-center px-4 py-2.5 bg-white bg-opacity-15 rounded-xl border border-white border-opacity-20 backdrop-blur-sm">
-                                <i class="fas fa-calculator text-green-100 mr-3"></i>
+                                <i class="fas fa-calculator text-emerald-100 mr-3"></i>
                                 <div class="text-left">
-                                    <p class="text-xs text-green-100 font-medium">Exemplo:</p>
+                                    <p class="text-xs text-emerald-100 font-medium">Exemplo:</p>
                                     <p class="text-sm text-white font-bold">
                                         Venda de R$ 100,00 → Você recebe R$ 96,00
                                     </p>
@@ -727,7 +727,7 @@
                             <div class="inline-flex flex-col items-center p-6 bg-white bg-opacity-10 rounded-2xl border border-white border-opacity-20 backdrop-blur-sm">
                                 <i class="fas fa-infinity text-5xl text-white mb-3" style="filter: drop-shadow(0 2px 8px rgba(0,0,0,0.3));"></i>
                                 <p class="text-green-50 text-sm font-semibold">Bots Ilimitados</p>
-                                <p class="text-green-100 text-xs mt-1">Sem mensalidade</p>
+                                <p class="text-emerald-100 text-xs mt-1">Sem mensalidade</p>
                         </div>
                         </div>
                     </div>
@@ -977,7 +977,7 @@ function settingsApp() {
 
         showNotification(message) {
             const notification = document.createElement('div');
-            notification.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';
+            notification.className = 'fixed top-4 right-4 bg-emerald-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';
             notification.textContent = message;
             document.body.appendChild(notification);
             setTimeout(() => notification.remove(), 3000);

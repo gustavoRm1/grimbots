@@ -45,7 +45,7 @@
                 </div>
             </div>
             <p class="text-sm text-textSecondary">
-                <span class="text-blue-400 font-semibold" x-text="stats.general.conversion_rate + '%'"></span> taxa de conversão
+                <span class="text-trust-300 font-semibold" x-text="stats.general.conversion_rate + '%'"></span> taxa de conversão
             </p>
         </div>
         
@@ -61,7 +61,7 @@
                 </div>
             </div>
             <p class="text-sm text-textSecondary">
-                <span class="text-yellow-400 font-semibold" x-text="stats.general.pending_sales"></span> pendentes
+                <span class="text-gold-300 font-semibold" x-text="stats.general.pending_sales"></span> pendentes
             </p>
         </div>
         
@@ -77,7 +77,7 @@
                 </div>
             </div>
             <p class="text-sm text-textSecondary">
-                Ticket médio: <span class="text-purple-400 font-semibold" x-text="'R$ ' + stats.general.avg_ticket.toFixed(2)"></span>
+                Ticket médio: <span class="text-trust-300 font-semibold" x-text="'R$ ' + stats.general.avg_ticket.toFixed(2)"></span>
             </p>
         </div>
     </div>
@@ -105,7 +105,7 @@
                         </div>
                         <div class="flex justify-between items-center text-xs">
                             <span class="text-textSecondary" x-text="product.sales + ' vendas'"></span>
-                            <span class="text-green-400 font-semibold" x-text="'R$ ' + product.revenue.toFixed(2)"></span>
+                            <span class="text-emerald-300 font-semibold" x-text="'R$ ' + product.revenue.toFixed(2)"></span>
                         </div>
                     </div>
                 </template>
@@ -131,7 +131,7 @@
                         <p class="text-sm text-textSecondary">Exibidos</p>
                         <p class="text-2xl font-bold text-textPrimary" x-text="stats.order_bumps.shown"></p>
                     </div>
-                    <i class="fas fa-eye text-blue-500 text-2xl"></i>
+                    <i class="fas fa-eye text-trust-500 text-2xl"></i>
                 </div>
                 
                 <div class="flex justify-between items-center p-4 bg-bg900 rounded-lg">
@@ -139,26 +139,26 @@
                         <p class="text-sm text-textSecondary">Aceitos</p>
                         <p class="text-2xl font-bold text-textPrimary" x-text="stats.order_bumps.accepted"></p>
                     </div>
-                    <i class="fas fa-check-circle text-green-500 text-2xl"></i>
+                    <i class="fas fa-check-circle text-emerald-500 text-2xl"></i>
                 </div>
                 
-                <div class="p-4 bg-gradient-to-r from-green-500/10 to-green-700/10 rounded-lg border border-green-500/20">
+                <div class="p-4 bg-gradient-to-r from-green-500/10 to-green-700/10 rounded-lg border border-emerald-500/20">
                     <p class="text-sm text-textSecondary mb-2">Taxa de Aceitação</p>
                     <div class="flex items-center gap-3">
                         <div class="flex-1 bg-bg900 rounded-full h-3 overflow-hidden">
                             <div class="bg-gradient-to-r from-green-500 to-green-700 h-full transition-all duration-500"
                                  :style="`width: ${stats.order_bumps.acceptance_rate}%`"></div>
                         </div>
-                        <span class="text-2xl font-bold text-green-400" x-text="stats.order_bumps.acceptance_rate + '%'"></span>
+                        <span class="text-2xl font-bold text-emerald-300" x-text="stats.order_bumps.acceptance_rate + '%'"></span>
                     </div>
                 </div>
                 
-                <div class="flex justify-between items-center p-4 bg-gradient-to-r from-purple-500/10 to-purple-700/10 rounded-lg border border-purple-500/20">
+                <div class="flex justify-between items-center p-4 bg-gradient-to-r from-purple-500/10 to-purple-700/10 rounded-lg border border-trust-500/20">
                     <div>
                         <p class="text-sm text-textSecondary">Receita de Order Bumps</p>
-                        <p class="text-2xl font-bold text-purple-400" x-text="'R$ ' + stats.order_bumps.revenue.toFixed(2)"></p>
+                        <p class="text-2xl font-bold text-trust-300" x-text="'R$ ' + stats.order_bumps.revenue.toFixed(2)"></p>
                     </div>
-                    <i class="fas fa-dollar-sign text-purple-500 text-2xl"></i>
+                    <i class="fas fa-dollar-sign text-trust-500 text-2xl"></i>
                 </div>
             </div>
         </div>
@@ -172,7 +172,7 @@
                         <p class="text-sm text-textSecondary">Enviados</p>
                         <p class="text-2xl font-bold text-textPrimary" x-text="stats.downsells.sent"></p>
                     </div>
-                    <i class="fas fa-paper-plane text-blue-500 text-2xl"></i>
+                    <i class="fas fa-paper-plane text-trust-500 text-2xl"></i>
                 </div>
                 
                 <div class="flex justify-between items-center p-4 bg-bg900 rounded-lg">
@@ -180,7 +180,7 @@
                         <p class="text-sm text-textSecondary">Convertidos</p>
                         <p class="text-2xl font-bold text-textPrimary" x-text="stats.downsells.converted"></p>
                     </div>
-                    <i class="fas fa-check-circle text-green-500 text-2xl"></i>
+                    <i class="fas fa-check-circle text-emerald-500 text-2xl"></i>
                 </div>
                 
                 <div class="p-4 bg-gradient-to-r from-orange-500/10 to-orange-700/10 rounded-lg border border-orange-500/20">
@@ -194,12 +194,12 @@
                     </div>
                 </div>
                 
-                <div class="flex justify-between items-center p-4 bg-gradient-to-r from-purple-500/10 to-purple-700/10 rounded-lg border border-purple-500/20">
+                <div class="flex justify-between items-center p-4 bg-gradient-to-r from-purple-500/10 to-purple-700/10 rounded-lg border border-trust-500/20">
                     <div>
                         <p class="text-sm text-textSecondary">Receita de Downsells</p>
-                        <p class="text-2xl font-bold text-purple-400" x-text="'R$ ' + stats.downsells.revenue.toFixed(2)"></p>
+                        <p class="text-2xl font-bold text-trust-300" x-text="'R$ ' + stats.downsells.revenue.toFixed(2)"></p>
                     </div>
-                    <i class="fas fa-dollar-sign text-purple-500 text-2xl"></i>
+                    <i class="fas fa-dollar-sign text-trust-500 text-2xl"></i>
                 </div>
             </div>
         </div>
@@ -250,7 +250,7 @@
                             <tr class="hover:bg-white hover:bg-opacity-5 transition">
                                 <td class="px-4 py-3 text-sm text-textPrimary" x-text="sale.customer_name"></td>
                                 <td class="px-4 py-3 text-sm text-textSecondary" x-text="sale.product_name"></td>
-                                <td class="px-4 py-3 text-sm font-semibold text-green-400" x-text="'R$ ' + sale.amount.toFixed(2)"></td>
+                                <td class="px-4 py-3 text-sm font-semibold text-emerald-300" x-text="'R$ ' + sale.amount.toFixed(2)"></td>
                                 <td class="px-4 py-3">
                                     <span :class="sale.status === 'paid' ? 'badge-success' : 'badge-warning'" 
                                           x-text="sale.status === 'paid' ? 'Pago' : 'Pendente'"></span>

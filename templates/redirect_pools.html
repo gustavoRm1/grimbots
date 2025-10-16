@@ -82,7 +82,7 @@
                             <p class="text-sm font-medium" style="color: #FCD34D;">Configure seu primeiro redirecionador em 3 passos simples</p>
                         </div>
                     </div>
-                    <button @click="tutorialDismissed = true" class="text-yellow-400 hover:text-white transition-colors">
+                    <button @click="tutorialDismissed = true" class="text-gold-300 hover:text-white transition-colors">
                         <i class="fas fa-times text-xl"></i>
                     </button>
                 </div>
@@ -181,7 +181,7 @@
                         <span class="badge" 
                               :class="pool.is_active ? 'badge--success' : 'bg-white bg-opacity-5 text-muted'">
                             <span class="w-2 h-2 mr-1 rounded-full" 
-                                  :class="pool.is_active ? 'bg-green-400 animate-pulse' : 'bg-gray-500'"></span>
+                                  :class="pool.is_active ? 'bg-emerald-300 animate-pulse' : 'bg-dark-surface'"></span>
                             <span x-text="pool.is_active ? 'Ativo' : 'Inativo'"></span>
                         </span>
                     </div>
@@ -194,7 +194,7 @@
                         <span class="text-2xl font-bold" 
                               :class="{
                                   'text-success-500': pool.health_percentage >= 80,
-                                  'text-yellow-500': pool.health_percentage >= 50 && pool.health_percentage < 80,
+                                  'text-gold-500': pool.health_percentage >= 50 && pool.health_percentage < 80,
                                   'text-danger': pool.health_percentage < 50
                               }"
                               x-text="pool.health_percentage + '%'">
@@ -233,13 +233,13 @@
 
                     <!-- Link Público (DESTAQUE) -->
                     <div class="mb-5 p-5 rounded-xl border-2 relative overflow-hidden" style="background: linear-gradient(135deg, rgba(251, 191, 36, 0.12) 0%, rgba(245, 158, 11, 0.05) 100%); border-color: #F59E0B;">
-                        <div class="absolute top-0 right-0 w-32 h-32 bg-yellow-500 opacity-5 blur-2xl"></div>
+                        <div class="absolute top-0 right-0 w-32 h-32 bg-gold-500 opacity-5 blur-2xl"></div>
                         <div class="relative">
                             <div class="flex items-center justify-between mb-3">
                                 <label class="flex items-center gap-2 text-sm font-bold" style="color: #FCD34D;">
                                     <i class="fas fa-link"></i>
                                     <span>Link Público</span>
-                                    <span class="px-2 py-0.5 text-xs rounded-full bg-yellow-500 bg-opacity-20 text-yellow-300 border border-yellow-500 border-opacity-30">
+                                    <span class="px-2 py-0.5 text-xs rounded-full bg-gold-500 bg-opacity-20 text-gold-300 border border-gold-500 border-opacity-30">
                                         Use em Anúncios
                                     </span>
                                 </label>
@@ -291,11 +291,11 @@
                         
                         <div class="relative group">
                             <button @click="deletePool(pool)"
-                                    class="w-full inline-flex justify-center items-center px-4 py-3 border-2 border-danger border-opacity-40 text-sm font-bold rounded-xl text-red-400 bg-transparent hover:bg-danger hover:bg-opacity-15 hover:border-opacity-60 transition-all transform hover:scale-105">
+                                    class="w-full inline-flex justify-center items-center px-4 py-3 border-2 border-danger border-opacity-40 text-sm font-bold rounded-xl text-alert-300 bg-transparent hover:bg-danger hover:bg-opacity-15 hover:border-opacity-60 transition-all transform hover:scale-105">
                                 <i class="fas fa-trash mr-2"></i>
                                 <span>Deletar</span>
                             </button>
-                            <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-red-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-10 border border-red-700">
+                            <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-alert-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-10 border border-alert-700">
                                 ⚠️ Ação permanente
                                 <div class="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-red-900"></div>
                             </div>
@@ -603,7 +603,7 @@
                                         <span class="w-2 h-2 rounded-full"
                                               :class="{
                                                   'bg-success-500 animate-pulse': poolBot.status === 'online',
-                                                  'bg-yellow-500': poolBot.status === 'degraded',
+                                                  'bg-gold-500': poolBot.status === 'degraded',
                                                   'bg-danger': poolBot.status === 'offline'
                                               }"></span>
                                         <div>
