@@ -10,6 +10,7 @@ from gateway_syncpay import SyncPayGateway
 from gateway_pushyn import PushynGateway
 from gateway_paradise import ParadisePaymentGateway
 from gateway_hoopay import HoopayPaymentGateway
+from gateway_wiinpay import WiinPayGateway
 
 logger = logging.getLogger(__name__)
 
@@ -26,10 +27,9 @@ class GatewayFactory:
     _gateway_classes: Dict[str, Type[PaymentGateway]] = {
         'syncpay': SyncPayGateway,
         'pushynpay': PushynGateway,
-        'paradise': ParadisePaymentGateway,  # ✅ PARADISE ADICIONADO
-        'hoopay': HoopayPaymentGateway,       # ✅ HOOPAY ADICIONADO
-        # Novos gateways podem ser adicionados aqui:
-        # 'mercadopago': MercadoPagoGateway,
+        'paradise': ParadisePaymentGateway,
+        'hoopay': HoopayPaymentGateway,
+        'wiinpay': WiinPayGateway,  # ✅ WIINPAY ADICIONADO
     }
     
     @classmethod
@@ -144,6 +144,20 @@ class GatewayFactory:
                     'organization_id': organization_id,
                     'split_percentage': split_percentage
                 })
+            
+            elif gateway_type == 'wiinpay':
+                # ✅ WiinPay requer: api_key
+                api_key = credentials.get('api_key')
+                split_user_id = credentials.get('split_user_id', '')
+                
+                if not api_key:
+                    logger.error(f"❌ [Factory] WiinPay requer api_key")
+                    return None
+                
+                gateway = gateway_class(
+                    api_key=api_key,
+                    split_user_id=split_user_id
+                )
             
             else:
                 # Gateway registrado mas sem construtor definido

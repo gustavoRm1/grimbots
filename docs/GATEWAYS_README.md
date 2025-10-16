@@ -2,12 +2,13 @@
 
 ## 🎯 **GATEWAYS DISPONÍVEIS**
 
-O sistema suporta **4 gateways de pagamento** totalmente integrados:
+O sistema suporta **5 gateways de pagamento** totalmente integrados:
 
 1. **SyncPay** - Gateway principal
 2. **Pushyn Pay** - Backup e alternativa
 3. **Paradise Pags** - Checkout customizável
 4. **HooPay** - Solução completa
+5. **WiinPay** - Simples e direto ✅ NOVO
 
 ---
 
@@ -60,6 +61,22 @@ O sistema suporta **4 gateways de pagamento** totalmente integrados:
 ```
 📄 **Documentação:** `docs/hoopay.md`
 
+### **5. WiinPay** ✅ NOVO
+```json
+{
+  "gateway_type": "wiinpay",
+  "api_key": "sua_api_key_wiinpay",
+  "split_user_id": "1234567890"
+}
+```
+📄 **Documentação:** `docs/wiinpay.md`
+
+**Características:**
+- ✅ API simples (apenas api_key)
+- ✅ Split automático (percentual ou fixo)
+- ✅ Webhook POST
+- ⚠️ Valor mínimo: R$ 3,00
+
 ---
 
 ## 🔧 **COMO CONFIGURAR**
@@ -74,14 +91,15 @@ O sistema suporta **4 gateways de pagamento** totalmente integrados:
 
 ## 📊 **COMPARAÇÃO TÉCNICA**
 
-| Feature | SyncPay | Pushyn | Paradise | HooPay |
-|---------|---------|--------|----------|--------|
-| **Setup** | Médio | Fácil | Difícil | Fácil |
-| **Campos** | 2 | 1 | 4 | 2 |
-| **Split** | ✅ | ✅ | ✅ | ✅ |
-| **Webhook** | ✅ | ✅ | ✅ | ✅ |
-| **Consulta** | ❌ | ✅ | ✅ | ✅ |
-| **QR Base64** | ❌ | ✅ | ✅ | ✅ |
+| Feature | SyncPay | Pushyn | Paradise | HooPay | WiinPay |
+|---------|---------|--------|----------|--------|---------|
+| **Setup** | Médio | Fácil | Difícil | Fácil | **Fácil** |
+| **Campos** | 2 | 1 | 4 | 2 | 2 |
+| **Split** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Webhook** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Consulta** | ❌ | ✅ | ✅ | ✅ | ✅ |
+| **QR Base64** | ❌ | ✅ | ✅ | ✅ | ✅ |
+| **Valor Mín** | R$ 0,50 | R$ 1,00 | R$ 1,00 | R$ 1,00 | **R$ 3,00** |
 
 ---
 
@@ -112,10 +130,11 @@ grpay/
 ├── gateway_interface.py      # Interface base
 ├── gateway_syncpay.py         # SyncPay
 ├── gateway_pushyn.py          # Pushyn
-├── gateway_paradise.py        # Paradise ✨
-├── gateway_hoopay.py          # HooPay ✨
+├── gateway_paradise.py        # Paradise
+├── gateway_hoopay.py          # HooPay
+├── gateway_wiinpay.py         # WiinPay ✅ NOVO
 ├── gateway_factory.py         # Factory Pattern
-├── migrate_add_gateway_fields.py  # Migration
+├── migrate_add_wiinpay.py     # Migration WiinPay
 ├── models.py                  # Modelo Gateway
 ├── app.py                     # Endpoints
 └── bot_manager.py             # Integração
@@ -125,14 +144,15 @@ grpay/
 
 ## ✅ **STATUS**
 
-- ✅ 4 gateways integrados
+- ✅ **5 gateways** integrados (WiinPay adicionado)
 - ✅ Factory Pattern implementado
 - ✅ Split payment funcionando
 - ✅ Webhook + Consulta ativa
+- ✅ Credenciais criptografadas
 - ✅ Zero bugs conhecidos
 - ✅ **PRODUCTION READY**
 
 ---
 
-**Última atualização:** 15/10/2025
+**Última atualização:** 16/10/2025
 

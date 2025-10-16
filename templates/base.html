@@ -55,6 +55,12 @@
     <!-- Custom CSS - Tema Escuro -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/dark-theme.css') }}?v=6.1">
     
+    <!-- UI Components CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/ui-components.css') }}?v=1.0">
+    
+    <!-- Gamification V2 CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/gamification.css') }}?v=2.0">
+    
     <style>
         [x-cloak] { display: none !important; }
     </style>
@@ -92,21 +98,28 @@
                         <span class="ml-2 text-xl font-bold text-gray-800">grimbots</span>
                     </div>
                     <div class="hidden sm:ml-6 sm:flex sm:space-x-8">
-                        <a href="{{ url_for('dashboard') }}" class="{% if request.endpoint == 'dashboard' %}border-blue-500 text-gray-900{% else %}border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700{% endif %} inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
-                            <i class="fas fa-home mr-2"></i> Dashboard
+                        <!-- Início (era: Dashboard) -->
+                        <a href="{{ url_for('dashboard') }}" class="{% if request.endpoint == 'dashboard' %}border-blue-500 text-gray-900{% else %}border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700{% endif %} inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium" title="Página inicial com resumo das suas vendas">
+                            <i class="fas fa-home mr-2"></i> Início
                         </a>
-                        <a href="{{ url_for('ranking') }}" class="{% if request.endpoint == 'ranking' %}border-accent500 text-gray-900{% else %}border-transparent hover:border-accent500 hover:text-gray-700{% endif %} inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium text-accent500">
+                        <!-- Ranking (mantém) -->
+                        <a href="{{ url_for('ranking') }}" class="{% if request.endpoint == 'ranking' %}border-accent500 text-gray-900{% else %}border-transparent hover:border-accent500 hover:text-gray-700{% endif %} inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium text-accent500" title="Veja sua posição entre os vendedores">
                             <i class="fas fa-trophy mr-2"></i> Ranking 🔥
                         </a>
-                        <a href="{{ url_for('redirect_pools_page') }}" class="{% if request.endpoint == 'redirect_pools_page' %}border-blue-500 text-gray-900{% else %}border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700{% endif %} inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
-                            <i class="fas fa-network-wired mr-2"></i> Redirecionador
+                        <!-- Distribuidor (era: Redirecionador) -->
+                        <a href="{{ url_for('redirect_pools_page') }}" class="{% if request.endpoint == 'redirect_pools_page' %}border-blue-500 text-gray-900{% else %}border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700{% endif %} inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium group" title="Distribua clientes entre vários bots automaticamente">
+                            <i class="fas fa-share-alt mr-2 group-hover:scale-110 transition-transform"></i> 
+                            <div class="flex flex-col items-start">
+                                <span>Distribuidor</span>
+                                <span class="text-xs text-gray-400 font-normal">Rotacione bots</span>
+                            </div>
                         </a>
                         {% if current_user.is_admin and not session.get('impersonate_admin_id') %}
                         <a href="{{ url_for('admin_dashboard') }}" class="{% if request.endpoint is not none and 'admin' in request.endpoint %}border-orange-500 text-gray-900{% else %}border-transparent text-orange-500 hover:border-orange-300 hover:text-orange-700{% endif %} inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
                             <i class="fas fa-shield-alt mr-2"></i> Painel Admin
                         </a>
                         {% endif %}
-                        <a href="{{ url_for('settings') }}" class="{% if request.endpoint == 'settings' %}border-blue-500 text-gray-900{% else %}border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700{% endif %} inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">
+                        <a href="{{ url_for('settings') }}" class="{% if request.endpoint == 'settings' %}border-blue-500 text-gray-900{% else %}border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700{% endif %} inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium" title="Altere suas configurações e dados">
                             <i class="fas fa-cog mr-2"></i> Configurações
                         </a>
                     </div>
@@ -171,6 +184,15 @@
             </p>
         </div>
     </footer>
+
+    <!-- UI Components JS - UX Completo -->
+    <script src="{{ url_for('static', filename='js/ui-components.js') }}?v=1.0"></script>
+    
+    <!-- Friendly Errors JS - UX Melhorado -->
+    <script src="{{ url_for('static', filename='js/friendly-errors.js') }}?v=1.0"></script>
+    
+    <!-- Gamification V2 JS -->
+    <script src="{{ url_for('static', filename='js/gamification.js') }}?v=2.0"></script>
 
     {% block extra_scripts %}{% endblock %}
 </body>

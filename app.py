@@ -13,6 +13,14 @@ from functools import wraps
 import os
 import logging
 import json
+from dotenv import load_dotenv
+
+# ============================================================================
+# CARREGAR VARIÁVEIS DE AMBIENTE (.env)
+# ============================================================================
+load_dotenv()
+logger_dotenv = logging.getLogger(__name__)
+logger_dotenv.info("✅ Variáveis de ambiente carregadas")
 
 # Configuração de logging LIMPO
 logging.basicConfig(
@@ -27,9 +35,48 @@ logging.getLogger('apscheduler.executors').setLevel(logging.ERROR)
 
 logger = logging.getLogger(__name__)
 
+# ============================================================================
+# GAMIFICAÇÃO V2.0 - IMPORTS
+# ============================================================================
+try:
+    from ranking_engine_v2 import RankingEngine
+    from achievement_checker_v2 import AchievementChecker
+    from gamification_websocket import register_gamification_events
+    GAMIFICATION_V2_ENABLED = True
+    logger.info("✅ Gamificação V2.0 carregada")
+except ImportError as e:
+    GAMIFICATION_V2_ENABLED = False
+    logger.warning(f"⚠️ Gamificação V2.0 não disponível: {e}")
+
 # Inicializar Flask
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
+
+# ============================================================================
+# CORREÇÃO #4: SECRET_KEY OBRIGATÓRIA E FORTE
+# ============================================================================
+SECRET_KEY = os.environ.get('SECRET_KEY')
+
+if not SECRET_KEY:
+    raise RuntimeError(
+        "\n❌ ERRO CRÍTICO: SECRET_KEY não configurada!\n\n"
+        "Execute:\n"
+        "  python -c \"import secrets; print('SECRET_KEY=' + secrets.token_hex(32))\" >> .env\n"
+    )
+
+if SECRET_KEY == 'dev-secret-key-change-in-production':
+    raise RuntimeError(
+        "\n❌ ERRO CRÍTICO: SECRET_KEY padrão detectada!\n"
+        "Gere uma nova: python -c \"import secrets; print(secrets.token_hex(32))\"\n"
+    )
+
+if len(SECRET_KEY) < 32:
+    raise RuntimeError(
+        f"\n❌ ERRO CRÍTICO: SECRET_KEY muito curta ({len(SECRET_KEY)} caracteres)!\n"
+        "Mínimo: 32 caracteres. Gere uma nova: python -c \"import secrets; print(secrets.token_hex(32))\"\n"
+    )
+
+app.config['SECRET_KEY'] = SECRET_KEY
+logger.info("✅ SECRET_KEY validada (forte e única)")
 
 # ✅ CORREÇÃO: Usar caminho ABSOLUTO para SQLite (compatível com threads)
 import os
@@ -63,12 +110,45 @@ app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
 
 # Inicializar extensões
 db.init_app(app)
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
+
+# ============================================================================
+# CORREÇÃO #1: CORS RESTRITO (não aceitar *)
+# ============================================================================
+ALLOWED_ORIGINS = os.environ.get('ALLOWED_ORIGINS', 'http://localhost:5000,http://127.0.0.1:5000').split(',')
+socketio = SocketIO(app, 
+    cors_allowed_origins=ALLOWED_ORIGINS,  # ✅ CORRIGIDO: Lista específica
+    async_mode='threading'
+)
+logger.info(f"✅ CORS configurado: {ALLOWED_ORIGINS}")
+
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 login_manager.login_message = 'Faça login para acessar esta página.'
 login_manager.login_message_category = 'warning'
+
+# ============================================================================
+# CORREÇÃO #2: CSRF PROTECTION
+# ============================================================================
+from flask_wtf.csrf import CSRFProtect
+
+csrf = CSRFProtect(app)
+logger.info("✅ CSRF Protection ativada")
+
+# ============================================================================
+# CORREÇÃO #6: RATE LIMITING
+# ============================================================================
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+
+limiter = Limiter(
+    app=app,
+    key_func=get_remote_address,
+    default_limits=["1000 per day", "200 per hour"],
+    storage_uri="memory://",  # Em produção: redis://localhost:6379
+    headers_enabled=True
+)
+logger.info("✅ Rate Limiting configurado")
 
 # Inicializar scheduler para polling
 from flask_apscheduler import APScheduler
@@ -78,6 +158,16 @@ scheduler.start()
 
 # Inicializar gerenciador de bots
 bot_manager = BotManager(socketio, scheduler)
+
+# Registrar eventos WebSocket de gamificação
+if GAMIFICATION_V2_ENABLED:
+    register_gamification_events(socketio)
+
+# Registrar blueprint de gamificação
+if GAMIFICATION_V2_ENABLED:
+    from gamification_api import gamification_bp
+    app.register_blueprint(gamification_bp)
+    logger.info("✅ API de Gamificação V2.0 registrada")
 
 # User loader para Flask-Login
 @login_manager.user_loader
@@ -205,6 +295,7 @@ def index():
     return redirect(url_for('login'))
 
 @app.route('/register', methods=['GET', 'POST'])
+@limiter.limit("3 per hour")  # ✅ PROTEÇÃO: Spam de registro
 def register():
     """Registro de novo usuário"""
     if current_user.is_authenticated:
@@ -249,6 +340,7 @@ def register():
     return render_template('register.html')
 
 @app.route('/login', methods=['GET', 'POST'])
+@limiter.limit("10 per minute")  # ✅ PROTEÇÃO: Brute-force login
 def login():
     """Login de usuário"""
     if current_user.is_authenticated:
@@ -331,7 +423,7 @@ def politica_privacidade():
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    """Dashboard principal - Otimizado com query única"""
+    """Dashboard principal com modo simples/avançado"""
     from sqlalchemy import func, case
     from models import BotUser
     
@@ -371,7 +463,7 @@ def dashboard():
         'total_revenue': total_revenue,
         'pending_sales': sum(b.pending_sales for b in bot_stats),
         'can_add_bot': current_user.can_add_bot(),
-        'commission_rate': current_user.commission_rate,
+        'commission_percentage': current_user.commission_percentage,
         'commission_balance': current_user.get_commission_balance(),
         'total_commission_owed': current_user.total_commission_owed,
         'total_commission_paid': current_user.total_commission_paid
@@ -591,7 +683,7 @@ def api_dashboard_analytics():
     total_commission_owed = current_user.total_commission_owed
     total_commission_paid = current_user.total_commission_paid
     commission_balance = current_user.get_commission_balance()
-    commission_rate = current_user.commission_rate
+    commission_percentage = current_user.commission_percentage
     
     # Últimas comissões
     recent_commissions = Commission.query.filter_by(
@@ -626,10 +718,16 @@ def get_bots():
     bots = current_user.bots.all()
     return jsonify([bot.to_dict() for bot in bots])
 
+@app.route('/bot/create')
+@login_required
+def bot_create_page():
+    """Página de criação de bot com wizard"""
+    return render_template('bot_create_wizard.html')
+
 @app.route('/api/bots', methods=['POST'])
 @login_required
 def create_bot():
-    """Cria novo bot"""
+    """Cria novo bot (API endpoint)"""
     if not current_user.can_add_bot():
         return jsonify({'error': 'Limite de bots atingido! Faça upgrade do seu plano.'}), 403
     
@@ -1796,6 +1894,12 @@ def update_bot_config(bot_id):
         if 'downsells' in data:
             config.set_downsells(data['downsells'])
         
+        # ✅ UPSELLS
+        if 'upsells_enabled' in data:
+            config.upsells_enabled = data['upsells_enabled']
+        if 'upsells' in data:
+            config.set_upsells(data['upsells'])
+        
         # Link de acesso
         if 'access_link' in data:
             config.access_link = data['access_link']
@@ -2141,8 +2245,8 @@ def create_gateway():
     data = request.json
     gateway_type = data.get('gateway_type')
     
-    # ✅ CORREÇÃO: Adicionar hoopay aos tipos válidos
-    if gateway_type not in ['syncpay', 'pushynpay', 'paradise', 'hoopay']:
+    # ✅ CORREÇÃO: Adicionar wiinpay aos tipos válidos
+    if gateway_type not in ['syncpay', 'pushynpay', 'paradise', 'hoopay', 'wiinpay']:
         return jsonify({'error': 'Tipo de gateway inválido'}), 400
     
     # Verificar se já existe gateway deste tipo
@@ -2178,6 +2282,12 @@ def create_gateway():
         # Organization ID configurado automaticamente para splits (você é o dono do sistema)
         gateway.organization_id = '5547db08-12c5-4de5-9592-90d38479745c'
     
+    elif gateway_type == 'wiinpay':
+        # ✅ WIINPAY
+        gateway.api_key = data.get('api_key')
+        # Split User ID configurado automaticamente para splits (você é o dono do sistema)
+        gateway.split_user_id = data.get('split_user_id', '6877edeba3c39f8451ba5bdd')  # Seu ID WiinPay
+    
     # ✅ Split percentage (comum a todos)
     gateway.split_percentage = float(data.get('split_percentage', 4.0))
     
@@ -2205,7 +2315,8 @@ def create_gateway():
             'product_hash': gateway.product_hash,  # Paradise
             'offer_hash': gateway.offer_hash,      # Paradise
             'store_id': gateway.store_id,          # Paradise
-            'organization_id': gateway.organization_id  # HooPay
+            'organization_id': gateway.organization_id,  # HooPay
+            'split_user_id': gateway.split_user_id  # WiinPay
         }
         
         is_valid = bot_manager.verify_gateway(gateway_type, credentials)
@@ -2241,23 +2352,27 @@ def delete_gateway(gateway_id):
 
 # ==================== CONFIGURAÇÕES ====================
 
+@app.route('/gamification/profile')
+@login_required
+def gamification_profile():
+    """Perfil de gamificação do usuário"""
+    return render_template('gamification_profile.html')
+
+
 @app.route('/ranking')
 @login_required
 def ranking():
-    """Hall da Fama - Ranking público"""
+    """Hall da Fama - Ranking público (otimizado)"""
     from sqlalchemy import func
     from models import BotUser, UserAchievement, Achievement
     from datetime import timedelta
     
-    # Filtro de período
-    period = request.args.get('period', 'all')  # today, week, month, all
-    metric = request.args.get('metric', 'points')  # points, revenue, sales
+    # Filtro de período (simplificado)
+    period = request.args.get('period', 'month')  # month (padrão) ou all
     
-    # Atualizar pontos de TODOS os usuários (cache de 5 min seria ideal, mas ok para MVP)
-    all_users = User.query.filter_by(is_admin=False, is_banned=False).all()
-    for u in all_users:
-        u.ranking_points = u.calculate_ranking_points()
-    db.session.commit()
+    # ✅ CORREÇÃO CRÍTICA: NÃO recalcular em cada pageview
+    # Usar pontos já calculados (atualizado por job em background ou webhook)
+    # Cache seria ideal, mas por ora usar dados existentes
     
     # Definir período
     date_filter = None
@@ -2268,44 +2383,39 @@ def ranking():
     elif period == 'month':
         date_filter = datetime.now() - timedelta(days=30)
     
+    # ✅ CORREÇÃO: Adicionar desempate no ranking
     # Calcular ranking baseado no período
-    if period == 'all' and metric == 'points':
-        # Ranking por pontos (all-time)
+    if period == 'all':
+        # Ranking all-time (ordenar por pontos + desempate)
         users_query = User.query.filter_by(is_admin=False, is_banned=False)\
-                               .order_by(User.ranking_points.desc())
+                               .order_by(
+                                   User.ranking_points.desc(),
+                                   User.total_sales.desc(),  # Desempate 1: Mais vendas
+                                   User.created_at.asc()      # Desempate 2: Mais antigo
+                               )
     else:
-        # Calcular receita/vendas no período
-        if date_filter:
-            if metric == 'revenue':
-                # Ranking por receita no período
-                subquery = db.session.query(
-                    Bot.user_id,
-                    func.sum(Payment.amount).label('period_revenue')
-                ).join(Payment)\
-                 .filter(Payment.status == 'paid', Payment.created_at >= date_filter)\
-                 .group_by(Bot.user_id)\
-                 .subquery()
-                
-                users_query = User.query.join(subquery, User.id == subquery.c.user_id)\
-                                       .filter(User.is_admin == False, User.is_banned == False)\
-                                       .order_by(subquery.c.period_revenue.desc())
-            else:
-                # Ranking por vendas no período
-                subquery = db.session.query(
-                    Bot.user_id,
-                    func.count(Payment.id).label('period_sales')
-                ).join(Payment)\
-                 .filter(Payment.status == 'paid', Payment.created_at >= date_filter)\
-                 .group_by(Bot.user_id)\
-                 .subquery()
-                
-                users_query = User.query.join(subquery, User.id == subquery.c.user_id)\
-                                       .filter(User.is_admin == False, User.is_banned == False)\
-                                       .order_by(subquery.c.period_sales.desc())
-        else:
-            # All-time por receita ou vendas
-            users_query = User.query.filter_by(is_admin=False, is_banned=False)\
-                                   .order_by(User.ranking_points.desc())
+        # Ranking do mês (período fixo)
+        date_filter = datetime.now() - timedelta(days=30)
+        
+        # Calcular receita no mês
+        if True:
+            # Ranking por receita no período (mês)
+            subquery = db.session.query(
+                Bot.user_id,
+                func.sum(Payment.amount).label('period_revenue'),
+                func.count(Payment.id).label('period_sales')
+            ).join(Payment)\
+             .filter(Payment.status == 'paid', Payment.created_at >= date_filter)\
+             .group_by(Bot.user_id)\
+             .subquery()
+            
+            users_query = User.query.join(subquery, User.id == subquery.c.user_id)\
+                                   .filter(User.is_admin == False, User.is_banned == False)\
+                                   .order_by(
+                                       subquery.c.period_revenue.desc(),
+                                       subquery.c.period_sales.desc(),
+                                       User.created_at.asc()
+                                   )
     
     # Top 100
     top_users = users_query.limit(100).all()
@@ -2376,8 +2486,7 @@ def ranking():
                          ranking=ranking_data,
                          my_position=my_position_number,
                          next_user=next_user,
-                         period=period,
-                         metric=metric)
+                         period=period)
 
 @app.route('/settings')
 @login_required
@@ -2432,6 +2541,8 @@ def update_password():
 # ==================== WEBHOOKS E NOTIFICAÇÕES EM TEMPO REAL ====================
 
 @app.route('/webhook/telegram/<int:bot_id>', methods=['POST'])
+@limiter.limit("1000 per minute")  # ✅ PROTEÇÃO: Webhooks legítimos mas limitados
+@csrf.exempt  # ✅ Webhooks externos não enviam CSRF token
 def telegram_webhook(bot_id):
     """Webhook para receber updates do Telegram"""
     try:
@@ -2455,6 +2566,8 @@ def telegram_webhook(bot_id):
         return jsonify({'error': str(e)}), 500
 
 @app.route('/webhook/payment/<string:gateway_type>', methods=['POST'])
+@limiter.limit("500 per minute")  # ✅ PROTEÇÃO: Webhooks de pagamento
+@csrf.exempt  # ✅ Webhooks externos não enviam CSRF token
 def payment_webhook(gateway_type):
     """Webhook para confirmação de pagamento"""
     data = request.json
@@ -2494,7 +2607,7 @@ def payment_webhook(gateway_type):
                     
                     if not existing_commission:
                         # Calcular e registrar receita da plataforma (split payment automático)
-                        commission_amount = payment.bot.owner.commission_rate
+                        commission_amount = payment.bot.owner.calculate_commission(payment.amount)
                         
                         commission = Commission(
                             user_id=payment.bot.owner.id,
@@ -2502,7 +2615,7 @@ def payment_webhook(gateway_type):
                             bot_id=payment.bot.id,
                             sale_amount=payment.amount,
                             commission_amount=commission_amount,
-                            commission_rate=payment.bot.owner.commission_rate,
+                            commission_rate=payment.bot.owner.commission_percentage,
                             status='paid',  # Split payment cai automaticamente
                             paid_at=datetime.now()  # Pago no mesmo momento da venda
                         )
@@ -2513,13 +2626,45 @@ def payment_webhook(gateway_type):
                         
                         logger.info(f"💰 Receita da plataforma: R$ {commission_amount:.2f} (split automático) - Usuário: {payment.bot.owner.email}")
                     
-                    # ATUALIZAR STREAK E VERIFICAR CONQUISTAS
-                    payment.bot.owner.update_streak(payment.created_at)
-                    payment.bot.owner.ranking_points = payment.bot.owner.calculate_ranking_points()
-                    new_badges = check_and_unlock_achievements(payment.bot.owner)
-                    
-                    if new_badges:
-                        logger.info(f"🎉 {len(new_badges)} nova(s) conquista(s) desbloqueada(s)!")
+                    # ============================================================================
+                    # GAMIFICAÇÃO V2.0 - ATUALIZAR STREAK, RANKING E CONQUISTAS
+                    # ============================================================================
+                    if GAMIFICATION_V2_ENABLED:
+                        try:
+                            # Atualizar streak
+                            payment.bot.owner.update_streak(payment.created_at)
+                            
+                            # Recalcular ranking com algoritmo V2
+                            old_points = payment.bot.owner.ranking_points or 0
+                            payment.bot.owner.ranking_points = RankingEngine.calculate_points(payment.bot.owner)
+                            new_points = payment.bot.owner.ranking_points
+                            
+                            # Verificar conquistas V2
+                            new_achievements = AchievementChecker.check_all_achievements(payment.bot.owner)
+                            
+                            if new_achievements:
+                                logger.info(f"🎉 {len(new_achievements)} conquista(s) V2 desbloqueada(s)!")
+                                
+                                # Notificar via WebSocket
+                                from gamification_websocket import notify_achievement_unlocked
+                                for ach in new_achievements:
+                                    notify_achievement_unlocked(socketio, payment.bot.owner.id, ach)
+                            
+                            # Atualizar ligas (pode ser async em produção)
+                            RankingEngine.update_leagues()
+                            
+                            logger.info(f"📊 Gamificação V2: {old_points:,} → {new_points:,} pts")
+                            
+                        except Exception as e:
+                            logger.error(f"❌ Erro na gamificação V2: {e}")
+                    else:
+                        # Fallback para sistema V1 (antigo)
+                        payment.bot.owner.update_streak(payment.created_at)
+                        payment.bot.owner.ranking_points = payment.bot.owner.calculate_ranking_points()
+                        new_badges = check_and_unlock_achievements(payment.bot.owner)
+                        
+                        if new_badges:
+                            logger.info(f"🎉 {len(new_badges)} nova(s) conquista(s) desbloqueada(s)!")
                     
                     # ENVIAR LINK DE ACESSO AUTOMATICAMENTE
                     if payment.bot.config and payment.bot.config.access_link:
@@ -2550,6 +2695,49 @@ Aproveite! 🚀
                             logger.info(f"✅ Link de acesso enviado para {payment.customer_name}")
                         except Exception as e:
                             logger.error(f"Erro ao enviar link de acesso: {e}")
+                    
+                    # ============================================================================
+                    # ✅ UPSELLS AUTOMÁTICOS - APÓS COMPRA APROVADA
+                    # ============================================================================
+                    if payment.bot.config and payment.bot.config.upsells_enabled:
+                        try:
+                            upsells = payment.bot.config.get_upsells()
+                            
+                            if upsells:
+                                logger.info(f"🎯 Verificando upsells para produto: {payment.product_name}")
+                                
+                                # Filtrar upsells que fazem match com o produto comprado
+                                matched_upsells = []
+                                for upsell in upsells:
+                                    trigger_product = upsell.get('trigger_product', '')
+                                    
+                                    # Match: trigger vazio (todas compras) OU produto específico
+                                    if not trigger_product or trigger_product == payment.product_name:
+                                        matched_upsells.append(upsell)
+                                
+                                if matched_upsells:
+                                    logger.info(f"✅ {len(matched_upsells)} upsell(s) encontrado(s)")
+                                    
+                                    # ✅ REUTILIZAR função de downsell (mesma lógica, só muda o nome)
+                                    bot_manager.schedule_downsells(
+                                        bot_id=payment.bot_id,
+                                        payment_id=payment.payment_id,
+                                        chat_id=int(payment.customer_user_id),
+                                        downsells=matched_upsells,  # Formato idêntico ao downsell
+                                        original_price=payment.amount,
+                                        original_button_index=-1
+                                    )
+                                    
+                                    logger.info(f"📅 Upsells agendados com sucesso!")
+                                else:
+                                    logger.info(f"ℹ️ Nenhum upsell configurado para '{payment.product_name}'")
+                            else:
+                                logger.info(f"ℹ️ Lista de upsells vazia")
+                                
+                        except Exception as e:
+                            logger.error(f"❌ Erro ao processar upsells: {e}")
+                            import traceback
+                            traceback.print_exc()
                 
                 db.session.commit()
                 
@@ -2721,19 +2909,47 @@ def simulate_payment(payment_id):
             existing_commission = Commission.query.filter_by(payment_id=payment.id).first()
             
             if not existing_commission:
+                commission_amount = payment.bot.owner.calculate_commission(payment.amount)
                 commission = Commission(
                     user_id=payment.bot.owner.id,
                     payment_id=payment.id,
                     bot_id=payment.bot.id,
                     sale_amount=payment.amount,
-                    commission_amount=payment.bot.owner.commission_rate,
-                    commission_rate=payment.bot.owner.commission_rate,
+                    commission_amount=commission_amount,
+                    commission_rate=payment.bot.owner.commission_percentage,
                     status='paid',  # Split payment cai automaticamente
                     paid_at=datetime.now()  # Pago no mesmo momento
                 )
                 db.session.add(commission)
                 # Split payment - receita já caiu automaticamente via SyncPay
-                payment.bot.owner.total_commission_paid += payment.bot.owner.commission_rate
+                payment.bot.owner.total_commission_paid += commission_amount
+            
+            # ============================================================================
+            # GAMIFICAÇÃO V2.0 - SIMULAR PAGAMENTO
+            # ============================================================================
+            if GAMIFICATION_V2_ENABLED:
+                try:
+                    # Atualizar streak
+                    payment.bot.owner.update_streak(payment.created_at)
+                    
+                    # Recalcular ranking
+                    payment.bot.owner.ranking_points = RankingEngine.calculate_points(payment.bot.owner)
+                    
+                    # Verificar conquistas
+                    new_achievements = AchievementChecker.check_all_achievements(payment.bot.owner)
+                    
+                    if new_achievements:
+                        logger.info(f"🎉 {len(new_achievements)} conquista(s) V2 desbloqueada(s) (simulação)!")
+                        
+                        from gamification_websocket import notify_achievement_unlocked
+                        for ach in new_achievements:
+                            notify_achievement_unlocked(socketio, payment.bot.owner.id, ach)
+                    
+                    # Atualizar ligas
+                    RankingEngine.update_leagues()
+                    
+                except Exception as e:
+                    logger.error(f"❌ Erro na gamificação V2 (simulação): {e}")
             
             db.session.commit()
             

@@ -21,9 +21,17 @@
                         :disabled="loading"
                         :class="{'opacity-50 cursor-not-allowed': loading}"
                         class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-semibold text-black bg-gradient-to-r from-accent500 to-accent600 hover:shadow-accent-glow focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent500 transition-all transform hover:-translate-y-0.5">
-                    <i class="fas fa-save mr-2"></i>
-                    <span x-show="!loading">Salvar Configurações</span>
-                    <span x-show="loading">Salvando...</span>
+                    <span x-show="!loading" class="flex items-center">
+                        <i class="fas fa-save mr-2"></i>
+                        Salvar Configurações
+                    </span>
+                    <span x-show="loading" class="flex items-center">
+                        <svg class="animate-spin h-4 w-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Salvando...
+                    </span>
                 </button>
             </div>
         </div>
@@ -47,6 +55,11 @@
                         :class="activeTab === 'downsells' ? 'tab-button active' : 'tab-button'"
                         class="whitespace-nowrap py-4 px-1 font-medium text-sm">
                     <i class="fas fa-arrow-down mr-2"></i>Downsells
+                </button>
+                <button @click="activeTab = 'upsells'" 
+                        :class="activeTab === 'upsells' ? 'tab-button active' : 'tab-button'"
+                        class="whitespace-nowrap py-4 px-1 font-medium text-sm">
+                    <i class="fas fa-arrow-up mr-2"></i>Upsells
                 </button>
                 <button @click="activeTab = 'access'" 
                         :class="activeTab === 'access' ? 'tab-button active' : 'tab-button'"
@@ -83,10 +96,15 @@
                 <div class="space-y-6">
                     <!-- Mensagem -->
                     <div class="space-y-2">
-                        <label class="block text-sm font-semibold text-textSecondary flex items-center">
-                            <i class="fas fa-comment-dots text-accent500 mr-2"></i>
-                            Mensagem
-                            <span class="text-danger-500 ml-1">*</span>
+                                <label class="block text-sm font-semibold text-textSecondary flex items-center gap-2">
+                            <i class="fas fa-comment-dots text-accent500"></i>
+                            Mensagem de Boas-vindas
+                            <span class="text-danger-500">*</span>
+                            <button type="button" 
+                                    class="text-blue-400 hover:text-blue-300 transition-colors"
+                                    data-tooltip="Digite a mensagem que o cliente verá quando iniciar conversa com seu bot. Use para apresentar seus produtos e criar interesse.">
+                                <i class="fas fa-question-circle text-sm"></i>
+                            </button>
                         </label>
                         <textarea x-model="config.welcome_message" 
                                   rows="5" 
@@ -161,7 +179,8 @@
                     </div>
                     <button @click="addButton()" 
                             class="inline-flex items-center px-4 py-2.5 border border-transparent rounded-xl text-sm font-semibold text-black bg-gradient-to-r from-success-500 to-green-700 hover:shadow-lg transition-all transform hover:-translate-y-0.5"
-                            style="box-shadow: 0 6px 16px rgba(34, 197, 94, 0.3);">
+                            style="box-shadow: 0 6px 16px rgba(34, 197, 94, 0.3);"
+                            data-tooltip="Adicione um novo botão de venda com valor personalizado">
                         <i class="fas fa-plus-circle mr-2"></i>
                         Adicionar Botão
                     </button>
@@ -182,7 +201,17 @@
                                         Botão <span x-text="index + 1"></span>
                                     </h4>
                                 </div>
-                                <button @click="removeButton(index)" 
+                                <button @click="async () => {
+                                            const confirmed = await confirmAction({
+                                                title: 'Remover este botão?',
+                                                message: 'O botão será removido da lista de opções de venda.',
+                                                warning: 'Esta ação não pode ser desfeita!',
+                                                icon: '🗑️',
+                                                confirmText: 'Sim, remover',
+                                                cancelText: 'Cancelar'
+                                            });
+                                            if (confirmed) removeButton(index);
+                                        }" 
                                         class="flex items-center justify-center h-10 w-10 border-2 border-danger-500 border-opacity-30 text-danger-500 rounded-lg hover:bg-danger-500 hover:bg-opacity-15 hover:border-opacity-50 transition-all">
                                     <i class="fas fa-trash"></i>
                                 </button>
@@ -191,9 +220,12 @@
                             <!-- Campos do Botão -->
                             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 mb-5">
                                 <div class="space-y-2">
-                                    <label class="block text-xs font-semibold text-textSecondary flex items-center">
-                                        <i class="fas fa-font text-info-500 mr-1.5"></i>
+                                    <label class="block text-xs font-semibold text-textSecondary flex items-center gap-2">
+                                        <i class="fas fa-font text-info-500"></i>
                                         Texto do Botão
+                                        <button type="button" class="text-blue-400 hover:text-blue-300" data-tooltip="O texto que aparecerá no botão. Ex: 'Comprar por R$ 97'">
+                                            <i class="fas fa-question-circle text-xs"></i>
+                                        </button>
                                     </label>
                                     <input type="text" 
                                            x-model="button.text" 
@@ -201,9 +233,12 @@
                                            placeholder="Comprar por R$ 19,97">
                                 </div>
                                 <div class="space-y-2">
-                                    <label class="block text-xs font-semibold text-textSecondary flex items-center">
-                                        <i class="fas fa-dollar-sign text-success-500 mr-1.5"></i>
+                                    <label class="block text-xs font-semibold text-textSecondary flex items-center gap-2">
+                                        <i class="fas fa-dollar-sign text-success-500"></i>
                                         Preço (R$)
+                                        <button type="button" class="text-blue-400 hover:text-blue-300" data-tooltip="Valor que será cobrado quando o cliente clicar neste botão">
+                                            <i class="fas fa-question-circle text-xs"></i>
+                                        </button>
                                     </label>
                                     <input type="number" 
                                            x-model="button.price" 
@@ -620,6 +655,164 @@
                 </div>
             </div>
 
+            <!-- ✅ UPSELLS TAB - NOVO -->
+            <div x-show="activeTab === 'upsells'" x-cloak>
+                <div class="flex justify-between items-center mb-6">
+                    <div>
+                        <h3 class="text-xl font-bold text-textPrimary flex items-center">
+                            <i class="fas fa-arrow-up text-success-500 mr-3"></i>
+                            Upsells Automáticos
+                        </h3>
+                        <p class="text-sm text-textSecondary mt-2">Ofertas enviadas APÓS compra aprovada para aumentar ticket médio</p>
+                    </div>
+                    <button @click="addUpsell()" 
+                            class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg text-sm font-semibold text-white bg-gradient-to-r from-success-500 to-success-600 hover:shadow-lg transition-all">
+                        <i class="fas fa-plus mr-2"></i>Adicionar Upsell
+                    </button>
+                </div>
+
+                <!-- Info Helper -->
+                <div class="mb-6 p-4 bg-success-500 bg-opacity-10 border-l-4 border-success-500 rounded-r-xl">
+                    <div class="flex items-start gap-3">
+                        <i class="fas fa-rocket text-success-500 text-lg"></i>
+                        <div class="flex-1">
+                            <h4 class="text-sm font-bold text-success-500 mb-1">Como Funciona?</h4>
+                            <p class="text-sm text-textPrimary leading-relaxed">
+                                Após o cliente <strong>PAGAR</strong> um produto, você pode enviar ofertas de upgrade automaticamente. 
+                                Configure o produto que dispara (trigger) e o tempo de espera. Deixe o trigger vazio para disparar em todas as compras.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Toggle Habilitar -->
+                <div class="mb-6">
+                    <div class="flex items-center p-4 bg-surface800 rounded-xl border border-white border-opacity-10">
+                        <input type="checkbox" 
+                               x-model="config.upsells_enabled" 
+                               id="upsells_enabled"
+                               class="h-5 w-5 text-success-600 focus:ring-success-500 border-gray-600 rounded">
+                        <label for="upsells_enabled" class="ml-3 block text-sm font-semibold text-textPrimary">
+                            <i class="fas fa-toggle-on text-success-500 mr-2"></i>Habilitar Upsells Automáticos
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Lista de Upsells -->
+                <div x-show="config.upsells_enabled" class="space-y-4">
+                    <template x-for="(upsell, index) in config.upsells" :key="index">
+                        <div class="border border-success-500 border-opacity-30 rounded-xl p-5 bg-surface800">
+                            <div class="flex justify-between items-start mb-4">
+                                <h4 class="text-base font-bold text-success-500 flex items-center gap-2">
+                                    <i class="fas fa-gift"></i>
+                                    Upsell <span x-text="index + 1"></span>
+                                </h4>
+                                <button @click="removeUpsell(index)" 
+                                        class="text-danger-500 hover:text-danger-400 transition-colors">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+
+                            <div class="space-y-4">
+                                <!-- Trigger Product (DIFERENCIAL) -->
+                                <div class="bg-info-500 bg-opacity-10 p-4 rounded-lg border border-info-500 border-opacity-30">
+                                    <label class="block text-sm font-bold text-info-400 mb-2">
+                                        <i class="fas fa-filter mr-1"></i>Produto Trigger (opcional)
+                                    </label>
+                                    <input type="text" 
+                                           x-model="upsell.trigger_product" 
+                                           class="w-full px-4 py-3 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary placeholder-muted focus:outline-none focus:ring-2 focus:ring-info-500"
+                                           placeholder="Ex: INSS Básico (vazio = todas as compras)">
+                                    <p class="mt-2 text-xs text-info-300">
+                                        <i class="fas fa-info-circle mr-1"></i>
+                                        Deixe vazio para disparar em TODAS as compras, ou especifique o nome exato do produto
+                                    </p>
+                                </div>
+
+                                <!-- Delay -->
+                                <div>
+                                    <label class="block text-sm font-medium text-textSecondary mb-2">
+                                        <i class="fas fa-clock mr-1"></i>Delay (minutos)
+                                    </label>
+                                    <input type="number" 
+                                           x-model="upsell.delay_minutes" 
+                                           class="w-full px-4 py-3 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary focus:outline-none focus:ring-2 focus:ring-success-500"
+                                           placeholder="0">
+                                    <p class="mt-1 text-xs text-muted">0 = imediato, 30 = após 30 minutos</p>
+                                </div>
+
+                                <!-- Mensagem -->
+                                <div>
+                                    <label class="block text-sm font-medium text-textSecondary mb-2">
+                                        <i class="fas fa-comment-dots mr-1"></i>Mensagem do Upsell
+                                    </label>
+                                    <textarea x-model="upsell.message" 
+                                              rows="4" 
+                                              class="w-full px-4 py-3 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary placeholder-muted focus:outline-none focus:ring-2 focus:ring-success-500 resize-none"
+                                              placeholder="🔥 Upgrade para o plano Premium por apenas R$ 97!"></textarea>
+                                </div>
+
+                                <!-- URL da Mídia -->
+                                <div>
+                                    <label class="block text-sm font-medium text-textSecondary mb-2">
+                                        <i class="fas fa-photo-video mr-1"></i>URL da Mídia (opcional)
+                                    </label>
+                                    <input type="url" 
+                                           x-model="upsell.media_url" 
+                                           class="w-full px-4 py-3 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary placeholder-muted focus:outline-none focus:ring-2 focus:ring-success-500"
+                                           placeholder="https://t.me/canal/123">
+                                </div>
+
+                                <!-- Produto e Preço -->
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-textSecondary mb-2">
+                                            <i class="fas fa-box mr-1"></i>Nome do Produto
+                                        </label>
+                                        <input type="text" 
+                                               x-model="upsell.product_name" 
+                                               class="w-full px-4 py-3 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary placeholder-muted focus:outline-none focus:ring-2 focus:ring-success-500"
+                                               placeholder="Ex: INSS Premium">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-textSecondary mb-2">
+                                            <i class="fas fa-dollar-sign mr-1"></i>Preço (R$)
+                                        </label>
+                                        <input type="number" 
+                                               x-model="upsell.price" 
+                                               step="0.01"
+                                               class="w-full px-4 py-3 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary placeholder-muted focus:outline-none focus:ring-2 focus:ring-success-500"
+                                               placeholder="97.00">
+                                    </div>
+                                </div>
+
+                                <!-- Botão Personalizado -->
+                                <div>
+                                    <label class="block text-sm font-medium text-textSecondary mb-2">
+                                        <i class="fas fa-mouse-pointer mr-1"></i>Texto do Botão
+                                    </label>
+                                    <input type="text" 
+                                           x-model="upsell.button_text" 
+                                           class="w-full px-4 py-3 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary placeholder-muted focus:outline-none focus:ring-2 focus:ring-success-500"
+                                           placeholder="🚀 Quero fazer Upgrade!">
+                                    <p class="mt-1 text-xs text-muted">Deixe vazio para usar texto padrão</p>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+
+                    <!-- Empty State -->
+                    <div x-show="config.upsells.length === 0" class="text-center py-12 px-4 border-2 border-dashed border-white border-opacity-10 rounded-xl">
+                        <i class="fas fa-arrow-up text-5xl text-muted mb-4"></i>
+                        <p class="text-textSecondary mb-4">Nenhum upsell configurado</p>
+                        <button @click="addUpsell()" 
+                                class="inline-flex items-center px-4 py-2 bg-success-600 text-white rounded-lg hover:bg-success-700 transition-colors">
+                            <i class="fas fa-plus mr-2"></i>Adicionar Primeiro Upsell
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <!-- Access Tab - Redesenhado -->
             <div x-show="activeTab === 'access'" x-cloak>
                 <div class="mb-6">
@@ -740,6 +933,8 @@ function botConfigApp() {
             redirect_buttons: [],
             downsells_enabled: false,
             downsells: [],
+            upsells_enabled: false,
+            upsells: [],
             access_link: '',
             success_message: '',
             pending_message: ''
@@ -803,6 +998,25 @@ function botConfigApp() {
                     // ✅ Garantir que config.downsells existe (mesmo que vazio)
                     if (!this.config.downsells) {
                         this.config.downsells = [];
+                    }
+                    
+                    // ✅ Garantir que cada upsell tenha TODOS os campos necessários
+                    if (Array.isArray(this.config.upsells)) {
+                        this.config.upsells.forEach(upsell => {
+                            if (!upsell.hasOwnProperty('trigger_product')) upsell.trigger_product = '';
+                            if (!upsell.hasOwnProperty('delay_minutes')) upsell.delay_minutes = 0;
+                            if (!upsell.hasOwnProperty('message')) upsell.message = '';
+                            if (!upsell.hasOwnProperty('media_url')) upsell.media_url = '';
+                            if (!upsell.hasOwnProperty('media_type')) upsell.media_type = 'video';
+                            if (!upsell.hasOwnProperty('product_name')) upsell.product_name = '';
+                            if (!upsell.hasOwnProperty('price')) upsell.price = 0;
+                            if (!upsell.hasOwnProperty('button_text')) upsell.button_text = '';
+                        });
+                    }
+                    
+                    // ✅ Garantir que config.upsells existe (mesmo que vazio)
+                    if (!this.config.upsells) {
+                        this.config.upsells = [];
                     }
                 }
             } catch (error) {
@@ -883,6 +1097,23 @@ function botConfigApp() {
 
         removeDownsell(index) {
             this.config.downsells.splice(index, 1);
+        },
+
+        addUpsell() {
+            this.config.upsells.push({
+                trigger_product: '',  // Vazio = todas compras
+                delay_minutes: 0,  // 0 = imediato
+                message: '',
+                media_url: '',
+                media_type: 'video',
+                product_name: '',
+                price: 0,
+                button_text: ''
+            });
+        },
+
+        removeUpsell(index) {
+            this.config.upsells.splice(index, 1);
         },
 
         showNotification(message, type = 'success') {

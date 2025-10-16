@@ -92,6 +92,7 @@
             
             <!-- Form -->
             <form class="px-8 pb-8 pt-6 space-y-6" method="POST" action="{{ url_for('login') }}" x-data="{ showPassword: false }">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                 
                 <!-- Email Field -->
                 <div class="space-y-2">

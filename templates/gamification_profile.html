@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+
+{% block title %}Meu Perfil - Gamificação - grimbots{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" x-data="gamificationProfile()" x-init="loadProfile()">
+    
+    <!-- Header -->
+    <div class="mb-8">
+        <h1 class="text-3xl font-black flex items-center gap-3" style="color: #FDE68A; text-shadow: 0 2px 16px rgba(253, 230, 138, 0.6);">
+            <i class="fas fa-user-circle" style="color: #F59E0B;"></i>
+            Meu Perfil de Jogador
+        </h1>
+        <p class="text-sm font-semibold mt-2" style="color: #D1D5DB;">Acompanhe seu progresso e conquistas</p>
+    </div>
+    
+    <!-- Loading -->
+    <div x-show="loading" class="text-center py-12">
+        <i class="fas fa-spinner fa-spin text-4xl" style="color: #F59E0B;"></i>
+        <p class="mt-4" style="color: #D1D5DB;">Carregando...</p>
+    </div>
+    
+    <!-- Profile -->
+    <div x-show="!loading" x-cloak>
+        
+        <!-- Stats principais -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            
+            <!-- Pontos -->
+            <div class="card !p-6 relative overflow-hidden border-2" style="border-color: #F59E0B; box-shadow: 0 0 30px rgba(245, 158, 11, 0.4);">
+                <div class="absolute -inset-2 rounded-xl blur-lg" style="background: #F59E0B; opacity: 0.15;"></div>
+                <div class="relative">
+                    <p class="text-xs font-bold mb-2" style="color: #FCD34D; text-transform: uppercase; letter-spacing: 0.1em;">Pontos Totais</p>
+                    <p class="text-4xl font-black mb-2" style="color: #FDE68A; text-shadow: 0 0 20px rgba(253, 230, 138, 0.6);" x-text="(profile.ranking?.points || 0).toLocaleString()">0</p>
+                    <p class="text-xs font-semibold" style="color: #D1D5DB;">XP acumulado</p>
+                </div>
+            </div>
+            
+            <!-- Posição -->
+            <div class="card !p-6">
+                <p class="text-xs font-bold mb-2" style="color: #93C5FD; text-transform: uppercase; letter-spacing: 0.1em;">Posição</p>
+                <p class="text-4xl font-black mb-2" style="color: #60A5FA;" x-text="'#' + (profile.ranking?.position || 0)">-</p>
+                <p class="text-xs font-semibold" style="color: #D1D5DB;">No ranking geral</p>
+            </div>
+            
+            <!-- Streak -->
+            <div class="card !p-6">
+                <p class="text-xs font-bold mb-2" style="color: #FDBA74; text-transform: uppercase; letter-spacing: 0.1em;">Streak</p>
+                <div class="flex items-center gap-2">
+                    <i class="fas fa-fire text-3xl" style="color: #FB923C; filter: drop-shadow(0 0 8px rgba(251, 146, 60, 0.8));"></i>
+                    <p class="text-4xl font-black" style="color: #FDBA74;" x-text="profile.streak?.current || 0">0</p>
+                </div>
+                <p class="text-xs font-semibold" style="color: #D1D5DB;">Dias consecutivos</p>
+            </div>
+            
+            <!-- Conquistas -->
+            <div class="card !p-6">
+                <p class="text-xs font-bold mb-2" style="color: #C4B5FD; text-transform: uppercase; letter-spacing: 0.1em;">Conquistas</p>
+                <p class="text-4xl font-black mb-2" style="color: #A78BFA;">
+                    <span x-text="profile.achievements?.total || 0">0</span>/<span x-text="profile.achievements?.total_available || 0">0</span>
+                </p>
+                <p class="text-xs font-semibold" style="color: #D1D5DB;">Desbloqueadas</p>
+            </div>
+            
+        </div>
+        
+        <!-- Liga Atual -->
+        <div x-show="profile.ranking?.league" class="card !p-6 mb-8 border-2" :style="`border-color: ${profile.ranking?.league?.color || '#CD7F32'}; box-shadow: 0 0 30px ${profile.ranking?.league?.color || '#CD7F32'}40;`">
+            <div class="flex items-center justify-between flex-wrap gap-4">
+                <div class="flex items-center gap-4">
+                    <div class="w-20 h-20 rounded-full flex items-center justify-center" :style="`background: linear-gradient(135deg, ${profile.ranking?.league?.color || '#CD7F32'}, ${profile.ranking?.league?.color || '#CD7F32'}AA);`">
+                        <i :class="profile.ranking?.league?.icon || 'fa-medal'" class="fas text-4xl" style="color: #1C1917;"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs font-bold" style="color: #9CA3AF; text-transform: uppercase;">Sua Liga</p>
+                        <h3 class="text-2xl font-black" :style="`color: ${profile.ranking?.league?.color || '#CD7F32'};`" x-text="profile.ranking?.league?.name || 'Carregando...'">-</h3>
+                        <p class="text-sm font-semibold" style="color: #D1D5DB;">
+                            Tier <span x-text="profile.ranking?.league?.tier || 0">0</span> - 
+                            <span x-text="(profile.ranking?.league?.commission_discount || 0) + '% de desconto'"></span>
+                        </p>
+                    </div>
+                </div>
+                
+                <div class="text-right">
+                    <p class="text-xs font-bold mb-2" style="color: #9CA3AF;">Range de Pontos</p>
+                    <p class="text-lg font-black" style="color: #FDE68A;">
+                        <span x-text="(profile.ranking?.league?.min_points || 0).toLocaleString()">0</span> - 
+                        <span x-text="profile.ranking?.league?.max_points ? profile.ranking.league.max_points.toLocaleString() : '∞'">∞</span>
+                    </p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Título Ativo -->
+        <div x-show="profile.title?.active" class="card !p-4 mb-8 border-2" style="border-color: #A855F7; background: rgba(168, 85, 247, 0.08);">
+            <div class="flex items-center gap-3">
+                <i class="fas fa-crown text-2xl" style="color: #A855F7; filter: drop-shadow(0 0 8px rgba(168, 85, 247, 0.6));"></i>
+                <div>
+                    <p class="text-xs font-bold" style="color: #C4B5FD;">Título Equipado</p>
+                    <p class="text-lg font-black" :style="`color: ${profile.title?.active?.color || '#A855F7'};`" x-text="profile.title?.active?.prefix || ''"></p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Navegação de Tabs -->
+        <div class="flex gap-4 mb-6 border-b border-white border-opacity-10">
+            <button 
+                @click="activeTab = 'achievements'"
+                :class="{'border-accent500 text-accent500': activeTab === 'achievements', 'border-transparent text-textSecondary': activeTab !== 'achievements'}"
+                class="px-4 py-3 font-bold border-b-2 transition-colors">
+                <i class="fas fa-trophy mr-2"></i>
+                Conquistas
+            </button>
+            <button 
+                @click="activeTab = 'stats'"
+                :class="{'border-accent500 text-accent500': activeTab === 'stats', 'border-transparent text-textSecondary': activeTab !== 'stats'}"
+                class="px-4 py-3 font-bold border-b-2 transition-colors">
+                <i class="fas fa-chart-bar mr-2"></i>
+                Estatísticas
+            </button>
+            <button 
+                @click="activeTab = 'titles'"
+                :class="{'border-accent500 text-accent500': activeTab === 'titles', 'border-transparent text-textSecondary': activeTab !== 'titles'}"
+                class="px-4 py-3 font-bold border-b-2 transition-colors">
+                <i class="fas fa-crown mr-2"></i>
+                Títulos
+            </button>
+        </div>
+        
+        <!-- Tab: Conquistas -->
+        <div x-show="activeTab === 'achievements'" class="space-y-6">
+            <div class="flex gap-2 mb-4">
+                <button @click="achievementFilter = 'all'" :class="achievementFilter === 'all' ? 'bg-accent500 text-black' : 'bg-bg900 text-textSecondary'" class="px-4 py-2 rounded-lg font-bold transition">Todas</button>
+                <button @click="achievementFilter = 'completed'" :class="achievementFilter === 'completed' ? 'bg-green-500 text-white' : 'bg-bg900 text-textSecondary'" class="px-4 py-2 rounded-lg font-bold transition">Completas</button>
+                <button @click="achievementFilter = 'in_progress'" :class="achievementFilter === 'in_progress' ? 'bg-blue-500 text-white' : 'bg-bg900 text-textSecondary'" class="px-4 py-2 rounded-lg font-bold transition">Em Progresso</button>
+                <button @click="achievementFilter = 'locked'" :class="achievementFilter === 'locked' ? 'bg-bg900 text-white' : 'bg-bg900 text-textSecondary'" class="px-4 py-2 rounded-lg font-bold transition">Bloqueadas</button>
+            </div>
+            
+            <p class="text-center py-8" style="color: #9CA3AF;">🚧 Em desenvolvimento - Fase 2</p>
+        </div>
+        
+        <!-- Tab: Estatísticas -->
+        <div x-show="activeTab === 'stats'" class="space-y-6">
+            <p class="text-center py-8" style="color: #9CA3AF;">🚧 Em desenvolvimento - Fase 2</p>
+        </div>
+        
+        <!-- Tab: Títulos -->
+        <div x-show="activeTab === 'titles'" class="space-y-6">
+            <p class="text-center py-8" style="color: #9CA3AF;">🚧 Em desenvolvimento - Fase 2</p>
+        </div>
+        
+    </div>
+    
+</div>
+
+<script>
+function gamificationProfile() {
+    return {
+        loading: true,
+        profile: {},
+        activeTab: 'achievements',
+        achievementFilter: 'all',
+        
+        async loadProfile() {
+            try {
+                this.loading = true;
+                
+                const response = await fetch('/api/v2/gamification/profile');
+                const data = await response.json();
+                
+                if (data.success) {
+                    this.profile = data.profile;
+                }
+            } catch (e) {
+                console.error('Erro ao carregar perfil:', e);
+            } finally {
+                this.loading = false;
+            }
+        }
+    }
+}
+</script>
+{% endblock %}
+
+

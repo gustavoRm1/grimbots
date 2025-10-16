@@ -40,26 +40,46 @@
 
                 <form @submit.prevent="updateProfile()" class="space-y-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700">Nome Completo</label>
+                        <label class="block text-sm font-medium text-gray-700 flex items-center gap-2">
+                            Nome Completo
+                            <button type="button" class="text-blue-500 hover:text-blue-600" data-tooltip="Seu nome completo como aparecerá no sistema">
+                                <i class="fas fa-question-circle text-xs"></i>
+                            </button>
+                        </label>
                         <input type="text" 
                                x-model="profile.full_name" 
-                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                               placeholder="João Silva">
                     </div>
 
                     <div>
-                        <label class="block text-sm font-medium text-gray-700">Email</label>
+                        <label class="block text-sm font-medium text-gray-700 flex items-center gap-2">
+                            Email
+                            <button type="button" class="text-blue-500 hover:text-blue-600" data-tooltip="Email para login e notificações importantes">
+                                <i class="fas fa-question-circle text-xs"></i>
+                            </button>
+                        </label>
                         <input type="email" 
                                x-model="profile.email" 
-                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                               class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                               placeholder="seu@email.com">
                     </div>
 
                     <div>
-                        <label class="block text-sm font-medium text-gray-700">Username</label>
+                        <label class="block text-sm font-medium text-gray-700 flex items-center gap-2">
+                            Username
+                            <button type="button" class="text-gray-400" data-tooltip="Nome de usuário único no sistema. Não pode ser alterado por segurança.">
+                                <i class="fas fa-question-circle text-xs"></i>
+                            </button>
+                        </label>
                         <input type="text" 
                                x-model="profile.username" 
                                disabled
                                class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 bg-gray-50 text-gray-500 cursor-not-allowed sm:text-sm">
-                        <p class="mt-1 text-xs text-gray-500">Username não pode ser alterado</p>
+                        <p class="mt-1 text-xs text-gray-500">
+                            <i class="fas fa-lock text-xs mr-1"></i>
+                            Username não pode ser alterado por segurança
+                        </p>
                     </div>
 
                     <div class="pt-4">
@@ -67,9 +87,17 @@
                                 :disabled="loading"
                                 :class="{'opacity-50 cursor-not-allowed': loading}"
                                 class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">
-                            <i class="fas fa-save mr-2"></i>
-                            <span x-show="!loading">Salvar Alterações</span>
-                            <span x-show="loading">Salvando...</span>
+                            <span x-show="!loading" class="flex items-center">
+                                <i class="fas fa-save mr-2"></i>
+                                Salvar Alterações
+                            </span>
+                            <span x-show="loading" class="flex items-center">
+                                <svg class="animate-spin h-4 w-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                Salvando...
+                            </span>
                         </button>
                     </div>
                 </form>
@@ -77,19 +105,32 @@
                 <div class="mt-8 pt-8 border-t border-gray-200">
                     <h3 class="text-lg font-medium text-gray-900 mb-4">Alterar Senha</h3>
                     <form @submit.prevent="updatePassword()" class="space-y-4">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700">Senha Atual</label>
+                            <label class="block text-sm font-medium text-gray-700 flex items-center gap-2">
+                                Senha Atual
+                                <button type="button" class="text-blue-500 hover:text-blue-600" data-tooltip="Digite sua senha atual para confirmar sua identidade">
+                                    <i class="fas fa-question-circle text-xs"></i>
+                                </button>
+                            </label>
                             <input type="password" 
                                    x-model="password.current" 
-                                   class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                                   class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                   placeholder="Digite sua senha atual">
                         </div>
 
                         <div>
-                            <label class="block text-sm font-medium text-gray-700">Nova Senha</label>
+                            <label class="block text-sm font-medium text-gray-700 flex items-center gap-2">
+                                Nova Senha
+                                <button type="button" class="text-blue-500 hover:text-blue-600" data-tooltip="Mínimo 6 caracteres. Recomendamos 12+ com letras, números e símbolos">
+                                    <i class="fas fa-question-circle text-xs"></i>
+                                </button>
+                            </label>
                             <input type="password" 
                                    x-model="password.new" 
                                    minlength="6"
-                                   class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+                                   class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                   placeholder="Digite sua nova senha (mín. 6 caracteres)">
                         </div>
 
                         <div class="pt-4">
@@ -218,6 +259,7 @@
                     </div>
 
                         <form @submit.prevent="saveGateway('syncpay')" class="space-y-5">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                             <!-- Client ID -->
                             <div class="space-y-2">
                                 <label for="syncpay_client_id" class="block text-sm font-black flex items-center gap-2" style="color: #FAFAFA;">
@@ -370,7 +412,7 @@
                                         <img src="{{ url_for('static', filename='img/paradise.jpg') }}" alt="Paradise" class="w-full h-full object-cover rounded-lg">
                                     </div>
                                 </div>
-                                <div>
+                            <div>
                                     <h4 class="text-xl font-black flex items-center gap-2" style="color: #FAFAFA;">
                                         Paradise
                                         <span x-show="getGatewayStatus('paradise')?.is_verified && getGatewayStatus('paradise')?.is_active" 
@@ -383,12 +425,12 @@
                                         </span>
                                     </h4>
                                     <p class="text-sm font-semibold mt-1" style="color: #9CA3AF;">Gateway de pagamento internacional</p>
-                                </div>
                             </div>
+                        </div>
                             <span x-show="!getGatewayStatus('paradise')?.is_verified" 
                                   class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-black border-2" style="background: rgba(245, 158, 11, 0.15); color: #FCD34D; border-color: #F59E0B;">
                                 <i class="fas fa-exclamation-triangle mr-1.5"></i> Não Configurado
-                            </span>
+                        </span>
                     </div>
 
                         <form @submit.prevent="saveGateway('paradise')" class="space-y-5">
@@ -476,6 +518,143 @@
                             </div>
                     </form>
                     </div>
+                </div>
+
+                <!-- HooPay Card -->
+                <div class="gateway-card rounded-2xl p-6 border-2 transition-all hover:scale-[1.01]" style="background: #1F2937; border-color: rgba(59, 130, 246, 0.3); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);">
+                    <div class="flex items-center justify-between mb-6">
+                        <div class="flex items-center gap-4">
+                            <div class="relative">
+                                <div class="absolute -inset-2 rounded-xl blur-lg" style="background: #3B82F6; opacity: 0.25;"></div>
+                                <div class="relative flex items-center justify-center rounded-xl border-2 p-2" style="width: 80px; height: 80px; background: rgba(59, 130, 246, 0.15); border-color: #3B82F6;">
+                                    <img src="{{ url_for('static', filename='img/hoopay.webp') }}" alt="HooPay" class="w-full h-full object-contain rounded-lg">
+                                </div>
+                            </div>
+                            <div>
+                                <h4 class="text-xl font-black flex items-center gap-2" style="color: #FAFAFA;">
+                                    HooPay
+                                    <span x-show="getGatewayStatus('hoopay')?.is_verified && getGatewayStatus('hoopay')?.is_active" 
+                                          class="inline-flex items-center px-3 py-1 rounded-full text-xs font-black border-2 animate-pulse" style="background: rgba(34, 197, 94, 0.2); color: #6EE7B7; border-color: #22C55E;">
+                                        <i class="fas fa-circle mr-1 text-xs"></i> ATIVO
+                                    </span>
+                                </h4>
+                                <p class="text-sm font-semibold mt-1" style="color: #9CA3AF;">Gateway completo</p>
+                            </div>
+                        </div>
+                        <span x-show="!getGatewayStatus('hoopay')?.is_verified" 
+                              class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-black border-2" style="background: rgba(245, 158, 11, 0.15); color: #FCD34D; border-color: #F59E0B;">
+                            <i class="fas fa-exclamation-triangle mr-1.5"></i> Não Configurado
+                        </span>
+                    </div>
+
+                    <form @submit.prevent="saveGateway('hoopay')" class="space-y-5">
+                        <div class="space-y-2" x-data="{ showKey: false }">
+                            <label class="block text-sm font-black flex items-center gap-2" style="color: #FAFAFA;">
+                                <i class="fas fa-key" style="color: #60A5FA;"></i>
+                                API Key
+                                <span style="color: #FCA5A5;">*</span>
+                            </label>
+                            <div class="relative group">
+                                <input 
+                                    :type="showKey ? 'text' : 'password'" 
+                                    x-model="gateways.hoopay.api_key" 
+                                    class="w-full pl-4 pr-12 py-3.5 rounded-xl focus:outline-none transition-all font-mono"
+                                    style="background: #111827; border: 2px solid rgba(255, 255, 255, 0.15); color: #93C5FD; font-weight: 700;"
+                                    placeholder="sua_api_key_hoopay">
+                                <button type="button" @click="showKey = !showKey" class="absolute inset-y-0 right-0 pr-4 flex items-center">
+                                    <i class="fas" :class="showKey ? 'fa-eye-slash' : 'fa-eye'"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="pt-2">
+                            <button type="submit" :disabled="loading" class="w-full py-3.5 px-6 rounded-xl text-sm font-black" style="background: linear-gradient(135deg, #3B82F6, #2563EB); color: #FFFFFF;">
+                                <span x-show="!loading"><i class="fas fa-save mr-2"></i>Salvar</span>
+                                <span x-show="loading"><i class="fas fa-spinner fa-spin mr-2"></i>Salvando...</span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- WiinPay Card ✅ NOVO -->
+                <div class="gateway-card rounded-2xl p-6 border-2 transition-all hover:scale-[1.01]" style="background: #1F2937; border-color: rgba(16, 185, 129, 0.3); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);">
+                    <div class="flex items-center justify-between mb-6">
+                        <div class="flex items-center gap-4">
+                            <div class="relative">
+                                <div class="absolute -inset-2 rounded-xl blur-lg" style="background: #10B981; opacity: 0.25;"></div>
+                                <div class="relative flex items-center justify-center rounded-xl border-2 p-2" style="width: 80px; height: 80px; background: rgba(16, 185, 129, 0.15); border-color: #10B981;">
+                                    <img src="{{ url_for('static', filename='img/wiinpay.ico') }}" alt="WiinPay" class="w-full h-full object-contain rounded-lg">
+                                </div>
+                            </div>
+                            <div>
+                                <h4 class="text-xl font-black flex items-center gap-2" style="color: #FAFAFA;">
+                                    WiinPay
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-black" style="background: rgba(16, 185, 129, 0.2); color: #6EE7B7;">NOVO</span>
+                                    <span x-show="getGatewayStatus('wiinpay')?.is_verified && getGatewayStatus('wiinpay')?.is_active" 
+                                          class="inline-flex items-center px-3 py-1 rounded-full text-xs font-black border-2 animate-pulse" style="background: rgba(34, 197, 94, 0.2); color: #6EE7B7; border-color: #22C55E;">
+                                        <i class="fas fa-circle mr-1 text-xs"></i> ATIVO
+                                    </span>
+                                </h4>
+                                <p class="text-sm font-semibold mt-1" style="color: #9CA3AF;">Simples e direto</p>
+                            </div>
+                        </div>
+                        <span x-show="!getGatewayStatus('wiinpay')?.is_verified" 
+                              class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-black border-2" style="background: rgba(245, 158, 11, 0.15); color: #FCD34D; border-color: #F59E0B;">
+                            <i class="fas fa-exclamation-triangle mr-1.5"></i> Não Configurado
+                        </span>
+                    </div>
+
+                    <form @submit.prevent="saveGateway('wiinpay')" class="space-y-5">
+                        <div class="space-y-2" x-data="{ showKey: false }">
+                            <label class="block text-sm font-black flex items-center gap-2" style="color: #FAFAFA;">
+                                <i class="fas fa-key" style="color: #10B981;"></i>
+                                API Key
+                                <span style="color: #FCA5A5;">*</span>
+                            </label>
+                            <div class="relative group">
+                                <input 
+                                    :type="showKey ? 'text' : 'password'" 
+                                    x-model="gateways.wiinpay.api_key" 
+                                    class="w-full pl-4 pr-12 py-3.5 rounded-xl focus:outline-none transition-all font-mono"
+                                    style="background: #111827; border: 2px solid rgba(255, 255, 255, 0.15); color: #6EE7B7; font-weight: 700;"
+                                    placeholder="sua_api_key_wiinpay">
+                                <button type="button" @click="showKey = !showKey" class="absolute inset-y-0 right-0 pr-4 flex items-center">
+                                    <i class="fas" :class="showKey ? 'fa-eye-slash' : 'fa-eye'"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="space-y-2">
+                            <label class="block text-sm font-black flex items-center gap-2" style="color: #FAFAFA;">
+                                <i class="fas fa-user" style="color: #10B981;"></i>
+                                Split User ID
+                                <span class="text-xs font-normal" style="color: #9CA3AF;">(opcional)</span>
+                            </label>
+                            <input 
+                                type="text" 
+                                x-model="gateways.wiinpay.split_user_id" 
+                                class="w-full px-4 py-3.5 rounded-xl focus:outline-none transition-all font-mono"
+                                style="background: #111827; border: 2px solid rgba(255, 255, 255, 0.15); color: #6EE7B7; font-weight: 700;"
+                                placeholder="1234567890 (seu user_id na WiinPay)">
+                            <p class="text-xs mt-1" style="color: #9CA3AF;">
+                                <i class="fas fa-info-circle mr-1"></i>
+                                Seu user_id na WiinPay para receber splits (4%)
+                            </p>
+                        </div>
+
+                        <div class="bg-info-500 bg-opacity-10 p-4 rounded-lg border border-info-500 border-opacity-30">
+                            <p class="text-xs" style="color: #93C5FD;">
+                                <i class="fas fa-exclamation-circle mr-1"></i>
+                                <strong>Valor mínimo:</strong> R$ 3,00. Produtos abaixo deste valor não podem usar WiinPay.
+                            </p>
+                        </div>
+
+                        <div class="pt-2">
+                            <button type="submit" :disabled="loading" class="w-full py-3.5 px-6 rounded-xl text-sm font-black" style="background: linear-gradient(135deg, #10B981, #059669); color: #FFFFFF;">
+                                <span x-show="!loading"><i class="fas fa-save mr-2"></i>Salvar Configuração</span>
+                                <span x-show="loading"><i class="fas fa-spinner fa-spin mr-2"></i>Salvando...</span>
+                            </button>
+                        </div>
+                    </form>
                 </div>
 
                 <!-- Final Info Box -->
@@ -669,6 +848,14 @@ function settingsApp() {
                 api_key: '',
                 offer_hash: '',
                 product_hash: ''
+            },
+            hoopay: {
+                api_key: '',
+                organization_id: ''
+            },
+            wiinpay: {
+                api_key: '',
+                split_user_id: ''
             }
         },
         gatewaysList: [],

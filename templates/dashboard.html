@@ -8,13 +8,90 @@
 {% endblock %}
 
 {% block content %}
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" x-data="dashboardApp()" x-init="init()">
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" 
+     x-data="{
+         showAdvanced: localStorage.getItem('dashboard_mode') === 'advanced',
+         dashboardData: null,
+         toggleDashboard() {
+             this.showAdvanced = !this.showAdvanced;
+             localStorage.setItem('dashboard_mode', this.showAdvanced ? 'advanced' : 'simple');
+         },
+         ...dashboardApp()
+     }" 
+     x-init="init()">
+    
+    <!-- MODO SIMPLES -->
+    <div x-show="!showAdvanced" x-cloak>
+        <div class="mb-8">
+            <h1 class="text-4xl font-bold text-gray-900">Olá, {{ current_user.username }}! 👋</h1>
+            <p class="mt-2 text-lg text-gray-600">Aqui está um resumo rápido do seu negócio</p>
+        </div>
+
+        {% if stats.total_bots == 0 %}
+        <div class="mb-8 bg-gradient-to-r from-blue-500 to-blue-600 rounded-2xl p-8 text-white shadow-2xl">
+            <div class="flex items-center justify-between flex-wrap gap-4">
+                <div>
+                    <div class="text-5xl mb-4">🤖</div>
+                    <h2 class="text-3xl font-bold mb-2">Crie seu primeiro bot de vendas!</h2>
+                    <p class="text-blue-100 text-lg">Em menos de 5 minutos você estará vendendo</p>
+                </div>
+                <a href="/bot/create" class="px-8 py-4 bg-white text-blue-600 rounded-xl font-bold text-lg hover:bg-blue-50 transition-all transform hover:scale-105 shadow-lg">
+                    <i class="fas fa-plus mr-2"></i>Criar Meu Bot Agora
+                </a>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="bg-white rounded-2xl p-6 shadow-lg border-2 border-green-100">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="text-5xl">💰</div>
+                    <div class="bg-green-100 text-green-600 px-3 py-1 rounded-full text-xs font-bold">GANHOS</div>
+                </div>
+                <div class="text-4xl font-black text-gray-900 mb-2">R$ {{ "%.2f"|format(stats.total_revenue) }}</div>
+                <div class="text-sm text-gray-500">Você ganhou no total</div>
+            </div>
+            <div class="bg-white rounded-2xl p-6 shadow-lg border-2 border-blue-100">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="text-5xl">✅</div>
+                    <div class="bg-blue-100 text-blue-600 px-3 py-1 rounded-full text-xs font-bold">VENDAS</div>
+                </div>
+                <div class="text-4xl font-black text-gray-900 mb-2">{{ stats.total_sales }}</div>
+                <div class="text-sm text-gray-500">Vendas confirmadas</div>
+            </div>
+            <div class="bg-white rounded-2xl p-6 shadow-lg border-2 border-purple-100">
+                <div class="flex items-center justify-between mb-4">
+                    <div class="text-5xl">🤖</div>
+                    <div class="bg-purple-100 text-purple-600 px-3 py-1 rounded-full text-xs font-bold">BOTS</div>
+                </div>
+                <div class="text-4xl font-black text-gray-900 mb-2">{{ stats.running_bots }}</div>
+                <div class="text-sm text-gray-500">Bots ativos <span class="text-gray-400">(de {{ stats.total_bots }})</span></div>
+            </div>
+        </div>
+
+        <div class="text-center mt-8">
+            <button @click="toggleDashboard()" class="inline-flex items-center gap-3 px-6 py-3 bg-gray-900 text-white rounded-xl font-semibold hover:bg-gray-800 transition-all">
+                <i class="fas fa-chart-line"></i>
+                <span>Ver Estatísticas Detalhadas</span>
+                <i class="fas fa-arrow-right"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- MODO AVANÇADO -->
+    <div x-show="showAdvanced" x-cloak>
+        <div class="mb-6">
+            <button @click="toggleDashboard()" class="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 transition-all">
+                <i class="fas fa-arrow-left"></i>
+                <span>Voltar para visão simples</span>
+            </button>
+        </div>
     
     <!-- Header com Filtros -->
     <div class="mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
             <h1 class="text-3xl font-bold text-textPrimary flex items-center gap-3">
-                Dashboard
+                Estatísticas Completas
                 <!-- Indicador de Atualização -->
                 <span x-show="isUpdating" class="inline-flex items-center gap-2 text-sm font-normal text-accent500">
                     <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -1390,7 +1467,7 @@ function dashboardApp() {
 
         async addBot() {
             if (!this.newBotToken) {
-                alert('Insira o token do bot');
+                showFriendlyError('Campo obrigatório');
                 return;
             }
 
@@ -1408,69 +1485,91 @@ function dashboardApp() {
                 const data = await response.json();
 
                 if (response.ok) {
-                    this.showNotification('Bot adicionado com sucesso!');
-                    location.reload();
+                    showSuccess('Bot adicionado com sucesso!');
+                    setTimeout(() => location.reload(), 1500);
                 } else {
-                    alert('Erro: ' + data.error);
+                    showFriendlyError(data.error);
                 }
             } catch (error) {
-                alert('Erro ao adicionar bot: ' + error.message);
+                showFriendlyError(error.message);
             } finally {
                 this.loading = false;
             }
         },
 
         async startBot(botId) {
-            if (!confirm('Deseja iniciar este bot?')) return;
+            const confirmed = await confirmAction({
+                title: 'Iniciar este bot?',
+                message: 'O bot começará a responder mensagens automaticamente.',
+                icon: '▶️',
+                confirmText: 'Sim, iniciar',
+                cancelText: 'Cancelar'
+            });
+            if (!confirmed) return;
 
             try {
                 const response = await fetch(`/api/bots/${botId}/start`, {method: 'POST'});
                 const data = await response.json();
 
                 if (response.ok) {
-                    this.showNotification('Bot iniciado!');
+                    showSuccess('Bot iniciado com sucesso!');
                     await this.refreshStats();
                 } else {
-                    alert('Erro: ' + data.error);
+                    showFriendlyError(data.error);
                 }
             } catch (error) {
-                alert('Erro: ' + error.message);
+                showFriendlyError(error.message);
             }
         },
 
         async stopBot(botId) {
-            if (!confirm('Deseja parar este bot?')) return;
+            const confirmed = await confirmAction({
+                title: 'Parar este bot?',
+                message: 'O bot vai parar de responder mensagens.',
+                icon: '⏸️',
+                confirmText: 'Sim, parar',
+                cancelText: 'Cancelar'
+            });
+            if (!confirmed) return;
 
             try {
                 const response = await fetch(`/api/bots/${botId}/stop`, {method: 'POST'});
                 const data = await response.json();
 
                 if (response.ok) {
-                    this.showNotification('Bot parado!');
+                    showSuccess('Bot parado com sucesso!');
                     await this.refreshStats();
                 } else {
-                    alert('Erro: ' + data.error);
+                    showFriendlyError(data.error);
                 }
             } catch (error) {
-                alert('Erro: ' + error.message);
+                showFriendlyError(error.message);
             }
         },
 
         async deleteBot(botId, botName) {
-            if (!confirm(`Deletar "${botName}"? Esta ação não pode ser desfeita.`)) return;
+            const confirmed = await confirmAction({
+                title: `Deletar "${botName}"?`,
+                message: 'Todos os dados deste bot serão apagados permanentemente.',
+                warning: 'Esta ação NÃO PODE ser desfeita!',
+                icon: '🗑️',
+                confirmText: 'Sim, deletar bot',
+                cancelText: 'Não, manter bot'
+            });
+            if (!confirmed) return;
 
             try {
                 const response = await fetch(`/api/bots/${botId}`, {method: 'DELETE'});
                 const data = await response.json();
 
                 if (response.ok) {
-                    this.showNotification('Bot deletado!');
+                    showSuccess('Bot deletado com sucesso!');
                     location.reload();
                 } else {
-                    alert('Erro: ' + data.error);
+                    showFriendlyError(data.error);
                 }
             } catch (error) {
-                alert('Erro: ' + error.message);
+                showFriendlyError(error.message);
             }
         },
 
@@ -1663,5 +1762,9 @@ function dashboardApp() {
     }
 }
 </script>
+    </div>
+    <!-- Fim Modo Avançado -->
+</div>
+<!-- Fim Container Principal -->
 {% endblock %}
 

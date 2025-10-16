@@ -27,8 +27,8 @@ class User(UserMixin, db.Model):
     password_hash = db.Column(db.String(255), nullable=False)
     full_name = db.Column(db.String(120))
     
-    # Modelo de comissão (sem planos fixos)
-    commission_rate = db.Column(db.Float, default=0.75)  # R$ 0.75 por venda
+    # Modelo de comissão (percentual sobre vendas)
+    commission_percentage = db.Column(db.Float, default=4.0)  # 4% sobre cada venda
     total_commission_owed = db.Column(db.Float, default=0.0)  # Total a pagar
     total_commission_paid = db.Column(db.Float, default=0.0)  # Total já pago
     
@@ -46,7 +46,7 @@ class User(UserMixin, db.Model):
     is_active = db.Column(db.Boolean, default=True)
     is_verified = db.Column(db.Boolean, default=False)
     is_admin = db.Column(db.Boolean, default=False)  # Admin da plataforma
-    is_banned = db.Column(db.Boolean, default=False)  # Usuário banido
+    is_banned = db.Column(db.Boolean, default=False, index=True)  # Usuário banido (indexado para queries de listagem)
     ban_reason = db.Column(db.String(500))  # Motivo do banimento
     banned_at = db.Column(db.DateTime)  # Data do banimento
     
@@ -79,11 +79,15 @@ class User(UserMixin, db.Model):
         """Retorna saldo de comissões a pagar"""
         return self.total_commission_owed - self.total_commission_paid
     
-    def add_commission(self, amount):
-        """Adiciona comissão à conta do usuário"""
-        commission = self.commission_rate
+    def add_commission(self, sale_amount):
+        """Adiciona comissão baseada no percentual sobre o valor da venda"""
+        commission = sale_amount * (self.commission_percentage / 100)
         self.total_commission_owed += commission
         return commission
+    
+    def calculate_commission(self, sale_amount):
+        """Calcula a comissão sem adicionar ao total (apenas retorna o valor)"""
+        return sale_amount * (self.commission_percentage / 100)
     
     def calculate_ranking_points(self):
         """Calcula pontos de ranking baseado em performance"""
@@ -180,7 +184,7 @@ class Bot(db.Model):
     
     # Status
     is_active = db.Column(db.Boolean, default=True)
-    is_running = db.Column(db.Boolean, default=False)
+    is_running = db.Column(db.Boolean, default=False, index=True)  # Indexado para filtrar bots em execução
     last_error = db.Column(db.Text)
     
     # Estatísticas
@@ -237,9 +241,13 @@ class BotConfig(db.Model):
     # [{"text": "...", "url": "https://..."}]
     redirect_buttons = db.Column(db.Text)
     
-    # Downsells (JSON)
+    # Downsells (JSON) - Enviados quando PIX gerado mas não pago
     downsells = db.Column(db.Text)  # [{"delay_minutes": 5, "message": "...", "media_url": "...", "buttons": [...]}]
     downsells_enabled = db.Column(db.Boolean, default=False)
+    
+    # ✅ UPSELLS (JSON) - Enviados APÓS compra aprovada
+    upsells = db.Column(db.Text)  # [{"trigger_product": "INSS Básico", "delay_minutes": 0, "message": "...", "price": 97, ...}]
+    upsells_enabled = db.Column(db.Boolean, default=False)
     
     # Link de acesso após pagamento
     access_link = db.Column(db.String(500))
@@ -252,7 +260,8 @@ class BotConfig(db.Model):
         if self.main_buttons:
             try:
                 return json.loads(self.main_buttons)
-            except:
+            except (json.JSONDecodeError, ValueError, TypeError) as e:
+                logger.warning(f"Erro ao parsear main_buttons: {e}")
                 return []
         return []
     
@@ -265,7 +274,8 @@ class BotConfig(db.Model):
         if self.downsells:
             try:
                 return json.loads(self.downsells)
-            except:
+            except (json.JSONDecodeError, ValueError, TypeError) as e:
+                logger.warning(f"Erro ao parsear downsells: {e}")
                 return []
         return []
     
@@ -273,12 +283,27 @@ class BotConfig(db.Model):
         """Define downsells"""
         self.downsells = json.dumps(downsells)
     
+    def get_upsells(self):
+        """Retorna upsells parseados"""
+        if self.upsells:
+            try:
+                return json.loads(self.upsells)
+            except (json.JSONDecodeError, ValueError, TypeError) as e:
+                logger.warning(f"Erro ao parsear upsells: {e}")
+                return []
+        return []
+    
+    def set_upsells(self, upsells):
+        """Define upsells"""
+        self.upsells = json.dumps(upsells)
+    
     def get_redirect_buttons(self):
         """Retorna botões de redirecionamento parseados"""
         if self.redirect_buttons:
             try:
                 return json.loads(self.redirect_buttons)
-            except:
+            except (json.JSONDecodeError, ValueError, TypeError) as e:
+                logger.warning(f"Erro ao parsear redirect_buttons: {e}")
                 return []
         return []
     
@@ -297,6 +322,8 @@ class BotConfig(db.Model):
             'redirect_buttons': self.get_redirect_buttons(),
             'downsells_enabled': self.downsells_enabled,
             'downsells': self.get_downsells(),
+            'upsells_enabled': self.upsells_enabled,
+            'upsells': self.get_upsells(),
             'access_link': self.access_link
         }
 
@@ -485,18 +512,24 @@ class Gateway(db.Model):
     # Tipo de gateway
     gateway_type = db.Column(db.String(30), nullable=False)  # syncpay, pushynpay, paradise, hoopay
     
-    # Credenciais (criptografadas)
+    # ============================================================================
+    # CORREÇÃO #5: CREDENCIAIS CRIPTOGRAFADAS
+    # ============================================================================
+    # Armazenamento interno (prefixo _ = privado)
     client_id = db.Column(db.String(255))
-    client_secret = db.Column(db.String(255))
-    api_key = db.Column(db.String(255))
+    _client_secret = db.Column('client_secret', db.String(1000))  # Criptografado
+    _api_key = db.Column('api_key', db.String(1000))  # Criptografado
     
-    # Campos específicos Paradise
-    product_hash = db.Column(db.String(255))  # prod_... (código do produto)
-    offer_hash = db.Column(db.String(255))    # ID da oferta (extraído da URL)
-    store_id = db.Column(db.String(50))       # ID da conta no Paradise para split
+    # Campos específicos Paradise (criptografados)
+    _product_hash = db.Column('product_hash', db.String(1000))  # Criptografado
+    _offer_hash = db.Column('offer_hash', db.String(1000))  # Criptografado
+    store_id = db.Column(db.String(50))  # ID da conta (não sensível)
     
-    # Campos específicos HooPay
-    organization_id = db.Column(db.String(255))  # UUID da organização para split
+    # Campos específicos HooPay (criptografado)
+    _organization_id = db.Column('organization_id', db.String(1000))  # Criptografado
+    
+    # Campos específicos WiinPay (criptografado)
+    _split_user_id = db.Column('split_user_id', db.String(1000))  # Criptografado
     
     # Split configuration (padrão 4%)
     split_percentage = db.Column(db.Float, default=4.0)
@@ -513,6 +546,136 @@ class Gateway(db.Model):
     # Datas
     created_at = db.Column(db.DateTime, default=get_brazil_time)
     verified_at = db.Column(db.DateTime)
+    
+    # ============================================================================
+    # PROPERTIES: CRIPTOGRAFIA AUTOMÁTICA
+    # ============================================================================
+    
+    @property
+    def client_secret(self):
+        """Descriptografa client_secret ao acessar"""
+        if not self._client_secret:
+            return None
+        try:
+            from utils.encryption import decrypt
+            return decrypt(self._client_secret)
+        except Exception as e:
+            logger.error(f"Erro ao descriptografar client_secret gateway {self.id}: {e}")
+            return None
+    
+    @client_secret.setter
+    def client_secret(self, value):
+        """Criptografa client_secret ao armazenar"""
+        if not value:
+            self._client_secret = None
+        else:
+            from utils.encryption import encrypt
+            self._client_secret = encrypt(value)
+    
+    @property
+    def api_key(self):
+        """Descriptografa api_key ao acessar"""
+        if not self._api_key:
+            return None
+        try:
+            from utils.encryption import decrypt
+            return decrypt(self._api_key)
+        except Exception as e:
+            logger.error(f"Erro ao descriptografar api_key gateway {self.id}: {e}")
+            return None
+    
+    @api_key.setter
+    def api_key(self, value):
+        """Criptografa api_key ao armazenar"""
+        if not value:
+            self._api_key = None
+        else:
+            from utils.encryption import encrypt
+            self._api_key = encrypt(value)
+    
+    @property
+    def product_hash(self):
+        """Descriptografa product_hash ao acessar"""
+        if not self._product_hash:
+            return None
+        try:
+            from utils.encryption import decrypt
+            return decrypt(self._product_hash)
+        except Exception as e:
+            logger.error(f"Erro ao descriptografar product_hash gateway {self.id}: {e}")
+            return None
+    
+    @product_hash.setter
+    def product_hash(self, value):
+        """Criptografa product_hash ao armazenar"""
+        if not value:
+            self._product_hash = None
+        else:
+            from utils.encryption import encrypt
+            self._product_hash = encrypt(value)
+    
+    @property
+    def offer_hash(self):
+        """Descriptografa offer_hash ao acessar"""
+        if not self._offer_hash:
+            return None
+        try:
+            from utils.encryption import decrypt
+            return decrypt(self._offer_hash)
+        except Exception as e:
+            logger.error(f"Erro ao descriptografar offer_hash gateway {self.id}: {e}")
+            return None
+    
+    @offer_hash.setter
+    def offer_hash(self, value):
+        """Criptografa offer_hash ao armazenar"""
+        if not value:
+            self._offer_hash = None
+        else:
+            from utils.encryption import encrypt
+            self._offer_hash = encrypt(value)
+    
+    @property
+    def organization_id(self):
+        """Descriptografa organization_id ao acessar"""
+        if not self._organization_id:
+            return None
+        try:
+            from utils.encryption import decrypt
+            return decrypt(self._organization_id)
+        except Exception as e:
+            logger.error(f"Erro ao descriptografar organization_id gateway {self.id}: {e}")
+            return None
+    
+    @organization_id.setter
+    def organization_id(self, value):
+        """Criptografa organization_id ao armazenar"""
+        if not value:
+            self._organization_id = None
+        else:
+            from utils.encryption import encrypt
+            self._organization_id = encrypt(value)
+    
+    @property
+    def split_user_id(self):
+        """Descriptografa split_user_id ao acessar"""
+        if not self._split_user_id:
+            return None
+        try:
+            from utils.encryption import decrypt
+            return decrypt(self._split_user_id)
+        except Exception as e:
+            logger.error(f"Erro ao descriptografar split_user_id gateway {self.id}: {e}")
+            return None
+    
+    @split_user_id.setter
+    def split_user_id(self, value):
+        """Criptografa split_user_id ao armazenar"""
+        if not value:
+            self._split_user_id = None
+        else:
+            from utils.encryption import encrypt
+            self._split_user_id = encrypt(value)
     
     def to_dict(self):
         """Retorna dados do gateway em formato dict"""
@@ -561,7 +724,7 @@ class Payment(db.Model):
     downsell_index = db.Column(db.Integer)
     
     # Status
-    status = db.Column(db.String(20), default='pending')  # pending, paid, failed, cancelled
+    status = db.Column(db.String(20), default='pending', index=True)  # pending, paid, failed, cancelled (indexado para queries frequentes)
     
     # Datas
     created_at = db.Column(db.DateTime, default=get_brazil_time, index=True)

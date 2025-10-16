@@ -96,13 +96,14 @@ class BotManager:
             # Configurar webhook para receber mensagens do Telegram
             self._setup_webhook(token, bot_id)
             
-            # Armazenar bot ativo
-            self.active_bots[bot_id] = {
-                'token': token,
-                'config': config,
-                'started_at': datetime.now(),
-                'status': 'running'
-            }
+            # ✅ CORREÇÃO: Armazenar bot ativo com LOCK
+            with self._bots_lock:
+                self.active_bots[bot_id] = {
+                    'token': token,
+                    'config': config,
+                    'started_at': datetime.now(),
+                    'status': 'running'
+                }
         
         # Iniciar thread de monitoramento
         thread = threading.Thread(
@@ -158,13 +159,15 @@ class BotManager:
             bot_id: ID do bot
             config: Nova configuração
         """
-        if bot_id in self.active_bots:
-            self.active_bots[bot_id]['config'] = config
-            logger.info(f"🔧 Configuração do bot {bot_id} atualizada")
-            logger.info(f"🔍 DEBUG Config - downsells_enabled: {config.get('downsells_enabled', False)}")
-            logger.info(f"🔍 DEBUG Config - downsells: {config.get('downsells', [])}")
-        else:
-            logger.warning(f"⚠️ Bot {bot_id} não está ativo para atualizar configuração")
+        # ✅ CORREÇÃO: Atualizar config com LOCK
+        with self._bots_lock:
+            if bot_id in self.active_bots:
+                self.active_bots[bot_id]['config'] = config
+                logger.info(f"🔧 Configuração do bot {bot_id} atualizada")
+                logger.info(f"🔍 DEBUG Config - downsells_enabled: {config.get('downsells_enabled', False)}")
+                logger.info(f"🔍 DEBUG Config - downsells: {config.get('downsells', [])}")
+            else:
+                logger.warning(f"⚠️ Bot {bot_id} não está ativo para atualizar configuração")
     
     def _bot_monitor_thread(self, bot_id: int):
         """
@@ -175,7 +178,12 @@ class BotManager:
         """
         logger.info(f"Monitor do bot {bot_id} iniciado")
         
-        while bot_id in self.active_bots and self.active_bots[bot_id]['status'] == 'running':
+        # ✅ CORREÇÃO: Verificar status com LOCK
+        while True:
+            with self._bots_lock:
+                if bot_id not in self.active_bots or self.active_bots[bot_id]['status'] != 'running':
+                    break
+            
             try:
                 # Simular ping/heartbeat
                 self.socketio.emit('bot_heartbeat', {
@@ -258,26 +266,30 @@ class BotManager:
             bot_id: ID do bot
             token: Token do bot
         """
-        if bot_id not in self.active_bots or self.active_bots[bot_id]['status'] != 'running':
-            # Bot não está mais ativo, remover job
-            if bot_id in self.polling_jobs:
-                try:
-                    self.scheduler.remove_job(self.polling_jobs[bot_id])
-                    del self.polling_jobs[bot_id]
-                    logger.info(f"🛑 Polling job removido para bot {bot_id}")
-                except:
-                    pass
-            return
+        # ✅ CORREÇÃO: Verificar com LOCK
+        with self._bots_lock:
+            if bot_id not in self.active_bots or self.active_bots[bot_id]['status'] != 'running':
+                # Bot não está mais ativo, remover job
+                if bot_id in self.polling_jobs:
+                    try:
+                        self.scheduler.remove_job(self.polling_jobs[bot_id])
+                        del self.polling_jobs[bot_id]
+                        logger.info(f"🛑 Polling job removido para bot {bot_id}")
+                    except:
+                        pass
+                return
         
         try:
-            # Inicializar offset se não existir
-            if 'offset' not in self.active_bots[bot_id]:
-                self.active_bots[bot_id]['offset'] = 0
-                self.active_bots[bot_id]['poll_count'] = 0
-            
-            self.active_bots[bot_id]['poll_count'] += 1
-            poll_count = self.active_bots[bot_id]['poll_count']
-            offset = self.active_bots[bot_id]['offset']
+            # ✅ CORREÇÃO: Acessar active_bots com LOCK
+            with self._bots_lock:
+                # Inicializar offset se não existir
+                if 'offset' not in self.active_bots[bot_id]:
+                    self.active_bots[bot_id]['offset'] = 0
+                    self.active_bots[bot_id]['poll_count'] = 0
+                
+                self.active_bots[bot_id]['poll_count'] += 1
+                poll_count = self.active_bots[bot_id]['poll_count']
+                offset = self.active_bots[bot_id]['offset']
             
             # Log apenas a cada 30 polls (30 segundos)
             if poll_count % 30 == 0:
@@ -298,7 +310,9 @@ class BotManager:
                         logger.info(f"{'='*60}")
                         
                         for update in updates:
-                            self.active_bots[bot_id]['offset'] = update['update_id'] + 1
+                            # ✅ CORREÇÃO: Atualizar offset com LOCK
+                            with self._bots_lock:
+                                self.active_bots[bot_id]['offset'] = update['update_id'] + 1
                             self._process_telegram_update(bot_id, update)
         
         except requests.exceptions.Timeout:
@@ -318,7 +332,11 @@ class BotManager:
         offset = 0
         poll_count = 0
         
-        while bot_id in self.active_bots and self.active_bots[bot_id]['status'] == 'running':
+        # ✅ CORREÇÃO: Loop com verificação thread-safe
+        while True:
+            with self._bots_lock:
+                if bot_id not in self.active_bots or self.active_bots[bot_id]['status'] != 'running':
+                    break
             try:
                 poll_count += 1
                 url = f"https://api.telegram.org/bot{token}/getUpdates"
@@ -375,7 +393,12 @@ class BotManager:
                 logger.warning(f"⚠️ Bot {bot_id} não está mais ativo, ignorando update")
                 return
             
-            bot_info = self.active_bots[bot_id]
+            # ✅ CORREÇÃO: Acessar com LOCK
+            with self._bots_lock:
+                if bot_id not in self.active_bots:
+                    return
+                bot_info = self.active_bots[bot_id].copy()  # Copy para não segurar lock
+            
             token = bot_info['token']
             config = bot_info['config']
             
@@ -2071,19 +2094,21 @@ Seu pagamento ainda não foi confirmado.
         Returns:
             Informações de status
         """
-        if bot_id in self.active_bots:
-            bot_info = self.active_bots[bot_id]
-            return {
-                'is_running': True,
-                'status': bot_info['status'],
-                'started_at': bot_info['started_at'].isoformat(),
-                'uptime': (datetime.now() - bot_info['started_at']).total_seconds()
-            }
-        else:
-            return {
-                'is_running': False,
-                'status': 'stopped'
-            }
+        # ✅ CORREÇÃO: Acessar com LOCK
+        with self._bots_lock:
+            if bot_id in self.active_bots:
+                bot_info = self.active_bots[bot_id].copy()
+                return {
+                    'is_running': True,
+                    'status': bot_info['status'],
+                    'started_at': bot_info['started_at'].isoformat(),
+                    'uptime': (datetime.now() - bot_info['started_at']).total_seconds()
+                }
+            else:
+                return {
+                    'is_running': False,
+                    'status': 'stopped'
+                }
     
     def schedule_downsells(self, bot_id: int, payment_id: str, chat_id: int, downsells: list, original_price: float = 0, original_button_index: int = -1):
         """
@@ -2166,7 +2191,12 @@ Seu pagamento ainda não foi confirmado.
                 return
             logger.info(f"✅ Bot está ativo")
             
-            bot_info = self.active_bots[bot_id]
+            # ✅ CORREÇÃO: Acessar com LOCK
+            with self._bots_lock:
+                if bot_id not in self.active_bots:
+                    return
+                bot_info = self.active_bots[bot_id].copy()
+            
             token = bot_info['token']
             config = bot_info.get('config', {})
             

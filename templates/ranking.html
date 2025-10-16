@@ -23,43 +23,23 @@
         <p class="text-lg font-semibold" style="color: #D1D5DB;">Compete, venda e domine o ranking!</p>
     </div>
     
-    <!-- Filtros -->
+    <!-- Filtros Simplificados -->
     <div class="card !p-6 mb-8">
         <div class="flex flex-wrap justify-center gap-4">
-            <div class="flex gap-2">
-                <a href="?period=today&metric={{ metric }}" 
-                   class="px-4 py-2 rounded-lg {% if period == 'today' %}bg-accent500 text-black font-bold{% else %}bg-bg900 text-textSecondary hover:bg-white hover:bg-opacity-5{% endif %} transition">
-                    Hoje
+            <div class="flex gap-3">
+                <a href="?period=month" 
+                   class="px-6 py-3 rounded-xl font-bold text-lg {% if period == 'month' %}bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg{% else %}bg-gray-100 text-gray-700 hover:bg-gray-200{% endif %} transition-all">
+                    📅 Este Mês
                 </a>
-                <a href="?period=week&metric={{ metric }}" 
-                   class="px-4 py-2 rounded-lg {% if period == 'week' %}bg-accent500 text-black font-bold{% else %}bg-bg900 text-textSecondary hover:bg-white hover:bg-opacity-5{% endif %} transition">
-                    Semana
-                </a>
-                <a href="?period=month&metric={{ metric }}" 
-                   class="px-4 py-2 rounded-lg {% if period == 'month' %}bg-accent500 text-black font-bold{% else %}bg-bg900 text-textSecondary hover:bg-white hover:bg-opacity-5{% endif %} transition">
-                    Mês
-                </a>
-                <a href="?period=all&metric={{ metric }}" 
-                   class="px-4 py-2 rounded-lg {% if period == 'all' %}bg-accent500 text-black font-bold{% else %}bg-bg900 text-textSecondary hover:bg-white hover:bg-opacity-5{% endif %} transition">
-                    All-Time
-                </a>
-            </div>
-            <div class="w-px h-8 bg-white bg-opacity-10"></div>
-            <div class="flex gap-2">
-                <a href="?period={{ period }}&metric=points" 
-                   class="px-4 py-2 rounded-lg {% if metric == 'points' %}bg-purple-500 text-white font-bold{% else %}bg-bg900 text-textSecondary hover:bg-white hover:bg-opacity-5{% endif %} transition">
-                    Pontos
-                </a>
-                <a href="?period={{ period }}&metric=revenue" 
-                   class="px-4 py-2 rounded-lg {% if metric == 'revenue' %}bg-green-500 text-white font-bold{% else %}bg-bg900 text-textSecondary hover:bg-white hover:bg-opacity-5{% endif %} transition">
-                    Receita
-                </a>
-                <a href="?period={{ period }}&metric=sales" 
-                   class="px-4 py-2 rounded-lg {% if metric == 'sales' %}bg-blue-500 text-white font-bold{% else %}bg-bg900 text-textSecondary hover:bg-white hover:bg-opacity-5{% endif %} transition">
-                    Vendas
+                <a href="?period=all" 
+                   class="px-6 py-3 rounded-xl font-bold text-lg {% if period == 'all' %}bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-lg{% else %}bg-gray-100 text-gray-700 hover:bg-gray-200{% endif %} transition-all">
+                    🏆 Histórico Completo
                 </a>
             </div>
         </div>
+        <p class="text-center text-sm text-gray-500 mt-3">
+            💡 Ranking por <strong>receita total</strong> (quanto cada vendedor faturou)
+        </p>
     </div>
     
     <!-- SUA POSIÇÃO (Destaque) -->

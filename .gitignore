@@ -23,6 +23,9 @@ instance/
 .env.local
 .env.*.local
 
+# ✅ SEGURANÇA: Credenciais administrativas
+.admin_password
+
 # Logs
 *.log
 logs/
