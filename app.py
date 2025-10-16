@@ -2339,6 +2339,44 @@ def create_gateway():
     
     return jsonify(gateway.to_dict())
 
+@app.route('/api/gateways/<int:gateway_id>/toggle', methods=['POST'])
+@login_required
+def toggle_gateway(gateway_id):
+    """Ativa/desativa um gateway"""
+    gateway = Gateway.query.filter_by(
+        id=gateway_id,
+        user_id=current_user.id
+    ).first()
+    
+    if not gateway:
+        return jsonify({'error': 'Gateway não encontrado'}), 404
+    
+    if not gateway.is_verified:
+        return jsonify({'error': 'Gateway precisa estar verificado para ser ativado'}), 400
+    
+    # Se está ativando, desativar todos os outros
+    if not gateway.is_active:
+        Gateway.query.filter_by(
+            user_id=current_user.id,
+            is_active=True
+        ).update({'is_active': False})
+        
+        gateway.is_active = True
+        message = f'Gateway {gateway.gateway_type} ativado'
+    else:
+        gateway.is_active = False
+        message = f'Gateway {gateway.gateway_type} desativado'
+    
+    db.session.commit()
+    
+    logger.info(f"Gateway {gateway.gateway_type} {'ativado' if gateway.is_active else 'desativado'} por {current_user.email}")
+    
+    return jsonify({
+        'success': True,
+        'message': message,
+        'is_active': gateway.is_active
+    })
+
 @app.route('/api/gateways/<int:gateway_id>', methods=['DELETE'])
 @login_required
 def delete_gateway(gateway_id):
