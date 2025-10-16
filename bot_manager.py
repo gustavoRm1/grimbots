@@ -1128,15 +1128,19 @@ Desculpe, não foi possível processar seu pagamento.
                             api_status = payment_gateway.get_payment_status(payment.gateway_transaction_id)
                             
                             if api_status and api_status.get('status') == 'paid':
-                                logger.info(f"✅ API confirmou pagamento! Atualizando status...")
-                                payment.status = 'paid'
-                                payment.paid_at = datetime.now()
-                                payment.bot.total_sales += 1
-                                payment.bot.total_revenue += payment.amount
-                                payment.bot.owner.total_sales += payment.amount
-                                payment.bot.owner.total_revenue += payment.amount
-                                db.session.commit()
-                                logger.info(f"💾 Pagamento atualizado via consulta ativa")
+                                # ✅ PROTEÇÃO: Só atualiza se estava pendente (evita race condition)
+                                if payment.status == 'pending':
+                                    logger.info(f"✅ API confirmou pagamento! Atualizando status...")
+                                    payment.status = 'paid'
+                                    payment.paid_at = datetime.now()
+                                    payment.bot.total_sales += 1
+                                    payment.bot.total_revenue += payment.amount
+                                    payment.bot.owner.total_sales += 1
+                                    payment.bot.owner.total_revenue += payment.amount
+                                    db.session.commit()
+                                    logger.info(f"💾 Pagamento atualizado via consulta ativa")
+                                else:
+                                    logger.info(f"⚠️ Pagamento já estava confirmado (status: {payment.status})")
                             elif api_status:
                                 logger.info(f"⏳ API retornou status: {api_status.get('status')}")
                         else:

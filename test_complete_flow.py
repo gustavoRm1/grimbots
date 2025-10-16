@@ -86,20 +86,28 @@ def simulate_verify_payment():
         
         # Simular atualização do banco (como no bot_manager.py)
         if api_status.get('status') == 'paid':
-            print(f"\n✅ PAGAMENTO CONFIRMADO! Atualizando banco...")
+            # ✅ IMPORTANTE: Só atualiza se estava pendente (evita incremento duplicado)
+            was_pending = payment.status == 'pending'
             
-            payment.status = 'paid'
-            payment.paid_at = datetime.now()
-            
-            # Atualizar estatísticas
-            payment.bot.total_sales += 1
-            payment.bot.total_revenue += payment.amount
-            payment.bot.owner.total_sales += 1
-            payment.bot.owner.total_revenue += payment.amount
-            
-            db.session.commit()
-            
-            print(f"💾 Banco atualizado!")
+            if was_pending:
+                print(f"\n✅ PAGAMENTO CONFIRMADO! Atualizando banco...")
+                
+                payment.status = 'paid'
+                payment.paid_at = datetime.now()
+                
+                # ✅ Atualizar estatísticas (APENAS SE ESTAVA PENDENTE)
+                payment.bot.total_sales += 1
+                payment.bot.total_revenue += payment.amount
+                payment.bot.owner.total_sales += 1
+                payment.bot.owner.total_revenue += payment.amount
+                
+                db.session.commit()
+                
+                print(f"💾 Banco atualizado!")
+            else:
+                print(f"\n⚠️ Pagamento já estava confirmado antes")
+                print(f"   (Status: {payment.status}, Paid At: {payment.paid_at})")
+                print(f"   ❌ NÃO incrementa estatísticas novamente!")
         else:
             print(f"\n⏳ Status ainda é: {api_status.get('status')}")
         
