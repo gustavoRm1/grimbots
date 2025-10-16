@@ -1162,6 +1162,15 @@ Desculpe, não foi possível processar seu pagamento.
                                     payment.bot.owner.total_revenue += payment.amount
                                     db.session.commit()
                                     logger.info(f"💾 Pagamento atualizado via consulta ativa")
+                                    
+                                    # ✅ VERIFICAR CONQUISTAS (Gamification V2.0)
+                                    try:
+                                        from app import check_and_unlock_achievements
+                                        new_achievements = check_and_unlock_achievements(payment.bot.owner)
+                                        if new_achievements:
+                                            logger.info(f"🏆 {len(new_achievements)} conquista(s) desbloqueada(s)!")
+                                    except Exception as e:
+                                        logger.warning(f"⚠️ Erro ao verificar conquistas: {e}")
                                 else:
                                     logger.info(f"⚠️ Pagamento já estava confirmado (status: {payment.status})")
                             elif api_status:
