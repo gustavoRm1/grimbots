@@ -149,7 +149,7 @@
             <!-- Gateways Tab - Redesenhado -->
             <div x-show="activeTab === 'gateways'" x-cloak>
                 <div class="mb-8">
-                    <h3 class="text-3xl font-black flex items-center gap-3" style="color: #FAFAFA;">
+                    <h3 class="text-3xl font-black flex items-center gap-3" style="color: var(--text-primary);">
                         <i class="fas fa-plug" style="color: #F59E0B; filter: drop-shadow(0 2px 8px rgba(245, 158, 11, 0.6));"></i>
                         Gateways de Pagamento
                     </h3>
@@ -182,7 +182,7 @@
                                 <span>⚠️ Atenção: Apenas 1 Gateway Ativo por Vez</span>
                             </h4>
                             <p class="text-sm font-semibold leading-relaxed" style="color: #E5E7EB;">
-                                <strong style="color: #FCA5A5; font-weight: 900;">TODOS os seus bots</strong> usarão o gateway que estiver <span style="color: #6EE7B7; font-weight: 900;">ATIVO</span>. 
+                                <strong style="color: #FCA5A5; font-weight: 900;">TODOS os seus bots</strong> usarão o gateway que estiver <span style="color: var(--brand-gold-300); font-weight: 900;">ATIVO</span>. 
                                 Ao salvar e ativar um gateway, os outros serão <strong style="color: #FCA5A5; font-weight: 900;">desativados automaticamente</strong>. 
                                 Use isso para trocar rapidamente entre gateways (contingência, alertas de fraude, etc).
                             </p>
@@ -191,21 +191,21 @@
                 </div>
 
                 <!-- Status Card: Gateway Ativo Atual -->
-                <div class="mb-6 p-6 rounded-2xl border-2" style="background: rgba(34, 197, 94, 0.12); border-color: #22C55E; box-shadow: 0 4px 16px rgba(34, 197, 94, 0.2);">
+                <div class="mb-6 p-6 rounded-2xl border-2" style="background: rgba(16, 185, 129, 0.12); border-color: var(--brand-green-500); box-shadow: 0 4px 16px rgba(34, 197, 94, 0.2);">
                     <div class="flex items-center justify-between">
                         <div class="flex items-center gap-4">
                             <div class="flex-shrink-0">
                                 <div class="relative">
                                     <div class="absolute -inset-2 rounded-xl blur-lg" style="background: #22C55E; opacity: 0.3;"></div>
                                     <div class="relative flex items-center justify-center h-14 w-14 rounded-xl border-2" style="background: rgba(34, 197, 94, 0.2); border-color: #22C55E;">
-                                        <i class="fas fa-bolt text-2xl" style="color: #6EE7B7; filter: drop-shadow(0 2px 8px rgba(110, 231, 183, 0.6));"></i>
+                                        <i class="fas fa-bolt text-2xl" style="color: var(--brand-gold-300); filter: drop-shadow(0 2px 8px rgba(110, 231, 183, 0.6));"></i>
                                     </div>
                                 </div>
                             </div>
                             <div>
                                 <h4 class="text-xs font-bold mb-1" style="color: #9CA3AF; text-transform: uppercase; letter-spacing: 0.05em;">Gateway Em Uso Agora:</h4>
                                 <template x-if="gatewaysList.find(g => g.is_active && g.is_verified)">
-                                    <p class="text-xl font-black flex items-center gap-2" style="color: #6EE7B7; text-shadow: 0 0 8px rgba(110, 231, 183, 0.4);">
+                                    <p class="text-xl font-black flex items-center gap-2" style="color: var(--brand-gold-300); text-shadow: 0 0 8px rgba(110, 231, 183, 0.4);">
                                         <i class="fas fa-circle text-xs animate-pulse"></i>
                                         <span x-text="gatewaysList.find(g => g.is_active && g.is_verified)?.gateway_type.toUpperCase()"></span>
                                     </p>
@@ -220,36 +220,36 @@
                         </div>
                         <div class="text-right">
                             <p class="text-xs font-bold" style="color: #D1D5DB;">Seus bots usarão este gateway</p>
-                            <p class="text-xs font-semibold mt-1" style="color: #9CA3AF;">para gerar pagamentos PIX</p>
+                            <p class="text-xs font-semibold mt-1" style="color: var(--text-tertiary);">para gerar pagamentos PIX</p>
                         </div>
                     </div>
                 </div>
 
                 <div class="space-y-6">
                     <!-- SyncPay Card -->
-                    <div class="gateway-card rounded-2xl p-6 border-2 transition-all hover:scale-[1.01]" style="background: #1F2937; border-color: rgba(59, 130, 246, 0.3); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);">
+                    <div class="gateway-card rounded-2xl p-6 border-2 transition-all hover:scale-[1.01]" style="background: var(--surface-low); border-color: var(--border-subtle); box-shadow: var(--shadow-lg);">
                         <!-- Header -->
                         <div class="flex items-center justify-between mb-6">
                             <div class="flex items-center gap-4">
                                 <div class="relative">
-                                    <div class="absolute -inset-2 rounded-xl blur-lg" style="background: #3B82F6; opacity: 0.25;"></div>
+                                    <div class="absolute -inset-2 rounded-xl blur-lg" style="background: var(--brand-gold-500); opacity: 0.25;"></div>
                                     <div class="relative flex items-center justify-center rounded-xl border-2 p-3" style="width: 80px; height: 80px; background: rgba(59, 130, 246, 0.15); border-color: #3B82F6;">
-                                        <i class="fas fa-qrcode" style="font-size: 2.5rem; color: #60A5FA; filter: drop-shadow(0 2px 8px rgba(96, 165, 250, 0.6));"></i>
+                                        <i class="fas fa-qrcode" style="font-size: 2.5rem; color: var(--brand-gold-300); filter: drop-shadow(0 2px 8px rgba(96, 165, 250, 0.6));"></i>
                                     </div>
                                 </div>
                             <div>
-                                    <h4 class="text-xl font-black flex items-center gap-2" style="color: #FAFAFA;">
+                                    <h4 class="text-xl font-black flex items-center gap-2" style="color: var(--text-primary);">
                                         SyncPay
                                         <span x-show="getGatewayStatus('syncpay')?.is_verified && getGatewayStatus('syncpay')?.is_active" 
-                                              class="inline-flex items-center px-3 py-1 rounded-full text-xs font-black border-2 animate-pulse" style="background: rgba(34, 197, 94, 0.2); color: #6EE7B7; border-color: #22C55E;">
+                                              class="inline-flex items-center px-3 py-1 rounded-full text-xs font-black border-2 animate-pulse" style="background: rgba(16, 185, 129, 0.15); color: var(--brand-green-300); border-color: var(--brand-green-500);">
                                             <i class="fas fa-circle mr-1 text-xs"></i> ATIVO
                                         </span>
                                         <span x-show="getGatewayStatus('syncpay')?.is_verified && !getGatewayStatus('syncpay')?.is_active" 
-                                              class="inline-flex items-center px-3 py-1 rounded-full text-xs font-black border-2" style="background: rgba(34, 197, 94, 0.15); color: #6EE7B7; border-color: #22C55E;">
+                                              class="inline-flex items-center px-3 py-1 rounded-full text-xs font-black border-2" style="background: rgba(16, 185, 129, 0.15); color: var(--brand-green-300); border-color: var(--brand-green-500);">
                                             <i class="fas fa-check-circle mr-1"></i> Verificado
                                         </span>
                                     </h4>
-                                    <p class="text-sm font-semibold mt-1" style="color: #9CA3AF;">Gateway de pagamento via PIX <span style="color: #60A5FA;">(Recomendado)</span></p>
+                                    <p class="text-sm font-semibold mt-1" style="color: var(--text-tertiary);">Gateway de pagamento via PIX <span style="color: var(--brand-gold-300);">(Recomendado)</span></p>
                             </div>
                         </div>
                             <span x-show="!getGatewayStatus('syncpay')?.is_verified" 
@@ -262,8 +262,8 @@
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                             <!-- Client ID -->
                             <div class="space-y-2">
-                                <label for="syncpay_client_id" class="block text-sm font-black flex items-center gap-2" style="color: #FAFAFA;">
-                                    <i class="fas fa-user" style="color: #60A5FA;"></i>
+                                <label for="syncpay_client_id" class="block text-sm font-black flex items-center gap-2" style="color: var(--text-primary);">
+                                    <i class="fas fa-user" style="color: var(--brand-gold-300);"></i>
                                     Client ID
                                     <span style="color: #FCA5A5;">*</span>
                                 </label>
@@ -273,7 +273,7 @@
                                         type="text" 
                                    x-model="gateways.syncpay.client_id" 
                                         class="w-full px-4 py-3.5 rounded-xl focus:outline-none transition-all font-mono"
-                                        style="background: #111827; border: 2px solid rgba(255, 255, 255, 0.15); color: #93C5FD; font-weight: 700;"
+                                        style="background: var(--bg-primary); border: 2px solid var(--border-subtle); color: #93C5FD; font-weight: 700;"
                                         placeholder="seu-client-id"
                                         onfocus="this.style.borderColor='#3B82F6'; this.style.background='#1F2937';"
                                         onblur="this.style.borderColor='rgba(255, 255, 255, 0.15)'; this.style.background='#111827';">
@@ -282,8 +282,8 @@
 
                             <!-- Client Secret -->
                             <div class="space-y-2" x-data="{ showSecret: false }">
-                                <label for="syncpay_client_secret" class="block text-sm font-black flex items-center gap-2" style="color: #FAFAFA;">
-                                    <i class="fas fa-lock" style="color: #60A5FA;"></i>
+                                <label for="syncpay_client_secret" class="block text-sm font-black flex items-center gap-2" style="color: var(--text-primary);">
+                                    <i class="fas fa-lock" style="color: var(--brand-gold-300);"></i>
                                     Client Secret
                                     <span style="color: #FCA5A5;">*</span>
                                 </label>
@@ -293,11 +293,11 @@
                                         :type="showSecret ? 'text' : 'password'" 
                                    x-model="gateways.syncpay.client_secret" 
                                         class="w-full pl-4 pr-12 py-3.5 rounded-xl focus:outline-none transition-all font-mono"
-                                        style="background: #111827; border: 2px solid rgba(255, 255, 255, 0.15); color: #93C5FD; font-weight: 700;"
+                                        style="background: var(--bg-primary); border: 2px solid var(--border-subtle); color: #93C5FD; font-weight: 700;"
                                         placeholder="●●●●●●●●●●●●●●●●"
                                         onfocus="this.style.borderColor='#3B82F6'; this.style.background='#1F2937';"
                                         onblur="this.style.borderColor='rgba(255, 255, 255, 0.15)'; this.style.background='#111827';">
-                                    <button type="button" @click="showSecret = !showSecret" class="absolute inset-y-0 right-0 pr-4 flex items-center transition-colors" style="color: #9CA3AF;">
+                                    <button type="button" @click="showSecret = !showSecret" class="absolute inset-y-0 right-0 pr-4 flex items-center transition-colors" style="color: var(--text-tertiary);">
                                         <i class="fas" :class="showSecret ? 'fa-eye-slash' : 'fa-eye'"></i>
                                     </button>
                                 </div>
@@ -325,29 +325,29 @@
                 </div>
 
                     <!-- PushynPay Card -->
-                    <div class="gateway-card rounded-2xl p-6 border-2 transition-all hover:scale-[1.01]" style="background: #1F2937; border-color: rgba(59, 130, 246, 0.3); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);">
+                    <div class="gateway-card rounded-2xl p-6 border-2 transition-all hover:scale-[1.01]" style="background: var(--surface-low); border-color: var(--border-subtle); box-shadow: var(--shadow-lg);">
                         <!-- Header -->
                         <div class="flex items-center justify-between mb-6">
                             <div class="flex items-center gap-4">
                                 <div class="relative">
-                                    <div class="absolute -inset-2 rounded-xl blur-lg" style="background: #3B82F6; opacity: 0.25;"></div>
+                                    <div class="absolute -inset-2 rounded-xl blur-lg" style="background: var(--brand-gold-500); opacity: 0.25;"></div>
                                     <div class="relative flex items-center justify-center rounded-xl border-2 p-2" style="width: 80px; height: 80px; background: rgba(59, 130, 246, 0.15); border-color: #3B82F6;">
                                         <img src="{{ url_for('static', filename='img/pushyn.png') }}" alt="PushynPay" class="w-full h-full object-contain rounded-lg">
                                     </div>
                                 </div>
                             <div>
-                                    <h4 class="text-xl font-black flex items-center gap-2" style="color: #FAFAFA;">
+                                    <h4 class="text-xl font-black flex items-center gap-2" style="color: var(--text-primary);">
                                         PushynPay
                                         <span x-show="getGatewayStatus('pushynpay')?.is_verified && getGatewayStatus('pushynpay')?.is_active" 
-                                              class="inline-flex items-center px-3 py-1 rounded-full text-xs font-black border-2 animate-pulse" style="background: rgba(34, 197, 94, 0.2); color: #6EE7B7; border-color: #22C55E;">
+                                              class="inline-flex items-center px-3 py-1 rounded-full text-xs font-black border-2 animate-pulse" style="background: rgba(16, 185, 129, 0.15); color: var(--brand-green-300); border-color: var(--brand-green-500);">
                                             <i class="fas fa-circle mr-1 text-xs"></i> ATIVO
                                         </span>
                                         <span x-show="getGatewayStatus('pushynpay')?.is_verified && !getGatewayStatus('pushynpay')?.is_active" 
-                                              class="inline-flex items-center px-3 py-1 rounded-full text-xs font-black border-2" style="background: rgba(34, 197, 94, 0.15); color: #6EE7B7; border-color: #22C55E;">
+                                              class="inline-flex items-center px-3 py-1 rounded-full text-xs font-black border-2" style="background: rgba(16, 185, 129, 0.15); color: var(--brand-green-300); border-color: var(--brand-green-500);">
                                             <i class="fas fa-check-circle mr-1"></i> Verificado
                                         </span>
                                     </h4>
-                                    <p class="text-sm font-semibold mt-1" style="color: #9CA3AF;">Gateway de pagamento alternativo</p>
+                                    <p class="text-sm font-semibold mt-1" style="color: var(--text-tertiary);">Gateway de pagamento alternativo</p>
                             </div>
                         </div>
                             <span x-show="!getGatewayStatus('pushynpay')?.is_verified" 
@@ -359,8 +359,8 @@
                         <form @submit.prevent="saveGateway('pushynpay')" class="space-y-5">
                             <!-- API Key -->
                             <div class="space-y-2" x-data="{ showKey: false }">
-                                <label for="pushynpay_api_key" class="block text-sm font-black flex items-center gap-2" style="color: #FAFAFA;">
-                                    <i class="fas fa-key" style="color: #60A5FA;"></i>
+                                <label for="pushynpay_api_key" class="block text-sm font-black flex items-center gap-2" style="color: var(--text-primary);">
+                                    <i class="fas fa-key" style="color: var(--brand-gold-300);"></i>
                                     API Key
                                     <span style="color: #FCA5A5;">*</span>
                                 </label>
@@ -370,11 +370,11 @@
                                         :type="showKey ? 'text' : 'password'" 
                                    x-model="gateways.pushynpay.api_key" 
                                         class="w-full pl-4 pr-12 py-3.5 rounded-xl focus:outline-none transition-all font-mono"
-                                        style="background: #111827; border: 2px solid rgba(255, 255, 255, 0.15); color: #93C5FD; font-weight: 700;"
+                                        style="background: var(--bg-primary); border: 2px solid var(--border-subtle); color: #93C5FD; font-weight: 700;"
                                         placeholder="●●●●●●●●●●●●●●●●"
                                         onfocus="this.style.borderColor='#3B82F6'; this.style.background='#1F2937';"
                                         onblur="this.style.borderColor='rgba(255, 255, 255, 0.15)'; this.style.background='#111827';">
-                                    <button type="button" @click="showKey = !showKey" class="absolute inset-y-0 right-0 pr-4 flex items-center transition-colors" style="color: #9CA3AF;">
+                                    <button type="button" @click="showKey = !showKey" class="absolute inset-y-0 right-0 pr-4 flex items-center transition-colors" style="color: var(--text-tertiary);">
                                         <i class="fas" :class="showKey ? 'fa-eye-slash' : 'fa-eye'"></i>
                                     </button>
                                 </div>
@@ -402,29 +402,29 @@
                 </div>
 
                     <!-- Paradise Card -->
-                    <div class="gateway-card rounded-2xl p-6 border-2 transition-all hover:scale-[1.01]" style="background: #1F2937; border-color: rgba(59, 130, 246, 0.3); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);">
+                    <div class="gateway-card rounded-2xl p-6 border-2 transition-all hover:scale-[1.01]" style="background: var(--surface-low); border-color: var(--border-subtle); box-shadow: var(--shadow-lg);">
                         <!-- Header -->
                         <div class="flex items-center justify-between mb-6">
                             <div class="flex items-center gap-4">
                                 <div class="relative">
-                                    <div class="absolute -inset-2 rounded-xl blur-lg" style="background: #3B82F6; opacity: 0.25;"></div>
+                                    <div class="absolute -inset-2 rounded-xl blur-lg" style="background: var(--brand-gold-500); opacity: 0.25;"></div>
                                     <div class="relative flex items-center justify-center rounded-xl border-2 p-2" style="width: 80px; height: 80px; background: rgba(59, 130, 246, 0.15); border-color: #3B82F6;">
                                         <img src="{{ url_for('static', filename='img/paradise.jpg') }}" alt="Paradise" class="w-full h-full object-cover rounded-lg">
                                     </div>
                                 </div>
                             <div>
-                                    <h4 class="text-xl font-black flex items-center gap-2" style="color: #FAFAFA;">
+                                    <h4 class="text-xl font-black flex items-center gap-2" style="color: var(--text-primary);">
                                         Paradise
                                         <span x-show="getGatewayStatus('paradise')?.is_verified && getGatewayStatus('paradise')?.is_active" 
-                                              class="inline-flex items-center px-3 py-1 rounded-full text-xs font-black border-2 animate-pulse" style="background: rgba(34, 197, 94, 0.2); color: #6EE7B7; border-color: #22C55E;">
+                                              class="inline-flex items-center px-3 py-1 rounded-full text-xs font-black border-2 animate-pulse" style="background: rgba(16, 185, 129, 0.15); color: var(--brand-green-300); border-color: var(--brand-green-500);">
                                             <i class="fas fa-circle mr-1 text-xs"></i> ATIVO
                                         </span>
                                         <span x-show="getGatewayStatus('paradise')?.is_verified && !getGatewayStatus('paradise')?.is_active" 
-                                              class="inline-flex items-center px-3 py-1 rounded-full text-xs font-black border-2" style="background: rgba(34, 197, 94, 0.15); color: #6EE7B7; border-color: #22C55E;">
+                                              class="inline-flex items-center px-3 py-1 rounded-full text-xs font-black border-2" style="background: rgba(16, 185, 129, 0.15); color: var(--brand-green-300); border-color: var(--brand-green-500);">
                                             <i class="fas fa-check-circle mr-1"></i> Verificado
                                         </span>
                                     </h4>
-                                    <p class="text-sm font-semibold mt-1" style="color: #9CA3AF;">Gateway de pagamento internacional</p>
+                                    <p class="text-sm font-semibold mt-1" style="color: var(--text-tertiary);">Gateway de pagamento internacional</p>
                             </div>
                         </div>
                             <span x-show="!getGatewayStatus('paradise')?.is_verified" 
@@ -436,8 +436,8 @@
                         <form @submit.prevent="saveGateway('paradise')" class="space-y-5">
                             <!-- API Key (Secret Key) -->
                             <div class="space-y-2" x-data="{ showKey: false }">
-                                <label for="paradise_api_key" class="block text-sm font-black flex items-center gap-2" style="color: #FAFAFA;">
-                                    <i class="fas fa-key" style="color: #60A5FA;"></i>
+                                <label for="paradise_api_key" class="block text-sm font-black flex items-center gap-2" style="color: var(--text-primary);">
+                                    <i class="fas fa-key" style="color: var(--brand-gold-300);"></i>
                                     Chave Secreta (Secret Key)
                                     <span style="color: #FCA5A5;">*</span>
                                 </label>
@@ -447,11 +447,11 @@
                                         :type="showKey ? 'text' : 'password'" 
                                    x-model="gateways.paradise.api_key" 
                                         class="w-full pl-4 pr-12 py-3.5 rounded-xl focus:outline-none transition-all font-mono"
-                                        style="background: #111827; border: 2px solid rgba(255, 255, 255, 0.15); color: #93C5FD; font-weight: 700;"
+                                        style="background: var(--bg-primary); border: 2px solid var(--border-subtle); color: #93C5FD; font-weight: 700;"
                                         placeholder="sk_... (chave secreta)"
                                         onfocus="this.style.borderColor='#3B82F6'; this.style.background='#1F2937';"
                                         onblur="this.style.borderColor='rgba(255, 255, 255, 0.15)'; this.style.background='#111827';">
-                                    <button type="button" @click="showKey = !showKey" class="absolute inset-y-0 right-0 pr-4 flex items-center transition-colors" style="color: #9CA3AF;">
+                                    <button type="button" @click="showKey = !showKey" class="absolute inset-y-0 right-0 pr-4 flex items-center transition-colors" style="color: var(--text-tertiary);">
                                         <i class="fas" :class="showKey ? 'fa-eye-slash' : 'fa-eye'"></i>
                                     </button>
                                 </div>
@@ -459,8 +459,8 @@
 
                             <!-- Offer Hash -->
                             <div class="space-y-2">
-                                <label for="paradise_offer_hash" class="block text-sm font-black flex items-center gap-2" style="color: #FAFAFA;">
-                                    <i class="fas fa-tag" style="color: #60A5FA;"></i>
+                                <label for="paradise_offer_hash" class="block text-sm font-black flex items-center gap-2" style="color: var(--text-primary);">
+                                    <i class="fas fa-tag" style="color: var(--brand-gold-300);"></i>
                                     Offer Hash
                                     <span style="color: #FCA5A5;">*</span>
                                 </label>
@@ -470,7 +470,7 @@
                                         type="text" 
                                         x-model="gateways.paradise.offer_hash" 
                                         class="w-full px-4 py-3.5 rounded-xl focus:outline-none transition-all font-mono"
-                                        style="background: #111827; border: 2px solid rgba(255, 255, 255, 0.15); color: #93C5FD; font-weight: 700;"
+                                        style="background: var(--bg-primary); border: 2px solid var(--border-subtle); color: #93C5FD; font-weight: 700;"
                                         placeholder="hash-da-oferta"
                                         onfocus="this.style.borderColor='#3B82F6'; this.style.background='#1F2937';"
                                         onblur="this.style.borderColor='rgba(255, 255, 255, 0.15)'; this.style.background='#111827';">
@@ -479,8 +479,8 @@
 
                             <!-- Product Hash -->
                             <div class="space-y-2">
-                                <label for="paradise_product_hash" class="block text-sm font-black flex items-center gap-2" style="color: #FAFAFA;">
-                                    <i class="fas fa-box" style="color: #60A5FA;"></i>
+                                <label for="paradise_product_hash" class="block text-sm font-black flex items-center gap-2" style="color: var(--text-primary);">
+                                    <i class="fas fa-box" style="color: var(--brand-gold-300);"></i>
                                     Código do Produto (Product Hash)
                                     <span style="color: #FCA5A5;">*</span>
                                 </label>
@@ -490,7 +490,7 @@
                                         type="text" 
                                         x-model="gateways.paradise.product_hash" 
                                         class="w-full px-4 py-3.5 rounded-xl focus:outline-none transition-all font-mono"
-                                        style="background: #111827; border: 2px solid rgba(255, 255, 255, 0.15); color: #93C5FD; font-weight: 700;"
+                                        style="background: var(--bg-primary); border: 2px solid var(--border-subtle); color: #93C5FD; font-weight: 700;"
                                         placeholder="prod_... (código do produto)"
                                         onfocus="this.style.borderColor='#3B82F6'; this.style.background='#1F2937';"
                                         onblur="this.style.borderColor='rgba(255, 255, 255, 0.15)'; this.style.background='#111827';">
@@ -521,24 +521,24 @@
                 </div>
 
                 <!-- HooPay Card -->
-                <div class="gateway-card rounded-2xl p-6 border-2 transition-all hover:scale-[1.01]" style="background: #1F2937; border-color: rgba(59, 130, 246, 0.3); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);">
+                <div class="gateway-card rounded-2xl p-6 border-2 transition-all hover:scale-[1.01]" style="background: var(--surface-low); border-color: var(--border-subtle); box-shadow: var(--shadow-lg);">
                     <div class="flex items-center justify-between mb-6">
                         <div class="flex items-center gap-4">
                             <div class="relative">
-                                <div class="absolute -inset-2 rounded-xl blur-lg" style="background: #3B82F6; opacity: 0.25;"></div>
+                                <div class="absolute -inset-2 rounded-xl blur-lg" style="background: var(--brand-gold-500); opacity: 0.25;"></div>
                                 <div class="relative flex items-center justify-center rounded-xl border-2 p-2" style="width: 80px; height: 80px; background: rgba(59, 130, 246, 0.15); border-color: #3B82F6;">
                                     <img src="{{ url_for('static', filename='img/hoopay.webp') }}" alt="HooPay" class="w-full h-full object-contain rounded-lg">
                                 </div>
                             </div>
                             <div>
-                                <h4 class="text-xl font-black flex items-center gap-2" style="color: #FAFAFA;">
+                                <h4 class="text-xl font-black flex items-center gap-2" style="color: var(--text-primary);">
                                     HooPay
                                     <span x-show="getGatewayStatus('hoopay')?.is_verified && getGatewayStatus('hoopay')?.is_active" 
-                                          class="inline-flex items-center px-3 py-1 rounded-full text-xs font-black border-2 animate-pulse" style="background: rgba(34, 197, 94, 0.2); color: #6EE7B7; border-color: #22C55E;">
+                                          class="inline-flex items-center px-3 py-1 rounded-full text-xs font-black border-2 animate-pulse" style="background: rgba(16, 185, 129, 0.15); color: var(--brand-green-300); border-color: var(--brand-green-500);">
                                         <i class="fas fa-circle mr-1 text-xs"></i> ATIVO
                                     </span>
                                 </h4>
-                                <p class="text-sm font-semibold mt-1" style="color: #9CA3AF;">Gateway completo</p>
+                                <p class="text-sm font-semibold mt-1" style="color: var(--text-tertiary);">Gateway completo</p>
                             </div>
                         </div>
                         <span x-show="!getGatewayStatus('hoopay')?.is_verified" 
@@ -549,8 +549,8 @@
 
                     <form @submit.prevent="saveGateway('hoopay')" class="space-y-5">
                         <div class="space-y-2" x-data="{ showKey: false }">
-                            <label class="block text-sm font-black flex items-center gap-2" style="color: #FAFAFA;">
-                                <i class="fas fa-key" style="color: #60A5FA;"></i>
+                            <label class="block text-sm font-black flex items-center gap-2" style="color: var(--text-primary);">
+                                <i class="fas fa-key" style="color: var(--brand-gold-300);"></i>
                                 API Key
                                 <span style="color: #FCA5A5;">*</span>
                             </label>
@@ -559,7 +559,7 @@
                                     :type="showKey ? 'text' : 'password'" 
                                     x-model="gateways.hoopay.api_key" 
                                     class="w-full pl-4 pr-12 py-3.5 rounded-xl focus:outline-none transition-all font-mono"
-                                    style="background: #111827; border: 2px solid rgba(255, 255, 255, 0.15); color: #93C5FD; font-weight: 700;"
+                                    style="background: var(--bg-primary); border: 2px solid var(--border-subtle); color: #93C5FD; font-weight: 700;"
                                     placeholder="sua_api_key_hoopay">
                                 <button type="button" @click="showKey = !showKey" class="absolute inset-y-0 right-0 pr-4 flex items-center">
                                     <i class="fas" :class="showKey ? 'fa-eye-slash' : 'fa-eye'"></i>
@@ -576,7 +576,7 @@
                 </div>
 
                 <!-- WiinPay Card ✅ NOVO -->
-                <div class="gateway-card rounded-2xl p-6 border-2 transition-all hover:scale-[1.01]" style="background: #1F2937; border-color: rgba(16, 185, 129, 0.3); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);">
+                <div class="gateway-card rounded-2xl p-6 border-2 transition-all hover:scale-[1.01]" style="background: var(--surface-low); border-color: rgba(16, 185, 129, 0.3); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);">
                     <div class="flex items-center justify-between mb-6">
                         <div class="flex items-center gap-4">
                             <div class="relative">
@@ -586,15 +586,15 @@
                                 </div>
                             </div>
                             <div>
-                                <h4 class="text-xl font-black flex items-center gap-2" style="color: #FAFAFA;">
+                                <h4 class="text-xl font-black flex items-center gap-2" style="color: var(--text-primary);">
                                     WiinPay
                                     <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-black" style="background: rgba(16, 185, 129, 0.2); color: #6EE7B7;">NOVO</span>
                                     <span x-show="getGatewayStatus('wiinpay')?.is_verified && getGatewayStatus('wiinpay')?.is_active" 
-                                          class="inline-flex items-center px-3 py-1 rounded-full text-xs font-black border-2 animate-pulse" style="background: rgba(34, 197, 94, 0.2); color: #6EE7B7; border-color: #22C55E;">
+                                          class="inline-flex items-center px-3 py-1 rounded-full text-xs font-black border-2 animate-pulse" style="background: rgba(16, 185, 129, 0.15); color: var(--brand-green-300); border-color: var(--brand-green-500);">
                                         <i class="fas fa-circle mr-1 text-xs"></i> ATIVO
                                     </span>
                                 </h4>
-                                <p class="text-sm font-semibold mt-1" style="color: #9CA3AF;">Simples e direto</p>
+                                <p class="text-sm font-semibold mt-1" style="color: var(--text-tertiary);">Simples e direto</p>
                             </div>
                         </div>
                         <span x-show="!getGatewayStatus('wiinpay')?.is_verified" 
@@ -605,7 +605,7 @@
 
                     <form @submit.prevent="saveGateway('wiinpay')" class="space-y-5">
                         <div class="space-y-2" x-data="{ showKey: false }">
-                            <label class="block text-sm font-black flex items-center gap-2" style="color: #FAFAFA;">
+                            <label class="block text-sm font-black flex items-center gap-2" style="color: var(--text-primary);">
                                 <i class="fas fa-key" style="color: #10B981;"></i>
                                 API Key
                                 <span style="color: #FCA5A5;">*</span>
@@ -615,7 +615,7 @@
                                     :type="showKey ? 'text' : 'password'" 
                                     x-model="gateways.wiinpay.api_key" 
                                     class="w-full pl-4 pr-12 py-3.5 rounded-xl focus:outline-none transition-all font-mono"
-                                    style="background: #111827; border: 2px solid rgba(255, 255, 255, 0.15); color: #6EE7B7; font-weight: 700;"
+                                    style="background: var(--bg-primary); border: 2px solid var(--border-subtle); color: #6EE7B7; font-weight: 700;"
                                     placeholder="sua_api_key_wiinpay">
                                 <button type="button" @click="showKey = !showKey" class="absolute inset-y-0 right-0 pr-4 flex items-center">
                                     <i class="fas" :class="showKey ? 'fa-eye-slash' : 'fa-eye'"></i>
@@ -624,18 +624,18 @@
                         </div>
 
                         <div class="space-y-2">
-                            <label class="block text-sm font-black flex items-center gap-2" style="color: #FAFAFA;">
+                            <label class="block text-sm font-black flex items-center gap-2" style="color: var(--text-primary);">
                                 <i class="fas fa-user" style="color: #10B981;"></i>
                                 Split User ID
-                                <span class="text-xs font-normal" style="color: #9CA3AF;">(opcional)</span>
+                                <span class="text-xs font-normal" style="color: var(--text-tertiary);">(opcional)</span>
                             </label>
                             <input 
                                 type="text" 
                                 x-model="gateways.wiinpay.split_user_id" 
                                 class="w-full px-4 py-3.5 rounded-xl focus:outline-none transition-all font-mono"
-                                style="background: #111827; border: 2px solid rgba(255, 255, 255, 0.15); color: #6EE7B7; font-weight: 700;"
+                                style="background: var(--bg-primary); border: 2px solid var(--border-subtle); color: #6EE7B7; font-weight: 700;"
                                 placeholder="1234567890 (seu user_id na WiinPay)">
-                            <p class="text-xs mt-1" style="color: #9CA3AF;">
+                            <p class="text-xs mt-1" style="color: var(--text-tertiary);">
                                 <i class="fas fa-info-circle mr-1"></i>
                                 Seu user_id na WiinPay para receber splits (4%)
                             </p>
@@ -669,12 +669,12 @@
                             </div>
                         </div>
                         <div class="flex-1">
-                            <h4 class="text-lg font-black mb-2 flex items-center gap-2" style="color: #FAFAFA;">
+                            <h4 class="text-lg font-black mb-2 flex items-center gap-2" style="color: var(--text-primary);">
                                 <i class="fas fa-lock" style="color: #FCD34D; filter: drop-shadow(0 0 4px rgba(252, 211, 77, 0.5));"></i>
                                 Segurança das Credenciais
                             </h4>
                             <p class="text-sm font-semibold leading-relaxed" style="color: #E5E7EB;">
-                                Suas credenciais são <strong style="color: #6EE7B7; font-weight: 900;">criptografadas</strong> e armazenadas com segurança. Nunca compartilhamos seus dados com terceiros. 
+                                Suas credenciais são <strong style="color: var(--brand-gold-300); font-weight: 900;">criptografadas</strong> e armazenadas com segurança. Nunca compartilhamos seus dados com terceiros. 
                                 Você precisa de <strong style="color: #FCD34D; font-weight: 900;">pelo menos um gateway verificado</strong> para que seus bots possam processar vendas.
                             </p>
                         </div>

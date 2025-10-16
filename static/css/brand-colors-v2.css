@@ -1,0 +1,488 @@
+/**
+ * GRIMBOTS v2.0 - PALETA DE CORES PROFISSIONAL
+ * Baseada em PNL, Persuasão e Branding Consistente
+ * 
+ * PSICOLOGIA DAS CORES:
+ * - Dourado: Dinheiro, Sucesso, Exclusividade (estimula desejo)
+ * - Verde Esmeralda: Crescimento, Aprovação, Segurança
+ * - Preto Premium: Elegância, Sofisticação, Seriedade
+ * - Azul Confiança: Estabilidade, Tecnologia, Credibilidade
+ */
+
+:root {
+    /* ===============================================
+       CORES PRIMÁRIAS - IDENTIDADE DA MARCA
+       =============================================== */
+    
+    /* DOURADO - Cor Principal (Dinheiro, Sucesso) */
+    --brand-gold-900: #B8860B;      /* Dourado escuro */
+    --brand-gold-700: #DAA520;      /* Dourado médio */
+    --brand-gold-500: #FFB800;      /* Dourado principal ⭐ */
+    --brand-gold-300: #FFC933;      /* Dourado claro */
+    --brand-gold-100: #FFE680;      /* Dourado suave */
+    
+    /* VERDE ESMERALDA - Sucesso e Crescimento */
+    --brand-green-900: #047857;     /* Verde escuro */
+    --brand-green-700: #059669;     /* Verde médio */
+    --brand-green-500: #10B981;     /* Verde principal ✅ */
+    --brand-green-300: #34D399;     /* Verde claro */
+    --brand-green-100: #6EE7B7;     /* Verde suave */
+    
+    /* ===============================================
+       CORES DE SUPORTE
+       =============================================== */
+    
+    /* AZUL CONFIANÇA - Informação e Credibilidade */
+    --brand-blue-900: #1E3A8A;      /* Azul profundo */
+    --brand-blue-700: #1E40AF;      /* Azul médio */
+    --brand-blue-500: #3B82F6;      /* Azul principal */
+    --brand-blue-300: #60A5FA;      /* Azul claro */
+    --brand-blue-100: #93C5FD;      /* Azul suave */
+    
+    /* VERMELHO CORAL - Urgência e Atenção */
+    --brand-red-900: #991B1B;       /* Vermelho escuro */
+    --brand-red-700: #B91C1C;       /* Vermelho médio */
+    --brand-red-500: #EF4444;       /* Vermelho principal */
+    --brand-red-300: #F87171;       /* Vermelho claro */
+    --brand-red-100: #FCA5A5;       /* Vermelho suave */
+    
+    /* ===============================================
+       BACKGROUNDS E SUPERFÍCIES
+       =============================================== */
+    
+    /* Preto Premium - Elegância */
+    --bg-primary: #0A0A0A;          /* Fundo principal */
+    --bg-secondary: #141414;        /* Fundo secundário */
+    --bg-tertiary: #1A1A1A;         /* Fundo terciário */
+    
+    /* Superfícies elevadas */
+    --surface-low: #1F1F1F;         /* Elevação baixa (cards) */
+    --surface-mid: #262626;         /* Elevação média (modals) */
+    --surface-high: #2D2D2D;        /* Elevação alta (dropdowns) */
+    
+    /* Bordas */
+    --border-subtle: rgba(255, 184, 0, 0.08);   /* Borda suave dourada */
+    --border-medium: rgba(255, 184, 0, 0.15);   /* Borda média */
+    --border-strong: rgba(255, 184, 0, 0.30);   /* Borda forte */
+    
+    /* ===============================================
+       TEXTOS
+       =============================================== */
+    
+    --text-primary: #FFFFFF;        /* Texto principal (branco puro) */
+    --text-secondary: #D1D1D1;      /* Texto secundário (cinza claro) */
+    --text-tertiary: #9CA3AF;       /* Texto terciário (cinza médio) */
+    --text-muted: #6B7280;          /* Texto discreto (cinza escuro) */
+    --text-disabled: #4B5563;       /* Texto desabilitado */
+    
+    /* ===============================================
+       ESTADOS E FEEDBACKS
+       =============================================== */
+    
+    /* Status */
+    --status-online: var(--brand-green-500);
+    --status-offline: #6B7280;
+    --status-error: var(--brand-red-500);
+    --status-warning: #F59E0B;
+    --status-info: var(--brand-blue-500);
+    
+    /* ===============================================
+       SOMBRAS E BRILHOS (DEPTH)
+       =============================================== */
+    
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.5);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.6);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.7);
+    --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.8);
+    
+    /* Glows (para CTAs) */
+    --glow-gold: 0 0 20px rgba(255, 184, 0, 0.3), 0 0 40px rgba(255, 184, 0, 0.1);
+    --glow-green: 0 0 20px rgba(16, 185, 129, 0.3);
+    --glow-blue: 0 0 20px rgba(59, 130, 246, 0.3);
+    
+    /* ===============================================
+       GRADIENTES (BRANDING)
+       =============================================== */
+    
+    /* Gradient Dourado (CTAs principais) */
+    --gradient-gold: linear-gradient(135deg, #FFB800 0%, #DAA520 100%);
+    --gradient-gold-hover: linear-gradient(135deg, #FFC933 0%, #FFB800 100%);
+    
+    /* Gradient Verde (Confirmações) */
+    --gradient-green: linear-gradient(135deg, #10B981 0%, #059669 100%);
+    
+    /* Gradient Preto (Backgrounds) */
+    --gradient-dark: linear-gradient(180deg, #0A0A0A 0%, #141414 100%);
+    
+    /* Gradient Card (Elevação sutil) */
+    --gradient-card: linear-gradient(135deg, 
+        rgba(255, 184, 0, 0.03) 0%, 
+        rgba(16, 185, 129, 0.02) 100%
+    );
+    
+    /* ===============================================
+       TIPOGRAFIA
+       =============================================== */
+    
+    --font-primary: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-mono: 'Fira Code', 'Courier New', monospace;
+    
+    /* ===============================================
+       TRANSIÇÕES (CONSISTÊNCIA)
+       =============================================== */
+    
+    --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-slow: 350ms cubic-bezier(0.4, 0, 0.2, 1);
+    
+    /* ===============================================
+       SPACING (CONSISTÊNCIA)
+       =============================================== */
+    
+    --space-xs: 0.25rem;   /* 4px */
+    --space-sm: 0.5rem;    /* 8px */
+    --space-md: 1rem;      /* 16px */
+    --space-lg: 1.5rem;    /* 24px */
+    --space-xl: 2rem;      /* 32px */
+    --space-2xl: 3rem;     /* 48px */
+    
+    /* ===============================================
+       BORDER RADIUS (CONSISTÊNCIA)
+       =============================================== */
+    
+    --radius-sm: 0.375rem;  /* 6px */
+    --radius-md: 0.5rem;    /* 8px */
+    --radius-lg: 0.75rem;   /* 12px */
+    --radius-xl: 1rem;      /* 16px */
+    --radius-2xl: 1.5rem;   /* 24px */
+}
+
+/* ===============================================
+   CLASSES UTILITÁRIAS (REUTILIZÁVEIS)
+   =============================================== */
+
+/* Botões Primários (Dourado - Ação Principal) */
+.btn-primary {
+    background: var(--gradient-gold);
+    color: #000000;
+    font-weight: 700;
+    padding: 0.75rem 1.5rem;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--glow-gold);
+    transition: all var(--transition-base);
+    border: none;
+    cursor: pointer;
+}
+
+.btn-primary:hover {
+    background: var(--gradient-gold-hover);
+    transform: translateY(-2px);
+    box-shadow: 0 12px 24px rgba(255, 184, 0, 0.4);
+}
+
+.btn-primary:active {
+    transform: translateY(0);
+}
+
+/* Botões Secundários (Verde - Confirmação) */
+.btn-success {
+    background: var(--gradient-green);
+    color: #FFFFFF;
+    font-weight: 700;
+    padding: 0.75rem 1.5rem;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--glow-green);
+    transition: all var(--transition-base);
+}
+
+.btn-success:hover {
+    background: linear-gradient(135deg, #34D399 0%, #10B981 100%);
+    transform: translateY(-2px);
+}
+
+/* Botões Perigo (Vermelho - Ações Destrutivas) */
+.btn-danger {
+    background: var(--brand-red-500);
+    color: #FFFFFF;
+    font-weight: 600;
+    padding: 0.75rem 1.5rem;
+    border-radius: var(--radius-lg);
+    transition: all var(--transition-base);
+}
+
+.btn-danger:hover {
+    background: var(--brand-red-700);
+    transform: translateY(-2px);
+}
+
+/* Botões Ghost (Outline Dourado) */
+.btn-ghost {
+    background: transparent;
+    color: var(--brand-gold-500);
+    border: 2px solid var(--brand-gold-500);
+    font-weight: 600;
+    padding: 0.75rem 1.5rem;
+    border-radius: var(--radius-lg);
+    transition: all var(--transition-base);
+}
+
+.btn-ghost:hover {
+    background: rgba(255, 184, 0, 0.1);
+    border-color: var(--brand-gold-300);
+}
+
+/* Cards (Preto Premium com Borda Dourada) */
+.card-premium {
+    background: var(--gradient-card), var(--surface-low);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-xl);
+    padding: var(--space-lg);
+    transition: all var(--transition-base);
+}
+
+.card-premium:hover {
+    border-color: var(--border-medium);
+    box-shadow: var(--shadow-lg), var(--glow-gold);
+    transform: translateY(-4px);
+}
+
+/* Badges de Status */
+.badge-online {
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--brand-green-300);
+    border: 1px solid var(--brand-green-500);
+    padding: 0.25rem 0.75rem;
+    border-radius: var(--radius-md);
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+.badge-earnings {
+    background: rgba(255, 184, 0, 0.15);
+    color: var(--brand-gold-300);
+    border: 1px solid var(--brand-gold-500);
+    padding: 0.25rem 0.75rem;
+    border-radius: var(--radius-md);
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+/* Inputs (Foco Dourado) */
+input:not([type="checkbox"]):not([type="radio"]),
+textarea,
+select {
+    background: var(--surface-low);
+    border: 2px solid var(--border-subtle);
+    color: var(--text-primary);
+    border-radius: var(--radius-lg);
+    padding: 0.75rem 1rem;
+    transition: all var(--transition-base);
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+    outline: none;
+    border-color: var(--brand-gold-500);
+    box-shadow: 0 0 0 4px rgba(255, 184, 0, 0.1);
+    background: var(--surface-mid);
+}
+
+/* Stats Cards (Destaque Dourado) */
+.stat-card-earnings {
+    background: linear-gradient(135deg, 
+        rgba(255, 184, 0, 0.1) 0%, 
+        rgba(255, 184, 0, 0.05) 100%
+    );
+    border: 1px solid var(--brand-gold-500);
+    border-left: 4px solid var(--brand-gold-500);
+}
+
+.stat-card-sales {
+    background: linear-gradient(135deg, 
+        rgba(16, 185, 129, 0.1) 0%, 
+        rgba(16, 185, 129, 0.05) 100%
+    );
+    border: 1px solid var(--brand-green-500);
+    border-left: 4px solid var(--brand-green-500);
+}
+
+.stat-card-info {
+    background: linear-gradient(135deg, 
+        rgba(59, 130, 246, 0.1) 0%, 
+        rgba(59, 130, 246, 0.05) 100%
+    );
+    border: 1px solid var(--brand-blue-500);
+    border-left: 4px solid var(--brand-blue-500);
+}
+
+/* ===============================================
+   HIERARQUIA VISUAL (PERSUASÃO)
+   =============================================== */
+
+/* H1 - Títulos Principais (Dourado) */
+h1, .heading-primary {
+    color: var(--brand-gold-500);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+}
+
+/* H2 - Subtítulos (Branco) */
+h2, .heading-secondary {
+    color: var(--text-primary);
+    font-weight: 700;
+}
+
+/* H3 - Seções (Branco Suave) */
+h3, .heading-tertiary {
+    color: var(--text-secondary);
+    font-weight: 600;
+}
+
+/* ===============================================
+   COMPONENTES ESPECÍFICOS
+   =============================================== */
+
+/* Navbar (Preto com Linha Dourada) */
+.navbar-premium {
+    background: var(--gradient-dark);
+    border-bottom: 1px solid var(--border-subtle);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+/* Logo com Brilho Dourado */
+.logo-brand {
+    color: var(--brand-gold-500);
+    text-shadow: 0 0 20px rgba(255, 184, 0, 0.4);
+    font-weight: 900;
+}
+
+/* Links de Navegação */
+.nav-link {
+    color: var(--text-secondary);
+    transition: color var(--transition-base);
+}
+
+.nav-link:hover {
+    color: var(--brand-gold-500);
+}
+
+.nav-link-active {
+    color: var(--brand-gold-500);
+    border-bottom: 2px solid var(--brand-gold-500);
+}
+
+/* ===============================================
+   VALORES MONETÁRIOS (SEMPRE DOURADO)
+   =============================================== */
+
+.currency-value {
+    color: var(--brand-gold-300);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.currency-large {
+    color: var(--brand-gold-500);
+    font-weight: 900;
+    font-size: 2rem;
+    text-shadow: 0 0 30px rgba(255, 184, 0, 0.3);
+}
+
+/* ===============================================
+   ANIMAÇÕES (SUTIS E PROFISSIONAIS)
+   =============================================== */
+
+@keyframes pulse-gold {
+    0%, 100% {
+        opacity: 1;
+        box-shadow: 0 0 0 0 rgba(255, 184, 0, 0.7);
+    }
+    50% {
+        opacity: 0.8;
+        box-shadow: 0 0 0 10px rgba(255, 184, 0, 0);
+    }
+}
+
+.animate-pulse-gold {
+    animation: pulse-gold 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes shimmer {
+    0% {
+        background-position: -1000px 0;
+    }
+    100% {
+        background-position: 1000px 0;
+    }
+}
+
+.shimmer-effect {
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(255, 184, 0, 0.1) 50%,
+        transparent 100%
+    );
+    background-size: 1000px 100%;
+    animation: shimmer 3s infinite;
+}
+
+/* ===============================================
+   ACESSIBILIDADE
+   =============================================== */
+
+*:focus-visible {
+    outline: 3px solid var(--brand-gold-500);
+    outline-offset: 2px;
+}
+
+/* ===============================================
+   MODO ESCURO PREMIUM (PADRÃO)
+   =============================================== */
+
+body {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: var(--font-primary);
+}
+
+/* Scrollbar Customizado (Dourado) */
+::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--brand-gold-900);
+    border-radius: 6px;
+    border: 2px solid var(--bg-secondary);
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--brand-gold-700);
+}
+
+/* ===============================================
+   UTILITIES (HELPERS)
+   =============================================== */
+
+.text-brand-gold { color: var(--brand-gold-500); }
+.text-brand-green { color: var(--brand-green-500); }
+.text-brand-blue { color: var(--brand-blue-500); }
+.text-brand-red { color: var(--brand-red-500); }
+
+.bg-brand-gold { background-color: var(--brand-gold-500); }
+.bg-brand-green { background-color: var(--brand-green-500); }
+.bg-brand-blue { background-color: var(--brand-blue-500); }
+.bg-brand-red { background-color: var(--brand-red-500); }
+
+.border-brand-gold { border-color: var(--brand-gold-500); }
+.border-brand-green { border-color: var(--brand-green-500); }
+.border-brand-blue { border-color: var(--brand-blue-500); }
+.border-brand-red { border-color: var(--brand-red-500); }
+
