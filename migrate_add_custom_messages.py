@@ -12,12 +12,14 @@ logger = logging.getLogger(__name__)
 def migrate():
     """Adiciona colunas de mensagens personalizadas"""
     with app.app_context():
+        from sqlalchemy import text
+        
         try:
             # Adicionar success_message
-            db.session.execute("""
+            db.session.execute(text("""
                 ALTER TABLE bot_configs 
                 ADD COLUMN success_message TEXT;
-            """)
+            """))
             logger.info("✅ Coluna success_message adicionada")
         except Exception as e:
             if 'duplicate column' in str(e).lower() or 'already exists' in str(e).lower():
@@ -27,10 +29,10 @@ def migrate():
         
         try:
             # Adicionar pending_message
-            db.session.execute("""
+            db.session.execute(text("""
                 ALTER TABLE bot_configs 
                 ADD COLUMN pending_message TEXT;
-            """)
+            """))
             logger.info("✅ Coluna pending_message adicionada")
         except Exception as e:
             if 'duplicate column' in str(e).lower() or 'already exists' in str(e).lower():
