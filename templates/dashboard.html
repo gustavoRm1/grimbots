@@ -906,11 +906,11 @@ function dashboardApp() {
             // Carregar analytics
             this.loadAnalytics();
             
-            // Auto-refresh a cada 30 segundos
+            // Auto-refresh a cada 60 segundos (reduzido para evitar stack overflow)
             setInterval(() => {
                 this.refreshStats();
                 this.loadAnalytics();
-            }, 30000);
+            }, 60000);
             
             console.log('✅ Dashboard inicializado!');
         },
@@ -918,25 +918,26 @@ function dashboardApp() {
         // WebSocket
         connectWebSocket() {
             try {
-                this.socket = io();
-                this.socket.on('connect', () => {
-                    console.log('✅ WebSocket conectado');
-                });
-                this.socket.on('bot_status_update', (data) => {
-                    console.log('🤖 Status do bot atualizado:', data);
-                    this.refreshStats();
-                });
-                this.socket.on('new_sale', (data) => {
-                    console.log('💰 Nova venda:', data);
-                    this.playNotificationSound();
-                    this.stats.total_sales += 1;
-                    this.stats.total_revenue += data.amount;
-                    this.payments.unshift(data);
-                    this.filterSales();
-                    this.loadChartData();
-                    this.loadAnalytics();
-                    this.showNotification(`💰 Nova venda: R$ ${this.formatMoney(data.amount)}`);
-                });
+                console.log('🔌 WebSocket desabilitado temporariamente');
+                // this.socket = io();
+                // this.socket.on('connect', () => {
+                //     console.log('✅ WebSocket conectado');
+                // });
+                // this.socket.on('bot_status_update', (data) => {
+                //     console.log('🤖 Status do bot atualizado:', data);
+                //     this.refreshStats();
+                // });
+                // this.socket.on('new_sale', (data) => {
+                //     console.log('💰 Nova venda:', data);
+                //     this.playNotificationSound();
+                //     this.stats.total_sales += 1;
+                //     this.stats.total_revenue += data.amount;
+                //     this.payments.unshift(data);
+                //     this.filterSales();
+                //     this.loadChartData();
+                //     this.loadAnalytics();
+                //     this.showNotification(`💰 Nova venda: R$ ${this.formatMoney(data.amount)}`);
+                // });
             } catch (error) {
                 console.error('❌ Erro WebSocket:', error);
             }
@@ -973,6 +974,12 @@ function dashboardApp() {
             }
             
             try {
+                // Destruir chart existente se houver
+                if (this.salesChart) {
+                    this.salesChart.destroy();
+                    this.salesChart = null;
+                }
+                
                 this.salesChart = new Chart(ctx.getContext('2d'), {
                     type: 'line',
                     data: {

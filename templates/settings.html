@@ -232,9 +232,9 @@
                         <div class="flex items-center justify-between mb-6">
                             <div class="flex items-center gap-4">
                                 <div class="relative">
-                                    <div class="absolute -inset-2 rounded-xl blur-lg" style="background: var(--brand-gold-500); opacity: 0.25;"></div>
-                                    <div class="relative flex items-center justify-center rounded-xl border-2 p-3" style="width: 80px; height: 80px; background: rgba(59, 130, 246, 0.15); border-color: #3B82F6;">
-                                        <i class="fas fa-qrcode" style="font-size: 2.5rem; color: var(--brand-gold-300); filter: drop-shadow(0 2px 8px rgba(96, 165, 250, 0.6));"></i>
+                                    <div class="absolute -inset-1 rounded-xl blur-md" style="background: var(--brand-gold-500); opacity: 0.2;"></div>
+                                    <div class="relative flex items-center justify-center rounded-xl border-2" style="width: 64px; height: 64px; background: var(--dark-700); border-color: var(--brand-gold-500);">
+                                        <i class="fas fa-qrcode text-4xl" style="color: var(--brand-gold-400);"></i>
                                     </div>
                                 </div>
                             <div>
@@ -310,7 +310,7 @@
                                 :disabled="loading"
                                     :class="{ 'opacity-60 cursor-not-allowed': loading }"
                                     class="w-full py-3.5 px-6 rounded-xl text-sm font-black focus:outline-none transition-all transform hover:-translate-y-1 active:translate-y-0 disabled:transform-none"
-                                    style="background: linear-gradient(135deg, #3B82F6, #2563EB); color: #FFFFFF; box-shadow: 0 8px 24px rgba(59, 130, 246, 0.4), 0 0 20px rgba(96, 165, 250, 0.2);">
+                                    style="background: linear-gradient(135deg, var(--brand-gold-500), var(--brand-gold-600)); color: var(--dark-900); box-shadow: 0 8px 24px rgba(var(--brand-gold-rgb), 0.4);">
                                     <span x-show="!loading" class="flex items-center justify-center gap-2">
                                         <i class="fas fa-save"></i>
                                         Salvar Configuração
@@ -330,9 +330,9 @@
                         <div class="flex items-center justify-between mb-6">
                             <div class="flex items-center gap-4">
                                 <div class="relative">
-                                    <div class="absolute -inset-2 rounded-xl blur-lg" style="background: var(--brand-gold-500); opacity: 0.25;"></div>
-                                    <div class="relative flex items-center justify-center rounded-xl border-2 p-2" style="width: 80px; height: 80px; background: rgba(59, 130, 246, 0.15); border-color: #3B82F6;">
-                                        <img src="{{ url_for('static', filename='img/pushyn.png') }}" alt="PushynPay" class="w-full h-full object-contain rounded-lg">
+                                    <div class="absolute -inset-1 rounded-xl blur-md" style="background: var(--brand-gold-500); opacity: 0.2;"></div>
+                                    <div class="relative flex items-center justify-center rounded-xl border-2 p-2" style="width: 64px; height: 64px; background: var(--dark-700); border-color: var(--brand-gold-500);">
+                                        <img src="{{ url_for('static', filename='img/pushyn.png') }}" alt="PushynPay" class="w-12 h-12 object-contain">
                                     </div>
                                 </div>
                             <div>
@@ -387,7 +387,7 @@
                                 :disabled="loading"
                                     :class="{ 'opacity-60 cursor-not-allowed': loading }"
                                     class="w-full py-3.5 px-6 rounded-xl text-sm font-black focus:outline-none transition-all transform hover:-translate-y-1 active:translate-y-0 disabled:transform-none"
-                                    style="background: linear-gradient(135deg, #3B82F6, #2563EB); color: #FFFFFF; box-shadow: 0 8px 24px rgba(59, 130, 246, 0.4), 0 0 20px rgba(96, 165, 250, 0.2);">
+                                    style="background: linear-gradient(135deg, var(--brand-gold-500), var(--brand-gold-600)); color: var(--dark-900); box-shadow: 0 8px 24px rgba(var(--brand-gold-rgb), 0.4);">
                                     <span x-show="!loading" class="flex items-center justify-center gap-2">
                                         <i class="fas fa-save"></i>
                                         Salvar Configuração
@@ -407,9 +407,9 @@
                         <div class="flex items-center justify-between mb-6">
                             <div class="flex items-center gap-4">
                                 <div class="relative">
-                                    <div class="absolute -inset-2 rounded-xl blur-lg" style="background: var(--brand-gold-500); opacity: 0.25;"></div>
-                                    <div class="relative flex items-center justify-center rounded-xl border-2 p-2" style="width: 80px; height: 80px; background: rgba(59, 130, 246, 0.15); border-color: #3B82F6;">
-                                        <img src="{{ url_for('static', filename='img/paradise.jpg') }}" alt="Paradise" class="w-full h-full object-cover rounded-lg">
+                                    <div class="absolute -inset-1 rounded-xl blur-md" style="background: var(--brand-gold-500); opacity: 0.2;"></div>
+                                    <div class="relative flex items-center justify-center rounded-xl border-2 p-2" style="width: 64px; height: 64px; background: var(--dark-700); border-color: var(--brand-gold-500);">
+                                        <img src="{{ url_for('static', filename='img/paradise.jpg') }}" alt="Paradise" class="w-12 h-12 object-cover rounded-lg">
                                     </div>
                                 </div>
                             <div>
@@ -505,7 +505,7 @@
                                 :disabled="loading"
                                     :class="{ 'opacity-60 cursor-not-allowed': loading }"
                                     class="w-full py-3.5 px-6 rounded-xl text-sm font-black focus:outline-none transition-all transform hover:-translate-y-1 active:translate-y-0 disabled:transform-none"
-                                    style="background: linear-gradient(135deg, #3B82F6, #2563EB); color: #FFFFFF; box-shadow: 0 8px 24px rgba(59, 130, 246, 0.4), 0 0 20px rgba(96, 165, 250, 0.2);">
+                                    style="background: linear-gradient(135deg, var(--brand-gold-500), var(--brand-gold-600)); color: var(--dark-900); box-shadow: 0 8px 24px rgba(var(--brand-gold-rgb), 0.4);">
                                     <span x-show="!loading" class="flex items-center justify-center gap-2">
                                         <i class="fas fa-save"></i>
                                         Salvar Configuração
@@ -525,9 +525,9 @@
                     <div class="flex items-center justify-between mb-6">
                         <div class="flex items-center gap-4">
                             <div class="relative">
-                                <div class="absolute -inset-2 rounded-xl blur-lg" style="background: var(--brand-gold-500); opacity: 0.25;"></div>
-                                <div class="relative flex items-center justify-center rounded-xl border-2 p-2" style="width: 80px; height: 80px; background: rgba(59, 130, 246, 0.15); border-color: #3B82F6;">
-                                    <img src="{{ url_for('static', filename='img/hoopay.webp') }}" alt="HooPay" class="w-full h-full object-contain rounded-lg">
+                                <div class="absolute -inset-1 rounded-xl blur-md" style="background: var(--brand-gold-500); opacity: 0.2;"></div>
+                                <div class="relative flex items-center justify-center rounded-xl border-2 p-2" style="width: 64px; height: 64px; background: var(--dark-700); border-color: var(--brand-gold-500);">
+                                    <img src="{{ url_for('static', filename='img/hoopay.webp') }}" alt="HooPay" class="w-12 h-12 object-contain">
                                 </div>
                             </div>
                             <div>
@@ -576,19 +576,19 @@
                 </div>
 
                 <!-- WiinPay Card ✅ NOVO -->
-                <div class="gateway-card rounded-2xl p-6 border-2 transition-all hover:scale-[1.01]" style="background: var(--surface-low); border-color: rgba(16, 185, 129, 0.3); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);">
+                <div class="gateway-card rounded-2xl p-6 border-2 transition-all hover:scale-[1.01]" style="background: var(--surface-low); border-color: var(--border-subtle); box-shadow: var(--shadow-lg);">
                     <div class="flex items-center justify-between mb-6">
                         <div class="flex items-center gap-4">
                             <div class="relative">
-                                <div class="absolute -inset-2 rounded-xl blur-lg" style="background: #10B981; opacity: 0.25;"></div>
-                                <div class="relative flex items-center justify-center rounded-xl border-2 p-2" style="width: 80px; height: 80px; background: rgba(16, 185, 129, 0.15); border-color: #10B981;">
-                                    <img src="{{ url_for('static', filename='img/wiinpay.ico') }}" alt="WiinPay" class="w-full h-full object-contain rounded-lg">
+                                <div class="absolute -inset-1 rounded-xl blur-md" style="background: var(--brand-gold-500); opacity: 0.2;"></div>
+                                <div class="relative flex items-center justify-center rounded-xl border-2 p-2" style="width: 64px; height: 64px; background: var(--dark-700); border-color: var(--brand-gold-500);">
+                                    <img src="{{ url_for('static', filename='img/wiinpay.ico') }}" alt="WiinPay" class="w-12 h-12 object-contain">
                                 </div>
                             </div>
                             <div>
                                 <h4 class="text-xl font-black flex items-center gap-2" style="color: var(--text-primary);">
                                     WiinPay
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-black" style="background: rgba(16, 185, 129, 0.2); color: #6EE7B7;">NOVO</span>
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-black" style="background: rgba(var(--brand-emerald-rgb), 0.15); color: var(--brand-emerald-400); border: 1px solid var(--brand-emerald-500);">NOVO</span>
                                     <span x-show="getGatewayStatus('wiinpay')?.is_verified && getGatewayStatus('wiinpay')?.is_active" 
                                           class="inline-flex items-center px-3 py-1 rounded-full text-xs font-black border-2 animate-pulse" style="background: rgba(16, 185, 129, 0.15); color: var(--brand-green-300); border-color: var(--brand-green-500);">
                                         <i class="fas fa-circle mr-1 text-xs"></i> ATIVO
@@ -649,9 +649,20 @@
                         </div>
 
                         <div class="pt-2">
-                            <button type="submit" :disabled="loading" class="w-full py-3.5 px-6 rounded-xl text-sm font-black" style="background: linear-gradient(135deg, #10B981, #059669); color: #FFFFFF;">
-                                <span x-show="!loading"><i class="fas fa-save mr-2"></i>Salvar Configuração</span>
-                                <span x-show="loading"><i class="fas fa-spinner fa-spin mr-2"></i>Salvando...</span>
+                            <button 
+                                type="submit" 
+                                :disabled="loading"
+                                :class="{ 'opacity-60 cursor-not-allowed': loading }"
+                                class="w-full py-3.5 px-6 rounded-xl text-sm font-black focus:outline-none transition-all transform hover:-translate-y-1 active:translate-y-0 disabled:transform-none"
+                                style="background: linear-gradient(135deg, var(--brand-gold-500), var(--brand-gold-600)); color: var(--dark-900); box-shadow: 0 8px 24px rgba(var(--brand-gold-rgb), 0.4);">
+                                <span x-show="!loading" class="flex items-center justify-center gap-2">
+                                    <i class="fas fa-save"></i>
+                                    Salvar Configuração
+                                </span>
+                                <span x-show="loading" class="flex items-center justify-center gap-2">
+                                    <i class="fas fa-spinner fa-spin"></i>
+                                    Salvando...
+                                </span>
                             </button>
                         </div>
                     </form>
