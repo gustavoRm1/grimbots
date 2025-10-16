@@ -727,9 +727,16 @@ class BotManager:
                     
                     logger.info(f"✅ PIX gerado COM order bump!")
                     
-                    # Agendar downsells se habilitados
-                    bot_info = self.active_bots.get(bot_id, {})
-                    config = bot_info.get('config', {})
+                    # ✅ CORREÇÃO: Buscar config atualizada do BANCO (não da memória)
+                    from app import app, db
+                    from models import Bot as BotModel
+                    
+                    with app.app_context():
+                        bot = BotModel.query.get(bot_id)
+                        if bot and bot.config:
+                            config = bot.config.to_dict()
+                        else:
+                            config = {}
                     
                     logger.info(f"🔍 DEBUG Downsells (Order Bump) - bot_id: {bot_id}")
                     logger.info(f"🔍 DEBUG Downsells (Order Bump) - enabled: {config.get('downsells_enabled', False)}")
@@ -738,7 +745,7 @@ class BotManager:
                     if config.get('downsells_enabled', False):
                         downsells = config.get('downsells', [])
                         logger.info(f"🔍 DEBUG Downsells (Order Bump) - downsells encontrados: {len(downsells)}")
-                        if downsells:
+                        if downsells and len(downsells) > 0:
                             self.schedule_downsells(
                                 bot_id=bot_id,
                                 payment_id=pix_data.get('payment_id'),
@@ -816,9 +823,16 @@ class BotManager:
                     
                     logger.info(f"✅ PIX gerado SEM order bump!")
                     
-                    # Agendar downsells se habilitados
-                    bot_info = self.active_bots.get(bot_id, {})
-                    config = bot_info.get('config', {})
+                    # ✅ CORREÇÃO: Buscar config atualizada do BANCO (não da memória)
+                    from app import app, db
+                    from models import Bot as BotModel
+                    
+                    with app.app_context():
+                        bot = BotModel.query.get(bot_id)
+                        if bot and bot.config:
+                            config = bot.config.to_dict()
+                        else:
+                            config = {}
                     
                     logger.info(f"🔍 DEBUG Downsells (bump_no) - bot_id: {bot_id}")
                     logger.info(f"🔍 DEBUG Downsells (bump_no) - enabled: {config.get('downsells_enabled', False)}")
@@ -827,7 +841,7 @@ class BotManager:
                     if config.get('downsells_enabled', False):
                         downsells = config.get('downsells', [])
                         logger.info(f"🔍 DEBUG Downsells (bump_no) - downsells encontrados: {len(downsells)}")
-                        if downsells:
+                        if downsells and len(downsells) > 0:
                             self.schedule_downsells(
                                 bot_id=bot_id,
                                 payment_id=pix_data.get('payment_id'),
@@ -985,18 +999,27 @@ class BotManager:
                     
                     logger.info(f"✅ PIX ENVIADO! ID: {pix_data.get('payment_id')}")
                     
-                    # Agendar downsells se habilitados
-                    bot_info = self.active_bots.get(bot_id, {})
-                    config = bot_info.get('config', {})
+                    # ✅ CORREÇÃO: Buscar config atualizada do BANCO (não da memória)
+                    from app import app, db
+                    from models import Bot as BotModel
+                    
+                    with app.app_context():
+                        bot = BotModel.query.get(bot_id)
+                        if bot and bot.config:
+                            config = bot.config.to_dict()
+                        else:
+                            config = {}
                     
                     logger.info(f"🔍 DEBUG Downsells - bot_id: {bot_id}")
                     logger.info(f"🔍 DEBUG Downsells - enabled: {config.get('downsells_enabled', False)}")
-                    logger.info(f"🔍 DEBUG Downsells - list: {config.get('downsells', [])}")
+                    logger.info(f"🔍 DEBUG Downsells - list type: {type(config.get('downsells', []))}")
+                    logger.info(f"🔍 DEBUG Downsells - list content: {config.get('downsells', [])}")
                     
                     if config.get('downsells_enabled', False):
                         downsells = config.get('downsells', [])
                         logger.info(f"🔍 DEBUG Downsells - downsells encontrados: {len(downsells)}")
-                        if downsells:
+                        logger.info(f"🔍 DEBUG Downsells - is empty?: {len(downsells) == 0}")
+                        if downsells and len(downsells) > 0:
                             self.schedule_downsells(
                                 bot_id=bot_id,
                                 payment_id=pix_data.get('payment_id'),
@@ -2158,15 +2181,17 @@ Seu pagamento ainda não foi confirmado.
             pricing_mode = downsell.get('pricing_mode', 'fixed')
             
             if pricing_mode == 'percentage':
-                # Modo Percentual: Aplicar desconto sobre o preço original
+                # Modo Percentual: Aplicar DESCONTO sobre o preço original
                 discount_percentage = float(downsell.get('discount_percentage', 50))
                 
                 # Validar percentual (1-95%)
                 discount_percentage = max(1, min(95, discount_percentage))
                 
                 if original_price > 0:
-                    price = original_price * (discount_percentage / 100)
-                    logger.info(f"💜 MODO PERCENTUAL: {discount_percentage}% de R$ {original_price:.2f} = R$ {price:.2f}")
+                    # ✅ CORREÇÃO: Desconto = preço × (1 - desconto%)
+                    # Exemplo: R$ 19,97 com 50% OFF = 19.97 × (1 - 0.50) = R$ 9,99
+                    price = original_price * (1 - discount_percentage / 100)
+                    logger.info(f"💜 MODO PERCENTUAL: {discount_percentage}% OFF de R$ {original_price:.2f} = R$ {price:.2f}")
                 else:
                     # Fallback: usar preço fixo se não tiver original_price
                     price = float(downsell.get('price', 0))

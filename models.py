@@ -450,8 +450,8 @@ class PoolBot(db.Model):
     added_at = db.Column(db.DateTime, default=get_brazil_time)
     
     # Relacionamentos
-    # ✅ Não usar backref aqui, pois Bot já define pool_associations
-    bot = db.relationship('Bot')
+    # ✅ Definir relationship explicitamente sem backref (Bot.pool_associations já existe)
+    bot = db.relationship('Bot', overlaps="associated_bot,pool_associations")
     
     # Constraints
     __table_args__ = (
