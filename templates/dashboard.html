@@ -1111,18 +1111,10 @@ function dashboardApp() {
         async startBot(botId) {
             try {
                 console.log(`▶️ Iniciando bot ${botId}...`);
-                console.log(`📡 URL: /api/bots/${botId}/start`);
                 
                 const csrfToken = this.getCsrfToken();
-                console.log('🔐 CSRF Token:', csrfToken ? 'Encontrado' : 'NÃO ENCONTRADO');
-                
-                const headers = {
-                    'Content-Type': 'application/json'
-                };
-                
-                if (csrfToken) {
-                    headers['X-CSRF-Token'] = csrfToken;
-                }
+                const headers = { 'Content-Type': 'application/json' };
+                if (csrfToken) headers['X-CSRF-Token'] = csrfToken;
                 
                 const response = await fetch(`/api/bots/${botId}/start`, { 
                     method: 'POST',
@@ -1130,42 +1122,25 @@ function dashboardApp() {
                     credentials: 'same-origin'
                 });
                 
-                console.log(`📊 Response status: ${response.status}`);
-                
-                if (!response.ok) {
+                if (response.ok) {
+                    console.log('✅ Bot iniciado com sucesso!');
+                    location.reload();
+                } else {
                     const text = await response.text();
-                    console.error('❌ Resposta do servidor (texto):', text);
-                    console.error('❌ Status:', response.status, response.statusText);
-                    alert(`❌ Erro ao iniciar bot!\n\nStatus: ${response.status}\n\nAbra o Console (F12) para ver detalhes.`);
-                    return;
+                    console.error('❌ Erro ao iniciar bot:', text);
                 }
-                
-                const data = await response.json();
-                console.log('✅ Resposta JSON:', data);
-                alert('✅ Bot iniciado com sucesso!');
-                location.reload();
             } catch (error) {
-                console.error('❌ Erro completo:', error);
-                console.error('❌ Stack:', error.stack);
-                alert('❌ Erro ao iniciar bot: ' + error.message + '\n\nAbra o Console (F12) para ver detalhes.');
+                console.error('❌ Erro ao iniciar bot:', error);
             }
         },
 
         async stopBot(botId) {
             try {
                 console.log(`🛑 Parando bot ${botId}...`);
-                console.log(`📡 URL: /api/bots/${botId}/stop`);
                 
                 const csrfToken = this.getCsrfToken();
-                console.log('🔐 CSRF Token:', csrfToken ? 'Encontrado' : 'NÃO ENCONTRADO');
-                
-                const headers = {
-                    'Content-Type': 'application/json'
-                };
-                
-                if (csrfToken) {
-                    headers['X-CSRF-Token'] = csrfToken;
-                }
+                const headers = { 'Content-Type': 'application/json' };
+                if (csrfToken) headers['X-CSRF-Token'] = csrfToken;
                 
                 const response = await fetch(`/api/bots/${botId}/stop`, { 
                     method: 'POST',
@@ -1173,25 +1148,15 @@ function dashboardApp() {
                     credentials: 'same-origin'
                 });
                 
-                console.log(`📊 Response status: ${response.status}`);
-                console.log(`📦 Response headers:`, response.headers);
-                
-                if (!response.ok) {
+                if (response.ok) {
+                    console.log('✅ Bot parado com sucesso!');
+                    location.reload();
+                } else {
                     const text = await response.text();
-                    console.error('❌ Resposta do servidor (texto):', text);
-                    console.error('❌ Status:', response.status, response.statusText);
-                    alert(`❌ Erro ao parar bot!\n\nStatus: ${response.status}\n\nAbra o Console (F12) para ver detalhes.`);
-                    return;
+                    console.error('❌ Erro ao parar bot:', text);
                 }
-                
-                const data = await response.json();
-                console.log('✅ Resposta JSON:', data);
-                alert('✅ Bot parado com sucesso!');
-                location.reload();
             } catch (error) {
-                console.error('❌ Erro completo:', error);
-                console.error('❌ Stack:', error.stack);
-                alert('❌ Erro ao parar bot: ' + error.message + '\n\nAbra o Console (F12) para ver detalhes.');
+                console.error('❌ Erro ao parar bot:', error);
             }
         },
 
