@@ -1412,20 +1412,8 @@ Seu pagamento ainda não foi confirmado.
                 payment_id = f"BOT{bot_id}_{int(time.time())}_{uuid.uuid4().hex[:8]}"
                 
                 # Gerar PIX via gateway (usando Factory Pattern)
-                # ✅ CORREÇÃO: Passar TODOS os campos necessários para cada gateway
-                credentials = {
-                    'client_id': gateway.client_id,
-                    'client_secret': gateway.client_secret,
-                    'api_key': gateway.api_key,
-                    # Paradise
-                    'product_hash': gateway.product_hash,
-                    'offer_hash': gateway.offer_hash,
-                    'store_id': gateway.store_id,
-                    # HooPay
-                    'organization_id': gateway.organization_id,
-                    # Comum
-                    'split_percentage': gateway.split_percentage or 4.0
-                }
+                logger.info(f"🔧 Criando gateway {gateway.gateway_type} com credenciais...")
+                logger.info(f"🔑 Credenciais HooPay: api_key={gateway.api_key[:16]}..., org_id={gateway.organization_id}")
                 
                 payment_gateway = GatewayFactory.create_gateway(
                     gateway_type=gateway.gateway_type,
@@ -1436,7 +1424,10 @@ Seu pagamento ainda não foi confirmado.
                     logger.error(f"❌ Erro ao criar gateway {gateway.gateway_type}")
                     return None
                 
+                logger.info(f"✅ Gateway {gateway.gateway_type} criado com sucesso!")
+                
                 # Gerar PIX usando gateway isolado com DADOS REAIS DO CLIENTE
+                logger.info(f"💰 Gerando PIX: R$ {amount:.2f} | Descrição: {description}")
                 pix_result = payment_gateway.generate_pix(
                     amount=amount,
                     description=description,
@@ -1448,6 +1439,8 @@ Seu pagamento ainda não foi confirmado.
                         'document': customer_user_id  # ✅ User ID do Telegram (gateways aceitam)
                     }
                 )
+                
+                logger.info(f"📊 Resultado do PIX: {pix_result}")
                 
                 if pix_result:
                     # Salvar pagamento no banco (incluindo código PIX para reenvio + analytics)
@@ -1875,7 +1868,11 @@ Seu pagamento ainda não foi confirmado.
                     'offer_hash': 'dummyhash'
                 }
             elif gateway_type == 'hoopay':
-                dummy_credentials = {'api_key': 'dummy'}
+                dummy_credentials = {
+                    'api_key': 'dummy',
+                    'organization_id': 'dummy-org-id',
+                    'split_percentage': 4.0
+                }
             
             # Criar instância do gateway via Factory
             payment_gateway = GatewayFactory.create_gateway(

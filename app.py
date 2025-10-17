@@ -2540,6 +2540,71 @@ def api_check_bots_status():
         logger.error(f"❌ Erro ao verificar status dos bots: {e}")
         return jsonify({'error': f'Erro ao verificar bots: {str(e)}'}), 500
 
+@app.route('/api/admin/test-hoopay', methods=['POST'])
+@login_required
+@csrf.exempt
+def api_test_hoopay():
+    """API para testar HooPay especificamente"""
+    try:
+        with app.app_context():
+            # Buscar gateway HooPay ativo
+            hoopay_gateway = Gateway.query.filter_by(
+                user_id=current_user.id,
+                gateway_type='hoopay',
+                is_active=True,
+                is_verified=True
+            ).first()
+            
+            if not hoopay_gateway:
+                return jsonify({'error': 'HooPay não encontrado ou não está ativo/verificado'}), 400
+            
+            # Testar criação do gateway
+            from gateway_factory import GatewayFactory
+            
+            credentials = {
+                'api_key': hoopay_gateway.api_key,
+                'organization_id': hoopay_gateway.organization_id,
+                'split_percentage': hoopay_gateway.split_percentage or 4.0
+            }
+            
+            gateway = GatewayFactory.create_gateway('hoopay', credentials)
+            
+            if not gateway:
+                return jsonify({'error': 'Erro ao criar instância do HooPay'}), 500
+            
+            # Testar verificação de credenciais
+            is_valid = gateway.verify_credentials()
+            
+            # Testar geração de PIX (valor baixo para teste)
+            test_pix = gateway.generate_pix(
+                amount=1.00,
+                description='Teste HooPay',
+                payment_id='TEST_' + str(int(time.time())),
+                customer_data={
+                    'name': 'Teste Cliente',
+                    'email': 'teste@exemplo.com',
+                    'phone': '11999999999',
+                    'document': '12345678901'
+                }
+            )
+            
+            result = {
+                'gateway_created': gateway is not None,
+                'credentials_valid': is_valid,
+                'test_pix': test_pix,
+                'gateway_info': {
+                    'api_key': hoopay_gateway.api_key[:16] + '...',
+                    'organization_id': hoopay_gateway.organization_id,
+                    'split_percentage': hoopay_gateway.split_percentage
+                }
+            }
+            
+            return jsonify(result)
+            
+    except Exception as e:
+        logger.error(f"❌ Erro ao testar HooPay: {e}", exc_info=True)
+        return jsonify({'error': f'Erro ao testar HooPay: {str(e)}'}), 500
+
 def _reload_user_bots_config(user_id: int):
     """Recarrega configuração dos bots ativos quando gateway muda"""
     try:
