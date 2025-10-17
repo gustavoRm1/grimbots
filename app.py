@@ -964,6 +964,7 @@ def duplicate_bot(bot_id):
 
 @app.route('/api/bots/<int:bot_id>/start', methods=['POST'])
 @login_required
+@csrf.exempt
 def start_bot(bot_id):
     """Inicia um bot"""
     bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
@@ -997,6 +998,7 @@ def start_bot(bot_id):
 
 @app.route('/api/bots/<int:bot_id>/stop', methods=['POST'])
 @login_required
+@csrf.exempt
 def stop_bot(bot_id):
     """Para um bot"""
     bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
