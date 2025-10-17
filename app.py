@@ -780,6 +780,7 @@ def get_bot(bot_id):
 
 @app.route('/api/bots/<int:bot_id>/token', methods=['PUT'])
 @login_required
+@csrf.exempt
 def update_bot_token(bot_id):
     """
     Atualiza o token de um bot (CRÍTICO para recuperação de bot banido)
@@ -1078,6 +1079,7 @@ def get_remarketing_campaigns(bot_id):
 
 @app.route('/api/bots/<int:bot_id>/remarketing/campaigns', methods=['POST'])
 @login_required
+@csrf.exempt
 def create_remarketing_campaign(bot_id):
     """Cria nova campanha de remarketing"""
     bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
@@ -1107,6 +1109,7 @@ def create_remarketing_campaign(bot_id):
 
 @app.route('/api/bots/<int:bot_id>/remarketing/campaigns/<int:campaign_id>/send', methods=['POST'])
 @login_required
+@csrf.exempt
 def send_remarketing_campaign(bot_id, campaign_id):
     """Envia campanha de remarketing"""
     bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
@@ -1124,6 +1127,7 @@ def send_remarketing_campaign(bot_id, campaign_id):
 
 @app.route('/api/bots/<int:bot_id>/remarketing/eligible-leads', methods=['POST'])
 @login_required
+@csrf.exempt
 def count_eligible_leads(bot_id):
     """Conta quantos leads são elegíveis para remarketing"""
     bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
@@ -2124,6 +2128,7 @@ def get_redirect_pools():
 
 @app.route('/api/redirect-pools', methods=['POST'])
 @login_required
+@csrf.exempt
 def create_redirect_pool():
     """
     Cria novo pool de redirecionamento
@@ -2203,6 +2208,7 @@ def get_redirect_pool(pool_id):
 
 @app.route('/api/redirect-pools/<int:pool_id>', methods=['PUT'])
 @login_required
+@csrf.exempt
 def update_redirect_pool(pool_id):
     """Atualiza configurações do pool"""
     pool = RedirectPool.query.filter_by(id=pool_id, user_id=current_user.id).first_or_404()
@@ -2235,6 +2241,7 @@ def update_redirect_pool(pool_id):
 
 @app.route('/api/redirect-pools/<int:pool_id>', methods=['DELETE'])
 @login_required
+@csrf.exempt
 def delete_redirect_pool(pool_id):
     """Deleta um pool"""
     pool = RedirectPool.query.filter_by(id=pool_id, user_id=current_user.id).first_or_404()
@@ -2250,6 +2257,7 @@ def delete_redirect_pool(pool_id):
 
 @app.route('/api/redirect-pools/<int:pool_id>/bots', methods=['POST'])
 @login_required
+@csrf.exempt
 def add_bot_to_pool(pool_id):
     """
     Adiciona bot ao pool
@@ -2310,6 +2318,7 @@ def add_bot_to_pool(pool_id):
 
 @app.route('/api/redirect-pools/<int:pool_id>/bots/<int:pool_bot_id>', methods=['DELETE'])
 @login_required
+@csrf.exempt
 def remove_bot_from_pool(pool_id, pool_bot_id):
     """Remove bot do pool"""
     pool = RedirectPool.query.filter_by(id=pool_id, user_id=current_user.id).first_or_404()
@@ -2330,6 +2339,7 @@ def remove_bot_from_pool(pool_id, pool_bot_id):
 
 @app.route('/api/redirect-pools/<int:pool_id>/bots/<int:pool_bot_id>', methods=['PUT'])
 @login_required
+@csrf.exempt
 def update_pool_bot_config(pool_id, pool_bot_id):
     """Atualiza configurações do bot no pool (weight, priority, enabled)"""
     pool = RedirectPool.query.filter_by(id=pool_id, user_id=current_user.id).first_or_404()
@@ -2367,6 +2377,7 @@ def get_gateways():
 
 @app.route('/api/gateways', methods=['POST'])
 @login_required
+@csrf.exempt
 def create_gateway():
     """Cria/atualiza gateway"""
     data = request.json
@@ -2468,6 +2479,7 @@ def create_gateway():
 
 @app.route('/api/gateways/<int:gateway_id>/toggle', methods=['POST'])
 @login_required
+@csrf.exempt
 def toggle_gateway(gateway_id):
     """Ativa/desativa um gateway"""
     gateway = Gateway.query.filter_by(
@@ -2506,6 +2518,7 @@ def toggle_gateway(gateway_id):
 
 @app.route('/api/gateways/<int:gateway_id>', methods=['DELETE'])
 @login_required
+@csrf.exempt
 def delete_gateway(gateway_id):
     """Deleta um gateway"""
     gateway = Gateway.query.filter_by(id=gateway_id, user_id=current_user.id).first_or_404()
@@ -2566,17 +2579,17 @@ def ranking():
         # Calcular receita no mês
         if True:
             # Ranking por receita no período (mês)
-            subquery = db.session.query(
-                Bot.user_id,
+                subquery = db.session.query(
+                    Bot.user_id,
                 func.sum(Payment.amount).label('period_revenue'),
-                func.count(Payment.id).label('period_sales')
-            ).join(Payment)\
-             .filter(Payment.status == 'paid', Payment.created_at >= date_filter)\
-             .group_by(Bot.user_id)\
-             .subquery()
-            
-            users_query = User.query.join(subquery, User.id == subquery.c.user_id)\
-                                   .filter(User.is_admin == False, User.is_banned == False)\
+                    func.count(Payment.id).label('period_sales')
+                ).join(Payment)\
+                 .filter(Payment.status == 'paid', Payment.created_at >= date_filter)\
+                 .group_by(Bot.user_id)\
+                 .subquery()
+                
+                users_query = User.query.join(subquery, User.id == subquery.c.user_id)\
+                                       .filter(User.is_admin == False, User.is_banned == False)\
                                    .order_by(
                                        subquery.c.period_revenue.desc(),
                                        subquery.c.period_sales.desc(),
@@ -2662,6 +2675,7 @@ def settings():
 
 @app.route('/api/user/profile', methods=['PUT'])
 @login_required
+@csrf.exempt
 def update_profile():
     """Atualiza perfil do usuário"""
     data = request.json
@@ -2686,6 +2700,7 @@ def update_profile():
 
 @app.route('/api/user/password', methods=['PUT'])
 @login_required
+@csrf.exempt
 def update_password():
     """Atualiza senha do usuário"""
     data = request.json
