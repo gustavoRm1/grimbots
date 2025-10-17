@@ -498,7 +498,7 @@ def dashboard():
         'created_at': p.created_at.isoformat()
     } for p in recent_payments]
     
-    return render_template('dashboard_v2.html', stats=stats, recent_payments=payments_list, bots=bots_list)
+    return render_template('dashboard.html', stats=stats, recent_payments=payments_list, bots=bots_list)
 
 
 # ==================== API DE ESTATÍSTICAS ====================
@@ -1831,7 +1831,7 @@ def get_bot_stats(bot_id):
 def bot_config_page(bot_id):
     """Página de configuração do bot"""
     bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
-    return render_template('bot_config_v2.html', bot=bot)
+    return render_template('bot_config.html', bot=bot)
 
 @app.route('/api/bots/<int:bot_id>/config', methods=['GET'])
 @login_required
