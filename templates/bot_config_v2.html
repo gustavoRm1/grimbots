@@ -930,7 +930,7 @@
     </div>
 
     <!-- Tab Content: Remarketing -->
-    <div x-show="activeTab === 'remarketing'" x-cloak>
+    <div x-show="activeTab === 'remarketing'" x-cloak x-data="remarketingApp()">
         <div class="config-section">
             <div class="config-section-header">
                 <i class="fas fa-bullhorn text-2xl text-purple-500"></i>
@@ -938,6 +938,11 @@
                     <div class="config-section-title">Campanhas de Remarketing</div>
                     <div class="config-section-description">Recupere clientes que não compraram</div>
                 </div>
+                <button @click="showCreateModal = true" 
+                        class="ml-auto px-4 py-2 bg-purple-500 text-white rounded-lg font-bold hover:bg-purple-600 transition-all flex items-center gap-2">
+                    <i class="fas fa-plus"></i>
+                    Nova Campanha
+                </button>
             </div>
 
             <div class="info-box mb-6">
@@ -947,15 +952,160 @@
                 </p>
             </div>
 
-            <div class="text-center py-12 border-2 border-dashed border-gray-700 rounded-xl">
+            <!-- Lista de Campanhas -->
+            <div x-show="campaigns.length > 0" class="space-y-4">
+                <template x-for="campaign in campaigns" :key="campaign.id">
+                    <div class="p-6 bg-gray-900 border border-gray-800 rounded-xl">
+                        <div class="flex justify-between items-start mb-4">
+                            <div class="flex-1">
+                                <h3 class="text-lg font-bold text-white" x-text="campaign.name"></h3>
+                                <p class="text-sm text-gray-500 mt-1">
+                                    <i class="fas fa-users mr-1"></i>
+                                    Público: <span x-text="getAudienceLabel(campaign.target_audience)"></span>
+                                </p>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span :class="{
+                                    'bg-yellow-500 bg-opacity-20 text-yellow-400': campaign.status === 'draft',
+                                    'bg-blue-500 bg-opacity-20 text-blue-400': campaign.status === 'scheduled',
+                                    'bg-green-500 bg-opacity-20 text-green-400': campaign.status === 'sending',
+                                    'bg-gray-500 bg-opacity-20 text-gray-400': campaign.status === 'completed'
+                                }" class="px-3 py-1 rounded-full text-xs font-bold">
+                                    <span x-text="getStatusLabel(campaign.status)"></span>
+                                </span>
+                                <button @click="sendCampaign(campaign.id)" 
+                                        x-show="campaign.status === 'draft'"
+                                        class="px-3 py-1 bg-purple-500 text-white rounded-lg text-sm font-bold hover:bg-purple-600">
+                                    <i class="fas fa-paper-plane mr-1"></i> Enviar
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div class="text-center p-3 bg-gray-800 rounded-lg">
+                                <div class="text-2xl font-bold text-white" x-text="campaign.total_targets || 0"></div>
+                                <div class="text-xs text-gray-500">Alvos</div>
+                            </div>
+                            <div class="text-center p-3 bg-gray-800 rounded-lg">
+                                <div class="text-2xl font-bold text-green-400" x-text="campaign.total_sent || 0"></div>
+                                <div class="text-xs text-gray-500">Enviados</div>
+                            </div>
+                            <div class="text-center p-3 bg-gray-800 rounded-lg">
+                                <div class="text-2xl font-bold text-blue-400" x-text="campaign.total_clicks || 0"></div>
+                                <div class="text-xs text-gray-500">Cliques</div>
+                            </div>
+                            <div class="text-center p-3 bg-gray-800 rounded-lg">
+                                <div class="text-2xl font-bold" style="color: var(--brand-gold-500);" x-text="'R$ ' + (campaign.revenue_generated || 0).toFixed(2)"></div>
+                                <div class="text-xs text-gray-500">Receita</div>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+
+            <!-- Empty State -->
+            <div x-show="campaigns.length === 0" class="text-center py-12 border-2 border-dashed border-gray-700 rounded-xl">
                 <i class="fas fa-bullhorn text-5xl text-gray-600 mb-4"></i>
-                <h3 class="text-xl font-bold text-white mb-2">Remarketing em Desenvolvimento</h3>
-                <p class="text-gray-500 mb-4">Esta funcionalidade estará disponível em breve</p>
-                <div class="info-box-warning info-box max-w-md mx-auto">
-                    <p class="text-sm text-gray-300">
-                        <i class="fas fa-rocket mr-2 text-yellow-500"></i>
-                        <strong>Em breve:</strong> Crie campanhas para recuperar até 30% dos usuários que não compraram!
-                    </p>
+                <h3 class="text-xl font-bold text-white mb-2">Nenhuma campanha criada</h3>
+                <p class="text-gray-500 mb-6">Crie sua primeira campanha de remarketing</p>
+                <button @click="showCreateModal = true" 
+                        class="px-6 py-3 bg-purple-500 text-white rounded-lg font-bold hover:bg-purple-600 transition-all">
+                    <i class="fas fa-plus mr-2"></i>
+                    Criar Primeira Campanha
+                </button>
+            </div>
+        </div>
+
+        <!-- Modal: Criar Campanha -->
+        <div x-show="showCreateModal" 
+             x-cloak
+             class="fixed inset-0 z-50 overflow-y-auto"
+             style="background: rgba(0,0,0,0.8);">
+            <div class="flex items-center justify-center min-h-screen p-4">
+                <div @click.away="showCreateModal = false" 
+                     class="bg-gray-900 rounded-xl max-w-2xl w-full p-6 border border-gray-800">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 class="text-xl font-bold text-white">Nova Campanha de Remarketing</h3>
+                        <button @click="showCreateModal = false" class="text-gray-500 hover:text-white">
+                            <i class="fas fa-times text-xl"></i>
+                        </button>
+                    </div>
+
+                    <div class="space-y-4">
+                        <div class="form-group">
+                            <label class="form-label">Nome da Campanha</label>
+                            <input type="text" x-model="newCampaign.name" class="form-input" placeholder="Ex: Recuperação de Carrinho">
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Mensagem</label>
+                            <textarea x-model="newCampaign.message" class="form-textarea" rows="4" placeholder="Olá! Notamos que você estava interessado..."></textarea>
+                        </div>
+
+                        <!-- Mídia (Padrão 2 colunas) -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="form-group">
+                                <label class="form-label">
+                                    <i class="fas fa-link mr-2 text-blue-500"></i>
+                                    URL da Mídia (opcional)
+                                </label>
+                                <input type="url" x-model="newCampaign.media_url" class="form-input" placeholder="https://t.me/canal/123">
+                                <p class="text-xs text-gray-500 mt-2">Link do Telegram</p>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">
+                                    <i class="fas fa-image mr-2 text-blue-500"></i>
+                                    Tipo de Mídia
+                                </label>
+                                <div class="flex gap-3 mt-2">
+                                    <label class="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer hover:border-blue-500 transition-colors"
+                                           :class="{'border-blue-500 bg-blue-500 bg-opacity-10': newCampaign.media_type === 'video'}">
+                                        <input type="radio" x-model="newCampaign.media_type" value="video" class="text-blue-500">
+                                        <i class="fas fa-video text-blue-500"></i>
+                                        <span class="text-sm text-white">Vídeo</span>
+                                    </label>
+                                    <label class="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer hover:border-blue-500 transition-colors"
+                                           :class="{'border-blue-500 bg-blue-500 bg-opacity-10': newCampaign.media_type === 'photo'}">
+                                        <input type="radio" x-model="newCampaign.media_type" value="photo" class="text-blue-500">
+                                        <i class="fas fa-camera text-blue-500"></i>
+                                        <span class="text-sm text-white">Foto</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="form-group">
+                                <label class="form-label">Público-Alvo</label>
+                                <select x-model="newCampaign.target_audience" class="form-input">
+                                    <option value="non_buyers">Não compraram</option>
+                                    <option value="abandoned_cart">Carrinho abandonado</option>
+                                    <option value="inactive">Inativos</option>
+                                    <option value="all">Todos</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">Dias sem contato</label>
+                                <input type="number" x-model="newCampaign.days_since_last_contact" class="form-input" placeholder="3">
+                            </div>
+                        </div>
+
+                        <div class="flex justify-end gap-3 mt-6">
+                            <button @click="showCreateModal = false" 
+                                    class="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600">
+                                Cancelar
+                            </button>
+                            <button @click="createCampaign()" 
+                                    :disabled="!newCampaign.name || !newCampaign.message"
+                                    :class="{'opacity-50 cursor-not-allowed': !newCampaign.name || !newCampaign.message}"
+                                    class="px-4 py-2 bg-purple-500 text-white rounded-lg font-bold hover:bg-purple-600">
+                                <i class="fas fa-plus mr-2"></i>
+                                Criar Campanha
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -974,12 +1124,12 @@
 
             <div class="space-y-6">
                 <!-- Trocar Token -->
-                <div class="p-6 bg-red-500 bg-opacity-10 border border-red-500 border-opacity-30 rounded-xl">
-                    <div class="flex items-start gap-3 mb-4">
-                        <i class="fas fa-exclamation-triangle text-red-500 text-xl"></i>
+                <div class="p-6 bg-gray-900 border-2 border-red-500 rounded-xl">
+                    <div class="flex items-start gap-3 mb-6 p-4 bg-red-500 bg-opacity-15 rounded-lg border-l-4 border-red-500">
+                        <i class="fas fa-exclamation-triangle text-red-400 text-2xl"></i>
                         <div>
-                            <h3 class="text-lg font-bold text-red-400 mb-1">Trocar Token do Bot</h3>
-                            <p class="text-sm text-gray-300">
+                            <h3 class="text-xl font-bold text-red-400 mb-2">Trocar Token do Bot</h3>
+                            <p class="text-sm text-white font-medium">
                                 Use esta opção se você precisa reconectar o bot ou trocar para um novo token do BotFather.
                             </p>
                         </div>
@@ -987,31 +1137,32 @@
 
                     <div class="form-group">
                         <label class="form-label">
-                            <i class="fas fa-key mr-2 text-yellow-500"></i>
-                            Novo Token do Telegram
+                            <i class="fas fa-key mr-2" style="color: var(--brand-gold-500);"></i>
+                            <span class="text-white font-bold">Novo Token do Telegram</span>
                         </label>
                         <input type="text" 
                                x-model="newBotToken" 
-                               class="form-input font-mono"
+                               class="form-input font-mono text-white"
                                placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz">
-                        <p class="text-xs text-gray-500 mt-2">
-                            Obtenha um novo token com o @BotFather no Telegram
+                        <p class="text-sm text-gray-300 mt-2 font-medium">
+                            <i class="fas fa-info-circle mr-1 text-blue-400"></i>
+                            Obtenha um novo token com o <strong class="text-blue-400">@BotFather</strong> no Telegram
                         </p>
                     </div>
 
                     <button @click="changeBotToken()" 
                             :disabled="!newBotToken || loading"
                             :class="{'opacity-50 cursor-not-allowed': !newBotToken || loading}"
-                            class="w-full px-4 py-3 bg-red-500 text-white rounded-lg font-bold hover:bg-red-600 transition-all flex items-center justify-center gap-2">
+                            class="w-full px-4 py-3 bg-red-500 text-white rounded-lg font-bold hover:bg-red-600 transition-all flex items-center justify-center gap-2 text-base">
                         <i class="fas fa-sync-alt"></i>
                         <span x-show="!loading">Atualizar Token</span>
                         <span x-show="loading">Atualizando...</span>
                     </button>
 
-                    <div class="info-box mt-4">
-                        <p class="text-xs text-gray-400">
-                            <i class="fas fa-shield-alt mr-1 text-green-500"></i>
-                            <strong>Segurança:</strong> O token é criptografado e nunca será exibido após salvo.
+                    <div class="mt-4 p-4 bg-green-500 bg-opacity-15 rounded-lg border-l-4 border-green-500">
+                        <p class="text-sm text-white font-medium">
+                            <i class="fas fa-shield-alt mr-2 text-green-400"></i>
+                            <strong class="text-green-400">Segurança:</strong> O token é criptografado e nunca será exibido após salvo.
                         </p>
                     </div>
                 </div>
@@ -1256,6 +1407,128 @@ function botConfigApp() {
             } finally {
                 this.loading = false;
             }
+        },
+        
+        showNotification(message, type = 'success') {
+            const notification = document.createElement('div');
+            notification.className = `fixed top-4 right-4 px-6 py-3 rounded-lg shadow-2xl z-50 text-white font-bold ${type === 'success' ? 'bg-green-500' : 'bg-red-500'}`;
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            setTimeout(() => notification.remove(), 3000);
+        }
+    };
+}
+
+// ✅ Remarketing App (componente separado)
+function remarketingApp() {
+    return {
+        campaigns: [],
+        showCreateModal: false,
+        newCampaign: {
+            name: '',
+            message: '',
+            media_url: '',
+            media_type: 'video',
+            target_audience: 'non_buyers',
+            days_since_last_contact: 3
+        },
+        
+        async init() {
+            await this.loadCampaigns();
+        },
+        
+        async loadCampaigns() {
+            try {
+                const response = await fetch('/api/bots/{{ bot.id }}/remarketing/campaigns');
+                const data = await response.json();
+                if (response.ok) {
+                    this.campaigns = data;
+                }
+            } catch (error) {
+                console.error('Erro ao carregar campanhas:', error);
+            }
+        },
+        
+        async createCampaign() {
+            if (!this.newCampaign.name || !this.newCampaign.message) {
+                alert('Preencha nome e mensagem');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/bots/{{ bot.id }}/remarketing/campaigns', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(this.newCampaign)
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    this.campaigns.unshift(data);
+                    this.showCreateModal = false;
+                    this.resetForm();
+                    this.showNotification('✅ Campanha criada!', 'success');
+                } else {
+                    alert('Erro: ' + data.error);
+                }
+            } catch (error) {
+                alert('Erro ao criar campanha: ' + error.message);
+            }
+        },
+        
+        async sendCampaign(campaignId) {
+            if (!confirm('Enviar esta campanha agora?')) return;
+            
+            try {
+                const response = await fetch(`/api/bots/{{ bot.id }}/remarketing/campaigns/${campaignId}/send`, {
+                    method: 'POST'
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    await this.loadCampaigns();
+                    this.showNotification('✅ Campanha enviada!', 'success');
+                } else {
+                    alert('Erro: ' + data.error);
+                }
+            } catch (error) {
+                alert('Erro ao enviar campanha: ' + error.message);
+            }
+        },
+        
+        resetForm() {
+            this.newCampaign = {
+                name: '',
+                message: '',
+                media_url: '',
+                media_type: 'video',
+                target_audience: 'non_buyers',
+                days_since_last_contact: 3
+            };
+        },
+        
+        getAudienceLabel(audience) {
+            const labels = {
+                'non_buyers': 'Não compraram',
+                'abandoned_cart': 'Carrinho abandonado',
+                'inactive': 'Inativos',
+                'all': 'Todos'
+            };
+            return labels[audience] || audience;
+        },
+        
+        getStatusLabel(status) {
+            const labels = {
+                'draft': 'Rascunho',
+                'scheduled': 'Agendada',
+                'sending': 'Enviando',
+                'completed': 'Concluída',
+                'paused': 'Pausada',
+                'failed': 'Falhou'
+            };
+            return labels[status] || status;
         },
         
         showNotification(message, type = 'success') {
