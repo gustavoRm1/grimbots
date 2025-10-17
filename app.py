@@ -1135,6 +1135,100 @@ def count_eligible_leads(bot_id):
     
     return jsonify({'count': count})
 
+@app.route('/api/remarketing/general', methods=['POST'])
+@login_required
+def general_remarketing():
+    """
+    API: Remarketing Geral (Multi-Bot)
+    Envia uma campanha de remarketing para múltiplos bots simultaneamente
+    """
+    try:
+        data = request.json
+        
+        # Validações
+        bot_ids = data.get('bot_ids', [])
+        message = data.get('message', '').strip()
+        
+        if not bot_ids or len(bot_ids) == 0:
+            return jsonify({'error': 'Selecione pelo menos 1 bot'}), 400
+        
+        if not message:
+            return jsonify({'error': 'Mensagem é obrigatória'}), 400
+        
+        # Verificar se todos os bots pertencem ao usuário
+        bots = Bot.query.filter(
+            Bot.id.in_(bot_ids),
+            Bot.user_id == current_user.id
+        ).all()
+        
+        if len(bots) != len(bot_ids):
+            return jsonify({'error': 'Um ou mais bots não pertencem a você'}), 403
+        
+        # Parâmetros da campanha
+        media_url = data.get('media_url')
+        media_type = data.get('media_type', 'video')
+        days_since_last_contact = data.get('days_since_last_contact', 7)
+        exclude_buyers = data.get('exclude_buyers', False)
+        
+        # Contador de usuários impactados
+        total_users = 0
+        bots_affected = 0
+        
+        # Criar campanha para cada bot
+        for bot in bots:
+            # Contar usuários elegíveis
+            eligible_count = bot_manager.count_eligible_leads(
+                bot_id=bot.id,
+                target_audience='non_buyers' if exclude_buyers else 'all',
+                days_since_last_contact=days_since_last_contact,
+                exclude_buyers=exclude_buyers
+            )
+            
+            if eligible_count > 0:
+                # Criar campanha no banco
+                from models import RemarketingCampaign
+                
+                campaign = RemarketingCampaign(
+                    bot_id=bot.id,
+                    name=f"Remarketing Geral - {datetime.now().strftime('%d/%m/%Y %H:%M')}",
+                    message=message,
+                    media_url=media_url,
+                    media_type=media_type,
+                    target_audience='non_buyers' if exclude_buyers else 'all',
+                    days_since_last_contact=days_since_last_contact,
+                    exclude_buyers=exclude_buyers,
+                    cooldown_hours=6,  # Fixo em 6 horas
+                    status='active'
+                )
+                
+                db.session.add(campaign)
+                db.session.commit()
+                
+                # Enviar campanha via bot_manager
+                try:
+                    bot_manager.send_remarketing_campaign(
+                        bot_id=bot.id,
+                        campaign_id=campaign.id
+                    )
+                    
+                    total_users += eligible_count
+                    bots_affected += 1
+                    
+                    logger.info(f"✅ Remarketing geral enviado para bot {bot.name} ({eligible_count} usuários)")
+                except Exception as e:
+                    logger.error(f"❌ Erro ao enviar remarketing para bot {bot.id}: {e}")
+        
+        return jsonify({
+            'success': True,
+            'total_users': total_users,
+            'bots_affected': bots_affected,
+            'message': f'Remarketing enviado para {bots_affected} bot(s) com sucesso!'
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Erro no remarketing geral: {e}")
+        return jsonify({'error': str(e)}), 500
+
 # ==================== PAINEL DE ADMINISTRAÇÃO ====================
 
 @app.route('/admin')
