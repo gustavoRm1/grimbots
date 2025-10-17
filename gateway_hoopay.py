@@ -41,9 +41,9 @@ class HoopayPaymentGateway(PaymentGateway):
         self.split_percentage = float(credentials.get('split_percentage', 4.0))
         
         # URLs da API HooPay (corrigidas conforme documentação)
-        self.base_url = 'https://pay.hoopay.com.br/api/v1'
-        self.charge_url = f'{self.base_url}/charges'  # ✅ CORREÇÃO: /charges (plural)
-        self.consult_url = f'{self.base_url}/charges'  # ✅ CORREÇÃO: consulta via /charges
+        self.base_url = 'https://api.hoopay.com.br/v1'  # ✅ CORREÇÃO: URL base diferente
+        self.charge_url = f'{self.base_url}/payments'  # ✅ CORREÇÃO: /payments
+        self.consult_url = f'{self.base_url}/payments'  # ✅ CORREÇÃO: consulta via /payments
         
         logger.info(f"🟡 HooPay Gateway inicializado | Token: {self.api_key[:16]}...")
 
@@ -172,24 +172,21 @@ class HoopayPaymentGateway(PaymentGateway):
             
             logger.debug(f"📤 HooPay Payload: {payload}")
             
-            # Headers HooPay (Basic Auth com token como username)
-            auth = (self.api_key, '')  # ✅ Token como username, senha vazia
-            
+            # Headers HooPay (Bearer Token)
             headers = {
                 'Content-Type': 'application/json',
                 'Accept': 'application/json',
-                'Authorization': f'Bearer {self.api_key}'  # ✅ TENTATIVA: Bearer Token também
+                'Authorization': f'Bearer {self.api_key}'  # ✅ CORREÇÃO: Apenas Bearer Token
             }
             
-            logger.info(f"🔐 HooPay Auth: Basic {self.api_key[:16]}...")
+            logger.info(f"🔐 HooPay Auth: Bearer {self.api_key[:16]}...")
             logger.info(f"📤 HooPay URL: {self.charge_url}")
             
             # Requisição para HooPay
             response = requests.post(
                 self.charge_url,
                 json=payload,
-                auth=auth,  # ✅ BASIC AUTH
-                headers=headers,
+                headers=headers,  # ✅ CORREÇÃO: Sem Basic Auth
                 timeout=15
             )
             
@@ -304,11 +301,14 @@ class HoopayPaymentGateway(PaymentGateway):
         try:
             logger.info(f"🔍 HooPay: Consultando status | Order: {transaction_id}")
             
-            auth = (self.api_key, '')
+            headers = {
+                'Authorization': f'Bearer {self.api_key}',
+                'Accept': 'application/json'
+            }
             
             response = requests.get(
                 f'{self.consult_url}/{transaction_id}',
-                auth=auth,
+                headers=headers,
                 timeout=10
             )
             

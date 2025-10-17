@@ -10,14 +10,14 @@ def test_hoopay_urls():
     """Testa diferentes URLs do HooPay"""
     api_key = "d7c92c358a7ec4819ce7282ff2f3f70d"
     
-    # URLs para testar
+    # URLs para testar (corrigidas)
     urls_to_test = [
-        "https://pay.hoopay.com.br/api/v1/charge",
-        "https://pay.hoopay.com.br/api/v1/charges", 
+        "https://api.hoopay.com.br/v1/payments",
+        "https://api.hoopay.com.br/v1/charges", 
+        "https://api.hoopay.com.br/v1/pix",
+        "https://api.hoopay.com.br/v1/transactions",
         "https://pay.hoopay.com.br/api/v1/payments",
-        "https://pay.hoopay.com.br/api/v1/pix",
-        "https://api.hoopay.com.br/v1/charge",
-        "https://api.hoopay.com.br/v1/charges"
+        "https://pay.hoopay.com.br/api/v1/charges"
     ]
     
     payload = {
@@ -50,11 +50,12 @@ def test_hoopay_urls():
         print(f"\n📤 Testando: {url}")
         
         try:
-            # Teste com Basic Auth
+            # Teste com Bearer Token
+            headers['Authorization'] = f'Bearer {api_key}'
+            
             response = requests.post(
                 url,
                 json=payload,
-                auth=(api_key, ''),
                 headers=headers,
                 timeout=10
             )
