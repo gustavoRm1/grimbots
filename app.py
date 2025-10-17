@@ -13,6 +13,7 @@ from functools import wraps
 import os
 import logging
 import json
+import time
 from dotenv import load_dotenv
 
 # ============================================================================
@@ -2484,12 +2485,109 @@ def create_gateway():
         db.session.commit()
         logger.info(f"✅ Gateway {gateway_type} salvo com sucesso!")
         
+        # 🔄 RECARREGAR CONFIGURAÇÃO DOS BOTS ATIVOS DO USUÁRIO
+        _reload_user_bots_config(current_user.id)
+        
         return jsonify(gateway.to_dict())
     
     except Exception as e:
         db.session.rollback()
         logger.error(f"❌ ERRO CRÍTICO ao salvar gateway: {e}", exc_info=True)
         return jsonify({'error': f'Erro ao salvar gateway: {str(e)}'}), 500
+
+@app.route('/api/admin/restart-all-bots', methods=['POST'])
+@login_required
+@csrf.exempt
+def api_restart_all_bots():
+    """API para reinicializar todos os bots manualmente (admin)"""
+    try:
+        logger.info(f"🔄 Reinicialização manual solicitada por {current_user.email}")
+        restart_all_active_bots()
+        return jsonify({'success': True, 'message': 'Todos os bots foram reiniciados com sucesso!'})
+    except Exception as e:
+        logger.error(f"❌ Erro na reinicialização manual: {e}")
+        return jsonify({'error': f'Erro ao reiniciar bots: {str(e)}'}), 500
+
+def _reload_user_bots_config(user_id: int):
+    """Recarrega configuração dos bots ativos quando gateway muda"""
+    try:
+        from models import Bot
+        
+        # Buscar bots ativos do usuário
+        active_bots = Bot.query.filter_by(user_id=user_id, is_active=True).all()
+        
+        for bot in active_bots:
+            if bot.id in bot_manager.active_bots:
+                logger.info(f"🔄 Recarregando configuração do bot {bot.id} (gateway mudou)")
+                
+                # Buscar configuração atualizada
+                config = BotConfig.query.filter_by(bot_id=bot.id).first()
+                if config:
+                    # Atualizar configuração em memória
+                    bot_manager.active_bots[bot.id]['config'] = config.to_dict()
+                    logger.info(f"✅ Bot {bot.id} recarregado com novo gateway")
+                else:
+                    logger.warning(f"⚠️ Configuração não encontrada para bot {bot.id}")
+                    
+    except Exception as e:
+        logger.error(f"❌ Erro ao recarregar bots do usuário {user_id}: {e}")
+
+def restart_all_active_bots():
+    """Reinicia automaticamente todos os bots ativos após deploy/restart do serviço"""
+    try:
+        logger.info("🔄 INICIANDO REINICIALIZAÇÃO AUTOMÁTICA DOS BOTS...")
+        
+        # Buscar todos os bots ativos
+        active_bots = Bot.query.filter_by(is_active=True).all()
+        
+        if not active_bots:
+            logger.info("ℹ️ Nenhum bot ativo encontrado para reiniciar")
+            return
+        
+        logger.info(f"📊 Encontrados {len(active_bots)} bots ativos para reiniciar")
+        
+        restarted_count = 0
+        failed_count = 0
+        
+        for bot in active_bots:
+            try:
+                # Buscar configuração do bot
+                config = BotConfig.query.filter_by(bot_id=bot.id).first()
+                if not config:
+                    logger.warning(f"⚠️ Configuração não encontrada para bot {bot.id} (@{bot.username})")
+                    failed_count += 1
+                    continue
+                
+                # Verificar se bot já está ativo no bot_manager
+                if bot.id in bot_manager.active_bots:
+                    logger.info(f"♻️ Bot {bot.id} (@{bot.username}) já está ativo, pulando...")
+                    continue
+                
+                # Reiniciar bot
+                logger.info(f"🚀 Reiniciando bot {bot.id} (@{bot.username})...")
+                bot_manager.start_bot(
+                    bot_id=bot.id,
+                    token=bot.token,
+                    config=config.to_dict()
+                )
+                
+                restarted_count += 1
+                logger.info(f"✅ Bot {bot.id} (@{bot.username}) reiniciado com sucesso!")
+                
+                # Pequena pausa para evitar sobrecarga
+                time.sleep(0.5)
+                
+            except Exception as e:
+                logger.error(f"❌ Erro ao reiniciar bot {bot.id} (@{bot.username}): {e}")
+                failed_count += 1
+        
+        logger.info(f"🎯 REINICIALIZAÇÃO CONCLUÍDA!")
+        logger.info(f"✅ Sucessos: {restarted_count}")
+        logger.info(f"❌ Falhas: {failed_count}")
+        logger.info(f"📊 Total: {len(active_bots)}")
+        
+    except Exception as e:
+        logger.error(f"❌ ERRO CRÍTICO na reinicialização automática: {e}", exc_info=True)
 
 @app.route('/api/gateways/<int:gateway_id>/toggle', methods=['POST'])
 @login_required
@@ -3261,6 +3359,9 @@ scheduler.add_job(
 
 if __name__ == '__main__':
     init_db()
+    
+    # 🔄 REINICIALIZAÇÃO AUTOMÁTICA DOS BOTS APÓS DEPLOY
+    restart_all_active_bots()
     
     # Modo de desenvolvimento
     port = int(os.environ.get('PORT', 5000))
