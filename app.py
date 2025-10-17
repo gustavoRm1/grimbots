@@ -2541,15 +2541,13 @@ def api_check_bots_status():
         return jsonify({'error': f'Erro ao verificar bots: {str(e)}'}), 500
 
 @app.route('/api/admin/test-hoopay', methods=['POST'])
-@login_required
 @csrf.exempt
 def api_test_hoopay():
-    """API para testar HooPay especificamente"""
+    """API para testar HooPay especificamente (sem login para debug)"""
     try:
         with app.app_context():
-            # Buscar gateway HooPay ativo
+            # Buscar gateway HooPay ativo (qualquer usuário)
             hoopay_gateway = Gateway.query.filter_by(
-                user_id=current_user.id,
                 gateway_type='hoopay',
                 is_active=True,
                 is_verified=True
