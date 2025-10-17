@@ -328,7 +328,9 @@ class BotConfig(db.Model):
             'downsells': self.get_downsells(),
             'upsells_enabled': self.upsells_enabled,
             'upsells': self.get_upsells(),
-            'access_link': self.access_link
+            'access_link': self.access_link,
+            'success_message': self.success_message,
+            'pending_message': self.pending_message
         }
 
 
