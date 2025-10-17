@@ -40,10 +40,10 @@ class HoopayPaymentGateway(PaymentGateway):
         self.organization_id = credentials.get('organization_id', '')
         self.split_percentage = float(credentials.get('split_percentage', 4.0))
         
-        # URLs da API HooPay
+        # URLs da API HooPay (corrigidas conforme documentação)
         self.base_url = 'https://pay.hoopay.com.br/api/v1'
-        self.charge_url = f'{self.base_url}/charge'
-        self.consult_url = f'{self.base_url}/pix/consult'
+        self.charge_url = f'{self.base_url}/charges'  # ✅ CORREÇÃO: /charges (plural)
+        self.consult_url = f'{self.base_url}/charges'  # ✅ CORREÇÃO: consulta via /charges
         
         logger.info(f"🟡 HooPay Gateway inicializado | Token: {self.api_key[:16]}...")
 
@@ -177,8 +177,12 @@ class HoopayPaymentGateway(PaymentGateway):
             
             headers = {
                 'Content-Type': 'application/json',
-                'Accept': 'application/json'
+                'Accept': 'application/json',
+                'Authorization': f'Bearer {self.api_key}'  # ✅ TENTATIVA: Bearer Token também
             }
+            
+            logger.info(f"🔐 HooPay Auth: Basic {self.api_key[:16]}...")
+            logger.info(f"📤 HooPay URL: {self.charge_url}")
             
             # Requisição para HooPay
             response = requests.post(
