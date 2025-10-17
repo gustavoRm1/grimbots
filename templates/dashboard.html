@@ -606,6 +606,7 @@
 function dashboardApp() {
     return {
         // Estado
+        _initialized: false,
         showAddBotModal: false,
         showDuplicateBotModal: false,
         newBotToken: '',
@@ -638,6 +639,13 @@ function dashboardApp() {
         
         // Inicialização
         init() {
+            // Prevenir inicialização dupla
+            if (this._initialized) {
+                console.log('⚠️ Dashboard já foi inicializado, ignorando...');
+                return;
+            }
+            this._initialized = true;
+            
             console.log('🚀 Dashboard V2.0 inicializando...');
             this.filteredBots = this.bots;
             this.filteredPayments = this.payments;
