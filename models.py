@@ -317,21 +317,40 @@ class BotConfig(db.Model):
     
     def to_dict(self):
         """Retorna configuração em formato dict"""
-        return {
-            'id': self.id,
-            'welcome_message': self.welcome_message,
-            'welcome_media_url': self.welcome_media_url,
-            'welcome_media_type': self.welcome_media_type,
-            'main_buttons': self.get_main_buttons(),
-            'redirect_buttons': self.get_redirect_buttons(),
-            'downsells_enabled': self.downsells_enabled,
-            'downsells': self.get_downsells(),
-            'upsells_enabled': self.upsells_enabled,
-            'upsells': self.get_upsells(),
-            'access_link': self.access_link,
-            'success_message': self.success_message,
-            'pending_message': self.pending_message
-        }
+        try:
+            return {
+                'id': self.id,
+                'welcome_message': self.welcome_message or '',
+                'welcome_media_url': self.welcome_media_url or '',
+                'welcome_media_type': self.welcome_media_type or 'video',
+                'main_buttons': self.get_main_buttons(),
+                'redirect_buttons': self.get_redirect_buttons(),
+                'downsells_enabled': self.downsells_enabled or False,
+                'downsells': self.get_downsells(),
+                'upsells_enabled': self.upsells_enabled or False,
+                'upsells': self.get_upsells(),
+                'access_link': self.access_link or '',
+                'success_message': getattr(self, 'success_message', None) or '',
+                'pending_message': getattr(self, 'pending_message', None) or ''
+            }
+        except Exception as e:
+            logger.error(f"❌ Erro ao serializar BotConfig: {e}")
+            # Retornar config mínimo em caso de erro
+            return {
+                'id': self.id,
+                'welcome_message': '',
+                'welcome_media_url': '',
+                'welcome_media_type': 'video',
+                'main_buttons': [],
+                'redirect_buttons': [],
+                'downsells_enabled': False,
+                'downsells': [],
+                'upsells_enabled': False,
+                'upsells': [],
+                'access_link': '',
+                'success_message': '',
+                'pending_message': ''
+            }
 
 
 class RedirectPool(db.Model):

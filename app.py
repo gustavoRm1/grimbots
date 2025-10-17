@@ -1931,18 +1931,23 @@ def bot_config_page(bot_id):
 @login_required
 def get_bot_config(bot_id):
     """Obtém configuração de um bot"""
-    bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
-    
-    if not bot.config:
-        logger.warning(f"⚠️ Bot {bot_id} não tem config, criando nova...")
-        config = BotConfig(bot_id=bot.id)
-        db.session.add(config)
-        db.session.commit()
-    
-    config_dict = bot.config.to_dict()
-    logger.info(f"📦 Retornando config do bot {bot_id}: {config_dict}")
-    
-    return jsonify(config_dict)
+    try:
+        bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
+        
+        if not bot.config:
+            logger.warning(f"⚠️ Bot {bot_id} não tem config, criando nova...")
+            config = BotConfig(bot_id=bot.id)
+            db.session.add(config)
+            db.session.commit()
+            db.session.refresh(config)
+        
+        config_dict = bot.config.to_dict()
+        logger.info(f"📦 Retornando config do bot {bot_id}: {config_dict}")
+        
+        return jsonify(config_dict)
+    except Exception as e:
+        logger.error(f"❌ Erro ao buscar config do bot {bot_id}: {e}", exc_info=True)
+        return jsonify({'error': f'Erro ao buscar configuração: {str(e)}'}), 500
 
 @app.route('/api/bots/<int:bot_id>/config', methods=['PUT'])
 @login_required
