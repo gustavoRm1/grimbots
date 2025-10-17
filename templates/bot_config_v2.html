@@ -227,6 +227,16 @@
                 class="tab-button">
             <i class="fas fa-key mr-2"></i>Acesso
         </button>
+        <button @click="activeTab = 'remarketing'" 
+                :class="{'active': activeTab === 'remarketing'}"
+                class="tab-button">
+            <i class="fas fa-bullhorn mr-2"></i>Remarketing
+        </button>
+        <button @click="activeTab = 'settings'" 
+                :class="{'active': activeTab === 'settings'}"
+                class="tab-button">
+            <i class="fas fa-cog mr-2"></i>Configurações
+        </button>
     </div>
 
     <!-- Tab Content: Welcome -->
@@ -410,19 +420,63 @@
                                     </div>
                                 </div>
 
-                                <div class="form-group">
-                                    <label class="form-label">URL da Mídia (opcional)</label>
-                                    <input type="url" 
-                                           x-model="button.order_bump.media_url" 
-                                           class="form-input"
-                                           placeholder="https://t.me/canal/123">
+                                <!-- Mídia (URL + Tipo) -->
+                                <div class="p-4 bg-gray-900 border border-gray-800 rounded-xl">
+                                    <label class="form-label mb-3">
+                                        <i class="fas fa-photo-video mr-2 text-purple-400"></i>
+                                        Mídia (opcional)
+                                    </label>
+                                    
+                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                        <div class="md:col-span-2">
+                                            <input type="url" 
+                                                   x-model="button.order_bump.media_url" 
+                                                   class="form-input" 
+                                                   placeholder="https://t.me/canal/789">
+                                        </div>
+                                        
+                                        <div>
+                                            <select x-model="button.order_bump.media_type" class="form-input">
+                                                <option value="video">🎥 Vídeo</option>
+                                                <option value="photo">📸 Foto</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="info-box-warning info-box mt-3">
+                                        <p class="text-xs text-gray-300">
+                                            <i class="fas fa-chart-line mr-1" style="color: var(--brand-gold-500);"></i>
+                                            <strong style="color: var(--brand-gold-500);">Conversão:</strong> 
+                                            Order bumps com mídia convertem até 40% mais! Use <strong>Foto</strong> para não quebrar o fluxo de compra.
+                                        </p>
+                                    </div>
                                 </div>
 
-                                <div class="info-box-warning info-box">
-                                    <p class="text-sm text-gray-300">
-                                        <i class="fas fa-chart-line mr-2 text-yellow-500"></i>
-                                        <strong>Conversão:</strong> Order bumps com mídia convertem até 40% mais!
-                                    </p>
+                                <!-- Botões Personalizados -->
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div class="form-group">
+                                        <label class="form-label">
+                                            <i class="fas fa-check-circle mr-2 text-green-400"></i>
+                                            Botão Aceitar (opcional)
+                                        </label>
+                                        <input type="text" 
+                                               x-model="button.order_bump.accept_text" 
+                                               class="form-input"
+                                               placeholder="SIM! Quero esse bônus!">
+                                        <p class="text-xs text-gray-500 mt-1">Deixe vazio para texto padrão</p>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label class="form-label">
+                                            <i class="fas fa-times-circle mr-2 text-red-400"></i>
+                                            Botão Recusar (opcional)
+                                        </label>
+                                        <input type="text" 
+                                               x-model="button.order_bump.decline_text" 
+                                               class="form-input"
+                                               placeholder="Não, obrigado">
+                                        <p class="text-xs text-gray-500 mt-1">Deixe vazio para texto padrão</p>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -596,9 +650,36 @@
                                 </div>
                             </div>
 
-                            <div class="form-group">
-                                <label class="form-label">URL da Mídia (opcional)</label>
-                                <input type="url" x-model="downsell.media_url" class="form-input" placeholder="https://t.me/canal/123">
+                            <!-- Mídia (URL + Tipo) -->
+                            <div class="p-4 bg-gray-900 border border-gray-800 rounded-xl">
+                                <label class="form-label mb-3">
+                                    <i class="fas fa-photo-video mr-2 text-purple-400"></i>
+                                    Mídia (opcional)
+                                </label>
+                                
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                    <div class="md:col-span-2">
+                                        <input type="url" 
+                                               x-model="downsell.media_url" 
+                                               class="form-input" 
+                                               placeholder="https://t.me/canal/123">
+                                    </div>
+                                    
+                                    <div>
+                                        <select x-model="downsell.media_type" class="form-input">
+                                            <option value="video">🎥 Vídeo</option>
+                                            <option value="photo">📸 Foto</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                
+                                <div class="info-box mt-3">
+                                    <p class="text-xs text-gray-400">
+                                        <i class="fas fa-lightbulb mr-1 text-purple-400"></i>
+                                        <strong class="text-purple-400">Dica:</strong> 
+                                        Use <strong>Foto</strong> para carregamento instantâneo (recomendado para downsells) ou <strong>Vídeo</strong> para maior engajamento.
+                                    </p>
+                                </div>
                             </div>
 
                             <div class="form-group">
@@ -664,8 +745,46 @@
                             </div>
 
                             <div class="form-group">
+                                <label class="form-label">Delay (minutos)</label>
+                                <input type="number" x-model="upsell.delay_minutes" class="form-input" placeholder="0">
+                                <p class="text-xs text-gray-500 mt-1">0 = envio imediato após pagamento</p>
+                            </div>
+
+                            <div class="form-group">
                                 <label class="form-label">Mensagem</label>
                                 <textarea x-model="upsell.message" class="form-textarea" placeholder="🔥 Upgrade para Premium!"></textarea>
+                            </div>
+
+                            <!-- Mídia (URL + Tipo) -->
+                            <div class="p-4 bg-gray-900 border border-gray-800 rounded-xl">
+                                <label class="form-label mb-3">
+                                    <i class="fas fa-photo-video mr-2 text-purple-400"></i>
+                                    Mídia (opcional)
+                                </label>
+                                
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                    <div class="md:col-span-2">
+                                        <input type="url" 
+                                               x-model="upsell.media_url" 
+                                               class="form-input" 
+                                               placeholder="https://t.me/canal/456">
+                                    </div>
+                                    
+                                    <div>
+                                        <select x-model="upsell.media_type" class="form-input">
+                                            <option value="video">🎥 Vídeo</option>
+                                            <option value="photo">📸 Foto</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                
+                                <div class="info-box-warning info-box mt-3">
+                                    <p class="text-xs text-gray-300">
+                                        <i class="fas fa-rocket mr-1" style="color: var(--brand-gold-500);"></i>
+                                        <strong style="color: var(--brand-gold-500);">Dica:</strong> 
+                                        <strong>Vídeos</strong> aumentam conversão em upsells (cliente já confia), mas <strong>fotos</strong> carregam mais rápido.
+                                    </p>
+                                </div>
                             </div>
 
                             <div class="grid grid-cols-2 gap-4">
@@ -677,6 +796,23 @@
                                 <div class="form-group">
                                     <label class="form-label">Preço (R$)</label>
                                     <input type="number" x-model="upsell.price" step="0.01" class="form-input" placeholder="97.00">
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">
+                                    <i class="fas fa-mouse-pointer mr-2 text-green-400"></i>
+                                    Texto do Botão (opcional)
+                                </label>
+                                <input type="text" 
+                                       x-model="upsell.button_text" 
+                                       class="form-input" 
+                                       placeholder="🚀 Quero fazer Upgrade!">
+                                <div class="info-box mt-2">
+                                    <p class="text-xs text-gray-400">
+                                        <i class="fas fa-lightbulb mr-1" style="color: var(--brand-gold-500);"></i>
+                                        Deixe vazio para usar texto padrão
+                                    </p>
                                 </div>
                             </div>
                         </div>
@@ -760,6 +896,126 @@
         </div>
     </div>
 
+    <!-- Tab Content: Remarketing -->
+    <div x-show="activeTab === 'remarketing'" x-cloak>
+        <div class="config-section">
+            <div class="config-section-header">
+                <i class="fas fa-bullhorn text-2xl text-purple-500"></i>
+                <div>
+                    <div class="config-section-title">Campanhas de Remarketing</div>
+                    <div class="config-section-description">Recupere clientes que não compraram</div>
+                </div>
+            </div>
+
+            <div class="info-box mb-6">
+                <p class="text-sm text-gray-300">
+                    <i class="fas fa-info-circle mr-2 text-blue-500"></i>
+                    <strong>Remarketing:</strong> Envie mensagens automáticas para usuários que iniciaram conversa mas não compraram. Configure público-alvo, delay e mensagem personalizada.
+                </p>
+            </div>
+
+            <div class="text-center py-12 border-2 border-dashed border-gray-700 rounded-xl">
+                <i class="fas fa-bullhorn text-5xl text-gray-600 mb-4"></i>
+                <h3 class="text-xl font-bold text-white mb-2">Remarketing em Desenvolvimento</h3>
+                <p class="text-gray-500 mb-4">Esta funcionalidade estará disponível em breve</p>
+                <div class="info-box-warning info-box max-w-md mx-auto">
+                    <p class="text-sm text-gray-300">
+                        <i class="fas fa-rocket mr-2 text-yellow-500"></i>
+                        <strong>Em breve:</strong> Crie campanhas para recuperar até 30% dos usuários que não compraram!
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab Content: Settings (Trocar Token) -->
+    <div x-show="activeTab === 'settings'" x-cloak>
+        <div class="config-section">
+            <div class="config-section-header">
+                <i class="fas fa-cog text-2xl text-gray-400"></i>
+                <div>
+                    <div class="config-section-title">Configurações do Bot</div>
+                    <div class="config-section-description">Token do Telegram e configurações avançadas</div>
+                </div>
+            </div>
+
+            <div class="space-y-6">
+                <!-- Trocar Token -->
+                <div class="p-6 bg-red-500 bg-opacity-10 border border-red-500 border-opacity-30 rounded-xl">
+                    <div class="flex items-start gap-3 mb-4">
+                        <i class="fas fa-exclamation-triangle text-red-500 text-xl"></i>
+                        <div>
+                            <h3 class="text-lg font-bold text-red-400 mb-1">Trocar Token do Bot</h3>
+                            <p class="text-sm text-gray-300">
+                                Use esta opção se você precisa reconectar o bot ou trocar para um novo token do BotFather.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">
+                            <i class="fas fa-key mr-2 text-yellow-500"></i>
+                            Novo Token do Telegram
+                        </label>
+                        <input type="text" 
+                               x-model="newBotToken" 
+                               class="form-input font-mono"
+                               placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz">
+                        <p class="text-xs text-gray-500 mt-2">
+                            Obtenha um novo token com o @BotFather no Telegram
+                        </p>
+                    </div>
+
+                    <button @click="changeBotToken()" 
+                            :disabled="!newBotToken || loading"
+                            :class="{'opacity-50 cursor-not-allowed': !newBotToken || loading}"
+                            class="w-full px-4 py-3 bg-red-500 text-white rounded-lg font-bold hover:bg-red-600 transition-all flex items-center justify-center gap-2">
+                        <i class="fas fa-sync-alt"></i>
+                        <span x-show="!loading">Atualizar Token</span>
+                        <span x-show="loading">Atualizando...</span>
+                    </button>
+
+                    <div class="info-box mt-4">
+                        <p class="text-xs text-gray-400">
+                            <i class="fas fa-shield-alt mr-1 text-green-500"></i>
+                            <strong>Segurança:</strong> O token é criptografado e nunca será exibido após salvo.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Informações do Bot -->
+                <div class="p-6 bg-gray-900 border border-gray-800 rounded-xl">
+                    <h3 class="text-sm font-bold text-white mb-4 flex items-center gap-2">
+                        <i class="fas fa-info-circle text-blue-500"></i>
+                        Informações do Bot
+                    </h3>
+                    
+                    <div class="space-y-3 text-sm">
+                        <div class="flex justify-between">
+                            <span class="text-gray-500">Nome:</span>
+                            <span class="text-white font-semibold">{{ bot.name }}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-500">Username:</span>
+                            <span class="text-white font-mono">@{{ bot.username }}</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-500">Status:</span>
+                            <span class="text-green-400 font-semibold">
+                                <i class="fas fa-circle text-xs mr-1"></i>
+                                {% if bot.is_active %}Ativo{% else %}Pausado{% endif %}
+                            </span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-500">ID:</span>
+                            <span class="text-white font-mono">#{{ bot.id }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </div>
 {% endblock %}
 
@@ -769,6 +1025,7 @@ function botConfigApp() {
     return {
         activeTab: 'welcome',
         loading: false,
+        newBotToken: '',  // ✅ NOVO: Para trocar token
         
         config: {
             welcome_message: '',
@@ -930,6 +1187,42 @@ function botConfigApp() {
         
         removeUpsell(index) {
             this.config.upsells.splice(index, 1);
+        },
+        
+        // ✅ NOVO: Trocar Token do Bot
+        async changeBotToken() {
+            if (!this.newBotToken.trim()) {
+                this.showNotification('Digite um token válido', 'error');
+                return;
+            }
+            
+            if (!confirm('Tem certeza que deseja trocar o token? O bot será reconectado.')) {
+                return;
+            }
+            
+            this.loading = true;
+            
+            try {
+                const response = await fetch('/api/bots/{{ bot.id }}/token', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token: this.newBotToken.trim() })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    this.showNotification('✅ Token atualizado! Bot reconectando...', 'success');
+                    this.newBotToken = '';
+                    setTimeout(() => window.location.reload(), 2000);
+                } else {
+                    this.showNotification('Erro: ' + (data.error || 'Token inválido'), 'error');
+                }
+            } catch (error) {
+                this.showNotification('Erro ao atualizar token: ' + error.message, 'error');
+            } finally {
+                this.loading = false;
+            }
         },
         
         showNotification(message, type = 'success') {
