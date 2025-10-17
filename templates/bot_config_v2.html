@@ -1176,28 +1176,17 @@
                             </div>
                         </div>
 
-                        <div class="grid grid-cols-2 gap-4">
-                            <div class="form-group">
-                                <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" 
-                                           x-model="newCampaign.exclude_buyers"
-                                           class="w-5 h-5 rounded border-gray-600 bg-gray-800 text-yellow-500">
-                                    <span class="text-sm text-white font-semibold">
-                                        <i class="fas fa-user-slash mr-1 text-red-400"></i>
-                                        Excluir compradores
-                                    </span>
-                                </label>
-                                <p class="text-xs text-gray-500 mt-1">Não enviar para quem já comprou</p>
-                            </div>
-
-                            <div class="form-group">
-                                <label class="form-label">
-                                    <i class="fas fa-hourglass-half mr-2 text-yellow-500"></i>
-                                    Cooldown (horas)
-                                </label>
-                                <input type="number" x-model="newCampaign.cooldown_hours" class="form-input" placeholder="24">
-                                <p class="text-xs text-gray-500 mt-1">Tempo mínimo entre campanhas</p>
-                            </div>
+                        <div class="form-group">
+                            <label class="flex items-center gap-2 cursor-pointer">
+                                <input type="checkbox" 
+                                       x-model="newCampaign.exclude_buyers"
+                                       class="w-5 h-5 rounded border-gray-600 bg-gray-800 text-yellow-500">
+                                <span class="text-sm text-white font-semibold">
+                                    <i class="fas fa-user-slash mr-1 text-red-400"></i>
+                                    Excluir compradores
+                                </span>
+                            </label>
+                            <p class="text-xs text-gray-500 mt-1">Não enviar para quem já comprou</p>
                         </div>
 
                         <div class="flex justify-end gap-3 mt-6">
@@ -1547,7 +1536,7 @@ function remarketingApp() {
             target_audience: 'non_buyers',
             days_since_last_contact: 3,
             exclude_buyers: true,
-            cooldown_hours: 24
+            cooldown_hours: 6  // ✅ Fixo: 6 horas (não aparece para usuário)
         },
         
         async init() {
@@ -1624,7 +1613,7 @@ function remarketingApp() {
                 target_audience: 'non_buyers',
                 days_since_last_contact: 3,
                 exclude_buyers: true,
-                cooldown_hours: 24
+                cooldown_hours: 6  // ✅ Fixo: 6 horas
             };
         },
         
