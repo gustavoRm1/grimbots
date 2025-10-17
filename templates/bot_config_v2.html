@@ -1155,7 +1155,10 @@
 
                         <div class="grid grid-cols-2 gap-4">
                             <div class="form-group">
-                                <label class="form-label">Público-Alvo</label>
+                                <label class="form-label">
+                                    <i class="fas fa-users mr-2 text-yellow-500"></i>
+                                    Público-Alvo
+                                </label>
                                 <select x-model="newCampaign.target_audience" class="form-input">
                                     <option value="non_buyers">Não compraram</option>
                                     <option value="abandoned_cart">Carrinho abandonado</option>
@@ -1165,8 +1168,35 @@
                             </div>
 
                             <div class="form-group">
-                                <label class="form-label">Dias sem contato</label>
+                                <label class="form-label">
+                                    <i class="fas fa-clock mr-2 text-yellow-500"></i>
+                                    Dias sem contato
+                                </label>
                                 <input type="number" x-model="newCampaign.days_since_last_contact" class="form-input" placeholder="3">
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="form-group">
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" 
+                                           x-model="newCampaign.exclude_buyers"
+                                           class="w-5 h-5 rounded border-gray-600 bg-gray-800 text-yellow-500">
+                                    <span class="text-sm text-white font-semibold">
+                                        <i class="fas fa-user-slash mr-1 text-red-400"></i>
+                                        Excluir compradores
+                                    </span>
+                                </label>
+                                <p class="text-xs text-gray-500 mt-1">Não enviar para quem já comprou</p>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">
+                                    <i class="fas fa-hourglass-half mr-2 text-yellow-500"></i>
+                                    Cooldown (horas)
+                                </label>
+                                <input type="number" x-model="newCampaign.cooldown_hours" class="form-input" placeholder="24">
+                                <p class="text-xs text-gray-500 mt-1">Tempo mínimo entre campanhas</p>
                             </div>
                         </div>
 
@@ -1515,7 +1545,9 @@ function remarketingApp() {
             media_url: '',
             media_type: 'video',
             target_audience: 'non_buyers',
-            days_since_last_contact: 3
+            days_since_last_contact: 3,
+            exclude_buyers: true,
+            cooldown_hours: 24
         },
         
         async init() {
@@ -1590,7 +1622,9 @@ function remarketingApp() {
                 media_url: '',
                 media_type: 'video',
                 target_audience: 'non_buyers',
-                days_since_last_contact: 3
+                days_since_last_contact: 3,
+                exclude_buyers: true,
+                cooldown_hours: 24
             };
         },
         
