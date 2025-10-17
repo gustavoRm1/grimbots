@@ -227,7 +227,7 @@
             Aqui está um resumo do seu negócio em tempo real
         </p>
     </div>
-
+    
     <!-- Stats Grid -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <!-- Ganhos -->
@@ -238,15 +238,15 @@
             </div>
             <div class="text-sm text-gray-500">Receita confirmada</div>
         </div>
-
+        
         <!-- Vendas -->
         <div class="stat-card">
             <div class="stat-label">✅ Vendas</div>
             <div class="stat-value" style="color: var(--brand-green-500);">
                 {{ stats.total_sales }}
-            </div>
+                        </div>
             <div class="text-sm text-gray-500">Pagamentos confirmados</div>
-        </div>
+                    </div>
 
         <!-- Bots Ativos -->
         <div class="stat-card">
@@ -255,16 +255,16 @@
                 {{ stats.running_bots }}<span class="text-2xl text-gray-600">/{{ stats.total_bots }}</span>
             </div>
             <div class="text-sm text-gray-500">Bots ativos agora</div>
-        </div>
     </div>
-
+        </div>
+        
     <!-- Gráfico -->
     <div class="chart-container mb-8">
         <div class="flex justify-between items-center mb-6">
-            <div>
+        <div>
                 <h2 class="text-2xl font-bold text-white">Vendas e Receita</h2>
                 <p class="text-sm text-gray-500 mt-1">Últimos 7 dias</p>
-            </div>
+        </div>
             <select x-model="filters.period" @change="loadChartData()" 
                     class="px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-yellow-500 transition-colors">
                 <option value="7">7 dias</option>
@@ -293,9 +293,9 @@
         </div>
 
         <!-- Grid de Bots -->
-        <template x-if="filteredBots.length > 0">
+            <template x-if="filteredBots.length > 0">
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <template x-for="bot in filteredBots" :key="bot.id">
+                    <template x-for="bot in filteredBots" :key="bot.id">
                     <div class="bot-card">
                         <!-- Header -->
                         <div class="flex items-start justify-between mb-4">
@@ -303,34 +303,34 @@
                                 <div class="w-12 h-12 rounded-lg flex items-center justify-center" 
                                      style="background: linear-gradient(135deg, rgba(255, 184, 0, 0.1), rgba(255, 184, 0, 0.05));">
                                     <i class="fas fa-robot text-xl" style="color: var(--brand-gold-500);"></i>
-                                </div>
+                            </div>
                                 <div>
                                     <h3 class="text-sm font-bold text-white" x-text="bot.name"></h3>
                                     <p class="text-xs text-gray-500">@<span x-text="bot.username"></span></p>
-                                </div>
+                        </div>
                             </div>
                             <span :class="bot.is_running ? 'bot-status-online' : 'bot-status-offline'">
                                 <span class="w-2 h-2 rounded-full" 
                                       :class="bot.is_running ? 'bg-green-400 animate-pulse' : 'bg-gray-600'"></span>
-                                <span x-text="bot.is_running ? 'Online' : 'Offline'"></span>
-                            </span>
-                        </div>
-
+                                    <span x-text="bot.is_running ? 'Online' : 'Offline'"></span>
+                        </span>
+                    </div>
+                    
                         <!-- Stats -->
                         <div class="grid grid-cols-3 gap-3 mb-4 pb-4 border-b border-gray-800">
                             <div class="text-center">
                                 <div class="text-xs text-gray-500 mb-1">Usuários</div>
                                 <div class="text-lg font-bold text-white" x-text="bot.total_users"></div>
-                            </div>
+                        </div>
                             <div class="text-center">
                                 <div class="text-xs text-gray-500 mb-1">Vendas</div>
                                 <div class="text-lg font-bold text-green-400" x-text="bot.total_sales"></div>
-                            </div>
+                        </div>
                             <div class="text-center">
                                 <div class="text-xs text-gray-500 mb-1">Receita</div>
                                 <div class="text-lg font-bold text-yellow-400">R$ <span x-text="(bot.total_revenue || 0).toFixed(0)"></span></div>
-                            </div>
                         </div>
+                    </div>
 
                         <!-- Actions -->
                         <div class="space-y-2">
@@ -344,43 +344,43 @@
                             <div class="flex gap-2">
                                 <a :href="`/bots/${bot.id}/config`" class="btn-action flex-1" 
                                    style="background: rgba(255, 255, 255, 0.05); color: #D1D5DB; border: 1px solid rgba(255, 255, 255, 0.1);">
-                                    <i class="fas fa-cog mr-1"></i> Configurar
-                                </a>
+                            <i class="fas fa-cog mr-1"></i> Configurar
+                        </a>
                                 <a :href="`/bots/${bot.id}/remarketing`" class="btn-action flex-1"
                                    style="background: rgba(255, 255, 255, 0.05); color: #D1D5DB; border: 1px solid rgba(255, 255, 255, 0.1);">
-                                    <i class="fas fa-bullhorn mr-1"></i> Remarketing
-                                </a>
-                            </div>
-                            
-                            <!-- Linha 3: Iniciar/Parar, Duplicar e Deletar -->
+                                        <i class="fas fa-bullhorn mr-1"></i> Remarketing
+                                    </a>
+                                </div>
+                                
+                                <!-- Linha 3: Iniciar/Parar, Duplicar e Deletar -->
                             <div class="flex gap-2">
-                                <template x-if="bot.is_running">
+                                    <template x-if="bot.is_running">
                                     <button @click="stopBot(bot.id)" class="btn-action btn-action-danger flex-1">
-                                        <i class="fas fa-stop mr-1"></i> Parar
-                                    </button>
-                                </template>
-                                <template x-if="!bot.is_running">
+                            <i class="fas fa-stop mr-1"></i> Parar
+                        </button>
+                                    </template>
+                                    <template x-if="!bot.is_running">
                                     <button @click="startBot(bot.id)" class="btn-action btn-action-success flex-1">
-                                        <i class="fas fa-play mr-1"></i> Iniciar
-                                    </button>
-                                </template>
+                            <i class="fas fa-play mr-1"></i> Iniciar
+                        </button>
+                                    </template>
                                 <button @click="openDuplicateBotModal(bot)" class="btn-action flex-1"
                                         style="background: rgba(255, 255, 255, 0.05); color: #D1D5DB; border: 1px solid rgba(255, 255, 255, 0.1);">
                                     <i class="fas fa-clone mr-1"></i> Duplicar
-                                </button>
+                                    </button>
                                 <button @click="deleteBot(bot.id, bot.name)" class="btn-action" 
                                         style="background: rgba(239, 68, 68, 0.1); color: #EF4444; border: 1px solid rgba(239, 68, 68, 0.2); padding: 10px;">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            </div>
-                        </div>
+                            <i class="fas fa-trash"></i>
+                        </button>
                     </div>
-                </template>
+                </div>
             </div>
-        </template>
-
+                    </template>
+            </div>
+            </template>
+            
         <!-- Empty State -->
-        <template x-if="filteredBots.length === 0">
+            <template x-if="filteredBots.length === 0">
             <div class="text-center py-16">
                 <div class="text-6xl mb-4">🤖</div>
                 <h3 class="text-xl font-bold text-white mb-2">Nenhum bot criado ainda</h3>
@@ -389,8 +389,8 @@
                     <i class="fas fa-plus mr-2"></i>
                     Criar Primeiro Bot
                 </button>
-            </div>
-        </template>
+                </div>
+            </template>
     </div>
 
     <!-- Últimas Vendas -->
@@ -398,46 +398,46 @@
         <div class="mb-6">
             <h2 class="text-2xl font-bold text-white">Últimas Vendas</h2>
             <p class="text-sm text-gray-500 mt-1">Transações recentes</p>
-        </div>
+            </div>
 
         <template x-if="filteredPayments.length > 0">
-            <div class="overflow-x-auto">
+        <div class="overflow-x-auto">
                 <table class="table-premium">
-                    <thead>
-                        <tr>
+                <thead>
+                    <tr>
                             <th>ID</th>
                             <th>Cliente</th>
                             <th>Produto</th>
                             <th>Valor</th>
                             <th>Status</th>
                             <th>Data</th>
-                        </tr>
-                    </thead>
-                    <tbody>
+                    </tr>
+                </thead>
+                <tbody>
                         <template x-for="payment in filteredPayments.slice(0, 10)" :key="payment.id">
                             <tr>
                                 <td class="text-gray-400 font-mono">#<span x-text="payment.id"></span></td>
                                 <td class="text-white font-medium" x-text="payment.customer_name || 'N/A'"></td>
                                 <td class="text-gray-300" x-text="payment.product_name || 'Produto'"></td>
                                 <td class="font-bold" style="color: var(--brand-gold-300);">
-                                    R$ <span x-text="formatMoney(payment.amount)"></span>
-                                </td>
+                                R$ <span x-text="formatMoney(payment.amount)"></span>
+                        </td>
                                 <td>
                                     <span class="badge-status" 
-                                          :class="{
+                                      :class="{
                                               'badge-paid': payment.status === 'paid',
                                               'badge-pending': payment.status === 'pending',
                                               'badge-canceled': payment.status !== 'paid' && payment.status !== 'pending'
-                                          }">
-                                        <span x-text="payment.status === 'paid' ? 'Pago' : (payment.status === 'pending' ? 'Pendente' : 'Cancelado')"></span>
-                                    </span>
-                                </td>
+                                      }">
+                                    <span x-text="payment.status === 'paid' ? 'Pago' : (payment.status === 'pending' ? 'Pendente' : 'Cancelado')"></span>
+                            </span>
+                        </td>
                                 <td class="text-gray-400 text-sm" x-text="formatDate(payment.created_at)"></td>
-                            </tr>
-                        </template>
-                    </tbody>
-                </table>
-            </div>
+                    </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
         </template>
 
         <!-- Empty State -->
@@ -446,12 +446,12 @@
                 <div class="text-6xl mb-4">💰</div>
                 <h3 class="text-xl font-bold text-white mb-2">Nenhuma venda ainda</h3>
                 <p class="text-gray-500">Suas vendas aparecerão aqui automaticamente</p>
-            </div>
+                    </div>
         </template>
-    </div>
-
-</div>
-
+                    </div>
+                        
+                        </div>
+                        
 <!-- Modal: Adicionar Bot -->
 <div x-show="showAddBotModal" 
      x-cloak
@@ -466,40 +466,40 @@
             <div class="px-8 py-6 border-b border-gray-800">
                 <h3 class="text-2xl font-bold text-white">Adicionar Novo Bot</h3>
                 <p class="text-sm text-gray-400 mt-1">Configure seu bot do Telegram</p>
-            </div>
+                </div>
 
-            <!-- Form -->
+                <!-- Form -->
             <form @submit.prevent="addBot()" class="p-8 space-y-6">
                 <!-- Token -->
                 <div>
                     <label class="block text-sm font-bold text-white mb-2">
                         Token do Bot <span class="text-red-400">*</span>
-                    </label>
+                        </label>
                     <input type="text" 
-                           x-model="newBotToken" 
-                           required
+                               x-model="newBotToken" 
+                               required
                            placeholder="1234567890:ABCdefGHIjklMNOpqrsTUVwxyz"
                            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-600 focus:outline-none focus:border-yellow-500 transition-colors font-mono text-sm">
-                </div>
-
+                    </div>
+                    
                 <!-- Nome -->
                 <div>
                     <label class="block text-sm font-bold text-white mb-2">
-                        Nome do Bot
-                    </label>
+                            Nome do Bot
+                        </label>
                     <input type="text" 
-                           x-model="newBotName" 
+                               x-model="newBotName" 
                            placeholder="Ex: Bot de Vendas FGTS"
                            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-600 focus:outline-none focus:border-yellow-500 transition-colors">
-                </div>
+                    </div>
 
                 <!-- Buttons -->
                 <div class="flex gap-3 pt-4">
                     <button type="button" 
-                            @click="showAddBotModal = false"
+                            @click="showAddBotModal = false" 
                             class="flex-1 px-6 py-3 bg-transparent border border-gray-700 rounded-lg text-gray-400 font-bold hover:bg-gray-800 transition-colors">
-                        Cancelar
-                    </button>
+                            Cancelar
+                        </button>
                     <button type="submit" 
                             :disabled="loading || !newBotToken"
                             :class="{'opacity-50 cursor-not-allowed': loading || !newBotToken}"
@@ -507,69 +507,69 @@
                         <span x-show="!loading">Adicionar Bot</span>
                         <span x-show="loading">
                             <i class="fas fa-spinner fa-spin mr-2"></i>Criando...
-                        </span>
-                    </button>
-                </div>
-            </form>
+                            </span>
+                        </button>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
-</div>
 
-<!-- Modal: Duplicar Bot -->
-<div x-show="showDuplicateBotModal" 
-     x-cloak
+    <!-- Modal: Duplicar Bot -->
+    <div x-show="showDuplicateBotModal" 
+         x-cloak
      class="fixed inset-0 z-50 overflow-y-auto"
      style="background: rgba(0, 0, 0, 0.9); backdrop-filter: blur(8px);">
     <div class="flex items-center justify-center min-h-screen p-4">
         <div @click.away="showDuplicateBotModal = false" 
              class="relative bg-gray-900 rounded-2xl shadow-2xl max-w-lg w-full"
              style="border: 1px solid rgba(255, 184, 0, 0.2);">
-            
-            <!-- Header -->
+                
+                <!-- Header -->
             <div class="px-8 py-6 border-b border-gray-800">
                 <h3 class="text-2xl font-bold text-white">Duplicar Bot</h3>
                 <p class="text-sm text-gray-400 mt-1">Copiar: <span class="text-yellow-400 font-bold" x-text="botToDuplicate?.name || ''"></span></p>
-            </div>
-
+                        </div>
+                        
             <!-- Warning -->
             <div class="px-8 py-4 bg-yellow-500 bg-opacity-10 border-l-4 border-yellow-500">
                 <p class="text-sm text-white font-semibold">
                     <i class="fas fa-exclamation-triangle mr-2 text-yellow-500"></i>
                     Token diferente obrigatório! Crie um novo bot no @BotFather.
                 </p>
-            </div>
+                </div>
 
-            <!-- Form -->
+                <!-- Form -->
             <form @submit.prevent="duplicateBot()" class="px-8 py-6 space-y-4">
                 <div>
                     <label class="block text-sm font-bold text-white mb-2">
                         <i class="fas fa-key mr-2 text-yellow-500"></i>
                         Token do Novo Bot
-                    </label>
+                        </label>
                     <input type="text" 
-                           x-model="duplicateBotToken" 
+                                x-model="duplicateBotToken"
                            placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
                            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-600 focus:outline-none focus:border-yellow-500 transition-colors font-mono text-sm">
-                </div>
-
+                    </div>
+                    
                 <div>
                     <label class="block text-sm font-bold text-white mb-2">
                         <i class="fas fa-robot mr-2 text-yellow-500"></i>
                         Nome do Novo Bot (opcional)
-                    </label>
+                        </label>
                     <input type="text" 
-                           x-model="duplicateBotName" 
-                           :placeholder="`${botToDuplicate?.name || ''} (Cópia)`"
+                                x-model="duplicateBotName"
+                                :placeholder="`${botToDuplicate?.name || ''} (Cópia)`"
                            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-600 focus:outline-none focus:border-yellow-500 transition-colors">
-                </div>
+                    </div>
 
                 <!-- Buttons -->
                 <div class="flex gap-3 pt-4">
                     <button type="button" 
-                            @click="showDuplicateBotModal = false"
+                            @click="showDuplicateBotModal = false" 
                             class="flex-1 px-6 py-3 bg-transparent border border-gray-700 rounded-lg text-gray-400 font-bold hover:bg-gray-800 transition-colors">
-                        Cancelar
-                    </button>
+                            Cancelar
+                        </button>
                     <button type="submit" 
                             :disabled="loading || !duplicateBotToken"
                             :class="{'opacity-50 cursor-not-allowed': loading || !duplicateBotToken}"
@@ -577,13 +577,13 @@
                         <span x-show="!loading">Duplicar Bot</span>
                         <span x-show="loading">
                             <i class="fas fa-spinner fa-spin mr-2"></i>Duplicando...
-                        </span>
-                    </button>
-                </div>
-            </form>
+                            </span>
+                        </button>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
-</div>
 
 {% endblock %}
 
@@ -622,7 +622,7 @@ function dashboardApp() {
         },
         
         salesChart: null,
-        
+
         // Inicialização
         init() {
             // Prevenir inicialização dupla
@@ -639,9 +639,9 @@ function dashboardApp() {
             // ✅ FIX: Esperar DOM estar 100% pronto (Alpine.js $nextTick)
             this.$nextTick(() => {
                 setTimeout(() => {
-                    this.initChart();
-                    setTimeout(() => this.loadChartData(), 200);
-                }, 50);
+            this.initChart();
+                    setTimeout(() => this.loadChartData(), 300);
+                }, 150);  // ✅ Delay maior para garantir renderização
             });
             
             console.log('✅ Dashboard V2.0 pronto!');
@@ -670,6 +670,10 @@ function dashboardApp() {
             }
             
             console.log('🔨 Criando novo gráfico...');
+            
+            // ✅ FIX CRÍTICO: Forçar layout antes de criar gráfico
+            ctx.offsetHeight;  // Força browser calcular dimensões
+            
             this.salesChart = new Chart(ctx, {
                 type: 'line',
                 data: {
@@ -700,6 +704,9 @@ function dashboardApp() {
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    animation: {
+                        duration: 750  // ✅ Animação suave
+                    },
                     interaction: {
                         mode: 'index',
                         intersect: false
@@ -733,7 +740,7 @@ function dashboardApp() {
                             display: true,
                             position: 'left',
                             grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                            ticks: { 
+                            ticks: {
                                 color: '#9CA3AF',
                                 font: { size: 12 },
                                 callback: (value) => Math.floor(value)
@@ -744,7 +751,7 @@ function dashboardApp() {
                             display: true,
                             position: 'right',
                             grid: { drawOnChartArea: false },
-                            ticks: { 
+                            ticks: {
                                 color: '#9CA3AF',
                                 font: { size: 12 },
                                 callback: (value) => 'R$ ' + value.toFixed(0)
@@ -752,7 +759,7 @@ function dashboardApp() {
                         },
                         x: {
                             grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                            ticks: { 
+                            ticks: {
                                 color: '#9CA3AF',
                                 font: { size: 12 }
                             }
@@ -796,7 +803,7 @@ function dashboardApp() {
         // Bot Actions
         async addBot() {
             if (!this.newBotToken) return;
-            
+
             this.loading = true;
             try {
                 const response = await fetch('/api/bots', {
@@ -807,9 +814,9 @@ function dashboardApp() {
                         name: this.newBotName || 'Novo Bot'
                     })
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (response.ok) {
                     location.reload();
                 } else {
@@ -821,7 +828,7 @@ function dashboardApp() {
                 this.loading = false;
             }
         },
-        
+
         async startBot(botId) {
             try {
                 const response = await fetch(`/api/bots/${botId}/start`, { method: 'POST' });
@@ -835,7 +842,7 @@ function dashboardApp() {
                 alert('Erro: ' + error.message);
             }
         },
-        
+
         async stopBot(botId) {
             try {
                 const response = await fetch(`/api/bots/${botId}/stop`, { method: 'POST' });
@@ -849,7 +856,7 @@ function dashboardApp() {
                 alert('Erro: ' + error.message);
             }
         },
-        
+
         // Duplicar Bot
         openDuplicateBotModal(bot) {
             this.botToDuplicate = bot;
@@ -857,17 +864,17 @@ function dashboardApp() {
             this.duplicateBotName = '';
             this.showDuplicateBotModal = true;
         },
-        
+
         async duplicateBot() {
             if (!this.duplicateBotToken.trim()) {
                 alert('Digite o token do novo bot');
                 return;
             }
-            
+
             if (!confirm(`Duplicar o bot "${this.botToDuplicate.name}"?\n\nTodas as configurações serão copiadas para o novo bot.`)) {
                 return;
             }
-            
+
             try {
                 const response = await fetch(`/api/bots/${this.botToDuplicate.id}/duplicate`, {
                     method: 'POST',
@@ -877,9 +884,9 @@ function dashboardApp() {
                         name: this.duplicateBotName.trim()
                     })
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (response.ok) {
                     this.showDuplicateBotModal = false;
                     alert('✅ Bot duplicado com sucesso!');
