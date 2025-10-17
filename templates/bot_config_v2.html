@@ -213,6 +213,39 @@
 .btn-action-info:hover {
     box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
 }
+
+/* Botões de Precificação (Downsells) */
+.pricing-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 700;
+    transition: all 0.15s ease;
+    cursor: pointer;
+}
+
+.pricing-btn-active {
+    color: #111827;
+    background-image: linear-gradient(to right, var(--brand-gold-500), var(--brand-gold-700));
+    border: 2px solid var(--brand-gold-500);
+    box-shadow: 0 4px 12px rgba(255, 184, 0, 0.3);
+}
+
+.pricing-btn-inactive {
+    color: #9CA3AF;
+    background: #1F2937;
+    border: 2px solid #374151;
+}
+
+.pricing-btn-inactive:hover {
+    color: #D1D5DB;
+    border-color: #4B5563;
+    background: #374151;
+}
 </style>
 {% endblock %}
 
@@ -646,24 +679,24 @@
                             </div>
 
                             <!-- ✅ MODO DE PRECIFICAÇÃO (Preço Fixo vs Desconto %) -->
-                            <div class="p-4 bg-gradient-to-r from-purple-900 to-blue-900 bg-opacity-30 border border-purple-500 border-opacity-30 rounded-xl">
+                            <div class="p-4 bg-gray-900 border border-gray-800 rounded-xl">
                                 <label class="form-label mb-3">
                                     <i class="fas fa-calculator mr-2" style="color: var(--brand-gold-500);"></i>
-                                    Modo de Precificação
+                                    <span class="text-white font-bold">Modo de Precificação</span>
                                 </label>
                                 
                                 <div class="grid grid-cols-2 gap-3 mb-4">
                                     <button type="button"
                                             @click="downsell.pricing_mode = 'fixed'"
-                                            :class="(downsell.pricing_mode || 'fixed') === 'fixed' ? 'bg-blue-500 text-white border-blue-500' : 'bg-gray-800 text-gray-400 border-gray-700'"
-                                            class="flex items-center justify-center gap-2 px-4 py-3 border-2 rounded-lg font-bold text-sm transition-all hover:scale-105">
+                                            :class="(downsell.pricing_mode || 'fixed') === 'fixed' ? 'pricing-btn-active' : 'pricing-btn-inactive'"
+                                            class="pricing-btn">
                                         <i class="fas fa-dollar-sign"></i>
                                         Preço Fixo
                                     </button>
                                     <button type="button"
                                             @click="downsell.pricing_mode = 'percentage'"
-                                            :class="downsell.pricing_mode === 'percentage' ? 'bg-blue-500 text-white border-blue-500' : 'bg-gray-800 text-gray-400 border-gray-700'"
-                                            class="flex items-center justify-center gap-2 px-4 py-3 border-2 rounded-lg font-bold text-sm transition-all hover:scale-105">
+                                            :class="downsell.pricing_mode === 'percentage' ? 'pricing-btn-active' : 'pricing-btn-inactive'"
+                                            class="pricing-btn">
                                         <i class="fas fa-percent"></i>
                                         Desconto %
                                     </button>
