@@ -722,7 +722,15 @@
                                        min="0"
                                        class="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
                                        placeholder="7">
-                                <p class="text-xs text-gray-500 mt-1">Apenas usuários inativos há X dias</p>
+                                <div class="mt-2 p-2 rounded-lg" 
+                                     :style="generalRemarketing.days_since_last_contact == 0 ? 'background: rgba(255, 184, 0, 0.1); border: 1px solid rgba(255, 184, 0, 0.3);' : 'background: rgba(59, 130, 246, 0.05);'">
+                                    <p class="text-xs" 
+                                       :style="generalRemarketing.days_since_last_contact == 0 ? 'color: #FFB800; font-weight: bold;' : 'color: #9CA3AF;'">
+                                        <i class="fas mr-1" 
+                                           :class="generalRemarketing.days_since_last_contact == 0 ? 'fa-bolt' : 'fa-info-circle'"></i>
+                                        <span x-text="generalRemarketing.days_since_last_contact == 0 ? '⚡ ENVIO IMEDIATO para todos os usuários!' : 'Apenas usuários inativos há ' + generalRemarketing.days_since_last_contact + ' dia(s)'"></span>
+                                    </p>
+                                </div>
                             </div>
                             <div class="flex items-center">
                                 <label class="flex items-center gap-3 cursor-pointer">
@@ -1245,9 +1253,16 @@ function dashboardApp() {
             this.loading = true;
             
             try {
+                console.log('📡 Enviando remarketing geral...');
+                
+                const csrfToken = this.getCsrfToken();
+                const headers = { 'Content-Type': 'application/json' };
+                if (csrfToken) headers['X-CSRF-Token'] = csrfToken;
+                
                 const response = await fetch('/api/remarketing/general', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: headers,
+                    credentials: 'same-origin',
                     body: JSON.stringify({
                         bot_ids: this.generalRemarketing.selectedBots,
                         message: this.generalRemarketing.message,
@@ -1258,29 +1273,33 @@ function dashboardApp() {
                     })
                 });
                 
-                const data = await response.json();
+                console.log(`📊 Response status: ${response.status}`);
                 
-                if (response.ok) {
-                    alert(`✅ Remarketing iniciado com sucesso!\n\n` +
-                          `📊 ${data.total_users} usuários serão impactados\n` +
-                          `🤖 ${data.bots_affected} bot(s) ativado(s)`);
-                    
-                    // Resetar form
-                    this.generalRemarketing = {
-                        selectedBots: [],
-                        message: '',
-                        media_url: '',
-                        media_type: 'video',
-                        days_since_last_contact: 7,
-                        exclude_buyers: false
-                    };
-                    
-                    this.showGeneralRemarketingModal = false;
-                } else {
-                    alert('❌ Erro: ' + (data.error || 'Falha ao enviar remarketing'));
+                if (!response.ok) {
+                    const text = await response.text();
+                    console.error('❌ Erro ao enviar remarketing:', text);
+                    return;
                 }
+                
+                const data = await response.json();
+                console.log('✅ Remarketing enviado:', data);
+                
+                // Resetar form e fechar modal
+                this.generalRemarketing = {
+                    selectedBots: [],
+                    message: '',
+                    media_url: '',
+                    media_type: 'video',
+                    days_since_last_contact: 7,
+                    exclude_buyers: false
+                };
+                
+                this.showGeneralRemarketingModal = false;
+                
+                // Recarregar página para atualizar estatísticas
+                location.reload();
             } catch (error) {
-                alert('❌ Erro ao enviar remarketing: ' + error.message);
+                console.error('❌ Erro ao enviar remarketing:', error);
             } finally {
                 this.loading = false;
             }

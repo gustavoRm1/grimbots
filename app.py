@@ -726,6 +726,7 @@ def bot_create_page():
 
 @app.route('/api/bots', methods=['POST'])
 @login_required
+@csrf.exempt
 def create_bot():
     """Cria novo bot (API endpoint)"""
     if not current_user.can_add_bot():
@@ -851,6 +852,7 @@ def update_bot_token(bot_id):
 
 @app.route('/api/bots/<int:bot_id>', methods=['DELETE'])
 @login_required
+@csrf.exempt
 def delete_bot(bot_id):
     """Deleta um bot"""
     bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
@@ -868,6 +870,7 @@ def delete_bot(bot_id):
 
 @app.route('/api/bots/<int:bot_id>/duplicate', methods=['POST'])
 @login_required
+@csrf.exempt
 def duplicate_bot(bot_id):
     """
     Duplica um bot com todas as configurações
@@ -1139,6 +1142,7 @@ def count_eligible_leads(bot_id):
 
 @app.route('/api/remarketing/general', methods=['POST'])
 @login_required
+@csrf.exempt
 def general_remarketing():
     """
     API: Remarketing Geral (Multi-Bot)
@@ -1953,6 +1957,7 @@ def get_bot_config(bot_id):
 
 @app.route('/api/bots/<int:bot_id>/config', methods=['PUT'])
 @login_required
+@csrf.exempt
 def update_bot_config(bot_id):
     """Atualiza configuração de um bot"""
     bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
