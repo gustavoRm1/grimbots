@@ -168,7 +168,7 @@
     margin-top: 20px;
 }
 
-/* Botões de Ação Padronizados */
+/* Botões de Ação Padronizados (Padrão Dashboard) */
 .btn-action {
     display: inline-flex;
     align-items: center;
@@ -185,34 +185,46 @@
 
 .btn-action:hover {
     transform: translateY(-2px);
-    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 8px 24px rgba(255, 186, 8, 0.25);
 }
 
+/* Primary - Amarelo (igual Dashboard) */
 .btn-action-primary {
-    background: linear-gradient(135deg, var(--brand-gold-500) 0%, var(--brand-gold-600) 100%);
-    color: #000000;
+    background: linear-gradient(to right, #D97706 0%, #B45309 100%);
+    color: #1F2937;
+    font-weight: 700;
+    box-shadow: 0 8px 24px rgba(255, 186, 8, 0.25);
 }
 
 .btn-action-primary:hover {
-    background: linear-gradient(135deg, var(--brand-gold-400) 0%, var(--brand-gold-500) 100%);
+    background: linear-gradient(to right, #F59E0B 0%, #D97706 100%);
+    transform: translateY(-2px);
 }
 
+/* Success - Verde (Adicionar) */
 .btn-action-success {
-    background: linear-gradient(135deg, var(--brand-emerald-500) 0%, #059669 100%);
-    color: #FFFFFF;
+    background: linear-gradient(to right, #D97706 0%, #B45309 100%);
+    color: #1F2937;
+    font-weight: 700;
+    box-shadow: 0 8px 24px rgba(255, 186, 8, 0.25);
 }
 
 .btn-action-success:hover {
-    background: linear-gradient(135deg, var(--brand-emerald-400) 0%, var(--brand-emerald-500) 100%);
+    background: linear-gradient(to right, #F59E0B 0%, #D97706 100%);
+    transform: translateY(-2px);
 }
 
+/* Info - Azul (Links) */
 .btn-action-info {
-    background: linear-gradient(135deg, var(--trust-500) 0%, #2563EB 100%);
-    color: #FFFFFF;
+    background: linear-gradient(to right, #D97706 0%, #B45309 100%);
+    color: #1F2937;
+    font-weight: 700;
+    box-shadow: 0 8px 24px rgba(255, 186, 8, 0.25);
 }
 
 .btn-action-info:hover {
-    background: linear-gradient(135deg, var(--trust-400) 0%, var(--trust-500) 100%);
+    background: linear-gradient(to right, #F59E0B 0%, #D97706 100%);
+    transform: translateY(-2px);
 }
 </style>
 {% endblock %}
@@ -257,7 +269,7 @@
         <button @click="activeTab = 'buttons'" 
                 :class="{'active': activeTab === 'buttons'}"
                 class="tab-button">
-            <i class="fas fa-shopping-cart mr-2"></i>Produtos
+            <i class="fas fa-shopping-cart mr-2"></i>Botões
         </button>
         <button @click="activeTab = 'downsells'" 
                 :class="{'active': activeTab === 'downsells'}"
@@ -356,12 +368,12 @@
     <div x-show="activeTab === 'buttons'" x-cloak>
         <div class="flex justify-between items-center mb-6">
             <div>
-                <h2 class="text-2xl font-bold text-white">Produtos de Venda</h2>
+                <h2 class="text-2xl font-bold text-white">Botões de Venda</h2>
                 <p class="text-sm text-gray-500 mt-1">Botões que geram PIX automaticamente</p>
             </div>
             <button @click="addButton()" class="btn-action btn-action-success">
                 <i class="fas fa-plus mr-2"></i>
-                Adicionar Produto
+                Adicionar Botão
             </button>
         </div>
 
@@ -375,7 +387,7 @@
                             <div class="flex items-center gap-3">
                                 <div class="button-index" x-text="index + 1"></div>
                                 <div>
-                                    <h3 class="text-sm font-bold text-white">Produto <span x-text="index + 1"></span></h3>
+                                    <h3 class="text-sm font-bold text-white">Botão <span x-text="index + 1"></span></h3>
                                     <p class="text-xs text-gray-500">Configure preço e order bump</p>
                                 </div>
                             </div>
@@ -413,7 +425,7 @@
                             <div class="form-group md:col-span-2">
                                 <label class="form-label">
                                     <i class="fas fa-box mr-2 text-blue-500"></i>
-                                    Descrição do Produto
+                                    Descrição
                                 </label>
                                 <input type="text" 
                                        x-model="button.description" 
@@ -549,17 +561,17 @@
         <template x-if="config.main_buttons.length === 0">
             <div class="text-center py-16">
                 <div class="text-6xl mb-4">🛍️</div>
-                <h3 class="text-xl font-bold text-white mb-2">Nenhum produto criado</h3>
-                <p class="text-gray-500 mb-6">Adicione seus primeiros produtos de venda</p>
+                <h3 class="text-xl font-bold text-white mb-2">Nenhum botão criado</h3>
+                <p class="text-gray-500 mb-6">Adicione seus primeiros botões de venda</p>
                 <button @click="addButton()" class="btn-action btn-action-success">
                     <i class="fas fa-plus mr-2"></i>
-                    Adicionar Primeiro Produto
+                    Adicionar Primeiro Botão
                 </button>
             </div>
         </template>
     </div>
 
-    <!-- Botões de Redirecionamento (dentro da tab Produtos) -->
+    <!-- Botões de Redirecionamento (dentro da tab Botões) -->
     <div x-show="activeTab === 'buttons'" x-cloak class="mt-8">
         <div class="border-t border-gray-800 pt-8">
             <div class="flex justify-between items-center mb-6">
