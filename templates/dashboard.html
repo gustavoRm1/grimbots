@@ -273,7 +273,21 @@
             </select>
         </div>
         <div class="relative" style="height: 320px;">
-            <canvas id="salesChart"></canvas>
+            <canvas id="salesChart" width="400" height="320"></canvas>
+        </div>
+        
+        <!-- Debug Info -->
+        <div x-data="{ showDebug: false }" class="mt-4">
+            <button @click="showDebug = !showDebug" class="text-xs text-gray-500 hover:text-gray-400">
+                <i class="fas fa-info-circle mr-1"></i>
+                Debug: Gráfico não aparece?
+            </button>
+            <div x-show="showDebug" class="mt-2 p-3 bg-gray-900 border border-gray-800 rounded text-xs text-gray-400">
+                <p>1. Abra o Console (F12)</p>
+                <p>2. Procure por mensagens de erro</p>
+                <p>3. Verifique se há vendas nos últimos 7 dias</p>
+                <p>4. API: <code class="text-yellow-400">/api/dashboard/sales-chart</code></p>
+            </div>
         </div>
     </div>
 
@@ -640,22 +654,27 @@ function dashboardApp() {
         
         // Chart
         initChart() {
+            console.log('🎨 Tentando criar gráfico...');
             const ctx = document.getElementById('salesChart');
             if (!ctx) {
-                console.error('Canvas não encontrado');
+                console.error('❌ Canvas #salesChart não encontrado no DOM');
                 return;
             }
+            console.log('✅ Canvas encontrado:', ctx);
             
             if (typeof Chart === 'undefined') {
-                console.error('Chart.js não carregado');
+                console.error('❌ Chart.js não carregado ainda, tentando novamente em 500ms...');
                 setTimeout(() => this.initChart(), 500);
                 return;
             }
+            console.log('✅ Chart.js disponível:', Chart.version);
             
             if (this.salesChart) {
+                console.log('♻️ Destruindo gráfico anterior...');
                 this.salesChart.destroy();
             }
             
+            console.log('🔨 Criando novo gráfico...');
             this.salesChart = new Chart(ctx, {
                 type: 'line',
                 data: {
