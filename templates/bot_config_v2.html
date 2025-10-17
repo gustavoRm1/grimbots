@@ -421,35 +421,46 @@
                                 </div>
 
                                 <!-- Mídia (URL + Tipo) -->
-                                <div class="p-4 bg-gray-900 border border-gray-800 rounded-xl">
-                                    <label class="form-label mb-3">
-                                        <i class="fas fa-photo-video mr-2 text-purple-400"></i>
-                                        Mídia (opcional)
-                                    </label>
-                                    
-                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                        <div class="md:col-span-2">
-                                            <input type="url" 
-                                                   x-model="button.order_bump.media_url" 
-                                                   class="form-input" 
-                                                   placeholder="https://t.me/canal/789">
-                                        </div>
-                                        
-                                        <div>
-                                            <select x-model="button.order_bump.media_type" class="form-input">
-                                                <option value="video">🎥 Vídeo</option>
-                                                <option value="photo">📸 Foto</option>
-                                            </select>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div class="form-group">
+                                        <label class="form-label">
+                                            <i class="fas fa-link mr-2 text-blue-500"></i>
+                                            URL da Mídia (opcional)
+                                        </label>
+                                        <input type="url" 
+                                               x-model="button.order_bump.media_url" 
+                                               class="form-input"
+                                               placeholder="https://t.me/canal/789">
+                                        <p class="text-xs text-gray-500 mt-2">Link do Telegram</p>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label class="form-label">
+                                            <i class="fas fa-image mr-2 text-blue-500"></i>
+                                            Tipo de Mídia
+                                        </label>
+                                        <div class="flex gap-3 mt-2">
+                                            <label class="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer hover:border-blue-500 transition-colors"
+                                                   :class="{'border-blue-500 bg-blue-500 bg-opacity-10': button.order_bump.media_type === 'video'}">
+                                                <input type="radio" x-model="button.order_bump.media_type" value="video" class="text-blue-500">
+                                                <i class="fas fa-video text-blue-500"></i>
+                                                <span class="text-sm text-white">Vídeo</span>
+                                            </label>
+                                            <label class="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer hover:border-blue-500 transition-colors"
+                                                   :class="{'border-blue-500 bg-blue-500 bg-opacity-10': button.order_bump.media_type === 'photo'}">
+                                                <input type="radio" x-model="button.order_bump.media_type" value="photo" class="text-blue-500">
+                                                <i class="fas fa-camera text-blue-500"></i>
+                                                <span class="text-sm text-white">Foto</span>
+                                            </label>
                                         </div>
                                     </div>
-                                    
-                                    <div class="info-box-warning info-box mt-3">
-                                        <p class="text-xs text-gray-300">
-                                            <i class="fas fa-chart-line mr-1" style="color: var(--brand-gold-500);"></i>
-                                            <strong style="color: var(--brand-gold-500);">Conversão:</strong> 
-                                            Order bumps com mídia convertem até 40% mais! Use <strong>Foto</strong> para não quebrar o fluxo de compra.
-                                        </p>
-                                    </div>
+                                </div>
+                                
+                                <div class="info-box-warning info-box">
+                                    <p class="text-sm text-gray-300">
+                                        <i class="fas fa-chart-line mr-2 text-yellow-500"></i>
+                                        <strong>Conversão:</strong> Order bumps com mídia convertem até 40% mais! Use <strong>Foto</strong> para não quebrar o fluxo de compra.
+                                    </p>
                                 </div>
 
                                 <!-- Botões Personalizados -->
@@ -651,35 +662,46 @@
                             </div>
 
                             <!-- Mídia (URL + Tipo) -->
-                            <div class="p-4 bg-gray-900 border border-gray-800 rounded-xl">
-                                <label class="form-label mb-3">
-                                    <i class="fas fa-photo-video mr-2 text-purple-400"></i>
-                                    Mídia (opcional)
-                                </label>
-                                
-                                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                    <div class="md:col-span-2">
-                                        <input type="url" 
-                                               x-model="downsell.media_url" 
-                                               class="form-input" 
-                                               placeholder="https://t.me/canal/123">
-                                    </div>
-                                    
-                                    <div>
-                                        <select x-model="downsell.media_type" class="form-input">
-                                            <option value="video">🎥 Vídeo</option>
-                                            <option value="photo">📸 Foto</option>
-                                        </select>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div class="form-group">
+                                    <label class="form-label">
+                                        <i class="fas fa-link mr-2 text-blue-500"></i>
+                                        URL da Mídia (opcional)
+                                    </label>
+                                    <input type="url" 
+                                           x-model="downsell.media_url" 
+                                           class="form-input"
+                                           placeholder="https://t.me/canal/123">
+                                    <p class="text-xs text-gray-500 mt-2">Link do Telegram</p>
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="form-label">
+                                        <i class="fas fa-image mr-2 text-blue-500"></i>
+                                        Tipo de Mídia
+                                    </label>
+                                    <div class="flex gap-3 mt-2">
+                                        <label class="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer hover:border-blue-500 transition-colors"
+                                               :class="{'border-blue-500 bg-blue-500 bg-opacity-10': downsell.media_type === 'video'}">
+                                            <input type="radio" x-model="downsell.media_type" value="video" class="text-blue-500">
+                                            <i class="fas fa-video text-blue-500"></i>
+                                            <span class="text-sm text-white">Vídeo</span>
+                                        </label>
+                                        <label class="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer hover:border-blue-500 transition-colors"
+                                               :class="{'border-blue-500 bg-blue-500 bg-opacity-10': downsell.media_type === 'photo'}">
+                                            <input type="radio" x-model="downsell.media_type" value="photo" class="text-blue-500">
+                                            <i class="fas fa-camera text-blue-500"></i>
+                                            <span class="text-sm text-white">Foto</span>
+                                        </label>
                                     </div>
                                 </div>
-                                
-                                <div class="info-box mt-3">
-                                    <p class="text-xs text-gray-400">
-                                        <i class="fas fa-lightbulb mr-1 text-purple-400"></i>
-                                        <strong class="text-purple-400">Dica:</strong> 
-                                        Use <strong>Foto</strong> para carregamento instantâneo (recomendado para downsells) ou <strong>Vídeo</strong> para maior engajamento.
-                                    </p>
-                                </div>
+                            </div>
+                            
+                            <div class="info-box">
+                                <p class="text-sm text-gray-300">
+                                    <i class="fas fa-lightbulb mr-2 text-yellow-500"></i>
+                                    <strong>Dica:</strong> Use <strong>Foto</strong> para carregamento instantâneo (recomendado para downsells).
+                                </p>
                             </div>
 
                             <div class="form-group">
@@ -756,35 +778,46 @@
                             </div>
 
                             <!-- Mídia (URL + Tipo) -->
-                            <div class="p-4 bg-gray-900 border border-gray-800 rounded-xl">
-                                <label class="form-label mb-3">
-                                    <i class="fas fa-photo-video mr-2 text-purple-400"></i>
-                                    Mídia (opcional)
-                                </label>
-                                
-                                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                    <div class="md:col-span-2">
-                                        <input type="url" 
-                                               x-model="upsell.media_url" 
-                                               class="form-input" 
-                                               placeholder="https://t.me/canal/456">
-                                    </div>
-                                    
-                                    <div>
-                                        <select x-model="upsell.media_type" class="form-input">
-                                            <option value="video">🎥 Vídeo</option>
-                                            <option value="photo">📸 Foto</option>
-                                        </select>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div class="form-group">
+                                    <label class="form-label">
+                                        <i class="fas fa-link mr-2 text-blue-500"></i>
+                                        URL da Mídia (opcional)
+                                    </label>
+                                    <input type="url" 
+                                           x-model="upsell.media_url" 
+                                           class="form-input"
+                                           placeholder="https://t.me/canal/456">
+                                    <p class="text-xs text-gray-500 mt-2">Link do Telegram</p>
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="form-label">
+                                        <i class="fas fa-image mr-2 text-blue-500"></i>
+                                        Tipo de Mídia
+                                    </label>
+                                    <div class="flex gap-3 mt-2">
+                                        <label class="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer hover:border-blue-500 transition-colors"
+                                               :class="{'border-blue-500 bg-blue-500 bg-opacity-10': upsell.media_type === 'video'}">
+                                            <input type="radio" x-model="upsell.media_type" value="video" class="text-blue-500">
+                                            <i class="fas fa-video text-blue-500"></i>
+                                            <span class="text-sm text-white">Vídeo</span>
+                                        </label>
+                                        <label class="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer hover:border-blue-500 transition-colors"
+                                               :class="{'border-blue-500 bg-blue-500 bg-opacity-10': upsell.media_type === 'photo'}">
+                                            <input type="radio" x-model="upsell.media_type" value="photo" class="text-blue-500">
+                                            <i class="fas fa-camera text-blue-500"></i>
+                                            <span class="text-sm text-white">Foto</span>
+                                        </label>
                                     </div>
                                 </div>
-                                
-                                <div class="info-box-warning info-box mt-3">
-                                    <p class="text-xs text-gray-300">
-                                        <i class="fas fa-rocket mr-1" style="color: var(--brand-gold-500);"></i>
-                                        <strong style="color: var(--brand-gold-500);">Dica:</strong> 
-                                        <strong>Vídeos</strong> aumentam conversão em upsells (cliente já confia), mas <strong>fotos</strong> carregam mais rápido.
-                                    </p>
-                                </div>
+                            </div>
+                            
+                            <div class="info-box-warning info-box">
+                                <p class="text-sm text-gray-300">
+                                    <i class="fas fa-rocket mr-2 text-yellow-500"></i>
+                                    <strong>Dica:</strong> <strong>Vídeos</strong> aumentam conversão em upsells (cliente já confia).
+                                </p>
                             </div>
 
                             <div class="grid grid-cols-2 gap-4">
