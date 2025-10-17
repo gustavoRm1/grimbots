@@ -1093,29 +1093,51 @@ function dashboardApp() {
 
         async startBot(botId) {
             try {
-                const response = await fetch(`/api/bots/${botId}/start`, { method: 'POST' });
-                const data = await response.json();
-                if (response.ok) {
-                    location.reload();
-                } else {
-                    alert('Erro: ' + data.error);
+                const response = await fetch(`/api/bots/${botId}/start`, { 
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'same-origin'
+                });
+                
+                if (!response.ok) {
+                    const text = await response.text();
+                    console.error('Resposta do servidor:', text);
+                    throw new Error('Erro ao iniciar bot');
                 }
+                
+                const data = await response.json();
+                alert('✅ Bot iniciado com sucesso!');
+                location.reload();
             } catch (error) {
-                alert('Erro: ' + error.message);
+                console.error('Erro ao iniciar bot:', error);
+                alert('❌ Erro ao iniciar bot: ' + error.message);
             }
         },
 
         async stopBot(botId) {
             try {
-                const response = await fetch(`/api/bots/${botId}/stop`, { method: 'POST' });
-                const data = await response.json();
-                if (response.ok) {
-                    location.reload();
-                } else {
-                    alert('Erro: ' + data.error);
+                const response = await fetch(`/api/bots/${botId}/stop`, { 
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'same-origin'
+                });
+                
+                if (!response.ok) {
+                    const text = await response.text();
+                    console.error('Resposta do servidor:', text);
+                    throw new Error('Erro ao parar bot');
                 }
+                
+                const data = await response.json();
+                alert('✅ Bot parado com sucesso!');
+                location.reload();
             } catch (error) {
-                alert('Erro: ' + error.message);
+                console.error('Erro ao parar bot:', error);
+                alert('❌ Erro ao parar bot: ' + error.message);
             }
         },
 
