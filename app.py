@@ -1173,8 +1173,18 @@ def general_remarketing():
         # Parâmetros da campanha
         media_url = data.get('media_url')
         media_type = data.get('media_type', 'video')
-        days_since_last_contact = data.get('days_since_last_contact', 7)
+        buttons = data.get('buttons', [])
+        days_since_last_contact = int(data.get('days_since_last_contact', 7))
         exclude_buyers = data.get('exclude_buyers', False)
+        
+        # Validar botões (se fornecidos)
+        if buttons:
+            for btn in buttons:
+                if not btn.get('text') or not btn.get('price'):
+                    return jsonify({'error': 'Todos os botões precisam ter texto e preço'}), 400
+        
+        # Converter botões para JSON
+        buttons_json = json.dumps(buttons) if buttons else None
         
         # Contador de usuários impactados
         total_users = 0
@@ -1200,6 +1210,7 @@ def general_remarketing():
                     message=message,
                     media_url=media_url,
                     media_type=media_type,
+                    buttons=buttons_json,
                     target_audience='non_buyers' if exclude_buyers else 'all',
                     days_since_last_contact=days_since_last_contact,
                     exclude_buyers=exclude_buyers,
