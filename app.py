@@ -2508,6 +2508,38 @@ def api_restart_all_bots():
         logger.error(f"❌ Erro na reinicialização manual: {e}")
         return jsonify({'error': f'Erro ao reiniciar bots: {str(e)}'}), 500
 
+@app.route('/api/admin/check-bots-status', methods=['GET'])
+@login_required
+@csrf.exempt
+def api_check_bots_status():
+    """API para verificar status dos bots (debug)"""
+    try:
+        with app.app_context():
+            # Bots no banco
+            db_bots = Bot.query.filter_by(is_active=True).all()
+            
+            # Bots ativos no bot_manager
+            active_bots = list(bot_manager.active_bots.keys())
+            
+            result = {
+                'db_bots': [
+                    {
+                        'id': bot.id,
+                        'username': bot.username,
+                        'is_active': bot.is_active
+                    } for bot in db_bots
+                ],
+                'active_bots': active_bots,
+                'total_db': len(db_bots),
+                'total_active': len(active_bots),
+                'missing': [bot.id for bot in db_bots if bot.id not in active_bots]
+            }
+            
+            return jsonify(result)
+    except Exception as e:
+        logger.error(f"❌ Erro ao verificar status dos bots: {e}")
+        return jsonify({'error': f'Erro ao verificar bots: {str(e)}'}), 500
+
 def _reload_user_bots_config(user_id: int):
     """Recarrega configuração dos bots ativos quando gateway muda"""
     try:
@@ -2537,54 +2569,56 @@ def restart_all_active_bots():
     try:
         logger.info("🔄 INICIANDO REINICIALIZAÇÃO AUTOMÁTICA DOS BOTS...")
         
-        # Buscar todos os bots ativos
-        active_bots = Bot.query.filter_by(is_active=True).all()
-        
-        if not active_bots:
-            logger.info("ℹ️ Nenhum bot ativo encontrado para reiniciar")
-            return
-        
-        logger.info(f"📊 Encontrados {len(active_bots)} bots ativos para reiniciar")
-        
-        restarted_count = 0
-        failed_count = 0
-        
-        for bot in active_bots:
-            try:
-                # Buscar configuração do bot
-                config = BotConfig.query.filter_by(bot_id=bot.id).first()
-                if not config:
-                    logger.warning(f"⚠️ Configuração não encontrada para bot {bot.id} (@{bot.username})")
+        # ✅ CORREÇÃO: Usar contexto do Flask para acessar banco
+        with app.app_context():
+            # Buscar todos os bots ativos
+            active_bots = Bot.query.filter_by(is_active=True).all()
+            
+            if not active_bots:
+                logger.info("ℹ️ Nenhum bot ativo encontrado para reiniciar")
+                return
+            
+            logger.info(f"📊 Encontrados {len(active_bots)} bots ativos para reiniciar")
+            
+            restarted_count = 0
+            failed_count = 0
+            
+            for bot in active_bots:
+                try:
+                    # Buscar configuração do bot
+                    config = BotConfig.query.filter_by(bot_id=bot.id).first()
+                    if not config:
+                        logger.warning(f"⚠️ Configuração não encontrada para bot {bot.id} (@{bot.username})")
+                        failed_count += 1
+                        continue
+                    
+                    # Verificar se bot já está ativo no bot_manager
+                    if bot.id in bot_manager.active_bots:
+                        logger.info(f"♻️ Bot {bot.id} (@{bot.username}) já está ativo, pulando...")
+                        continue
+                    
+                    # Reiniciar bot
+                    logger.info(f"🚀 Reiniciando bot {bot.id} (@{bot.username})...")
+                    bot_manager.start_bot(
+                        bot_id=bot.id,
+                        token=bot.token,
+                        config=config.to_dict()
+                    )
+                    
+                    restarted_count += 1
+                    logger.info(f"✅ Bot {bot.id} (@{bot.username}) reiniciado com sucesso!")
+                    
+                    # Pequena pausa para evitar sobrecarga
+                    time.sleep(0.5)
+                    
+                except Exception as e:
+                    logger.error(f"❌ Erro ao reiniciar bot {bot.id} (@{bot.username}): {e}")
                     failed_count += 1
-                    continue
-                
-                # Verificar se bot já está ativo no bot_manager
-                if bot.id in bot_manager.active_bots:
-                    logger.info(f"♻️ Bot {bot.id} (@{bot.username}) já está ativo, pulando...")
-                    continue
-                
-                # Reiniciar bot
-                logger.info(f"🚀 Reiniciando bot {bot.id} (@{bot.username})...")
-                bot_manager.start_bot(
-                    bot_id=bot.id,
-                    token=bot.token,
-                    config=config.to_dict()
-                )
-                
-                restarted_count += 1
-                logger.info(f"✅ Bot {bot.id} (@{bot.username}) reiniciado com sucesso!")
-                
-                # Pequena pausa para evitar sobrecarga
-                time.sleep(0.5)
-                
-            except Exception as e:
-                logger.error(f"❌ Erro ao reiniciar bot {bot.id} (@{bot.username}): {e}")
-                failed_count += 1
-        
-        logger.info(f"🎯 REINICIALIZAÇÃO CONCLUÍDA!")
-        logger.info(f"✅ Sucessos: {restarted_count}")
-        logger.info(f"❌ Falhas: {failed_count}")
-        logger.info(f"📊 Total: {len(active_bots)}")
+            
+            logger.info(f"🎯 REINICIALIZAÇÃO CONCLUÍDA!")
+            logger.info(f"✅ Sucessos: {restarted_count}")
+            logger.info(f"❌ Falhas: {failed_count}")
+            logger.info(f"📊 Total: {len(active_bots)}")
         
     except Exception as e:
         logger.error(f"❌ ERRO CRÍTICO na reinicialização automática: {e}", exc_info=True)
