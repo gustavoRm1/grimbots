@@ -650,12 +650,13 @@ function dashboardApp() {
             this.filteredBots = this.bots;
             this.filteredPayments = this.payments;
             
-            // Iniciar gráfico (esperar Chart.js carregar)
-            setTimeout(() => {
-                this.initChart();
-                // Carregar dados só depois do gráfico ser criado
-                setTimeout(() => this.loadChartData(), 300);
-            }, 100);
+            // ✅ FIX: Usar requestAnimationFrame para garantir DOM renderizado
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    this.initChart();
+                    setTimeout(() => this.loadChartData(), 200);
+                });
+            });
             
             console.log('✅ Dashboard V2.0 pronto!');
         },
@@ -791,13 +792,11 @@ function dashboardApp() {
                 console.log('📈 Dados recebidos:', data);
                 
                 if (!this.salesChart) {
-                    console.error('❌ Gráfico não foi criado ainda!');
-                    // Tentar criar o gráfico
-                    this.initChart();
-                    setTimeout(() => this.loadChartData(), 500);
-                    return;
+                    console.error('❌ Gráfico não existe! Ignorando atualização.');
+                    return;  // ✅ NÃO tenta recriar (evita loop)
                 }
                 
+                // ✅ Atualizar dados
                 this.salesChart.data.labels = data.map(d => d.date);
                 this.salesChart.data.datasets[0].data = data.map(d => d.sales);
                 this.salesChart.data.datasets[1].data = data.map(d => d.revenue);
