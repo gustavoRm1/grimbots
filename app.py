@@ -2380,102 +2380,116 @@ def get_gateways():
 @csrf.exempt
 def create_gateway():
     """Cria/atualiza gateway"""
-    data = request.json
-    gateway_type = data.get('gateway_type')
+    try:
+        logger.info(f"📡 Recebendo requisição para salvar gateway...")
+        data = request.json
+        logger.info(f"📦 Dados recebidos: gateway_type={data.get('gateway_type')}")
+        
+        gateway_type = data.get('gateway_type')
     
-    # ✅ CORREÇÃO: Adicionar wiinpay aos tipos válidos
-    if gateway_type not in ['syncpay', 'pushynpay', 'paradise', 'hoopay', 'wiinpay']:
-        return jsonify({'error': 'Tipo de gateway inválido'}), 400
-    
-    # Verificar se já existe gateway deste tipo
-    gateway = Gateway.query.filter_by(
-        user_id=current_user.id,
-        gateway_type=gateway_type
-    ).first()
-    
-    if not gateway:
-        gateway = Gateway(
+        # ✅ CORREÇÃO: Adicionar wiinpay aos tipos válidos
+        if gateway_type not in ['syncpay', 'pushynpay', 'paradise', 'hoopay', 'wiinpay']:
+            logger.error(f"❌ Tipo de gateway inválido: {gateway_type}")
+            return jsonify({'error': 'Tipo de gateway inválido'}), 400
+        
+        # Verificar se já existe gateway deste tipo
+        gateway = Gateway.query.filter_by(
             user_id=current_user.id,
             gateway_type=gateway_type
-        )
-        db.session.add(gateway)
-    
-    # ✅ CORREÇÃO: Atualizar credenciais específicas de cada gateway
-    if gateway_type == 'syncpay':
-        gateway.client_id = data.get('client_id')
-        gateway.client_secret = data.get('client_secret')
-    
-    elif gateway_type == 'pushynpay':
-        gateway.api_key = data.get('api_key')
-    
-    elif gateway_type == 'paradise':
-        gateway.api_key = data.get('api_key')
-        gateway.product_hash = data.get('product_hash')
-        gateway.offer_hash = data.get('offer_hash')
-        # Store ID configurado automaticamente para splits (você é o dono do sistema)
-        gateway.store_id = '177'
-    
-    elif gateway_type == 'hoopay':
-        gateway.api_key = data.get('api_key')
-        # Organization ID configurado automaticamente para splits (você é o dono do sistema)
-        gateway.organization_id = '5547db08-12c5-4de5-9592-90d38479745c'
-    
-    elif gateway_type == 'wiinpay':
-        # ✅ WIINPAY
-        gateway.api_key = data.get('api_key')
-        # Split User ID da plataforma (4% de comissão pelos serviços de automação)
-        # Fallback para o ID da plataforma se não fornecido
-        gateway.split_user_id = data.get('split_user_id', '6877edeba3c39f8451ba5bdd')
-    
-    # ✅ Split percentage (comum a todos)
-    gateway.split_percentage = float(data.get('split_percentage', 4.0))
-    
-    # IMPORTANTE: Desativar outros gateways do usuário antes de ativar este
-    # Regra de negócio: Apenas 1 gateway ativo por usuário
-    if data.get('is_active', True):  # Se requisição pede para ativar
-        # Desativar todos outros gateways do usuário
-        Gateway.query.filter(
-            Gateway.user_id == current_user.id,
-            Gateway.id != gateway.id  # Exceto o atual
-        ).update({'is_active': False})
+        ).first()
         
-        gateway.is_active = True
-        logger.info(f"✅ Gateway {gateway_type} ativado para {current_user.email} (outros desativados)")
-    else:
-        gateway.is_active = data.get('is_active', False)
-    
-    # Verificar credenciais
-    try:
-        # Montar credenciais conforme o gateway
-        credentials = {
-            'client_id': gateway.client_id,
-            'client_secret': gateway.client_secret,
-            'api_key': gateway.api_key,
-            'product_hash': gateway.product_hash,  # Paradise
-            'offer_hash': gateway.offer_hash,      # Paradise
-            'store_id': gateway.store_id,          # Paradise
-            'organization_id': gateway.organization_id,  # HooPay
-            'split_user_id': gateway.split_user_id  # WiinPay
-        }
-        
-        is_valid = bot_manager.verify_gateway(gateway_type, credentials)
-        
-        if is_valid:
-            gateway.is_verified = True
-            gateway.verified_at = datetime.now()
-            gateway.last_error = None
-            logger.info(f"Gateway {gateway_type} verificado para {current_user.email}")
+        if not gateway:
+            logger.info(f"➕ Criando novo gateway {gateway_type} para usuário {current_user.id}")
+            gateway = Gateway(
+                user_id=current_user.id,
+                gateway_type=gateway_type
+            )
+            db.session.add(gateway)
         else:
+            logger.info(f"♻️ Atualizando gateway {gateway_type} existente (ID: {gateway.id})")
+        
+        # ✅ CORREÇÃO: Atualizar credenciais específicas de cada gateway
+        if gateway_type == 'syncpay':
+            gateway.client_id = data.get('client_id')
+            gateway.client_secret = data.get('client_secret')
+        
+        elif gateway_type == 'pushynpay':
+            gateway.api_key = data.get('api_key')
+        
+        elif gateway_type == 'paradise':
+            gateway.api_key = data.get('api_key')
+            gateway.product_hash = data.get('product_hash')
+            gateway.offer_hash = data.get('offer_hash')
+            # Store ID configurado automaticamente para splits (você é o dono do sistema)
+            gateway.store_id = '177'
+        
+        elif gateway_type == 'hoopay':
+            gateway.api_key = data.get('api_key')
+            # Organization ID configurado automaticamente para splits (você é o dono do sistema)
+            gateway.organization_id = '5547db08-12c5-4de5-9592-90d38479745c'
+        
+        elif gateway_type == 'wiinpay':
+            # ✅ WIINPAY
+            gateway.api_key = data.get('api_key')
+            # Split User ID da plataforma (4% de comissão pelos serviços de automação)
+            # Fallback para o ID da plataforma se não fornecido
+            gateway.split_user_id = data.get('split_user_id', '6877edeba3c39f8451ba5bdd')
+        
+        # ✅ Split percentage (comum a todos)
+        gateway.split_percentage = float(data.get('split_percentage', 4.0))
+        
+        # IMPORTANTE: Desativar outros gateways do usuário antes de ativar este
+        # Regra de negócio: Apenas 1 gateway ativo por usuário
+        if data.get('is_active', True):  # Se requisição pede para ativar
+            # Desativar todos outros gateways do usuário
+            Gateway.query.filter(
+                Gateway.user_id == current_user.id,
+                Gateway.id != gateway.id  # Exceto o atual
+            ).update({'is_active': False})
+            
+            gateway.is_active = True
+            logger.info(f"✅ Gateway {gateway_type} ativado para {current_user.email} (outros desativados)")
+        else:
+            gateway.is_active = data.get('is_active', False)
+        
+        # Verificar credenciais
+        try:
+            # Montar credenciais conforme o gateway
+            credentials = {
+                'client_id': gateway.client_id,
+                'client_secret': gateway.client_secret,
+                'api_key': gateway.api_key,
+                'product_hash': gateway.product_hash,  # Paradise
+                'offer_hash': gateway.offer_hash,      # Paradise
+                'store_id': gateway.store_id,          # Paradise
+                'organization_id': gateway.organization_id,  # HooPay
+                'split_user_id': gateway.split_user_id  # WiinPay
+            }
+            
+            is_valid = bot_manager.verify_gateway(gateway_type, credentials)
+            
+            if is_valid:
+                gateway.is_verified = True
+                gateway.verified_at = datetime.now()
+                gateway.last_error = None
+                logger.info(f"Gateway {gateway_type} verificado para {current_user.email}")
+            else:
+                gateway.is_verified = False
+                gateway.last_error = 'Credenciais inválidas'
+        except Exception as e:
             gateway.is_verified = False
-            gateway.last_error = 'Credenciais inválidas'
+            gateway.last_error = str(e)
+            logger.error(f"❌ Erro ao verificar gateway: {e}")
+        
+        db.session.commit()
+        logger.info(f"✅ Gateway {gateway_type} salvo com sucesso!")
+        
+        return jsonify(gateway.to_dict())
+    
     except Exception as e:
-        gateway.is_verified = False
-        gateway.last_error = str(e)
-        logger.error(f"Erro ao verificar gateway: {e}")
-    
-    db.session.commit()
-    
-    return jsonify(gateway.to_dict())
+        db.session.rollback()
+        logger.error(f"❌ ERRO CRÍTICO ao salvar gateway: {e}", exc_info=True)
+        return jsonify({'error': f'Erro ao salvar gateway: {str(e)}'}), 500
 
 @app.route('/api/gateways/<int:gateway_id>/toggle', methods=['POST'])
 @login_required
