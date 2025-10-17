@@ -786,14 +786,30 @@ function dashboardApp() {
                 
                 if (!this.salesChart) {
                     console.error('❌ Gráfico não existe! Ignorando atualização.');
-                    return;  // ✅ NÃO tenta recriar (evita loop)
+                    return;
                 }
                 
-                // ✅ Atualizar dados
-                this.salesChart.data.labels = data.map(d => d.date);
-                this.salesChart.data.datasets[0].data = data.map(d => d.sales);
-                this.salesChart.data.datasets[1].data = data.map(d => d.revenue);
-                this.salesChart.update();
+                if (!data || !Array.isArray(data) || data.length === 0) {
+                    console.error('❌ Dados inválidos ou vazios!');
+                    return;
+                }
+                
+                // ✅ SOLUÇÃO: Atualizar dados diretamente SEM chamar update()
+                const labels = data.map(d => d.date || '');
+                const salesData = data.map(d => Number(d.sales) || 0);
+                const revenueData = data.map(d => Number(d.revenue) || 0);
+                
+                console.log('🔢 Labels:', labels);
+                console.log('📊 Sales:', salesData);
+                console.log('💰 Revenue:', revenueData);
+                
+                // Atualizar dados
+                this.salesChart.data.labels = labels;
+                this.salesChart.data.datasets[0].data = salesData;
+                this.salesChart.data.datasets[1].data = revenueData;
+                
+                // ✅ CRÍTICO: Usar update('none') para evitar animação que causa loop
+                this.salesChart.update('none');
                 console.log('✅ Gráfico atualizado!');
             } catch (error) {
                 console.error('❌ Erro ao carregar gráfico:', error);
