@@ -273,21 +273,7 @@
             </select>
         </div>
         <div class="relative" style="height: 320px;">
-            <canvas id="salesChart" width="400" height="320"></canvas>
-        </div>
-        
-        <!-- Debug Info -->
-        <div x-data="{ showDebug: false }" class="mt-4">
-            <button @click="showDebug = !showDebug" class="text-xs text-gray-500 hover:text-gray-400">
-                <i class="fas fa-info-circle mr-1"></i>
-                Debug: Gráfico não aparece?
-            </button>
-            <div x-show="showDebug" class="mt-2 p-3 bg-gray-900 border border-gray-800 rounded text-xs text-gray-400">
-                <p>1. Abra o Console (F12)</p>
-                <p>2. Procure por mensagens de erro</p>
-                <p>3. Verifique se há vendas nos últimos 7 dias</p>
-                <p>4. API: <code class="text-yellow-400">/api/dashboard/sales-chart</code></p>
-            </div>
+            <canvas id="salesChart"></canvas>
         </div>
     </div>
 
@@ -650,12 +636,12 @@ function dashboardApp() {
             this.filteredBots = this.bots;
             this.filteredPayments = this.payments;
             
-            // ✅ FIX: Usar requestAnimationFrame para garantir DOM renderizado
-            requestAnimationFrame(() => {
-                requestAnimationFrame(() => {
+            // ✅ FIX: Esperar DOM estar 100% pronto (Alpine.js $nextTick)
+            this.$nextTick(() => {
+                setTimeout(() => {
                     this.initChart();
                     setTimeout(() => this.loadChartData(), 200);
-                });
+                }, 50);
             });
             
             console.log('✅ Dashboard V2.0 pronto!');
