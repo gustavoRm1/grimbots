@@ -1338,14 +1338,23 @@ function botConfigApp() {
         
         async loadConfig() {
             try {
+                console.log('📡 Buscando config da API...');
                 const response = await fetch('/api/bots/{{ bot.id }}/config');
                 const data = await response.json();
                 
+                console.log('📊 Response status:', response.status);
+                console.log('📦 Dados recebidos da API:', data);
+                
                 if (response.ok) {
+                    console.log('✅ Mesclando dados com config atual...');
+                    console.log('🔧 Config ANTES:', JSON.stringify(this.config, null, 2));
+                    
                     this.config = {
                         ...this.config,
                         ...data
                     };
+                    
+                    console.log('🔧 Config DEPOIS:', JSON.stringify(this.config, null, 2));
                     
                     // Inicializar order_bump em cada botão
                     if (Array.isArray(this.config.main_buttons)) {
@@ -1378,6 +1387,10 @@ function botConfigApp() {
                     // Garantir arrays existem
                     if (!this.config.downsells) this.config.downsells = [];
                     if (!this.config.upsells) this.config.upsells = [];
+                    
+                    console.log('✅ Config final carregado com sucesso!');
+                } else {
+                    console.error('❌ Erro na resposta da API:', data);
                 }
             } catch (error) {
                 console.error('Erro ao carregar config:', error);

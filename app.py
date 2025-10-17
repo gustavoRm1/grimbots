@@ -1934,11 +1934,15 @@ def get_bot_config(bot_id):
     bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
     
     if not bot.config:
+        logger.warning(f"⚠️ Bot {bot_id} não tem config, criando nova...")
         config = BotConfig(bot_id=bot.id)
         db.session.add(config)
         db.session.commit()
     
-    return jsonify(bot.config.to_dict())
+    config_dict = bot.config.to_dict()
+    logger.info(f"📦 Retornando config do bot {bot_id}: {config_dict}")
+    
+    return jsonify(config_dict)
 
 @app.route('/api/bots/<int:bot_id>/config', methods=['PUT'])
 @login_required
