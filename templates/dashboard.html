@@ -289,7 +289,7 @@
             <div class="flex gap-3">
                 <button @click="showGeneralRemarketingModal = true" 
                         class="btn-action flex items-center"
-                        style="background: rgba(124, 58, 237, 0.1); color: #A78BFA; border: 1px solid rgba(124, 58, 237, 0.3);">
+                        style="background: rgba(255, 184, 0, 0.1); color: #FFB800; border: 1px solid rgba(255, 184, 0, 0.3);">
                     <i class="fas fa-broadcast-tower mr-2"></i>
                     Remarketing Geral
                 </button>
@@ -597,16 +597,16 @@
 <div x-show="showGeneralRemarketingModal" 
      x-cloak
      class="fixed inset-0 z-50 overflow-y-auto"
-     style="background: rgba(0, 0, 0, 0.9); backdrop-filter: blur(8px);">
+     style="background: rgba(0, 0, 0, 0.95); backdrop-filter: blur(8px);">
     <div class="flex items-center justify-center min-h-screen p-4">
         <div @click.away="showGeneralRemarketingModal = false" 
              class="relative bg-gray-900 rounded-2xl shadow-2xl max-w-4xl w-full"
-             style="border: 1px solid rgba(124, 58, 237, 0.3);">
+             style="border: 2px solid rgba(255, 184, 0, 0.5);">
             
             <!-- Header -->
-            <div class="px-8 py-6 border-b border-gray-800">
-                <h3 class="text-2xl font-bold text-white flex items-center gap-3">
-                    <i class="fas fa-broadcast-tower text-purple-400"></i>
+            <div class="px-8 py-6 border-b border-gray-800" style="background: rgba(255, 184, 0, 0.05);">
+                <h3 class="text-2xl font-bold flex items-center gap-3" style="color: #FFB800;">
+                    <i class="fas fa-broadcast-tower"></i>
                     Remarketing Geral
                 </h3>
                 <p class="text-sm text-gray-400 mt-1">Envie uma campanha para múltiplos bots simultaneamente</p>
@@ -616,21 +616,25 @@
             <div class="px-8 py-6 max-h-[70vh] overflow-y-auto">
                 <form @submit.prevent="sendGeneralRemarketing()">
                     <!-- Seleção de Bots -->
-                    <div class="mb-6 p-4 bg-purple-500 bg-opacity-10 border border-purple-500 border-opacity-30 rounded-xl">
+                    <div class="mb-6 p-4 rounded-xl" style="background: rgba(255, 184, 0, 0.08); border: 1px solid rgba(255, 184, 0, 0.3);">
                         <label class="block text-sm font-bold text-white mb-3">
-                            <i class="fas fa-robot mr-2 text-purple-400"></i>
+                            <i class="fas fa-robot mr-2" style="color: #FFB800;"></i>
                             Selecione os Bots
                         </label>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <template x-for="bot in bots" :key="bot.id">
-                                <label class="flex items-center gap-3 p-3 bg-gray-800 rounded-lg cursor-pointer hover:bg-gray-750 transition-colors border border-transparent hover:border-purple-500"
-                                       :class="{'border-purple-500 bg-purple-500 bg-opacity-10': generalRemarketing.selectedBots.includes(bot.id)}">
+                                <label class="flex items-center gap-3 p-3 bg-gray-800 rounded-lg cursor-pointer hover:bg-gray-750 transition-colors border border-transparent"
+                                       style="transition: all 0.2s ease;"
+                                       :style="generalRemarketing.selectedBots.includes(bot.id) ? 'border-color: #FFB800; background: rgba(255, 184, 0, 0.1);' : 'border-color: transparent;'"
+                                       @mouseenter="$el.style.borderColor = '#FFB800'"
+                                       @mouseleave="$el.style.borderColor = generalRemarketing.selectedBots.includes(bot.id) ? '#FFB800' : 'transparent'">
                                     <input type="checkbox" 
                                            :value="bot.id" 
                                            x-model="generalRemarketing.selectedBots"
-                                           class="w-4 h-4 text-purple-500 bg-gray-700 border-gray-600 rounded focus:ring-purple-500">
+                                           class="w-4 h-4 bg-gray-700 border-gray-600 rounded focus:ring-yellow-500"
+                                           style="accent-color: #FFB800;">
                                     <div class="flex items-center gap-2 flex-1">
-                                        <i class="fas fa-robot text-purple-400"></i>
+                                        <i class="fas fa-robot" style="color: #FFB800;"></i>
                                         <div>
                                             <div class="text-sm font-bold text-white" x-text="bot.name"></div>
                                             <div class="text-xs text-gray-500">@<span x-text="bot.username"></span></div>
@@ -641,8 +645,8 @@
                         </div>
                         <div class="mt-3 p-3 bg-gray-800 rounded-lg">
                             <p class="text-xs text-gray-400">
-                                <i class="fas fa-info-circle mr-1 text-purple-400"></i>
-                                <span class="font-bold text-purple-400" x-text="generalRemarketing.selectedBots.length"></span> 
+                                <i class="fas fa-info-circle mr-1" style="color: #FFB800;"></i>
+                                <span class="font-bold" style="color: #FFB800;" x-text="generalRemarketing.selectedBots.length"></span> 
                                 bot(s) selecionado(s)
                             </p>
                         </div>
@@ -651,15 +655,16 @@
                     <!-- Mensagem -->
                     <div class="mb-6">
                         <label class="block text-sm font-bold text-white mb-2">
-                            <i class="fas fa-comment-alt mr-2 text-purple-400"></i>
+                            <i class="fas fa-comment-alt mr-2" style="color: #FFB800;"></i>
                             Mensagem do Remarketing
                         </label>
                         <textarea x-model="generalRemarketing.message" 
                                   rows="6"
-                                  class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                  class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2"
+                                  style="focus:ring-color: #FFB800;"
                                   placeholder="Digite a mensagem que será enviada para os usuários...&#10;&#10;Exemplo:&#10;🔥 OFERTA ESPECIAL!&#10;Não perca essa oportunidade única..."></textarea>
                         <p class="text-xs text-gray-500 mt-2">
-                            <i class="fas fa-lightbulb mr-1 text-yellow-500"></i>
+                            <i class="fas fa-lightbulb mr-1" style="color: #FFB800;"></i>
                             Use emojis e seja persuasivo para aumentar a conversão
                         </p>
                     </div>
@@ -668,31 +673,35 @@
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                         <div>
                             <label class="block text-sm font-bold text-white mb-2">
-                                <i class="fas fa-link mr-2 text-purple-400"></i>
+                                <i class="fas fa-link mr-2" style="color: #FFB800;"></i>
                                 URL da Mídia (opcional)
                             </label>
                             <input type="url" 
                                    x-model="generalRemarketing.media_url" 
-                                   class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                   class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-yellow-500"
                                    placeholder="https://t.me/canal/123">
                             <p class="text-xs text-gray-500 mt-2">Link do Telegram</p>
                         </div>
                         <div>
                             <label class="block text-sm font-bold text-white mb-2">
-                                <i class="fas fa-image mr-2 text-purple-400"></i>
+                                <i class="fas fa-image mr-2" style="color: #FFB800;"></i>
                                 Tipo de Mídia
                             </label>
                             <div class="flex gap-3 mt-2">
-                                <label class="flex items-center gap-2 px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer hover:border-purple-500 transition-colors flex-1"
-                                       :class="{'border-purple-500 bg-purple-500 bg-opacity-10': generalRemarketing.media_type === 'video'}">
-                                    <input type="radio" x-model="generalRemarketing.media_type" value="video" class="text-purple-500">
-                                    <i class="fas fa-video text-purple-400"></i>
+                                <label class="flex items-center gap-2 px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer transition-colors flex-1"
+                                       :style="generalRemarketing.media_type === 'video' ? 'border-color: #FFB800; background: rgba(255, 184, 0, 0.1);' : ''"
+                                       @mouseenter="if(generalRemarketing.media_type !== 'video') $el.style.borderColor = '#FFB800'"
+                                       @mouseleave="if(generalRemarketing.media_type !== 'video') $el.style.borderColor = '#374151'">
+                                    <input type="radio" x-model="generalRemarketing.media_type" value="video" style="accent-color: #FFB800;">
+                                    <i class="fas fa-video" style="color: #FFB800;"></i>
                                     <span class="text-sm text-white">Vídeo</span>
                                 </label>
-                                <label class="flex items-center gap-2 px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer hover:border-purple-500 transition-colors flex-1"
-                                       :class="{'border-purple-500 bg-purple-500 bg-opacity-10': generalRemarketing.media_type === 'photo'}">
-                                    <input type="radio" x-model="generalRemarketing.media_type" value="photo" class="text-purple-500">
-                                    <i class="fas fa-camera text-purple-400"></i>
+                                <label class="flex items-center gap-2 px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer transition-colors flex-1"
+                                       :style="generalRemarketing.media_type === 'photo' ? 'border-color: #FFB800; background: rgba(255, 184, 0, 0.1);' : ''"
+                                       @mouseenter="if(generalRemarketing.media_type !== 'photo') $el.style.borderColor = '#FFB800'"
+                                       @mouseleave="if(generalRemarketing.media_type !== 'photo') $el.style.borderColor = '#374151'">
+                                    <input type="radio" x-model="generalRemarketing.media_type" value="photo" style="accent-color: #FFB800;">
+                                    <i class="fas fa-camera" style="color: #FFB800;"></i>
                                     <span class="text-sm text-white">Foto</span>
                                 </label>
                             </div>
@@ -700,7 +709,7 @@
                     </div>
 
                     <!-- Filtros de Segmentação -->
-                    <div class="mb-6 p-4 bg-blue-500 bg-opacity-10 border border-blue-500 border-opacity-30 rounded-xl">
+                    <div class="mb-6 p-4 rounded-xl" style="background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.3);">
                         <label class="block text-sm font-bold text-white mb-3">
                             <i class="fas fa-filter mr-2 text-blue-400"></i>
                             Segmentação de Público
@@ -711,7 +720,7 @@
                                 <input type="number" 
                                        x-model="generalRemarketing.days_since_last_contact" 
                                        min="0"
-                                       class="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                       class="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
                                        placeholder="7">
                                 <p class="text-xs text-gray-500 mt-1">Apenas usuários inativos há X dias</p>
                             </div>
@@ -719,7 +728,8 @@
                                 <label class="flex items-center gap-3 cursor-pointer">
                                     <input type="checkbox" 
                                            x-model="generalRemarketing.exclude_buyers"
-                                           class="w-4 h-4 text-blue-500 bg-gray-700 border-gray-600 rounded focus:ring-blue-500">
+                                           class="w-4 h-4 bg-gray-700 border-gray-600 rounded focus:ring-yellow-500"
+                                           style="accent-color: #FFB800;">
                                     <span class="text-sm text-white">Excluir quem já comprou</span>
                                 </label>
                             </div>
@@ -727,13 +737,13 @@
                     </div>
 
                     <!-- Warning -->
-                    <div class="mb-6 p-4 bg-yellow-500 bg-opacity-10 border border-yellow-500 border-opacity-30 rounded-lg">
+                    <div class="mb-6 p-4 rounded-lg" style="background: rgba(255, 184, 0, 0.08); border: 1px solid rgba(255, 184, 0, 0.3);">
                         <div class="flex items-start gap-3">
-                            <i class="fas fa-exclamation-triangle text-yellow-400 text-xl"></i>
+                            <i class="fas fa-exclamation-triangle text-xl" style="color: #FFB800;"></i>
                             <div>
                                 <p class="text-sm text-white font-bold mb-1">Atenção</p>
                                 <p class="text-xs text-gray-300">
-                                    Esta campanha será enviada para <strong class="text-yellow-400">TODOS</strong> os usuários dos bots selecionados que atendam aos critérios de segmentação. 
+                                    Esta campanha será enviada para <strong style="color: #FFB800;">TODOS</strong> os usuários dos bots selecionados que atendam aos critérios de segmentação. 
                                     Certifique-se de que a mensagem está correta antes de enviar.
                                 </p>
                             </div>
@@ -750,7 +760,8 @@
                         <button type="submit"
                                 :disabled="generalRemarketing.selectedBots.length === 0 || !generalRemarketing.message || loading"
                                 :class="generalRemarketing.selectedBots.length === 0 || !generalRemarketing.message ? 'opacity-50 cursor-not-allowed' : ''"
-                                class="flex-1 px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg transition-colors flex items-center justify-center gap-2">
+                                class="flex-1 px-6 py-3 text-black font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
+                                style="background: linear-gradient(to right, #FFB800, #FFA000);">
                             <i class="fas fa-paper-plane"></i>
                             <span x-text="loading ? 'Enviando...' : 'Enviar Remarketing'"></span>
                         </button>
@@ -823,6 +834,19 @@ function dashboardApp() {
             console.log('🚀 Dashboard V2.0 inicializando...');
             this.filteredBots = this.bots;
             this.filteredPayments = this.payments;
+            
+            // ✅ Watchers para bloquear scroll do body quando modal abre
+            this.$watch('showAddBotModal', (value) => {
+                this.toggleBodyScroll(value);
+            });
+            
+            this.$watch('showDuplicateBotModal', (value) => {
+                this.toggleBodyScroll(value);
+            });
+            
+            this.$watch('showGeneralRemarketingModal', (value) => {
+                this.toggleBodyScroll(value);
+            });
             
             // ✅ FIX: Esperar DOM estar 100% pronto (Alpine.js $nextTick)
             this.$nextTick(() => {
@@ -1222,6 +1246,18 @@ function dashboardApp() {
         },
         
         // Utilities
+        toggleBodyScroll(isOpen) {
+            if (isOpen) {
+                // Bloquear scroll do body
+                document.body.style.overflow = 'hidden';
+                document.body.style.paddingRight = '0px';
+            } else {
+                // Restaurar scroll do body
+                document.body.style.overflow = '';
+                document.body.style.paddingRight = '';
+            }
+        },
+        
         formatMoney(value) {
             return new Intl.NumberFormat('pt-BR', {
                 minimumFractionDigits: 2,
