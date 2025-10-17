@@ -333,21 +333,46 @@
                         </div>
 
                         <!-- Actions -->
-                        <div class="flex gap-2">
-                            <template x-if="bot.is_running">
-                                <button @click="stopBot(bot.id)" class="btn-action btn-action-danger flex-1">
-                                    <i class="fas fa-stop mr-1"></i> Parar
-                                </button>
-                            </template>
-                            <template x-if="!bot.is_running">
-                                <button @click="startBot(bot.id)" class="btn-action btn-action-success flex-1">
-                                    <i class="fas fa-play mr-1"></i> Iniciar
-                                </button>
-                            </template>
-                            <a :href="`/bots/${bot.id}/config`" class="btn-action flex-1" 
-                               style="background: rgba(59, 130, 246, 0.1); color: #60A5FA; border: 1px solid rgba(59, 130, 246, 0.2);">
-                                <i class="fas fa-cog mr-1"></i> Config
+                        <div class="space-y-2">
+                            <!-- Linha 1: Estatísticas -->
+                            <a :href="`/bots/${bot.id}/stats`" class="btn-action btn-action-primary w-full">
+                                <i class="fas fa-chart-line mr-2"></i>
+                                Ver Estatísticas
                             </a>
+                            
+                            <!-- Linha 2: Config e Remarketing -->
+                            <div class="flex gap-2">
+                                <a :href="`/bots/${bot.id}/config`" class="btn-action flex-1" 
+                                   style="background: rgba(255, 255, 255, 0.05); color: #D1D5DB; border: 1px solid rgba(255, 255, 255, 0.1);">
+                                    <i class="fas fa-cog mr-1"></i> Configurar
+                                </a>
+                                <a :href="`/bots/${bot.id}/remarketing`" class="btn-action flex-1"
+                                   style="background: rgba(255, 184, 0, 0.1); color: var(--brand-gold-400); border: 1px solid rgba(255, 184, 0, 0.2);">
+                                    <i class="fas fa-bullhorn mr-1"></i> Remarketing
+                                </a>
+                            </div>
+                            
+                            <!-- Linha 3: Iniciar/Parar, Duplicar e Deletar -->
+                            <div class="flex gap-2">
+                                <template x-if="bot.is_running">
+                                    <button @click="stopBot(bot.id)" class="btn-action btn-action-danger flex-1">
+                                        <i class="fas fa-stop mr-1"></i> Parar
+                                    </button>
+                                </template>
+                                <template x-if="!bot.is_running">
+                                    <button @click="startBot(bot.id)" class="btn-action btn-action-success flex-1">
+                                        <i class="fas fa-play mr-1"></i> Iniciar
+                                    </button>
+                                </template>
+                                <button @click="openDuplicateBotModal(bot)" class="btn-action flex-1"
+                                        style="background: rgba(255, 184, 0, 0.1); color: var(--brand-gold-400); border: 1px solid rgba(255, 184, 0, 0.2);">
+                                    <i class="fas fa-clone mr-1"></i> Duplicar
+                                </button>
+                                <button @click="deleteBot(bot.id, bot.name)" class="btn-action" 
+                                        style="background: rgba(239, 68, 68, 0.1); color: #EF4444; border: 1px solid rgba(239, 68, 68, 0.2); padding: 10px;">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </template>
@@ -490,6 +515,76 @@
     </div>
 </div>
 
+<!-- Modal: Duplicar Bot -->
+<div x-show="showDuplicateBotModal" 
+     x-cloak
+     class="fixed inset-0 z-50 overflow-y-auto"
+     style="background: rgba(0, 0, 0, 0.9); backdrop-filter: blur(8px);">
+    <div class="flex items-center justify-center min-h-screen p-4">
+        <div @click.away="showDuplicateBotModal = false" 
+             class="relative bg-gray-900 rounded-2xl shadow-2xl max-w-lg w-full"
+             style="border: 1px solid rgba(255, 184, 0, 0.2);">
+            
+            <!-- Header -->
+            <div class="px-8 py-6 border-b border-gray-800">
+                <h3 class="text-2xl font-bold text-white">Duplicar Bot</h3>
+                <p class="text-sm text-gray-400 mt-1">Copiar: <span class="text-yellow-400 font-bold" x-text="botToDuplicate?.name || ''"></span></p>
+            </div>
+
+            <!-- Warning -->
+            <div class="px-8 py-4 bg-yellow-500 bg-opacity-10 border-l-4 border-yellow-500">
+                <p class="text-sm text-white font-semibold">
+                    <i class="fas fa-exclamation-triangle mr-2 text-yellow-500"></i>
+                    Token diferente obrigatório! Crie um novo bot no @BotFather.
+                </p>
+            </div>
+
+            <!-- Form -->
+            <form @submit.prevent="duplicateBot()" class="px-8 py-6 space-y-4">
+                <div>
+                    <label class="block text-sm font-bold text-white mb-2">
+                        <i class="fas fa-key mr-2 text-yellow-500"></i>
+                        Token do Novo Bot
+                    </label>
+                    <input type="text" 
+                           x-model="duplicateBotToken" 
+                           placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
+                           class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-600 focus:outline-none focus:border-yellow-500 transition-colors font-mono text-sm">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-white mb-2">
+                        <i class="fas fa-robot mr-2 text-yellow-500"></i>
+                        Nome do Novo Bot (opcional)
+                    </label>
+                    <input type="text" 
+                           x-model="duplicateBotName" 
+                           :placeholder="`${botToDuplicate?.name || ''} (Cópia)`"
+                           class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-600 focus:outline-none focus:border-yellow-500 transition-colors">
+                </div>
+
+                <!-- Buttons -->
+                <div class="flex gap-3 pt-4">
+                    <button type="button" 
+                            @click="showDuplicateBotModal = false"
+                            class="flex-1 px-6 py-3 bg-transparent border border-gray-700 rounded-lg text-gray-400 font-bold hover:bg-gray-800 transition-colors">
+                        Cancelar
+                    </button>
+                    <button type="submit" 
+                            :disabled="loading || !duplicateBotToken"
+                            :class="{'opacity-50 cursor-not-allowed': loading || !duplicateBotToken}"
+                            class="flex-1 btn-action btn-action-primary">
+                        <span x-show="!loading">Duplicar Bot</span>
+                        <span x-show="loading">
+                            <i class="fas fa-spinner fa-spin mr-2"></i>Duplicando...
+                        </span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block extra_scripts %}
@@ -498,8 +593,12 @@ function dashboardApp() {
     return {
         // Estado
         showAddBotModal: false,
+        showDuplicateBotModal: false,
         newBotToken: '',
         newBotName: '',
+        duplicateBotToken: '',
+        duplicateBotName: '',
+        botToDuplicate: null,
         loading: false,
         isUpdating: false,
         
@@ -712,6 +811,68 @@ function dashboardApp() {
                 const response = await fetch(`/api/bots/${botId}/stop`, { method: 'POST' });
                 const data = await response.json();
                 if (response.ok) {
+                    location.reload();
+                } else {
+                    alert('Erro: ' + data.error);
+                }
+            } catch (error) {
+                alert('Erro: ' + error.message);
+            }
+        },
+        
+        // Duplicar Bot
+        openDuplicateBotModal(bot) {
+            this.botToDuplicate = bot;
+            this.duplicateBotToken = '';
+            this.duplicateBotName = '';
+            this.showDuplicateBotModal = true;
+        },
+        
+        async duplicateBot() {
+            if (!this.duplicateBotToken.trim()) {
+                alert('Digite o token do novo bot');
+                return;
+            }
+            
+            if (!confirm(`Duplicar o bot "${this.botToDuplicate.name}"?\n\nTodas as configurações serão copiadas para o novo bot.`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/bots/${this.botToDuplicate.id}/duplicate`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        token: this.duplicateBotToken.trim(),
+                        name: this.duplicateBotName.trim()
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    this.showDuplicateBotModal = false;
+                    alert('✅ Bot duplicado com sucesso!');
+                    location.reload();
+                } else {
+                    alert('Erro: ' + (data.error || 'Erro ao duplicar bot'));
+                }
+            } catch (error) {
+                alert('Erro ao duplicar bot: ' + error.message);
+            }
+        },
+        
+        // Deletar Bot
+        async deleteBot(botId, botName) {
+            if (!confirm(`Deletar o bot "${botName}"?\n\nEsta ação não pode ser desfeita!`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/bots/${botId}`, { method: 'DELETE' });
+                const data = await response.json();
+                if (response.ok) {
+                    alert('✅ Bot deletado com sucesso!');
                     location.reload();
                 } else {
                     alert('Erro: ' + data.error);
