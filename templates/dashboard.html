@@ -347,7 +347,7 @@
                                     <i class="fas fa-cog mr-1"></i> Configurar
                                 </a>
                                 <a :href="`/bots/${bot.id}/remarketing`" class="btn-action flex-1"
-                                   style="background: rgba(255, 184, 0, 0.1); color: var(--brand-gold-400); border: 1px solid rgba(255, 184, 0, 0.2);">
+                                   style="background: rgba(255, 255, 255, 0.05); color: #D1D5DB; border: 1px solid rgba(255, 255, 255, 0.1);">
                                     <i class="fas fa-bullhorn mr-1"></i> Remarketing
                                 </a>
                             </div>
@@ -365,7 +365,7 @@
                                     </button>
                                 </template>
                                 <button @click="openDuplicateBotModal(bot)" class="btn-action flex-1"
-                                        style="background: rgba(255, 184, 0, 0.1); color: var(--brand-gold-400); border: 1px solid rgba(255, 184, 0, 0.2);">
+                                        style="background: rgba(255, 255, 255, 0.05); color: #D1D5DB; border: 1px solid rgba(255, 255, 255, 0.1);">
                                     <i class="fas fa-clone mr-1"></i> Duplicar
                                 </button>
                                 <button @click="deleteBot(bot.id, bot.name)" class="btn-action" 
@@ -628,9 +628,12 @@ function dashboardApp() {
             this.filteredBots = this.bots;
             this.filteredPayments = this.payments;
             
-            // Iniciar gráfico
-            setTimeout(() => this.initChart(), 100);
-            setTimeout(() => this.loadChartData(), 200);
+            // Iniciar gráfico (esperar Chart.js carregar)
+            setTimeout(() => {
+                this.initChart();
+                // Carregar dados só depois do gráfico ser criado
+                setTimeout(() => this.loadChartData(), 300);
+            }, 100);
             
             console.log('✅ Dashboard V2.0 pronto!');
         },
@@ -749,17 +752,32 @@ function dashboardApp() {
         
         async loadChartData() {
             try {
+                console.log('📊 Carregando dados do gráfico...');
                 const response = await fetch('/api/dashboard/sales-chart');
-                const data = await response.json();
                 
-                if (this.salesChart) {
-                    this.salesChart.data.labels = data.map(d => d.date);
-                    this.salesChart.data.datasets[0].data = data.map(d => d.sales);
-                    this.salesChart.data.datasets[1].data = data.map(d => d.revenue);
-                    this.salesChart.update();
+                if (!response.ok) {
+                    console.error('❌ API retornou erro:', response.status);
+                    return;
                 }
+                
+                const data = await response.json();
+                console.log('📈 Dados recebidos:', data);
+                
+                if (!this.salesChart) {
+                    console.error('❌ Gráfico não foi criado ainda!');
+                    // Tentar criar o gráfico
+                    this.initChart();
+                    setTimeout(() => this.loadChartData(), 500);
+                    return;
+                }
+                
+                this.salesChart.data.labels = data.map(d => d.date);
+                this.salesChart.data.datasets[0].data = data.map(d => d.sales);
+                this.salesChart.data.datasets[1].data = data.map(d => d.revenue);
+                this.salesChart.update();
+                console.log('✅ Gráfico atualizado!');
             } catch (error) {
-                console.error('Erro ao carregar gráfico:', error);
+                console.error('❌ Erro ao carregar gráfico:', error);
             }
         },
         
