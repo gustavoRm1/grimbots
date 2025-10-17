@@ -686,8 +686,7 @@ function dashboardApp() {
                             backgroundColor: 'rgba(59, 130, 246, 0.1)',
                             borderWidth: 2,
                             tension: 0.4,
-                            fill: true,
-                            yAxisID: 'y'
+                            fill: true
                         },
                         {
                             label: 'Receita (R$)',
@@ -696,17 +695,14 @@ function dashboardApp() {
                             backgroundColor: 'rgba(255, 184, 0, 0.1)',
                             borderWidth: 2,
                             tension: 0.4,
-                            fill: true,
-                            yAxisID: 'y1'
+                            fill: true
                         }
                     ]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    animation: {
-                        duration: 750  // ✅ Animação suave
-                    },
+                    animation: false,  // ✅ SEM ANIMAÇÃO (evita loop)
                     interaction: {
                         mode: 'index',
                         intersect: false
@@ -718,7 +714,6 @@ function dashboardApp() {
                             labels: {
                                 color: '#D1D1D1',
                                 padding: 20,
-                                font: { size: 13, weight: '600' },
                                 usePointStyle: true
                             }
                         },
@@ -727,41 +722,26 @@ function dashboardApp() {
                             titleColor: '#FFFFFF',
                             bodyColor: '#D1D1D1',
                             borderColor: '#FFB800',
-                            borderWidth: 2,
-                            padding: 12,
-                            displayColors: true,
-                            titleFont: { size: 14, weight: 'bold' },
-                            bodyFont: { size: 13 }
+                            borderWidth: 1,
+                            padding: 12
                         }
                     },
                     scales: {
                         y: {
-                            type: 'linear',
-                            display: true,
-                            position: 'left',
-                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            beginAtZero: true,
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.05)'
+                            },
                             ticks: {
-                                color: '#9CA3AF',
-                                font: { size: 12 },
-                                callback: (value) => Math.floor(value)
-                            }
-                        },
-                        y1: {
-                            type: 'linear',
-                            display: true,
-                            position: 'right',
-                            grid: { drawOnChartArea: false },
-                            ticks: {
-                                color: '#9CA3AF',
-                                font: { size: 12 },
-                                callback: (value) => 'R$ ' + value.toFixed(0)
+                                color: '#9CA3AF'
                             }
                         },
                         x: {
-                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.05)'
+                            },
                             ticks: {
-                                color: '#9CA3AF',
-                                font: { size: 12 }
+                                color: '#9CA3AF'
                             }
                         }
                     }
