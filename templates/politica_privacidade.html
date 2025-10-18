@@ -1,492 +1,634 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Política de Privacidade - grimbots</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #0F172A;
-            color: #E5E7EB;
-        }
-        .legal-section {
-            scroll-margin-top: 100px;
-        }
-        .highlight-box {
-            background: linear-gradient(135deg, rgba(245,158,11,0.08), rgba(217,119,6,0.05));
-            border-left: 4px solid #F59E0B;
-        }
-    </style>
-</head>
-<body>
+{% extends "base.html" %}
+{% block title %}Política de Privacidade{% endblock %}
+
+{% block extra_head %}
+<style>
+/* Bot Config V2.0 - Design System (IDÊNTICO) */
+
+.config-section {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.02) 0%, rgba(255, 255, 255, 0.01) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 24px;
+}
+
+.config-section-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.config-section-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #FFFFFF;
+}
+
+.config-section-description {
+    font-size: 0.875rem;
+    color: #9CA3AF;
+    margin-top: 4px;
+}
+
+.legal-section {
+    scroll-margin-top: 100px;
+}
+
+.section-number {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #FFB800, #FFC933);
+    font-weight: 700;
+    font-size: 1.125rem;
+    color: #111827;
+}
+
+.highlight-box {
+    padding: 16px;
+    background: rgba(255, 184, 0, 0.08);
+    border-left: 4px solid #FFB800;
+    border-radius: 0 8px 8px 0;
+    margin-top: 12px;
+}
+
+.warning-box {
+    padding: 16px;
+    background: rgba(239, 68, 68, 0.08);
+    border-left: 4px solid #EF4444;
+    border-radius: 0 8px 8px 0;
+    margin-top: 12px;
+}
+
+.success-box {
+    padding: 16px;
+    background: rgba(16, 185, 129, 0.08);
+    border-left: 4px solid #10B981;
+    border-radius: 0 8px 8px 0;
+    margin-top: 12px;
+}
+
+.info-box {
+    padding: 16px;
+    background: rgba(59, 130, 246, 0.08);
+    border-left: 4px solid #3B82F6;
+    border-radius: 0 8px 8px 0;
+    margin-top: 12px;
+}
+
+.toc-link {
+    display: block;
+    padding: 8px 12px;
+    color: #FFB800;
+    text-decoration: none;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+    font-size: 0.875rem;
+}
+
+.toc-link:hover {
+    background: rgba(255, 184, 0, 0.1);
+    transform: translateX(4px);
+}
+
+.content-text {
+    color: #E5E7EB;
+    line-height: 1.8;
+}
+
+.content-subtitle {
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: #FFB800;
+    margin-bottom: 12px;
+}
+
+.content-list {
+    list-style: disc;
+    padding-left: 24px;
+    color: #E5E7EB;
+    line-height: 1.8;
+}
+
+.content-list li {
+    margin-bottom: 8px;
+}
+
+.back-to-top {
+    position: fixed;
+    bottom: 32px;
+    right: 32px;
+    width: 56px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #FFB800, #FFC933);
+    border-radius: 50%;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    z-index: 999;
+}
+
+.back-to-top:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 32px rgba(255, 184, 0, 0.4);
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    
     <!-- Header -->
-    <header class="sticky top-0 z-50 backdrop-blur-lg" style="background: rgba(15, 23, 42, 0.95); border-bottom: 1px solid rgba(245, 158, 11, 0.2);">
-        <div class="max-w-5xl mx-auto px-4 py-5">
-            <div class="flex items-center justify-between">
-                <div class="flex items-center gap-3">
-                    <i class="fas fa-robot text-2xl" style="color: #FCD34D;"></i>
-                    <h1 class="text-2xl font-black" style="color: #FDE68A;">grimbots</h1>
-                </div>
-                <a href="/termos-de-uso" class="text-sm font-semibold hover:scale-105 transition-transform" style="color: #D1D5DB;">
-                    Ver Termos de Uso →
-                </a>
+    <div class="mb-8">
+        <h1 class="text-4xl font-black text-white mb-2 flex items-center gap-3">
+            <i class="fas fa-shield-alt" style="color: #FFB800;"></i>
+            Política de Privacidade
+        </h1>
+        <p class="text-lg text-gray-400">
+            Última atualização: 13 de outubro de 2025
+        </p>
+        <div class="mt-4 p-4 rounded-lg inline-block" style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3);">
+            <p class="text-sm font-bold flex items-center gap-2" style="color: #6EE7B7;">
+                <i class="fas fa-check-circle"></i>
+                Em conformidade com a Lei Geral de Proteção de Dados (LGPD - Lei nº 13.709/2018)
+            </p>
+        </div>
+    </div>
+
+    <!-- Resumo Rápido -->
+    <div class="config-section mb-8" style="border: 2px solid rgba(16, 185, 129, 0.3);">
+        <div class="config-section-header">
+            <i class="fas fa-info-circle text-2xl" style="color: #6EE7B7;"></i>
+            <div>
+                <div class="config-section-title" style="color: #6EE7B7;">Resumo Rápido</div>
+                <div class="config-section-description">Entenda de forma simples</div>
             </div>
         </div>
-    </header>
 
-    <!-- Main Content -->
-    <main class="max-w-5xl mx-auto px-4 py-8">
-        <!-- Title Section -->
-        <div class="rounded-2xl shadow-2xl p-8 mb-6" style="background: linear-gradient(135deg, #F59E0B, #D97706); color: #1C1917;">
-            <h1 class="text-4xl font-black mb-3">Política de Privacidade</h1>
-            <p class="font-semibold mb-4"><strong>Última atualização:</strong> 13 de outubro de 2025</p>
-            <div class="rounded-xl p-4" style="background: rgba(255, 255, 255, 0.2); backdrop-filter: blur(10px);">
-                <p class="text-sm font-bold flex items-center gap-2">
-                    <i class="fas fa-shield-alt"></i>
-                    Em conformidade com a <strong>Lei Geral de Proteção de Dados (LGPD - Lei nº 13.709/2018)</strong>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+                <p class="font-bold mb-3 flex items-center gap-2" style="color: #6EE7B7;">
+                    <i class="fas fa-check-circle"></i>
+                    O que coletamos:
                 </p>
+                <ul class="space-y-2 text-sm content-text">
+                    <li>• Nome, e-mail, dados de cadastro</li>
+                    <li>• Configurações dos seus bots</li>
+                    <li>• Histórico de transações</li>
+                    <li>• Dados de uso da plataforma</li>
+                </ul>
+            </div>
+            <div>
+                <p class="font-bold mb-3 flex items-center gap-2" style="color: #EF4444;">
+                    <i class="fas fa-times-circle"></i>
+                    O que NÃO coletamos:
+                </p>
+                <ul class="space-y-2 text-sm content-text">
+                    <li>• Conteúdo de mensagens privadas</li>
+                    <li>• Números de cartão completos</li>
+                    <li>• Dados sensíveis pessoais</li>
+                </ul>
             </div>
         </div>
 
-        <!-- Quick Summary -->
-        <div class="rounded-2xl p-6 mb-6" style="background: rgba(34, 197, 94, 0.12); border: 2px solid #22C55E;">
-            <h2 class="text-xl font-black mb-4 flex items-center gap-2" style="color: #6EE7B7;">
-                <i class="fas fa-info-circle"></i>
-                Resumo Rápido
-            </h2>
-            <div class="grid md:grid-cols-2 gap-4 text-sm">
-                <div>
-                    <p class="font-black mb-2 flex items-center gap-2" style="color: #6EE7B7;">
-                        <i class="fas fa-check-circle"></i>
-                        O que coletamos:
-                    </p>
-                    <ul class="space-y-1" style="color: #E5E7EB;">
-                        <li>• Nome, e-mail, dados de cadastro</li>
-                        <li>• Configurações dos seus bots</li>
-                        <li>• Histórico de transações</li>
-                        <li>• Dados de uso da plataforma</li>
-                    </ul>
-                </div>
-                <div>
-                    <p class="font-black mb-2 flex items-center gap-2" style="color: #FCA5A5;">
-                        <i class="fas fa-times-circle"></i>
-                        O que NÃO coletamos:
-                    </p>
-                    <ul class="space-y-1" style="color: #E5E7EB;">
-                        <li>• Conteúdo de mensagens privadas</li>
-                        <li>• Dados de cartão completos</li>
-                        <li>• Dados sensíveis pessoais</li>
-                    </ul>
-                </div>
-            </div>
-            <div class="mt-4 pt-4" style="border-top: 1px solid rgba(34, 197, 94, 0.3);">
-                <p style="color: #E5E7EB;"><strong style="color: #6EE7B7;">Seus direitos:</strong> Acessar, corrigir, excluir, revogar consentimento e solicitar portabilidade de dados</p>
-                <p class="text-sm mt-1" style="color: #D1D5DB;"><strong>Contato:</strong> privacidade@grimbots.com</p>
+        <div class="mt-6 pt-6" style="border-top: 1px solid rgba(255, 255, 255, 0.08);">
+            <p class="content-text"><strong style="color: #FFB800;">Seus direitos:</strong> Acessar, corrigir, excluir, revogar consentimento e solicitar portabilidade de dados</p>
+            <p class="text-sm mt-2 text-gray-400"><strong>Contato:</strong> privacidade@grimbots.com</p>
+        </div>
+    </div>
+
+    <!-- Índice -->
+    <div class="config-section mb-8">
+        <div class="config-section-header">
+            <i class="fas fa-list text-2xl" style="color: #FFB800;"></i>
+            <div>
+                <div class="config-section-title">Índice</div>
+                <div class="config-section-description">Navegue pelos tópicos</div>
             </div>
         </div>
 
-        <!-- Table of Contents -->
-        <div class="rounded-2xl p-6 mb-6" style="background: rgba(245, 158, 11, 0.08); border: 2px solid rgba(245, 158, 11, 0.2);">
-            <h2 class="text-xl font-black mb-4 flex items-center gap-2" style="color: #FDE68A;">
-                <i class="fas fa-list"></i>
-                Índice
-            </h2>
-            <div class="grid md:grid-cols-2 gap-2 text-sm">
-                <a href="#secao1" class="hover:underline" style="color: #FCD34D;">1. Compromisso com a Privacidade</a>
-                <a href="#secao2" class="hover:underline" style="color: #FCD34D;">2. Dados Coletados</a>
-                <a href="#secao3" class="hover:underline" style="color: #FCD34D;">3. Uso das Informações</a>
-                <a href="#secao4" class="hover:underline" style="color: #FCD34D;">4. Compartilhamento de Dados</a>
-                <a href="#secao5" class="hover:underline" style="color: #FCD34D;">5. Cookies e Tecnologias</a>
-                <a href="#secao6" class="hover:underline" style="color: #FCD34D;">6. Direitos do Titular (LGPD)</a>
-                <a href="#secao7" class="hover:underline" style="color: #FCD34D;">7. Segurança dos Dados</a>
-                <a href="#secao8" class="hover:underline" style="color: #FCD34D;">8. Retenção e Exclusão</a>
-                <a href="#secao9" class="hover:underline" style="color: #FCD34D;">9. Menores de Idade</a>
-                <a href="#secao10" class="hover:underline" style="color: #FCD34D;">10. Alterações na Política</a>
-                <a href="#secao11" class="hover:underline" style="color: #FCD34D;">11. Encarregado (DPO)</a>
-                <a href="#secao14" class="hover:underline" style="color: #FCD34D;">14. Contato</a>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+            <a href="#secao1" class="toc-link">1. Compromisso com a Privacidade</a>
+            <a href="#secao2" class="toc-link">2. Dados Coletados</a>
+            <a href="#secao3" class="toc-link">3. Uso das Informações</a>
+            <a href="#secao4" class="toc-link">4. Compartilhamento de Dados</a>
+            <a href="#secao5" class="toc-link">5. Cookies e Tecnologias</a>
+            <a href="#secao6" class="toc-link">6. Direitos do Titular (LGPD)</a>
+            <a href="#secao7" class="toc-link">7. Segurança dos Dados</a>
+            <a href="#secao8" class="toc-link">8. Retenção e Exclusão</a>
+            <a href="#secao9" class="toc-link">9. Menores de Idade</a>
+            <a href="#secao10" class="toc-link">10. Alterações na Política</a>
+            <a href="#secao11" class="toc-link">11. Encarregado (DPO)</a>
+            <a href="#secao14" class="toc-link">14. Contato</a>
+        </div>
+    </div>
+
+    <!-- Seção 1: Compromisso com a Privacidade -->
+    <section id="secao1" class="config-section legal-section">
+        <div class="config-section-header">
+            <div class="section-number">1</div>
+            <div>
+                <div class="config-section-title">Compromisso com a Privacidade</div>
+                <div class="config-section-description">Nossa política de proteção de dados</div>
             </div>
         </div>
 
-        <!-- Sections -->
-        <div class="space-y-6">
-            <!-- Section 1 -->
-            <section id="secao1" class="rounded-2xl shadow-xl p-8 legal-section" style="background: #1F2937; border: 1px solid rgba(255, 255, 255, 0.1);">
-                <h2 class="text-2xl font-black mb-4 flex items-center gap-3" style="color: #FAFAFA;">
-                    <span class="rounded-full w-10 h-10 flex items-center justify-center text-lg font-black" style="background: linear-gradient(135deg, #F59E0B, #D97706); color: #1C1917;">1</span>
-                    Compromisso com a Privacidade
-                </h2>
-                <div class="space-y-4" style="color: #E5E7EB;">
-                    <p>O <strong style="color: #FDE68A;">grimbots</strong> compromete-se a proteger a privacidade e os dados pessoais de seus usuários. Esta Política de Privacidade descreve como coletamos, usamos, armazenamos e protegemos suas informações, em conformidade com a <strong style="color: #FDE68A;">Lei Geral de Proteção de Dados (LGPD - Lei nº 13.709/2018)</strong> e demais legislações aplicáveis.</p>
-                    
-                    <p>Ao utilizar nossa plataforma, você concorda com as práticas descritas nesta política. Caso não concorde, não utilize nossos serviços.</p>
+        <div class="space-y-4 content-text">
+            <p>O <strong style="color: #FFB800;">grimbots</strong> compromete-se a proteger a privacidade e os dados pessoais de seus usuários. Esta Política de Privacidade descreve como coletamos, usamos, armazenamos e protegemos suas informações, em conformidade com a <strong style="color: #FFB800;">Lei Geral de Proteção de Dados (LGPD - Lei nº 13.709/2018)</strong> e demais legislações aplicáveis.</p>
+            
+            <p>Ao utilizar nossa plataforma, você concorda com as práticas descritas nesta política. Caso não concorde, não utilize nossos serviços.</p>
 
-                    <div class="highlight-box rounded-xl p-5 mt-4">
-                        <h3 class="font-black mb-3" style="color: #FCD34D;">Definições</h3>
-                        <ul class="space-y-2 text-sm">
-                            <li><strong style="color: #FDE68A;">Dados Pessoais:</strong> Informações relacionadas a pessoa natural identificada ou identificável</li>
-                            <li><strong style="color: #FDE68A;">Tratamento:</strong> Qualquer operação realizada com dados pessoais (coleta, armazenamento, uso, etc.)</li>
-                            <li><strong style="color: #FDE68A;">Titular:</strong> Pessoa natural a quem se referem os dados pessoais</li>
-                            <li><strong style="color: #FDE68A;">Controlador:</strong> grimbots, responsável pelas decisões sobre o tratamento de dados</li>
-                            <li><strong style="color: #FDE68A;">Operador:</strong> Terceiros que realizam tratamento de dados em nome do grimbots</li>
-                        </ul>
-                    </div>
-                </div>
-            </section>
+            <div class="highlight-box">
+                <h3 class="font-bold mb-3" style="color: #FFB800;">Definições</h3>
+                <ul class="space-y-2 text-sm">
+                    <li><strong style="color: #FFB800;">Dados Pessoais:</strong> Informações relacionadas a pessoa natural identificada ou identificável</li>
+                    <li><strong style="color: #FFB800;">Tratamento:</strong> Qualquer operação realizada com dados pessoais (coleta, armazenamento, uso, etc.)</li>
+                    <li><strong style="color: #FFB800;">Titular:</strong> Pessoa natural a quem se referem os dados pessoais</li>
+                    <li><strong style="color: #FFB800;">Controlador:</strong> grimbots, responsável pelas decisões sobre o tratamento de dados</li>
+                    <li><strong style="color: #FFB800;">Operador:</strong> Terceiros que realizam tratamento de dados em nome do grimbots</li>
+                </ul>
+            </div>
+        </div>
+    </section>
 
-            <!-- Section 2 -->
-            <section id="secao2" class="rounded-2xl shadow-xl p-8 legal-section" style="background: #1F2937; border: 1px solid rgba(255, 255, 255, 0.1);">
-                <h2 class="text-2xl font-black mb-4 flex items-center gap-3" style="color: #FAFAFA;">
-                    <span class="rounded-full w-10 h-10 flex items-center justify-center text-lg font-black" style="background: linear-gradient(135deg, #F59E0B, #D97706); color: #1C1917;">2</span>
-                    Dados Coletados
-                </h2>
-                <div class="space-y-6" style="color: #E5E7EB;">
-                    <div>
-                        <h3 class="text-xl font-black mb-3" style="color: #FCD34D;">2.1 Dados Fornecidos Diretamente por Você</h3>
-                        
-                        <div class="rounded-xl p-5 mb-4" style="background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.3);">
-                            <p class="font-black mb-2 flex items-center gap-2" style="color: #93C5FD;">
-                                <i class="fas fa-user-circle"></i>
-                                Dados de Cadastro:
-                            </p>
-                            <ul class="list-disc pl-6 space-y-1 text-sm">
-                                <li>Nome completo</li>
-                                <li>Endereço de e-mail</li>
-                                <li>Senha (armazenada de forma criptografada)</li>
-                                <li>Telefone (opcional)</li>
-                                <li>Documento de identificação (CPF ou CNPJ) - quando necessário para fins fiscais</li>
-                            </ul>
-                        </div>
+    <!-- Seção 2: Dados Coletados -->
+    <section id="secao2" class="config-section legal-section">
+        <div class="config-section-header">
+            <div class="section-number">2</div>
+            <div>
+                <div class="config-section-title">Dados Coletados</div>
+                <div class="config-section-description">Informações que processamos</div>
+            </div>
+        </div>
 
-                        <div class="rounded-xl p-5 mb-4" style="background: rgba(168, 85, 247, 0.08); border: 1px solid rgba(168, 85, 247, 0.3);">
-                            <p class="font-black mb-2 flex items-center gap-2" style="color: #C4B5FD;">
-                                <i class="fas fa-robot"></i>
-                                Dados de Configuração dos Bots:
-                            </p>
-                            <ul class="list-disc pl-6 space-y-1 text-sm">
-                                <li>Token da API do Telegram</li>
-                                <li>Configurações de pagamento (chaves de API de gateways)</li>
-                                <li>Mensagens personalizadas e conteúdo dos bots</li>
-                                <li>Configurações de grupos e canais do Telegram</li>
-                            </ul>
-                        </div>
-
-                        <div class="rounded-xl p-5" style="background: rgba(34, 197, 94, 0.08); border: 1px solid rgba(34, 197, 94, 0.3);">
-                            <p class="font-black mb-2 flex items-center gap-2" style="color: #6EE7B7;">
-                                <i class="fas fa-credit-card"></i>
-                                Dados de Transações:
-                            </p>
-                            <ul class="list-disc pl-6 space-y-1 text-sm">
-                                <li>Histórico de vendas processadas</li>
-                                <li>Valores recebidos e taxas cobradas</li>
-                                <li>IDs de transações e comprovantes</li>
-                            </ul>
-                        </div>
-                    </div>
-
-                    <div>
-                        <h3 class="text-xl font-black mb-3" style="color: #FCD34D;">2.4 Dados que NÃO Coletamos</h3>
-                        <div class="rounded-xl p-5" style="background: rgba(239, 68, 68, 0.12); border-left: 4px solid #EF4444;">
-                            <p class="font-black mb-2 flex items-center gap-2" style="color: #FCA5A5;">
-                                <i class="fas fa-ban"></i>
-                                O grimbots NÃO coleta, armazena ou tem acesso a:
-                            </p>
-                            <ul class="list-disc pl-6 space-y-1 text-sm">
-                                <li>Conteúdo das mensagens privadas trocadas entre seus bots e usuários finais (apenas metadados)</li>
-                                <li>Números de cartão de crédito completos (processados diretamente pelos gateways)</li>
-                                <li>Dados sensíveis como origem racial, opinião política, dados de saúde ou orientação sexual</li>
-                                <li>Conversas privadas nos grupos e canais gerenciados por seus bots</li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Section 6 - Direitos LGPD (destaque) -->
-            <section id="secao6" class="rounded-2xl shadow-2xl p-8 legal-section" style="background: linear-gradient(135deg, rgba(245,158,11,0.15), rgba(217,119,6,0.08)); border: 2px solid #F59E0B;">
-                <h2 class="text-2xl font-black mb-4 flex items-center gap-3" style="color: #FDE68A;">
-                    <span class="rounded-full w-10 h-10 flex items-center justify-center text-lg font-black" style="background: #FDE68A; color: #1C1917;">6</span>
-                    Direitos do Titular (LGPD)
-                </h2>
-                <div class="space-y-6">
-                    <div class="rounded-xl p-6 shadow-xl" style="background: #1F2937;">
-                        <h3 class="text-xl font-black mb-4" style="color: #FCD34D;">6.1 Seus Direitos</h3>
-                        <p class="mb-4" style="color: #E5E7EB;">Conforme o Art. 18 da LGPD, você tem direito a:</p>
-                        
-                        <div class="grid md:grid-cols-2 gap-4">
-                            <div class="rounded-xl p-4" style="background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.3);">
-                                <p class="font-black mb-2 flex items-center gap-2" style="color: #FCD34D;">
-                                    <i class="fas fa-check"></i>
-                                    Confirmação e Acesso
-                                </p>
-                                <ul class="text-sm space-y-1" style="color: #E5E7EB;">
-                                    <li>• Confirmar se tratamos seus dados</li>
-                                    <li>• Acessar seus dados armazenados</li>
-                                </ul>
-                            </div>
-
-                            <div class="rounded-xl p-4" style="background: rgba(59, 130, 246, 0.12); border: 1px solid rgba(59, 130, 246, 0.3);">
-                                <p class="font-black mb-2 flex items-center gap-2" style="color: #93C5FD;">
-                                    <i class="fas fa-edit"></i>
-                                    Correção e Atualização
-                                </p>
-                                <ul class="text-sm space-y-1" style="color: #E5E7EB;">
-                                    <li>• Corrigir dados incompletos</li>
-                                    <li>• Atualizar dados inexatos</li>
-                                </ul>
-                            </div>
-
-                            <div class="rounded-xl p-4" style="background: rgba(34, 197, 94, 0.12); border: 1px solid rgba(34, 197, 94, 0.3);">
-                                <p class="font-black mb-2 flex items-center gap-2" style="color: #6EE7B7;">
-                                    <i class="fas fa-exchange-alt"></i>
-                                    Portabilidade
-                                </p>
-                                <ul class="text-sm space-y-1" style="color: #E5E7EB;">
-                                    <li>• Receber dados em formato estruturado</li>
-                                    <li>• Transferir para outro fornecedor</li>
-                                </ul>
-                            </div>
-
-                            <div class="rounded-xl p-4" style="background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.3);">
-                                <p class="font-black mb-2 flex items-center gap-2" style="color: #FCA5A5;">
-                                    <i class="fas fa-trash"></i>
-                                    Eliminação
-                                </p>
-                                <ul class="text-sm space-y-1" style="color: #E5E7EB;">
-                                    <li>• Solicitar exclusão de dados</li>
-                                    <li>• Direito ao "esquecimento"</li>
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="rounded-xl p-6" style="background: linear-gradient(135deg, #F59E0B, #D97706); color: #1C1917;">
-                        <h3 class="text-xl font-black mb-4">6.2 Como Exercer Seus Direitos</h3>
-                        <div class="space-y-3">
-                            <p class="flex items-start gap-2 font-semibold">
-                                <span class="font-black">1️⃣</span>
-                                <span>Acesse <strong>Configurações → Privacidade</strong> no painel da plataforma</span>
-                            </p>
-                            <p class="flex items-start gap-2 font-semibold">
-                                <span class="font-black">2️⃣</span>
-                                <span>Ou envie e-mail para: <strong class="px-2 py-1 rounded" style="background: rgba(255, 255, 255, 0.3);">privacidade@grimbots.com</strong></span>
-                            </p>
-                            <p class="flex items-start gap-2 font-semibold">
-                                <span class="font-black">3️⃣</span>
-                                <span>Identifique-se adequadamente para proteção de seus dados</span>
-                            </p>
-                            <p class="flex items-start gap-2 font-semibold">
-                                <span class="font-black">4️⃣</span>
-                                <span>Especifique o direito que deseja exercer</span>
-                            </p>
-                        </div>
-                        <div class="mt-4 pt-4" style="border-top: 2px solid rgba(28, 25, 23, 0.3);">
-                            <p class="font-black flex items-center gap-2">
-                                <i class="fas fa-clock"></i>
-                                Prazo de Resposta: Até 15 dias corridos (conforme Art. 18, §3º da LGPD)
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Section 7 -->
-            <section id="secao7" class="rounded-2xl shadow-xl p-8 legal-section" style="background: #1F2937; border: 1px solid rgba(255, 255, 255, 0.1);">
-                <h2 class="text-2xl font-black mb-4 flex items-center gap-3" style="color: #FAFAFA;">
-                    <span class="rounded-full w-10 h-10 flex items-center justify-center text-lg font-black" style="background: linear-gradient(135deg, #F59E0B, #D97706); color: #1C1917;">7</span>
-                    Segurança dos Dados
-                </h2>
-                <div class="space-y-6" style="color: #E5E7EB;">
-                    <div>
-                        <h3 class="text-xl font-black mb-3" style="color: #FCD34D;">7.1 Medidas de Segurança</h3>
-                        
-                        <div class="grid md:grid-cols-3 gap-4">
-                            <div class="rounded-xl p-4" style="background: rgba(59, 130, 246, 0.12); border: 1px solid rgba(59, 130, 246, 0.3);">
-                                <p class="font-black mb-3 flex items-center gap-2" style="color: #93C5FD;">
-                                    <i class="fas fa-lock"></i>
-                                    Segurança Técnica
-                                </p>
-                                <ul class="text-xs space-y-2">
-                                    <li class="flex items-center gap-1"><i class="fas fa-check" style="color: #6EE7B7;"></i> Criptografia HTTPS/TLS</li>
-                                    <li class="flex items-center gap-1"><i class="fas fa-check" style="color: #6EE7B7;"></i> Hash seguro de senhas (bcrypt)</li>
-                                    <li class="flex items-center gap-1"><i class="fas fa-check" style="color: #6EE7B7;"></i> Firewalls e IDS</li>
-                                    <li class="flex items-center gap-1"><i class="fas fa-check" style="color: #6EE7B7;"></i> Backups regulares</li>
-                                    <li class="flex items-center gap-1"><i class="fas fa-check" style="color: #6EE7B7;"></i> Isolamento de ambientes</li>
-                                    <li class="flex items-center gap-1"><i class="fas fa-check" style="color: #6EE7B7;"></i> Atualizações de segurança</li>
-                                </ul>
-                            </div>
-
-                            <div class="rounded-xl p-4" style="background: rgba(34, 197, 94, 0.12); border: 1px solid rgba(34, 197, 94, 0.3);">
-                                <p class="font-black mb-3 flex items-center gap-2" style="color: #6EE7B7;">
-                                    <i class="fas fa-users"></i>
-                                    Segurança Organizacional
-                                </p>
-                                <ul class="text-xs space-y-2">
-                                    <li class="flex items-center gap-1"><i class="fas fa-check" style="color: #6EE7B7;"></i> Acesso restrito autorizado</li>
-                                    <li class="flex items-center gap-1"><i class="fas fa-check" style="color: #6EE7B7;"></i> Treinamento de equipe</li>
-                                    <li class="flex items-center gap-1"><i class="fas fa-check" style="color: #6EE7B7;"></i> Políticas internas</li>
-                                    <li class="flex items-center gap-1"><i class="fas fa-check" style="color: #6EE7B7;"></i> Monitoramento de logs</li>
-                                    <li class="flex items-center gap-1"><i class="fas fa-check" style="color: #6EE7B7;"></i> Auditorias periódicas</li>
-                                </ul>
-                            </div>
-
-                            <div class="rounded-xl p-4" style="background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.3);">
-                                <p class="font-black mb-3 flex items-center gap-2" style="color: #FCA5A5;">
-                                    <i class="fas fa-exclamation-triangle"></i>
-                                    Resposta a Incidentes
-                                </p>
-                                <ul class="text-xs space-y-2">
-                                    <li class="flex items-center gap-1"><i class="fas fa-check" style="color: #6EE7B7;"></i> Plano de resposta</li>
-                                    <li class="flex items-center gap-1"><i class="fas fa-check" style="color: #6EE7B7;"></i> Notificação à ANPD</li>
-                                    <li class="flex items-center gap-1"><i class="fas fa-check" style="color: #6EE7B7;"></i> Comunicação aos titulares</li>
-                                    <li class="flex items-center gap-1"><i class="fas fa-check" style="color: #6EE7B7;"></i> Conformidade Art. 48 LGPD</li>
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div>
-                        <h3 class="text-xl font-black mb-3" style="color: #FCD34D;">7.2 Suas Responsabilidades</h3>
-                        <div class="highlight-box rounded-xl p-5">
-                            <p class="font-black mb-2 flex items-center gap-2" style="color: #FCA5A5;">
-                                <i class="fas fa-exclamation-circle"></i>
-                                Você também é responsável por:
-                            </p>
-                            <ul class="list-disc pl-6 space-y-1 text-sm">
-                                <li>Manter suas credenciais em sigilo</li>
-                                <li>Utilizar senha forte e única</li>
-                                <li>Não compartilhar acesso à sua conta</li>
-                                <li>Notificar imediatamente sobre acessos suspeitos</li>
-                            </ul>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Section 11 - DPO -->
-            <section id="secao11" class="rounded-2xl shadow-2xl p-8 legal-section" style="background: linear-gradient(135deg, rgba(168, 85, 247, 0.15), rgba(147, 51, 234, 0.08)); border: 2px solid #A855F7;">
-                <h2 class="text-2xl font-black mb-4 flex items-center gap-3" style="color: #E9D5FF;">
-                    <span class="rounded-full w-10 h-10 flex items-center justify-center text-lg font-black" style="background: #C4B5FD; color: #1C1917;">11</span>
-                    Encarregado de Proteção de Dados (DPO)
-                </h2>
-                <div class="space-y-4" style="color: #E5E7EB;">
-                    <p>Conforme o Art. 41 da LGPD, o grimbots designou um Encarregado de Proteção de Dados (Data Protection Officer - DPO).</p>
-                    
-                    <div class="rounded-xl p-6 mt-4" style="background: rgba(255, 255, 255, 0.08); backdrop-filter: blur(10px);">
-                        <h3 class="text-xl font-black mb-4 flex items-center gap-2" style="color: #E9D5FF;">
-                            <i class="fas fa-envelope"></i>
-                            Contato do DPO:
-                        </h3>
-                        <div class="space-y-2">
-                            <p><strong>E-mail:</strong> <span class="px-3 py-1 rounded font-mono" style="background: rgba(196, 181, 253, 0.2);">dpo@grimbots.com</span></p>
-                            <p><strong>Assunto sugerido:</strong> "LGPD - [Descreva sua solicitação]"</p>
-                        </div>
-                    </div>
-
-                    <div class="mt-6">
-                        <p class="font-black mb-2" style="color: #C4B5FD;">O DPO é responsável por:</p>
-                        <ul class="space-y-2">
-                            <li class="flex items-center gap-2"><i class="fas fa-check" style="color: #6EE7B7;"></i> Receber e tratar solicitações de titulares</li>
-                            <li class="flex items-center gap-2"><i class="fas fa-check" style="color: #6EE7B7;"></i> Orientar colaboradores sobre práticas de proteção de dados</li>
-                            <li class="flex items-center gap-2"><i class="fas fa-check" style="color: #6EE7B7;"></i> Comunicar-se com a Autoridade Nacional de Proteção de Dados (ANPD)</li>
-                        </ul>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Section 14 - Contact -->
-            <section id="secao14" class="rounded-2xl shadow-xl p-8 legal-section" style="background: #1F2937; border: 1px solid rgba(255, 255, 255, 0.1);">
-                <h2 class="text-2xl font-black mb-4 flex items-center gap-3" style="color: #FAFAFA;">
-                    <span class="rounded-full w-10 h-10 flex items-center justify-center text-lg font-black" style="background: linear-gradient(135deg, #F59E0B, #D97706); color: #1C1917;">14</span>
-                    Contato para Questões de Privacidade
-                </h2>
-                <div class="space-y-4" style="color: #E5E7EB;">
-                    <p>Para dúvidas, solicitações ou preocupações sobre privacidade:</p>
-                    
-                    <div class="grid md:grid-cols-2 gap-4 mt-4">
-                        <div class="rounded-xl p-5" style="background: rgba(168, 85, 247, 0.12); border: 2px solid rgba(168, 85, 247, 0.3);">
-                            <p class="font-black mb-1 flex items-center gap-2" style="color: #C4B5FD;">
-                                <i class="fas fa-envelope"></i>
-                                E-mail Geral de Privacidade
-                            </p>
-                            <p class="text-sm font-semibold" style="color: #DDD6FE;">privacidade@grimbots.com</p>
-                        </div>
-
-                        <div class="rounded-xl p-5" style="background: rgba(59, 130, 246, 0.12); border: 2px solid rgba(59, 130, 246, 0.3);">
-                            <p class="font-black mb-1 flex items-center gap-2" style="color: #93C5FD;">
-                                <i class="fas fa-user-shield"></i>
-                                E-mail do DPO
-                            </p>
-                            <p class="text-sm font-semibold" style="color: #BFDBFE;">dpo@grimbots.com</p>
-                        </div>
-
-                        <div class="rounded-xl p-5" style="background: rgba(245, 158, 11, 0.12); border: 2px solid rgba(245, 158, 11, 0.3);">
-                            <p class="font-black mb-1 flex items-center gap-2" style="color: #FCD34D;">
-                                <i class="fas fa-cog"></i>
-                                Painel da Plataforma
-                            </p>
-                            <p class="text-sm font-semibold" style="color: #FDE68A;">Configurações → Privacidade → Solicitar Dados</p>
-                        </div>
-
-                        <div class="rounded-xl p-5" style="background: rgba(34, 197, 94, 0.12); border: 2px solid rgba(34, 197, 94, 0.3);">
-                            <p class="font-black mb-1 flex items-center gap-2" style="color: #6EE7B7;">
-                                <i class="fas fa-life-ring"></i>
-                                Suporte Geral
-                            </p>
-                            <p class="text-sm font-semibold" style="color: #A7F3D0;">suporte@grimbots.com</p>
-                        </div>
-                    </div>
-
-                    <div class="rounded-xl p-4 mt-6" style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.3);">
-                        <p class="font-black mb-2 flex items-center gap-2" style="color: #FCD34D;">
-                            <i class="fas fa-clock"></i>
-                            Prazos de Resposta:
+        <div class="space-y-6 content-text">
+            <div>
+                <h3 class="content-subtitle">2.1 Dados Fornecidos Diretamente por Você</h3>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="p-5 rounded-lg" style="background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.3);">
+                        <p class="font-bold mb-3 flex items-center gap-2" style="color: #60A5FA;">
+                            <i class="fas fa-user-circle"></i>
+                            Dados de Cadastro
                         </p>
                         <ul class="text-sm space-y-1">
-                            <li>• <strong style="color: #FDE68A;">Solicitações de titulares (LGPD):</strong> até 15 dias corridos</li>
-                            <li>• <strong style="color: #FDE68A;">Dúvidas gerais:</strong> até 5 dias úteis</li>
+                            <li>• Nome completo</li>
+                            <li>• E-mail</li>
+                            <li>• Senha (criptografada)</li>
+                            <li>• Telefone (opcional)</li>
+                            <li>• CPF/CNPJ (quando necessário)</li>
+                        </ul>
+                    </div>
+
+                    <div class="p-5 rounded-lg" style="background: rgba(168, 85, 247, 0.08); border: 1px solid rgba(168, 85, 247, 0.3);">
+                        <p class="font-bold mb-3 flex items-center gap-2" style="color: #C4B5FD;">
+                            <i class="fas fa-robot"></i>
+                            Dados dos Bots
+                        </p>
+                        <ul class="text-sm space-y-1">
+                            <li>• Token da API do Telegram</li>
+                            <li>• Chaves de API de gateways</li>
+                            <li>• Mensagens personalizadas</li>
+                            <li>• Configurações de grupos</li>
+                        </ul>
+                    </div>
+
+                    <div class="p-5 rounded-lg" style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3);">
+                        <p class="font-bold mb-3 flex items-center gap-2" style="color: #6EE7B7;">
+                            <i class="fas fa-credit-card"></i>
+                            Dados de Transações
+                        </p>
+                        <ul class="text-sm space-y-1">
+                            <li>• Histórico de vendas</li>
+                            <li>• Valores e taxas</li>
+                            <li>• IDs de transações</li>
+                            <li>• Comprovantes</li>
                         </ul>
                     </div>
                 </div>
-            </section>
+            </div>
 
-            <!-- ANPD Contact -->
-            <section class="rounded-2xl shadow-2xl p-6" style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(234, 88, 12, 0.10)); border: 2px solid #F59E0B;">
-                <h3 class="text-xl font-black mb-3 flex items-center gap-2" style="color: #FDE68A;">
-                    <i class="fas fa-balance-scale"></i>
-                    Autoridade de Fiscalização
-                </h3>
-                <p class="mb-4" style="color: #E5E7EB;">Em caso de problemas não resolvidos, você pode contatar a <strong style="color: #FDE68A;">Autoridade Nacional de Proteção de Dados (ANPD)</strong>:</p>
-                <div class="rounded-xl p-4 space-y-2 text-sm" style="background: rgba(255, 255, 255, 0.08);">
-                    <p><strong style="color: #FCD34D;">Website:</strong> https://www.gov.br/anpd/pt-br</p>
-                    <p><strong style="color: #FCD34D;">Endereço:</strong> SAS Quadra 06, Conjunto A, Bloco A - Brasília/DF</p>
-                    <p><strong style="color: #FCD34D;">Ouvidoria ANPD:</strong> Disponível no website oficial</p>
+            <div>
+                <h3 class="content-subtitle">2.4 Dados que NÃO Coletamos</h3>
+                <div class="warning-box">
+                    <p class="font-bold mb-2 flex items-center gap-2" style="color: #EF4444;">
+                        <i class="fas fa-ban"></i>
+                        O grimbots NÃO coleta, armazena ou tem acesso a:
+                    </p>
+                    <ul class="text-sm space-y-1">
+                        <li>• Conteúdo das mensagens privadas trocadas entre seus bots e usuários finais</li>
+                        <li>• Números de cartão de crédito completos (processados diretamente pelos gateways)</li>
+                        <li>• Dados sensíveis como origem racial, opinião política, dados de saúde ou orientação sexual</li>
+                        <li>• Conversas privadas nos grupos e canais gerenciados por seus bots</li>
+                    </ul>
                 </div>
-            </section>
+            </div>
+        </div>
+    </section>
+
+    <!-- Seção 6: Direitos LGPD (Destaque) -->
+    <section id="secao6" class="config-section legal-section" style="border: 2px solid rgba(255, 184, 0, 0.3);">
+        <div class="config-section-header">
+            <div class="section-number">6</div>
+            <div>
+                <div class="config-section-title" style="color: #FFB800;">Direitos do Titular (LGPD)</div>
+                <div class="config-section-description">Seus direitos garantidos por lei</div>
+            </div>
         </div>
 
-        <!-- Footer -->
-        <footer class="mt-12 pb-8 text-center">
-            <div class="rounded-2xl p-8" style="background: linear-gradient(135deg, #1F2937, #111827); border: 2px solid rgba(245, 158, 11, 0.3);">
-                <div class="flex items-center justify-center gap-3 mb-3">
-                    <i class="fas fa-robot text-2xl" style="color: #FCD34D;"></i>
-                    <p class="font-black text-2xl" style="color: #FDE68A;">grimbots</p>
-                </div>
-                <p class="text-sm mb-3" style="color: #9CA3AF;">Todos os direitos reservados</p>
-                <p class="text-xs" style="color: #6B7280;">Esta Política de Privacidade foi elaborada em conformidade com a<br><strong>Lei Geral de Proteção de Dados (LGPD - Lei nº 13.709/2018)</strong><br>e demais legislações brasileiras aplicáveis à proteção de dados pessoais.</p>
-            </div>
-        </footer>
-    </main>
+        <div class="space-y-6">
+            <div>
+                <h3 class="content-subtitle">6.1 Seus Direitos</h3>
+                <p class="mb-4 content-text">Conforme o Art. 18 da LGPD, você tem direito a:</p>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="p-4 rounded-lg" style="background: rgba(255, 184, 0, 0.08); border: 1px solid rgba(255, 184, 0, 0.3);">
+                        <p class="font-bold mb-2 flex items-center gap-2" style="color: #FFB800;">
+                            <i class="fas fa-check"></i>
+                            Confirmação e Acesso
+                        </p>
+                        <ul class="text-sm space-y-1 content-text">
+                            <li>• Confirmar se tratamos seus dados</li>
+                            <li>• Acessar seus dados armazenados</li>
+                        </ul>
+                    </div>
 
-    <!-- Back to top button -->
-    <button onclick="window.scrollTo({top: 0, behavior: 'smooth'})" 
-            class="fixed bottom-8 right-8 rounded-full p-4 shadow-2xl transition-all duration-300 hover:scale-110"
-            style="background: linear-gradient(135deg, #F59E0B, #D97706);">
-        <svg class="w-6 h-6" fill="none" stroke="#1C1917" viewBox="0 0 24 24" stroke-width="3">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
-        </svg>
-    </button>
-</body>
-</html>
+                    <div class="p-4 rounded-lg" style="background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.3);">
+                        <p class="font-bold mb-2 flex items-center gap-2" style="color: #60A5FA;">
+                            <i class="fas fa-edit"></i>
+                            Correção e Atualização
+                        </p>
+                        <ul class="text-sm space-y-1 content-text">
+                            <li>• Corrigir dados incompletos</li>
+                            <li>• Atualizar dados inexatos</li>
+                        </ul>
+                    </div>
+
+                    <div class="p-4 rounded-lg" style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3);">
+                        <p class="font-bold mb-2 flex items-center gap-2" style="color: #6EE7B7;">
+                            <i class="fas fa-exchange-alt"></i>
+                            Portabilidade
+                        </p>
+                        <ul class="text-sm space-y-1 content-text">
+                            <li>• Receber dados em formato estruturado</li>
+                            <li>• Transferir para outro fornecedor</li>
+                        </ul>
+                    </div>
+
+                    <div class="p-4 rounded-lg" style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.3);">
+                        <p class="font-bold mb-2 flex items-center gap-2" style="color: #EF4444;">
+                            <i class="fas fa-trash"></i>
+                            Eliminação
+                        </p>
+                        <ul class="text-sm space-y-1 content-text">
+                            <li>• Solicitar exclusão de dados</li>
+                            <li>• Direito ao "esquecimento"</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-6 rounded-lg" style="background: rgba(255, 184, 0, 0.15); border: 2px solid rgba(255, 184, 0, 0.3);">
+                <h3 class="content-subtitle">6.2 Como Exercer Seus Direitos</h3>
+                <div class="space-y-3 content-text">
+                    <p class="flex items-start gap-2">
+                        <span class="font-bold" style="color: #FFB800;">1.</span>
+                        <span>Acesse <strong>Configurações → Privacidade</strong> no painel da plataforma</span>
+                    </p>
+                    <p class="flex items-start gap-2">
+                        <span class="font-bold" style="color: #FFB800;">2.</span>
+                        <span>Ou envie e-mail para: <strong style="color: #FFB800;">privacidade@grimbots.com</strong></span>
+                    </p>
+                    <p class="flex items-start gap-2">
+                        <span class="font-bold" style="color: #FFB800;">3.</span>
+                        <span>Identifique-se adequadamente para proteção de seus dados</span>
+                    </p>
+                    <p class="flex items-start gap-2">
+                        <span class="font-bold" style="color: #FFB800;">4.</span>
+                        <span>Especifique o direito que deseja exercer</span>
+                    </p>
+                </div>
+                <div class="mt-4 pt-4" style="border-top: 2px solid rgba(255, 184, 0, 0.3);">
+                    <p class="font-bold flex items-center gap-2" style="color: #FFB800;">
+                        <i class="fas fa-clock"></i>
+                        Prazo de Resposta: Até 15 dias corridos (conforme Art. 18, §3º da LGPD)
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Seção 7: Segurança -->
+    <section id="secao7" class="config-section legal-section">
+        <div class="config-section-header">
+            <div class="section-number">7</div>
+            <div>
+                <div class="config-section-title">Segurança dos Dados</div>
+                <div class="config-section-description">Como protegemos suas informações</div>
+            </div>
+        </div>
+
+        <div class="space-y-6">
+            <div>
+                <h3 class="content-subtitle">7.1 Medidas de Segurança</h3>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="p-4 rounded-lg" style="background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.3);">
+                        <p class="font-bold mb-3 flex items-center gap-2" style="color: #60A5FA;">
+                            <i class="fas fa-lock"></i>
+                            Segurança Técnica
+                        </p>
+                        <ul class="text-xs space-y-2 content-text">
+                            <li class="flex items-center gap-1"><i class="fas fa-check" style="color: #6EE7B7;"></i> Criptografia HTTPS/TLS</li>
+                            <li class="flex items-center gap-1"><i class="fas fa-check" style="color: #6EE7B7;"></i> Hash seguro de senhas</li>
+                            <li class="flex items-center gap-1"><i class="fas fa-check" style="color: #6EE7B7;"></i> Firewalls e IDS</li>
+                            <li class="flex items-center gap-1"><i class="fas fa-check" style="color: #6EE7B7;"></i> Backups regulares</li>
+                        </ul>
+                    </div>
+
+                    <div class="p-4 rounded-lg" style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3);">
+                        <p class="font-bold mb-3 flex items-center gap-2" style="color: #6EE7B7;">
+                            <i class="fas fa-users"></i>
+                            Segurança Organizacional
+                        </p>
+                        <ul class="text-xs space-y-2 content-text">
+                            <li class="flex items-center gap-1"><i class="fas fa-check" style="color: #6EE7B7;"></i> Acesso restrito autorizado</li>
+                            <li class="flex items-center gap-1"><i class="fas fa-check" style="color: #6EE7B7;"></i> Treinamento de equipe</li>
+                            <li class="flex items-center gap-1"><i class="fas fa-check" style="color: #6EE7B7;"></i> Políticas internas</li>
+                            <li class="flex items-center gap-1"><i class="fas fa-check" style="color: #6EE7B7;"></i> Auditorias periódicas</li>
+                        </ul>
+                    </div>
+
+                    <div class="p-4 rounded-lg" style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.3);">
+                        <p class="font-bold mb-3 flex items-center gap-2" style="color: #EF4444;">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            Resposta a Incidentes
+                        </p>
+                        <ul class="text-xs space-y-2 content-text">
+                            <li class="flex items-center gap-1"><i class="fas fa-check" style="color: #6EE7B7;"></i> Plano de resposta</li>
+                            <li class="flex items-center gap-1"><i class="fas fa-check" style="color: #6EE7B7;"></i> Notificação à ANPD</li>
+                            <li class="flex items-center gap-1"><i class="fas fa-check" style="color: #6EE7B7;"></i> Comunicação aos titulares</li>
+                            <li class="flex items-center gap-1"><i class="fas fa-check" style="color: #6EE7B7;"></i> Conformidade LGPD</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div>
+                <h3 class="content-subtitle">7.2 Suas Responsabilidades</h3>
+                <div class="highlight-box">
+                    <p class="font-bold mb-2 flex items-center gap-2" style="color: #FFB800;">
+                        <i class="fas fa-exclamation-circle"></i>
+                        Você também é responsável por:
+                    </p>
+                    <ul class="text-sm space-y-1 content-text">
+                        <li>• Manter suas credenciais em sigilo</li>
+                        <li>• Utilizar senha forte e única</li>
+                        <li>• Não compartilhar acesso à sua conta</li>
+                        <li>• Notificar imediatamente sobre acessos suspeitos</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Seção 11: DPO -->
+    <section id="secao11" class="config-section legal-section" style="border: 2px solid rgba(168, 85, 247, 0.3);">
+        <div class="config-section-header">
+            <div class="section-number" style="background: linear-gradient(135deg, #A855F7, #9333EA);">11</div>
+            <div>
+                <div class="config-section-title" style="color: #C4B5FD;">Encarregado de Proteção de Dados (DPO)</div>
+                <div class="config-section-description">Conforme Art. 41 da LGPD</div>
+            </div>
+        </div>
+
+        <div class="space-y-4 content-text">
+            <p>Conforme o Art. 41 da LGPD, o grimbots designou um Encarregado de Proteção de Dados (Data Protection Officer - DPO).</p>
+            
+            <div class="p-6 rounded-lg" style="background: rgba(168, 85, 247, 0.1); border: 2px solid rgba(168, 85, 247, 0.3);">
+                <h3 class="font-bold mb-4 flex items-center gap-2" style="color: #C4B5FD;">
+                    <i class="fas fa-envelope"></i>
+                    Contato do DPO:
+                </h3>
+                <div class="space-y-2">
+                    <p><strong>E-mail:</strong> <span class="px-3 py-1 rounded font-mono" style="background: rgba(196, 181, 253, 0.2); color: #C4B5FD;">dpo@grimbots.com</span></p>
+                    <p><strong>Assunto sugerido:</strong> "LGPD - [Descreva sua solicitação]"</p>
+                </div>
+            </div>
+
+            <div class="mt-6">
+                <p class="font-bold mb-2" style="color: #C4B5FD;">O DPO é responsável por:</p>
+                <ul class="space-y-2">
+                    <li class="flex items-center gap-2"><i class="fas fa-check" style="color: #6EE7B7;"></i> Receber e tratar solicitações de titulares</li>
+                    <li class="flex items-center gap-2"><i class="fas fa-check" style="color: #6EE7B7;"></i> Orientar colaboradores sobre práticas de proteção de dados</li>
+                    <li class="flex items-center gap-2"><i class="fas fa-check" style="color: #6EE7B7;"></i> Comunicar-se com a Autoridade Nacional de Proteção de Dados (ANPD)</li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <!-- Seção 14: Contato -->
+    <section id="secao14" class="config-section legal-section">
+        <div class="config-section-header">
+            <div class="section-number">14</div>
+            <div>
+                <div class="config-section-title">Contato para Questões de Privacidade</div>
+                <div class="config-section-description">Canais de atendimento</div>
+            </div>
+        </div>
+
+        <div class="space-y-4 content-text">
+            <p>Para dúvidas, solicitações ou preocupações sobre privacidade:</p>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                <div class="p-5 rounded-lg" style="background: rgba(168, 85, 247, 0.08); border: 1px solid rgba(168, 85, 247, 0.3);">
+                    <p class="font-bold mb-2 flex items-center gap-2" style="color: #C4B5FD;">
+                        <i class="fas fa-envelope"></i>
+                        E-mail Geral de Privacidade
+                    </p>
+                    <p style="color: #E5E7EB;">privacidade@grimbots.com</p>
+                </div>
+
+                <div class="p-5 rounded-lg" style="background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.3);">
+                    <p class="font-bold mb-2 flex items-center gap-2" style="color: #60A5FA;">
+                        <i class="fas fa-user-shield"></i>
+                        E-mail do DPO
+                    </p>
+                    <p style="color: #E5E7EB;">dpo@grimbots.com</p>
+                </div>
+
+                <div class="p-5 rounded-lg" style="background: rgba(255, 184, 0, 0.08); border: 1px solid rgba(255, 184, 0, 0.3);">
+                    <p class="font-bold mb-2 flex items-center gap-2" style="color: #FFB800;">
+                        <i class="fas fa-cog"></i>
+                        Painel da Plataforma
+                    </p>
+                    <p style="color: #E5E7EB;">Configurações → Privacidade</p>
+                </div>
+
+                <div class="p-5 rounded-lg" style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3);">
+                    <p class="font-bold mb-2 flex items-center gap-2" style="color: #6EE7B7;">
+                        <i class="fas fa-life-ring"></i>
+                        Suporte Geral
+                    </p>
+                    <p style="color: #E5E7EB;">suporte@grimbots.com</p>
+                </div>
+            </div>
+
+            <div class="p-4 rounded-lg mt-6" style="background: rgba(255, 184, 0, 0.08); border: 1px solid rgba(255, 184, 0, 0.3);">
+                <p class="font-bold mb-2 flex items-center gap-2" style="color: #FFB800;">
+                    <i class="fas fa-clock"></i>
+                    Prazos de Resposta:
+                </p>
+                <ul class="text-sm space-y-1">
+                    <li>• <strong style="color: #FFB800;">Solicitações de titulares (LGPD):</strong> até 15 dias corridos</li>
+                    <li>• <strong style="color: #FFB800;">Dúvidas gerais:</strong> até 5 dias úteis</li>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <!-- ANPD -->
+    <section class="config-section" style="border: 2px solid rgba(255, 184, 0, 0.3);">
+        <h3 class="font-bold mb-3 flex items-center gap-2 text-xl" style="color: #FFB800;">
+            <i class="fas fa-balance-scale"></i>
+            Autoridade de Fiscalização
+        </h3>
+        <p class="mb-4 content-text">Em caso de problemas não resolvidos, você pode contatar a <strong style="color: #FFB800;">Autoridade Nacional de Proteção de Dados (ANPD)</strong>:</p>
+        <div class="p-4 rounded-lg space-y-2 text-sm content-text" style="background: rgba(255, 184, 0, 0.08);">
+            <p><strong style="color: #FFB800;">Website:</strong> https://www.gov.br/anpd/pt-br</p>
+            <p><strong style="color: #FFB800;">Endereço:</strong> SAS Quadra 06, Conjunto A, Bloco A - Brasília/DF</p>
+            <p><strong style="color: #FFB800;">Ouvidoria ANPD:</strong> Disponível no website oficial</p>
+        </div>
+    </section>
+
+    <!-- Footer da Página -->
+    <div class="config-section mt-8">
+        <div class="text-center py-6">
+            <div class="flex items-center justify-center gap-3 mb-3">
+                <i class="fas fa-robot text-2xl" style="color: #FFB800;"></i>
+                <p class="font-black text-2xl" style="color: #FFB800;">grimbots</p>
+            </div>
+            <p class="text-sm mb-3 text-gray-400">Todos os direitos reservados</p>
+            <p class="text-xs text-gray-500">Esta Política de Privacidade foi elaborada em conformidade com a<br><strong>Lei Geral de Proteção de Dados (LGPD - Lei nº 13.709/2018)</strong></p>
+        </div>
+    </div>
+
+</div>
+
+<!-- Back to Top Button -->
+<div class="back-to-top" onclick="window.scrollTo({top: 0, behavior: 'smooth'})">
+    <svg class="w-6 h-6" fill="none" stroke="#111827" viewBox="0 0 24 24" stroke-width="3">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18"/>
+    </svg>
+</div>
+{% endblock %}
