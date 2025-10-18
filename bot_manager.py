@@ -483,6 +483,8 @@ class BotManager:
             welcome_message = config.get('welcome_message', 'Olá! Bem-vindo!')
             welcome_media_url = config.get('welcome_media_url')
             welcome_media_type = config.get('welcome_media_type', 'video')
+            welcome_audio_enabled = config.get('welcome_audio_enabled', False)
+            welcome_audio_url = config.get('welcome_audio_url', '')
             main_buttons = config.get('main_buttons', [])
             redirect_buttons = config.get('redirect_buttons', [])
             
@@ -545,6 +547,22 @@ class BotManager:
             
             if result:
                 logger.info(f"✅ Mensagem /start enviada com {len(buttons)} botão(ões)")
+                
+                # ✅ Enviar áudio adicional se habilitado
+                if welcome_audio_enabled and welcome_audio_url:
+                    logger.info(f"🎤 Enviando áudio complementar...")
+                    audio_result = self.send_telegram_message(
+                        token=token,
+                        chat_id=str(chat_id),
+                        message="",  # Sem caption
+                        media_url=welcome_audio_url,
+                        media_type='audio',
+                        buttons=None  # Sem botões no áudio
+                    )
+                    if audio_result:
+                        logger.info(f"✅ Áudio complementar enviado")
+                    else:
+                        logger.warning(f"⚠️ Falha ao enviar áudio complementar")
             else:
                 logger.error(f"❌ Falha ao enviar mensagem")
             
@@ -1314,6 +1332,8 @@ Seu pagamento ainda não foi confirmado.
             bump_description = order_bump.get('description', 'Bônus')
             bump_media_url = order_bump.get('media_url')
             bump_media_type = order_bump.get('media_type', 'video')
+            bump_audio_enabled = order_bump.get('audio_enabled', False)
+            bump_audio_url = order_bump.get('audio_url', '')
             accept_text = order_bump.get('accept_text', '')
             decline_text = order_bump.get('decline_text', '')
             total_price = original_price + bump_price
@@ -1370,6 +1390,20 @@ Seu pagamento ainda não foi confirmado.
                 )
             
             logger.info(f"✅ Order Bump exibido!")
+            
+            # ✅ Enviar áudio adicional se habilitado
+            if bump_audio_enabled and bump_audio_url:
+                logger.info(f"🎤 Enviando áudio complementar do Order Bump...")
+                audio_result = self.send_telegram_message(
+                    token=token,
+                    chat_id=str(chat_id),
+                    message="",
+                    media_url=bump_audio_url,
+                    media_type='audio',
+                    buttons=None
+                )
+                if audio_result:
+                    logger.info(f"✅ Áudio complementar do Order Bump enviado")
             
         except Exception as e:
             logger.error(f"❌ Erro ao exibir order bump: {e}")
@@ -2270,6 +2304,8 @@ Seu pagamento ainda não foi confirmado.
             message = downsell.get('message', '')
             media_url = downsell.get('media_url', '')
             media_type = downsell.get('media_type', 'video')
+            audio_enabled = downsell.get('audio_enabled', False)
+            audio_url = downsell.get('audio_url', '')
             
             # ✅ NOVO: Calcular preço baseado no modo (fixo ou percentual)
             pricing_mode = downsell.get('pricing_mode', 'fixed')
@@ -2352,6 +2388,20 @@ Seu pagamento ainda não foi confirmado.
                 )
             
             logger.info(f"✅ Downsell {index+1} enviado com sucesso!")
+            
+            # ✅ Enviar áudio adicional se habilitado
+            if audio_enabled and audio_url:
+                logger.info(f"🎤 Enviando áudio complementar do Downsell {index+1}...")
+                audio_result = self.send_telegram_message(
+                    token=token,
+                    chat_id=str(chat_id),
+                    message="",
+                    media_url=audio_url,
+                    media_type='audio',
+                    buttons=None
+                )
+                if audio_result:
+                    logger.info(f"✅ Áudio complementar do Downsell {index+1} enviado")
             
         except Exception as e:
             logger.error(f"❌ Erro ao enviar downsell {index+1}: {e}")
@@ -2581,6 +2631,18 @@ Seu pagamento ainda não foi confirmado.
                             
                             if result:
                                 campaign.total_sent += 1
+                                
+                                # ✅ Enviar áudio adicional se habilitado
+                                if campaign.audio_enabled and campaign.audio_url:
+                                    logger.info(f"🎤 Enviando áudio complementar para {lead.first_name}...")
+                                    audio_result = self.send_telegram_message(
+                                        token=bot_token,
+                                        chat_id=lead.telegram_user_id,
+                                        message="",
+                                        media_url=campaign.audio_url,
+                                        media_type='audio',
+                                        buttons=None
+                                    )
                             else:
                                 campaign.total_failed += 1
                                 

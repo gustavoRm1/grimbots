@@ -235,10 +235,13 @@ class BotConfig(db.Model):
     welcome_message = db.Column(db.Text)
     welcome_media_url = db.Column(db.String(500))  # Link do Telegram
     welcome_media_type = db.Column(db.String(20), default='video')  # video, photo
+    welcome_audio_enabled = db.Column(db.Boolean, default=False)  # ✅ Áudio complementar
+    welcome_audio_url = db.Column(db.String(500))  # ✅ URL do áudio adicional
     
     # Botões principais (JSON) - CADA BOTÃO TEM SEU ORDER BUMP
     # [{"text": "...", "price": 19.97, "description": "...", 
-    #   "order_bump": {"enabled": true, "message": "...", "price": 5, "description": "..."}}]
+    #   "order_bump": {"enabled": true, "message": "...", "price": 5, "description": "...", 
+    #                   "audio_enabled": false, "audio_url": ""}}]
     main_buttons = db.Column(db.Text)
     
     # Botões de redirecionamento (JSON) - SEM PAGAMENTO
@@ -810,6 +813,8 @@ class RemarketingCampaign(db.Model):
     message = db.Column(db.Text, nullable=False)
     media_url = db.Column(db.String(500))
     media_type = db.Column(db.String(20))  # photo, video
+    audio_enabled = db.Column(db.Boolean, default=False)  # ✅ Áudio complementar
+    audio_url = db.Column(db.String(500))  # ✅ URL do áudio adicional
     buttons = db.Column(db.JSON)  # [{text, url/callback_data}]
     
     # Segmentação

@@ -13,7 +13,9 @@
              gateway_type: 'pushynpay',
              welcome_message: '',
              welcome_media_url: '',
-             welcome_media_type: 'video'
+             welcome_media_type: 'video',
+             welcome_audio_enabled: false,
+             welcome_audio_url: ''
          },
          loading: false,
          
@@ -299,8 +301,8 @@ Escolha uma opção abaixo para começar:"></textarea>
                 </div>
                 
                 <div>
-                    <label class="block text-sm font-bold text-txt-primary mb-2">Tipo de Mídia</label>
-                    <div class="grid grid-cols-3 gap-4">
+                    <label class="block text-sm font-bold text-txt-primary mb-2">Tipo de Mídia Principal</label>
+                    <div class="grid grid-cols-2 gap-4">
                         <label class="cursor-pointer">
                             <input type="radio" x-model="formData.welcome_media_type" value="photo" class="hidden peer">
                             <div class="border-2 border-white border-opacity-10 rounded-lg p-4 text-center peer-checked:border-trust-500 peer-checked:bg-blue-50 hover:border-trust-300 transition-all">
@@ -315,13 +317,28 @@ Escolha uma opção abaixo para começar:"></textarea>
                                 <p class="font-bold text-txt-primary">Vídeo</p>
                             </div>
                         </label>
-                        <label class="cursor-pointer">
-                            <input type="radio" x-model="formData.welcome_media_type" value="audio" class="hidden peer">
-                            <div class="border-2 border-white border-opacity-10 rounded-lg p-4 text-center peer-checked:border-trust-500 peer-checked:bg-blue-50 hover:border-trust-300 transition-all">
-                                <i class="fas fa-microphone text-3xl text-txt-primary mb-2"></i>
-                                <p class="font-bold text-txt-primary">Áudio</p>
-                            </div>
-                        </label>
+                    </div>
+                </div>
+
+                <div class="p-4 rounded-lg" style="background: rgba(168, 85, 247, 0.05); border: 1px solid rgba(168, 85, 247, 0.2);">
+                    <label class="flex items-center gap-3 cursor-pointer">
+                        <input type="checkbox" 
+                               x-model="formData.welcome_audio_enabled"
+                               class="w-5 h-5 bg-gray-700 border-gray-600 rounded focus:ring-purple-500"
+                               style="accent-color: #A855F7;">
+                        <div class="flex items-center gap-2">
+                            <i class="fas fa-microphone text-purple-500 text-lg"></i>
+                            <span class="text-sm font-bold text-txt-primary">Adicionar Áudio Complementar (opcional)</span>
+                        </div>
+                    </label>
+                    <div x-show="formData.welcome_audio_enabled" x-cloak class="mt-3">
+                        <input type="url" 
+                               x-model="formData.welcome_audio_url"
+                               class="w-full px-4 py-3 border-2 border-white border-opacity-10 rounded-lg focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all"
+                               placeholder="https://t.me/seucanal/audio123">
+                        <p class="mt-2 text-xs text-txt-primary opacity-70">
+                            O áudio será enviado após a mídia principal (vídeo ou foto)
+                        </p>
                     </div>
                 </div>
             </div>

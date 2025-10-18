@@ -679,9 +679,9 @@
                         <div>
                             <label class="block text-sm font-bold text-white mb-2">
                                 <i class="fas fa-image mr-2" style="color: #FFB800;"></i>
-                                Tipo de Mídia
+                                Tipo de Mídia Principal
                             </label>
-                            <div class="grid grid-cols-3 gap-3 mt-2">
+                            <div class="grid grid-cols-2 gap-3 mt-2">
                                 <label class="flex items-center gap-2 px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer transition-colors"
                                        :style="generalRemarketing.media_type === 'video' ? 'border-color: #FFB800; background: rgba(255, 184, 0, 0.1);' : ''"
                                        @mouseenter="if(generalRemarketing.media_type !== 'video') $el.style.borderColor = '#FFB800'"
@@ -698,15 +698,28 @@
                                     <i class="fas fa-camera" style="color: #FFB800;"></i>
                                     <span class="text-sm text-white">Foto</span>
                                 </label>
-                                <label class="flex items-center gap-2 px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer transition-colors"
-                                       :style="generalRemarketing.media_type === 'audio' ? 'border-color: #FFB800; background: rgba(255, 184, 0, 0.1);' : ''"
-                                       @mouseenter="if(generalRemarketing.media_type !== 'audio') $el.style.borderColor = '#FFB800'"
-                                       @mouseleave="if(generalRemarketing.media_type !== 'audio') $el.style.borderColor = '#374151'">
-                                    <input type="radio" x-model="generalRemarketing.media_type" value="audio" style="accent-color: #FFB800;">
-                                    <i class="fas fa-microphone" style="color: #FFB800;"></i>
-                                    <span class="text-sm text-white">Áudio</span>
-                                </label>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Áudio Adicional -->
+                    <div class="mb-6 p-4 rounded-xl" style="background: rgba(168, 85, 247, 0.08); border: 1px solid rgba(168, 85, 247, 0.3);">
+                        <label class="flex items-center gap-3 cursor-pointer mb-3">
+                            <input type="checkbox" 
+                                   x-model="generalRemarketing.audio_enabled"
+                                   class="w-5 h-5 bg-gray-700 border-gray-600 rounded focus:ring-purple-500"
+                                   style="accent-color: #A855F7;">
+                            <div class="flex items-center gap-2">
+                                <i class="fas fa-microphone text-purple-500 text-lg"></i>
+                                <span class="text-sm font-bold text-white">Adicionar Áudio Complementar (opcional)</span>
+                            </div>
+                        </label>
+                        <div x-show="generalRemarketing.audio_enabled" x-cloak>
+                            <input type="url" 
+                                   x-model="generalRemarketing.audio_url" 
+                                   class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                   placeholder="https://t.me/canal/audio">
+                            <p class="text-xs text-gray-500 mt-2">O áudio será enviado após a mídia principal</p>
                         </div>
                     </div>
 

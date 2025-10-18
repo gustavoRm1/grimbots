@@ -363,27 +363,39 @@
                 <div class="form-group">
                     <label class="form-label">
                         <i class="fas fa-image mr-2 text-blue-500"></i>
-                        Tipo de Mídia
+                        Tipo de Mídia Principal
                     </label>
                     <div class="flex gap-3 mt-2">
-                        <label class="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer hover:border-blue-500 transition-colors"
+                        <label class="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer hover:border-blue-500 transition-colors flex-1"
                                :class="{'border-blue-500 bg-blue-500 bg-opacity-10': config.welcome_media_type === 'video'}">
                             <input type="radio" x-model="config.welcome_media_type" value="video" class="text-blue-500">
                             <i class="fas fa-video text-blue-500"></i>
                             <span class="text-sm text-white">Vídeo</span>
                         </label>
-                        <label class="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer hover:border-blue-500 transition-colors"
+                        <label class="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer hover:border-blue-500 transition-colors flex-1"
                                :class="{'border-blue-500 bg-blue-500 bg-opacity-10': config.welcome_media_type === 'photo'}">
                             <input type="radio" x-model="config.welcome_media_type" value="photo" class="text-blue-500">
                             <i class="fas fa-camera text-blue-500"></i>
                             <span class="text-sm text-white">Foto</span>
                         </label>
-                        <label class="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer hover:border-blue-500 transition-colors"
-                               :class="{'border-blue-500 bg-blue-500 bg-opacity-10': config.welcome_media_type === 'audio'}">
-                            <input type="radio" x-model="config.welcome_media_type" value="audio" class="text-blue-500">
-                            <i class="fas fa-microphone text-blue-500"></i>
-                            <span class="text-sm text-white">Áudio</span>
-                        </label>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label flex items-center gap-2">
+                        <input type="checkbox" 
+                               x-model="config.welcome_audio_enabled"
+                               class="w-4 h-4 bg-gray-700 border-gray-600 rounded focus:ring-blue-500"
+                               style="accent-color: #3B82F6;">
+                        <i class="fas fa-microphone mr-1 text-purple-500"></i>
+                        <span>Adicionar Áudio Complementar (opcional)</span>
+                    </label>
+                    <div x-show="config.welcome_audio_enabled" x-cloak class="mt-2">
+                        <input type="url" 
+                               x-model="config.welcome_audio_url" 
+                               class="form-input"
+                               placeholder="https://t.me/canal/789">
+                        <p class="text-xs text-gray-500 mt-2">Link do áudio no Telegram (será enviado após a mídia principal)</p>
                     </div>
                 </div>
             </div>
@@ -524,27 +536,39 @@
                                     <div class="form-group">
                                         <label class="form-label">
                                             <i class="fas fa-image mr-2 text-blue-500"></i>
-                                            Tipo de Mídia
+                                            Tipo de Mídia Principal
                                         </label>
                                         <div class="flex gap-3 mt-2">
-                                            <label class="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer hover:border-blue-500 transition-colors"
+                                            <label class="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer hover:border-blue-500 transition-colors flex-1"
                                                    :class="{'border-blue-500 bg-blue-500 bg-opacity-10': button.order_bump.media_type === 'video'}">
                                                 <input type="radio" x-model="button.order_bump.media_type" value="video" class="text-blue-500">
                                                 <i class="fas fa-video text-blue-500"></i>
                                                 <span class="text-sm text-white">Vídeo</span>
                                             </label>
-                                            <label class="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer hover:border-blue-500 transition-colors"
+                                            <label class="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer hover:border-blue-500 transition-colors flex-1"
                                                    :class="{'border-blue-500 bg-blue-500 bg-opacity-10': button.order_bump.media_type === 'photo'}">
                                                 <input type="radio" x-model="button.order_bump.media_type" value="photo" class="text-blue-500">
                                                 <i class="fas fa-camera text-blue-500"></i>
                                                 <span class="text-sm text-white">Foto</span>
                                             </label>
-                                            <label class="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer hover:border-blue-500 transition-colors"
-                                                   :class="{'border-blue-500 bg-blue-500 bg-opacity-10': button.order_bump.media_type === 'audio'}">
-                                                <input type="radio" x-model="button.order_bump.media_type" value="audio" class="text-blue-500">
-                                                <i class="fas fa-microphone text-blue-500"></i>
-                                                <span class="text-sm text-white">Áudio</span>
-                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label class="form-label flex items-center gap-2">
+                                            <input type="checkbox" 
+                                                   x-model="button.order_bump.audio_enabled"
+                                                   class="w-4 h-4 bg-gray-700 border-gray-600 rounded focus:ring-purple-500"
+                                                   style="accent-color: #A855F7;">
+                                            <i class="fas fa-microphone mr-1 text-purple-500"></i>
+                                            <span>Adicionar Áudio Complementar</span>
+                                        </label>
+                                        <div x-show="button.order_bump.audio_enabled" x-cloak class="mt-2">
+                                            <input type="url" 
+                                                   x-model="button.order_bump.audio_url" 
+                                                   class="form-input"
+                                                   placeholder="https://t.me/canal/audio1">
+                                            <p class="text-xs text-gray-500 mt-2">Áudio enviado após a mídia principal</p>
                                         </div>
                                     </div>
                                 </div>
@@ -770,27 +794,39 @@
                                     <div class="form-group">
                                         <label class="form-label">
                                             <i class="fas fa-image mr-2 text-blue-500"></i>
-                                            Tipo de Mídia
+                                            Tipo de Mídia Principal
                                         </label>
                                         <div class="flex gap-3 mt-2">
-                                            <label class="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer hover:border-yellow-500 transition-colors"
+                                            <label class="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer hover:border-yellow-500 transition-colors flex-1"
                                                    :class="{'border-yellow-500 bg-yellow-500 bg-opacity-10': downsell.media_type === 'video'}">
                                                 <input type="radio" x-model="downsell.media_type" value="video" class="text-yellow-500">
                                                 <i class="fas fa-video text-yellow-500"></i>
                                                 <span class="text-sm text-white">Vídeo</span>
                                             </label>
-                                            <label class="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer hover:border-yellow-500 transition-colors"
+                                            <label class="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer hover:border-yellow-500 transition-colors flex-1"
                                                    :class="{'border-yellow-500 bg-yellow-500 bg-opacity-10': downsell.media_type === 'photo'}">
                                                 <input type="radio" x-model="downsell.media_type" value="photo" class="text-yellow-500">
                                                 <i class="fas fa-camera text-yellow-500"></i>
                                                 <span class="text-sm text-white">Foto</span>
                                             </label>
-                                            <label class="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer hover:border-yellow-500 transition-colors"
-                                                   :class="{'border-yellow-500 bg-yellow-500 bg-opacity-10': downsell.media_type === 'audio'}">
-                                                <input type="radio" x-model="downsell.media_type" value="audio" class="text-yellow-500">
-                                                <i class="fas fa-microphone text-yellow-500"></i>
-                                                <span class="text-sm text-white">Áudio</span>
-                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label class="form-label flex items-center gap-2">
+                                            <input type="checkbox" 
+                                                   x-model="downsell.audio_enabled"
+                                                   class="w-4 h-4 bg-gray-700 border-gray-600 rounded focus:ring-purple-500"
+                                                   style="accent-color: #A855F7;">
+                                            <i class="fas fa-microphone mr-1 text-purple-500"></i>
+                                            <span>Adicionar Áudio Complementar</span>
+                                        </label>
+                                        <div x-show="downsell.audio_enabled" x-cloak class="mt-2">
+                                            <input type="url" 
+                                                   x-model="downsell.audio_url" 
+                                                   class="form-input"
+                                                   placeholder="https://t.me/canal/audio2">
+                                            <p class="text-xs text-gray-500 mt-2">Áudio enviado após a mídia principal</p>
                                         </div>
                                     </div>
                             </div>
@@ -892,27 +928,39 @@
                                 <div class="form-group">
                                     <label class="form-label">
                                         <i class="fas fa-image mr-2 text-blue-500"></i>
-                                        Tipo de Mídia
+                                        Tipo de Mídia Principal
                                     </label>
                                     <div class="flex gap-3 mt-2">
-                                        <label class="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer hover:border-blue-500 transition-colors"
+                                        <label class="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer hover:border-blue-500 transition-colors flex-1"
                                                :class="{'border-blue-500 bg-blue-500 bg-opacity-10': upsell.media_type === 'video'}">
                                             <input type="radio" x-model="upsell.media_type" value="video" class="text-blue-500">
                                             <i class="fas fa-video text-blue-500"></i>
                                             <span class="text-sm text-white">Vídeo</span>
                                         </label>
-                                        <label class="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer hover:border-blue-500 transition-colors"
+                                        <label class="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer hover:border-blue-500 transition-colors flex-1"
                                                :class="{'border-blue-500 bg-blue-500 bg-opacity-10': upsell.media_type === 'photo'}">
                                             <input type="radio" x-model="upsell.media_type" value="photo" class="text-blue-500">
                                             <i class="fas fa-camera text-blue-500"></i>
                                             <span class="text-sm text-white">Foto</span>
                                         </label>
-                                        <label class="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer hover:border-blue-500 transition-colors"
-                                               :class="{'border-blue-500 bg-blue-500 bg-opacity-10': upsell.media_type === 'audio'}">
-                                            <input type="radio" x-model="upsell.media_type" value="audio" class="text-blue-500">
-                                            <i class="fas fa-microphone text-blue-500"></i>
-                                            <span class="text-sm text-white">Áudio</span>
-                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="form-label flex items-center gap-2">
+                                        <input type="checkbox" 
+                                               x-model="upsell.audio_enabled"
+                                               class="w-4 h-4 bg-gray-700 border-gray-600 rounded focus:ring-purple-500"
+                                               style="accent-color: #A855F7;">
+                                        <i class="fas fa-microphone mr-1 text-purple-500"></i>
+                                        <span>Adicionar Áudio Complementar</span>
+                                    </label>
+                                    <div x-show="upsell.audio_enabled" x-cloak class="mt-2">
+                                        <input type="url" 
+                                               x-model="upsell.audio_url" 
+                                               class="form-input"
+                                               placeholder="https://t.me/canal/audio3">
+                                        <p class="text-xs text-gray-500 mt-2">Áudio enviado após a mídia principal</p>
                                     </div>
                                 </div>
                             </div>
@@ -1232,27 +1280,39 @@
                             <div class="form-group">
                                 <label class="form-label">
                                     <i class="fas fa-image mr-2 text-blue-500"></i>
-                                    Tipo de Mídia
+                                    Tipo de Mídia Principal
                                 </label>
                                 <div class="flex gap-3 mt-2">
-                                    <label class="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer hover:border-blue-500 transition-colors"
+                                    <label class="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer hover:border-blue-500 transition-colors flex-1"
                                            :class="{'border-blue-500 bg-blue-500 bg-opacity-10': newCampaign.media_type === 'video'}">
                                         <input type="radio" x-model="newCampaign.media_type" value="video" class="text-blue-500">
                                         <i class="fas fa-video text-blue-500"></i>
                                         <span class="text-sm text-white">Vídeo</span>
                                     </label>
-                                    <label class="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer hover:border-blue-500 transition-colors"
+                                    <label class="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer hover:border-blue-500 transition-colors flex-1"
                                            :class="{'border-blue-500 bg-blue-500 bg-opacity-10': newCampaign.media_type === 'photo'}">
                                         <input type="radio" x-model="newCampaign.media_type" value="photo" class="text-blue-500">
                                         <i class="fas fa-camera text-blue-500"></i>
                                         <span class="text-sm text-white">Foto</span>
                                     </label>
-                                    <label class="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer hover:border-blue-500 transition-colors"
-                                           :class="{'border-blue-500 bg-blue-500 bg-opacity-10': newCampaign.media_type === 'audio'}">
-                                        <input type="radio" x-model="newCampaign.media_type" value="audio" class="text-blue-500">
-                                        <i class="fas fa-microphone text-blue-500"></i>
-                                        <span class="text-sm text-white">Áudio</span>
-                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label flex items-center gap-2">
+                                    <input type="checkbox" 
+                                           x-model="newCampaign.audio_enabled"
+                                           class="w-4 h-4 bg-gray-700 border-gray-600 rounded focus:ring-purple-500"
+                                           style="accent-color: #A855F7;">
+                                    <i class="fas fa-microphone mr-1 text-purple-500"></i>
+                                    <span>Adicionar Áudio Complementar</span>
+                                </label>
+                                <div x-show="newCampaign.audio_enabled" x-cloak class="mt-2">
+                                    <input type="url" 
+                                           x-model="newCampaign.audio_url" 
+                                           class="form-input"
+                                           placeholder="https://t.me/canal/audioremkt">
+                                    <p class="text-xs text-gray-500 mt-2">Áudio enviado após a mídia principal</p>
                                 </div>
                             </div>
                         </div>
@@ -1551,6 +1611,8 @@ function botConfigApp() {
             welcome_message: '',
             welcome_media_url: '',
             welcome_media_type: 'video',
+            welcome_audio_enabled: false,
+            welcome_audio_url: '',
             main_buttons: [],
             redirect_buttons: [],
             downsells_enabled: false,
@@ -1597,11 +1659,17 @@ function botConfigApp() {
                                     message: '',
                                     media_url: '',
                                     media_type: 'video',
+                                    audio_enabled: false,
+                                    audio_url: '',
                                     price: 0,
                                     description: '',
                                     accept_text: '',
                                     decline_text: ''
                                 };
+                            } else {
+                                // Garantir campos de áudio existem
+                                if (!button.order_bump.hasOwnProperty('audio_enabled')) button.order_bump.audio_enabled = false;
+                                if (!button.order_bump.hasOwnProperty('audio_url')) button.order_bump.audio_url = '';
                             }
                         });
                     }
@@ -1613,12 +1681,23 @@ function botConfigApp() {
                             if (!downsell.hasOwnProperty('discount_percentage')) downsell.discount_percentage = 50;
                             if (!downsell.hasOwnProperty('button_text')) downsell.button_text = '';
                             if (!downsell.hasOwnProperty('media_type')) downsell.media_type = 'video';
+                            if (!downsell.hasOwnProperty('audio_enabled')) downsell.audio_enabled = false;
+                            if (!downsell.hasOwnProperty('audio_url')) downsell.audio_url = '';
                         });
                     }
                     
                     // Garantir arrays existem
                     if (!this.config.downsells) this.config.downsells = [];
                     if (!this.config.upsells) this.config.upsells = [];
+                    
+                    // ✅ Inicializar campos de upsells (compatibilidade)
+                    if (Array.isArray(this.config.upsells)) {
+                        this.config.upsells.forEach(upsell => {
+                            if (!upsell.hasOwnProperty('media_type')) upsell.media_type = 'video';
+                            if (!upsell.hasOwnProperty('audio_enabled')) upsell.audio_enabled = false;
+                            if (!upsell.hasOwnProperty('audio_url')) upsell.audio_url = '';
+                        });
+                    }
                     
                     console.log('✅ Config final carregado com sucesso!');
                 } else {
@@ -1694,6 +1773,8 @@ function botConfigApp() {
                 message: '',
                 media_url: '',
                 media_type: 'video',
+                audio_enabled: false,
+                audio_url: '',
                 pricing_mode: 'fixed',
                 price: 0,
                 discount_percentage: 50,
@@ -1712,6 +1793,8 @@ function botConfigApp() {
                 message: '',
                 media_url: '',
                 media_type: 'video',
+                audio_enabled: false,
+                audio_url: '',
                 product_name: '',
                 price: 0,
                 button_text: ''
@@ -1780,6 +1863,8 @@ function remarketingApp() {
             message: '',
             media_url: '',
             media_type: 'video',
+            audio_enabled: false,
+            audio_url: '',
             target_audience: 'non_buyers',
             days_since_last_contact: 3,
             exclude_buyers: true,
@@ -1857,6 +1942,8 @@ function remarketingApp() {
                 message: '',
                 media_url: '',
                 media_type: 'video',
+                audio_enabled: false,
+                audio_url: '',
                 target_audience: 'non_buyers',
                 days_since_last_contact: 3,
                 exclude_buyers: true,
