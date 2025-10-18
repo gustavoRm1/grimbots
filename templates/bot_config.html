@@ -1095,10 +1095,16 @@
             <!-- Lista de Campanhas -->
             <div x-show="campaigns.length > 0" class="space-y-4">
                 <template x-for="campaign in campaigns" :key="campaign.id">
-                    <div class="p-6 bg-gray-900 border border-gray-800 rounded-xl">
+                    <div class="p-6 bg-gray-900 border border-gray-800 rounded-xl hover:border-yellow-500 transition-all"
+                         :class="{'cursor-pointer': campaign.status === 'completed' || campaign.status === 'sending'}"
+                         @click="if(campaign.status === 'completed' || campaign.status === 'sending') { viewCampaignStats(campaign) }">
                         <div class="flex justify-between items-start mb-4">
                             <div class="flex-1">
-                                <h3 class="text-lg font-bold text-white" x-text="campaign.name"></h3>
+                                <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                                    <span x-text="campaign.name"></span>
+                                    <i x-show="campaign.status === 'completed' || campaign.status === 'sending'" 
+                                       class="fas fa-chart-bar text-yellow-500 text-sm"></i>
+                                </h3>
                                 <p class="text-sm text-gray-500 mt-1">
                                     <i class="fas fa-users mr-1"></i>
                                     Público: <span x-text="getAudienceLabel(campaign.target_audience)"></span>
@@ -1113,7 +1119,7 @@
                                 }" class="px-3 py-1 rounded-full text-xs font-bold">
                                     <span x-text="getStatusLabel(campaign.status)"></span>
                                 </span>
-                                <button @click="sendCampaign(campaign.id)" 
+                                <button @click.stop="sendCampaign(campaign.id)" 
                                         x-show="campaign.status === 'draft'"
                                         class="px-3 py-1.5 bg-yellow-500 text-black rounded-lg text-sm font-bold hover:bg-yellow-400 transition-all">
                                     <i class="fas fa-paper-plane mr-1"></i> Enviar
@@ -1138,6 +1144,13 @@
                                 <div class="text-2xl font-bold" style="color: var(--brand-gold-500);" x-text="'R$ ' + (campaign.revenue_generated || 0).toFixed(2)"></div>
                                 <div class="text-xs text-gray-500">Receita</div>
                             </div>
+                        </div>
+                        
+                        <!-- Dica: Clique para ver detalhes -->
+                        <div x-show="campaign.status === 'completed' || campaign.status === 'sending'" 
+                             class="mt-4 text-center text-xs text-yellow-500 opacity-60 hover:opacity-100 transition-opacity">
+                            <i class="fas fa-mouse-pointer mr-1"></i>
+                            Clique para ver estatísticas detalhadas
                         </div>
                     </div>
                 </template>
@@ -1263,6 +1276,134 @@
                                 Criar Campanha
                             </button>
                         </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal: Estatísticas da Campanha -->
+        <div x-show="showStatsModal" 
+             x-cloak
+             class="fixed inset-0 z-50 overflow-y-auto"
+             style="background: rgba(0,0,0,0.9);">
+            <div class="flex items-center justify-center min-h-screen p-4">
+                <div @click.away="showStatsModal = false" 
+                     class="bg-gray-900 rounded-2xl max-w-4xl w-full p-8 border-2 border-yellow-500">
+                    <div class="flex justify-between items-center mb-6">
+                        <div>
+                            <h3 class="text-2xl font-bold text-white flex items-center gap-3">
+                                <i class="fas fa-chart-line text-yellow-500"></i>
+                                Estatísticas da Campanha
+                            </h3>
+                            <p class="text-sm text-gray-500 mt-1" x-text="selectedCampaign?.name"></p>
+                        </div>
+                        <button @click="showStatsModal = false" class="text-gray-500 hover:text-white">
+                            <i class="fas fa-times text-2xl"></i>
+                        </button>
+                    </div>
+
+                    <!-- Métricas Principais -->
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                        <div class="text-center p-5 bg-gray-800 border border-gray-700 rounded-xl">
+                            <div class="text-3xl font-bold text-blue-400" x-text="selectedCampaign?.total_targets || 0"></div>
+                            <div class="text-sm text-gray-500 mt-1">Total de Alvos</div>
+                        </div>
+                        
+                        <div class="text-center p-5 bg-gray-800 border border-gray-700 rounded-xl">
+                            <div class="text-3xl font-bold text-green-400" x-text="selectedCampaign?.total_sent || 0"></div>
+                            <div class="text-sm text-gray-500 mt-1">Mensagens Enviadas</div>
+                        </div>
+                        
+                        <div class="text-center p-5 bg-gray-800 border border-gray-700 rounded-xl">
+                            <div class="text-3xl font-bold text-purple-400" x-text="selectedCampaign?.total_clicks || 0"></div>
+                            <div class="text-sm text-gray-500 mt-1">Total de Cliques</div>
+                        </div>
+                        
+                        <div class="text-center p-5 bg-gray-800 border border-gray-700 rounded-xl">
+                            <div class="text-3xl font-bold text-yellow-500" x-text="'R$ ' + (selectedCampaign?.revenue_generated || 0).toFixed(2)"></div>
+                            <div class="text-sm text-gray-500 mt-1">Receita Gerada</div>
+                        </div>
+                    </div>
+
+                    <!-- Taxas e Performance -->
+                    <div class="grid grid-cols-3 gap-4 mb-6">
+                        <div class="text-center p-4 bg-gray-800 border border-gray-700 rounded-lg">
+                            <div class="text-2xl font-bold text-green-300" x-text="getCampaignDeliveryRate(selectedCampaign) + '%'"></div>
+                            <div class="text-xs text-gray-500 mt-1">Taxa de Entrega</div>
+                        </div>
+                        
+                        <div class="text-center p-4 bg-gray-800 border border-gray-700 rounded-lg">
+                            <div class="text-2xl font-bold text-blue-300" x-text="getCampaignClickRate(selectedCampaign) + '%'"></div>
+                            <div class="text-xs text-gray-500 mt-1">Taxa de Cliques</div>
+                        </div>
+                        
+                        <div class="text-center p-4 bg-gray-800 border border-gray-700 rounded-lg">
+                            <div class="text-2xl font-bold text-purple-300" x-text="getCampaignConversionRate(selectedCampaign) + '%'"></div>
+                            <div class="text-xs text-gray-500 mt-1">Taxa de Conversão</div>
+                        </div>
+                    </div>
+
+                    <!-- Detalhes Adicionais -->
+                    <div class="grid grid-cols-3 gap-4 mb-6">
+                        <div class="p-4 bg-gray-800 border border-gray-700 rounded-lg">
+                            <div class="text-xs text-gray-500 mb-1">Falhas no Envio</div>
+                            <div class="text-xl font-bold text-red-400" x-text="selectedCampaign?.total_failed || 0"></div>
+                        </div>
+                        
+                        <div class="p-4 bg-gray-800 border border-gray-700 rounded-lg">
+                            <div class="text-xs text-gray-500 mb-1">Usuários Bloqueados</div>
+                            <div class="text-xl font-bold text-gray-400" x-text="selectedCampaign?.total_blocked || 0"></div>
+                        </div>
+                        
+                        <div class="p-4 bg-gray-800 border border-gray-700 rounded-lg">
+                            <div class="text-xs text-gray-500 mb-1">Status</div>
+                            <div class="text-xl font-bold" :class="{
+                                'text-yellow-400': selectedCampaign?.status === 'draft',
+                                'text-green-400': selectedCampaign?.status === 'sending',
+                                'text-gray-400': selectedCampaign?.status === 'completed'
+                            }" x-text="getStatusLabel(selectedCampaign?.status)"></div>
+                        </div>
+                    </div>
+
+                    <!-- Info da Campanha -->
+                    <div class="p-4 bg-gray-800 border border-gray-700 rounded-lg mb-6">
+                        <h4 class="text-sm font-bold text-white mb-3">Detalhes da Campanha</h4>
+                        <div class="grid grid-cols-2 gap-3 text-sm">
+                            <div>
+                                <span class="text-gray-500">Público-Alvo:</span>
+                                <span class="text-white ml-2" x-text="getAudienceLabel(selectedCampaign?.target_audience)"></span>
+                            </div>
+                            <div>
+                                <span class="text-gray-500">Delay:</span>
+                                <span class="text-white ml-2" x-text="selectedCampaign?.days_since_last_contact + ' dias'"></span>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <span class="text-gray-500">Mensagem:</span>
+                            <p class="text-white mt-1 text-sm bg-gray-900 p-3 rounded" x-text="selectedCampaign?.message"></p>
+                        </div>
+                    </div>
+
+                    <!-- Análise de Performance -->
+                    <div class="p-4 rounded-lg" :class="{
+                        'bg-green-500 bg-opacity-10 border border-green-500': getCampaignClickRate(selectedCampaign) > 10,
+                        'bg-blue-500 bg-opacity-10 border border-blue-500': getCampaignClickRate(selectedCampaign) <= 10 && getCampaignClickRate(selectedCampaign) > 5,
+                        'bg-yellow-500 bg-opacity-10 border border-yellow-500': getCampaignClickRate(selectedCampaign) <= 5
+                    }">
+                        <p class="text-sm">
+                            <i class="fas fa-lightbulb mr-2"></i>
+                            <strong>Análise:</strong>
+                            <span x-show="getCampaignClickRate(selectedCampaign) > 10">🎉 Excelente performance! Continue com esse tipo de mensagem.</span>
+                            <span x-show="getCampaignClickRate(selectedCampaign) <= 10 && getCampaignClickRate(selectedCampaign) > 5">👍 Boa performance! Teste variações para melhorar ainda mais.</span>
+                            <span x-show="getCampaignClickRate(selectedCampaign) <= 5">💡 Performance pode melhorar. Teste mensagens mais diretas e ofertas melhores.</span>
+                        </p>
+                    </div>
+
+                    <div class="flex justify-end mt-6">
+                        <button @click="showStatsModal = false" 
+                                class="px-6 py-2 bg-yellow-500 text-black rounded-lg hover:bg-yellow-400 font-bold">
+                            Fechar
+                        </button>
                     </div>
                 </div>
             </div>
@@ -1602,6 +1743,8 @@ function remarketingApp() {
     return {
         campaigns: [],
         showCreateModal: false,
+        showStatsModal: false,
+        selectedCampaign: null,
         newCampaign: {
             name: '',
             message: '',
@@ -1746,6 +1889,30 @@ function remarketingApp() {
         
         getTotalRevenue() {
             return this.campaigns.reduce((sum, c) => sum + (c.revenue_generated || 0), 0);
+        },
+        
+        // ✅ Funções para Modal de Estatísticas
+        viewCampaignStats(campaign) {
+            this.selectedCampaign = campaign;
+            this.showStatsModal = true;
+        },
+        
+        getCampaignDeliveryRate(campaign) {
+            if (!campaign || !campaign.total_sent) return 0;
+            const delivered = campaign.total_sent - (campaign.total_failed || 0);
+            return (delivered / campaign.total_sent * 100).toFixed(1);
+        },
+        
+        getCampaignClickRate(campaign) {
+            if (!campaign || !campaign.total_sent) return 0;
+            return ((campaign.total_clicks || 0) / campaign.total_sent * 100).toFixed(1);
+        },
+        
+        getCampaignConversionRate(campaign) {
+            if (!campaign || !campaign.total_sent) return 0;
+            // Assumindo que conversão = cliques que geraram receita
+            const conversions = campaign.total_clicks || 0;
+            return (conversions / campaign.total_sent * 100).toFixed(1);
         },
         
         showNotification(message, type = 'success') {
