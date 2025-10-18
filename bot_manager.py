@@ -24,8 +24,8 @@ PLATFORM_SPLIT_USER_ID = os.environ.get('PLATFORM_SPLIT_USER_ID', '')  # Client 
 PLATFORM_SPLIT_PERCENTAGE = 2  # 2% PADRÃO PARA TODOS OS GATEWAYS
 
 # Configuração de Split Payment para PushynPay (LEGADO - não mais usado)
-# ✅ Split configurado com Account ID correto
-PUSHYN_SPLIT_ACCOUNT_ID = os.environ.get('PUSHYN_SPLIT_ACCOUNT_ID', '50712')
+# ✅ Split configurado com Account ID correto (hash alfanumérico)
+PUSHYN_SPLIT_ACCOUNT_ID = os.environ.get('PUSHYN_SPLIT_ACCOUNT_ID', 'OOh4WBnse1C8412BawIDlqYmerMxrOQeEfH427lp589263b4')
 PUSHYN_SPLIT_PERCENTAGE = 2  # 2% PADRÃO
 
 # Importar Gateway Factory (Arquitetura Enterprise)
