@@ -3038,11 +3038,16 @@ def ranking():
         if next_position_idx < len(ranking_data):
             next_user = ranking_data[next_position_idx]
     
+    # Debug: Buscar conquistas do usuário atual
+    my_achievements = UserAchievement.query.filter_by(user_id=current_user.id).all()
+    logger.info(f"📊 Ranking - Usuario {current_user.username} tem {len(my_achievements)} conquista(s)")
+    
     return render_template('ranking.html',
                          ranking=ranking_data,
                          my_position=my_position_number,
                          next_user=next_user,
-                         period=period)
+                         period=period,
+                         my_achievements=my_achievements)
 
 @app.route('/settings')
 @login_required
