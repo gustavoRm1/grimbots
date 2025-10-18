@@ -180,6 +180,8 @@ class HoopayPaymentGateway(PaymentGateway):
             
             logger.info(f"🔐 HooPay Auth: Basic {self.api_key[:16]}... (token como username)")
             logger.info(f"📤 HooPay URL: {self.charge_url}")
+            logger.info(f"📤 HooPay Payload Completo: {payload}")
+            logger.info(f"📤 HooPay Headers: {headers}")
             
             # Requisição para HooPay
             response = requests.post(
@@ -191,6 +193,8 @@ class HoopayPaymentGateway(PaymentGateway):
             )
             
             logger.info(f"📡 HooPay Response: Status {response.status_code}")
+            logger.info(f"📡 HooPay Response Headers: {dict(response.headers)}")
+            logger.info(f"📡 HooPay Response Body: {response.text}")
             
             if response.status_code != 200:
                 logger.error(f"❌ HooPay API Error: {response.status_code} - {response.text}")
