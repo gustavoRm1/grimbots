@@ -3051,26 +3051,40 @@ def ranking():
 
 @app.route('/api/force-check-achievements', methods=['POST'])
 @login_required
+@csrf.exempt
 def force_check_achievements():
     """Força verificação de achievements do usuário atual"""
     try:
-        if GAMIFICATION_V2_ENABLED:
-            newly_unlocked = AchievementChecker.check_all_achievements(current_user)
-            
-            # Também recalcular pontos
-            current_user.ranking_points = RankingEngine.calculate_points(current_user)
-            db.session.commit()
-            
-            return jsonify({
-                'success': True,
-                'newly_unlocked': len(newly_unlocked),
-                'total_achievements': UserAchievement.query.filter_by(user_id=current_user.id).count(),
-                'ranking_points': current_user.ranking_points
-            })
-        else:
-            return jsonify({'error': 'Gamificação não habilitada'}), 400
+        logger.info(f"🔍 Forçando verificação de achievements para {current_user.username}")
+        
+        # Verificar conquistas
+        newly_unlocked = AchievementChecker.check_all_achievements(current_user)
+        
+        # Recalcular pontos (simples)
+        if current_user.ranking_points is None:
+            current_user.ranking_points = 0
+        
+        # Somar pontos das conquistas
+        total_points = db.session.query(func.sum(Achievement.points))\
+            .join(UserAchievement)\
+            .filter(UserAchievement.user_id == current_user.id)\
+            .scalar() or 0
+        
+        current_user.ranking_points = int(total_points)
+        db.session.commit()
+        
+        total_achievements = UserAchievement.query.filter_by(user_id=current_user.id).count()
+        
+        logger.info(f"✅ Verificação concluída: {len(newly_unlocked)} novas | Total: {total_achievements}")
+        
+        return jsonify({
+            'success': True,
+            'newly_unlocked': len(newly_unlocked),
+            'total_achievements': total_achievements,
+            'ranking_points': current_user.ranking_points
+        })
     except Exception as e:
-        logger.error(f"Erro ao forçar verificação: {e}")
+        logger.error(f"❌ Erro ao forçar verificação: {e}", exc_info=True)
         return jsonify({'error': str(e)}), 500
 
 @app.route('/settings')
