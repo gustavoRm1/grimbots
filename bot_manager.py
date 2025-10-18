@@ -1138,7 +1138,7 @@ Desculpe, não foi possível processar seu pagamento.
                         # Criar instância do gateway
                         # ✅ CORREÇÃO: Passar TODOS os campos necessários
                         credentials = {
-                            # SyncPay e HooPay usam client_id/client_secret
+                            # SyncPay usa client_id/client_secret
                             'client_id': gateway.client_id,
                             'client_secret': gateway.client_secret,
                             # Outros gateways usam api_key
@@ -1147,8 +1147,6 @@ Desculpe, não foi possível processar seu pagamento.
                             'product_hash': gateway.product_hash,
                             'offer_hash': gateway.offer_hash,
                             'store_id': gateway.store_id,
-                            # HooPay
-                            'organization_id': gateway.organization_id,
                             # WiinPay
                             'split_user_id': gateway.split_user_id,
                             # Comum a todos
@@ -1427,7 +1425,7 @@ Seu pagamento ainda não foi confirmado.
                 
                 # ✅ PREPARAR CREDENCIAIS ESPECÍFICAS PARA CADA GATEWAY
                 credentials = {
-                    # SyncPay e HooPay usam client_id/client_secret
+                    # SyncPay usa client_id/client_secret
                     'client_id': gateway.client_id,
                     'client_secret': gateway.client_secret,
                     # Outros gateways usam api_key
@@ -1436,8 +1434,6 @@ Seu pagamento ainda não foi confirmado.
                     'product_hash': gateway.product_hash,
                     'offer_hash': gateway.offer_hash,
                     'store_id': gateway.store_id,
-                    # HooPay
-                    'organization_id': gateway.organization_id,
                     # WiinPay
                     'split_user_id': gateway.split_user_id,
                     # Comum a todos
@@ -1461,7 +1457,7 @@ Seu pagamento ainda não foi confirmado.
                 # ✅ VALIDAÇÃO ESPECÍFICA: WiinPay valor mínimo R$ 3,00
                 if gateway.gateway_type == 'wiinpay' and amount < 3.0:
                     logger.error(f"❌ WIINPAY: Valor mínimo R$ 3,00 | Produto: R$ {amount:.2f}")
-                    logger.error(f"   SOLUÇÃO: Use Paradise, HooPay, Pushyn ou SyncPay para valores < R$ 3,00")
+                    logger.error(f"   SOLUÇÃO: Use Paradise, Pushyn ou SyncPay para valores < R$ 3,00")
                     logger.error(f"   Ou aumente o preço do produto para mínimo R$ 3,00")
                     return None
                 
@@ -1545,7 +1541,7 @@ Seu pagamento ainda não foi confirmado.
                     # ✅ VALIDAÇÃO ESPECÍFICA WIINPAY
                     if gateway.gateway_type == 'wiinpay' and amount < 3.0:
                         logger.error(f"⚠️ WIINPAY: Valor mínimo é R$ 3,00! Valor enviado: R$ {amount:.2f}")
-                        logger.error(f"   SOLUÇÃO: Use outro gateway (Paradise, Pushyn, HooPay ou SyncPay) para valores < R$ 3,00")
+                        logger.error(f"   SOLUÇÃO: Use outro gateway (Paradise, Pushyn ou SyncPay) para valores < R$ 3,00")
                     
                     return None
                     
@@ -1916,13 +1912,6 @@ Seu pagamento ainda não foi confirmado.
                     'api_key': 'sk_dummy',
                     'product_hash': 'prod_dummy',
                     'offer_hash': 'dummyhash'
-                }
-            elif gateway_type == 'hoopay':
-                dummy_credentials = {
-                    'client_id': 'dummy-client-id',
-                    'client_secret': 'dummy-secret',
-                    'organization_id': 'dummy-org-id',
-                    'split_percentage': 2.0  # 2% PADRÃO
                 }
             elif gateway_type == 'wiinpay':
                 dummy_credentials = {

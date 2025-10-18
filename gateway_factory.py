@@ -9,7 +9,6 @@ from gateway_interface import PaymentGateway
 from gateway_syncpay import SyncPayGateway
 from gateway_pushyn import PushynGateway
 from gateway_paradise import ParadisePaymentGateway
-from gateway_hoopay import HoopayPaymentGateway
 from gateway_wiinpay import WiinPayGateway
 
 logger = logging.getLogger(__name__)
@@ -28,8 +27,7 @@ class GatewayFactory:
         'syncpay': SyncPayGateway,
         'pushynpay': PushynGateway,
         'paradise': ParadisePaymentGateway,
-        'hoopay': HoopayPaymentGateway,
-        'wiinpay': WiinPayGateway,  # ✅ WIINPAY ADICIONADO
+        'wiinpay': WiinPayGateway,
     }
     
     @classmethod
@@ -126,24 +124,6 @@ class GatewayFactory:
                     'product_hash': product_hash,
                     'offer_hash': offer_hash,
                     'store_id': store_id,
-                    'split_percentage': split_percentage
-                })
-            
-            elif gateway_type == 'hoopay':
-                # HooPay requer: client_id e client_secret
-                client_id = credentials.get('client_id', '')
-                client_secret = credentials.get('client_secret', '')
-                organization_id = credentials.get('organization_id', '')
-                split_percentage = credentials.get('split_percentage', 2.0)  # 2% PADRÃO
-                
-                if not client_id or not client_secret:
-                    logger.error(f"❌ [Factory] HooPay requer client_id e client_secret")
-                    return None
-                
-                gateway = gateway_class(credentials={
-                    'client_id': client_id,
-                    'client_secret': client_secret,
-                    'organization_id': organization_id,
                     'split_percentage': split_percentage
                 })
             

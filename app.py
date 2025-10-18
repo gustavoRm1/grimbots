@@ -2557,8 +2557,8 @@ def create_gateway():
         
         gateway_type = data.get('gateway_type')
     
-        # ✅ CORREÇÃO: Adicionar wiinpay aos tipos válidos
-        if gateway_type not in ['syncpay', 'pushynpay', 'paradise', 'hoopay', 'wiinpay']:
+        # ✅ Validar tipo de gateway
+        if gateway_type not in ['syncpay', 'pushynpay', 'paradise', 'wiinpay']:
             logger.error(f"❌ Tipo de gateway inválido: {gateway_type}")
             return jsonify({'error': 'Tipo de gateway inválido'}), 400
         
@@ -2592,13 +2592,6 @@ def create_gateway():
             gateway.offer_hash = data.get('offer_hash')
             # Store ID configurado automaticamente para splits (você é o dono do sistema)
             gateway.store_id = '177'
-        
-        elif gateway_type == 'hoopay':
-            # ✅ HooPay requer Client ID e Client Secret
-            gateway.client_id = data.get('client_id')
-            gateway.client_secret = data.get('client_secret')
-            # Organization ID configurado automaticamente para splits (você é o dono do sistema)
-            gateway.organization_id = '5547db08-12c5-4de5-9592-90d38479745c'
         
         elif gateway_type == 'wiinpay':
             # ✅ WIINPAY
@@ -2710,69 +2703,6 @@ def api_check_bots_status():
     except Exception as e:
         logger.error(f"❌ Erro ao verificar status dos bots: {e}")
         return jsonify({'error': f'Erro ao verificar bots: {str(e)}'}), 500
-
-@app.route('/api/admin/test-hoopay', methods=['POST'])
-@csrf.exempt
-def api_test_hoopay():
-    """API para testar HooPay especificamente (sem login para debug)"""
-    try:
-        with app.app_context():
-            # Buscar gateway HooPay ativo (qualquer usuário)
-            hoopay_gateway = Gateway.query.filter_by(
-                gateway_type='hoopay',
-                is_active=True,
-                is_verified=True
-            ).first()
-            
-            if not hoopay_gateway:
-                return jsonify({'error': 'HooPay não encontrado ou não está ativo/verificado'}), 400
-            
-            # Testar criação do gateway
-            from gateway_factory import GatewayFactory
-            
-            credentials = {
-                'api_key': hoopay_gateway.api_key,
-                'organization_id': hoopay_gateway.organization_id,
-                'split_percentage': hoopay_gateway.split_percentage or 4.0
-            }
-            
-            gateway = GatewayFactory.create_gateway('hoopay', credentials)
-            
-            if not gateway:
-                return jsonify({'error': 'Erro ao criar instância do HooPay'}), 500
-            
-            # Testar verificação de credenciais
-            is_valid = gateway.verify_credentials()
-            
-            # Testar geração de PIX (valor baixo para teste)
-            test_pix = gateway.generate_pix(
-                amount=1.00,
-                description='Teste HooPay',
-                payment_id='TEST_' + str(int(time.time())),
-                customer_data={
-                    'name': 'Teste Cliente',
-                    'email': 'teste@exemplo.com',
-                    'phone': '11999999999',
-                    'document': '12345678901'
-                }
-            )
-            
-            result = {
-                'gateway_created': gateway is not None,
-                'credentials_valid': is_valid,
-                'test_pix': test_pix,
-                'gateway_info': {
-                    'api_key': hoopay_gateway.api_key[:16] + '...',
-                    'organization_id': hoopay_gateway.organization_id,
-                    'split_percentage': hoopay_gateway.split_percentage
-                }
-            }
-            
-            return jsonify(result)
-            
-    except Exception as e:
-        logger.error(f"❌ Erro ao testar HooPay: {e}", exc_info=True)
-        return jsonify({'error': f'Erro ao testar HooPay: {str(e)}'}), 500
 
 def _reload_user_bots_config(user_id: int):
     """Recarrega configuração dos bots ativos quando gateway muda"""
@@ -2925,12 +2855,6 @@ def update_gateway(gateway_id):
                 gateway.offer_hash = data['offer_hash']
             if data.get('product_hash'):
                 gateway.product_hash = data['product_hash']
-        
-        elif gateway_type == 'hoopay':
-            if data.get('client_id'):
-                gateway.client_id = data['client_id']
-            if data.get('client_secret'):
-                gateway.client_secret = data['client_secret']
         
         elif gateway_type == 'wiinpay':
             if data.get('api_key'):
