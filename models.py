@@ -7,6 +7,10 @@ from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
 import json
+import logging
+
+# Logger
+logger = logging.getLogger(__name__)
 
 # Timezone do Brasil (UTC-3)
 BRAZIL_TZ_OFFSET = timedelta(hours=-3)
