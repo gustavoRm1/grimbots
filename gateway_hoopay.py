@@ -130,23 +130,20 @@ class HoopayPaymentGateway(PaymentGateway):
                 }
             ]
             
-            # Payments (tipo PIX)
+            # Payments (tipo PIX) - conforme exemplo linha 291
             payments = [
                 {
-                    "amount": amount,
-                    "type": "pix"  # ✅ TIPO: pix
+                    "type": "pix"  # ✅ APENAS type, sem amount
                 }
             ]
             
-            # Payload HooPay (conforme hoopay.json)
+            # Payload HooPay (conforme hoopay.json - exemplo simplificado linha 291)
             payload = {
                 "customer": customer_payload,  # ✅ DADOS REAIS DO CLIENTE
                 "products": products,
                 "payments": payments,
-                "data": {
-                    "ip": "192.168.0.1",
-                    "callbackURL": self.get_webhook_url()  # ✅ WEBHOOK
-                }
+                "ip": "192.168.0.1",  # ✅ IP direto no root (não em data)
+                "callbackURL": self.get_webhook_url()  # ✅ Callback direto no root
             }
             
             # Se split configurado, adiciona comissões
