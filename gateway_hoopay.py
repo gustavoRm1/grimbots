@@ -40,10 +40,11 @@ class HoopayPaymentGateway(PaymentGateway):
         self.organization_id = credentials.get('organization_id', '')
         self.split_percentage = float(credentials.get('split_percentage', 2.0))  # 2% PADRÃO
         
-        # URLs da API HooPay (corrigidas conforme documentação)
+        # URLs da API HooPay
+        # Testando endpoints comuns: /v1/pix/charges, /pix, /v1/charges
         self.base_url = 'https://api.hoopay.com.br'  
-        self.charge_url = f'{self.base_url}/charge'  # ✅ CORREÇÃO: /charge (não /v1/payments)
-        self.consult_url = f'{self.base_url}/charge'  # ✅ CORREÇÃO: consulta via /charge
+        self.charge_url = f'{self.base_url}/v1/pix/charges'  # Endpoint comum PIX
+        self.consult_url = f'{self.base_url}/v1/pix/charges'
         
         logger.info(f"🟡 HooPay Gateway inicializado | Token: {self.api_key[:16]}...")
 
