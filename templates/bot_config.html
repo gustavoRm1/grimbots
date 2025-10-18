@@ -1648,6 +1648,10 @@ function botConfigApp() {
                         ...data
                     };
                     
+                    // ✅ Garantir que campos de áudio existem (compatibilidade com configs antigos)
+                    if (!this.config.hasOwnProperty('welcome_audio_enabled')) this.config.welcome_audio_enabled = false;
+                    if (!this.config.hasOwnProperty('welcome_audio_url')) this.config.welcome_audio_url = '';
+                    
                     console.log('🔧 Config DEPOIS:', JSON.stringify(this.config, null, 2));
                     
                     // Inicializar order_bump em cada botão

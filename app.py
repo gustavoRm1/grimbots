@@ -1097,6 +1097,8 @@ def create_remarketing_campaign(bot_id):
         message=data.get('message'),
         media_url=data.get('media_url'),
         media_type=data.get('media_type'),
+        audio_enabled=data.get('audio_enabled', False),
+        audio_url=data.get('audio_url', ''),
         buttons=data.get('buttons', []),
         target_audience=data.get('target_audience', 'non_buyers'),
         days_since_last_contact=data.get('days_since_last_contact', 3),
@@ -1181,6 +1183,8 @@ def general_remarketing():
         # Parâmetros da campanha
         media_url = data.get('media_url')
         media_type = data.get('media_type', 'video')
+        audio_enabled = data.get('audio_enabled', False)
+        audio_url = data.get('audio_url', '')
         buttons = data.get('buttons', [])
         days_since_last_contact = int(data.get('days_since_last_contact', 7))
         exclude_buyers = data.get('exclude_buyers', False)
@@ -1218,6 +1222,8 @@ def general_remarketing():
                     message=message,
                     media_url=media_url,
                     media_type=media_type,
+                    audio_enabled=audio_enabled,
+                    audio_url=audio_url,
                     buttons=buttons_json,
                     target_audience='non_buyers' if exclude_buyers else 'all',
                     days_since_last_contact=days_since_last_contact,
@@ -2162,6 +2168,10 @@ def update_bot_config(bot_id):
             config.welcome_media_url = data['welcome_media_url']
         if 'welcome_media_type' in data:
             config.welcome_media_type = data['welcome_media_type']
+        if 'welcome_audio_enabled' in data:
+            config.welcome_audio_enabled = data['welcome_audio_enabled']
+        if 'welcome_audio_url' in data:
+            config.welcome_audio_url = data['welcome_audio_url']
         
         # Botões principais
         if 'main_buttons' in data:
