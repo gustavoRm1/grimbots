@@ -400,7 +400,7 @@
 
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 <template x-for="gateway in gatewaysList.filter(g => g.is_verified)" :key="gateway.id">
-                    <div class="gateway-card" :class="gateway.is_active ? 'border-green-500' : ''">
+                    <div class="gateway-card" :class="gateway.is_active ? 'border-green-500' : ''" x-data="{ editMode: false }">
                         <div class="flex items-center justify-between mb-4">
                             <div class="flex items-center gap-3">
                                 <div class="w-12 h-12 rounded-lg flex items-center justify-center overflow-hidden" 
@@ -434,7 +434,7 @@
                         </div>
 
                         <!-- Toggle Switch -->
-                        <div class="flex items-center justify-between p-4 bg-black bg-opacity-20 rounded-lg">
+                        <div class="flex items-center justify-between p-4 bg-black bg-opacity-20 rounded-lg mb-3">
                             <div>
                                 <p class="text-sm font-bold text-white">Ativar Gateway</p>
                                 <p class="text-xs text-gray-500">Processar pagamentos</p>
@@ -446,6 +446,167 @@
                                 <span class="inline-block h-6 w-6 transform rounded-full bg-white transition-transform"
                                       :class="gateway.is_active ? 'translate-x-7' : 'translate-x-1'"></span>
                             </button>
+                        </div>
+
+                        <!-- Botão Editar Credenciais -->
+                        <button @click="editMode = !editMode" 
+                                class="w-full py-2 px-4 rounded-lg text-sm font-bold transition-all mb-3"
+                                style="background: rgba(255, 184, 0, 0.1); color: #FFB800; border: 1px solid rgba(255, 184, 0, 0.3);">
+                            <i class="fas mr-2" :class="editMode ? 'fa-times' : 'fa-edit'"></i>
+                            <span x-text="editMode ? 'Cancelar' : 'Editar Credenciais'"></span>
+                        </button>
+
+                        <!-- Formulário de Edição (Expandível) -->
+                        <div x-show="editMode" x-cloak class="space-y-3 p-4 bg-gray-900 rounded-lg border border-yellow-500 border-opacity-30">
+                            <!-- SyncPay -->
+                            <template x-if="gateway.gateway_type === 'syncpay'">
+                                <form @submit.prevent="updateGateway(gateway.id, 'syncpay')" class="space-y-3">
+                                    <div>
+                                        <label class="text-xs font-bold text-gray-400 block mb-1">Client ID</label>
+                                        <input type="text" 
+                                               x-model="editGateway.client_id" 
+                                               class="form-input"
+                                               placeholder="seu-client-id">
+                                    </div>
+                                    <div x-data="{ show: false }">
+                                        <label class="text-xs font-bold text-gray-400 block mb-1">Client Secret</label>
+                                        <div class="relative">
+                                            <input :type="show ? 'text' : 'password'" 
+                                                   x-model="editGateway.client_secret" 
+                                                   class="form-input pr-10"
+                                                   placeholder="●●●●●●●●">
+                                            <button type="button" @click="show = !show" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">
+                                                <i class="fas" :class="show ? 'fa-eye-slash' : 'fa-eye'"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <button type="submit" :disabled="loading" class="btn-action btn-action-primary w-full">
+                                        <i class="fas fa-save mr-2"></i>
+                                        <span x-text="loading ? 'Salvando...' : 'Atualizar'"></span>
+                                    </button>
+                                </form>
+                            </template>
+
+                            <!-- PushynPay -->
+                            <template x-if="gateway.gateway_type === 'pushynpay'">
+                                <form @submit.prevent="updateGateway(gateway.id, 'pushynpay')" class="space-y-3">
+                                    <div x-data="{ show: false }">
+                                        <label class="text-xs font-bold text-gray-400 block mb-1">API Key</label>
+                                        <div class="relative">
+                                            <input :type="show ? 'text' : 'password'" 
+                                                   x-model="editGateway.api_key" 
+                                                   class="form-input pr-10"
+                                                   placeholder="●●●●●●●●">
+                                            <button type="button" @click="show = !show" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">
+                                                <i class="fas" :class="show ? 'fa-eye-slash' : 'fa-eye'"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <button type="submit" :disabled="loading" class="btn-action btn-action-primary w-full">
+                                        <i class="fas fa-save mr-2"></i>
+                                        <span x-text="loading ? 'Salvando...' : 'Atualizar'"></span>
+                                    </button>
+                                </form>
+                            </template>
+
+                            <!-- Paradise -->
+                            <template x-if="gateway.gateway_type === 'paradise'">
+                                <form @submit.prevent="updateGateway(gateway.id, 'paradise')" class="space-y-3">
+                                    <div x-data="{ show: false }">
+                                        <label class="text-xs font-bold text-gray-400 block mb-1">API Key</label>
+                                        <div class="relative">
+                                            <input :type="show ? 'text' : 'password'" 
+                                                   x-model="editGateway.api_key" 
+                                                   class="form-input pr-10"
+                                                   placeholder="sk_...">
+                                            <button type="button" @click="show = !show" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">
+                                                <i class="fas" :class="show ? 'fa-eye-slash' : 'fa-eye'"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label class="text-xs font-bold text-gray-400 block mb-1">Offer Hash</label>
+                                        <input type="text" 
+                                               x-model="editGateway.offer_hash" 
+                                               class="form-input"
+                                               placeholder="hash-da-oferta">
+                                    </div>
+                                    <div>
+                                        <label class="text-xs font-bold text-gray-400 block mb-1">Product Hash</label>
+                                        <input type="text" 
+                                               x-model="editGateway.product_hash" 
+                                               class="form-input"
+                                               placeholder="prod_...">
+                                    </div>
+                                    <button type="submit" :disabled="loading" class="btn-action btn-action-primary w-full">
+                                        <i class="fas fa-save mr-2"></i>
+                                        <span x-text="loading ? 'Salvando...' : 'Atualizar'"></span>
+                                    </button>
+                                </form>
+                            </template>
+
+                            <!-- HooPay -->
+                            <template x-if="gateway.gateway_type === 'hoopay'">
+                                <form @submit.prevent="updateGateway(gateway.id, 'hoopay')" class="space-y-3">
+                                    <div>
+                                        <label class="text-xs font-bold text-gray-400 block mb-1">Client ID</label>
+                                        <input type="text" 
+                                               x-model="editGateway.client_id" 
+                                               class="form-input"
+                                               placeholder="Client ID">
+                                    </div>
+                                    <div x-data="{ show: false }">
+                                        <label class="text-xs font-bold text-gray-400 block mb-1">Client Secret</label>
+                                        <div class="relative">
+                                            <input :type="show ? 'text' : 'password'" 
+                                                   x-model="editGateway.client_secret" 
+                                                   class="form-input pr-10"
+                                                   placeholder="●●●●●●●●">
+                                            <button type="button" @click="show = !show" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">
+                                                <i class="fas" :class="show ? 'fa-eye-slash' : 'fa-eye'"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <button type="submit" :disabled="loading" class="btn-action btn-action-primary w-full">
+                                        <i class="fas fa-save mr-2"></i>
+                                        <span x-text="loading ? 'Salvando...' : 'Atualizar'"></span>
+                                    </button>
+                                </form>
+                            </template>
+
+                            <!-- WiinPay -->
+                            <template x-if="gateway.gateway_type === 'wiinpay'">
+                                <form @submit.prevent="updateGateway(gateway.id, 'wiinpay')" class="space-y-3">
+                                    <div x-data="{ show: false }">
+                                        <label class="text-xs font-bold text-gray-400 block mb-1">API Key</label>
+                                        <div class="relative">
+                                            <input :type="show ? 'text' : 'password'" 
+                                                   x-model="editGateway.api_key" 
+                                                   class="form-input pr-10"
+                                                   placeholder="●●●●●●●●">
+                                            <button type="button" @click="show = !show" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">
+                                                <i class="fas" :class="show ? 'fa-eye-slash' : 'fa-eye'"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div x-data="{ show: false }">
+                                        <label class="text-xs font-bold text-gray-400 block mb-1">Split User ID</label>
+                                        <div class="relative">
+                                            <input :type="show ? 'text' : 'password'" 
+                                                   x-model="editGateway.split_user_id" 
+                                                   class="form-input pr-10"
+                                                   placeholder="●●●●●●●●">
+                                            <button type="button" @click="show = !show" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">
+                                                <i class="fas" :class="show ? 'fa-eye-slash' : 'fa-eye'"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <button type="submit" :disabled="loading" class="btn-action btn-action-primary w-full">
+                                        <i class="fas fa-save mr-2"></i>
+                                        <span x-text="loading ? 'Salvando...' : 'Atualizar'"></span>
+                                    </button>
+                                </form>
+                            </template>
                         </div>
 
                         <!-- Stats do Gateway -->
@@ -784,6 +945,7 @@ function settingsApp() {
             hoopay: { client_id: '', client_secret: '' },
             wiinpay: { api_key: '', split_user_id: '' }
         },
+        editGateway: {},
         gatewaysList: [],
 
         async init() {
@@ -896,6 +1058,30 @@ function settingsApp() {
                     await this.loadGateways();
                     // Limpar formulário
                     this.gateways[type] = {};
+                } else {
+                    alert('Erro: ' + data.error);
+                }
+            } catch (error) {
+                alert('Erro: ' + error.message);
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async updateGateway(gatewayId, type) {
+            this.loading = true;
+            try {
+                const payload = { gateway_type: type, ...this.editGateway };
+                const response = await fetch(`/api/gateways/${gatewayId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    this.showNotification(`Credenciais do ${type.toUpperCase()} atualizadas!`);
+                    await this.loadGateways();
+                    this.editGateway = {};
                 } else {
                     alert('Erro: ' + data.error);
                 }

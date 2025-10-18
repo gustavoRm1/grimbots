@@ -2896,6 +2896,60 @@ def toggle_gateway(gateway_id):
         'is_active': gateway.is_active
     })
 
+@app.route('/api/gateways/<int:gateway_id>', methods=['PUT'])
+@login_required
+@csrf.exempt
+def update_gateway(gateway_id):
+    """Atualiza credenciais de um gateway"""
+    try:
+        gateway = Gateway.query.filter_by(id=gateway_id, user_id=current_user.id).first_or_404()
+        data = request.json
+        
+        gateway_type = gateway.gateway_type
+        
+        # Atualizar campos conforme o tipo
+        if gateway_type == 'syncpay':
+            if data.get('client_id'):
+                gateway.client_id = data['client_id']
+            if data.get('client_secret'):
+                gateway.client_secret = data['client_secret']
+        
+        elif gateway_type == 'pushynpay':
+            if data.get('api_key'):
+                gateway.api_key = data['api_key']
+        
+        elif gateway_type == 'paradise':
+            if data.get('api_key'):
+                gateway.api_key = data['api_key']
+            if data.get('offer_hash'):
+                gateway.offer_hash = data['offer_hash']
+            if data.get('product_hash'):
+                gateway.product_hash = data['product_hash']
+        
+        elif gateway_type == 'hoopay':
+            if data.get('client_id'):
+                gateway.client_id = data['client_id']
+            if data.get('client_secret'):
+                gateway.client_secret = data['client_secret']
+        
+        elif gateway_type == 'wiinpay':
+            if data.get('api_key'):
+                gateway.api_key = data['api_key']
+            if data.get('split_user_id'):
+                gateway.split_user_id = data['split_user_id']
+        
+        db.session.commit()
+        
+        logger.info(f"✅ Gateway {gateway_type} atualizado por {current_user.email}")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Gateway {gateway_type} atualizado com sucesso'
+        })
+    except Exception as e:
+        logger.error(f"❌ Erro ao atualizar gateway: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/gateways/<int:gateway_id>', methods=['DELETE'])
 @login_required
 @csrf.exempt
