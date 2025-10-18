@@ -1,213 +1,394 @@
 {% extends "base.html" %}
+{% block title %}Hall da Fama - Ranking{% endblock %}
 
-{% block title %}Hall da Fama - Ranking - grimbots{% endblock %}
+{% block extra_head %}
+<style>
+/* Bot Config V2.0 - Design System (IDÊNTICO) */
+
+.config-section {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.02) 0%, rgba(255, 255, 255, 0.01) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 24px;
+}
+
+.config-section-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.config-section-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #FFFFFF;
+}
+
+.config-section-description {
+    font-size: 0.875rem;
+    color: #9CA3AF;
+    margin-top: 4px;
+}
+
+.podium-card {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.01) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 20px;
+    transition: all 0.3s ease;
+}
+
+.podium-card:hover {
+    border-color: rgba(255, 184, 0, 0.3);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.podium-gold {
+    border: 2px solid #FFB800 !important;
+    box-shadow: 0 0 20px rgba(255, 184, 0, 0.4) !important;
+}
+
+.podium-silver {
+    border: 2px solid #C0C0C0 !important;
+    box-shadow: 0 0 20px rgba(192, 192, 192, 0.3) !important;
+}
+
+.podium-bronze {
+    border: 2px solid #CD7F32 !important;
+    box-shadow: 0 0 20px rgba(205, 127, 50, 0.3) !important;
+}
+
+.stat-box {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.01) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+    transition: all 0.2s ease;
+}
+
+.stat-box:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+    border-color: rgba(255, 184, 0, 0.3);
+}
+
+.stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #FFFFFF;
+    margin-bottom: 4px;
+}
+
+.stat-label {
+    font-size: 0.75rem;
+    color: #9CA3AF;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.table-premium {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.table-premium thead th {
+    padding: 16px 24px;
+    background: rgba(255, 184, 0, 0.05);
+    border-bottom: 2px solid rgba(255, 184, 0, 0.2);
+    font-size: 12px;
+    font-weight: 700;
+    color: #FFC933;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    text-align: left;
+}
+
+.table-premium tbody tr {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    transition: all 0.2s ease;
+}
+
+.table-premium tbody tr:hover {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.table-premium tbody td {
+    padding: 16px 24px;
+    font-size: 14px;
+}
+
+.badge-status {
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.btn-action {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    border: 1px solid transparent;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #111827;
+    background-image: linear-gradient(to right, var(--brand-gold-500), var(--brand-gold-700));
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-action:hover {
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+.info-box {
+    padding: 16px;
+    background: rgba(59, 130, 246, 0.05);
+    border-left: 4px solid #3B82F6;
+    border-radius: 0 8px 8px 0;
+    margin-bottom: 16px;
+}
+
+.info-box-warning {
+    background: rgba(255, 184, 0, 0.05);
+    border-left-color: #FFB800;
+}
+
+.tab-button {
+    padding: 16px 24px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #9CA3AF;
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+    top: 2px;
+}
+
+.tab-button:hover {
+    color: #D1D1D1;
+}
+
+.tab-button.active {
+    color: #FFB800;
+    border-bottom-color: #FFB800;
+}
+</style>
+{% endblock %}
 
 {% block content %}
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
     
-    <!-- Header Instagram-style -->
-    <div class="mb-8 text-center">
-        <div class="inline-flex items-center gap-4 mb-4">
-            <div class="w-16 h-16 rounded-full flex items-center justify-center animate-pulse"
-                 style="background: linear-gradient(135deg, var(--brand-gold-500), var(--brand-gold-600)); box-shadow: 0 0 20px rgba(245, 158, 11, 0.5);">
-                <i class="fas fa-trophy text-3xl" style="color: var(--brand-gold-900);"></i>
-            </div>
-            <h1 class="text-4xl font-black" style="color: var(--brand-gold-200); text-shadow: 0 2px 16px rgba(253, 230, 138, 0.6), 0 0 30px rgba(252, 211, 77, 0.4); letter-spacing: 0.05em;">
-                HALL DA FAMA
-            </h1>
-            <div class="w-16 h-16 rounded-full flex items-center justify-center animate-pulse"
-                 style="background: linear-gradient(135deg, var(--brand-gold-500), var(--alert-600)); box-shadow: 0 0 20px rgba(249, 115, 22, 0.5);">
-                <i class="fas fa-fire text-3xl" style="color: var(--brand-gold-100); filter: drop-shadow(0 0 4px rgba(254, 243, 199, 0.8));"></i>
-            </div>
-        </div>
-        <p class="text-lg font-semibold" style="color: var(--txt-secondary);">Compete, venda e domine o ranking!</p>
-    </div>
-    
-    <!-- Filtros Simplificados -->
-    <div class="card !p-6 mb-8">
-        <div class="flex flex-wrap justify-center gap-4">
-            <div class="flex gap-3">
-                <a href="?period=month" 
-                   class="px-6 py-3 rounded-xl font-bold text-lg {% if period == 'month' %}bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg{% else %}bg-dark-surface text-txt-primary hover:bg-gray-200{% endif %} transition-all">
-                    📅 Este Mês
-                </a>
-                <a href="?period=all" 
-                   class="px-6 py-3 rounded-xl font-bold text-lg {% if period == 'all' %}bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-lg{% else %}bg-dark-surface text-txt-primary hover:bg-gray-200{% endif %} transition-all">
-                    🏆 Histórico Completo
-                </a>
-            </div>
-        </div>
-        <p class="text-center text-sm text-txt-tertiary mt-3">
-            💡 Ranking por <strong>receita total</strong> (quanto cada vendedor faturou)
+    <!-- Header -->
+    <div class="mb-8">
+        <h1 class="text-4xl font-black text-white mb-2 flex items-center gap-3">
+            <i class="fas fa-trophy" style="color: #FFB800;"></i>
+            Hall da Fama 🏆
+        </h1>
+        <p class="text-lg text-gray-400">
+            Compete, venda e domine o ranking!
         </p>
     </div>
-    
+
+    <!-- Filtros (Tabs) -->
+    <div class="flex gap-0 border-b-2 border-gray-800 mb-8">
+        <a href="?period=month" 
+           class="tab-button {% if period == 'month' %}active{% endif %}">
+            <i class="fas fa-calendar-alt mr-2"></i>Este Mês
+        </a>
+        <a href="?period=all" 
+           class="tab-button {% if period == 'all' %}active{% endif %}">
+            <i class="fas fa-infinity mr-2"></i>Histórico Completo
+        </a>
+    </div>
+
+    <!-- Info Box -->
+    <div class="info-box-warning info-box">
+        <p class="text-sm text-gray-300">
+            <i class="fas fa-lightbulb mr-2 text-yellow-500"></i>
+            <strong class="text-yellow-400">Ranking por:</strong> Receita total gerada no período selecionado
+        </p>
+    </div>
+
     <!-- SUA POSIÇÃO (Destaque) -->
     {% if my_position %}
-    <div class="card !p-0 mb-8 overflow-hidden border-2" style="border-color: var(--brand-gold-500); box-shadow: 0 0 30px rgba(245, 158, 11, 0.4), 0 8px 24px rgba(0, 0, 0, 0.4);">
-        <div class="px-6 py-4" style="background: linear-gradient(135deg, var(--brand-gold-500), var(--brand-gold-600));">
-            <h3 class="text-lg font-black flex items-center gap-2" style="color: var(--dark-900); text-shadow: 0 1px 2px rgba(255, 255, 255, 0.2);">
-                <i class="fas fa-star" style="color: var(--brand-gold-900);"></i> SUA POSIÇÃO
-            </h3>
-        </div>
-        <div class="p-6" style="background: var(--dark-800);">
-            <div class="flex items-center justify-between flex-wrap gap-6">
-                <div class="flex items-center gap-8 flex-wrap">
-                    <div class="text-center">
-                        <div class="font-black mb-2" style="font-size: 4rem; color: var(--brand-gold-200); text-shadow: 0 2px 16px rgba(253, 230, 138, 0.6), 0 0 30px rgba(252, 211, 77, 0.5); line-height: 1;">
-                            #{{ my_position }}
-                        </div>
-                        <p class="text-xs font-semibold" style="color: var(--txt-secondary);">Posição</p>
-                    </div>
-                    <div class="h-20 w-px" style="background: rgba(255, 255, 255, 0.15);"></div>
-                    <div>
-                        <p class="text-sm font-semibold mb-1" style="color: var(--txt-tertiary);">Seus pontos:</p>
-                        <p class="text-3xl font-black" style="color: var(--brand-gold-200); text-shadow: 0 0 12px rgba(253, 230, 138, 0.4);">{{ current_user.ranking_points }}</p>
-                    </div>
-                    {% if current_user.current_streak > 0 %}
-                    <div class="h-20 w-px" style="background: rgba(255, 255, 255, 0.15);"></div>
-                    <div>
-                        <p class="text-sm font-semibold mb-1" style="color: var(--txt-tertiary);">Streak:</p>
-                        <div class="flex items-center gap-2">
-                            <i class="fas fa-fire text-2xl" style="color: var(--brand-gold-400); filter: drop-shadow(0 0 8px rgba(251, 146, 60, 0.8));"></i>
-                            <p class="text-3xl font-black" style="color: var(--brand-gold-300); text-shadow: 0 0 12px rgba(253, 186, 116, 0.4);">{{ current_user.current_streak }}</p>
-                        </div>
-                    </div>
-                    {% endif %}
-                </div>
-                {% if next_user %}
-                <div class="text-right">
-                    <p class="text-sm font-semibold mb-2" style="color: var(--txt-tertiary);">Para subir para #{{ next_user.position }}:</p>
-                    <p class="text-xl font-black" style="color: var(--brand-gold-200); text-shadow: 0 0 12px rgba(253, 230, 138, 0.4);">
-                        Faltam {{ next_user.points - current_user.ranking_points }} pontos
-                    </p>
-                    <p class="text-xs font-semibold mt-2" style="color: var(--txt-secondary);">Próximo: @{{ next_user.user.username }}</p>
-                </div>
-                {% endif %}
+    <div class="config-section" style="border: 2px solid #FFB800; box-shadow: 0 0 20px rgba(255, 184, 0, 0.3);">
+        <div class="config-section-header" style="border-bottom-color: rgba(255, 184, 0, 0.2);">
+            <i class="fas fa-star text-2xl" style="color: #FFB800;"></i>
+            <div>
+                <div class="config-section-title" style="color: #FFB800;">SUA POSIÇÃO</div>
+                <div class="config-section-description">Você está competindo!</div>
             </div>
+        </div>
+
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="stat-box" style="border-color: rgba(255, 184, 0, 0.3);">
+                <div class="stat-value" style="color: #FFB800; font-size: 3rem;">#{{ my_position }}</div>
+                <div class="stat-label">Posição</div>
+            </div>
+
+            <div class="stat-box">
+                <div class="stat-value" style="color: #FFB800;">{{ current_user.ranking_points }}</div>
+                <div class="stat-label">Pontos</div>
+            </div>
+
+            {% if current_user.current_streak > 0 %}
+            <div class="stat-box">
+                <div class="stat-value" style="color: #FFB800;">{{ current_user.current_streak }}</div>
+                <div class="stat-label">🔥 Streak (dias)</div>
+            </div>
+            {% endif %}
+
+            {% if next_user %}
+            <div class="stat-box">
+                <div class="stat-value" style="color: #EF4444; font-size: 1.5rem;">{{ next_user.points - current_user.ranking_points }}</div>
+                <div class="stat-label">Pontos faltando</div>
+                <div class="text-xs text-gray-600 mt-1">Para #{{ next_user.position }}</div>
+            </div>
+            {% endif %}
         </div>
     </div>
     {% endif %}
-    
-    <!-- Top 3 (Pódio Visual) -->
+
+    <!-- Pódio (Top 3) -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         {% for item in ranking[:3] %}
-        <div class="card !p-6 relative overflow-hidden border-2 {% if loop.index == 1 %}order-2 md:order-1{% elif loop.index == 2 %}order-1 md:order-2 transform md:scale-110 md:-mt-4{% else %}order-3{% endif %}"
-             style="background: var(--dark-800); {% if loop.index == 1 %}border-color: var(--brand-gold-500); box-shadow: 0 0 20px rgba(245, 158, 11, 0.3);{% elif loop.index == 2 %}border-color: var(--txt-secondary); box-shadow: 0 0 20px rgba(209, 213, 219, 0.2);{% else %}border-color: var(--brand-gold-500); box-shadow: 0 0 20px rgba(249, 115, 22, 0.3);{% endif %}">
-            
+        <div class="podium-card {% if loop.index == 1 %}podium-gold order-2 md:order-1{% elif loop.index == 2 %}podium-silver order-1 md:order-2 md:scale-105{% else %}podium-bronze order-3{% endif %}">
             <!-- Medalha -->
             <div class="text-center mb-6">
-                <div class="inline-flex w-24 h-24 rounded-full items-center justify-center shadow-xl mb-3"
-                     style="{% if loop.index == 1 %}background: linear-gradient(135deg, var(--brand-gold-500), var(--brand-gold-600));{% elif loop.index == 2 %}background: linear-gradient(135deg, var(--txt-secondary), var(--txt-tertiary));{% else %}background: linear-gradient(135deg, var(--brand-gold-500), var(--brand-gold-600));{% endif %} box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);">
-                    <i class="{% if loop.index == 1 %}fas fa-crown{% elif loop.index == 2 %}fas fa-award{% else %}fas fa-medal{% endif %} text-5xl"
-                       style="{% if loop.index == 1 %}color: var(--brand-gold-900);{% elif loop.index == 2 %}color: var(--dark-700);{% else %}color: var(--brand-gold-800);{% endif %}"></i>
+                <div class="inline-flex w-20 h-20 rounded-full items-center justify-center mb-3"
+                     style="{% if loop.index == 1 %}background: linear-gradient(135deg, #FFB800, #DAA520);{% elif loop.index == 2 %}background: linear-gradient(135deg, #C0C0C0, #A8A8A8);{% else %}background: linear-gradient(135deg, #CD7F32, #B8732D);{% endif %}">
+                    <i class="{% if loop.index == 1 %}fas fa-crown{% elif loop.index == 2 %}fas fa-award{% else %}fas fa-medal{% endif %} text-4xl"
+                       style="color: {% if loop.index == 1 %}#000{% elif loop.index == 2 %}#FFFFFF{% else %}#000{% endif %};"></i>
                 </div>
-                <p class="text-3xl font-black" style="{% if loop.index == 1 %}color: var(--brand-gold-200); text-shadow: 0 0 12px rgba(253, 230, 138, 0.5);{% elif loop.index == 2 %}color: var(--txt-secondary); text-shadow: 0 0 12px rgba(243, 244, 246, 0.3);{% else %}color: var(--brand-gold-300); text-shadow: 0 0 12px rgba(253, 186, 116, 0.5);{% endif %}">
+                <p class="text-3xl font-black" style="{% if loop.index == 1 %}color: #FFB800;{% elif loop.index == 2 %}color: #C0C0C0;{% else %}color: #CD7F32;{% endif %}">
                     #{{ item.position }}
                 </p>
             </div>
-            
+
             <!-- Usuário -->
-            <div class="text-center mb-6 pb-4" style="border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
-                <p class="text-lg font-black" style="color: var(--txt-primary);">@{{ item.user.username }}</p>
-                <p class="text-sm font-semibold mt-1" style="color: var(--txt-tertiary);">{{ item.user.full_name or '-' }}</p>
+            <div class="text-center mb-4 pb-4 border-b border-gray-800">
+                <p class="text-lg font-bold text-white">@{{ item.user.username }}</p>
+                <p class="text-sm text-gray-500 mt-1">{{ item.user.full_name or '-' }}</p>
             </div>
-            
+
             <!-- Stats -->
-            <div class="space-y-3 text-sm">
-                <div class="flex justify-between items-center p-3 rounded-lg" style="background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255, 255, 255, 0.1);">
-                    <span class="font-semibold" style="color: var(--txt-secondary);">Pontos:</span>
-                    <span class="font-black text-lg" style="color: var(--brand-gold-200);">{{ item.points }}</span>
+            <div class="space-y-3">
+                <div class="flex justify-between items-center p-3 bg-black bg-opacity-30 rounded-lg">
+                    <span class="text-xs font-bold text-gray-400">PONTOS</span>
+                    <span class="text-lg font-black" style="color: #FFB800;">{{ item.points }}</span>
                 </div>
-                <div class="flex justify-between items-center p-3 rounded-lg" style="background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255, 255, 255, 0.1);">
-                    <span class="font-semibold" style="color: var(--txt-secondary);">Receita:</span>
-                    <span class="font-black text-lg" style="color: var(--brand-emerald-300);">R$ {{ "%.2f"|format(item.revenue) }}</span>
+                <div class="flex justify-between items-center p-3 bg-black bg-opacity-30 rounded-lg">
+                    <span class="text-xs font-bold text-gray-400">RECEITA</span>
+                    <span class="text-lg font-black text-green-400">R$ {{ "%.2f"|format(item.revenue) }}</span>
                 </div>
-                <div class="flex justify-between items-center p-3 rounded-lg" style="background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255, 255, 255, 0.1);">
-                    <span class="font-semibold" style="color: var(--txt-secondary);">Vendas:</span>
-                    <span class="font-black text-lg" style="color: var(--txt-primary);">{{ item.sales }}</span>
+                <div class="flex justify-between items-center p-3 bg-black bg-opacity-30 rounded-lg">
+                    <span class="text-xs font-bold text-gray-400">VENDAS</span>
+                    <span class="text-lg font-black text-white">{{ item.sales }}</span>
                 </div>
                 {% if item.streak > 0 %}
-                <div class="flex justify-between items-center p-3 rounded-lg" style="background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255, 255, 255, 0.1);">
-                    <span class="font-semibold" style="color: var(--txt-secondary);">Streak:</span>
-                    <div class="flex items-center gap-1.5">
-                        <i class="fas fa-fire" style="color: var(--brand-gold-400);"></i>
-                        <span class="font-black text-lg" style="color: var(--brand-gold-300);">{{ item.streak }} dias</span>
+                <div class="flex justify-between items-center p-3 bg-black bg-opacity-30 rounded-lg">
+                    <span class="text-xs font-bold text-gray-400">STREAK</span>
+                    <div class="flex items-center gap-2">
+                        <i class="fas fa-fire" style="color: #FFB800;"></i>
+                        <span class="text-lg font-black" style="color: #FFB800;">{{ item.streak }}</span>
                     </div>
                 </div>
                 {% endif %}
             </div>
-            
+
             <!-- Badges -->
             {% if item.badges %}
-            <div class="mt-6 pt-4 flex justify-center gap-2 flex-wrap" style="border-top: 1px solid rgba(255, 255, 255, 0.1);">
-                {% for badge in item.badges %}
+            <div class="mt-4 pt-4 flex justify-center gap-2 flex-wrap border-t border-gray-800">
+                {% for badge in item.badges[:5] %}
                 <span class="text-2xl" title="{{ badge.name }}">{{ badge.icon }}</span>
                 {% endfor %}
                 {% if item.total_badges > 5 %}
-                <span class="text-xs font-semibold" style="color: var(--txt-tertiary);">+{{ item.total_badges - 5 }}</span>
+                <span class="text-xs font-bold text-gray-500">+{{ item.total_badges - 5 }}</span>
                 {% endif %}
             </div>
             {% endif %}
         </div>
         {% endfor %}
     </div>
-    
-    <!-- Resto do Ranking (4-100) -->
-    <div class="card !p-0 overflow-hidden">
+
+    <!-- Resto do Ranking -->
+    <div class="config-section">
+        <div class="config-section-header">
+            <i class="fas fa-list-ol text-2xl text-blue-500"></i>
+            <div>
+                <div class="config-section-title">Ranking Completo</div>
+                <div class="config-section-description">Posições 4-100</div>
+            </div>
+        </div>
+
         <div class="overflow-x-auto">
-            <table class="w-full">
-                <thead style="background: var(--dark-800);">
+            <table class="table-premium">
+                <thead>
                     <tr>
-                        <th class="px-6 py-4 text-left text-xs font-bold uppercase" style="color: var(--txt-tertiary); letter-spacing: 0.05em;">#</th>
-                        <th class="px-6 py-4 text-left text-xs font-bold uppercase" style="color: var(--txt-tertiary); letter-spacing: 0.05em;">Usuário</th>
-                        <th class="px-6 py-4 text-left text-xs font-bold uppercase" style="color: var(--txt-tertiary); letter-spacing: 0.05em;">Pontos</th>
-                        <th class="px-6 py-4 text-left text-xs font-bold uppercase" style="color: var(--txt-tertiary); letter-spacing: 0.05em;">Receita</th>
-                        <th class="px-6 py-4 text-left text-xs font-bold uppercase" style="color: var(--txt-tertiary); letter-spacing: 0.05em;">Vendas</th>
-                        <th class="px-6 py-4 text-left text-xs font-bold uppercase" style="color: var(--txt-tertiary); letter-spacing: 0.05em;">Streak</th>
-                        <th class="px-6 py-4 text-left text-xs font-bold uppercase" style="color: var(--txt-tertiary); letter-spacing: 0.05em;">Conquistas</th>
+                        <th>#</th>
+                        <th>Usuário</th>
+                        <th>Pontos</th>
+                        <th>Receita</th>
+                        <th>Vendas</th>
+                        <th>Streak</th>
+                        <th>Conquistas</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y" style="border-color: rgba(255, 255, 255, 0.08);">
+                <tbody>
                     {% for item in ranking[3:] %}
-                    <tr class="hover:bg-white hover:bg-opacity-5 transition {% if item.user.id == current_user.id %}border-l-4{% endif %}"
-                        style="{% if item.user.id == current_user.id %}background: rgba(245, 158, 11, 0.12); border-left-color: var(--brand-gold-500);{% endif %}">
-                        <td class="px-6 py-4">
-                            <span class="text-lg font-black" style="{% if item.position <= 10 %}color: var(--brand-gold-200);{% else %}color: var(--txt-primary);{% endif %}">
+                    <tr {% if item.user.id == current_user.id %}style="background: rgba(255, 184, 0, 0.1); border-left: 3px solid #FFB800;"{% endif %}>
+                        <td>
+                            <span class="text-lg font-bold" style="{% if item.position <= 10 %}color: #FFB800;{% else %}color: #9CA3AF;{% endif %}">
                                 #{{ item.position }}
                             </span>
                         </td>
-                        <td class="px-6 py-4">
+                        <td>
                             <div>
-                                <p class="text-sm font-black" style="color: var(--txt-primary);">
+                                <p class="text-sm font-bold text-white">
                                     @{{ item.user.username }}
                                     {% if item.user.id == current_user.id %}
-                                    <span class="ml-2 px-2 py-1 text-xs font-black rounded" style="background: var(--brand-gold-500); color: var(--dark-900);">VOCÊ</span>
+                                    <span class="ml-2 px-2 py-1 text-xs font-bold rounded" style="background: #FFB800; color: #000;">VOCÊ</span>
                                     {% endif %}
                                 </p>
-                                <p class="text-xs font-semibold mt-0.5" style="color: var(--txt-tertiary);">{{ item.bots_count }} bot(s)</p>
+                                <p class="text-xs text-gray-500 mt-0.5">{{ item.bots_count }} bot(s)</p>
                             </div>
                         </td>
-                        <td class="px-6 py-4 text-sm font-black" style="color: var(--brand-gold-200);">{{ item.points }}</td>
-                        <td class="px-6 py-4 text-sm font-black" style="color: var(--brand-emerald-300);">R$ {{ "%.2f"|format(item.revenue) }}</td>
-                        <td class="px-6 py-4 text-sm font-black" style="color: var(--txt-primary);">{{ item.sales }}</td>
-                        <td class="px-6 py-4">
+                        <td class="font-bold" style="color: #FFB800;">{{ item.points }}</td>
+                        <td class="font-bold text-green-400">R$ {{ "%.2f"|format(item.revenue) }}</td>
+                        <td class="font-bold text-white">{{ item.sales }}</td>
+                        <td>
                             {% if item.streak > 0 %}
-                            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold rounded" style="background: rgba(251, 146, 60, 0.2); border: 1px solid rgba(251, 146, 60, 0.3);">
-                                <i class="fas fa-fire" style="color: var(--brand-gold-400);"></i>
-                                <span style="color: var(--brand-gold-300);">{{ item.streak }}</span>
+                            <span class="badge-status" style="background: rgba(255, 184, 0, 0.15); color: #FFB800; border: 1px solid rgba(255, 184, 0, 0.3);">
+                                <i class="fas fa-fire mr-1"></i>
+                                {{ item.streak }}
                             </span>
                             {% else %}
-                            <span class="text-xs font-semibold" style="color: var(--txt-muted);">-</span>
+                            <span class="text-xs text-gray-600">-</span>
                             {% endif %}
                         </td>
-                        <td class="px-6 py-4">
+                        <td>
                             <div class="flex items-center gap-1">
-                                {% for badge in item.badges %}
+                                {% for badge in item.badges[:5] %}
                                 <span class="text-lg" title="{{ badge.name }}">{{ badge.icon }}</span>
                                 {% endfor %}
                                 {% if item.total_badges > 5 %}
-                                <span class="text-xs font-semibold ml-1" style="color: var(--txt-tertiary);">+{{ item.total_badges - 5 }}</span>
+                                <span class="text-xs font-bold text-gray-500">+{{ item.total_badges - 5 }}</span>
                                 {% endif %}
                             </div>
                         </td>
@@ -217,44 +398,44 @@
             </table>
         </div>
     </div>
-    
+
     <!-- Minhas Conquistas -->
-    <div class="card !p-6 mt-8">
-        <h3 class="text-lg font-black mb-6 flex items-center gap-2" style="color: var(--txt-primary);">
-            <i class="fas fa-medal" style="color: var(--brand-gold-200); filter: drop-shadow(0 0 4px rgba(253, 230, 138, 0.5));"></i>
-            Minhas Conquistas
-        </h3>
-        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {% set my_achievements = current_user.achievements %}
-            {% set all_achievements = [] %}
-            
-            {# Buscar todas as conquistas disponíveis #}
-            {% for item in ranking %}
-                {% for badge in item.badges %}
-                    {% if badge not in all_achievements %}
-                        {% set _ = all_achievements.append(badge) %}
-                    {% endif %}
-                {% endfor %}
-            {% endfor %}
-            
-            {# Aqui seria ideal buscar do banco, mas para MVP mostra as dos top users #}
-            {% for ua in my_achievements %}
-            <div class="p-4 border-2 rounded-lg text-center" style="background: rgba(245, 158, 11, 0.15); border-color: var(--brand-gold-500);">
-                <div class="text-4xl mb-2">{{ ua.achievement.icon }}</div>
-                <p class="font-black text-sm" style="color: var(--txt-primary);">{{ ua.achievement.name }}</p>
-                <p class="text-xs font-semibold mt-1" style="color: var(--txt-secondary);">{{ ua.achievement.description }}</p>
-                <p class="text-xs font-bold mt-2 px-2 py-1 rounded inline-block" style="color: var(--brand-gold-200); background: rgba(253, 230, 138, 0.15);">+{{ ua.achievement.points }} pts</p>
+    <div class="config-section">
+        <div class="config-section-header">
+            <i class="fas fa-medal text-2xl" style="color: #FFB800;"></i>
+            <div>
+                <div class="config-section-title">Minhas Conquistas</div>
+                <div class="config-section-description">Badges que você desbloqueou</div>
             </div>
-            {% else %}
-            <div class="col-span-full text-center py-12">
-                <i class="fas fa-lock text-5xl mb-3" style="color: var(--txt-muted);"></i>
-                <p class="font-bold text-lg" style="color: var(--txt-secondary);">Nenhuma conquista desbloqueada ainda</p>
-                <p class="text-sm mt-2 font-semibold" style="color: var(--txt-tertiary);">Faça sua primeira venda para começar!</p>
+        </div>
+
+        {% set my_achievements = current_user.achievements %}
+        {% if my_achievements %}
+        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {% for ua in my_achievements %}
+            <div class="p-4 rounded-lg text-center transition-all hover:scale-105" 
+                 style="background: rgba(255, 184, 0, 0.1); border: 1px solid rgba(255, 184, 0, 0.3);">
+                <div class="text-4xl mb-2">{{ ua.achievement.icon }}</div>
+                <p class="font-bold text-sm text-white">{{ ua.achievement.name }}</p>
+                <p class="text-xs text-gray-400 mt-1">{{ ua.achievement.description }}</p>
+                <p class="text-xs font-bold mt-2 px-2 py-1 rounded inline-block" style="color: #FFB800; background: rgba(255, 184, 0, 0.15);">
+                    +{{ ua.achievement.points }} pts
+                </p>
             </div>
             {% endfor %}
         </div>
+        {% else %}
+        <div class="text-center py-16 border-2 border-dashed border-gray-700 rounded-xl">
+            <i class="fas fa-lock text-5xl text-gray-700 mb-4"></i>
+            <h3 class="text-xl font-bold text-white mb-2">Nenhuma conquista ainda</h3>
+            <p class="text-gray-500 mb-6">Faça sua primeira venda para começar!</p>
+            <a href="{{ url_for('dashboard') }}" class="btn-action">
+                <i class="fas fa-rocket"></i>
+                Ir para Dashboard
+            </a>
+        </div>
+        {% endif %}
     </div>
-    
+
 </div>
 {% endblock %}
-
