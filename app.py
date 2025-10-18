@@ -3038,7 +3038,45 @@ def ranking():
         if next_position_idx < len(ranking_data):
             next_user = ranking_data[next_position_idx]
     
-    # Debug: Buscar conquistas do usuário atual
+    # ✅ AUTO-VERIFICAÇÃO: Checar achievements automaticamente quando acessar ranking
+    try:
+        # Verificar se achievements existem no banco
+        total_achievements_db = Achievement.query.count()
+        
+        # Se não existir, criar achievements básicos
+        if total_achievements_db == 0:
+            logger.warning("⚠️ Criando achievements básicos...")
+            basic_achievements = [
+                {'name': 'Primeira Venda', 'description': 'Realize sua primeira venda', 'icon': '🎯', 'badge_color': 'gold', 'requirement_type': 'sales', 'requirement_value': 1, 'points': 50, 'rarity': 'common'},
+                {'name': 'Vendedor Iniciante', 'description': 'Realize 10 vendas', 'icon': '📈', 'badge_color': 'blue', 'requirement_type': 'sales', 'requirement_value': 10, 'points': 100, 'rarity': 'common'},
+                {'name': 'Vendedor Profissional', 'description': 'Realize 50 vendas', 'icon': '💼', 'badge_color': 'gold', 'requirement_type': 'sales', 'requirement_value': 50, 'points': 500, 'rarity': 'rare'},
+                {'name': 'Primeiro R$ 100', 'description': 'Fature R$ 100 em vendas', 'icon': '💰', 'badge_color': 'green', 'requirement_type': 'revenue', 'requirement_value': 100, 'points': 100, 'rarity': 'common'},
+                {'name': 'R$ 1.000 Faturados', 'description': 'Fature R$ 1.000 em vendas', 'icon': '💸', 'badge_color': 'green', 'requirement_type': 'revenue', 'requirement_value': 1000, 'points': 500, 'rarity': 'rare'},
+                {'name': 'Consistência', 'description': 'Venda por 3 dias consecutivos', 'icon': '🔥', 'badge_color': 'orange', 'requirement_type': 'streak', 'requirement_value': 3, 'points': 200, 'rarity': 'common'},
+                {'name': 'Taxa de Ouro', 'description': 'Atinja 50% de conversão', 'icon': '🎖️', 'badge_color': 'gold', 'requirement_type': 'conversion_rate', 'requirement_value': 50, 'points': 1000, 'rarity': 'epic'},
+            ]
+            for ach_data in basic_achievements:
+                db.session.add(Achievement(**ach_data))
+            db.session.commit()
+            logger.info(f"✅ {len(basic_achievements)} achievements criados")
+        
+        # Verificar conquistas do usuário (leve, sem bloquear)
+        if GAMIFICATION_V2_ENABLED:
+            newly_unlocked = AchievementChecker.check_all_achievements(current_user)
+            if newly_unlocked:
+                logger.info(f"🎉 {len(newly_unlocked)} conquista(s) auto-desbloqueada(s) para {current_user.username}")
+                
+                # Recalcular pontos
+                total_points = db.session.query(func.sum(Achievement.points))\
+                    .join(UserAchievement)\
+                    .filter(UserAchievement.user_id == current_user.id)\
+                    .scalar() or 0
+                current_user.ranking_points = int(total_points)
+                db.session.commit()
+    except Exception as e:
+        logger.error(f"⚠️ Erro na auto-verificação de achievements: {e}")
+    
+    # Buscar conquistas do usuário
     my_achievements = UserAchievement.query.filter_by(user_id=current_user.id).all()
     logger.info(f"📊 Ranking - Usuario {current_user.username} tem {len(my_achievements)} conquista(s)")
     

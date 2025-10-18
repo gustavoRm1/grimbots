@@ -192,19 +192,19 @@
 {% endblock %}
 
 {% block content %}
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" x-data="rankingApp()">
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
     
     <!-- Header -->
     <div class="mb-8">
         <h1 class="text-4xl font-black text-white mb-2 flex items-center gap-3">
             <i class="fas fa-trophy" style="color: #FFB800;"></i>
             Hall da Fama
-        </h1>
+            </h1>
         <p class="text-lg text-gray-400">
             Compete, venda e domine o ranking!
         </p>
     </div>
-
+    
     <!-- Filtros (Tabs) -->
     <div class="flex gap-0 border-b-2 border-gray-800 mb-8">
         <a href="?period=month" 
@@ -214,8 +214,8 @@
         <a href="?period=all" 
            class="tab-button {% if period == 'all' %}active{% endif %}">
             <i class="fas fa-infinity mr-2"></i>Histórico Completo
-        </a>
-    </div>
+                </a>
+            </div>
 
     <!-- Info Box -->
     <div class="info-box-warning info-box">
@@ -224,7 +224,7 @@
             <strong class="text-yellow-400">Ranking por:</strong> Receita total gerada no período selecionado
         </p>
     </div>
-
+    
     <!-- SUA POSIÇÃO (Destaque) -->
     {% if my_position %}
     <div class="config-section" style="border: 2px solid #FFB800; box-shadow: 0 0 20px rgba(255, 184, 0, 0.3);">
@@ -240,21 +240,21 @@
             <div class="stat-box" style="border-color: rgba(255, 184, 0, 0.3);">
                 <div class="stat-value" style="color: #FFB800; font-size: 3rem;">#{{ my_position }}</div>
                 <div class="stat-label">Posição</div>
-            </div>
+                        </div>
 
             <div class="stat-box">
                 <div class="stat-value" style="color: #FFB800;">{{ current_user.ranking_points }}</div>
                 <div class="stat-label">Pontos</div>
-            </div>
+                    </div>
 
-            {% if current_user.current_streak > 0 %}
+                    {% if current_user.current_streak > 0 %}
             <div class="stat-box">
                 <div class="stat-value" style="color: #FFB800;">{{ current_user.current_streak }}</div>
                 <div class="stat-label">🔥 Streak (dias)</div>
-            </div>
-            {% endif %}
+                    </div>
+                    {% endif %}
 
-            {% if next_user %}
+                {% if next_user %}
             <div class="stat-box">
                 <div class="stat-value" style="color: #EF4444; font-size: 1.5rem;">{{ next_user.points - current_user.ranking_points }}</div>
                 <div class="stat-label">Pontos faltando</div>
@@ -264,61 +264,61 @@
         </div>
     </div>
     {% endif %}
-
+    
     <!-- Pódio (Top 3) -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         {% for item in ranking[:3] %}
         <div class="podium-card {% if loop.index == 1 %}podium-gold order-2 md:order-1{% elif loop.index == 2 %}podium-silver order-1 md:order-2 md:scale-105{% else %}podium-bronze order-3{% endif %}">
-            <!-- Medalha -->
+                <!-- Medalha -->
             <div class="text-center mb-6">
                 <div class="inline-flex w-20 h-20 rounded-full items-center justify-center mb-3"
                      style="{% if loop.index == 1 %}background: linear-gradient(135deg, #FFB800, #DAA520);{% elif loop.index == 2 %}background: linear-gradient(135deg, #C0C0C0, #A8A8A8);{% else %}background: linear-gradient(135deg, #CD7F32, #B8732D);{% endif %}">
                     <i class="{% if loop.index == 1 %}fas fa-crown{% elif loop.index == 2 %}fas fa-award{% else %}fas fa-medal{% endif %} text-4xl"
                        style="color: {% if loop.index == 1 %}#000{% elif loop.index == 2 %}#FFFFFF{% else %}#000{% endif %};"></i>
-                </div>
+                    </div>
                 <p class="text-3xl font-black" style="{% if loop.index == 1 %}color: #FFB800;{% elif loop.index == 2 %}color: #C0C0C0;{% else %}color: #CD7F32;{% endif %}">
-                    #{{ item.position }}
-                </p>
-            </div>
-
-            <!-- Usuário -->
+                        #{{ item.position }}
+                    </p>
+                </div>
+                
+                <!-- Usuário -->
             <div class="text-center mb-4 pb-4 border-b border-gray-800">
                 <p class="text-lg font-bold text-white">@{{ item.user.username }}</p>
                 <p class="text-sm text-gray-500 mt-1">{{ item.user.full_name or '-' }}</p>
-            </div>
-
-            <!-- Stats -->
+                </div>
+                
+                <!-- Stats -->
             <div class="space-y-3">
                 <div class="flex justify-between items-center p-3 bg-black bg-opacity-30 rounded-lg">
                     <span class="text-xs font-bold text-gray-400">PONTOS</span>
                     <span class="text-lg font-black" style="color: #FFB800;">{{ item.points }}</span>
-                </div>
+                    </div>
                 <div class="flex justify-between items-center p-3 bg-black bg-opacity-30 rounded-lg">
                     <span class="text-xs font-bold text-gray-400">RECEITA</span>
                     <span class="text-lg font-black text-green-400">R$ {{ "%.2f"|format(item.revenue) }}</span>
-                </div>
+                    </div>
                 <div class="flex justify-between items-center p-3 bg-black bg-opacity-30 rounded-lg">
                     <span class="text-xs font-bold text-gray-400">VENDAS</span>
                     <span class="text-lg font-black text-white">{{ item.sales }}</span>
-                </div>
-                {% if item.streak > 0 %}
+                    </div>
+                    {% if item.streak > 0 %}
                 <div class="flex justify-between items-center p-3 bg-black bg-opacity-30 rounded-lg">
                     <span class="text-xs font-bold text-gray-400">STREAK</span>
                     <div class="flex items-center gap-2">
                         <i class="fas fa-fire" style="color: #FFB800;"></i>
                         <span class="text-lg font-black" style="color: #FFB800;">{{ item.streak }}</span>
                     </div>
+                    </div>
+                    {% endif %}
                 </div>
-                {% endif %}
-            </div>
-
-            <!-- Badges -->
-            {% if item.badges %}
+                
+                <!-- Badges -->
+                {% if item.badges %}
             <div class="mt-4 pt-4 flex justify-center gap-2 flex-wrap border-t border-gray-800">
                 {% for badge in item.badges[:5] %}
-                <span class="text-2xl" title="{{ badge.name }}">{{ badge.icon }}</span>
-                {% endfor %}
-                {% if item.total_badges > 5 %}
+                    <span class="text-2xl" title="{{ badge.name }}">{{ badge.icon }}</span>
+                    {% endfor %}
+                    {% if item.total_badges > 5 %}
                 <span class="text-xs font-bold text-gray-500">+{{ item.total_badges - 5 }}</span>
                 {% endif %}
             </div>
@@ -326,7 +326,7 @@
         </div>
         {% endfor %}
     </div>
-
+    
     <!-- Resto do Ranking -->
     <div class="config-section">
         <div class="config-section-header">
@@ -398,22 +398,15 @@
             </table>
         </div>
     </div>
-
+    
     <!-- Minhas Conquistas -->
     <div class="config-section">
         <div class="config-section-header">
             <i class="fas fa-medal text-2xl" style="color: #FFB800;"></i>
-            <div class="flex-1">
+            <div>
                 <div class="config-section-title">Minhas Conquistas</div>
                 <div class="config-section-description">Badges que você desbloqueou</div>
             </div>
-            <button @click="forceCheckAchievements()" 
-                    :disabled="loading"
-                    :class="{'opacity-50 cursor-not-allowed': loading}"
-                    class="btn-action">
-                <i class="fas" :class="loading ? 'fa-spinner fa-spin' : 'fa-sync'"></i>
-                <span x-text="loading ? 'Verificando...' : 'Verificar Conquistas'"></span>
-            </button>
         </div>
 
         {# Buscar conquistas do current_user diretamente #}
@@ -445,43 +438,6 @@
         </div>
         {% endif %}
     </div>
-
+    
 </div>
-{% endblock %}
-
-{% block extra_scripts %}
-<script>
-function rankingApp() {
-    return {
-        loading: false,
-        
-        async forceCheckAchievements() {
-            this.loading = true;
-            try {
-                const response = await fetch('/api/force-check-achievements', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
-                });
-                
-                const data = await response.json();
-                
-                if (response.ok) {
-                    if (data.newly_unlocked > 0) {
-                        alert(`🎉 ${data.newly_unlocked} nova(s) conquista(s) desbloqueada(s)!\n\nRecarregando página...`);
-                    } else {
-                        alert(`✅ Verificação completa!\n\nVocê tem ${data.total_achievements} conquista(s)\nRanking: ${data.ranking_points} pontos\n\nRecarregando página...`);
-                    }
-                    location.reload();
-                } else {
-                    alert('Erro: ' + data.error);
-                }
-            } catch (error) {
-                alert('Erro ao verificar conquistas: ' + error.message);
-            } finally {
-                this.loading = false;
-            }
-        }
-    };
-}
-</script>
 {% endblock %}
