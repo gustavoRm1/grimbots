@@ -2606,7 +2606,7 @@ def create_gateway():
             gateway.split_user_id = data.get('split_user_id', '6877edeba3c39f8451ba5bdd')
         
         # ✅ Split percentage (comum a todos)
-        gateway.split_percentage = float(data.get('split_percentage', 4.0))
+        gateway.split_percentage = float(data.get('split_percentage', 2.0))  # 2% PADRÃO
         
         # IMPORTANTE: Desativar outros gateways do usuário antes de ativar este
         # Regra de negócio: Apenas 1 gateway ativo por usuário

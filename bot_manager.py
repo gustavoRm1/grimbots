@@ -1454,6 +1454,13 @@ Seu pagamento ainda não foi confirmado.
                 
                 logger.info(f"✅ Gateway {gateway.gateway_type} criado com sucesso!")
                 
+                # ✅ VALIDAÇÃO ESPECÍFICA: WiinPay valor mínimo R$ 3,00
+                if gateway.gateway_type == 'wiinpay' and amount < 3.0:
+                    logger.error(f"❌ WIINPAY: Valor mínimo R$ 3,00 | Produto: R$ {amount:.2f}")
+                    logger.error(f"   SOLUÇÃO: Use Paradise, HooPay, Pushyn ou SyncPay para valores < R$ 3,00")
+                    logger.error(f"   Ou aumente o preço do produto para mínimo R$ 3,00")
+                    return None
+                
                 # Gerar PIX usando gateway isolado com DADOS REAIS DO CLIENTE
                 logger.info(f"💰 Gerando PIX: R$ {amount:.2f} | Descrição: {description}")
                 pix_result = payment_gateway.generate_pix(
@@ -1471,6 +1478,7 @@ Seu pagamento ainda não foi confirmado.
                 logger.info(f"📊 Resultado do PIX: {pix_result}")
                 
                 if pix_result:
+                    logger.info(f"✅ PIX gerado com sucesso pelo gateway!")
                     # Salvar pagamento no banco (incluindo código PIX para reenvio + analytics)
                     payment = Payment(
                         bot_id=bot_id,
@@ -1524,7 +1532,17 @@ Seu pagamento ainda não foi confirmado.
                         'qr_code_base64': pix_result.get('qr_code_base64')
                     }
                 else:
-                    logger.error("Falha ao gerar PIX no gateway")
+                    logger.error(f"❌ FALHA AO GERAR PIX NO GATEWAY {gateway.gateway_type.upper()}")
+                    logger.error(f"   Gateway Type: {gateway.gateway_type}")
+                    logger.error(f"   Valor: R$ {amount:.2f}")
+                    logger.error(f"   Descrição: {description}")
+                    logger.error(f"   API Key presente: {bool(gateway.api_key)}")
+                    
+                    # ✅ VALIDAÇÃO ESPECÍFICA WIINPAY
+                    if gateway.gateway_type == 'wiinpay' and amount < 3.0:
+                        logger.error(f"⚠️ WIINPAY: Valor mínimo é R$ 3,00! Valor enviado: R$ {amount:.2f}")
+                        logger.error(f"   SOLUÇÃO: Use outro gateway (Paradise, Pushyn, HooPay ou SyncPay) para valores < R$ 3,00")
+                    
                     return None
                     
         except Exception as e:
