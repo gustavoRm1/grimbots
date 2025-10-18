@@ -1018,12 +1018,7 @@
                     <div class="config-section-title">Campanhas de Remarketing</div>
                     <div class="config-section-description">Recupere clientes que não compraram</div>
                 </div>
-                <div class="ml-auto flex items-center gap-3">
-                    <a href="{{ url_for('remarketing_analytics', bot_id=bot.id) }}" 
-                       class="btn-action" style="background: linear-gradient(to right, #3B82F6, #2563EB);">
-                        <i class="fas fa-chart-line"></i>
-                        Ver Analytics
-                    </a>
+                <div class="ml-auto">
                     <button @click="showCreateModal = true" class="btn-action btn-action-success">
                         <i class="fas fa-plus"></i>
                         Nova Campanha
@@ -1035,6 +1030,65 @@
                 <p class="text-sm text-gray-300">
                     <i class="fas fa-lightbulb mr-2 text-yellow-500"></i>
                     <strong class="text-yellow-500">Remarketing:</strong> Envie mensagens automáticas para usuários que iniciaram conversa mas não compraram. Configure público-alvo, delay e mensagem personalizada.
+                </p>
+            </div>
+
+            <!-- Analytics Detalhados -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                <div class="stat-box text-center p-5 bg-gray-900 border border-gray-800 rounded-xl hover:border-yellow-500 transition-all">
+                    <div class="text-3xl font-bold text-yellow-500" x-text="campaigns.length || 0"></div>
+                    <div class="text-sm text-gray-500 mt-1">Campanhas Criadas</div>
+                </div>
+                
+                <div class="stat-box text-center p-5 bg-gray-900 border border-gray-800 rounded-xl hover:border-blue-400 transition-all">
+                    <div class="text-3xl font-bold text-blue-400" x-text="getTotalSent()"></div>
+                    <div class="text-sm text-gray-500 mt-1">Mensagens Enviadas</div>
+                </div>
+                
+                <div class="stat-box text-center p-5 bg-gray-900 border border-gray-800 rounded-xl hover:border-green-400 transition-all">
+                    <div class="text-3xl font-bold text-green-400" x-text="getDeliveryRate() + '%'"></div>
+                    <div class="text-sm text-gray-500 mt-1">Taxa de Entrega</div>
+                </div>
+                
+                <div class="stat-box text-center p-5 bg-gray-900 border border-gray-800 rounded-xl hover:border-green-400 transition-all">
+                    <div class="text-3xl font-bold text-green-400" x-text="getClickRate() + '%'"></div>
+                    <div class="text-sm text-gray-500 mt-1">Taxa de Cliques</div>
+                </div>
+            </div>
+
+            <!-- Métricas Adicionais -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                <div class="text-center p-4 bg-gray-900 border border-gray-800 rounded-lg">
+                    <div class="text-xl font-bold text-green-300" x-text="getTotalClicks()"></div>
+                    <div class="text-xs text-gray-500 mt-1">Total de Cliques</div>
+                </div>
+                
+                <div class="text-center p-4 bg-gray-900 border border-gray-800 rounded-lg">
+                    <div class="text-xl font-bold text-red-400" x-text="getTotalFailed()"></div>
+                    <div class="text-xs text-gray-500 mt-1">Falhas no Envio</div>
+                </div>
+                
+                <div class="text-center p-4 bg-gray-900 border border-gray-800 rounded-lg">
+                    <div class="text-xl font-bold text-gray-400" x-text="getTotalBlocked()"></div>
+                    <div class="text-xs text-gray-500 mt-1">Usuários Bloqueados</div>
+                </div>
+                
+                <div class="text-center p-4 bg-gray-900 border border-gray-800 rounded-lg">
+                    <div class="text-xl font-bold text-yellow-500" x-text="'R$ ' + getTotalRevenue().toFixed(2)"></div>
+                    <div class="text-xs text-gray-500 mt-1">Receita Gerada</div>
+                </div>
+            </div>
+
+            <!-- Info Box: Dica de Performance -->
+            <div class="info-box mb-6" style="background: rgba(16, 185, 129, 0.05); border-left: 4px solid #10B981; padding: 12px; border-radius: 0 8px 8px 0;">
+                <p class="text-sm text-gray-300">
+                    <i class="fas fa-chart-line mr-2 text-green-400"></i>
+                    <strong class="text-green-400">Análise de Performance:</strong>
+                    <span x-show="getClickRate() > 10" class="text-green-300">Excelente! Taxa de cliques acima de 10% é considerada ótima.</span>
+                    <span x-show="getClickRate() <= 10 && getClickRate() > 5" class="text-blue-300">Bom! Continue testando mensagens diferentes para melhorar.</span>
+                    <span x-show="getClickRate() <= 5 && getClickRate() > 0" class="text-yellow-300">Teste mensagens mais persuasivas e ofertas melhores.</span>
+                    <span x-show="getClickRate() === 0 && campaigns.length > 0" class="text-gray-300">Envie suas primeiras campanhas para começar a coletar dados.</span>
+                    <span x-show="campaigns.length === 0" class="text-gray-300">Crie sua primeira campanha para ver as métricas aqui.</span>
                 </p>
             </div>
 
@@ -1657,6 +1711,41 @@ function remarketingApp() {
                 'failed': 'Falhou'
             };
             return labels[status] || status;
+        },
+        
+        // ✅ Cálculos de Analytics
+        getTotalSent() {
+            return this.campaigns.reduce((sum, c) => sum + (c.total_sent || 0), 0);
+        },
+        
+        getDeliveryRate() {
+            const totalSent = this.getTotalSent();
+            const totalFailed = this.campaigns.reduce((sum, c) => sum + (c.total_failed || 0), 0);
+            if (totalSent === 0) return 0;
+            return ((totalSent - totalFailed) / totalSent * 100).toFixed(1);
+        },
+        
+        getClickRate() {
+            const totalSent = this.getTotalSent();
+            const totalClicks = this.getTotalClicks();
+            if (totalSent === 0) return 0;
+            return (totalClicks / totalSent * 100).toFixed(1);
+        },
+        
+        getTotalClicks() {
+            return this.campaigns.reduce((sum, c) => sum + (c.total_clicks || 0), 0);
+        },
+        
+        getTotalFailed() {
+            return this.campaigns.reduce((sum, c) => sum + (c.total_failed || 0), 0);
+        },
+        
+        getTotalBlocked() {
+            return this.campaigns.reduce((sum, c) => sum + (c.total_blocked || 0), 0);
+        },
+        
+        getTotalRevenue() {
+            return this.campaigns.reduce((sum, c) => sum + (c.revenue_generated || 0), 0);
         },
         
         showNotification(message, type = 'success') {
