@@ -361,9 +361,17 @@
                             <i class="fas fa-stop mr-1"></i> Parar
                         </button>
                                     </template>
-                                    <template x-if="!bot.is_running">
+                                    <template x-if="!bot.is_running && bot.config && bot.config.welcome_message">
                                     <button @click="startBot(bot.id)" class="btn-action btn-action-success flex-1">
                             <i class="fas fa-play mr-1"></i> Iniciar
+                        </button>
+                                    </template>
+                                    <template x-if="!bot.is_running && (!bot.config || !bot.config.welcome_message)">
+                                    <button @click="window.location.href='/bot/' + bot.id + '/config'" 
+                                            class="btn-action flex-1"
+                                            style="background: rgba(251, 191, 36, 0.1); border-color: rgba(251, 191, 36, 0.3); color: #FCD34D;"
+                                            title="Configure o bot antes de iniciar">
+                            <i class="fas fa-cog mr-1"></i> Configurar Primeiro
                         </button>
                                     </template>
                                 <button @click="openDuplicateBotModal(bot)" class="btn-action flex-1"
@@ -1224,11 +1232,21 @@ function dashboardApp() {
                     console.log('✅ Bot iniciado com sucesso!');
                     location.reload();
                 } else {
-                    const text = await response.text();
-                    console.error('❌ Erro ao iniciar bot:', text);
+                    const data = await response.json();
+                    console.error('❌ Erro ao iniciar bot:', data);
+                    
+                    // Se o erro for de configuração, redirecionar
+                    if (data.error && data.error.includes('Configure')) {
+                        if (confirm(`⚠️ ${data.error}\n\nDeseja ir para a página de configuração agora?`)) {
+                            window.location.href = `/bots/${botId}/config`;
+                        }
+                    } else {
+                        alert(`❌ Erro: ${data.error || 'Erro desconhecido'}`);
+                    }
                 }
             } catch (error) {
                 console.error('❌ Erro ao iniciar bot:', error);
+                alert('❌ Erro ao iniciar bot. Verifique o console para detalhes.');
             }
         },
 
