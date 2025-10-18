@@ -40,7 +40,7 @@ class ParadisePaymentGateway(PaymentGateway):
         self.product_hash = credentials.get('product_hash', '')
         self.offer_hash = credentials.get('offer_hash', '')
         self.store_id = credentials.get('store_id', '')
-        self.split_percentage = float(credentials.get('split_percentage', 4.0))
+        self.split_percentage = float(credentials.get('split_percentage', 2.0))  # 2% PADRÃO
         
         # URLs da API Paradise
         self.base_url = 'https://multi.paradisepags.com/api/v1'
@@ -144,6 +144,27 @@ class ParadisePaymentGateway(PaymentGateway):
             # Se offerHash foi configurado, adiciona
             if self.offer_hash:
                 payload["offerHash"] = self.offer_hash
+            
+            # ✅ CORREÇÃO CRÍTICA: ADICIONAR SPLIT PAYMENT
+            if self.store_id and self.split_percentage > 0:
+                split_amount_cents = int(amount_cents * (self.split_percentage / 100))
+                
+                # Validar mínimo de 1 centavo
+                if split_amount_cents < 1:
+                    split_amount_cents = 1
+                
+                # Garantir que sobra pelo menos 1 centavo para o vendedor
+                seller_amount_cents = amount_cents - split_amount_cents
+                if seller_amount_cents < 1:
+                    logger.warning(f"⚠️ Paradise: Split deixaria menos de 1 centavo para vendedor. Ajustando...")
+                    split_amount_cents = amount_cents - 1
+                
+                payload["split"] = {
+                    "store_id": self.store_id,
+                    "amount": split_amount_cents
+                }
+                
+                logger.info(f"💰 Paradise Split: {split_amount_cents} centavos ({self.split_percentage}%) para store {self.store_id}")
             
             # ✅ LOG DETALHADO para debug
             logger.info(f"📤 Paradise Payload: {payload}")

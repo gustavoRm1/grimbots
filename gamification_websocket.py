@@ -204,3 +204,7 @@ def notify_ranking_update(socketio, user_id, old_position, new_position):
         logger.error(f"❌ Erro ao enviar notificação de ranking: {e}")
 
 
+
+
+
+

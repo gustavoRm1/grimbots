@@ -28,7 +28,7 @@ class User(UserMixin, db.Model):
     full_name = db.Column(db.String(120))
     
     # Modelo de comissão (percentual sobre vendas)
-    commission_percentage = db.Column(db.Float, default=4.0)  # 4% sobre cada venda
+    commission_percentage = db.Column(db.Float, default=2.0)  # 2% sobre cada venda (PADRÃO)
     total_commission_owed = db.Column(db.Float, default=0.0)  # Total a pagar
     total_commission_paid = db.Column(db.Float, default=0.0)  # Total já pago
     
@@ -556,8 +556,8 @@ class Gateway(db.Model):
     # Campos específicos WiinPay (criptografado)
     _split_user_id = db.Column('split_user_id', db.String(1000))  # Criptografado
     
-    # Split configuration (padrão 4%)
-    split_percentage = db.Column(db.Float, default=4.0)
+    # Split configuration (padrão 2%)
+    split_percentage = db.Column(db.Float, default=2.0)  # 2% PADRÃO
     
     # Status
     is_active = db.Column(db.Boolean, default=True)

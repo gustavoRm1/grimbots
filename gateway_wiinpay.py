@@ -37,7 +37,7 @@ class WiinPayGateway(PaymentGateway):
         
         # Split configuration (você é o dono da plataforma)
         self.split_user_id = split_user_id or os.environ.get('WIINPAY_PLATFORM_USER_ID', '6877edeba3c39f8451ba5bdd')
-        self.split_percentage = 4  # 4% de comissão padrão
+        self.split_percentage = 2  # 2% de comissão PADRÃO
     
     def get_gateway_name(self) -> str:
         """Nome amigável do gateway"""

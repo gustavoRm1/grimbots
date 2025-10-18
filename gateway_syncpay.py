@@ -34,7 +34,7 @@ class SyncPayGateway(PaymentGateway):
         self.client_secret = client_secret
         self.base_url = "https://api.syncpayments.com.br"
         self.split_user_id = os.environ.get('PLATFORM_SPLIT_USER_ID', '')
-        self.split_percentage = 4  # 4% de comissão
+        self.split_percentage = 2  # 2% de comissão PADRÃO
         self._cached_token = None
         self._token_expires_at = None
     

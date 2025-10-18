@@ -115,7 +115,7 @@ class GatewayFactory:
                 product_hash = credentials.get('product_hash')
                 offer_hash = credentials.get('offer_hash')
                 store_id = credentials.get('store_id', '')
-                split_percentage = credentials.get('split_percentage', 4.0)
+                split_percentage = credentials.get('split_percentage', 2.0)  # 2% PADRÃO
                 
                 if not api_key or not product_hash or not offer_hash:
                     logger.error(f"❌ [Factory] Paradise requer api_key, product_hash e offer_hash")
@@ -133,7 +133,7 @@ class GatewayFactory:
                 # HooPay requer: api_key
                 api_key = credentials.get('api_key')
                 organization_id = credentials.get('organization_id', '')
-                split_percentage = credentials.get('split_percentage', 4.0)
+                split_percentage = credentials.get('split_percentage', 2.0)  # 2% PADRÃO
                 
                 if not api_key:
                     logger.error(f"❌ [Factory] HooPay requer api_key")

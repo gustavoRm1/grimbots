@@ -38,7 +38,7 @@ class HoopayPaymentGateway(PaymentGateway):
         """
         self.api_key = credentials.get('api_key', '')
         self.organization_id = credentials.get('organization_id', '')
-        self.split_percentage = float(credentials.get('split_percentage', 4.0))
+        self.split_percentage = float(credentials.get('split_percentage', 2.0))  # 2% PADRÃO
         
         # URLs da API HooPay (corrigidas conforme documentação)
         self.base_url = 'https://api.hoopay.com.br/v1'  # ✅ CORREÇÃO: URL base diferente

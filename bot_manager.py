@@ -21,11 +21,11 @@ logger.setLevel(logging.INFO)
 # Configuração de Split Payment da Plataforma
 import os
 PLATFORM_SPLIT_USER_ID = os.environ.get('PLATFORM_SPLIT_USER_ID', '')  # Client ID para receber comissões (SyncPay)
-PLATFORM_SPLIT_PERCENTAGE = 4  # 4% de comissão (aproximadamente R$ 0.75 em vendas de ~R$ 19)
+PLATFORM_SPLIT_PERCENTAGE = 2  # 2% PADRÃO PARA TODOS OS GATEWAYS
 
 # Configuração de Split Payment para PushynPay
 PUSHYN_SPLIT_ACCOUNT_ID = os.environ.get('PUSHYN_SPLIT_ACCOUNT_ID', '50180')  # Account ID da Pushyn para receber comissões
-PUSHYN_SPLIT_PERCENTAGE = 4  # 4% de comissão
+PUSHYN_SPLIT_PERCENTAGE = 2  # 2% PADRÃO
 
 # Importar Gateway Factory (Arquitetura Enterprise)
 from gateway_factory import GatewayFactory
@@ -1137,8 +1137,10 @@ Desculpe, não foi possível processar seu pagamento.
                             'store_id': gateway.store_id,
                             # HooPay
                             'organization_id': gateway.organization_id,
-                            # Comum
-                            'split_percentage': gateway.split_percentage or 4.0
+                            # WiinPay
+                            'split_user_id': gateway.split_user_id,
+                            # Comum a todos
+                            'split_percentage': gateway.split_percentage or 2.0  # 2% PADRÃO
                         }
                         
                         payment_gateway = GatewayFactory.create_gateway(
@@ -1411,9 +1413,25 @@ Seu pagamento ainda não foi confirmado.
                 import uuid
                 payment_id = f"BOT{bot_id}_{int(time.time())}_{uuid.uuid4().hex[:8]}"
                 
+                # ✅ PREPARAR CREDENCIAIS ESPECÍFICAS PARA CADA GATEWAY
+                credentials = {
+                    'client_id': gateway.client_id,
+                    'client_secret': gateway.client_secret,
+                    'api_key': gateway.api_key,
+                    # Paradise
+                    'product_hash': gateway.product_hash,
+                    'offer_hash': gateway.offer_hash,
+                    'store_id': gateway.store_id,
+                    # HooPay
+                    'organization_id': gateway.organization_id,
+                    # WiinPay
+                    'split_user_id': gateway.split_user_id,
+                    # Comum a todos
+                    'split_percentage': gateway.split_percentage or 2.0  # 2% PADRÃO
+                }
+                
                 # Gerar PIX via gateway (usando Factory Pattern)
                 logger.info(f"🔧 Criando gateway {gateway.gateway_type} com credenciais...")
-                logger.info(f"🔑 Credenciais HooPay: api_key={gateway.api_key[:16]}..., org_id={gateway.organization_id}")
                 
                 payment_gateway = GatewayFactory.create_gateway(
                     gateway_type=gateway.gateway_type,
@@ -1871,7 +1889,12 @@ Seu pagamento ainda não foi confirmado.
                 dummy_credentials = {
                     'api_key': 'dummy',
                     'organization_id': 'dummy-org-id',
-                    'split_percentage': 4.0
+                    'split_percentage': 2.0  # 2% PADRÃO
+                }
+            elif gateway_type == 'wiinpay':
+                dummy_credentials = {
+                    'api_key': 'dummy',
+                    'split_user_id': 'dummy-user-id'
                 }
             
             # Criar instância do gateway via Factory
