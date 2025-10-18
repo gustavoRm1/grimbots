@@ -3054,6 +3054,8 @@ def ranking():
 @csrf.exempt
 def force_check_achievements():
     """Força verificação de achievements do usuário atual"""
+    from sqlalchemy import func
+    
     try:
         logger.info(f"🔍 Forçando verificação de achievements para {current_user.username}")
         
