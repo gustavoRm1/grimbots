@@ -2129,7 +2129,9 @@ def api_remarketing_timeline(bot_id):
 def get_bot_config(bot_id):
     """Obtém configuração de um bot"""
     try:
+        logger.info(f"🔍 Buscando config do bot {bot_id}...")
         bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
+        logger.info(f"✅ Bot encontrado: {bot.name}")
         
         if not bot.config:
             logger.warning(f"⚠️ Bot {bot_id} não tem config, criando nova...")
@@ -2137,9 +2139,16 @@ def get_bot_config(bot_id):
             db.session.add(config)
             db.session.commit()
             db.session.refresh(config)
+            logger.info(f"✅ Config nova criada para bot {bot_id}")
+        else:
+            logger.info(f"✅ Config existente encontrada (ID: {bot.config.id})")
         
         config_dict = bot.config.to_dict()
-        logger.info(f"📦 Retornando config do bot {bot_id}: {config_dict}")
+        logger.info(f"📦 Config serializado com sucesso")
+        logger.info(f"   - welcome_message: {len(config_dict.get('welcome_message', ''))} chars")
+        logger.info(f"   - main_buttons: {len(config_dict.get('main_buttons', []))} botões")
+        logger.info(f"   - downsells: {len(config_dict.get('downsells', []))} downsells")
+        logger.info(f"   - upsells: {len(config_dict.get('upsells', []))} upsells")
         
         return jsonify(config_dict)
     except Exception as e:

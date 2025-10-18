@@ -1634,9 +1634,17 @@ function botConfigApp() {
             try {
                 console.log('📡 Buscando config da API...');
                 const response = await fetch('/api/bots/{{ bot.id }}/config');
-                const data = await response.json();
                 
                 console.log('📊 Response status:', response.status);
+                
+                if (!response.ok) {
+                    console.error('❌ Erro na resposta:', response.status, response.statusText);
+                    const errorText = await response.text();
+                    console.error('❌ Erro detalhado:', errorText);
+                    return;
+                }
+                
+                const data = await response.json();
                 console.log('📦 Dados recebidos da API:', data);
                 
                 if (response.ok) {
@@ -1704,11 +1712,15 @@ function botConfigApp() {
                     }
                     
                     console.log('✅ Config final carregado com sucesso!');
+                    console.log('📊 Config completo:', this.config);
                 } else {
                     console.error('❌ Erro na resposta da API:', data);
+                    alert('❌ Erro ao carregar configuração. Verifique o console do navegador (F12).');
                 }
             } catch (error) {
-                console.error('Erro ao carregar config:', error);
+                console.error('❌ ERRO CRÍTICO ao carregar config:', error);
+                console.error('Stack:', error.stack);
+                alert('❌ Erro ao carregar configuração: ' + error.message + '\nAbra o console (F12) para mais detalhes.');
             }
         },
         
