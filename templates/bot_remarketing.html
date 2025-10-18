@@ -84,11 +84,11 @@
                                     <h4 class="text-lg font-semibold text-textPrimary" x-text="campaign.name"></h4>
                                     <p class="text-sm text-textSecondary mt-1" x-text="campaign.message.substring(0, 100) + '...'"></p>
                                 </div>
-                                <span class="badge" 
+                                <span class="badge px-3 py-1 rounded-full text-xs font-bold" 
                                       :class="{
-                                          'badge--success': campaign.status === 'completed',
-                                          'bg-yellow-500 bg-opacity-10 text-yellow-500': campaign.status === 'sending',
-                                          'bg-blue-500 bg-opacity-10 text-blue-400': campaign.status === 'draft'
+                                          'bg-green-500 bg-opacity-40 text-green-300 border border-green-500': campaign.status === 'completed',
+                                          'bg-yellow-500 bg-opacity-20 text-yellow-400 border border-yellow-500': campaign.status === 'sending',
+                                          'bg-blue-500 bg-opacity-20 text-blue-400 border border-blue-500': campaign.status === 'draft'
                                       }">
                                     <span x-text="getStatusLabel(campaign.status)"></span>
                                 </span>

@@ -1055,7 +1055,7 @@
                                     'bg-yellow-500 bg-opacity-20 text-yellow-400': campaign.status === 'draft',
                                     'bg-blue-500 bg-opacity-20 text-blue-400': campaign.status === 'scheduled',
                                     'bg-green-500 bg-opacity-30 text-green-300 font-semibold': campaign.status === 'sending',
-                                    'bg-gray-500 bg-opacity-20 text-gray-400': campaign.status === 'completed'
+                                    'bg-gray-500 bg-opacity-40 text-gray-300 border border-gray-500': campaign.status === 'completed'
                                 }" class="px-3 py-1 rounded-full text-xs font-bold">
                                     <span x-text="getStatusLabel(campaign.status)"></span>
                                 </span>
