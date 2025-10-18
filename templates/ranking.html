@@ -192,7 +192,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" x-data="rankingApp()">
     
     <!-- Header -->
     <div class="mb-8">
@@ -403,10 +403,17 @@
     <div class="config-section">
         <div class="config-section-header">
             <i class="fas fa-medal text-2xl" style="color: #FFB800;"></i>
-            <div>
+            <div class="flex-1">
                 <div class="config-section-title">Minhas Conquistas</div>
                 <div class="config-section-description">Badges que você desbloqueou</div>
             </div>
+            <button @click="forceCheckAchievements()" 
+                    :disabled="loading"
+                    :class="{'opacity-50 cursor-not-allowed': loading}"
+                    class="btn-action">
+                <i class="fas" :class="loading ? 'fa-spinner fa-spin' : 'fa-sync'"></i>
+                <span x-text="loading ? 'Verificando...' : 'Verificar Conquistas'"></span>
+            </button>
         </div>
 
         {% if my_achievements and my_achievements|length > 0 %}
@@ -437,4 +444,41 @@
     </div>
 
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function rankingApp() {
+    return {
+        loading: false,
+        
+        async forceCheckAchievements() {
+            this.loading = true;
+            try {
+                const response = await fetch('/api/force-check-achievements', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    if (data.newly_unlocked > 0) {
+                        alert(`🎉 ${data.newly_unlocked} nova(s) conquista(s) desbloqueada(s)!\n\nRecarregando página...`);
+                    } else {
+                        alert(`✅ Verificação completa!\n\nVocê tem ${data.total_achievements} conquista(s)\nRanking: ${data.ranking_points} pontos\n\nRecarregando página...`);
+                    }
+                    location.reload();
+                } else {
+                    alert('Erro: ' + data.error);
+                }
+            } catch (error) {
+                alert('Erro ao verificar conquistas: ' + error.message);
+            } finally {
+                this.loading = false;
+            }
+        }
+    };
+}
+</script>
 {% endblock %}

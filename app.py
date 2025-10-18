@@ -3049,6 +3049,30 @@ def ranking():
                          period=period,
                          my_achievements=my_achievements)
 
+@app.route('/api/force-check-achievements', methods=['POST'])
+@login_required
+def force_check_achievements():
+    """Força verificação de achievements do usuário atual"""
+    try:
+        if GAMIFICATION_V2_ENABLED:
+            newly_unlocked = AchievementChecker.check_all_achievements(current_user)
+            
+            # Também recalcular pontos
+            current_user.ranking_points = RankingEngine.calculate_points(current_user)
+            db.session.commit()
+            
+            return jsonify({
+                'success': True,
+                'newly_unlocked': len(newly_unlocked),
+                'total_achievements': UserAchievement.query.filter_by(user_id=current_user.id).count(),
+                'ranking_points': current_user.ranking_points
+            })
+        else:
+            return jsonify({'error': 'Gamificação não habilitada'}), 400
+    except Exception as e:
+        logger.error(f"Erro ao forçar verificação: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/settings')
 @login_required
 def settings():
