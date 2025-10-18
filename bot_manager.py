@@ -617,10 +617,20 @@ class BotManager:
                 
                 with app.app_context():
                     campaign = RemarketingCampaign.query.get(campaign_id)
-                    if campaign and campaign.buttons and btn_idx < len(campaign.buttons):
-                        btn = campaign.buttons[btn_idx]
-                        price = float(btn.get('price', 0))
-                        description = btn.get('description', 'Produto Remarketing')
+                    if campaign and campaign.buttons:
+                        # ✅ CORREÇÃO: Parsear JSON se for string
+                        buttons_list = campaign.buttons
+                        if isinstance(campaign.buttons, str):
+                            import json
+                            try:
+                                buttons_list = json.loads(campaign.buttons)
+                            except:
+                                buttons_list = []
+                        
+                        if btn_idx < len(buttons_list):
+                            btn = buttons_list[btn_idx]
+                            price = float(btn.get('price', 0))
+                            description = btn.get('description', 'Produto Remarketing')
                     else:
                         price = 0
                         description = 'Produto Remarketing'
@@ -2509,7 +2519,16 @@ Seu pagamento ainda não foi confirmado.
                             # Preparar botões (converter para formato de callback_data)
                             remarketing_buttons = []
                             if campaign.buttons:
-                                for btn_idx, btn in enumerate(campaign.buttons):
+                                # ✅ CORREÇÃO: Parsear JSON se for string
+                                buttons_list = campaign.buttons
+                                if isinstance(campaign.buttons, str):
+                                    import json
+                                    try:
+                                        buttons_list = json.loads(campaign.buttons)
+                                    except:
+                                        buttons_list = []
+                                
+                                for btn_idx, btn in enumerate(buttons_list):
                                     if btn.get('price') and btn.get('description'):
                                         # Botão de compra - gera PIX
                                         # ✅ NOVO FORMATO: rmkt_CAMPAIGN_BTN_INDEX (< 20 bytes)
