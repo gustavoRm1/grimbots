@@ -3049,6 +3049,61 @@ def ranking():
                          period=period,
                          my_achievements=my_achievements)
 
+@app.route('/api/debug-achievements', methods=['GET'])
+@login_required
+def debug_achievements():
+    """Debug completo do sistema de achievements"""
+    from sqlalchemy import func
+    
+    try:
+        # 1. Verificar tabelas
+        total_achievements_db = Achievement.query.count()
+        
+        # 2. Stats do usuário
+        total_sales = db.session.query(func.count(Payment.id))\
+            .join(Bot).filter(
+                Bot.user_id == current_user.id,
+                Payment.status == 'paid'
+            ).scalar() or 0
+        
+        total_revenue = db.session.query(func.sum(Payment.amount))\
+            .join(Bot).filter(
+                Bot.user_id == current_user.id,
+                Payment.status == 'paid'
+            ).scalar() or 0.0
+        
+        # 3. UserAchievements do usuário
+        user_achievements = UserAchievement.query.filter_by(user_id=current_user.id).all()
+        
+        # 4. Usar relationship
+        achievements_via_rel = current_user.achievements
+        
+        return jsonify({
+            'user': {
+                'id': current_user.id,
+                'username': current_user.username,
+                'total_sales': total_sales,
+                'total_revenue': float(total_revenue),
+                'ranking_points': current_user.ranking_points
+            },
+            'database': {
+                'total_achievements': total_achievements_db,
+                'user_achievements_count': len(user_achievements),
+                'relationship_count': len(achievements_via_rel)
+            },
+            'achievements': [
+                {
+                    'id': ua.id,
+                    'achievement_name': ua.achievement.name,
+                    'points': ua.achievement.points,
+                    'unlocked_at': ua.unlocked_at.isoformat()
+                } for ua in user_achievements
+            ]
+        })
+    except Exception as e:
+        logger.error(f"Erro no debug: {e}", exc_info=True)
+        return jsonify({'error': str(e), 'traceback': str(e)}), 500
+
 @app.route('/api/force-check-achievements', methods=['POST'])
 @login_required
 @csrf.exempt
@@ -3059,14 +3114,33 @@ def force_check_achievements():
     try:
         logger.info(f"🔍 Forçando verificação de achievements para {current_user.username}")
         
-        # Verificar conquistas
+        # PRIMEIRO: Garantir que achievements existem no banco
+        total_achievements_db = Achievement.query.count()
+        if total_achievements_db == 0:
+            logger.warning("⚠️ Nenhum achievement cadastrado! Criando agora...")
+            
+            # Criar achievements básicos
+            basic_achievements = [
+                {'name': 'Primeira Venda', 'description': 'Realize sua primeira venda', 'icon': '🎯', 'badge_color': 'gold', 'requirement_type': 'sales', 'requirement_value': 1, 'points': 50, 'rarity': 'common'},
+                {'name': 'Vendedor Iniciante', 'description': 'Realize 10 vendas', 'icon': '📈', 'badge_color': 'blue', 'requirement_type': 'sales', 'requirement_value': 10, 'points': 100, 'rarity': 'common'},
+                {'name': 'Vendedor Profissional', 'description': 'Realize 50 vendas', 'icon': '💼', 'badge_color': 'gold', 'requirement_type': 'sales', 'requirement_value': 50, 'points': 500, 'rarity': 'rare'},
+                {'name': 'Primeiro R$ 100', 'description': 'Fature R$ 100 em vendas', 'icon': '💰', 'badge_color': 'green', 'requirement_type': 'revenue', 'requirement_value': 100, 'points': 100, 'rarity': 'common'},
+                {'name': 'R$ 1.000 Faturados', 'description': 'Fature R$ 1.000 em vendas', 'icon': '💸', 'badge_color': 'green', 'requirement_type': 'revenue', 'requirement_value': 1000, 'points': 500, 'rarity': 'rare'},
+                {'name': 'Consistência', 'description': 'Venda por 3 dias consecutivos', 'icon': '🔥', 'badge_color': 'orange', 'requirement_type': 'streak', 'requirement_value': 3, 'points': 200, 'rarity': 'common'},
+                {'name': 'Taxa de Ouro', 'description': 'Atinja 50% de conversão', 'icon': '🎖️', 'badge_color': 'gold', 'requirement_type': 'conversion_rate', 'requirement_value': 50, 'points': 1000, 'rarity': 'epic'},
+            ]
+            
+            for ach_data in basic_achievements:
+                achievement = Achievement(**ach_data)
+                db.session.add(achievement)
+            
+            db.session.commit()
+            logger.info(f"✅ {len(basic_achievements)} achievements criados!")
+        
+        # SEGUNDO: Verificar conquistas
         newly_unlocked = AchievementChecker.check_all_achievements(current_user)
         
-        # Recalcular pontos (simples)
-        if current_user.ranking_points is None:
-            current_user.ranking_points = 0
-        
-        # Somar pontos das conquistas
+        # TERCEIRO: Recalcular pontos
         total_points = db.session.query(func.sum(Achievement.points))\
             .join(UserAchievement)\
             .filter(UserAchievement.user_id == current_user.id)\

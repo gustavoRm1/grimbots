@@ -416,9 +416,12 @@
             </button>
         </div>
 
-        {% if my_achievements and my_achievements|length > 0 %}
+        {# Buscar conquistas do current_user diretamente #}
+        {% set user_achievements = current_user.achievements %}
+        
+        {% if user_achievements and user_achievements|length > 0 %}
         <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {% for ua in my_achievements %}
+            {% for ua in user_achievements %}
             <div class="p-4 rounded-lg text-center transition-all hover:scale-105" 
                  style="background: rgba(255, 184, 0, 0.1); border: 1px solid rgba(255, 184, 0, 0.3);">
                 <div class="text-4xl mb-2">{{ ua.achievement.icon }}</div>
