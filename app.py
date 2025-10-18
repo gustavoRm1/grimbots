@@ -1229,8 +1229,8 @@ def general_remarketing():
                 # Enviar campanha via bot_manager
                 try:
                     bot_manager.send_remarketing_campaign(
-                        bot_id=bot.id,
-                        campaign_id=campaign.id
+                        campaign_id=campaign.id,
+                        bot_token=bot.token
                     )
                     
                     total_users += eligible_count
