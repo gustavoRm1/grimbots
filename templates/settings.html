@@ -1,855 +1,674 @@
 {% extends "base.html" %}
-
 {% block title %}Configurações - grimbots{% endblock %}
 
+{% block extra_head %}
+<style>
+/* Dashboard V2.0 - Design System (IDÊNTICO) */
+
+/* Stats Cards Premium */
+.stat-card {
+    position: relative;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.02) 0%, rgba(255, 255, 255, 0.01) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    padding: 24px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+}
+
+.stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--brand-gold-500), var(--brand-gold-700));
+}
+
+.stat-card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(255, 184, 0, 0.2);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 184, 0, 0.1);
+}
+
+.stat-value {
+    font-size: 2.5rem;
+    font-weight: 900;
+    line-height: 1;
+    margin: 16px 0 8px 0;
+    font-variant-numeric: tabular-nums;
+}
+
+.stat-label {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #9CA3AF;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+/* Gateway Card (Estilo Bot Card) */
+.gateway-card {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.01) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 20px;
+    transition: all 0.3s ease;
+}
+
+.gateway-card:hover {
+    border-color: rgba(255, 184, 0, 0.3);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.gateway-status-active {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #6EE7B7;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.gateway-status-verified {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #60A5FA;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.gateway-status-unconfigured {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    background: rgba(107, 114, 128, 0.1);
+    border: 1px solid rgba(107, 114, 128, 0.2);
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #9CA3AF;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Action Buttons (IDÊNTICO Dashboard) */
+.btn-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 700;
+    transition: all 0.2s ease;
+    border: none;
+    cursor: pointer;
+}
+
+.btn-action-primary {
+    background: linear-gradient(135deg, #FFB800, #DAA520);
+    color: #000000;
+    box-shadow: 0 4px 12px rgba(255, 184, 0, 0.3);
+}
+
+.btn-action-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(255, 184, 0, 0.4);
+}
+
+.btn-action-success {
+    background: #10B981;
+    color: #FFFFFF;
+}
+
+.btn-action-success:hover {
+    background: #059669;
+    transform: translateY(-2px);
+}
+
+/* Chart Container (Para info boxes) */
+.chart-container {
+    position: relative;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.02) 0%, rgba(255, 255, 255, 0.01) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    padding: 24px;
+}
+
+/* Form Inputs (Estilo Dashboard) */
+.form-input {
+    width: 100%;
+    padding: 12px 16px;
+    background: #1A1A1A;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    color: #FFFFFF;
+    font-size: 0.875rem;
+    transition: all 0.2s ease;
+}
+
+.form-input:focus {
+    outline: none;
+    border-color: #FFB800;
+    box-shadow: 0 0 0 3px rgba(255, 184, 0, 0.1);
+}
+
+/* Info Box */
+.info-box {
+    padding: 16px;
+    background: rgba(59, 130, 246, 0.05);
+    border-left: 4px solid #3B82F6;
+    border-radius: 0 8px 8px 0;
+    margin-bottom: 16px;
+}
+
+.info-box-warning {
+    background: rgba(255, 184, 0, 0.05);
+    border-left-color: #FFB800;
+}
+
+.info-box-success {
+    background: rgba(16, 185, 129, 0.05);
+    border-left-color: #10B981;
+}
+
+/* Tab Buttons */
+.tab-button {
+    padding: 16px 24px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #9CA3AF;
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+    top: 2px;
+}
+
+.tab-button:hover {
+    color: #D1D1D1;
+}
+
+.tab-button.active {
+    color: #FFB800;
+    border-bottom-color: #FFB800;
+}
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8" x-data="settingsApp()" x-init="init()">
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" x-data="settingsApp()" x-init="init()">
     
     <!-- Header -->
     <div class="mb-8">
-        <h1 class="text-3xl font-bold text-txt-primary">Configurações</h1>
-        <p class="mt-1 text-sm text-txt-secondary">Gerencie seu perfil e gateways de pagamento</p>
+        <h1 class="text-4xl font-black text-white mb-2">
+            Configurações ⚙️
+        </h1>
+        <p class="text-lg text-gray-400">
+            Gerencie seu perfil e gateways de pagamento
+        </p>
     </div>
 
     <!-- Tabs -->
-    <div class="bg-white shadow rounded-lg">
-        <div class="border-b border-white border-opacity-5">
-            <nav class="-mb-px flex space-x-8 px-6" aria-label="Tabs">
-                <button @click="activeTab = 'profile'" 
-                        :class="activeTab === 'profile' ? 'border-trust-500 text-trust-500' : 'border-transparent text-txt-tertiary hover:text-txt-secondary hover:border-white border-opacity-10'"
-                        class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
-                    <i class="fas fa-user mr-2"></i>Perfil
-                </button>
-                <button @click="activeTab = 'gateways'" 
-                        :class="activeTab === 'gateways' ? 'border-trust-500 text-trust-500' : 'border-transparent text-txt-tertiary hover:text-txt-secondary hover:border-white border-opacity-10'"
-                        class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
-                    <i class="fas fa-credit-card mr-2"></i>Gateways de Pagamento
-                </button>
-                <button @click="activeTab = 'plan'" 
-                        :class="activeTab === 'plan' ? 'border-trust-500 text-trust-500' : 'border-transparent text-txt-tertiary hover:text-txt-secondary hover:border-white border-opacity-10'"
-                        class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">
-                    <i class="fas fa-crown mr-2"></i>Plano
-                </button>
-            </nav>
+    <div class="flex gap-0 border-b-2 border-gray-800 mb-8">
+        <button @click="activeTab = 'profile'" 
+                :class="{'active': activeTab === 'profile'}"
+                class="tab-button">
+            <i class="fas fa-user mr-2"></i>Perfil
+        </button>
+        <button @click="activeTab = 'gateways'" 
+                :class="{'active': activeTab === 'gateways'}"
+                class="tab-button">
+            <i class="fas fa-credit-card mr-2"></i>Gateways
+        </button>
+        <button @click="activeTab = 'plan'" 
+                :class="{'active': activeTab === 'plan'}"
+                class="tab-button">
+            <i class="fas fa-crown mr-2"></i>Plano
+        </button>
+    </div>
+
+    <!-- Profile Tab -->
+    <div x-show="activeTab === 'profile'" x-cloak>
+        <div class="chart-container mb-8">
+            <h3 class="text-2xl font-bold text-white mb-6">Informações do Perfil</h3>
+
+            <form @submit.prevent="updateProfile()" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-bold text-gray-300 mb-2">
+                        <i class="fas fa-user mr-2 text-yellow-500"></i>
+                        Nome Completo
+                    </label>
+                    <input type="text" 
+                           x-model="profile.full_name" 
+                           class="form-input"
+                           placeholder="João Silva">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-gray-300 mb-2">
+                        <i class="fas fa-envelope mr-2 text-yellow-500"></i>
+                        Email
+                    </label>
+                    <input type="email" 
+                           x-model="profile.email" 
+                           class="form-input"
+                           placeholder="seu@email.com">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-gray-300 mb-2">
+                        <i class="fas fa-at mr-2 text-yellow-500"></i>
+                        Username
+                    </label>
+                    <input type="text" 
+                           x-model="profile.username" 
+                           disabled
+                           class="form-input opacity-50 cursor-not-allowed">
+                    <p class="mt-2 text-xs text-gray-500">
+                        <i class="fas fa-lock mr-1"></i>
+                        Username não pode ser alterado por segurança
+                    </p>
+                </div>
+
+                <div class="pt-4">
+                    <button type="submit" 
+                            :disabled="loading"
+                            :class="{'opacity-50 cursor-not-allowed': loading}"
+                            class="btn-action btn-action-primary">
+                        <i class="fas fa-save mr-2"></i>
+                        <span x-text="loading ? 'Salvando...' : 'Salvar Alterações'"></span>
+                    </button>
+                </div>
+            </form>
         </div>
 
-        <div class="p-6">
-            <!-- Profile Tab -->
-            <div x-show="activeTab === 'profile'" x-cloak>
-                <h3 class="text-lg font-medium text-txt-primary mb-4">Informações do Perfil</h3>
+        <!-- Alterar Senha -->
+        <div class="chart-container">
+            <h3 class="text-2xl font-bold text-white mb-6">Alterar Senha</h3>
+            <form @submit.prevent="updatePassword()" class="space-y-4">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <div>
+                    <label class="block text-sm font-bold text-gray-300 mb-2">
+                        <i class="fas fa-lock mr-2 text-yellow-500"></i>
+                        Senha Atual
+                    </label>
+                    <input type="password" 
+                           x-model="password.current" 
+                           class="form-input"
+                           placeholder="Digite sua senha atual">
+                </div>
 
-                <form @submit.prevent="updateProfile()" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-bold text-gray-300 mb-2">
+                        <i class="fas fa-key mr-2 text-yellow-500"></i>
+                        Nova Senha
+                    </label>
+                    <input type="password" 
+                           x-model="password.new" 
+                           minlength="6"
+                           class="form-input"
+                           placeholder="Digite sua nova senha (mín. 6 caracteres)">
+                </div>
+
+                <div class="pt-4">
+                    <button type="submit" 
+                            :disabled="loading"
+                            :class="{'opacity-50 cursor-not-allowed': loading}"
+                            class="btn-action btn-action-primary">
+                        <i class="fas fa-lock mr-2"></i>
+                        Alterar Senha
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Gateways Tab - REDESENHADO (Estilo Dashboard) -->
+    <div x-show="activeTab === 'gateways'" x-cloak>
+        <!-- Stats Cards (Gateway Ativo) -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <div class="stat-card">
+                <div class="stat-label">🔌 Gateway Ativo</div>
+                <template x-if="gatewaysList.find(g => g.is_active && g.is_verified)">
                     <div>
-                        <label class="block text-sm font-medium text-txt-secondary flex items-center gap-2">
-                            Nome Completo
-                            <button type="button" class="text-trust-500 hover:text-trust-500" data-tooltip="Seu nome completo como aparecerá no sistema">
-                                <i class="fas fa-question-circle text-xs"></i>
-                            </button>
-                        </label>
-                        <input type="text" 
-                               x-model="profile.full_name" 
-                               class="mt-1 block w-full border border-white border-opacity-10 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-trust-500 sm:text-sm"
-                               placeholder="João Silva">
+                        <div class="stat-value" style="color: #10B981;">
+                            <span x-text="gatewaysList.find(g => g.is_active && g.is_verified)?.gateway_type.toUpperCase()"></span>
+                        </div>
+                        <div class="text-sm text-gray-500">Processando pagamentos agora</div>
                     </div>
-
+                </template>
+                <template x-if="!gatewaysList.find(g => g.is_active && g.is_verified)">
                     <div>
-                        <label class="block text-sm font-medium text-txt-secondary flex items-center gap-2">
-                            Email
-                            <button type="button" class="text-trust-500 hover:text-trust-500" data-tooltip="Email para login e notificações importantes">
-                                <i class="fas fa-question-circle text-xs"></i>
-                            </button>
-                        </label>
-                        <input type="email" 
-                               x-model="profile.email" 
-                               class="mt-1 block w-full border border-white border-opacity-10 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-trust-500 sm:text-sm"
-                               placeholder="seu@email.com">
+                        <div class="stat-value" style="color: #EF4444;">
+                            Nenhum
+                        </div>
+                        <div class="text-sm text-gray-500">Configure um gateway abaixo</div>
+                    </div>
+                </template>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-label">✅ Gateways Configurados</div>
+                <div class="stat-value" style="color: #FFB800;">
+                    <span x-text="gatewaysList.filter(g => g.is_verified).length"></span><span class="text-2xl text-gray-600">/5</span>
+                </div>
+                <div class="text-sm text-gray-500">Gateways verificados</div>
+            </div>
+        </div>
+
+        <!-- Info Boxes -->
+        <div class="info-box-warning info-box">
+            <p class="text-sm text-gray-300">
+                <i class="fas fa-lightbulb mr-2 text-yellow-500"></i>
+                <strong class="text-yellow-400">Importante:</strong> Configure pelo menos 1 gateway para que seus bots possam gerar PIX e processar vendas.
+            </p>
+        </div>
+
+        <div class="info-box mb-8">
+            <p class="text-sm text-gray-300">
+                <i class="fas fa-shield-alt mr-2 text-blue-500"></i>
+                <strong class="text-blue-400">Segurança:</strong> Suas credenciais são criptografadas e armazenadas com segurança. Nunca compartilhamos seus dados.
+            </p>
+        </div>
+
+        <!-- Gateways Grid -->
+        <div class="chart-container">
+            <div class="mb-6">
+                <h2 class="text-2xl font-bold text-white">Seus Gateways</h2>
+                <p class="text-sm text-gray-500 mt-1">Configure e gerencie seus meios de pagamento</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <!-- SyncPay -->
+                <div class="gateway-card">
+                    <div class="flex items-start justify-between mb-4">
+                        <div class="flex items-center gap-3">
+                            <div class="w-12 h-12 rounded-lg flex items-center justify-center" 
+                                 style="background: linear-gradient(135deg, rgba(255, 184, 0, 0.1), rgba(255, 184, 0, 0.05));">
+                                <i class="fas fa-qrcode text-xl" style="color: #FFB800;"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-sm font-bold text-white">SyncPay</h3>
+                                <p class="text-xs text-gray-500">PIX Instantâneo</p>
+                            </div>
+                        </div>
+                        <span :class="getGatewayStatus('syncpay')?.is_active ? 'gateway-status-active' : (getGatewayStatus('syncpay')?.is_verified ? 'gateway-status-verified' : 'gateway-status-unconfigured')">
+                            <span class="w-2 h-2 rounded-full" 
+                                  :class="getGatewayStatus('syncpay')?.is_active ? 'bg-green-400 animate-pulse' : 'bg-gray-600'"></span>
+                            <span x-text="getGatewayStatus('syncpay')?.is_active ? 'Ativo' : (getGatewayStatus('syncpay')?.is_verified ? 'OK' : 'Config')"></span>
+                        </span>
                     </div>
 
-                    <div>
-                        <label class="block text-sm font-medium text-txt-secondary flex items-center gap-2">
-                            Username
-                            <button type="button" class="text-txt-muted" data-tooltip="Nome de usuário único no sistema. Não pode ser alterado por segurança.">
-                                <i class="fas fa-question-circle text-xs"></i>
-                            </button>
-                        </label>
-                        <input type="text" 
-                               x-model="profile.username" 
-                               disabled
-                               class="mt-1 block w-full border border-white border-opacity-10 rounded-md shadow-sm py-2 px-3 bg-dark-primary text-txt-tertiary cursor-not-allowed sm:text-sm">
-                        <p class="mt-1 text-xs text-txt-tertiary">
-                            <i class="fas fa-lock text-xs mr-1"></i>
-                            Username não pode ser alterado por segurança
-                        </p>
-                    </div>
-
-                    <div class="pt-4">
-                        <button type="submit" 
-                                :disabled="loading"
-                                :class="{'opacity-50 cursor-not-allowed': loading}"
-                                class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-trust-500 hover:bg-trust-700">
-                            <span x-show="!loading" class="flex items-center">
-                                <i class="fas fa-save mr-2"></i>
-                                Salvar Alterações
-                            </span>
-                            <span x-show="loading" class="flex items-center">
-                                <svg class="animate-spin h-4 w-4 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                </svg>
-                                Salvando...
-                            </span>
-                        </button>
-                    </div>
-                </form>
-
-                <div class="mt-8 pt-8 border-t border-white border-opacity-5">
-                    <h3 class="text-lg font-medium text-txt-primary mb-4">Alterar Senha</h3>
-                    <form @submit.prevent="updatePassword()" class="space-y-4">
+                    <form @submit.prevent="saveGateway('syncpay')" class="space-y-3">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                         <div>
-                            <label class="block text-sm font-medium text-txt-secondary flex items-center gap-2">
-                                Senha Atual
-                                <button type="button" class="text-trust-500 hover:text-trust-500" data-tooltip="Digite sua senha atual para confirmar sua identidade">
-                                    <i class="fas fa-question-circle text-xs"></i>
-                                </button>
-                            </label>
-                            <input type="password" 
-                                   x-model="password.current" 
-                                   class="mt-1 block w-full border border-white border-opacity-10 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-trust-500 sm:text-sm"
-                                   placeholder="Digite sua senha atual">
-                        </div>
-
-                        <div>
-                            <label class="block text-sm font-medium text-txt-secondary flex items-center gap-2">
-                                Nova Senha
-                                <button type="button" class="text-trust-500 hover:text-trust-500" data-tooltip="Mínimo 6 caracteres. Recomendamos 12+ com letras, números e símbolos">
-                                    <i class="fas fa-question-circle text-xs"></i>
-                                </button>
-                            </label>
-                            <input type="password" 
-                                   x-model="password.new" 
-                                   minlength="6"
-                                   class="mt-1 block w-full border border-white border-opacity-10 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-trust-500 sm:text-sm"
-                                   placeholder="Digite sua nova senha (mín. 6 caracteres)">
-                        </div>
-
-                        <div class="pt-4">
-                            <button type="submit" 
-                                    :disabled="loading"
-                                    :class="{'opacity-50 cursor-not-allowed': loading}"
-                                    class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-trust-500 hover:bg-trust-700">
-                                <i class="fas fa-lock mr-2"></i>
-                                Alterar Senha
-                            </button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-
-            <!-- Gateways Tab - Redesenhado -->
-            <div x-show="activeTab === 'gateways'" x-cloak>
-                <div class="mb-8">
-                    <h3 class="text-3xl font-black flex items-center gap-3" style="color: var(--text-primary);">
-                        <i class="fas fa-plug" style="color: var(--brand-gold-500); filter: drop-shadow(0 2px 8px rgba(245, 158, 11, 0.6));"></i>
-                        Gateways de Pagamento
-                    </h3>
-                    <p class="text-sm font-semibold mt-2" style="color: var(--txt-secondary);">Configure suas credenciais para receber pagamentos via PIX</p>
-                </div>
-
-                <!-- Info Helper Box -->
-                <div class="mb-6 p-5 border-l-4 rounded-r-xl" style="background: rgba(245, 158, 11, 0.12); border-color: var(--brand-gold-500);">
-                    <div class="flex items-start gap-3">
-                        <div class="flex-shrink-0">
-                            <i class="fas fa-info-circle text-xl" style="color: var(--brand-gold-300); filter: drop-shadow(0 0 6px rgba(252, 211, 77, 0.5));"></i>
-                        </div>
-                        <div class="flex-1">
-                            <h4 class="text-sm font-black mb-2" style="color: var(--brand-gold-300);">Por que configurar um gateway?</h4>
-                            <p class="text-sm font-semibold leading-relaxed" style="color: var(--text-secondary);">
-                                Para que seus bots possam gerar <strong style="color: var(--brand-gold-400); font-weight: 900;">PIX</strong> e processar vendas, você precisa conectar ao menos um gateway verificado.
-                            </p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Alert: Apenas 1 Gateway Ativo -->
-                <div class="mb-6 p-5 border-l-4 rounded-r-xl" style="background: rgba(239, 68, 68, 0.12); border-color: var(--alert-500);">
-                    <div class="flex items-start gap-3">
-                        <div class="flex-shrink-0">
-                            <i class="fas fa-exclamation-triangle text-xl" style="color: var(--alert-300); filter: drop-shadow(0 0 6px rgba(252, 165, 165, 0.5));"></i>
-                        </div>
-                        <div class="flex-1">
-                            <h4 class="text-sm font-black mb-2 flex items-center gap-2" style="color: var(--alert-300);">
-                                <span>⚠️ Atenção: Apenas 1 Gateway Ativo por Vez</span>
-                            </h4>
-                            <p class="text-sm font-semibold leading-relaxed" style="color: var(--txt-secondary);">
-                                <strong style="color: var(--alert-300); font-weight: 900;">TODOS os seus bots</strong> usarão o gateway que estiver <span style="color: var(--brand-gold-300); font-weight: 900;">ATIVO</span>. 
-                                Ao salvar e ativar um gateway, os outros serão <strong style="color: var(--alert-300); font-weight: 900;">desativados automaticamente</strong>. 
-                                Use isso para trocar rapidamente entre gateways (contingência, alertas de fraude, etc).
-                            </p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Status Card: Gateway Ativo Atual -->
-                <div class="mb-6 p-6 rounded-2xl border-2" style="background: rgba(16, 185, 129, 0.12); border-color: var(--brand-green-500); box-shadow: 0 4px 16px rgba(34, 197, 94, 0.2);">
-                    <div class="flex items-center justify-between">
-                        <div class="flex items-center gap-4">
-                            <div class="flex-shrink-0">
-                                <div class="relative">
-                                    <div class="absolute -inset-2 rounded-xl blur-lg" style="background: var(--brand-emerald-500); opacity: 0.3;"></div>
-                                    <div class="relative flex items-center justify-center h-14 w-14 rounded-xl border-2" style="background: rgba(34, 197, 94, 0.2); border-color: var(--brand-emerald-500);">
-                                        <i class="fas fa-bolt text-2xl" style="color: var(--brand-gold-300); filter: drop-shadow(0 2px 8px rgba(110, 231, 183, 0.6));"></i>
-                                    </div>
-                                </div>
-                            </div>
-                            <div>
-                                <h4 class="text-xs font-bold mb-1" style="color: var(--txt-tertiary); text-transform: uppercase; letter-spacing: 0.05em;">Gateway Em Uso Agora:</h4>
-                                <template x-if="gatewaysList.find(g => g.is_active && g.is_verified)">
-                                    <p class="text-xl font-black flex items-center gap-2" style="color: var(--brand-gold-300); text-shadow: 0 0 8px rgba(110, 231, 183, 0.4);">
-                                        <i class="fas fa-circle text-xs animate-pulse"></i>
-                                        <span x-text="gatewaysList.find(g => g.is_active && g.is_verified)?.gateway_type.toUpperCase()"></span>
-                                    </p>
-                                </template>
-                                <template x-if="!gatewaysList.find(g => g.is_active && g.is_verified)">
-                                    <p class="text-xl font-black flex items-center gap-2" style="color: var(--alert-300); text-shadow: 0 0 8px rgba(252, 165, 165, 0.4);">
-                                        <i class="fas fa-exclamation-circle text-sm"></i>
-                                        Nenhum Gateway Ativo
-                                    </p>
-                                </template>
-                            </div>
-                        </div>
-                        <div class="text-right">
-                            <p class="text-xs font-bold" style="color: var(--txt-secondary);">Seus bots usarão este gateway</p>
-                            <p class="text-xs font-semibold mt-1" style="color: var(--text-tertiary);">para gerar pagamentos PIX</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- ✅ Seletor de Gateway Ativo (se houver múltiplos configurados) -->
-                <div x-show="gatewaysList.filter(g => g.is_verified).length > 1" class="mb-8 p-6 rounded-2xl border-2" style="background: var(--dark-800); border-color: var(--brand-gold-500);">
-                    <div class="flex items-center gap-3 mb-4">
-                        <i class="fas fa-toggle-on text-2xl" style="color: var(--brand-gold-400);"></i>
-                        <h4 class="text-lg font-black" style="color: var(--text-primary);">Selecione o Gateway Ativo</h4>
-                    </div>
-                    <p class="text-sm mb-4" style="color: var(--text-secondary);">
-                        Você tem múltiplos gateways configurados. <strong style="color: var(--brand-gold-400);">Ative o que deseja usar agora</strong> (apenas 1 pode estar ativo por vez):
-                    </p>
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        <template x-for="gw in gatewaysList.filter(g => g.is_verified)" :key="gw.id">
-                            <button 
-                                @click="toggleGateway(gw.id, gw.gateway_type)"
-                                :class="gw.is_active ? 'border-emerald-500 bg-emerald-500 bg-opacity-10' : 'border-white border-opacity-10 bg-dark-700'"
-                                class="p-4 rounded-xl border-2 transition-all hover:scale-105 text-left">
-                                <div class="flex items-center justify-between mb-2">
-                                    <span class="text-sm font-black uppercase" style="color: var(--text-primary);" x-text="gw.gateway_type"></span>
-                                    <div 
-                                        :class="gw.is_active ? 'bg-emerald-500' : 'bg-gray-600'"
-                                        class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors">
-                                        <span 
-                                            :class="gw.is_active ? 'translate-x-6' : 'translate-x-1'"
-                                            class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"></span>
-                                    </div>
-                                </div>
-                                <p class="text-xs" :style="gw.is_active ? 'color: var(--brand-emerald-400)' : 'color: var(--text-tertiary)'">
-                                    <i class="fas" :class="gw.is_active ? 'fa-check-circle' : 'fa-circle'"></i>
-                                    <span x-text="gw.is_active ? 'ATIVO AGORA' : 'Clique para ativar'"></span>
-                                </p>
-                            </button>
-                        </template>
-                    </div>
-                </div>
-
-                <div class="space-y-8">
-                    <!-- SyncPay Card -->
-                    <div class="gateway-card rounded-2xl p-6 border-2 transition-all hover:scale-[1.01]" 
-                         :class="getGatewayStatus('syncpay')?.is_active ? 'border-emerald-500 shadow-emerald-500/20' : ''" 
-                         style="background: var(--dark-800); border-color: var(--border-subtle); box-shadow: var(--shadow-lg);">
-                        <!-- Header -->
-                        <div class="flex items-center justify-between mb-6">
-                            <div class="flex items-center gap-4">
-                                <div class="relative">
-                                    <div class="absolute -inset-1 rounded-xl blur-md" style="background: var(--brand-gold-500); opacity: 0.2;"></div>
-                                    <div class="relative flex items-center justify-center rounded-xl border-2" style="width: 64px; height: 64px; background: var(--dark-700); border-color: var(--brand-gold-500);">
-                                        <i class="fas fa-qrcode text-4xl" style="color: var(--brand-gold-400);"></i>
-                                    </div>
-                                </div>
-                            <div>
-                                    <h4 class="text-xl font-black flex items-center gap-2" style="color: var(--text-primary);">
-                                        SyncPay
-                                        <span x-show="getGatewayStatus('syncpay')?.is_verified && getGatewayStatus('syncpay')?.is_active" 
-                                              class="inline-flex items-center px-3 py-1 rounded-full text-xs font-black border-2 animate-pulse" style="background: rgba(16, 185, 129, 0.15); color: var(--brand-green-300); border-color: var(--brand-green-500);">
-                                            <i class="fas fa-circle mr-1 text-xs"></i> ATIVO
-                                        </span>
-                                        <span x-show="getGatewayStatus('syncpay')?.is_verified && !getGatewayStatus('syncpay')?.is_active" 
-                                              class="inline-flex items-center px-3 py-1 rounded-full text-xs font-black border-2" style="background: rgba(16, 185, 129, 0.15); color: var(--brand-green-300); border-color: var(--brand-green-500);">
-                                            <i class="fas fa-check-circle mr-1"></i> Verificado
-                                        </span>
-                                    </h4>
-                                    <p class="text-sm font-semibold mt-1" style="color: var(--text-tertiary);">Gateway de pagamento via PIX <span style="color: var(--brand-gold-300);">(Recomendado)</span></p>
-                            </div>
-                        </div>
-                            <span x-show="!getGatewayStatus('syncpay')?.is_verified" 
-                                  class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-black border-2" style="background: rgba(245, 158, 11, 0.15); color: var(--brand-gold-300); border-color: var(--brand-gold-500);">
-                                <i class="fas fa-exclamation-triangle mr-1.5"></i> Não Configurado
-                        </span>
-                    </div>
-
-                        <form @submit.prevent="saveGateway('syncpay')" class="space-y-5">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                            <!-- Client ID -->
-                            <div class="space-y-2">
-                                <label for="syncpay_client_id" class="block text-sm font-black flex items-center gap-2" style="color: var(--text-primary);">
-                                    <i class="fas fa-user" style="color: var(--brand-gold-300);"></i>
-                                    Client ID
-                                    <span style="color: var(--alert-300);">*</span>
-                                </label>
-                                <div class="relative group">
-                                    <input 
-                                        id="syncpay_client_id"
-                                        type="text" 
+                            <label class="text-xs font-bold text-gray-400 block mb-1">Client ID</label>
+                            <input type="text" 
                                    x-model="gateways.syncpay.client_id" 
-                                        class="w-full px-4 py-3.5 rounded-xl focus:outline-none transition-all font-mono"
-                                        style="background: var(--bg-primary); border: 2px solid var(--border-subtle); color: var(--trust-300); font-weight: 700;"
-                                        placeholder="seu-client-id"
-                                        onfocus="this.style.borderColor='var(--trust-500)'; this.style.background='var(--dark-800)';"
-                                        onblur="this.style.borderColor='rgba(255, 255, 255, 0.15)'; this.style.background='var(--dark-900)';">
-                                </div>
+                                   class="form-input"
+                                   placeholder="seu-client-id">
                         </div>
-
-                            <!-- Client Secret -->
-                            <div class="space-y-2" x-data="{ showSecret: false }">
-                                <label for="syncpay_client_secret" class="block text-sm font-black flex items-center gap-2" style="color: var(--text-primary);">
-                                    <i class="fas fa-lock" style="color: var(--brand-gold-300);"></i>
-                                    Client Secret
-                                    <span style="color: var(--alert-300);">*</span>
-                                </label>
-                                <div class="relative group">
-                                    <input 
-                                        id="syncpay_client_secret"
-                                        :type="showSecret ? 'text' : 'password'" 
-                                   x-model="gateways.syncpay.client_secret" 
-                                        class="w-full pl-4 pr-12 py-3.5 rounded-xl focus:outline-none transition-all font-mono"
-                                        style="background: var(--bg-primary); border: 2px solid var(--border-subtle); color: var(--trust-300); font-weight: 700;"
-                                        placeholder="●●●●●●●●●●●●●●●●"
-                                        onfocus="this.style.borderColor='var(--trust-500)'; this.style.background='var(--dark-800)';"
-                                        onblur="this.style.borderColor='rgba(255, 255, 255, 0.15)'; this.style.background='var(--dark-900)';">
-                                    <button type="button" @click="showSecret = !showSecret" class="absolute inset-y-0 right-0 pr-4 flex items-center transition-colors" style="color: var(--text-tertiary);">
-                                        <i class="fas" :class="showSecret ? 'fa-eye-slash' : 'fa-eye'"></i>
-                                    </button>
-                                </div>
-                        </div>
-
-                            <!-- Action Button -->
-                            <div class="pt-2">
-                                <button 
-                                    type="submit" 
-                                :disabled="loading"
-                                    :class="{ 'opacity-60 cursor-not-allowed': loading }"
-                                    class="w-full py-3.5 px-6 rounded-xl text-sm font-black focus:outline-none transition-all transform hover:-translate-y-1 active:translate-y-0 disabled:transform-none"
-                                    style="background: linear-gradient(135deg, var(--brand-gold-500), var(--brand-gold-600)); color: var(--dark-900); box-shadow: 0 8px 24px rgba(var(--brand-gold-rgb), 0.4);">
-                                    <span x-show="!loading" class="flex items-center justify-center gap-2">
-                                        <i class="fas fa-save"></i>
-                                        Salvar Configuração
-                                    </span>
-                                    <span x-show="loading" class="flex items-center justify-center gap-2">
-                                        <i class="fas fa-spinner fa-spin"></i>
-                                        Salvando...
-                                    </span>
-                        </button>
-                            </div>
-                    </form>
-                </div>
-
-                    <!-- PushynPay Card -->
-                    <div class="gateway-card rounded-2xl p-6 border-2 transition-all hover:scale-[1.01]" 
-                         :class="getGatewayStatus('pushynpay')?.is_active ? 'border-emerald-500 shadow-emerald-500/20' : ''" 
-                         style="background: var(--dark-800); border-color: var(--border-subtle); box-shadow: var(--shadow-lg);">
-                        <!-- Header -->
-                        <div class="flex items-center justify-between mb-6">
-                            <div class="flex items-center gap-4">
-                                <div class="relative">
-                                    <div class="absolute -inset-1 rounded-xl blur-md" style="background: var(--brand-gold-500); opacity: 0.2;"></div>
-                                    <div class="relative flex items-center justify-center rounded-xl border-2 p-2" style="width: 64px; height: 64px; background: var(--dark-700); border-color: var(--brand-gold-500);">
-                                        <img src="{{ url_for('static', filename='img/pushyn.png') }}" alt="PushynPay" class="w-12 h-12 object-contain">
-                                    </div>
-                                </div>
-                            <div>
-                                    <h4 class="text-xl font-black flex items-center gap-2" style="color: var(--text-primary);">
-                                        PushynPay
-                                        <span x-show="getGatewayStatus('pushynpay')?.is_verified && getGatewayStatus('pushynpay')?.is_active" 
-                                              class="inline-flex items-center px-3 py-1 rounded-full text-xs font-black border-2 animate-pulse" style="background: rgba(16, 185, 129, 0.15); color: var(--brand-green-300); border-color: var(--brand-green-500);">
-                                            <i class="fas fa-circle mr-1 text-xs"></i> ATIVO
-                                        </span>
-                                        <span x-show="getGatewayStatus('pushynpay')?.is_verified && !getGatewayStatus('pushynpay')?.is_active" 
-                                              class="inline-flex items-center px-3 py-1 rounded-full text-xs font-black border-2" style="background: rgba(16, 185, 129, 0.15); color: var(--brand-green-300); border-color: var(--brand-green-500);">
-                                            <i class="fas fa-check-circle mr-1"></i> Verificado
-                                        </span>
-                                    </h4>
-                                    <p class="text-sm font-semibold mt-1" style="color: var(--text-tertiary);">Gateway de pagamento alternativo</p>
-                            </div>
-                        </div>
-                            <span x-show="!getGatewayStatus('pushynpay')?.is_verified" 
-                                  class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-black border-2" style="background: rgba(245, 158, 11, 0.15); color: var(--brand-gold-300); border-color: var(--brand-gold-500);">
-                                <i class="fas fa-exclamation-triangle mr-1.5"></i> Não Configurado
-                        </span>
-                    </div>
-
-                        <form @submit.prevent="saveGateway('pushynpay')" class="space-y-5">
-                            <!-- API Key -->
-                            <div class="space-y-2" x-data="{ showKey: false }">
-                                <label for="pushynpay_api_key" class="block text-sm font-black flex items-center gap-2" style="color: var(--text-primary);">
-                                    <i class="fas fa-key" style="color: var(--brand-gold-300);"></i>
-                                    API Key
-                                    <span style="color: var(--alert-300);">*</span>
-                                </label>
-                                <div class="relative group">
-                                    <input 
-                                        id="pushynpay_api_key"
-                                        :type="showKey ? 'text' : 'password'" 
-                                   x-model="gateways.pushynpay.api_key" 
-                                        class="w-full pl-4 pr-12 py-3.5 rounded-xl focus:outline-none transition-all font-mono"
-                                        style="background: var(--bg-primary); border: 2px solid var(--border-subtle); color: var(--trust-300); font-weight: 700;"
-                                        placeholder="●●●●●●●●●●●●●●●●"
-                                        onfocus="this.style.borderColor='var(--trust-500)'; this.style.background='var(--dark-800)';"
-                                        onblur="this.style.borderColor='rgba(255, 255, 255, 0.15)'; this.style.background='var(--dark-900)';">
-                                    <button type="button" @click="showKey = !showKey" class="absolute inset-y-0 right-0 pr-4 flex items-center transition-colors" style="color: var(--text-tertiary);">
-                                        <i class="fas" :class="showKey ? 'fa-eye-slash' : 'fa-eye'"></i>
-                                    </button>
-                                </div>
-                        </div>
-
-                            <!-- Action Button -->
-                            <div class="pt-2">
-                                <button 
-                                    type="submit" 
-                                :disabled="loading"
-                                    :class="{ 'opacity-60 cursor-not-allowed': loading }"
-                                    class="w-full py-3.5 px-6 rounded-xl text-sm font-black focus:outline-none transition-all transform hover:-translate-y-1 active:translate-y-0 disabled:transform-none"
-                                    style="background: linear-gradient(135deg, var(--brand-gold-500), var(--brand-gold-600)); color: var(--dark-900); box-shadow: 0 8px 24px rgba(var(--brand-gold-rgb), 0.4);">
-                                    <span x-show="!loading" class="flex items-center justify-center gap-2">
-                                        <i class="fas fa-save"></i>
-                                        Salvar Configuração
-                                    </span>
-                                    <span x-show="loading" class="flex items-center justify-center gap-2">
-                                        <i class="fas fa-spinner fa-spin"></i>
-                                        Salvando...
-                                    </span>
-                        </button>
-                            </div>
-                    </form>
-                </div>
-
-                    <!-- Paradise Card -->
-                    <div class="gateway-card rounded-2xl p-6 border-2 transition-all hover:scale-[1.01]" 
-                         :class="getGatewayStatus('paradise')?.is_active ? 'border-emerald-500 shadow-emerald-500/20' : ''" 
-                         style="background: var(--dark-800); border-color: var(--border-subtle); box-shadow: var(--shadow-lg);">
-                        <!-- Header -->
-                        <div class="flex items-center justify-between mb-6">
-                            <div class="flex items-center gap-4">
-                                <div class="relative">
-                                    <div class="absolute -inset-1 rounded-xl blur-md" style="background: var(--brand-gold-500); opacity: 0.2;"></div>
-                                    <div class="relative flex items-center justify-center rounded-xl border-2 p-2" style="width: 64px; height: 64px; background: var(--dark-700); border-color: var(--brand-gold-500);">
-                                        <img src="{{ url_for('static', filename='img/paradise.jpg') }}" alt="Paradise" class="w-12 h-12 object-cover rounded-lg">
-                                    </div>
-                                </div>
-                            <div>
-                                    <h4 class="text-xl font-black flex items-center gap-2" style="color: var(--text-primary);">
-                                        Paradise
-                                        <span x-show="getGatewayStatus('paradise')?.is_verified && getGatewayStatus('paradise')?.is_active" 
-                                              class="inline-flex items-center px-3 py-1 rounded-full text-xs font-black border-2 animate-pulse" style="background: rgba(16, 185, 129, 0.15); color: var(--brand-green-300); border-color: var(--brand-green-500);">
-                                            <i class="fas fa-circle mr-1 text-xs"></i> ATIVO
-                                        </span>
-                                        <span x-show="getGatewayStatus('paradise')?.is_verified && !getGatewayStatus('paradise')?.is_active" 
-                                              class="inline-flex items-center px-3 py-1 rounded-full text-xs font-black border-2" style="background: rgba(16, 185, 129, 0.15); color: var(--brand-green-300); border-color: var(--brand-green-500);">
-                                            <i class="fas fa-check-circle mr-1"></i> Verificado
-                                        </span>
-                                    </h4>
-                                    <p class="text-sm font-semibold mt-1" style="color: var(--text-tertiary);">Gateway de pagamento internacional</p>
-                            </div>
-                        </div>
-                            <span x-show="!getGatewayStatus('paradise')?.is_verified" 
-                                  class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-black border-2" style="background: rgba(245, 158, 11, 0.15); color: var(--brand-gold-300); border-color: var(--brand-gold-500);">
-                                <i class="fas fa-exclamation-triangle mr-1.5"></i> Não Configurado
-                        </span>
-                    </div>
-
-                        <form @submit.prevent="saveGateway('paradise')" class="space-y-5">
-                            <!-- API Key (Secret Key) -->
-                            <div class="space-y-2" x-data="{ showKey: false }">
-                                <label for="paradise_api_key" class="block text-sm font-black flex items-center gap-2" style="color: var(--text-primary);">
-                                    <i class="fas fa-key" style="color: var(--brand-gold-300);"></i>
-                                    Chave Secreta (Secret Key)
-                                    <span style="color: var(--alert-300);">*</span>
-                                </label>
-                                <div class="relative group">
-                                    <input 
-                                        id="paradise_api_key"
-                                        :type="showKey ? 'text' : 'password'" 
-                                   x-model="gateways.paradise.api_key" 
-                                        class="w-full pl-4 pr-12 py-3.5 rounded-xl focus:outline-none transition-all font-mono"
-                                        style="background: var(--bg-primary); border: 2px solid var(--border-subtle); color: var(--trust-300); font-weight: 700;"
-                                        placeholder="sk_... (chave secreta)"
-                                        onfocus="this.style.borderColor='var(--trust-500)'; this.style.background='var(--dark-800)';"
-                                        onblur="this.style.borderColor='rgba(255, 255, 255, 0.15)'; this.style.background='var(--dark-900)';">
-                                    <button type="button" @click="showKey = !showKey" class="absolute inset-y-0 right-0 pr-4 flex items-center transition-colors" style="color: var(--text-tertiary);">
-                                        <i class="fas" :class="showKey ? 'fa-eye-slash' : 'fa-eye'"></i>
-                                    </button>
-                                </div>
-                            </div>
-
-                            <!-- Offer Hash -->
-                            <div class="space-y-2">
-                                <label for="paradise_offer_hash" class="block text-sm font-black flex items-center gap-2" style="color: var(--text-primary);">
-                                    <i class="fas fa-tag" style="color: var(--brand-gold-300);"></i>
-                                    Offer Hash
-                                    <span style="color: var(--alert-300);">*</span>
-                                </label>
-                                <div class="relative group">
-                                    <input 
-                                        id="paradise_offer_hash"
-                                        type="text" 
-                                        x-model="gateways.paradise.offer_hash" 
-                                        class="w-full px-4 py-3.5 rounded-xl focus:outline-none transition-all font-mono"
-                                        style="background: var(--bg-primary); border: 2px solid var(--border-subtle); color: var(--trust-300); font-weight: 700;"
-                                        placeholder="hash-da-oferta"
-                                        onfocus="this.style.borderColor='var(--trust-500)'; this.style.background='var(--dark-800)';"
-                                        onblur="this.style.borderColor='rgba(255, 255, 255, 0.15)'; this.style.background='var(--dark-900)';">
-                                </div>
-                            </div>
-
-                            <!-- Product Hash -->
-                            <div class="space-y-2">
-                                <label for="paradise_product_hash" class="block text-sm font-black flex items-center gap-2" style="color: var(--text-primary);">
-                                    <i class="fas fa-box" style="color: var(--brand-gold-300);"></i>
-                                    Código do Produto (Product Hash)
-                                    <span style="color: var(--alert-300);">*</span>
-                                </label>
-                                <div class="relative group">
-                                    <input 
-                                        id="paradise_product_hash"
-                                        type="text" 
-                                        x-model="gateways.paradise.product_hash" 
-                                        class="w-full px-4 py-3.5 rounded-xl focus:outline-none transition-all font-mono"
-                                        style="background: var(--bg-primary); border: 2px solid var(--border-subtle); color: var(--trust-300); font-weight: 700;"
-                                        placeholder="prod_... (código do produto)"
-                                        onfocus="this.style.borderColor='var(--trust-500)'; this.style.background='var(--dark-800)';"
-                                        onblur="this.style.borderColor='rgba(255, 255, 255, 0.15)'; this.style.background='var(--dark-900)';">
-                                </div>
-                        </div>
-
-
-                            <!-- Action Button -->
-                            <div class="pt-2">
-                                <button 
-                                    type="submit" 
-                                :disabled="loading"
-                                    :class="{ 'opacity-60 cursor-not-allowed': loading }"
-                                    class="w-full py-3.5 px-6 rounded-xl text-sm font-black focus:outline-none transition-all transform hover:-translate-y-1 active:translate-y-0 disabled:transform-none"
-                                    style="background: linear-gradient(135deg, var(--brand-gold-500), var(--brand-gold-600)); color: var(--dark-900); box-shadow: 0 8px 24px rgba(var(--brand-gold-rgb), 0.4);">
-                                    <span x-show="!loading" class="flex items-center justify-center gap-2">
-                                        <i class="fas fa-save"></i>
-                                        Salvar Configuração
-                                    </span>
-                                    <span x-show="loading" class="flex items-center justify-center gap-2">
-                                        <i class="fas fa-spinner fa-spin"></i>
-                                        Salvando...
-                                    </span>
-                        </button>
-                            </div>
-                    </form>
-                    </div>
-                </div>
-
-                <!-- HooPay Card -->
-                <div class="gateway-card rounded-2xl p-6 border-2 transition-all hover:scale-[1.01]" 
-                     :class="getGatewayStatus('hoopay')?.is_active ? 'border-emerald-500 shadow-emerald-500/20' : ''" 
-                     style="background: var(--dark-800); border-color: var(--border-subtle); box-shadow: var(--shadow-lg);">
-                    <div class="flex items-center justify-between mb-6">
-                        <div class="flex items-center gap-4">
+                        <div x-data="{ show: false }">
+                            <label class="text-xs font-bold text-gray-400 block mb-1">Client Secret</label>
                             <div class="relative">
-                                <div class="absolute -inset-1 rounded-xl blur-md" style="background: var(--brand-gold-500); opacity: 0.2;"></div>
-                                <div class="relative flex items-center justify-center rounded-xl border-2 p-2" style="width: 64px; height: 64px; background: var(--dark-700); border-color: var(--brand-gold-500);">
-                                    <img src="{{ url_for('static', filename='img/hoopay.webp') }}" alt="HooPay" class="w-12 h-12 object-contain">
-                                </div>
-                            </div>
-                            <div>
-                                <h4 class="text-xl font-black flex items-center gap-2" style="color: var(--text-primary);">
-                                    HooPay
-                                    <span x-show="getGatewayStatus('hoopay')?.is_verified && getGatewayStatus('hoopay')?.is_active" 
-                                          class="inline-flex items-center px-3 py-1 rounded-full text-xs font-black border-2 animate-pulse" style="background: rgba(16, 185, 129, 0.15); color: var(--brand-green-300); border-color: var(--brand-green-500);">
-                                        <i class="fas fa-circle mr-1 text-xs"></i> ATIVO
-                                    </span>
-                                </h4>
-                                <p class="text-sm font-semibold mt-1" style="color: var(--text-tertiary);">Gateway completo</p>
-                            </div>
-                        </div>
-                        <span x-show="!getGatewayStatus('hoopay')?.is_verified" 
-                              class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-black border-2" style="background: rgba(245, 158, 11, 0.15); color: var(--brand-gold-300); border-color: var(--brand-gold-500);">
-                            <i class="fas fa-exclamation-triangle mr-1.5"></i> Não Configurado
-                        </span>
-                    </div>
-
-                    <form @submit.prevent="saveGateway('hoopay')" class="space-y-5">
-                        <div class="space-y-2" x-data="{ showKey: false }">
-                            <label class="block text-sm font-black flex items-center gap-2" style="color: var(--text-primary);">
-                                <i class="fas fa-key" style="color: var(--brand-gold-300);"></i>
-                                API Key
-                                <span style="color: var(--alert-300);">*</span>
-                            </label>
-                            <div class="relative group">
-                                <input 
-                                    :type="showKey ? 'text' : 'password'" 
-                                    x-model="gateways.hoopay.api_key" 
-                                    class="w-full pl-4 pr-12 py-3.5 rounded-xl focus:outline-none transition-all font-mono"
-                                    style="background: var(--bg-primary); border: 2px solid var(--border-subtle); color: var(--trust-300); font-weight: 700;"
-                                    placeholder="sua_api_key_hoopay">
-                                <button type="button" @click="showKey = !showKey" class="absolute inset-y-0 right-0 pr-4 flex items-center">
-                                    <i class="fas" :class="showKey ? 'fa-eye-slash' : 'fa-eye'"></i>
+                                <input :type="show ? 'text' : 'password'" 
+                                       x-model="gateways.syncpay.client_secret" 
+                                       class="form-input pr-10"
+                                       placeholder="●●●●●●●●">
+                                <button type="button" @click="show = !show" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">
+                                    <i class="fas" :class="show ? 'fa-eye-slash' : 'fa-eye'"></i>
                                 </button>
                             </div>
                         </div>
-                        <div class="pt-2">
-                            <button type="submit" :disabled="loading" class="w-full py-3.5 px-6 rounded-xl text-sm font-black" style="background: linear-gradient(135deg, var(--trust-500), var(--trust-600)); color: var(--txt-primary);">
-                                <span x-show="!loading"><i class="fas fa-save mr-2"></i>Salvar</span>
-                                <span x-show="loading"><i class="fas fa-spinner fa-spin mr-2"></i>Salvando...</span>
-                            </button>
-                        </div>
+                        <button type="submit" 
+                                :disabled="loading"
+                                class="btn-action btn-action-primary w-full">
+                            <i class="fas fa-save mr-2"></i>
+                            <span x-text="loading ? 'Salvando...' : 'Salvar'"></span>
+                        </button>
                     </form>
                 </div>
 
-                <!-- WiinPay Card ✅ NOVO -->
-                <div class="gateway-card rounded-2xl p-6 border-2 transition-all hover:scale-[1.01]" 
-                     :class="getGatewayStatus('wiinpay')?.is_active ? 'border-emerald-500 shadow-emerald-500/20' : ''" 
-                     style="background: var(--dark-800); border-color: var(--border-subtle); box-shadow: var(--shadow-lg);">
-                    <div class="flex items-center justify-between mb-6">
-                        <div class="flex items-center gap-4">
-                            <div class="relative">
-                                <div class="absolute -inset-1 rounded-xl blur-md" style="background: var(--brand-gold-500); opacity: 0.2;"></div>
-                                <div class="relative flex items-center justify-center rounded-xl border-2 p-2" style="width: 64px; height: 64px; background: var(--dark-700); border-color: var(--brand-gold-500);">
-                                    <img src="{{ url_for('static', filename='img/wiinpay.ico') }}" alt="WiinPay" class="w-12 h-12 object-contain">
-                                </div>
+                <!-- PushynPay -->
+                <div class="gateway-card">
+                    <div class="flex items-start justify-between mb-4">
+                        <div class="flex items-center gap-3">
+                            <div class="w-12 h-12 rounded-lg flex items-center justify-center" 
+                                 style="background: linear-gradient(135deg, rgba(255, 184, 0, 0.1), rgba(255, 184, 0, 0.05));">
+                                <i class="fas fa-bolt text-xl" style="color: #FFB800;"></i>
                             </div>
                             <div>
-                                <h4 class="text-xl font-black flex items-center gap-2" style="color: var(--text-primary);">
-                                    WiinPay
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-black" style="background: rgba(var(--brand-emerald-rgb), 0.15); color: var(--brand-emerald-400); border: 1px solid var(--brand-emerald-500);">NOVO</span>
-                                    <span x-show="getGatewayStatus('wiinpay')?.is_verified && getGatewayStatus('wiinpay')?.is_active" 
-                                          class="inline-flex items-center px-3 py-1 rounded-full text-xs font-black border-2 animate-pulse" style="background: rgba(16, 185, 129, 0.15); color: var(--brand-green-300); border-color: var(--brand-green-500);">
-                                        <i class="fas fa-circle mr-1 text-xs"></i> ATIVO
-                                    </span>
-                                </h4>
-                                <p class="text-sm font-semibold mt-1" style="color: var(--text-tertiary);">Simples e direto</p>
+                                <h3 class="text-sm font-bold text-white">PushynPay</h3>
+                                <p class="text-xs text-gray-500">Gateway Rápido</p>
                             </div>
                         </div>
-                        <span x-show="!getGatewayStatus('wiinpay')?.is_verified" 
-                              class="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-black border-2" style="background: rgba(245, 158, 11, 0.15); color: var(--brand-gold-300); border-color: var(--brand-gold-500);">
-                            <i class="fas fa-exclamation-triangle mr-1.5"></i> Não Configurado
+                        <span :class="getGatewayStatus('pushynpay')?.is_active ? 'gateway-status-active' : (getGatewayStatus('pushynpay')?.is_verified ? 'gateway-status-verified' : 'gateway-status-unconfigured')">
+                            <span class="w-2 h-2 rounded-full" 
+                                  :class="getGatewayStatus('pushynpay')?.is_active ? 'bg-green-400 animate-pulse' : 'bg-gray-600'"></span>
+                            <span x-text="getGatewayStatus('pushynpay')?.is_active ? 'Ativo' : (getGatewayStatus('pushynpay')?.is_verified ? 'OK' : 'Config')"></span>
                         </span>
                     </div>
 
-                    <form @submit.prevent="saveGateway('wiinpay')" class="space-y-5">
-                        <div class="space-y-2" x-data="{ showKey: false }">
-                            <label class="block text-sm font-black flex items-center gap-2" style="color: var(--text-primary);">
-                                <i class="fas fa-key" style="color: var(--brand-gold-400);"></i>
-                                API Key
-                                <span style="color: var(--alert-500);">*</span>
-                            </label>
-                            <div class="relative group">
-                                <input 
-                                    :type="showKey ? 'text' : 'password'" 
-                                    x-model="gateways.wiinpay.api_key" 
-                                    class="w-full pl-4 pr-12 py-3.5 rounded-xl focus:outline-none transition-all font-mono"
-                                    style="background: var(--bg-primary); border: 2px solid var(--border-subtle); color: var(--brand-emerald-400); font-weight: 700;"
-                                    placeholder="sua_api_key_wiinpay">
-                                <button type="button" @click="showKey = !showKey" class="absolute inset-y-0 right-0 pr-4 flex items-center" style="color: var(--text-secondary);">
-                                    <i class="fas" :class="showKey ? 'fa-eye-slash' : 'fa-eye'"></i>
+                    <form @submit.prevent="saveGateway('pushynpay')" class="space-y-3">
+                        <div x-data="{ show: false }">
+                            <label class="text-xs font-bold text-gray-400 block mb-1">API Key</label>
+                            <div class="relative">
+                                <input :type="show ? 'text' : 'password'" 
+                                       x-model="gateways.pushynpay.api_key" 
+                                       class="form-input pr-10"
+                                       placeholder="●●●●●●●●">
+                                <button type="button" @click="show = !show" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">
+                                    <i class="fas" :class="show ? 'fa-eye-slash' : 'fa-eye'"></i>
                                 </button>
                             </div>
                         </div>
-
-                        <!-- Info sobre valor mínimo -->
-                        <div class="bg-info-500 bg-opacity-10 p-4 rounded-lg border border-info-500 border-opacity-30">
-                            <p class="text-xs" style="color: var(--trust-300);">
-                                <i class="fas fa-exclamation-circle mr-1"></i>
-                                <strong>Valor mínimo:</strong> R$ 3,00. Produtos abaixo deste valor não podem usar WiinPay.
-                            </p>
-                        </div>
-
-                        <div class="pt-2">
-                            <button 
-                                type="submit" 
+                        <button type="submit" 
                                 :disabled="loading"
-                                :class="{ 'opacity-60 cursor-not-allowed': loading }"
-                                class="w-full py-3.5 px-6 rounded-xl text-sm font-black focus:outline-none transition-all transform hover:-translate-y-1 active:translate-y-0 disabled:transform-none"
-                                style="background: linear-gradient(135deg, var(--brand-gold-500), var(--brand-gold-600)); color: var(--dark-900); box-shadow: 0 8px 24px rgba(var(--brand-gold-rgb), 0.4);">
-                                <span x-show="!loading" class="flex items-center justify-center gap-2">
-                                    <i class="fas fa-save"></i>
-                                    Salvar Configuração
-                                </span>
-                                <span x-show="loading" class="flex items-center justify-center gap-2">
-                                    <i class="fas fa-spinner fa-spin"></i>
-                                    Salvando...
-                                </span>
-                            </button>
-                        </div>
+                                class="btn-action btn-action-primary w-full">
+                            <i class="fas fa-save mr-2"></i>
+                            <span x-text="loading ? 'Salvando...' : 'Salvar'"></span>
+                        </button>
                     </form>
                 </div>
 
-                <!-- Final Info Box -->
-                <div class="mt-8 p-6 border-l-4 rounded-r-2xl" style="background: rgba(245, 158, 11, 0.12); border-color: var(--brand-gold-500);">
-                    <div class="flex items-start gap-4">
-                        <div class="flex-shrink-0">
-                            <div class="relative">
-                                <div class="absolute -inset-2 rounded-xl blur-xl" style="background: var(--brand-gold-500); opacity: 0.3;"></div>
-                                <div class="relative flex items-center justify-center h-16 w-16 rounded-xl border-2" style="background: rgba(245, 158, 11, 0.2); border-color: var(--brand-gold-500);">
-                                    <i class="fas fa-shield-alt" style="font-size: 2rem; color: var(--brand-gold-300); filter: drop-shadow(0 2px 10px rgba(252, 211, 77, 0.7));"></i>
-                                </div>
+                <!-- Paradise -->
+                <div class="gateway-card">
+                    <div class="flex items-start justify-between mb-4">
+                        <div class="flex items-center gap-3">
+                            <div class="w-12 h-12 rounded-lg flex items-center justify-center" 
+                                 style="background: linear-gradient(135deg, rgba(255, 184, 0, 0.1), rgba(255, 184, 0, 0.05));">
+                                <i class="fas fa-globe text-xl" style="color: #FFB800;"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-sm font-bold text-white">Paradise</h3>
+                                <p class="text-xs text-gray-500">Gateway Global</p>
                             </div>
                         </div>
-                        <div class="flex-1">
-                            <h4 class="text-lg font-black mb-2 flex items-center gap-2" style="color: var(--text-primary);">
-                                <i class="fas fa-lock" style="color: var(--brand-gold-300); filter: drop-shadow(0 0 4px rgba(252, 211, 77, 0.5));"></i>
-                                Segurança das Credenciais
-                            </h4>
-                            <p class="text-sm font-semibold leading-relaxed" style="color: var(--txt-secondary);">
-                                Suas credenciais são <strong style="color: var(--brand-gold-300); font-weight: 900;">criptografadas</strong> e armazenadas com segurança. Nunca compartilhamos seus dados com terceiros. 
-                                Você precisa de <strong style="color: var(--brand-gold-300); font-weight: 900;">pelo menos um gateway verificado</strong> para que seus bots possam processar vendas.
+                        <span :class="getGatewayStatus('paradise')?.is_active ? 'gateway-status-active' : (getGatewayStatus('paradise')?.is_verified ? 'gateway-status-verified' : 'gateway-status-unconfigured')">
+                            <span class="w-2 h-2 rounded-full" 
+                                  :class="getGatewayStatus('paradise')?.is_active ? 'bg-green-400 animate-pulse' : 'bg-gray-600'"></span>
+                            <span x-text="getGatewayStatus('paradise')?.is_active ? 'Ativo' : (getGatewayStatus('paradise')?.is_verified ? 'OK' : 'Config')"></span>
+                        </span>
+                    </div>
+
+                    <form @submit.prevent="saveGateway('paradise')" class="space-y-3">
+                        <div x-data="{ show: false }">
+                            <label class="text-xs font-bold text-gray-400 block mb-1">API Key</label>
+                            <div class="relative">
+                                <input :type="show ? 'text' : 'password'" 
+                                       x-model="gateways.paradise.api_key" 
+                                       class="form-input pr-10"
+                                       placeholder="sk_...">
+                                <button type="button" @click="show = !show" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">
+                                    <i class="fas" :class="show ? 'fa-eye-slash' : 'fa-eye'"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-gray-400 block mb-1">Offer Hash</label>
+                            <input type="text" 
+                                   x-model="gateways.paradise.offer_hash" 
+                                   class="form-input"
+                                   placeholder="hash-da-oferta">
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-gray-400 block mb-1">Product Hash</label>
+                            <input type="text" 
+                                   x-model="gateways.paradise.product_hash" 
+                                   class="form-input"
+                                   placeholder="prod_...">
+                        </div>
+                        <button type="submit" 
+                                :disabled="loading"
+                                class="btn-action btn-action-primary w-full">
+                            <i class="fas fa-save mr-2"></i>
+                            <span x-text="loading ? 'Salvando...' : 'Salvar'"></span>
+                        </button>
+                    </form>
+                </div>
+
+                <!-- HooPay -->
+                <div class="gateway-card">
+                    <div class="flex items-start justify-between mb-4">
+                        <div class="flex items-center gap-3">
+                            <div class="w-12 h-12 rounded-lg flex items-center justify-center" 
+                                 style="background: linear-gradient(135deg, rgba(255, 184, 0, 0.1), rgba(255, 184, 0, 0.05));">
+                                <i class="fas fa-credit-card text-xl" style="color: #FFB800;"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-sm font-bold text-white">HooPay</h3>
+                                <p class="text-xs text-gray-500">Completo</p>
+                            </div>
+                        </div>
+                        <span :class="getGatewayStatus('hoopay')?.is_active ? 'gateway-status-active' : (getGatewayStatus('hoopay')?.is_verified ? 'gateway-status-verified' : 'gateway-status-unconfigured')">
+                            <span class="w-2 h-2 rounded-full" 
+                                  :class="getGatewayStatus('hoopay')?.is_active ? 'bg-green-400 animate-pulse' : 'bg-gray-600'"></span>
+                            <span x-text="getGatewayStatus('hoopay')?.is_active ? 'Ativo' : (getGatewayStatus('hoopay')?.is_verified ? 'OK' : 'Config')"></span>
+                        </span>
+                    </div>
+
+                    <form @submit.prevent="saveGateway('hoopay')" class="space-y-3">
+                        <div x-data="{ show: false }">
+                            <label class="text-xs font-bold text-gray-400 block mb-1">API Key</label>
+                            <div class="relative">
+                                <input :type="show ? 'text' : 'password'" 
+                                       x-model="gateways.hoopay.api_key" 
+                                       class="form-input pr-10"
+                                       placeholder="●●●●●●●●">
+                                <button type="button" @click="show = !show" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">
+                                    <i class="fas" :class="show ? 'fa-eye-slash' : 'fa-eye'"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <button type="submit" 
+                                :disabled="loading"
+                                class="btn-action btn-action-primary w-full">
+                            <i class="fas fa-save mr-2"></i>
+                            <span x-text="loading ? 'Salvando...' : 'Salvar'"></span>
+                        </button>
+                    </form>
+                </div>
+
+                <!-- WiinPay -->
+                <div class="gateway-card">
+                    <div class="flex items-start justify-between mb-4">
+                        <div class="flex items-center gap-3">
+                            <div class="w-12 h-12 rounded-lg flex items-center justify-center" 
+                                 style="background: linear-gradient(135deg, rgba(255, 184, 0, 0.1), rgba(255, 184, 0, 0.05));">
+                                <i class="fas fa-rocket text-xl" style="color: #FFB800;"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-sm font-bold text-white">WiinPay</h3>
+                                <p class="text-xs text-gray-500">Simples</p>
+                            </div>
+                        </div>
+                        <span :class="getGatewayStatus('wiinpay')?.is_active ? 'gateway-status-active' : (getGatewayStatus('wiinpay')?.is_verified ? 'gateway-status-verified' : 'gateway-status-unconfigured')">
+                            <span class="w-2 h-2 rounded-full" 
+                                  :class="getGatewayStatus('wiinpay')?.is_active ? 'bg-green-400 animate-pulse' : 'bg-gray-600'"></span>
+                            <span x-text="getGatewayStatus('wiinpay')?.is_active ? 'Ativo' : (getGatewayStatus('wiinpay')?.is_verified ? 'OK' : 'Config')"></span>
+                        </span>
+                    </div>
+
+                    <form @submit.prevent="saveGateway('wiinpay')" class="space-y-3">
+                        <div x-data="{ show: false }">
+                            <label class="text-xs font-bold text-gray-400 block mb-1">API Key</label>
+                            <div class="relative">
+                                <input :type="show ? 'text' : 'password'" 
+                                       x-model="gateways.wiinpay.api_key" 
+                                       class="form-input pr-10"
+                                       placeholder="●●●●●●●●">
+                                <button type="button" @click="show = !show" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">
+                                    <i class="fas" :class="show ? 'fa-eye-slash' : 'fa-eye'"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="info-box-warning info-box p-2">
+                            <p class="text-xs text-gray-300">
+                                <i class="fas fa-info-circle mr-1"></i>
+                                Mínimo R$ 3,00
                             </p>
                         </div>
-                    </div>
+                        <button type="submit" 
+                                :disabled="loading"
+                                class="btn-action btn-action-primary w-full">
+                            <i class="fas fa-save mr-2"></i>
+                            <span x-text="loading ? 'Salvando...' : 'Salvar'"></span>
+                        </button>
+                    </form>
                 </div>
             </div>
+        </div>
+    </div>
 
-            <!-- Plan Tab (Modelo de Comissão) -->
-            <div x-show="activeTab === 'plan'" x-cloak>
-                <div class="mb-8">
-                    <h3 class="text-2xl font-bold text-textPrimary">💰 Modelo de Pricing</h3>
-                    <p class="text-sm text-textSecondary mt-2">Pague apenas quando vender - simples, transparente e escalável</p>
+    <!-- Plan Tab (Idêntico anterior) -->
+    <div x-show="activeTab === 'plan'" x-cloak>
+        <div class="chart-container">
+            <h2 class="text-2xl font-bold text-white mb-4">💰 Modelo de Pricing</h2>
+            <p class="text-gray-400 mb-6">Pague apenas quando vender - simples e transparente</p>
+
+            <div class="stat-card mb-8">
+                <div class="stat-label">Taxa Atual</div>
+                <div class="stat-value" style="color: #10B981;">2%</div>
+                <div class="text-sm text-gray-500">de cada venda confirmada</div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="gateway-card text-center">
+                    <i class="fas fa-infinity text-4xl text-yellow-500 mb-3"></i>
+                    <h5 class="font-bold text-white mb-2">Bots Ilimitados</h5>
+                    <p class="text-sm text-gray-400">Sem mensalidade</p>
                 </div>
-
-                <!-- Card Principal - Redesenhado -->
-                <div class="relative rounded-2xl p-8 mb-8 overflow-hidden"
-                     style="background: linear-gradient(135deg, var(--brand-emerald-500), var(--brand-emerald-600));
-                            box-shadow: 0 12px 40px rgba(34, 197, 94, 0.3), 0 0 0 1px rgba(255,255,255,0.1);">
-                    <!-- Pattern decorativo -->
-                    <div class="absolute inset-0 opacity-10" style="background-image: radial-gradient(circle at 20% 50%, rgba(255,255,255,0.2) 1px, transparent 1px); background-size: 24px 24px;"></div>
-                    
-                    <div class="relative flex flex-col md:flex-row items-center md:items-start justify-between">
-                        <div class="text-center md:text-left mb-6 md:mb-0">
-                            <p class="text-emerald-100 text-xs uppercase font-bold tracking-wider mb-3">
-                                Sua Taxa Atual
-                            </p>
-                            <div class="flex items-baseline justify-center md:justify-start">
-                                <h4 class="text-6xl md:text-7xl font-black text-white" style="text-shadow: 0 2px 12px rgba(0,0,0,0.3);">
-                                    4%
-                                </h4>
-                                <span class="ml-2 text-2xl font-semibold text-emerald-100">apenas</span>
-                            </div>
-                            <p class="text-green-50 mt-3 text-base font-medium">
-                                de cada venda confirmada
-                            </p>
-                            
-                            <!-- Exemplo de cálculo -->
-                            <div class="mt-6 inline-flex items-center px-4 py-2.5 bg-white bg-opacity-15 rounded-xl border border-white border-opacity-20 backdrop-blur-sm">
-                                <i class="fas fa-calculator text-emerald-100 mr-3"></i>
-                                <div class="text-left">
-                                    <p class="text-xs text-emerald-100 font-medium">Exemplo:</p>
-                                    <p class="text-sm text-white font-bold">
-                                        Venda de R$ 100,00 → Você recebe R$ 96,00
-                                    </p>
-                                </div>
-                            </div>
+                
+                <div class="gateway-card text-center">
+                    <i class="fas fa-rocket text-4xl text-yellow-500 mb-3"></i>
+                    <h5 class="font-bold text-white mb-2">Sem Setup</h5>
+                    <p class="text-sm text-gray-400">Comece agora</p>
                 </div>
-
-                        <div class="text-center">
-                            <div class="inline-flex flex-col items-center p-6 bg-white bg-opacity-10 rounded-2xl border border-white border-opacity-20 backdrop-blur-sm">
-                                <i class="fas fa-infinity text-5xl text-white mb-3" style="filter: drop-shadow(0 2px 8px rgba(0,0,0,0.3));"></i>
-                                <p class="text-green-50 text-sm font-semibold">Bots Ilimitados</p>
-                                <p class="text-emerald-100 text-xs mt-1">Sem mensalidade</p>
-                        </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Benefits Grid -->
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-                    <div class="bg-surface800 rounded-xl p-6 border border-white border-opacity-10 hover:border-accent500 hover:border-opacity-30 transition-all">
-                        <div class="flex items-center mb-3">
-                            <div class="flex items-center justify-center h-10 w-10 rounded-lg bg-accent500 bg-opacity-15">
-                                <i class="fas fa-rocket text-accent500 text-lg"></i>
-                            </div>
-                            <h5 class="ml-3 text-base font-bold text-textPrimary">Sem Setup</h5>
-                        </div>
-                        <p class="text-sm text-textSecondary">
-                            Comece a vender em minutos. Sem taxas iniciais ou mensalidades.
-                        </p>
-                    </div>
-                    
-                    <div class="bg-surface800 rounded-xl p-6 border border-white border-opacity-10 hover:border-success-500 hover:border-opacity-30 transition-all">
-                        <div class="flex items-center mb-3">
-                            <div class="flex items-center justify-center h-10 w-10 rounded-lg bg-success-500 bg-opacity-15">
-                                <i class="fas fa-chart-line text-success-500 text-lg"></i>
-                            </div>
-                            <h5 class="ml-3 text-base font-bold text-textPrimary">Escala Livre</h5>
-                        </div>
-                        <p class="text-sm text-textSecondary">
-                            Quanto mais vender, mais lucra. A taxa permanece sempre em 4%.
-                        </p>
-                    </div>
-                    
-                    <div class="bg-surface800 rounded-xl p-6 border border-white border-opacity-10 hover:border-info-500 hover:border-opacity-30 transition-all">
-                        <div class="flex items-center mb-3">
-                            <div class="flex items-center justify-center h-10 w-10 rounded-lg bg-info-500 bg-opacity-15">
-                                <i class="fas fa-shield-alt text-info-500 text-lg"></i>
-                            </div>
-                            <h5 class="ml-3 text-base font-bold text-textPrimary">100% Seguro</h5>
-                        </div>
-                        <p class="text-sm text-textSecondary">
-                            Split automático via SyncPay. Você recebe direto na sua conta.
-                        </p>
-                    </div>
-                </div>
-
-                <!-- FAQ -->
-                <div class="bg-surface800 border border-white border-opacity-10 rounded-2xl p-8">
-                    <div class="flex items-center mb-6">
-                        <div class="flex items-center justify-center h-12 w-12 rounded-xl bg-accent500 bg-opacity-15">
-                            <i class="fas fa-question-circle text-accent500 text-xl"></i>
-                        </div>
-                        <h4 class="ml-4 text-xl font-bold text-textPrimary">
-                        Perguntas Frequentes
-                    </h4>
-                    </div>
-                    
-                    <div class="space-y-6">
-                        <div class="border-l-2 border-accent500 pl-4">
-                            <p class="font-semibold text-textPrimary text-base">Preciso pagar algo para começar?</p>
-                            <p class="text-textSecondary mt-2 leading-relaxed">
-                                Não! Você só paga <strong class="text-accent500">4% de comissão</strong> quando fizer uma venda confirmada. Zero mensalidade, zero setup.
-                            </p>
-                        </div>
-                        
-                        <div class="border-l-2 border-success-500 pl-4">
-                            <p class="font-semibold text-textPrimary text-base">Como o split funciona tecnicamente?</p>
-                            <p class="text-textSecondary mt-2 leading-relaxed">
-                                Quando um PIX é gerado, a SyncPay automaticamente divide: <strong class="text-success-500">96% para você</strong> e <strong class="text-accent500">4% para a plataforma</strong>. Tudo instantâneo!
-                            </p>
-                        </div>
-                        
-                        <div class="border-l-2 border-info-500 pl-4">
-                            <p class="font-semibold text-textPrimary text-base">Posso criar quantos bots eu quiser?</p>
-                            <p class="text-textSecondary mt-2 leading-relaxed">
-                                Sim! <strong class="text-info-500">Bots ilimitados</strong>. Crie 1, 10, 100 bots. Você paga apenas por venda, não por bot.
-                            </p>
-                        </div>
-                        
-                        <div class="border-l-2 border-accent500 pl-4">
-                            <p class="font-semibold text-textPrimary text-base">E se eu vender muito?</p>
-                            <p class="text-textSecondary mt-2 leading-relaxed">
-                                Melhor ainda! A taxa permanece em <strong class="text-accent500">4% fixos</strong>. Quanto mais você vender, mais você ganha. Sem limite de faturamento.
-                            </p>
-                        </div>
-                    </div>
+                
+                <div class="gateway-card text-center">
+                    <i class="fas fa-shield-alt text-4xl text-yellow-500 mb-3"></i>
+                    <h5 class="font-bold text-white mb-2">100% Seguro</h5>
+                    <p class="text-sm text-gray-400">Split automático</p>
                 </div>
             </div>
         </div>
@@ -867,34 +686,18 @@ function settingsApp() {
         profile: {
             full_name: '{{ current_user.full_name or "" }}',
             email: '{{ current_user.email }}',
-            username: '{{ current_user.username }}',
-            plan: '{{ current_user.plan }}'
+            username: '{{ current_user.username }}'
         },
         password: {
             current: '',
             new: ''
         },
         gateways: {
-            syncpay: {
-                client_id: '',
-                client_secret: ''
-            },
-            pushynpay: {
-                api_key: ''
-            },
-            paradise: {
-                api_key: '',
-                offer_hash: '',
-                product_hash: ''
-            },
-            hoopay: {
-                api_key: '',
-                organization_id: ''
-            },
-            wiinpay: {
-                api_key: '',
-                split_user_id: ''
-            }
+            syncpay: { client_id: '', client_secret: '' },
+            pushynpay: { api_key: '' },
+            paradise: { api_key: '', offer_hash: '', product_hash: '' },
+            hoopay: { api_key: '', organization_id: '' },
+            wiinpay: { api_key: '', split_user_id: '' }
         },
         gatewaysList: [],
 
@@ -906,7 +709,6 @@ function settingsApp() {
             try {
                 const response = await fetch('/api/gateways');
                 const data = await response.json();
-                
                 if (response.ok) {
                     this.gatewaysList = data;
                 }
@@ -919,51 +721,25 @@ function settingsApp() {
             return this.gatewaysList.find(g => g.gateway_type === type);
         },
 
-        async toggleGateway(gatewayId, gatewayType) {
-            try {
-                const response = await fetch(`/api/gateways/${gatewayId}/toggle`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    }
-                });
-
-                const data = await response.json();
-
-                if (response.ok) {
-                    await this.loadGateways();
-                    this.showNotification(`${gatewayType.toUpperCase()} ${data.is_active ? 'ativado' : 'desativado'} com sucesso!`);
-                } else {
-                    alert('Erro: ' + data.error);
-                }
-            } catch (error) {
-                alert('Erro ao alterar gateway: ' + error.message);
-            }
-        },
-
         async updateProfile() {
             this.loading = true;
             try {
                 const response = await fetch('/api/user/profile', {
                     method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         full_name: this.profile.full_name,
                         email: this.profile.email
                     })
                 });
-
                 const data = await response.json();
-
                 if (response.ok) {
-                    this.showNotification('Perfil atualizado com sucesso!');
+                    this.showNotification('Perfil atualizado!');
                 } else {
                     alert('Erro: ' + data.error);
                 }
             } catch (error) {
-                alert('Erro ao atualizar perfil: ' + error.message);
+                alert('Erro: ' + error.message);
             } finally {
                 this.loading = false;
             }
@@ -974,31 +750,26 @@ function settingsApp() {
                 alert('Preencha todos os campos');
                 return;
             }
-
             this.loading = true;
             try {
                 const response = await fetch('/api/user/password', {
                     method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         current_password: this.password.current,
                         new_password: this.password.new
                     })
                 });
-
                 const data = await response.json();
-
                 if (response.ok) {
-                    this.showNotification('Senha alterada com sucesso!');
+                    this.showNotification('Senha alterada!');
                     this.password.current = '';
                     this.password.new = '';
                 } else {
                     alert('Erro: ' + data.error);
                 }
             } catch (error) {
-                alert('Erro ao alterar senha: ' + error.message);
+                alert('Erro: ' + error.message);
             } finally {
                 this.loading = false;
             }
@@ -1007,29 +778,21 @@ function settingsApp() {
         async saveGateway(type) {
             this.loading = true;
             try {
-                const payload = {
-                    gateway_type: type,
-                    ...this.gateways[type]
-                };
-
+                const payload = { gateway_type: type, ...this.gateways[type] };
                 const response = await fetch('/api/gateways', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
-
                 const data = await response.json();
-
                 if (response.ok) {
-                    this.showNotification(`Gateway ${type} configurado com sucesso!`);
+                    this.showNotification(`Gateway ${type} configurado!`);
                     await this.loadGateways();
                 } else {
                     alert('Erro: ' + data.error);
                 }
             } catch (error) {
-                alert('Erro ao salvar gateway: ' + error.message);
+                alert('Erro: ' + error.message);
             } finally {
                 this.loading = false;
             }
@@ -1037,8 +800,8 @@ function settingsApp() {
 
         showNotification(message) {
             const notification = document.createElement('div');
-            notification.className = 'fixed top-4 right-4 bg-emerald-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';
-            notification.textContent = message;
+            notification.className = 'fixed top-4 right-4 px-6 py-3 rounded-lg shadow-2xl z-50 text-white font-bold bg-green-500';
+            notification.textContent = '✅ ' + message;
             document.body.appendChild(notification);
             setTimeout(() => notification.remove(), 3000);
         }
@@ -1046,5 +809,3 @@ function settingsApp() {
 }
 </script>
 {% endblock %}
-
-
