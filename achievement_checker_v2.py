@@ -5,20 +5,13 @@ Suporta requisitos compostos, progressão parcial e conquistas secretas
 
 from datetime import datetime, timedelta
 from sqlalchemy import func
-from models import db, User, Bot, Payment, BotUser
+from models import db, User, Bot, Payment, BotUser, Achievement, UserAchievement
 import logging
 
-# ✅ CORREÇÃO: Desabilitar sistema V2 se tabelas não existirem
-try:
-    # from models_v2 import AchievementV2, UserAchievementV2, GamificationNotification  # ❌ Módulo não existe
-    # ✅ Usando Achievement e UserAchievement do models.py
-    pass
-    ACHIEVEMENTS_V2_ENABLED = True
-except ImportError:
-    ACHIEVEMENTS_V2_ENABLED = False
-    AchievementV2, UserAchievementV2, GamificationNotification = None, None, None
-
 logger = logging.getLogger(__name__)
+
+# ✅ Usar modelos corretos do models.py
+ACHIEVEMENTS_V2_ENABLED = True
 
 
 class AchievementChecker:
@@ -33,66 +26,43 @@ class AchievementChecker:
         
         try:
             # Buscar todas as conquistas ativas
-            achievements = AchievementV2.query.filter(
-                db.or_(
-                    AchievementV2.expires_at.is_(None),
-                    AchievementV2.expires_at > datetime.utcnow()
-                )
-            ).all()
+            achievements = Achievement.query.all()
             
             newly_unlocked = []
             
             for achievement in achievements:
                 # Verificar se já possui
-                user_achievement = UserAchievementV2.query.filter_by(
+                user_achievement = UserAchievement.query.filter_by(
                     user_id=user.id,
                     achievement_id=achievement.id
                 ).first()
                 
-                # Se já completou e não pode repetir, skip
-                if user_achievement and user_achievement.status == 'completed':
-                    if achievement.max_completions == 1:
-                        continue
-                    
-                    # Verificar cooldown
-                    if achievement.cooldown_hours and user_achievement.last_completion:
-                        cooldown_end = user_achievement.last_completion + timedelta(hours=achievement.cooldown_hours)
-                        if datetime.utcnow() < cooldown_end:
-                            continue
+                # Se já completou, skip
+                if user_achievement:
+                    continue
                 
-                # Verificar progresso
-                progress = AchievementChecker._check_achievement_progress(user, achievement)
+                # Verificar se atingiu requisito
+                current_value = AchievementChecker._get_metric_value(user, achievement.requirement_type)
+                met_requirement = current_value >= achievement.requirement_value
                 
-                # Criar/atualizar registro de progresso
-                if not user_achievement:
-                    user_achievement = UserAchievementV2(
+                if met_requirement:
+                    # Desbloquear conquista
+                    user_achievement = UserAchievement(
                         user_id=user.id,
                         achievement_id=achievement.id,
-                        status='in_progress'
+                        unlocked_at=datetime.utcnow(),
+                        notified=False
                     )
                     db.session.add(user_achievement)
-                
-                user_achievement.current_progress = progress['percentage']
-                user_achievement.progress_data = progress['data']
-                
-                # Se completou
-                if progress['percentage'] >= 1.0 and user_achievement.status != 'completed':
-                    user_achievement.status = 'completed'
-                    user_achievement.unlocked_at = datetime.utcnow()
-                    if user_achievement.completion_count is None:
-                        user_achievement.completion_count = 0
-                    user_achievement.completion_count += 1
-                    user_achievement.last_completion = datetime.utcnow()
                     
-                    # Aplicar recompensas
-                    AchievementChecker._apply_rewards(user, achievement)
-                    
-                    # Criar notificação
-                    AchievementChecker._create_notification(user, achievement)
+                    # Aplicar pontos
+                    if user.ranking_points is None:
+                        user.ranking_points = 0
+                    user.ranking_points += achievement.points
                     
                     newly_unlocked.append(achievement)
                     
-                    logger.info(f"🏆 Achievement unlocked: {achievement.name} - User {user.id}")
+                    logger.info(f"🏆 Achievement unlocked: {achievement.name} - User {user.id} (+{achievement.points} pts)")
             
             db.session.commit()
             return newly_unlocked
