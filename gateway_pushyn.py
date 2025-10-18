@@ -34,9 +34,10 @@ class PushynGateway(PaymentGateway):
         """
         self.api_key = api_key
         self.base_url = os.environ.get('PUSHYN_API_URL', 'https://api.pushinpay.com.br')
-        # ✅ Split configurado com Account ID correto (hash alfanumérico)
-        self.split_account_id = os.environ.get('PUSHYN_SPLIT_ACCOUNT_ID', 'OOh4WBnse1C8412BawIDlqYmerMxrOQeEfH427lp589263b4')
-        self.split_percentage = 2  # 2% de comissão PADRÃO
+        # ⚠️ SPLIT DESABILITADO - Account ID fornecido não existe no PushynPay
+        # Configure o Account ID correto no .env: PUSHYN_SPLIT_ACCOUNT_ID
+        self.split_account_id = os.environ.get('PUSHYN_SPLIT_ACCOUNT_ID', None)
+        self.split_percentage = 2  # 2% (quando habilitado)
     
     def get_gateway_name(self) -> str:
         """Nome amigável do gateway"""
