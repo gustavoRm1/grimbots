@@ -370,7 +370,7 @@
             <div class="stat-card">
                 <div class="stat-label">✅ Gateways Configurados</div>
                 <div class="stat-value" style="color: #FFB800;">
-                    <span x-text="gatewaysList.filter(g => g.is_verified).length"></span><span class="text-2xl text-gray-600">/5</span>
+                    <span x-text="gatewaysList.filter(g => g.is_verified && g.gateway_type !== 'hoopay' && g.gateway_type !== 'syncpay').length"></span><span class="text-2xl text-gray-600">/3</span>
                 </div>
                 <div class="text-sm text-gray-500">Gateways verificados</div>
             </div>
