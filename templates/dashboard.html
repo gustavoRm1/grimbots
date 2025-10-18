@@ -367,7 +367,7 @@
                         </button>
                                     </template>
                                     <template x-if="!bot.is_running && (!bot.config || !bot.config.welcome_message)">
-                                    <button @click="window.location.href='/bot/' + bot.id + '/config'" 
+                                    <button @click="window.location.href='/bots/' + bot.id + '/config'" 
                                             class="btn-action flex-1"
                                             style="background: rgba(251, 191, 36, 0.1); border-color: rgba(251, 191, 36, 0.3); color: #FCD34D;"
                                             title="Configure o bot antes de iniciar">
