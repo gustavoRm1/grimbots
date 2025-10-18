@@ -40,11 +40,10 @@ class HoopayPaymentGateway(PaymentGateway):
         self.organization_id = credentials.get('organization_id', '')
         self.split_percentage = float(credentials.get('split_percentage', 2.0))  # 2% PADRÃO
         
-        # URLs da API HooPay
-        # Testando endpoints comuns: /v1/pix/charges, /pix, /v1/charges
-        self.base_url = 'https://api.hoopay.com.br'  
-        self.charge_url = f'{self.base_url}/v1/pix/charges'  # Endpoint comum PIX
-        self.consult_url = f'{self.base_url}/v1/pix/charges'
+        # URLs da API HooPay (conforme hoopay.json)
+        self.base_url = 'https://pay.hoopay.com.br'  # ✅ pay.hoopay (não api.hoopay)
+        self.charge_url = f'{self.base_url}/charge'  # ✅ /charge
+        self.consult_url = f'{self.base_url}/pix/consult'  # ✅ /pix/consult/{orderUUID}
         
         logger.info(f"🟡 HooPay Gateway inicializado | Token: {self.api_key[:16]}...")
 
@@ -173,21 +172,25 @@ class HoopayPaymentGateway(PaymentGateway):
             
             logger.debug(f"📤 HooPay Payload: {payload}")
             
-            # Headers HooPay (Bearer Token)
+            # Headers HooPay (sem Authorization, usa Basic Auth)
             headers = {
                 'Content-Type': 'application/json',
-                'Accept': 'application/json',
-                'Authorization': f'Bearer {self.api_key}'  # ✅ CORREÇÃO: Apenas Bearer Token
+                'Accept': 'application/json'
             }
             
-            logger.info(f"🔐 HooPay Auth: Bearer {self.api_key[:16]}...")
+            # ✅ CORREÇÃO: HooPay usa Basic Auth (token como username, password vazio)
+            from requests.auth import HTTPBasicAuth
+            auth = HTTPBasicAuth(self.api_key, '')
+            
+            logger.info(f"🔐 HooPay Auth: Basic {self.api_key[:16]}... (token como username)")
             logger.info(f"📤 HooPay URL: {self.charge_url}")
             
             # Requisição para HooPay
             response = requests.post(
                 self.charge_url,
                 json=payload,
-                headers=headers,  # ✅ CORREÇÃO: Sem Basic Auth
+                headers=headers,
+                auth=auth,  # ✅ CORREÇÃO: Basic Auth
                 timeout=15
             )
             
