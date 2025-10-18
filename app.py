@@ -1251,6 +1251,92 @@ def general_remarketing():
         logger.error(f"❌ Erro no remarketing geral: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/remarketing/<int:bot_id>/stats', methods=['GET'])
+@login_required
+def get_remarketing_stats(bot_id):
+    """
+    API: Estatísticas gerais de remarketing por bot
+    Retorna métricas agregadas de todas as campanhas
+    """
+    try:
+        from models import RemarketingCampaign
+        
+        # Verificar se o bot pertence ao usuário
+        bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
+        
+        # Buscar todas as campanhas do bot
+        campaigns = RemarketingCampaign.query.filter_by(bot_id=bot_id).all()
+        
+        # Calcular métricas agregadas
+        total_campaigns = len(campaigns)
+        total_sent = sum(c.total_sent for c in campaigns)
+        total_clicks = sum(c.total_clicks for c in campaigns)
+        total_failed = sum(c.total_failed for c in campaigns)
+        total_blocked = sum(c.total_blocked for c in campaigns)
+        total_revenue = sum(c.revenue_generated or 0 for c in campaigns)
+        
+        # Taxas
+        delivery_rate = (total_sent / sum(c.total_targets for c in campaigns) * 100) if sum(c.total_targets for c in campaigns) > 0 else 0
+        click_rate = (total_clicks / total_sent * 100) if total_sent > 0 else 0
+        
+        return jsonify({
+            'total_campaigns': total_campaigns,
+            'total_sent': total_sent,
+            'total_clicks': total_clicks,
+            'total_failed': total_failed,
+            'total_blocked': total_blocked,
+            'total_revenue': float(total_revenue),
+            'delivery_rate': round(delivery_rate, 2),
+            'click_rate': round(click_rate, 2)
+        })
+    except Exception as e:
+        logger.error(f"❌ Erro ao buscar stats de remarketing: {e}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/remarketing/<int:bot_id>/timeline', methods=['GET'])
+@login_required
+def get_remarketing_timeline(bot_id):
+    """
+    API: Timeline de performance de remarketing
+    Retorna dados diários dos últimos 30 dias
+    """
+    try:
+        from models import RemarketingCampaign
+        from datetime import date, timedelta
+        from sqlalchemy import func
+        
+        # Verificar se o bot pertence ao usuário
+        bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
+        
+        # Últimos 30 dias
+        end_date = date.today()
+        start_date = end_date - timedelta(days=30)
+        
+        # Buscar campanhas concluídas no período
+        campaigns = RemarketingCampaign.query.filter(
+            RemarketingCampaign.bot_id == bot_id,
+            RemarketingCampaign.completed_at.isnot(None),
+            func.date(RemarketingCampaign.completed_at) >= start_date
+        ).order_by(RemarketingCampaign.completed_at).all()
+        
+        # Agrupar por data
+        timeline = {}
+        for campaign in campaigns:
+            date_key = campaign.completed_at.strftime('%Y-%m-%d')
+            if date_key not in timeline:
+                timeline[date_key] = {'date': campaign.completed_at.strftime('%d/%m'), 'sent': 0, 'clicks': 0}
+            
+            timeline[date_key]['sent'] += campaign.total_sent
+            timeline[date_key]['clicks'] += campaign.total_clicks
+        
+        # Converter para lista ordenada
+        timeline_list = [v for k, v in sorted(timeline.items())]
+        
+        return jsonify(timeline_list)
+    except Exception as e:
+        logger.error(f"❌ Erro ao buscar timeline de remarketing: {e}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
 # ==================== PAINEL DE ADMINISTRAÇÃO ====================
 
 @app.route('/admin')
@@ -1948,6 +2034,13 @@ def bot_config_page(bot_id):
     """Página de configuração do bot"""
     bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
     return render_template('bot_config.html', bot=bot)
+
+@app.route('/remarketing/analytics/<int:bot_id>')
+@login_required
+def remarketing_analytics(bot_id):
+    """Página de analytics de remarketing"""
+    bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
+    return render_template('remarketing_analytics.html', bot=bot)
 
 @app.route('/api/bots/<int:bot_id>/config', methods=['GET'])
 @login_required

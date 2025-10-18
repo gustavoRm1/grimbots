@@ -1,0 +1,711 @@
+{% extends "base.html" %}
+{% block title %}Analytics de Remarketing - {{ bot.name }}{% endblock %}
+
+{% block extra_head %}
+<style>
+/* Bot Config V2.0 - Design System (IDÊNTICO) */
+
+.config-section {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.02) 0%, rgba(255, 255, 255, 0.01) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 24px;
+}
+
+.config-section-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.config-section-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #FFFFFF;
+}
+
+.config-section-description {
+    font-size: 0.875rem;
+    color: #9CA3AF;
+    margin-top: 4px;
+}
+
+.stat-box {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.01) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+    transition: all 0.2s ease;
+}
+
+.stat-box:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+    border-color: rgba(255, 184, 0, 0.3);
+}
+
+.stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #FFFFFF;
+    margin-bottom: 4px;
+}
+
+.stat-label {
+    font-size: 0.75rem;
+    color: #9CA3AF;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.campaign-card {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.01) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+    transition: all 0.2s ease;
+}
+
+.campaign-card:hover {
+    border-color: rgba(255, 184, 0, 0.3);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 12px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.status-sending {
+    background: rgba(59, 130, 246, 0.15);
+    color: #60A5FA;
+    border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.status-completed {
+    background: rgba(16, 185, 129, 0.15);
+    color: #6EE7B7;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.status-draft {
+    background: rgba(156, 163, 175, 0.15);
+    color: #D1D5DB;
+    border: 1px solid rgba(156, 163, 175, 0.3);
+}
+
+.status-failed {
+    background: rgba(239, 68, 68, 0.15);
+    color: #FCA5A5;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.chart-container {
+    background: #1A1A1A;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 24px;
+}
+
+.metric-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 8px;
+    margin-top: 12px;
+}
+
+.metric-item {
+    text-align: center;
+}
+
+.metric-item-value {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #FFFFFF;
+}
+
+.metric-item-label {
+    font-size: 0.75rem;
+    color: #9CA3AF;
+    margin-top: 4px;
+}
+
+.info-box {
+    padding: 16px;
+    background: rgba(59, 130, 246, 0.05);
+    border-left: 4px solid #3B82F6;
+    border-radius: 0 8px 8px 0;
+    margin-top: 12px;
+}
+
+.info-box-success {
+    background: rgba(16, 185, 129, 0.05);
+    border-left-color: #10B981;
+}
+
+.info-box-warning {
+    background: rgba(255, 184, 0, 0.05);
+    border-left-color: #FFB800;
+}
+
+.btn-action {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    border: 1px solid transparent;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #111827;
+    background-image: linear-gradient(to right, var(--brand-gold-500), var(--brand-gold-700));
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-action:hover {
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+.btn-action i {
+    margin-right: 0.5rem;
+}
+
+/* Loading Animation */
+.pulse-animation {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: .5;
+    }
+}
+
+/* Real-time indicator */
+.live-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #FCA5A5;
+}
+
+.live-dot {
+    width: 8px;
+    height: 8px;
+    background: #EF4444;
+    border-radius: 50%;
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+</style>
+
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" x-data="analyticsApp()" x-init="init()">
+    
+    <!-- Header -->
+    <div class="mb-8 flex items-center justify-between">
+        <div class="flex items-center gap-4">
+            <a href="{{ url_for('bot_config', bot_id=bot.id) }}" 
+               class="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-700 text-gray-400 hover:text-white hover:border-yellow-500 transition-all">
+                <i class="fas fa-arrow-left"></i>
+            </a>
+            <div>
+                <h1 class="text-3xl font-bold text-white flex items-center gap-3">
+                    <i class="fas fa-chart-line" style="color: var(--brand-gold-500);"></i>
+                    Analytics de Remarketing
+                </h1>
+                <p class="text-sm text-gray-500 mt-1">{{ bot.name }} (@{{ bot.username }})</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-3">
+            <div class="live-indicator">
+                <div class="live-dot"></div>
+                <span>AO VIVO</span>
+            </div>
+            <button @click="refreshData()" 
+                    :disabled="loading"
+                    :class="{'opacity-50 cursor-not-allowed': loading}"
+                    class="btn-action">
+                <i class="fas fa-sync-alt" :class="{'fa-spin': loading}"></i>
+                <span x-text="loading ? 'Atualizando...' : 'Atualizar'"></span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Métricas Gerais -->
+    <div class="config-section">
+        <div class="config-section-header">
+            <i class="fas fa-chart-bar text-2xl" style="color: var(--brand-gold-500);"></i>
+            <div>
+                <div class="config-section-title">Visão Geral</div>
+                <div class="config-section-description">Resumo de todas as campanhas</div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="stat-box">
+                <div class="stat-value" style="color: var(--brand-gold-500);" x-text="stats.total_campaigns || 0"></div>
+                <div class="stat-label">Campanhas Criadas</div>
+            </div>
+            
+            <div class="stat-box">
+                <div class="stat-value" style="color: #60A5FA;" x-text="stats.total_sent || 0"></div>
+                <div class="stat-label">Mensagens Enviadas</div>
+            </div>
+            
+            <div class="stat-box">
+                <div class="stat-value" style="color: #10B981;" x-text="formatPercentage(stats.delivery_rate)"></div>
+                <div class="stat-label">Taxa de Entrega</div>
+            </div>
+            
+            <div class="stat-box">
+                <div class="stat-value" style="color: #10B981;" x-text="formatPercentage(stats.click_rate)"></div>
+                <div class="stat-label">Taxa de Cliques</div>
+            </div>
+        </div>
+
+        <!-- Métricas Adicionais -->
+        <div class="metric-row mt-6">
+            <div class="metric-item">
+                <div class="metric-item-value" style="color: #6EE7B7;" x-text="stats.total_clicks || 0"></div>
+                <div class="metric-item-label">Total de Cliques</div>
+            </div>
+            
+            <div class="metric-item">
+                <div class="metric-item-value" style="color: #FCA5A5;" x-text="stats.total_failed || 0"></div>
+                <div class="metric-item-label">Falhas</div>
+            </div>
+            
+            <div class="metric-item">
+                <div class="metric-item-value" style="color: #D1D5DB;" x-text="stats.total_blocked || 0"></div>
+                <div class="metric-item-label">Bloqueados</div>
+            </div>
+            
+            <div class="metric-item">
+                <div class="metric-item-value" style="color: var(--brand-gold-500);" x-text="'R$ ' + (stats.total_revenue || 0).toFixed(2)"></div>
+                <div class="metric-item-label">Receita Gerada</div>
+            </div>
+        </div>
+
+        <!-- Info Box -->
+        <div class="info-box-success info-box mt-6">
+            <p class="text-sm text-gray-300">
+                <i class="fas fa-lightbulb mr-2 text-green-400"></i>
+                <strong>Dica:</strong> Uma taxa de cliques acima de 10% é considerada excelente. Continue testando mensagens e ofertas para melhorar!
+            </p>
+        </div>
+    </div>
+
+    <!-- Gráfico de Performance ao Longo do Tempo -->
+    <div class="config-section">
+        <div class="config-section-header">
+            <i class="fas fa-chart-line text-2xl text-blue-500"></i>
+            <div>
+                <div class="config-section-title">Performance ao Longo do Tempo</div>
+                <div class="config-section-description">Evolução das métricas nos últimos 30 dias</div>
+            </div>
+        </div>
+
+        <div class="chart-container">
+            <canvas id="timelineChart" style="max-height: 300px;"></canvas>
+        </div>
+    </div>
+
+    <!-- Gráfico de Conversão por Campanha -->
+    <div class="config-section">
+        <div class="config-section-header">
+            <i class="fas fa-bullseye text-2xl text-purple-500"></i>
+            <div>
+                <div class="config-section-title">Conversão por Campanha</div>
+                <div class="config-section-description">Compare o desempenho de cada campanha</div>
+            </div>
+        </div>
+
+        <div class="chart-container">
+            <canvas id="campaignChart" style="max-height: 300px;"></canvas>
+        </div>
+    </div>
+
+    <!-- Lista de Campanhas -->
+    <div class="config-section">
+        <div class="config-section-header">
+            <i class="fas fa-list text-2xl text-yellow-500"></i>
+            <div>
+                <div class="config-section-title">Campanhas Recentes</div>
+                <div class="config-section-description">Histórico detalhado de todas as campanhas</div>
+            </div>
+        </div>
+
+        <!-- Loading State -->
+        <div x-show="loading" class="text-center py-12">
+            <i class="fas fa-spinner fa-spin text-4xl text-yellow-500 mb-4"></i>
+            <p class="text-gray-400">Carregando campanhas...</p>
+        </div>
+
+        <!-- Empty State -->
+        <div x-show="!loading && campaigns.length === 0" class="text-center py-12 border-2 border-dashed border-gray-700 rounded-xl">
+            <i class="fas fa-inbox text-5xl text-gray-700 mb-4"></i>
+            <h3 class="text-xl font-bold text-white mb-2">Nenhuma campanha encontrada</h3>
+            <p class="text-gray-500 mb-6">Você ainda não criou campanhas de remarketing</p>
+            <a href="{{ url_for('bot_config', bot_id=bot.id) }}#remarketing" class="btn-action">
+                <i class="fas fa-plus"></i>
+                Criar Primeira Campanha
+            </a>
+        </div>
+
+        <!-- Campanhas -->
+        <div x-show="!loading && campaigns.length > 0" class="space-y-4">
+            <template x-for="campaign in campaigns" :key="campaign.id">
+                <div class="campaign-card">
+                    <!-- Header da Campanha -->
+                    <div class="flex justify-between items-start mb-4">
+                        <div class="flex-1">
+                            <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                                <i class="fas fa-bullhorn text-yellow-500"></i>
+                                <span x-text="campaign.name"></span>
+                            </h3>
+                            <p class="text-sm text-gray-500 mt-1">
+                                <i class="fas fa-calendar mr-1"></i>
+                                Criada em: <span x-text="formatDate(campaign.created_at)"></span>
+                            </p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span :class="{
+                                'status-sending': campaign.status === 'sending',
+                                'status-completed': campaign.status === 'completed',
+                                'status-draft': campaign.status === 'draft',
+                                'status-failed': campaign.status === 'failed'
+                            }" class="status-badge">
+                                <i class="fas fa-circle text-xs mr-1"></i>
+                                <span x-text="getStatusLabel(campaign.status)"></span>
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Métricas da Campanha -->
+                    <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+                        <div class="stat-box">
+                            <div class="stat-value text-lg" x-text="campaign.total_targets || 0"></div>
+                            <div class="stat-label">Alvos</div>
+                        </div>
+                        
+                        <div class="stat-box">
+                            <div class="stat-value text-lg" style="color: #60A5FA;" x-text="campaign.total_sent || 0"></div>
+                            <div class="stat-label">Enviados</div>
+                        </div>
+                        
+                        <div class="stat-box">
+                            <div class="stat-value text-lg" style="color: #10B981;" x-text="campaign.total_clicks || 0"></div>
+                            <div class="stat-label">Cliques</div>
+                        </div>
+                        
+                        <div class="stat-box">
+                            <div class="stat-value text-lg" style="color: #FCA5A5;" x-text="campaign.total_failed || 0"></div>
+                            <div class="stat-label">Falhas</div>
+                        </div>
+                        
+                        <div class="stat-box">
+                            <div class="stat-value text-lg" style="color: var(--brand-gold-500);" x-text="'R$ ' + (campaign.revenue_generated || 0).toFixed(2)"></div>
+                            <div class="stat-label">Receita</div>
+                        </div>
+                    </div>
+
+                    <!-- Taxas de Conversão -->
+                    <div class="mt-4 p-4 bg-gray-900 rounded-lg">
+                        <div class="grid grid-cols-2 gap-4 text-center">
+                            <div>
+                                <div class="text-sm text-gray-400 mb-1">Taxa de Entrega</div>
+                                <div class="text-xl font-bold" style="color: #10B981;" 
+                                     x-text="formatPercentage(campaign.total_sent / campaign.total_targets * 100)"></div>
+                            </div>
+                            <div>
+                                <div class="text-sm text-gray-400 mb-1">Taxa de Cliques</div>
+                                <div class="text-xl font-bold" style="color: #60A5FA;" 
+                                     x-text="formatPercentage(campaign.total_clicks / campaign.total_sent * 100)"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Mensagem da Campanha (Preview) -->
+                    <div class="mt-4 p-3 bg-gray-900 border border-gray-800 rounded-lg">
+                        <div class="text-xs text-gray-500 mb-2">MENSAGEM:</div>
+                        <div class="text-sm text-gray-300 line-clamp-2" x-text="campaign.message"></div>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+function analyticsApp() {
+    return {
+        loading: true,
+        stats: {},
+        campaigns: [],
+        timeline: [],
+        timelineChart: null,
+        campaignChart: null,
+        
+        async init() {
+            console.log('📊 Analytics inicializando...');
+            await this.loadData();
+            this.initCharts();
+            
+            // Auto-refresh a cada 30 segundos
+            setInterval(() => {
+                this.refreshData();
+            }, 30000);
+        },
+        
+        async loadData() {
+            this.loading = true;
+            try {
+                // Carregar estatísticas gerais
+                const statsResponse = await fetch('/api/remarketing/{{ bot.id }}/stats');
+                if (statsResponse.ok) {
+                    this.stats = await statsResponse.json();
+                }
+                
+                // Carregar campanhas
+                const campaignsResponse = await fetch('/api/bots/{{ bot.id }}/remarketing/campaigns');
+                if (campaignsResponse.ok) {
+                    this.campaigns = await campaignsResponse.json();
+                }
+                
+                // Carregar timeline
+                const timelineResponse = await fetch('/api/remarketing/{{ bot.id }}/timeline');
+                if (timelineResponse.ok) {
+                    this.timeline = await timelineResponse.json();
+                }
+                
+                console.log('✅ Dados carregados:', {
+                    stats: this.stats,
+                    campaigns: this.campaigns.length,
+                    timeline: this.timeline.length
+                });
+                
+                // Atualizar gráficos
+                if (this.timelineChart) {
+                    this.updateCharts();
+                }
+            } catch (error) {
+                console.error('Erro ao carregar dados:', error);
+            } finally {
+                this.loading = false;
+            }
+        },
+        
+        async refreshData() {
+            await this.loadData();
+            this.showNotification('✅ Dados atualizados!', 'success');
+        },
+        
+        initCharts() {
+            // Gráfico de Timeline
+            const timelineCtx = document.getElementById('timelineChart');
+            if (timelineCtx) {
+                this.timelineChart = new Chart(timelineCtx, {
+                    type: 'line',
+                    data: {
+                        labels: [],
+                        datasets: [
+                            {
+                                label: 'Mensagens Enviadas',
+                                data: [],
+                                borderColor: '#60A5FA',
+                                backgroundColor: 'rgba(96, 165, 250, 0.1)',
+                                tension: 0.4,
+                                fill: true
+                            },
+                            {
+                                label: 'Cliques',
+                                data: [],
+                                borderColor: '#10B981',
+                                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                                tension: 0.4,
+                                fill: true
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                labels: {
+                                    color: '#9CA3AF'
+                                }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    color: '#9CA3AF'
+                                },
+                                grid: {
+                                    color: 'rgba(255, 255, 255, 0.05)'
+                                }
+                            },
+                            x: {
+                                ticks: {
+                                    color: '#9CA3AF'
+                                },
+                                grid: {
+                                    color: 'rgba(255, 255, 255, 0.05)'
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+            
+            // Gráfico de Campanhas
+            const campaignCtx = document.getElementById('campaignChart');
+            if (campaignCtx) {
+                this.campaignChart = new Chart(campaignCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: [],
+                        datasets: [
+                            {
+                                label: 'Taxa de Cliques (%)',
+                                data: [],
+                                backgroundColor: 'rgba(255, 184, 0, 0.7)',
+                                borderColor: '#FFB800',
+                                borderWidth: 1
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                labels: {
+                                    color: '#9CA3AF'
+                                }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                max: 100,
+                                ticks: {
+                                    color: '#9CA3AF',
+                                    callback: function(value) {
+                                        return value + '%';
+                                    }
+                                },
+                                grid: {
+                                    color: 'rgba(255, 255, 255, 0.05)'
+                                }
+                            },
+                            x: {
+                                ticks: {
+                                    color: '#9CA3AF'
+                                },
+                                grid: {
+                                    color: 'rgba(255, 255, 255, 0.05)'
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+            
+            // Carregar dados iniciais
+            this.updateCharts();
+        },
+        
+        updateCharts() {
+            // Atualizar Timeline Chart
+            if (this.timelineChart && this.timeline.length > 0) {
+                this.timelineChart.data.labels = this.timeline.map(t => t.date);
+                this.timelineChart.data.datasets[0].data = this.timeline.map(t => t.sent);
+                this.timelineChart.data.datasets[1].data = this.timeline.map(t => t.clicks);
+                this.timelineChart.update();
+            }
+            
+            // Atualizar Campaign Chart
+            if (this.campaignChart && this.campaigns.length > 0) {
+                const completedCampaigns = this.campaigns.filter(c => c.status === 'completed');
+                this.campaignChart.data.labels = completedCampaigns.map(c => c.name);
+                this.campaignChart.data.datasets[0].data = completedCampaigns.map(c => {
+                    return c.total_sent > 0 ? (c.total_clicks / c.total_sent * 100).toFixed(2) : 0;
+                });
+                this.campaignChart.update();
+            }
+        },
+        
+        formatPercentage(value) {
+            if (!value || isNaN(value)) return '0%';
+            return value.toFixed(1) + '%';
+        },
+        
+        formatDate(dateString) {
+            if (!dateString) return 'N/A';
+            const date = new Date(dateString);
+            return date.toLocaleDateString('pt-BR', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        },
+        
+        getStatusLabel(status) {
+            const labels = {
+                'draft': 'Rascunho',
+                'scheduled': 'Agendada',
+                'sending': 'Enviando',
+                'completed': 'Concluída',
+                'paused': 'Pausada',
+                'failed': 'Falhou'
+            };
+            return labels[status] || status;
+        },
+        
+        showNotification(message, type = 'success') {
+            const notification = document.createElement('div');
+            notification.className = `fixed top-4 right-4 px-6 py-3 rounded-lg shadow-2xl z-50 text-white font-bold ${type === 'success' ? 'bg-green-500' : 'bg-red-500'}`;
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            setTimeout(() => notification.remove(), 3000);
+        }
+    };
+}
+</script>
+{% endblock %}
+

@@ -1018,10 +1018,17 @@
                     <div class="config-section-title">Campanhas de Remarketing</div>
                     <div class="config-section-description">Recupere clientes que não compraram</div>
                 </div>
-                <button @click="showCreateModal = true" class="ml-auto btn-action btn-action-success">
-                    <i class="fas fa-plus"></i>
-                    Nova Campanha
-                </button>
+                <div class="ml-auto flex items-center gap-3">
+                    <a href="{{ url_for('remarketing_analytics', bot_id=bot.id) }}" 
+                       class="btn-action" style="background: linear-gradient(to right, #3B82F6, #2563EB);">
+                        <i class="fas fa-chart-line"></i>
+                        Ver Analytics
+                    </a>
+                    <button @click="showCreateModal = true" class="btn-action btn-action-success">
+                        <i class="fas fa-plus"></i>
+                        Nova Campanha
+                    </button>
+                </div>
             </div>
 
             <div class="info-box-warning info-box mb-6">
