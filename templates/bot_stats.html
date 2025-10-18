@@ -238,7 +238,7 @@
                 <h1 class="text-3xl font-bold text-white flex items-center gap-3">
                     <i class="fas fa-chart-line" style="color: var(--brand-gold-500);"></i>
                     Estatísticas do Bot
-                </h1>
+            </h1>
                 <p class="text-sm text-gray-500 mt-1">{{ bot.name }} (@{{ bot.username }})</p>
             </div>
         </div>
@@ -256,23 +256,23 @@
             </button>
         </div>
     </div>
-
+    
     <!-- Métricas Principais -->
     <div class="config-section">
         <div class="config-section-header">
             <i class="fas fa-tachometer-alt text-2xl" style="color: var(--brand-gold-500);"></i>
-            <div>
+                <div>
                 <div class="config-section-title">Visão Geral</div>
                 <div class="config-section-description">Métricas principais do bot</div>
             </div>
         </div>
-
+        
         <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div class="stat-box">
                 <div class="stat-value" style="color: #60A5FA;" x-text="stats.general.total_users"></div>
                 <div class="stat-label">Usuários</div>
                 <div class="text-xs text-gray-600 mt-1" x-text="'Conv: ' + stats.general.conversion_rate.toFixed(1) + '%'"></div>
-            </div>
+                </div>
             
             <div class="stat-box">
                 <div class="stat-value" style="color: #10B981;" x-text="stats.general.total_sales"></div>
@@ -284,8 +284,8 @@
                 <div class="stat-value" style="color: var(--brand-gold-500);" x-text="'R$ ' + stats.general.total_revenue.toFixed(0)"></div>
                 <div class="stat-label">Receita Total</div>
                 <div class="text-xs text-gray-600 mt-1" x-text="'Ticket: R$ ' + stats.general.avg_ticket.toFixed(2)"></div>
-            </div>
-            
+        </div>
+        
             <div class="stat-box">
                 <div class="stat-value" style="color: #C4B5FD;" x-text="stats.order_bumps.acceptance_rate + '%'"></div>
                 <div class="stat-label">Order Bumps</div>
@@ -293,7 +293,7 @@
             </div>
         </div>
     </div>
-
+    
     <!-- Gráfico de Performance -->
     <div class="config-section">
         <div class="config-section-header">
@@ -303,12 +303,12 @@
                 <div class="config-section-description">Vendas e receita dos últimos 7 dias</div>
             </div>
         </div>
-
+        
         <div class="chart-container">
             <canvas id="salesChart" style="max-height: 320px;"></canvas>
         </div>
     </div>
-
+    
     <!-- Order Bumps e Downsells -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
         <!-- Order Bumps -->
@@ -329,7 +329,7 @@
                     </div>
                     <i class="fas fa-eye text-blue-500 text-2xl"></i>
                 </div>
-
+                
                 <div class="flex justify-between items-center p-4 bg-gray-900 rounded-lg">
                     <div>
                         <div class="text-xs text-gray-500 mb-1">Aceitos</div>
@@ -337,17 +337,17 @@
                     </div>
                     <i class="fas fa-check-circle text-green-500 text-2xl"></i>
                 </div>
-
-                <div class="p-4 bg-gradient-to-r from-green-500 bg-opacity-10 rounded-lg border border-green-500 border-opacity-30">
-                    <div class="text-xs text-gray-400 mb-2">Taxa de Aceitação</div>
+                
+                <div class="p-4 rounded-lg border-2" style="background: rgba(16, 185, 129, 0.15); border-color: rgba(16, 185, 129, 0.5);">
+                    <div class="text-sm font-bold text-green-300 mb-2">Taxa de Aceitação</div>
                     <div class="flex items-center gap-3">
-                        <div class="flex-1 progress-bar">
-                            <div class="progress-fill" :style="`width: ${stats.order_bumps.acceptance_rate}%`"></div>
+                        <div class="flex-1 progress-bar" style="background: rgba(0, 0, 0, 0.4); height: 12px;">
+                            <div class="progress-fill" style="height: 12px;" :style="`width: ${stats.order_bumps.acceptance_rate}%`"></div>
                         </div>
-                        <span class="text-xl font-bold text-green-400" x-text="stats.order_bumps.acceptance_rate + '%'"></span>
+                        <span class="text-2xl font-bold text-green-300" x-text="stats.order_bumps.acceptance_rate + '%'"></span>
                     </div>
                 </div>
-
+                
                 <div class="p-4 bg-gray-900 rounded-lg border border-yellow-500 border-opacity-30">
                     <div class="text-xs text-gray-400 mb-1">Receita de Order Bumps</div>
                     <div class="text-2xl font-bold" style="color: var(--brand-gold-500);" x-text="'R$ ' + stats.order_bumps.revenue.toFixed(2)"></div>
@@ -361,7 +361,7 @@
                 </p>
             </div>
         </div>
-
+        
         <!-- Downsells -->
         <div class="config-section">
             <div class="config-section-header">
@@ -380,7 +380,7 @@
                     </div>
                     <i class="fas fa-paper-plane text-blue-500 text-2xl"></i>
                 </div>
-
+                
                 <div class="flex justify-between items-center p-4 bg-gray-900 rounded-lg">
                     <div>
                         <div class="text-xs text-gray-500 mb-1">Convertidos</div>
@@ -388,17 +388,17 @@
                     </div>
                     <i class="fas fa-check-circle text-green-500 text-2xl"></i>
                 </div>
-
-                <div class="p-4 bg-gradient-to-r from-orange-500 bg-opacity-10 rounded-lg border border-orange-500 border-opacity-30">
-                    <div class="text-xs text-gray-400 mb-2">Taxa de Conversão</div>
+                
+                <div class="p-4 rounded-lg border-2" style="background: rgba(249, 115, 22, 0.15); border-color: rgba(249, 115, 22, 0.5);">
+                    <div class="text-sm font-bold text-orange-300 mb-2">Taxa de Conversão</div>
                     <div class="flex items-center gap-3">
-                        <div class="flex-1 progress-bar">
-                            <div class="progress-fill" style="background: linear-gradient(90deg, #F97316, #EA580C);" :style="`width: ${stats.downsells.conversion_rate}%`"></div>
+                        <div class="flex-1 progress-bar" style="background: rgba(0, 0, 0, 0.4); height: 12px;">
+                            <div class="progress-fill" style="background: linear-gradient(90deg, #F97316, #EA580C); height: 12px;" :style="`width: ${stats.downsells.conversion_rate}%`"></div>
                         </div>
-                        <span class="text-xl font-bold text-orange-400" x-text="stats.downsells.conversion_rate + '%'"></span>
+                        <span class="text-2xl font-bold text-orange-300" x-text="stats.downsells.conversion_rate + '%'"></span>
                     </div>
                 </div>
-
+                
                 <div class="p-4 bg-gray-900 rounded-lg border border-yellow-500 border-opacity-30">
                     <div class="text-xs text-gray-400 mb-1">Receita de Downsells</div>
                     <div class="text-2xl font-bold" style="color: var(--brand-gold-500);" x-text="'R$ ' + stats.downsells.revenue.toFixed(2)"></div>
@@ -413,7 +413,7 @@
             </div>
         </div>
     </div>
-
+    
     <!-- Top Produtos e Horários de Pico -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
         <!-- Top Produtos -->
@@ -502,7 +502,7 @@
                 <div class="config-section-description">Histórico de transações recentes</div>
             </div>
         </div>
-
+        
         <template x-if="stats.recent_sales.length > 0">
             <div class="overflow-x-auto">
                 <table class="table-premium">
@@ -551,10 +551,10 @@
                 <i class="fas fa-inbox text-5xl text-gray-700 mb-4"></i>
                 <h3 class="text-xl font-bold text-white mb-2">Nenhuma venda ainda</h3>
                 <p class="text-gray-500">As vendas aparecerão aqui automaticamente</p>
-            </div>
+        </div>
         </template>
     </div>
-
+    
 </div>
 {% endblock %}
 
@@ -612,7 +612,7 @@ function botStatsApp() {
                     console.log('✅ Stats carregados:', this.stats);
                     
                     if (this.salesChart) {
-                        this.updateChart();
+                    this.updateChart();
                     }
                 }
             } catch (error) {
@@ -635,24 +635,24 @@ function botStatsApp() {
                     labels: [],
                     datasets: [
                         {
-                            label: 'Vendas',
-                            data: [],
+                        label: 'Vendas',
+                        data: [],
                             borderColor: '#3B82F6',
                             backgroundColor: 'rgba(59, 130, 246, 0.1)',
                             borderWidth: 2,
-                            tension: 0.4,
-                            fill: true,
-                            yAxisID: 'y'
+                        tension: 0.4,
+                        fill: true,
+                        yAxisID: 'y'
                         },
                         {
-                            label: 'Receita (R$)',
-                            data: [],
+                        label: 'Receita (R$)',
+                        data: [],
                             borderColor: '#FFB800',
                             backgroundColor: 'rgba(255, 184, 0, 0.1)',
                             borderWidth: 2,
-                            tension: 0.4,
-                            fill: true,
-                            yAxisID: 'y1'
+                        tension: 0.4,
+                        fill: true,
+                        yAxisID: 'y1'
                         }
                     ]
                 },
