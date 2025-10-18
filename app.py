@@ -3322,7 +3322,7 @@ def payment_webhook(gateway_type):
                     
                     if not existing_commission:
                         # Calcular e registrar receita da plataforma (split payment automático)
-                        commission_amount = payment.bot.owner.calculate_commission(payment.amount)
+                        commission_amount = payment.bot.owner.add_commission(payment.amount)  # ✅ CORRIGIDO: add_commission() atualiza total_commission_owed
                         
                         commission = Commission(
                             user_id=payment.bot.owner.id,
@@ -3624,7 +3624,7 @@ def simulate_payment(payment_id):
             existing_commission = Commission.query.filter_by(payment_id=payment.id).first()
             
             if not existing_commission:
-                commission_amount = payment.bot.owner.calculate_commission(payment.amount)
+                commission_amount = payment.bot.owner.add_commission(payment.amount)  # ✅ CORRIGIDO: add_commission() atualiza total_commission_owed
                 commission = Commission(
                     user_id=payment.bot.owner.id,
                     payment_id=payment.id,
