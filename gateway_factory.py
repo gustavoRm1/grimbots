@@ -130,17 +130,19 @@ class GatewayFactory:
                 })
             
             elif gateway_type == 'hoopay':
-                # HooPay requer: api_key
-                api_key = credentials.get('api_key')
+                # HooPay requer: client_id e client_secret
+                client_id = credentials.get('client_id', '')
+                client_secret = credentials.get('client_secret', '')
                 organization_id = credentials.get('organization_id', '')
                 split_percentage = credentials.get('split_percentage', 2.0)  # 2% PADRÃO
                 
-                if not api_key:
-                    logger.error(f"❌ [Factory] HooPay requer api_key")
+                if not client_id or not client_secret:
+                    logger.error(f"❌ [Factory] HooPay requer client_id e client_secret")
                     return None
                 
                 gateway = gateway_class(credentials={
-                    'api_key': api_key,
+                    'client_id': client_id,
+                    'client_secret': client_secret,
                     'organization_id': organization_id,
                     'split_percentage': split_percentage
                 })

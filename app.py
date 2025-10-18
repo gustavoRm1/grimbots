@@ -2594,7 +2594,9 @@ def create_gateway():
             gateway.store_id = '177'
         
         elif gateway_type == 'hoopay':
-            gateway.api_key = data.get('api_key')
+            # ✅ HooPay requer Client ID e Client Secret
+            gateway.client_id = data.get('client_id')
+            gateway.client_secret = data.get('client_secret')
             # Organization ID configurado automaticamente para splits (você é o dono do sistema)
             gateway.organization_id = '5547db08-12c5-4de5-9592-90d38479745c'
         

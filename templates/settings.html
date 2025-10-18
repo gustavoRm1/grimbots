@@ -644,10 +644,19 @@
 
                     <form @submit.prevent="saveGateway('hoopay')" class="space-y-3">
                         <div x-data="{ show: false }">
-                            <label class="text-xs font-bold text-gray-400 block mb-1">API Key</label>
+                            <label class="text-xs font-bold text-gray-400 block mb-1">Client ID</label>
+                            <div class="relative">
+                                <input type="text" 
+                                       x-model="gateways.hoopay.client_id" 
+                                       class="form-input"
+                                       placeholder="Client ID gerado no painel">
+                            </div>
+                        </div>
+                        <div x-data="{ show: false }">
+                            <label class="text-xs font-bold text-gray-400 block mb-1">Client Secret</label>
                             <div class="relative">
                                 <input :type="show ? 'text' : 'password'" 
-                                       x-model="gateways.hoopay.api_key" 
+                                       x-model="gateways.hoopay.client_secret" 
                                        class="form-input pr-10"
                                        placeholder="●●●●●●●●">
                                 <button type="button" @click="show = !show" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">
@@ -772,7 +781,7 @@ function settingsApp() {
             syncpay: { client_id: '', client_secret: '' },
             pushynpay: { api_key: '' },
             paradise: { api_key: '', offer_hash: '', product_hash: '' },
-            hoopay: { api_key: '', organization_id: '' },
+            hoopay: { client_id: '', client_secret: '' },
             wiinpay: { api_key: '', split_user_id: '' }
         },
         gatewaysList: [],

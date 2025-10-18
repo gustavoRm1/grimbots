@@ -1138,8 +1138,10 @@ Desculpe, não foi possível processar seu pagamento.
                         # Criar instância do gateway
                         # ✅ CORREÇÃO: Passar TODOS os campos necessários
                         credentials = {
+                            # SyncPay e HooPay usam client_id/client_secret
                             'client_id': gateway.client_id,
                             'client_secret': gateway.client_secret,
+                            # Outros gateways usam api_key
                             'api_key': gateway.api_key,
                             # Paradise
                             'product_hash': gateway.product_hash,
@@ -1425,8 +1427,10 @@ Seu pagamento ainda não foi confirmado.
                 
                 # ✅ PREPARAR CREDENCIAIS ESPECÍFICAS PARA CADA GATEWAY
                 credentials = {
+                    # SyncPay e HooPay usam client_id/client_secret
                     'client_id': gateway.client_id,
                     'client_secret': gateway.client_secret,
+                    # Outros gateways usam api_key
                     'api_key': gateway.api_key,
                     # Paradise
                     'product_hash': gateway.product_hash,
@@ -1915,7 +1919,8 @@ Seu pagamento ainda não foi confirmado.
                 }
             elif gateway_type == 'hoopay':
                 dummy_credentials = {
-                    'api_key': 'dummy',
+                    'client_id': 'dummy-client-id',
+                    'client_secret': 'dummy-secret',
                     'organization_id': 'dummy-org-id',
                     'split_percentage': 2.0  # 2% PADRÃO
                 }

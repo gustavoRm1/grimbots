@@ -32,11 +32,14 @@ class HoopayPaymentGateway(PaymentGateway):
         
         Args:
             credentials: Dict com:
-                - api_key: Token ID do HooPay (d7c92c358a7ec4819ce7282ff2f3f70d)
+                - client_id: Client ID do HooPay (gerado ao clicar "Gerar Token")
+                - client_secret: Client Secret do HooPay
                 - organization_id: ID da organização para split (UUID)
-                - split_percentage: Percentual de comissão da plataforma (padrão 4%)
+                - split_percentage: Percentual de comissão da plataforma (padrão 2%)
         """
-        self.api_key = credentials.get('api_key', '')
+        # ✅ CORREÇÃO: HooPay usa Client ID/Secret, não apenas Token ID
+        self.client_id = credentials.get('client_id', '')
+        self.client_secret = credentials.get('client_secret', '')
         self.organization_id = credentials.get('organization_id', '')
         self.split_percentage = float(credentials.get('split_percentage', 2.0))  # 2% PADRÃO
         
@@ -45,7 +48,7 @@ class HoopayPaymentGateway(PaymentGateway):
         self.charge_url = f'{self.base_url}/charge'  # ✅ /charge
         self.consult_url = f'{self.base_url}/pix/consult'  # ✅ /pix/consult/{orderUUID}
         
-        logger.info(f"🟡 HooPay Gateway inicializado | Token: {self.api_key[:16]}...")
+        logger.info(f"🟡 HooPay Gateway inicializado | Client ID: {self.client_id[:16] if self.client_id else 'N/A'}...")
 
     def get_gateway_name(self) -> str:
         return "HooPay"
@@ -64,9 +67,13 @@ class HoopayPaymentGateway(PaymentGateway):
         HooPay não tem endpoint de verificação dedicado, validamos localmente
         """
         try:
-            # Validação básica do token
-            if not self.api_key or len(self.api_key) < 20:
-                logger.error("❌ HooPay: api_key inválida (deve ter 20+ caracteres)")
+            # Validação básica do Client ID e Secret
+            if not self.client_id or len(self.client_id) < 20:
+                logger.error("❌ HooPay: client_id inválido (deve ter 20+ caracteres)")
+                return False
+            
+            if not self.client_secret or len(self.client_secret) < 20:
+                logger.error("❌ HooPay: client_secret inválido (deve ter 20+ caracteres)")
                 return False
             
             # Validação do organization_id (UUID format)
@@ -174,11 +181,11 @@ class HoopayPaymentGateway(PaymentGateway):
                 'Accept': 'application/json'
             }
             
-            # ✅ CORREÇÃO: HooPay usa Basic Auth (token como username, password vazio)
+            # ✅ CORREÇÃO: HooPay usa Basic Auth (Client ID como username, Client Secret como password)
             from requests.auth import HTTPBasicAuth
-            auth = HTTPBasicAuth(self.api_key, '')
+            auth = HTTPBasicAuth(self.client_id, self.client_secret)
             
-            logger.info(f"🔐 HooPay Auth: Basic {self.api_key[:16]}... (token como username)")
+            logger.info(f"🔐 HooPay Auth: Basic {self.client_id[:16]}... / {self.client_secret[:8] if self.client_secret else 'N/A'}...")
             logger.info(f"📤 HooPay URL: {self.charge_url}")
             logger.info(f"📤 HooPay Payload Completo: {payload}")
             logger.info(f"📤 HooPay Headers: {headers}")
