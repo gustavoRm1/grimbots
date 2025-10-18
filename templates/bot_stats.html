@@ -338,13 +338,13 @@
                     <i class="fas fa-check-circle text-green-500 text-2xl"></i>
                 </div>
                 
-                <div class="p-4 rounded-lg border-2" style="background: rgba(16, 185, 129, 0.15); border-color: rgba(16, 185, 129, 0.5);">
-                    <div class="text-sm font-bold text-green-300 mb-2">Taxa de Aceitação</div>
+                <div class="p-4 rounded-lg border-2" style="background: rgba(255, 184, 0, 0.15); border-color: rgba(255, 184, 0, 0.5);">
+                    <div class="text-sm font-bold mb-2" style="color: #FFC933;">Taxa de Aceitação</div>
                     <div class="flex items-center gap-3">
                         <div class="flex-1 progress-bar" style="background: rgba(0, 0, 0, 0.4); height: 12px;">
-                            <div class="progress-fill" style="height: 12px;" :style="`width: ${stats.order_bumps.acceptance_rate}%`"></div>
+                            <div class="progress-fill" style="background: linear-gradient(90deg, #FFB800, #DAA520); height: 12px;" :style="`width: ${stats.order_bumps.acceptance_rate}%`"></div>
                         </div>
-                        <span class="text-2xl font-bold text-green-300" x-text="stats.order_bumps.acceptance_rate + '%'"></span>
+                        <span class="text-2xl font-bold" style="color: #FFB800;" x-text="stats.order_bumps.acceptance_rate + '%'"></span>
                     </div>
                 </div>
                 
@@ -389,13 +389,13 @@
                     <i class="fas fa-check-circle text-green-500 text-2xl"></i>
                 </div>
                 
-                <div class="p-4 rounded-lg border-2" style="background: rgba(249, 115, 22, 0.15); border-color: rgba(249, 115, 22, 0.5);">
-                    <div class="text-sm font-bold text-orange-300 mb-2">Taxa de Conversão</div>
+                <div class="p-4 rounded-lg border-2" style="background: rgba(255, 184, 0, 0.15); border-color: rgba(255, 184, 0, 0.5);">
+                    <div class="text-sm font-bold mb-2" style="color: #FFC933;">Taxa de Conversão</div>
                     <div class="flex items-center gap-3">
                         <div class="flex-1 progress-bar" style="background: rgba(0, 0, 0, 0.4); height: 12px;">
-                            <div class="progress-fill" style="background: linear-gradient(90deg, #F97316, #EA580C); height: 12px;" :style="`width: ${stats.downsells.conversion_rate}%`"></div>
+                            <div class="progress-fill" style="background: linear-gradient(90deg, #FFB800, #DAA520); height: 12px;" :style="`width: ${stats.downsells.conversion_rate}%`"></div>
                         </div>
-                        <span class="text-2xl font-bold text-orange-300" x-text="stats.downsells.conversion_rate + '%'"></span>
+                        <span class="text-2xl font-bold" style="color: #FFB800;" x-text="stats.downsells.conversion_rate + '%'"></span>
                     </div>
                 </div>
                 
@@ -562,6 +562,8 @@
 <script>
 function botStatsApp() {
     return {
+        // ✅ FIX: Prevenir inicialização dupla
+        _initialized: false,
         botId: {{ bot.id }},
         loading: true,
         stats: {
@@ -593,9 +595,35 @@ function botStatsApp() {
         salesChart: null,
         
         async init() {
+            // ✅ FIX: Prevenir inicialização dupla
+            if (this._initialized) {
+                console.log('⚠️ Bot Stats já foi inicializado, ignorando...');
+                return;
+            }
+            this._initialized = true;
+            
             console.log('📊 Bot Stats inicializando...');
             await this.loadStats();
-            this.initChart();
+            
+            // ✅ FIX: Usar $nextTick para garantir DOM pronto
+            this.$nextTick(() => {
+                setTimeout(() => {
+                    this.initChart();
+                    // Após criar gráfico, atualizar com dados
+                    setTimeout(() => {
+                        if (this.stats.daily_chart && this.stats.daily_chart.length > 0) {
+                            this.updateChart();
+                        }
+                    }, 300);
+                }, 150);
+            });
+            
+            // ✅ Watcher: Atualizar gráfico quando dados mudarem
+            this.$watch('stats.daily_chart', () => {
+                if (this.salesChart && this.stats.daily_chart && this.stats.daily_chart.length > 0) {
+                    this.updateChart();
+                }
+            });
             
             // Auto-refresh a cada 30 segundos
             setInterval(() => {
@@ -610,10 +638,6 @@ function botStatsApp() {
                 if (response.ok) {
                     this.stats = await response.json();
                     console.log('✅ Stats carregados:', this.stats);
-                    
-                    if (this.salesChart) {
-                    this.updateChart();
-                    }
                 }
             } catch (error) {
                 console.error('Erro ao carregar stats:', error);
@@ -625,9 +649,28 @@ function botStatsApp() {
         initChart() {
             const ctx = document.getElementById('salesChart');
             if (!ctx) {
-                console.error('Canvas não encontrado');
+                console.error('❌ Canvas #salesChart não encontrado no DOM');
                 return;
             }
+            console.log('✅ Canvas encontrado:', ctx);
+            
+            if (typeof Chart === 'undefined') {
+                console.error('❌ Chart.js não carregado ainda, tentando novamente em 500ms...');
+                setTimeout(() => this.initChart(), 500);
+                return;
+            }
+            console.log('✅ Chart.js disponível');
+            
+            // ✅ FIX: Destruir gráfico anterior se existir
+            if (this.salesChart) {
+                console.log('♻️ Destruindo gráfico anterior...');
+                this.salesChart.destroy();
+            }
+            
+            console.log('🔨 Criando novo gráfico...');
+            
+            // ✅ FIX: Forçar layout antes de criar gráfico
+            ctx.offsetHeight;
             
             this.salesChart = new Chart(ctx, {
                 type: 'line',
@@ -635,30 +678,31 @@ function botStatsApp() {
                     labels: [],
                     datasets: [
                         {
-                        label: 'Vendas',
-                        data: [],
+                            label: 'Vendas',
+                            data: [],
                             borderColor: '#3B82F6',
                             backgroundColor: 'rgba(59, 130, 246, 0.1)',
                             borderWidth: 2,
-                        tension: 0.4,
-                        fill: true,
-                        yAxisID: 'y'
+                            tension: 0.4,
+                            fill: true,
+                            yAxisID: 'y'
                         },
                         {
-                        label: 'Receita (R$)',
-                        data: [],
+                            label: 'Receita (R$)',
+                            data: [],
                             borderColor: '#FFB800',
                             backgroundColor: 'rgba(255, 184, 0, 0.1)',
                             borderWidth: 2,
-                        tension: 0.4,
-                        fill: true,
-                        yAxisID: 'y1'
+                            tension: 0.4,
+                            fill: true,
+                            yAxisID: 'y1'
                         }
                     ]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    animation: false,  // ✅ SEM ANIMAÇÃO (evita loop)
                     interaction: {
                         mode: 'index',
                         intersect: false
@@ -719,15 +763,100 @@ function botStatsApp() {
                     }
                 }
             });
+            
+            console.log('✅ Gráfico criado com sucesso!');
         },
         
         updateChart() {
-            if (!this.salesChart || !this.stats.daily_chart) return;
+            if (!this.salesChart || !this.stats.daily_chart) {
+                console.log('⏳ Gráfico ou dados ainda não prontos');
+                return;
+            }
             
-            this.salesChart.data.labels = this.stats.daily_chart.map(d => d.date);
-            this.salesChart.data.datasets[0].data = this.stats.daily_chart.map(d => d.sales);
-            this.salesChart.data.datasets[1].data = this.stats.daily_chart.map(d => d.revenue);
-            this.salesChart.update('none');
+            console.log('📊 Atualizando gráfico...');
+            
+            // ✅ SOLUÇÃO QI 300: DESTRUIR E RECRIAR (evita update() com bug)
+            const ctx = document.getElementById('salesChart');
+            if (!ctx) {
+                console.error('❌ Canvas não encontrado!');
+                return;
+            }
+            
+            // Destruir gráfico anterior
+            if (this.salesChart) {
+                this.salesChart.destroy();
+                console.log('♻️ Gráfico anterior destruído');
+            }
+            
+            // Forçar layout
+            ctx.offsetHeight;
+            
+            // RECRIAR com dados
+            this.salesChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: this.stats.daily_chart.map(d => d.date),
+                    datasets: [
+                        {
+                            label: 'Vendas',
+                            data: this.stats.daily_chart.map(d => d.sales),
+                            borderColor: '#3B82F6',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            borderWidth: 2,
+                            tension: 0.4,
+                            fill: true,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: 'Receita (R$)',
+                            data: this.stats.daily_chart.map(d => d.revenue),
+                            borderColor: '#FFB800',
+                            backgroundColor: 'rgba(255, 184, 0, 0.1)',
+                            borderWidth: 2,
+                            tension: 0.4,
+                            fill: true,
+                            yAxisID: 'y1'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: false,  // ✅ SEM ANIMAÇÃO
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'bottom',
+                            labels: { color: '#9CA3AF', padding: 20 }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            type: 'linear',
+                            position: 'left',
+                            beginAtZero: true,
+                            ticks: { color: '#60A5FA', stepSize: 1 },
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' }
+                        },
+                        y1: {
+                            type: 'linear',
+                            position: 'right',
+                            beginAtZero: true,
+                            ticks: {
+                                color: '#FFB800',
+                                callback: (value) => 'R$ ' + value.toFixed(0)
+                            },
+                            grid: { drawOnChartArea: false }
+                        },
+                        x: {
+                            ticks: { color: '#9CA3AF' },
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' }
+                        }
+                    }
+                }
+            });
+            
+            console.log('✅ Gráfico recriado com dados!');
         },
         
         formatDate(dateString) {
