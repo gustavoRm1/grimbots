@@ -532,9 +532,25 @@ function analyticsApp() {
         },
         
         initCharts() {
+            // ✅ CORREÇÃO: Verificar se Chart.js foi carregado
+            if (typeof Chart === 'undefined') {
+                console.error('❌ Chart.js não carregado ainda, tentando novamente em 500ms...');
+                setTimeout(() => this.initCharts(), 500);
+                return;
+            }
+            console.log('✅ Chart.js disponível:', Chart.version);
+            
             // Gráfico de Timeline
             const timelineCtx = document.getElementById('timelineChart');
             if (timelineCtx) {
+                // ✅ CORREÇÃO: Destruir gráfico anterior se existir
+                if (this.timelineChart) {
+                    this.timelineChart.destroy();
+                }
+                
+                // ✅ CORREÇÃO: Forçar layout antes de criar gráfico
+                timelineCtx.offsetHeight;
+                
                 this.timelineChart = new Chart(timelineCtx, {
                     type: 'line',
                     data: {
@@ -561,6 +577,7 @@ function analyticsApp() {
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
+                        animation: false,  // ✅ SEM ANIMAÇÃO (evita loop)
                         plugins: {
                             legend: {
                                 labels: {
@@ -594,6 +611,14 @@ function analyticsApp() {
             // Gráfico de Campanhas
             const campaignCtx = document.getElementById('campaignChart');
             if (campaignCtx) {
+                // ✅ CORREÇÃO: Destruir gráfico anterior se existir
+                if (this.campaignChart) {
+                    this.campaignChart.destroy();
+                }
+                
+                // ✅ CORREÇÃO: Forçar layout antes de criar gráfico
+                campaignCtx.offsetHeight;
+                
                 this.campaignChart = new Chart(campaignCtx, {
                     type: 'bar',
                     data: {
@@ -611,6 +636,7 @@ function analyticsApp() {
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
+                        animation: false,  // ✅ SEM ANIMAÇÃO (evita loop)
                         plugins: {
                             legend: {
                                 labels: {

@@ -2042,6 +2042,79 @@ def remarketing_analytics(bot_id):
     bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
     return render_template('remarketing_analytics.html', bot=bot)
 
+@app.route('/api/remarketing/<int:bot_id>/stats')
+@login_required
+def api_remarketing_stats(bot_id):
+    """API: Estatísticas gerais de remarketing"""
+    bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
+    
+    from sqlalchemy import func
+    from models import RemarketingCampaign
+    
+    # Estatísticas agregadas
+    total_campaigns = RemarketingCampaign.query.filter_by(bot_id=bot_id).count()
+    completed_campaigns = RemarketingCampaign.query.filter_by(bot_id=bot_id, status='completed').count()
+    
+    totals = db.session.query(
+        func.sum(RemarketingCampaign.total_sent).label('total_sent'),
+        func.sum(RemarketingCampaign.total_clicks).label('total_clicks'),
+        func.sum(RemarketingCampaign.total_failed).label('total_failed')
+    ).filter(RemarketingCampaign.bot_id == bot_id).first()
+    
+    total_sent = int(totals.total_sent or 0)
+    total_clicks = int(totals.total_clicks or 0)
+    total_failed = int(totals.total_failed or 0)
+    
+    click_rate = (total_clicks / total_sent * 100) if total_sent > 0 else 0
+    success_rate = ((total_sent - total_failed) / total_sent * 100) if total_sent > 0 else 0
+    
+    return jsonify({
+        'total_campaigns': total_campaigns,
+        'completed_campaigns': completed_campaigns,
+        'total_sent': total_sent,
+        'total_clicks': total_clicks,
+        'total_failed': total_failed,
+        'click_rate': round(click_rate, 2),
+        'success_rate': round(success_rate, 2)
+    })
+
+@app.route('/api/remarketing/<int:bot_id>/timeline')
+@login_required
+def api_remarketing_timeline(bot_id):
+    """API: Timeline de envios de remarketing (últimos 7 dias)"""
+    bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
+    
+    from sqlalchemy import func
+    from models import RemarketingCampaign
+    from datetime import datetime, timedelta
+    
+    # Últimos 7 dias
+    seven_days_ago = datetime.now() - timedelta(days=7)
+    
+    # Agrupar por data
+    timeline_data = db.session.query(
+        func.date(RemarketingCampaign.started_at).label('date'),
+        func.sum(RemarketingCampaign.total_sent).label('sent'),
+        func.sum(RemarketingCampaign.total_clicks).label('clicks')
+    ).filter(
+        RemarketingCampaign.bot_id == bot_id,
+        RemarketingCampaign.started_at >= seven_days_ago,
+        RemarketingCampaign.status == 'completed'
+    ).group_by(func.date(RemarketingCampaign.started_at)).all()
+    
+    # Preencher dias sem dados
+    result = []
+    for i in range(7):
+        date = (datetime.now() - timedelta(days=6-i)).date()
+        day_data = next((t for t in timeline_data if str(t.date) == str(date)), None)
+        result.append({
+            'date': date.strftime('%d/%m'),
+            'sent': int(day_data.sent) if day_data else 0,
+            'clicks': int(day_data.clicks) if day_data else 0
+        })
+    
+    return jsonify(result)
+
 @app.route('/api/bots/<int:bot_id>/config', methods=['GET'])
 @login_required
 def get_bot_config(bot_id):
