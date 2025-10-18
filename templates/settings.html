@@ -391,31 +391,103 @@
             </p>
         </div>
 
-        <!-- Gateways Grid -->
+        <!-- Gateways Configurados (Ativar/Desativar) -->
+        <div class="chart-container mb-8" x-show="gatewaysList.filter(g => g.is_verified).length > 0">
+            <div class="mb-6">
+                <h2 class="text-2xl font-bold text-white">Gateways Configurados</h2>
+                <p class="text-sm text-gray-500 mt-1">Ative ou desative seus gateways com um clique</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <template x-for="gateway in gatewaysList.filter(g => g.is_verified)" :key="gateway.id">
+                    <div class="gateway-card" :class="gateway.is_active ? 'border-green-500' : ''">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center gap-3">
+                                <div class="w-12 h-12 rounded-lg flex items-center justify-center overflow-hidden" 
+                                     style="background: linear-gradient(135deg, rgba(255, 184, 0, 0.1), rgba(255, 184, 0, 0.05));">
+                                    <template x-if="gateway.gateway_type === 'syncpay'">
+                                        <i class="fas fa-qrcode text-2xl" style="color: #FFB800;"></i>
+                                    </template>
+                                    <template x-if="gateway.gateway_type === 'pushynpay'">
+                                        <img src="{{ url_for('static', filename='img/pushyn.png') }}" alt="PushynPay" class="w-12 h-12 object-contain">
+                                    </template>
+                                    <template x-if="gateway.gateway_type === 'paradise'">
+                                        <img src="{{ url_for('static', filename='img/paradise.jpg') }}" alt="Paradise" class="w-12 h-12 object-cover rounded-lg">
+                                    </template>
+                                    <template x-if="gateway.gateway_type === 'hoopay'">
+                                        <img src="{{ url_for('static', filename='img/hoopay.webp') }}" alt="HooPay" class="w-12 h-12 object-contain">
+                                    </template>
+                                    <template x-if="gateway.gateway_type === 'wiinpay'">
+                                        <img src="{{ url_for('static', filename='img/wiinpay.ico') }}" alt="WiinPay" class="w-12 h-12 object-contain">
+                                    </template>
+                                </div>
+                                <div class="flex-1">
+                                    <h3 class="text-sm font-bold text-white" x-text="gateway.gateway_type.toUpperCase()"></h3>
+                                    <p class="text-xs text-gray-500">Verificado e pronto</p>
+                                </div>
+                            </div>
+                            <span :class="gateway.is_active ? 'gateway-status-active' : 'gateway-status-verified'">
+                                <span class="w-2 h-2 rounded-full" 
+                                      :class="gateway.is_active ? 'bg-green-400 animate-pulse' : 'bg-blue-400'"></span>
+                                <span x-text="gateway.is_active ? 'Ativo' : 'Inativo'"></span>
+                            </span>
+                        </div>
+
+                        <!-- Toggle Switch -->
+                        <div class="flex items-center justify-between p-4 bg-black bg-opacity-20 rounded-lg">
+                            <div>
+                                <p class="text-sm font-bold text-white">Ativar Gateway</p>
+                                <p class="text-xs text-gray-500">Processar pagamentos</p>
+                            </div>
+                            <button @click="toggleGateway(gateway.id, gateway.gateway_type)"
+                                    :disabled="loading"
+                                    class="relative inline-flex h-8 w-14 items-center rounded-full transition-colors"
+                                    :class="gateway.is_active ? 'bg-green-500' : 'bg-gray-600'">
+                                <span class="inline-block h-6 w-6 transform rounded-full bg-white transition-transform"
+                                      :class="gateway.is_active ? 'translate-x-7' : 'translate-x-1'"></span>
+                            </button>
+                        </div>
+
+                        <!-- Stats do Gateway -->
+                        <div class="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-gray-800">
+                            <div class="text-center">
+                                <div class="text-xs text-gray-500 mb-1">Transações</div>
+                                <div class="text-sm font-bold text-white" x-text="gateway.total_transactions || 0"></div>
+                            </div>
+                            <div class="text-center">
+                                <div class="text-xs text-gray-500 mb-1">Taxa Sucesso</div>
+                                <div class="text-sm font-bold text-green-400" x-text="gateway.success_rate ? gateway.success_rate.toFixed(1) + '%' : '0%'"></div>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <!-- Adicionar Novo Gateway -->
         <div class="chart-container">
             <div class="mb-6">
-                <h2 class="text-2xl font-bold text-white">Seus Gateways</h2>
-                <p class="text-sm text-gray-500 mt-1">Configure e gerencie seus meios de pagamento</p>
+                <h2 class="text-2xl font-bold text-white">Adicionar Novo Gateway</h2>
+                <p class="text-sm text-gray-500 mt-1">Configure suas credenciais pela primeira vez</p>
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 <!-- SyncPay -->
-                <div class="gateway-card">
+                <div class="gateway-card" x-show="!getGatewayStatus('syncpay')?.is_verified">
                     <div class="flex items-start justify-between mb-4">
                         <div class="flex items-center gap-3">
-                            <div class="w-12 h-12 rounded-lg flex items-center justify-center" 
+                            <div class="w-12 h-12 rounded-lg flex items-center justify-center overflow-hidden" 
                                  style="background: linear-gradient(135deg, rgba(255, 184, 0, 0.1), rgba(255, 184, 0, 0.05));">
-                                <i class="fas fa-qrcode text-xl" style="color: #FFB800;"></i>
+                                <i class="fas fa-qrcode text-2xl" style="color: #FFB800;"></i>
                             </div>
                             <div>
                                 <h3 class="text-sm font-bold text-white">SyncPay</h3>
                                 <p class="text-xs text-gray-500">PIX Instantâneo</p>
                             </div>
                         </div>
-                        <span :class="getGatewayStatus('syncpay')?.is_active ? 'gateway-status-active' : (getGatewayStatus('syncpay')?.is_verified ? 'gateway-status-verified' : 'gateway-status-unconfigured')">
-                            <span class="w-2 h-2 rounded-full" 
-                                  :class="getGatewayStatus('syncpay')?.is_active ? 'bg-green-400 animate-pulse' : 'bg-gray-600'"></span>
-                            <span x-text="getGatewayStatus('syncpay')?.is_active ? 'Ativo' : (getGatewayStatus('syncpay')?.is_verified ? 'OK' : 'Config')"></span>
+                        <span class="gateway-status-unconfigured">
+                            <i class="fas fa-exclamation-circle"></i>
+                            Novo
                         </span>
                     </div>
 
@@ -450,22 +522,23 @@
                 </div>
 
                 <!-- PushynPay -->
-                <div class="gateway-card">
+                <div class="gateway-card" x-show="!getGatewayStatus('pushynpay')?.is_verified">
                     <div class="flex items-start justify-between mb-4">
                         <div class="flex items-center gap-3">
-                            <div class="w-12 h-12 rounded-lg flex items-center justify-center" 
+                            <div class="w-12 h-12 rounded-lg flex items-center justify-center overflow-hidden" 
                                  style="background: linear-gradient(135deg, rgba(255, 184, 0, 0.1), rgba(255, 184, 0, 0.05));">
-                                <i class="fas fa-bolt text-xl" style="color: #FFB800;"></i>
+                                <img src="{{ url_for('static', filename='img/pushyn.png') }}" 
+                                     alt="PushynPay" 
+                                     class="w-12 h-12 object-contain">
                             </div>
                             <div>
                                 <h3 class="text-sm font-bold text-white">PushynPay</h3>
                                 <p class="text-xs text-gray-500">Gateway Rápido</p>
                             </div>
                         </div>
-                        <span :class="getGatewayStatus('pushynpay')?.is_active ? 'gateway-status-active' : (getGatewayStatus('pushynpay')?.is_verified ? 'gateway-status-verified' : 'gateway-status-unconfigured')">
-                            <span class="w-2 h-2 rounded-full" 
-                                  :class="getGatewayStatus('pushynpay')?.is_active ? 'bg-green-400 animate-pulse' : 'bg-gray-600'"></span>
-                            <span x-text="getGatewayStatus('pushynpay')?.is_active ? 'Ativo' : (getGatewayStatus('pushynpay')?.is_verified ? 'OK' : 'Config')"></span>
+                        <span class="gateway-status-unconfigured">
+                            <i class="fas fa-exclamation-circle"></i>
+                            Novo
                         </span>
                     </div>
 
@@ -492,22 +565,23 @@
                 </div>
 
                 <!-- Paradise -->
-                <div class="gateway-card">
+                <div class="gateway-card" x-show="!getGatewayStatus('paradise')?.is_verified">
                     <div class="flex items-start justify-between mb-4">
                         <div class="flex items-center gap-3">
-                            <div class="w-12 h-12 rounded-lg flex items-center justify-center" 
+                            <div class="w-12 h-12 rounded-lg flex items-center justify-center overflow-hidden" 
                                  style="background: linear-gradient(135deg, rgba(255, 184, 0, 0.1), rgba(255, 184, 0, 0.05));">
-                                <i class="fas fa-globe text-xl" style="color: #FFB800;"></i>
+                                <img src="{{ url_for('static', filename='img/paradise.jpg') }}" 
+                                     alt="Paradise" 
+                                     class="w-12 h-12 object-cover rounded-lg">
                             </div>
                             <div>
                                 <h3 class="text-sm font-bold text-white">Paradise</h3>
                                 <p class="text-xs text-gray-500">Gateway Global</p>
                             </div>
                         </div>
-                        <span :class="getGatewayStatus('paradise')?.is_active ? 'gateway-status-active' : (getGatewayStatus('paradise')?.is_verified ? 'gateway-status-verified' : 'gateway-status-unconfigured')">
-                            <span class="w-2 h-2 rounded-full" 
-                                  :class="getGatewayStatus('paradise')?.is_active ? 'bg-green-400 animate-pulse' : 'bg-gray-600'"></span>
-                            <span x-text="getGatewayStatus('paradise')?.is_active ? 'Ativo' : (getGatewayStatus('paradise')?.is_verified ? 'OK' : 'Config')"></span>
+                        <span class="gateway-status-unconfigured">
+                            <i class="fas fa-exclamation-circle"></i>
+                            Novo
                         </span>
                     </div>
 
@@ -548,22 +622,23 @@
                 </div>
 
                 <!-- HooPay -->
-                <div class="gateway-card">
+                <div class="gateway-card" x-show="!getGatewayStatus('hoopay')?.is_verified">
                     <div class="flex items-start justify-between mb-4">
                         <div class="flex items-center gap-3">
-                            <div class="w-12 h-12 rounded-lg flex items-center justify-center" 
+                            <div class="w-12 h-12 rounded-lg flex items-center justify-center overflow-hidden" 
                                  style="background: linear-gradient(135deg, rgba(255, 184, 0, 0.1), rgba(255, 184, 0, 0.05));">
-                                <i class="fas fa-credit-card text-xl" style="color: #FFB800;"></i>
+                                <img src="{{ url_for('static', filename='img/hoopay.webp') }}" 
+                                     alt="HooPay" 
+                                     class="w-12 h-12 object-contain">
                             </div>
                             <div>
                                 <h3 class="text-sm font-bold text-white">HooPay</h3>
                                 <p class="text-xs text-gray-500">Completo</p>
                             </div>
                         </div>
-                        <span :class="getGatewayStatus('hoopay')?.is_active ? 'gateway-status-active' : (getGatewayStatus('hoopay')?.is_verified ? 'gateway-status-verified' : 'gateway-status-unconfigured')">
-                            <span class="w-2 h-2 rounded-full" 
-                                  :class="getGatewayStatus('hoopay')?.is_active ? 'bg-green-400 animate-pulse' : 'bg-gray-600'"></span>
-                            <span x-text="getGatewayStatus('hoopay')?.is_active ? 'Ativo' : (getGatewayStatus('hoopay')?.is_verified ? 'OK' : 'Config')"></span>
+                        <span class="gateway-status-unconfigured">
+                            <i class="fas fa-exclamation-circle"></i>
+                            Novo
                         </span>
                     </div>
 
@@ -590,22 +665,23 @@
                 </div>
 
                 <!-- WiinPay -->
-                <div class="gateway-card">
+                <div class="gateway-card" x-show="!getGatewayStatus('wiinpay')?.is_verified">
                     <div class="flex items-start justify-between mb-4">
                         <div class="flex items-center gap-3">
-                            <div class="w-12 h-12 rounded-lg flex items-center justify-center" 
+                            <div class="w-12 h-12 rounded-lg flex items-center justify-center overflow-hidden" 
                                  style="background: linear-gradient(135deg, rgba(255, 184, 0, 0.1), rgba(255, 184, 0, 0.05));">
-                                <i class="fas fa-rocket text-xl" style="color: #FFB800;"></i>
+                                <img src="{{ url_for('static', filename='img/wiinpay.ico') }}" 
+                                     alt="WiinPay" 
+                                     class="w-12 h-12 object-contain">
                             </div>
                             <div>
                                 <h3 class="text-sm font-bold text-white">WiinPay</h3>
                                 <p class="text-xs text-gray-500">Simples</p>
                             </div>
                         </div>
-                        <span :class="getGatewayStatus('wiinpay')?.is_active ? 'gateway-status-active' : (getGatewayStatus('wiinpay')?.is_verified ? 'gateway-status-verified' : 'gateway-status-unconfigured')">
-                            <span class="w-2 h-2 rounded-full" 
-                                  :class="getGatewayStatus('wiinpay')?.is_active ? 'bg-green-400 animate-pulse' : 'bg-gray-600'"></span>
-                            <span x-text="getGatewayStatus('wiinpay')?.is_active ? 'Ativo' : (getGatewayStatus('wiinpay')?.is_verified ? 'OK' : 'Config')"></span>
+                        <span class="gateway-status-unconfigured">
+                            <i class="fas fa-exclamation-circle"></i>
+                            Novo
                         </span>
                     </div>
 
@@ -775,6 +851,27 @@ function settingsApp() {
             }
         },
 
+        async toggleGateway(gatewayId, gatewayType) {
+            this.loading = true;
+            try {
+                const response = await fetch(`/api/gateways/${gatewayId}/toggle`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    await this.loadGateways();
+                    this.showNotification(data.is_active ? `${gatewayType.toUpperCase()} ativado!` : `${gatewayType.toUpperCase()} desativado`);
+                } else {
+                    alert('Erro: ' + data.error);
+                }
+            } catch (error) {
+                alert('Erro: ' + error.message);
+            } finally {
+                this.loading = false;
+            }
+        },
+
         async saveGateway(type) {
             this.loading = true;
             try {
@@ -788,6 +885,8 @@ function settingsApp() {
                 if (response.ok) {
                     this.showNotification(`Gateway ${type} configurado!`);
                     await this.loadGateways();
+                    // Limpar formulário
+                    this.gateways[type] = {};
                 } else {
                     alert('Erro: ' + data.error);
                 }
