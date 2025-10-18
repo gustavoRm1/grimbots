@@ -10,7 +10,9 @@ import logging
 
 # ✅ CORREÇÃO: Desabilitar sistema de ligas (tabelas não criadas)
 try:
-    from models_v2 import Season, League, UserLeague
+    # from models_v2 import Season, League, UserLeague  # ❌ Módulo não existe
+    # ✅ Usando modelos do models.py padrão
+    pass
     LEAGUES_ENABLED = True
 except ImportError:
     LEAGUES_ENABLED = False
@@ -221,10 +223,10 @@ class RankingEngine:
         # ACHIEVEMENT MULTIPLIER (usar apenas se disponível)
         if LEAGUES_ENABLED:
             try:
-                from models_v2 import UserAchievementV2
-                total_achievements = UserAchievementV2.query.filter_by(
-                    user_id=user.id,
-                    status='completed'
+                # from models_v2 import UserAchievementV2  # ❌ Módulo não existe
+                from models import UserAchievement  # ✅ Usar modelo existente
+                total_achievements = UserAchievement.query.filter_by(
+                    user_id=user.id
                 ).count()
                 
                 # +2% por conquista desbloqueada (max +50%)

@@ -10,7 +10,9 @@ import logging
 
 # ✅ CORREÇÃO: Desabilitar sistema V2 se tabelas não existirem
 try:
-    from models_v2 import AchievementV2, UserAchievementV2, GamificationNotification
+    # from models_v2 import AchievementV2, UserAchievementV2, GamificationNotification  # ❌ Módulo não existe
+    # ✅ Usando Achievement e UserAchievement do models.py
+    pass
     ACHIEVEMENTS_V2_ENABLED = True
 except ImportError:
     ACHIEVEMENTS_V2_ENABLED = False
@@ -379,39 +381,10 @@ class AchievementChecker:
         
         # Título
         elif reward_type == 'title':
-            # TODO: Criar título e atribuir ao usuário
-            from models_v2 import Title, UserTitle
-            
+            # ✅ Sistema de títulos não implementado (tabelas não existem)
             title_name = reward_value.get('title')
             if title_name:
-                # Buscar ou criar título
-                title = Title.query.filter_by(name=title_name).first()
-                if not title:
-                    title = Title(
-                        name=title_name,
-                        prefix=f"[{title_name.upper()}]",
-                        color='#F59E0B',
-                        rarity=achievement.rarity,
-                        requirement_type='achievement',
-                        requirement_id=achievement.id
-                    )
-                    db.session.add(title)
-                    db.session.flush()
-                
-                # Atribuir ao usuário
-                user_title = UserTitle.query.filter_by(
-                    user_id=user.id,
-                    title_id=title.id
-                ).first()
-                
-                if not user_title:
-                    user_title = UserTitle(
-                        user_id=user.id,
-                        title_id=title.id
-                    )
-                    db.session.add(user_title)
-                
-                logger.info(f"👑 Título '{title_name}' desbloqueado - User {user.id}")
+                logger.info(f"🏆 Título '{title_name}' seria concedido ao usuário {user.id} (funcionalidade não implementada)")
         
         # Multiplicador
         elif reward_type == 'multiplier':

@@ -4,7 +4,8 @@ Gamification WebSocket - Notificações em tempo real
 
 from flask_socketio import emit, join_room, leave_room
 from flask_login import current_user
-from models_v2 import GamificationNotification
+# from models_v2 import GamificationNotification  # ❌ Módulo não existe
+# ✅ Gamificação funciona sem este modelo específico
 import logging
 
 logger = logging.getLogger(__name__)
