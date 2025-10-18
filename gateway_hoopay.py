@@ -138,9 +138,8 @@ class HoopayPaymentGateway(PaymentGateway):
                 }
             ]
             
-            # Payload HooPay
+            # Payload HooPay (conforme hoopay.json)
             payload = {
-                "amount": amount,  # ✅ REAIS (não centavos!)
                 "customer": customer_payload,  # ✅ DADOS REAIS DO CLIENTE
                 "products": products,
                 "payments": payments,
