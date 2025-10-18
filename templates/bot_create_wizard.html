@@ -293,25 +293,33 @@ Escolha uma opção abaixo para começar:"></textarea>
                            class="w-full px-4 py-3 border-2 border-white border-opacity-10 rounded-lg focus:border-trust-500 focus:ring-2 focus:ring-blue-200 transition-all"
                            placeholder="https://t.me/seucanal/123">
                     <p class="mt-2 text-xs text-txt-primary">
-                        <strong>Exemplo:</strong> https://t.me/alemaomidias/602
+                        <strong>Exemplo:</strong> https://t.me/alemaomidias/602<br>
+                        <strong>Tipos suportados:</strong> Vídeo, Foto ou Áudio
                     </p>
                 </div>
                 
                 <div>
                     <label class="block text-sm font-bold text-txt-primary mb-2">Tipo de Mídia</label>
-                    <div class="flex gap-4">
-                        <label class="flex-1 cursor-pointer">
+                    <div class="grid grid-cols-3 gap-4">
+                        <label class="cursor-pointer">
                             <input type="radio" x-model="formData.welcome_media_type" value="photo" class="hidden peer">
                             <div class="border-2 border-white border-opacity-10 rounded-lg p-4 text-center peer-checked:border-trust-500 peer-checked:bg-blue-50 hover:border-trust-300 transition-all">
                                 <i class="fas fa-image text-3xl text-txt-primary mb-2"></i>
                                 <p class="font-bold text-txt-primary">Foto</p>
                             </div>
                         </label>
-                        <label class="flex-1 cursor-pointer">
+                        <label class="cursor-pointer">
                             <input type="radio" x-model="formData.welcome_media_type" value="video" class="hidden peer">
                             <div class="border-2 border-white border-opacity-10 rounded-lg p-4 text-center peer-checked:border-trust-500 peer-checked:bg-blue-50 hover:border-trust-300 transition-all">
                                 <i class="fas fa-video text-3xl text-txt-primary mb-2"></i>
                                 <p class="font-bold text-txt-primary">Vídeo</p>
+                            </div>
+                        </label>
+                        <label class="cursor-pointer">
+                            <input type="radio" x-model="formData.welcome_media_type" value="audio" class="hidden peer">
+                            <div class="border-2 border-white border-opacity-10 rounded-lg p-4 text-center peer-checked:border-trust-500 peer-checked:bg-blue-50 hover:border-trust-300 transition-all">
+                                <i class="fas fa-microphone text-3xl text-txt-primary mb-2"></i>
+                                <p class="font-bold text-txt-primary">Áudio</p>
                             </div>
                         </label>
                     </div>

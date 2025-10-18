@@ -2068,7 +2068,7 @@ Seu pagamento ainda não foi confirmado.
             chat_id: ID do chat
             message: Mensagem de texto
             media_url: URL da mídia (opcional)
-            media_type: Tipo da mídia (video ou photo)
+            media_type: Tipo da mídia (video, photo ou audio)
             buttons: Lista de botões inline
         """
         try:
@@ -2092,6 +2092,14 @@ Seu pagamento ainda não foi confirmado.
                     payload = {
                         'chat_id': chat_id,
                         'video': media_url,
+                        'caption': message,
+                        'parse_mode': 'HTML'
+                    }
+                elif media_type == 'audio':
+                    url = f"{base_url}/sendAudio"
+                    payload = {
+                        'chat_id': chat_id,
+                        'audio': media_url,
                         'caption': message,
                         'parse_mode': 'HTML'
                     }

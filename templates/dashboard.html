@@ -674,15 +674,15 @@
                                    x-model="generalRemarketing.media_url" 
                                    class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-yellow-500"
                                    placeholder="https://t.me/canal/123">
-                            <p class="text-xs text-gray-500 mt-2">Link do Telegram</p>
+                            <p class="text-xs text-gray-500 mt-2">Link do Telegram (vídeo, foto ou áudio)</p>
                         </div>
                         <div>
                             <label class="block text-sm font-bold text-white mb-2">
                                 <i class="fas fa-image mr-2" style="color: #FFB800;"></i>
                                 Tipo de Mídia
                             </label>
-                            <div class="flex gap-3 mt-2">
-                                <label class="flex items-center gap-2 px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer transition-colors flex-1"
+                            <div class="grid grid-cols-3 gap-3 mt-2">
+                                <label class="flex items-center gap-2 px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer transition-colors"
                                        :style="generalRemarketing.media_type === 'video' ? 'border-color: #FFB800; background: rgba(255, 184, 0, 0.1);' : ''"
                                        @mouseenter="if(generalRemarketing.media_type !== 'video') $el.style.borderColor = '#FFB800'"
                                        @mouseleave="if(generalRemarketing.media_type !== 'video') $el.style.borderColor = '#374151'">
@@ -690,13 +690,21 @@
                                     <i class="fas fa-video" style="color: #FFB800;"></i>
                                     <span class="text-sm text-white">Vídeo</span>
                                 </label>
-                                <label class="flex items-center gap-2 px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer transition-colors flex-1"
+                                <label class="flex items-center gap-2 px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer transition-colors"
                                        :style="generalRemarketing.media_type === 'photo' ? 'border-color: #FFB800; background: rgba(255, 184, 0, 0.1);' : ''"
                                        @mouseenter="if(generalRemarketing.media_type !== 'photo') $el.style.borderColor = '#FFB800'"
                                        @mouseleave="if(generalRemarketing.media_type !== 'photo') $el.style.borderColor = '#374151'">
                                     <input type="radio" x-model="generalRemarketing.media_type" value="photo" style="accent-color: #FFB800;">
                                     <i class="fas fa-camera" style="color: #FFB800;"></i>
                                     <span class="text-sm text-white">Foto</span>
+                                </label>
+                                <label class="flex items-center gap-2 px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer transition-colors"
+                                       :style="generalRemarketing.media_type === 'audio' ? 'border-color: #FFB800; background: rgba(255, 184, 0, 0.1);' : ''"
+                                       @mouseenter="if(generalRemarketing.media_type !== 'audio') $el.style.borderColor = '#FFB800'"
+                                       @mouseleave="if(generalRemarketing.media_type !== 'audio') $el.style.borderColor = '#374151'">
+                                    <input type="radio" x-model="generalRemarketing.media_type" value="audio" style="accent-color: #FFB800;">
+                                    <i class="fas fa-microphone" style="color: #FFB800;"></i>
+                                    <span class="text-sm text-white">Áudio</span>
                                 </label>
                             </div>
                         </div>

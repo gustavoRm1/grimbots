@@ -283,6 +283,13 @@
                                 <i class="fas fa-video text-accent500 ml-2 mr-1"></i>
                                 <span class="ml-1 text-sm text-textPrimary">Vídeo</span>
                             </label>
+                            <label class="flex items-center px-4 py-2.5 bg-bg900 border border-white border-opacity-10 rounded-lg cursor-pointer hover:border-opacity-20 transition-all"
+                                   :class="{'border-accent500 border-opacity-40 bg-accent500 bg-opacity-8': newCampaign.media_type === 'audio'}">
+                                <input type="radio" x-model="newCampaign.media_type" value="audio"
+                                       class="form-radio text-accent500 h-4 w-4">
+                                <i class="fas fa-microphone text-accent500 ml-2 mr-1"></i>
+                                <span class="ml-1 text-sm text-textPrimary">Áudio</span>
+                            </label>
                         </div>
                         <div x-show="newCampaign.media_type" class="relative group">
                             <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">

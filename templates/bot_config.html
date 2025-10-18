@@ -357,7 +357,7 @@
                            x-model="config.welcome_media_url" 
                            class="form-input"
                            placeholder="https://t.me/canal/123">
-                    <p class="text-xs text-gray-500 mt-2">Link do Telegram (vídeo ou foto)</p>
+                    <p class="text-xs text-gray-500 mt-2">Link do Telegram (vídeo, foto ou áudio)</p>
                 </div>
 
                 <div class="form-group">
@@ -377,6 +377,12 @@
                             <input type="radio" x-model="config.welcome_media_type" value="photo" class="text-blue-500">
                             <i class="fas fa-camera text-blue-500"></i>
                             <span class="text-sm text-white">Foto</span>
+                        </label>
+                        <label class="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer hover:border-blue-500 transition-colors"
+                               :class="{'border-blue-500 bg-blue-500 bg-opacity-10': config.welcome_media_type === 'audio'}">
+                            <input type="radio" x-model="config.welcome_media_type" value="audio" class="text-blue-500">
+                            <i class="fas fa-microphone text-blue-500"></i>
+                            <span class="text-sm text-white">Áudio</span>
                         </label>
                     </div>
                 </div>
@@ -532,6 +538,12 @@
                                                 <input type="radio" x-model="button.order_bump.media_type" value="photo" class="text-blue-500">
                                                 <i class="fas fa-camera text-blue-500"></i>
                                                 <span class="text-sm text-white">Foto</span>
+                                            </label>
+                                            <label class="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer hover:border-blue-500 transition-colors"
+                                                   :class="{'border-blue-500 bg-blue-500 bg-opacity-10': button.order_bump.media_type === 'audio'}">
+                                                <input type="radio" x-model="button.order_bump.media_type" value="audio" class="text-blue-500">
+                                                <i class="fas fa-microphone text-blue-500"></i>
+                                                <span class="text-sm text-white">Áudio</span>
                                             </label>
                                         </div>
                                     </div>
@@ -755,26 +767,32 @@
                                     <p class="text-xs text-gray-500 mt-2">Link do Telegram</p>
                                 </div>
 
-                                <div class="form-group">
-                                    <label class="form-label">
-                                        <i class="fas fa-image mr-2 text-blue-500"></i>
-                                        Tipo de Mídia
-                                    </label>
-                                    <div class="flex gap-3 mt-2">
-                                        <label class="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer hover:border-yellow-500 transition-colors"
-                                               :class="{'border-yellow-500 bg-yellow-500 bg-opacity-10': downsell.media_type === 'video'}">
-                                            <input type="radio" x-model="downsell.media_type" value="video" class="text-yellow-500">
-                                            <i class="fas fa-video text-yellow-500"></i>
-                                            <span class="text-sm text-white">Vídeo</span>
+                                    <div class="form-group">
+                                        <label class="form-label">
+                                            <i class="fas fa-image mr-2 text-blue-500"></i>
+                                            Tipo de Mídia
                                         </label>
-                                        <label class="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer hover:border-yellow-500 transition-colors"
-                                               :class="{'border-yellow-500 bg-yellow-500 bg-opacity-10': downsell.media_type === 'photo'}">
-                                            <input type="radio" x-model="downsell.media_type" value="photo" class="text-yellow-500">
-                                            <i class="fas fa-camera text-yellow-500"></i>
-                                            <span class="text-sm text-white">Foto</span>
-                                        </label>
+                                        <div class="flex gap-3 mt-2">
+                                            <label class="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer hover:border-yellow-500 transition-colors"
+                                                   :class="{'border-yellow-500 bg-yellow-500 bg-opacity-10': downsell.media_type === 'video'}">
+                                                <input type="radio" x-model="downsell.media_type" value="video" class="text-yellow-500">
+                                                <i class="fas fa-video text-yellow-500"></i>
+                                                <span class="text-sm text-white">Vídeo</span>
+                                            </label>
+                                            <label class="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer hover:border-yellow-500 transition-colors"
+                                                   :class="{'border-yellow-500 bg-yellow-500 bg-opacity-10': downsell.media_type === 'photo'}">
+                                                <input type="radio" x-model="downsell.media_type" value="photo" class="text-yellow-500">
+                                                <i class="fas fa-camera text-yellow-500"></i>
+                                                <span class="text-sm text-white">Foto</span>
+                                            </label>
+                                            <label class="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer hover:border-yellow-500 transition-colors"
+                                                   :class="{'border-yellow-500 bg-yellow-500 bg-opacity-10': downsell.media_type === 'audio'}">
+                                                <input type="radio" x-model="downsell.media_type" value="audio" class="text-yellow-500">
+                                                <i class="fas fa-microphone text-yellow-500"></i>
+                                                <span class="text-sm text-white">Áudio</span>
+                                            </label>
+                                        </div>
                                     </div>
-                                </div>
                             </div>
                             
                             <div class="info-box">
@@ -888,6 +906,12 @@
                                             <input type="radio" x-model="upsell.media_type" value="photo" class="text-blue-500">
                                             <i class="fas fa-camera text-blue-500"></i>
                                             <span class="text-sm text-white">Foto</span>
+                                        </label>
+                                        <label class="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer hover:border-blue-500 transition-colors"
+                                               :class="{'border-blue-500 bg-blue-500 bg-opacity-10': upsell.media_type === 'audio'}">
+                                            <input type="radio" x-model="upsell.media_type" value="audio" class="text-blue-500">
+                                            <i class="fas fa-microphone text-blue-500"></i>
+                                            <span class="text-sm text-white">Áudio</span>
                                         </label>
                                     </div>
                                 </div>
@@ -1222,6 +1246,12 @@
                                         <input type="radio" x-model="newCampaign.media_type" value="photo" class="text-blue-500">
                                         <i class="fas fa-camera text-blue-500"></i>
                                         <span class="text-sm text-white">Foto</span>
+                                    </label>
+                                    <label class="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer hover:border-blue-500 transition-colors"
+                                           :class="{'border-blue-500 bg-blue-500 bg-opacity-10': newCampaign.media_type === 'audio'}">
+                                        <input type="radio" x-model="newCampaign.media_type" value="audio" class="text-blue-500">
+                                        <i class="fas fa-microphone text-blue-500"></i>
+                                        <span class="text-sm text-white">Áudio</span>
                                     </label>
                                 </div>
                             </div>
