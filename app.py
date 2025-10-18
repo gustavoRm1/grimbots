@@ -164,11 +164,14 @@ bot_manager = BotManager(socketio, scheduler)
 if GAMIFICATION_V2_ENABLED:
     register_gamification_events(socketio)
 
-# Registrar blueprint de gamificação
+# Registrar blueprint de gamificação (se existir)
 if GAMIFICATION_V2_ENABLED:
-    from gamification_api import gamification_bp
-    app.register_blueprint(gamification_bp)
-    logger.info("✅ API de Gamificação V2.0 registrada")
+    try:
+        from gamification_api import gamification_bp
+        app.register_blueprint(gamification_bp)
+        logger.info("✅ API de Gamificação V2.0 registrada")
+    except ImportError:
+        logger.info("⚠️ gamification_api não encontrado (opcional)")
 
 # User loader para Flask-Login
 @login_manager.user_loader
