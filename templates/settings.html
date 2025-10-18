@@ -399,7 +399,7 @@
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <template x-for="gateway in gatewaysList.filter(g => g.is_verified)" :key="gateway.id">
+                <template x-for="gateway in gatewaysList.filter(g => g.is_verified && g.gateway_type !== 'hoopay')" :key="gateway.id">
                     <div class="gateway-card" :class="gateway.is_active ? 'border-green-500' : ''" x-data="{ editMode: false }">
                         <div class="flex items-center justify-between mb-4">
                             <div class="flex items-center gap-3">
