@@ -348,17 +348,11 @@
                                 Ver Estatísticas
                             </a>
                             
-                            <!-- Linha 2: Config e Remarketing -->
-                            <div class="flex gap-2">
-                                <a :href="`/bots/${bot.id}/config`" class="btn-action flex-1" 
-                                   style="background: rgba(255, 255, 255, 0.05); color: #D1D5DB; border: 1px solid rgba(255, 255, 255, 0.1);">
-                            <i class="fas fa-cog mr-1"></i> Configurar
-                        </a>
-                                <a :href="`/bots/${bot.id}/remarketing`" class="btn-action flex-1"
-                                   style="background: rgba(255, 255, 255, 0.05); color: #D1D5DB; border: 1px solid rgba(255, 255, 255, 0.1);">
-                                        <i class="fas fa-bullhorn mr-1"></i> Remarketing
-                                    </a>
-                                </div>
+                            <!-- Linha 2: Config -->
+                            <a :href="`/bots/${bot.id}/config`" class="btn-action w-full" 
+                               style="background: rgba(255, 255, 255, 0.05); color: #D1D5DB; border: 1px solid rgba(255, 255, 255, 0.1);">
+                                <i class="fas fa-cog mr-2"></i> Configurar Bot
+                            </a>
                                 
                                 <!-- Linha 3: Iniciar/Parar, Duplicar e Deletar -->
                             <div class="flex gap-2">
