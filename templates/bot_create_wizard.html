@@ -10,7 +10,7 @@
          formData: {
              token: '',
              name: '',
-             gateway_type: 'syncpay',
+             gateway_type: 'pushynpay',
              welcome_message: '',
              welcome_media_url: '',
              welcome_media_type: 'video'
@@ -208,28 +208,9 @@
         <!-- STEP 2: Gateway de Pagamento -->
         <div x-show="currentStep === 2" x-cloak>
             <h2 class="text-2xl font-bold text-txt-primary mb-2">Passo 2: Método de Pagamento</h2>
-            <p class="text-txt-primary mb-6">Escolha como você quer receber os pagamentos (recomendamos SyncPay para iniciantes)</p>
+            <p class="text-txt-primary mb-6">Escolha como você quer receber os pagamentos (recomendamos PushynPay para iniciantes)</p>
             
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <!-- SyncPay -->
-                <label class="cursor-pointer">
-                    <input type="radio" x-model="formData.gateway_type" value="syncpay" class="hidden peer">
-                    <div class="border-2 border-white border-opacity-10 rounded-xl p-6 peer-checked:border-trust-500 peer-checked:bg-blue-50 hover:border-trust-300 transition-all">
-                        <div class="flex items-center justify-between mb-3">
-                            <h3 class="text-lg font-bold text-txt-primary">SyncPay</h3>
-                            <span class="bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full text-xs font-bold">
-                                RECOMENDADO
-                            </span>
-                        </div>
-                        <ul class="space-y-2 text-sm text-txt-primary">
-                            <li>✅ Mais usado por iniciantes</li>
-                            <li>✅ Aprovação rápida</li>
-                            <li>✅ Split automático (4%)</li>
-                            <li>💰 Taxa: 2.99%</li>
-                        </ul>
-                    </div>
-                </label>
-                
                 <!-- Paradise -->
                 <label class="cursor-pointer">
                     <input type="radio" x-model="formData.gateway_type" value="paradise" class="hidden peer">
@@ -244,12 +225,18 @@
                     </div>
                 </label>
                 
-                <!-- Pushyn -->
+                <!-- PushynPay -->
                 <label class="cursor-pointer">
-                    <input type="radio" x-model="formData.gateway_type" value="pushyn" class="hidden peer">
+                    <input type="radio" x-model="formData.gateway_type" value="pushynpay" class="hidden peer">
                     <div class="border-2 border-white border-opacity-10 rounded-xl p-6 peer-checked:border-trust-500 peer-checked:bg-blue-50 hover:border-trust-300 transition-all">
-                        <h3 class="text-lg font-bold text-txt-primary mb-3">PushynPay</h3>
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="text-lg font-bold text-txt-primary">PushynPay</h3>
+                            <span class="bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full text-xs font-bold">
+                                RECOMENDADO
+                            </span>
+                        </div>
                         <ul class="space-y-2 text-sm text-txt-primary">
+                            <li>✅ Mais usado por iniciantes</li>
                             <li>✅ Confiável</li>
                             <li>✅ Boa taxa</li>
                             <li>💰 Taxa: 2.49%</li>

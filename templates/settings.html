@@ -399,15 +399,12 @@
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <template x-for="gateway in gatewaysList.filter(g => g.is_verified && g.gateway_type !== 'hoopay')" :key="gateway.id">
+                <template x-for="gateway in gatewaysList.filter(g => g.is_verified && g.gateway_type !== 'hoopay' && g.gateway_type !== 'syncpay')" :key="gateway.id">
                     <div class="gateway-card" :class="gateway.is_active ? 'border-green-500' : ''" x-data="{ editMode: false }">
                         <div class="flex items-center justify-between mb-4">
                             <div class="flex items-center gap-3">
                                 <div class="w-12 h-12 rounded-lg flex items-center justify-center overflow-hidden" 
                                      style="background: linear-gradient(135deg, rgba(255, 184, 0, 0.1), rgba(255, 184, 0, 0.05));">
-                                    <template x-if="gateway.gateway_type === 'syncpay'">
-                                        <i class="fas fa-qrcode text-2xl" style="color: #FFB800;"></i>
-                                    </template>
                                     <template x-if="gateway.gateway_type === 'pushynpay'">
                                         <img src="{{ url_for('static', filename='img/pushyn.png') }}" alt="PushynPay" class="w-12 h-12 object-contain">
                                     </template>
@@ -455,35 +452,6 @@
 
                         <!-- Formulário de Edição (Expandível) -->
                         <div x-show="editMode" x-cloak class="space-y-3 p-4 bg-gray-900 rounded-lg border border-yellow-500 border-opacity-30">
-                            <!-- SyncPay -->
-                            <template x-if="gateway.gateway_type === 'syncpay'">
-                                <form @submit.prevent="updateGateway(gateway.id, 'syncpay')" class="space-y-3">
-                                    <div>
-                                        <label class="text-xs font-bold text-gray-400 block mb-1">Client ID</label>
-                                        <input type="text" 
-                                               x-model="editGateway.client_id" 
-                                               class="form-input"
-                                               placeholder="seu-client-id">
-                                    </div>
-                                    <div x-data="{ show: false }">
-                                        <label class="text-xs font-bold text-gray-400 block mb-1">Client Secret</label>
-                                        <div class="relative">
-                                            <input :type="show ? 'text' : 'password'" 
-                                                   x-model="editGateway.client_secret" 
-                                                   class="form-input pr-10"
-                                                   placeholder="●●●●●●●●">
-                                            <button type="button" @click="show = !show" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">
-                                                <i class="fas" :class="show ? 'fa-eye-slash' : 'fa-eye'"></i>
-                                            </button>
-                                        </div>
-                                    </div>
-                                    <button type="submit" :disabled="loading" class="btn-action btn-action-primary w-full">
-                                        <i class="fas fa-save mr-2"></i>
-                                        <span x-text="loading ? 'Salvando...' : 'Atualizar'"></span>
-                                    </button>
-                                </form>
-                            </template>
-
                             <!-- PushynPay -->
                             <template x-if="gateway.gateway_type === 'pushynpay'">
                                 <form @submit.prevent="updateGateway(gateway.id, 'pushynpay')" class="space-y-3">
@@ -601,55 +569,6 @@
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <!-- SyncPay -->
-                <div class="gateway-card" x-show="!getGatewayStatus('syncpay')?.is_verified">
-                    <div class="flex items-start justify-between mb-4">
-                        <div class="flex items-center gap-3">
-                            <div class="w-12 h-12 rounded-lg flex items-center justify-center overflow-hidden" 
-                                 style="background: linear-gradient(135deg, rgba(255, 184, 0, 0.1), rgba(255, 184, 0, 0.05));">
-                                <i class="fas fa-qrcode text-2xl" style="color: #FFB800;"></i>
-                            </div>
-                            <div>
-                                <h3 class="text-sm font-bold text-white">SyncPay</h3>
-                                <p class="text-xs text-gray-500">PIX Instantâneo</p>
-                            </div>
-                        </div>
-                        <span class="gateway-status-unconfigured">
-                            <i class="fas fa-exclamation-circle"></i>
-                            Novo
-                        </span>
-                    </div>
-
-                    <form @submit.prevent="saveGateway('syncpay')" class="space-y-3">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                        <div>
-                            <label class="text-xs font-bold text-gray-400 block mb-1">Client ID</label>
-                            <input type="text" 
-                                   x-model="gateways.syncpay.client_id" 
-                                   class="form-input"
-                                   placeholder="seu-client-id">
-                        </div>
-                        <div x-data="{ show: false }">
-                            <label class="text-xs font-bold text-gray-400 block mb-1">Client Secret</label>
-                            <div class="relative">
-                                <input :type="show ? 'text' : 'password'" 
-                                       x-model="gateways.syncpay.client_secret" 
-                                       class="form-input pr-10"
-                                       placeholder="●●●●●●●●">
-                                <button type="button" @click="show = !show" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">
-                                    <i class="fas" :class="show ? 'fa-eye-slash' : 'fa-eye'"></i>
-                                </button>
-                            </div>
-                        </div>
-                        <button type="submit" 
-                                :disabled="loading"
-                                class="btn-action btn-action-primary w-full">
-                            <i class="fas fa-save mr-2"></i>
-                            <span x-text="loading ? 'Salvando...' : 'Salvar'"></span>
-                        </button>
-                    </form>
-                </div>
-
                 <!-- PushynPay -->
                 <div class="gateway-card" x-show="!getGatewayStatus('pushynpay')?.is_verified">
                     <div class="flex items-start justify-between mb-4">
@@ -855,7 +774,6 @@ function settingsApp() {
             new: ''
         },
         gateways: {
-            syncpay: { client_id: '', client_secret: '' },
             pushynpay: { api_key: '' },
             paradise: { api_key: '', offer_hash: '', product_hash: '' },
             wiinpay: { api_key: '', split_user_id: '' }
