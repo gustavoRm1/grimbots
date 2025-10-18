@@ -133,14 +133,20 @@ class WiinPayGateway(PaymentGateway):
             
             response = requests.post(create_url, json=payload, headers=headers, timeout=15)
             
-            # ✅ SUCCESS: 201 Created
-            if response.status_code == 201:
-                data = response.json()
+            # ✅ SUCCESS: 201 Created OU 200 OK
+            if response.status_code in [200, 201]:
+                response_data = response.json()
+                
+                # ✅ CORREÇÃO: WiinPay retorna dentro de 'data' wrapper
+                if 'data' in response_data:
+                    data = response_data['data']
+                else:
+                    data = response_data
                 
                 # ✅ PARSE RESPONSE
-                # Estrutura típica: {id, qr_code, qr_code_url, pix_code, status, ...}
-                transaction_id = data.get('id') or data.get('transaction_id') or data.get('uuid')
-                pix_code = data.get('pix_code') or data.get('brcode') or data.get('emv')
+                # WiinPay retorna: {qr_code, paymentId}
+                transaction_id = data.get('paymentId') or data.get('id') or data.get('transaction_id') or data.get('uuid')
+                pix_code = data.get('qr_code') or data.get('pix_code') or data.get('brcode') or data.get('emv')
                 qr_code_url = data.get('qr_code_url') or data.get('qrcode_url')
                 qr_code_base64 = data.get('qr_code_base64') or data.get('qrcode_base64')
                 
