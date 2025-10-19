@@ -478,19 +478,39 @@ def dashboard():
         Bot.user_id == current_user.id
     ).order_by(Payment.id.desc()).limit(20).all()
     
+    # Buscar configs de todos os bots de uma vez (otimizado)
+    bot_ids = [b.id for b in bot_stats]
+    configs_dict = {}
+    if bot_ids:
+        configs = db.session.query(BotConfig).filter(BotConfig.bot_id.in_(bot_ids)).all()
+        configs_dict = {c.bot_id: c for c in configs}
+    
     # Converter bot_stats para dicionários
-    bots_list = [{
-        'id': b.id,
-        'name': b.name,
-        'username': b.username,
-        'is_running': b.is_running,
-        'is_active': b.is_active,
-        'total_users': b.total_users,
-        'total_sales': b.total_sales,
-        'total_revenue': float(b.total_revenue),
-        'pending_sales': b.pending_sales,
-        'created_at': b.created_at.isoformat()
-    } for b in bot_stats]
+    bots_list = []
+    for b in bot_stats:
+        bot_dict = {
+            'id': b.id,
+            'name': b.name,
+            'username': b.username,
+            'is_running': b.is_running,
+            'is_active': b.is_active,
+            'total_users': b.total_users,
+            'total_sales': b.total_sales,
+            'total_revenue': float(b.total_revenue),
+            'pending_sales': b.pending_sales,
+            'created_at': b.created_at.isoformat()
+        }
+        
+        # Adicionar config se existir (busca no dicionário pré-carregado)
+        config = configs_dict.get(b.id)
+        if config:
+            bot_dict['config'] = {
+                'welcome_message': config.welcome_message or ''
+            }
+        else:
+            bot_dict['config'] = None
+        
+        bots_list.append(bot_dict)
     
     # Converter payments para dicionários
     payments_list = [{
