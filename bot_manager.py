@@ -2436,8 +2436,8 @@ Seu pagamento ainda não foi confirmado.
                             logger.warning(f"⚠️ Preço {btn.get('text', 'Produto')} muito baixo após desconto, pulando")
                             continue
                         
-                        # Texto do botão: Nome + Preço + Percentual
-                        btn_text = f"🔥 {btn.get('text', 'Produto')} R$ {discounted_price:.2f} ({int(discount_percentage)}% OFF)"
+                        # Texto do botão: Nome + Percentual (sem mostrar valor)
+                        btn_text = f"🔥 {btn.get('text', 'Produto')} ({int(discount_percentage)}% OFF)"
                         
                         buttons.append({
                             'text': btn_text,
