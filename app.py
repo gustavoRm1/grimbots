@@ -720,7 +720,19 @@ def api_dashboard_analytics():
 def get_bots():
     """Lista todos os bots do usuário"""
     bots = current_user.bots.all()
-    return jsonify([bot.to_dict() for bot in bots])
+    bots_data = []
+    for bot in bots:
+        bot_dict = bot.to_dict()
+        # Incluir dados da configuração para verificar se está configurado
+        if bot.config:
+            bot_dict['config'] = {
+                'welcome_message': bot.config.welcome_message,
+                'has_welcome_message': bool(bot.config.welcome_message)
+            }
+        else:
+            bot_dict['config'] = None
+        bots_data.append(bot_dict)
+    return jsonify(bots_data)
 
 @app.route('/bot/create')
 @login_required

@@ -962,6 +962,9 @@ function dashboardApp() {
                 }, 150);  // ✅ Delay maior para garantir renderização
             });
             
+            // Recarregar dados dos bots (garante dados atualizados após salvar config)
+            this.refreshBots();
+            
             console.log('✅ Dashboard V2.0 pronto!');
         },
         
@@ -1165,6 +1168,22 @@ function dashboardApp() {
                 console.log('✅ Gráfico recriado com dados!');
             } catch (error) {
                 console.error('❌ Erro ao carregar gráfico:', error);
+            }
+        },
+        
+        // Recarregar dados dos bots
+        async refreshBots() {
+            try {
+                const response = await fetch('/api/bots');
+                if (response.ok) {
+                    const data = await response.json();
+                    // A API retorna um array direto, não um objeto {bots: [...]}
+                    this.bots = Array.isArray(data) ? data : (data.bots || []);
+                    this.filterBots(); // Atualizar filtros
+                    console.log('✅ Dados dos bots recarregados:', this.bots.length);
+                }
+            } catch (error) {
+                console.error('❌ Erro ao recarregar bots:', error);
             }
         },
         
