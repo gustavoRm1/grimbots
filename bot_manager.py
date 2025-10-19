@@ -436,21 +436,30 @@ class BotManager:
         Args:
             bot_id: ID do bot
             token: Token do bot
-            config: Configuração do bot
+            config: Configuração do bot (será recarregada do banco)
             chat_id: ID do chat
             message: Dados da mensagem
         """
         try:
-            # Registrar usuário no banco de dados
+            # ✅ CORREÇÃO CRÍTICA: Buscar config atualizada do BANCO (não da memória)
             from app import app, db
             from models import BotUser, Bot
             
-            user_from = message.get('from', {})
-            telegram_user_id = str(user_from.get('id', ''))
-            first_name = user_from.get('first_name', 'Usuário')
-            username = user_from.get('username', '')
-            
             with app.app_context():
+                bot = Bot.query.get(bot_id)
+                if bot and bot.config:
+                    config = bot.config.to_dict()  # Usar config do banco
+                    logger.info(f"🔄 Config recarregada do banco para /start")
+                else:
+                    logger.warning(f"⚠️ Bot {bot_id} sem config no banco, usando padrão")
+                    config = config or {}  # Fallback para config da memória
+                
+                # Aproveitando o app_context, registrar/atualizar usuário
+                user_from = message.get('from', {})
+                telegram_user_id = str(user_from.get('id', ''))
+                first_name = user_from.get('first_name', 'Usuário')
+                username = user_from.get('username', '')
+                
                 # Verificar se usuário já existe
                 bot_user = BotUser.query.filter_by(
                     bot_id=bot_id,
@@ -467,8 +476,7 @@ class BotManager:
                     )
                     db.session.add(bot_user)
                     
-                    # Atualizar contador do bot
-                    bot = Bot.query.get(bot_id)
+                    # Atualizar contador do bot (bot já foi carregado acima)
                     if bot:
                         bot.total_users = BotUser.query.filter_by(bot_id=bot_id).count()
                     
