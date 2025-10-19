@@ -916,15 +916,93 @@ class BotManager:
                         logger.info(f"ℹ️ Downsells desabilitados ou não configurados (bump_no)")
             
             # ✅ NOVO: Downsell com formato simplificado
+            elif callback_data.startswith('dwnsl_'):
+                # ✅ NOVO FORMATO PERCENTUAL: dwnsl_DOWNSELL_IDX_BUTTON_IDX_PRICE_CENTAVOS
+                # Este formato é usado quando o downsell tem modo percentual e mostra múltiplos botões
+                parts = callback_data.replace('dwnsl_', '').split('_')
+                downsell_idx = int(parts[0])
+                button_idx = int(parts[1])
+                price = float(parts[2]) / 100  # Converter centavos para reais
+                
+                # Buscar configuração para pegar nome do produto
+                # ✅ Recarregar config do banco (pode ter sido alterada)
+                from app import app, db
+                from models import Bot as BotModel
+                
+                product_name = f'Produto {button_idx + 1}'  # Default
+                description = f"Downsell {downsell_idx + 1} - {product_name}"
+                
+                with app.app_context():
+                    bot = BotModel.query.get(bot_id)
+                    if bot and bot.config:
+                        fresh_config = bot.config.to_dict()
+                        main_buttons = fresh_config.get('main_buttons', [])
+                        if button_idx < len(main_buttons):
+                            product_name = main_buttons[button_idx].get('text', product_name)
+                            description = f"{product_name} (Downsell {downsell_idx + 1})"
+                
+                logger.info(f"💜 DOWNSELL PERCENTUAL CLICADO | Downsell: {downsell_idx} | Produto: {product_name} | Valor: R$ {price:.2f}")
+                
+                # Responder callback
+                requests.post(url, json={
+                    'callback_query_id': callback_id,
+                    'text': '🔄 Gerando pagamento PIX...'
+                }, timeout=3)
+                
+                # Gerar PIX do downsell
+                pix_data = self._generate_pix_payment(
+                    bot_id=bot_id,
+                    amount=price,
+                    description=description,
+                    customer_name=user_info.get('first_name', ''),
+                    customer_username=user_info.get('username', ''),
+                    customer_user_id=str(user_info.get('id', '')),
+                    is_downsell=True,
+                    downsell_index=downsell_idx
+                )
+                
+                if pix_data and pix_data.get('pix_code'):
+                    payment_message = f"""🎯 <b>Produto:</b> {description}
+💰 <b>Valor:</b> R$ {price:.2f}
+
+📱 <b>PIX Copia e Cola:</b>
+<code>{pix_data['pix_code']}</code>
+
+<i>👆 Toque no código acima para copiar</i>
+
+⏰ <b>Válido por:</b> 30 minutos
+
+💡 <b>Após pagar, clique no botão abaixo para verificar e receber seu acesso!</b>"""
+                    
+                    buttons = [{
+                        'text': '✅ Verificar Pagamento',
+                        'callback_data': f'verify_{pix_data.get("payment_id")}'
+                    }]
+                    
+                    self.send_telegram_message(
+                        token=token,
+                        chat_id=str(chat_id),
+                        message=payment_message.strip(),
+                        buttons=buttons
+                    )
+                    
+                    logger.info(f"✅ PIX DOWNSELL PERCENTUAL ENVIADO! ID: {pix_data.get('payment_id')}")
+                else:
+                    self.send_telegram_message(
+                        token=token,
+                        chat_id=str(chat_id),
+                        message="❌ Erro ao gerar PIX. Entre em contato com o suporte."
+                    )
+            
             elif callback_data.startswith('downsell_'):
-                # Formato: downsell_INDEX_PRICE_CENTAVOS
+                # Formato FIXO: downsell_INDEX_PRICE_CENTAVOS
                 parts = callback_data.replace('downsell_', '').split('_')
                 downsell_idx = int(parts[0])
                 price = float(parts[1]) / 100  # Converter centavos para reais
                 description = f"Downsell {downsell_idx + 1}"
                 button_index = -1  # Sinalizar que é downsell
                 
-                logger.info(f"💰 DOWNSELL CLICADO | Índice: {downsell_idx} | Valor: R$ {price:.2f}")
+                logger.info(f"💙 DOWNSELL FIXO CLICADO | Índice: {downsell_idx} | Valor: R$ {price:.2f}")
                 
                 # Responder callback
                 requests.post(url, json={
@@ -2300,7 +2378,21 @@ Seu pagamento ainda não foi confirmado.
                 bot_info = self.active_bots[bot_id].copy()
             
             token = bot_info['token']
-            config = bot_info.get('config', {})
+            
+            # ✅ CRÍTICO: Buscar config atualizada do BANCO (não usar cache da memória)
+            # Isso garante que mudanças recentes na configuração sejam refletidas
+            from app import app, db
+            from models import Bot as BotModel
+            
+            with app.app_context():
+                bot = BotModel.query.get(bot_id)
+                if bot and bot.config:
+                    config = bot.config.to_dict()
+                    logger.info(f"🔄 Config recarregada do banco para downsell")
+                else:
+                    # Fallback: usar config da memória se não encontrar no banco
+                    config = bot_info.get('config', {})
+                    logger.warning(f"⚠️ Usando config da memória para downsell")
             
             # Verificar se downsells ainda estão habilitados
             logger.info(f"🔍 DEBUG _send_downsell - Verificando se downsells estão habilitados...")
@@ -2318,54 +2410,91 @@ Seu pagamento ainda não foi confirmado.
             # ✅ NOVO: Calcular preço baseado no modo (fixo ou percentual)
             pricing_mode = downsell.get('pricing_mode', 'fixed')
             
+            # 🎯 ESTRATÉGIA DE CONVERSÃO: MODO PERCENTUAL = TODOS OS BOTÕES COM DESCONTO
             if pricing_mode == 'percentage':
-                # Modo Percentual: Aplicar DESCONTO sobre o preço original
                 discount_percentage = float(downsell.get('discount_percentage', 50))
+                discount_percentage = max(1, min(95, discount_percentage))  # Validar 1-95%
                 
-                # Validar percentual (1-95%)
-                discount_percentage = max(1, min(95, discount_percentage))
+                # Buscar TODOS os botões principais do config
+                main_buttons = config.get('main_buttons', [])
                 
-                if original_price > 0:
-                    # ✅ CORREÇÃO: Desconto = preço × (1 - desconto%)
-                    # Exemplo: R$ 19,97 com 50% OFF = 19.97 × (1 - 0.50) = R$ 9,99
-                    price = original_price * (1 - discount_percentage / 100)
-                    logger.info(f"💜 MODO PERCENTUAL: {discount_percentage}% OFF de R$ {original_price:.2f} = R$ {price:.2f}")
+                if main_buttons and len(main_buttons) > 0:
+                    # ✅ MÚLTIPLOS BOTÕES: Aplicar desconto em cada produto
+                    buttons = []
+                    logger.info(f"💜 MODO PERCENTUAL: {discount_percentage}% OFF em TODOS os produtos!")
+                    
+                    for btn_index, btn in enumerate(main_buttons):
+                        original_btn_price = float(btn.get('price', 0))
+                        if original_btn_price <= 0:
+                            continue  # Pular botões sem preço
+                        
+                        # Calcular preço com desconto
+                        discounted_price = original_btn_price * (1 - discount_percentage / 100)
+                        
+                        # Validar mínimo
+                        if discounted_price < 0.50:
+                            logger.warning(f"⚠️ Preço {btn.get('text', 'Produto')} muito baixo após desconto, pulando")
+                            continue
+                        
+                        # Texto do botão (mostrar original → desconto)
+                        btn_text = f"🔥 {btn.get('text', 'Produto')} - R$ {discounted_price:.2f}"
+                        
+                        buttons.append({
+                            'text': btn_text,
+                            'callback_data': f'dwnsl_{index}_{btn_index}_{int(discounted_price*100)}'
+                        })
+                        
+                        logger.info(f"  ✅ {btn.get('text')}: R$ {original_btn_price:.2f} → R$ {discounted_price:.2f} ({discount_percentage}% OFF)")
+                    
+                    if len(buttons) == 0:
+                        logger.error(f"❌ Nenhum botão válido após aplicar desconto percentual")
+                        return
+                    
+                    logger.info(f"🎯 Total de {len(buttons)} opções de compra com desconto")
+                    
                 else:
-                    # Fallback: usar preço fixo se não tiver original_price
-                    price = float(downsell.get('price', 0))
-                    logger.warning(f"⚠️ Preço original não disponível, usando preço fixo: R$ {price:.2f}")
+                    # Fallback: se não tiver main_buttons, usar preço original (comportamento antigo)
+                    if original_price > 0:
+                        price = original_price * (1 - discount_percentage / 100)
+                        logger.info(f"💜 MODO PERCENTUAL (fallback): {discount_percentage}% OFF de R$ {original_price:.2f} = R$ {price:.2f}")
+                    else:
+                        price = float(downsell.get('price', 0))
+                        logger.warning(f"⚠️ Preço original não disponível, usando preço fixo: R$ {price:.2f}")
+                    
+                    if price < 0.50:
+                        logger.error(f"❌ Preço muito baixo (R$ {price:.2f}), mínimo R$ 0,50")
+                        return
+                    
+                    button_text = downsell.get('button_text', '').strip()
+                    if not button_text:
+                        button_text = f'🛒 Comprar por R$ {price:.2f} ({int(discount_percentage)}% OFF)'
+                    
+                    buttons = [{
+                        'text': button_text,
+                        'callback_data': f'downsell_{index}_{int(price*100)}'
+                    }]
+            
             else:
-                # Modo Fixo: Usar preço configurado
+                # 💙 MODO FIXO: Um único botão com preço fixo (comportamento original)
                 price = float(downsell.get('price', 0))
                 logger.info(f"💙 MODO FIXO: R$ {price:.2f}")
-            
-            # Validar preço mínimo
-            if price < 0.50:
-                logger.error(f"❌ Preço do downsell muito baixo (R$ {price:.2f}), mínimo R$ 0,50")
-                return
-            
-            button_text = downsell.get('button_text', '').strip()
-            
-            # Se não tiver texto personalizado, usar padrão com indicador de desconto
-            if not button_text:
-                if pricing_mode == 'percentage':
-                    discount_pct = int(downsell.get('discount_percentage', 50))
-                    button_text = f'🛒 Comprar por R$ {price:.2f} ({discount_pct}% OFF)'
-                else:
+                
+                if price < 0.50:
+                    logger.error(f"❌ Preço muito baixo (R$ {price:.2f}), mínimo R$ 0,50")
+                    return
+                
+                button_text = downsell.get('button_text', '').strip()
+                if not button_text:
                     button_text = f'🛒 Comprar por R$ {price:.2f}'
+                
+                buttons = [{
+                    'text': button_text,
+                    'callback_data': f'downsell_{index}_{int(price*100)}'
+                }]
             
-            logger.info(f"🔍 DEBUG _send_downsell - Dados do downsell:")
+            logger.info(f"🔍 DEBUG _send_downsell - Botões criados: {len(buttons)}")
             logger.info(f"  - message: {message}")
-            logger.info(f"  - price: {price}")
-            logger.info(f"  - button_text: {button_text}")
             logger.info(f"  - media_url: {media_url}")
-            
-            # Criar botão de compra para o downsell
-            # ✅ CORREÇÃO: Usar apenas price e index (< 25 bytes)
-            buttons = [{
-                'text': button_text,
-                'callback_data': f'downsell_{index}_{int(price*100)}'  # price em centavos para evitar float
-            }]
             
             logger.info(f"📨 Enviando downsell {index+1} para chat {chat_id}")
             
