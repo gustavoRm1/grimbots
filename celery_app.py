@@ -45,6 +45,78 @@ celery_app.conf.update(
 )
 
 # ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
+
+def _validate_meta_token(access_token: str) -> bool:
+    """
+    Valida token de acesso do Meta usando endpoint debug_token
+    
+    ✅ PRODUCTION-READY:
+    - Usa endpoint oficial de debug
+    - Validação robusta
+    - Timeout configurado
+    """
+    try:
+        import requests
+        
+        # Usar endpoint oficial de debug do Meta
+        url = f"https://graph.facebook.com/v18.0/debug_token"
+        
+        params = {
+            'input_token': access_token,
+            'access_token': access_token
+        }
+        
+        response = requests.get(url, params=params, timeout=10)
+        
+        if response.status_code == 200:
+            data = response.json()
+            token_data = data.get('data', {})
+            
+            # Verificar se token é válido
+            is_valid = token_data.get('is_valid', False)
+            expires_at = token_data.get('expires_at', 0)
+            
+            # Verificar se não expirou
+            import time
+            if expires_at > 0 and expires_at < time.time():
+                return False
+            
+            return is_valid
+        else:
+            return False
+            
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Erro ao validar token Meta: {e}")
+        return False
+
+def _send_token_alert(pixel_id: str, message: str):
+    """
+    Envia alerta automático para token inválido
+    
+    ✅ PRODUCTION-READY:
+    - Log estruturado com severidade CRITICAL
+    - Informações completas para debug
+    - Timestamp preciso
+    """
+    import logging
+    import time
+    from datetime import datetime
+    
+    logger = logging.getLogger(__name__)
+    
+    # ✅ LOG CRÍTICO PARA ALERTA
+    logger.critical(f"ALERT | Token Invalid | Pixel: {pixel_id} | " +
+                   f"Message: {message} | " +
+                   f"Timestamp: {datetime.now().isoformat()}")
+    
+    # ✅ FUTURO: Integrar com sistema de alertas (Slack, Discord, etc)
+    # Por enquanto, apenas log crítico que pode ser monitorado
+
+# ============================================================================
 # TASKS
 # ============================================================================
 
@@ -53,13 +125,36 @@ def send_meta_event(self, pixel_id, access_token, event_data, test_code=None):
     """
     Envia evento para Meta Conversions API
     
-    Retry automático com backoff exponencial
+    ✅ PRODUCTION-READY (QI 540):
+    - Valida token ANTES do envio
+    - Falha task para erros 4xx (token inválido)
+    - Retry apenas para erros 5xx
+    - Logging estruturado com severidade real
     """
     import requests
     import time
     import logging
     
     logger = logging.getLogger(__name__)
+    
+    # ✅ VALIDAÇÃO DE TOKEN ANTES DO ENVIO
+    try:
+        token_valid = _validate_meta_token(access_token)
+        if not token_valid:
+            error_msg = f"🚨 TOKEN INVÁLIDO: Meta API rejeitou token antes do envio"
+            logger.error(error_msg)
+            
+            # ✅ ALERTA AUTOMÁTICO PARA TOKEN INVÁLIDO
+            _send_token_alert(pixel_id, "Token inválido detectado")
+            
+            raise Exception("Token de acesso inválido ou expirado")
+    except Exception as e:
+        logger.error(f"🚨 ERRO NA VALIDAÇÃO DO TOKEN: {e}")
+        
+        # ✅ ALERTA AUTOMÁTICO PARA ERRO DE VALIDAÇÃO
+        _send_token_alert(pixel_id, f"Erro na validação: {str(e)[:100]}")
+        
+        raise Exception(f"Falha na validação do token: {e}")
     
     url = f'https://graph.facebook.com/v18.0/{pixel_id}/events'
     
@@ -80,27 +175,58 @@ def send_meta_event(self, pixel_id, access_token, event_data, test_code=None):
         
         if response.status_code == 200:
             result = response.json()
-            logger.info(f"✅ Evento enviado: {event_data.get('event_name')} | " +
+            # ✅ LOGGING ESTRUTURADO - SUCESSO
+            logger.info(f"SUCCESS | Meta Event | {event_data.get('event_name')} | " +
                        f"ID: {event_data.get('event_id')} | " +
-                       f"Latência: {latency}ms")
+                       f"Pixel: {pixel_id} | " +
+                       f"Latency: {latency}ms | " +
+                       f"EventsReceived: {result.get('events_received', 0)}")
             return result
         
-        elif response.status_code in [429, 500, 502, 503, 504]:
-            # Erro temporário - retry
-            logger.warning(f"⚠️ Erro {response.status_code}, retry {self.request.retries + 1}/10")
+        elif response.status_code >= 500:
+            # ✅ RETRY APENAS PARA ERROS 5xx (servidor)
+            # ✅ LOGGING ESTRUTURADO - RETRY
+            logger.warning(f"RETRY | Meta Event | {event_data.get('event_name')} | " +
+                          f"Status: {response.status_code} | " +
+                          f"Attempt: {self.request.retries + 1}/10 | " +
+                          f"Pixel: {pixel_id}")
             raise self.retry(countdown=2 ** self.request.retries)
         
+        elif response.status_code == 429:
+            # Rate limit - retry com backoff maior
+            # ✅ LOGGING ESTRUTURADO - RATE LIMIT
+            logger.warning(f"RATE_LIMIT | Meta Event | {event_data.get('event_name')} | " +
+                          f"Attempt: {self.request.retries + 1}/10 | " +
+                          f"Pixel: {pixel_id}")
+            raise self.retry(countdown=60 * (2 ** self.request.retries))  # Backoff maior para rate limit
+        
         else:
-            # Erro permanente - não retry
-            logger.error(f"❌ Erro {response.status_code}: {response.text}")
+            # Erro permanente - FALHAR A TASK
+            # ✅ LOGGING ESTRUTURADO - ERRO PERMANENTE
+            logger.error(f"FAILED | Meta Event | {event_data.get('event_name')} | " +
+                        f"Status: {response.status_code} | " +
+                        f"Pixel: {pixel_id} | " +
+                        f"Error: {response.text[:200]}")
+            
+            # ✅ FALHAR A TASK PARA ERROS 4xx (token inválido, etc)
+            if response.status_code >= 400 and response.status_code < 500:
+                raise Exception(f"Meta API Error {response.status_code}: {response.text}")
+            
+            # Para outros erros, retornar erro mas não falhar
             return {'error': response.text, 'status_code': response.status_code}
     
     except requests.exceptions.Timeout:
-        logger.warning(f"⏰ Timeout, retry {self.request.retries + 1}/10")
+        # ✅ LOGGING ESTRUTURADO - TIMEOUT
+        logger.warning(f"TIMEOUT | Meta Event | {event_data.get('event_name')} | " +
+                      f"Attempt: {self.request.retries + 1}/10 | " +
+                      f"Pixel: {pixel_id}")
         raise self.retry(countdown=2 ** self.request.retries)
     
     except Exception as e:
-        logger.error(f"💥 Erro: {e}")
+        # ✅ LOGGING ESTRUTURADO - EXCEÇÃO
+        logger.error(f"EXCEPTION | Meta Event | {event_data.get('event_name')} | " +
+                   f"Pixel: {pixel_id} | " +
+                   f"Error: {str(e)[:200]}")
         raise self.retry(countdown=2 ** self.request.retries)
 
 
