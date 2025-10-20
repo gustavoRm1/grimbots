@@ -2318,12 +2318,13 @@ def update_bot_config(bot_id):
 @app.route('/go/<slug>')
 def public_redirect(slug):
     """
-    Endpoint PÚBLICO de redirecionamento com Load Balancing + Meta Pixel Tracking
+    Endpoint PÚBLICO de redirecionamento com Load Balancing + Meta Pixel Tracking + Cloaker
     
     URL: /go/{slug} (ex: /go/red1)
     
     FUNCIONALIDADES:
     - Busca pool pelo slug
+    - ✅ CLOAKER: Valida parâmetro de segurança (bloqueia acessos não autorizados)
     - Seleciona bot online (estratégia configurada)
     - Health check em cache (não valida em tempo real)
     - Failover automático
@@ -2338,6 +2339,36 @@ def public_redirect(slug):
     
     if not pool:
         abort(404, f'Pool "{slug}" não encontrado ou inativo')
+    
+    # ============================================================================
+    # ✅ CLOAKER + ANTICLONE: VALIDAÇÃO DE SEGURANÇA
+    # ============================================================================
+    # CRÍTICO: Se cloaker está ativo, BLOQUEIA acessos sem parâmetro correto
+    # Protege contra: concorrentes, biblioteca de anúncios, moderadores
+    # ============================================================================
+    if pool.meta_cloaker_enabled:
+        # Pegar nome e valor do parâmetro configurado
+        param_name = pool.meta_cloaker_param_name or 'grim'
+        expected_value = pool.meta_cloaker_param_value
+        
+        # Verificar se parâmetro está presente e correto
+        actual_value = request.args.get(param_name)
+        
+        if actual_value != expected_value:
+            # ❌ ACESSO BLOQUEADO
+            logger.warning(f"🛡️ Cloaker bloqueou acesso ao pool '{slug}' | " +
+                          f"IP: {request.remote_addr} | " +
+                          f"User-Agent: {request.headers.get('User-Agent')} | " +
+                          f"Parâmetro esperado: {param_name}={expected_value} | " +
+                          f"Recebido: {param_name}={actual_value}")
+            
+            return render_template('cloaker_block.html', 
+                                 pool_name=pool.name,
+                                 slug=slug), 403
+        
+        # ✅ ACESSO AUTORIZADO
+        logger.info(f"✅ Cloaker validou acesso ao pool '{slug}' | " +
+                   f"Parâmetro: {param_name}={actual_value}")
     
     # Selecionar bot usando estratégia configurada
     pool_bot = pool.select_bot()
@@ -2364,10 +2395,15 @@ def public_redirect(slug):
     logger.info(f"Redirect: /go/{slug} → @{pool_bot.bot.username} | Estratégia: {pool.distribution_strategy} | Total: {pool_bot.total_redirects}")
     
     # ============================================================================
-    # ✅ META PIXEL: PAGEVIEW TRACKING (NÍVEL DE POOL)
+    # ✅ META PIXEL: PAGEVIEW TRACKING + UTM CAPTURE (NÍVEL DE POOL)
     # ============================================================================
+    # CRÍTICO: Captura UTM e External ID para vincular eventos posteriores
+    # ============================================================================
+    external_id = None
+    utm_data = {}
+    
     try:
-        send_meta_pixel_pageview_event(pool, request)
+        external_id, utm_data = send_meta_pixel_pageview_event(pool, request)
     except Exception as e:
         logger.error(f"Erro ao enviar PageView para Meta Pixel: {e}")
         # Não impedir o redirect se Meta falhar
@@ -2380,8 +2416,53 @@ def public_redirect(slug):
         'total_redirects': pool.total_redirects
     }, room=f'user_{pool.user_id}')
     
-    # Redirect 302 para Telegram
-    redirect_url = f"https://t.me/{pool_bot.bot.username}?start=acesso"
+    # ============================================================================
+    # ✅ REDIRECT PARA TELEGRAM COM TRACKING DATA
+    # ============================================================================
+    # Passar pool_id, external_id e UTMs no parâmetro start
+    # Formato: start=p{pool_id}_e{external_id}_s{utm_source}_c{utm_campaign}
+    # Limitado a 64 caracteres pelo Telegram
+    # ============================================================================
+    import base64
+    import json
+    
+    # Construir payload de tracking
+    tracking_data = {
+        'p': pool.id,  # pool_id
+    }
+    
+    if external_id:
+        tracking_data['e'] = external_id[:12]  # Primeiros 12 chars do external_id
+    
+    if utm_data:
+        if utm_data.get('utm_source'):
+            tracking_data['s'] = utm_data['utm_source'][:10]
+        if utm_data.get('utm_campaign'):
+            tracking_data['c'] = utm_data['utm_campaign'][:10]
+        if utm_data.get('campaign_code'):
+            tracking_data['cc'] = utm_data['campaign_code'][:8]
+        if utm_data.get('fbclid'):
+            tracking_data['f'] = utm_data['fbclid'][:15]
+    
+    # Serializar e encodar (base64 para reduzir tamanho)
+    try:
+        tracking_json = json.dumps(tracking_data, separators=(',', ':'))
+        tracking_base64 = base64.urlsafe_b64encode(tracking_json.encode()).decode()
+        
+        # Telegram limita start param a 64 chars
+        # Se exceder, usar apenas pool_id
+        if len(tracking_base64) + 1 > 64:  # +1 para o 't' inicial
+            # Fallback: apenas pool_id
+            tracking_param = f"p{pool.id}"
+            logger.warning(f"Tracking param muito longo ({len(tracking_base64)} chars), usando fallback: {tracking_param}")
+        else:
+            tracking_param = f"t{tracking_base64}"
+    except Exception as e:
+        # Fallback simples se encoding falhar
+        logger.error(f"Erro ao encodar tracking: {e}")
+        tracking_param = f"p{pool.id}"
+    
+    redirect_url = f"https://t.me/{pool_bot.bot.username}?start={tracking_param}"
     return redirect(redirect_url, code=302)
 
 
@@ -3668,26 +3749,30 @@ def send_meta_pixel_pageview_event(pool, request):
     """
     Envia evento PageView para Meta Pixel quando usuário acessa redirecionador
     
-    ARQUITETURA V2.0 (QI 240):
+    ARQUITETURA V3.0 (QI 540 - CORREÇÃO CRÍTICA):
     - Pixel configurado no POOL (não no bot)
     - Alta disponibilidade: bot cai, pool continua tracking
     - Dados consolidados: 1 campanha = 1 pool = 1 pixel
+    - ✅ RETORNA external_id e utm_data para vincular eventos posteriores
     
     CRÍTICO: Anti-duplicação via IP + User-Agent + timestamp
+    
+    Returns:
+        tuple: (external_id, utm_data) para salvar no BotUser
     """
     try:
         # ✅ VERIFICAÇÃO 1: Pool tem Meta Pixel configurado?
         if not pool.meta_tracking_enabled:
-            return
+            return None, {}
         
         if not pool.meta_pixel_id or not pool.meta_access_token:
             logger.warning(f"Pool {pool.id} tem tracking ativo mas sem pixel_id ou access_token")
-            return
+            return None, {}
         
         # ✅ VERIFICAÇÃO 2: Evento PageView está habilitado?
         if not pool.meta_events_pageview:
             logger.info(f"Evento PageView desabilitado para pool {pool.id}")
-            return
+            return None, {}
         
         logger.info(f"📊 Preparando envio Meta PageView: Pool {pool.id} ({pool.name})")
         
@@ -3707,11 +3792,22 @@ def send_meta_pixel_pageview_event(pool, request):
             access_token = decrypt(pool.meta_access_token)
         except Exception as e:
             logger.error(f"Erro ao descriptografar access_token do pool {pool.id}: {e}")
-            return
+            return None, {}
         
         # Extrair UTM parameters e cookies
         utm_params = MetaPixelHelper.extract_utm_params(request)
         cookies = MetaPixelHelper.extract_cookies(request)
+        
+        # ✅ CAPTURAR DADOS PARA RETORNAR
+        utm_data = {
+            'utm_source': utm_params.get('utm_source'),
+            'utm_campaign': utm_params.get('utm_campaign'),
+            'utm_content': utm_params.get('utm_content'),
+            'utm_medium': utm_params.get('utm_medium'),
+            'utm_term': utm_params.get('utm_term'),
+            'fbclid': utm_params.get('fbclid'),
+            'campaign_code': utm_params.get('code')
+        }
         
         # Enviar evento PageView
         result = MetaPixelAPI.send_pageview_event(
@@ -3723,21 +3819,25 @@ def send_meta_pixel_pageview_event(pool, request):
             client_user_agent=request.headers.get('User-Agent'),
             fbp=cookies.get('fbp'),
             fbc=cookies.get('fbc'),
-            utm_source=utm_params.get('utm_source'),
-            utm_campaign=utm_params.get('utm_campaign'),
-            campaign_code=utm_params.get('code')  # Parâmetro customizado
+            utm_source=utm_data['utm_source'],
+            utm_campaign=utm_data['utm_campaign'],
+            campaign_code=utm_data['campaign_code']
         )
         
         # ✅ VERIFICAÇÃO 3: Meta confirmou recebimento?
         if result['success']:
             logger.info(f"✅ Meta PageView confirmado: Pool {pool.id} ({pool.name}) | Event ID: {event_id}")
+            # ✅ RETORNAR external_id e utm_data para salvar no BotUser
+            return external_id, utm_data
         else:
             # Falhou - log do erro
             logger.error(f"❌ Meta PageView falhou: {result['error']} | Pool: {pool.id} ({pool.name})")
+            return external_id, utm_data  # Retorna mesmo se falhou (para salvar UTM)
     
     except Exception as e:
         logger.error(f"💥 Erro ao enviar Meta PageView: {e}")
         # Não impedir o redirect se Meta falhar
+        return None, {}
 
 def send_meta_pixel_purchase_event(payment):
     """

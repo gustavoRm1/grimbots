@@ -18,28 +18,47 @@ logger = logging.getLogger(__name__)
 # Configurar logging para este módulo
 logger.setLevel(logging.INFO)
 
-def send_meta_pixel_viewcontent_event(bot, bot_user, message):
+def send_meta_pixel_viewcontent_event(bot, bot_user, message, pool_id=None):
     """
     Envia evento ViewContent para Meta Pixel quando usuário inicia conversa com bot
     
-    ARQUITETURA V2.0 (QI 240):
-    - Busca pixel do POOL associado ao bot (não do bot diretamente)
+    ARQUITETURA V3.0 (QI 540 - CORREÇÃO CRÍTICA):
+    - Busca pixel do POOL ESPECÍFICO (passado via pool_id)
+    - Se pool_id não fornecido, busca primeiro pool do bot (fallback)
+    - Usa UTM e external_id salvos no BotUser
     - Alta disponibilidade: dados consolidados no pool
     - Tracking preciso mesmo com múltiplos bots
     
     CRÍTICO: Anti-duplicação via meta_viewcontent_sent flag
+    
+    Args:
+        bot: Instância do Bot
+        bot_user: Instância do BotUser
+        message: Mensagem do Telegram
+        pool_id: ID do pool específico (extraído do start param)
     """
     try:
         # ✅ VERIFICAÇÃO 1: Buscar pool associado ao bot
-        from models import PoolBot
+        from models import PoolBot, RedirectPool
         
-        pool_bot = PoolBot.query.filter_by(bot_id=bot.id).first()
+        # Se pool_id foi passado, buscar pool específico
+        if pool_id:
+            pool_bot = PoolBot.query.filter_by(bot_id=bot.id, pool_id=pool_id).first()
+            if not pool_bot:
+                logger.warning(f"Bot {bot.id} não está no pool {pool_id} especificado - tentando fallback")
+                pool_bot = PoolBot.query.filter_by(bot_id=bot.id).first()
+        else:
+            # Fallback: buscar primeiro pool do bot
+            pool_bot = PoolBot.query.filter_by(bot_id=bot.id).first()
         
         if not pool_bot:
             logger.info(f"Bot {bot.id} não está associado a nenhum pool - Meta Pixel ignorado")
             return
         
         pool = pool_bot.pool
+        
+        logger.info(f"📊 Pool selecionado para ViewContent: {pool.id} ({pool.name}) | " +
+                   f"pool_id_param={pool_id} | bot_id={bot.id}")
         
         # ✅ VERIFICAÇÃO 2: Pool tem Meta Pixel configurado?
         if not pool.meta_tracking_enabled:
@@ -78,6 +97,10 @@ def send_meta_pixel_viewcontent_event(bot, bot_user, message):
             logger.error(f"Erro ao descriptografar access_token do pool {pool.id}: {e}")
             return
         
+        # ✅ USAR UTM E EXTERNAL_ID SALVOS NO BOTUSER (QI 540 - FIX CRÍTICO)
+        # Dados foram salvos quando usuário acessou /go/<slug>
+        # ✅ Agora eventos ViewContent e Purchase têm origem correta!
+        
         # Enviar evento ViewContent
         result = MetaPixelAPI.send_viewcontent_event(
             pixel_id=pool.meta_pixel_id,
@@ -86,10 +109,13 @@ def send_meta_pixel_viewcontent_event(bot, bot_user, message):
             customer_user_id=bot_user.telegram_user_id,
             content_id=str(pool.id),  # Usar pool ID para consistência
             content_name=pool.name,
-            utm_source=bot_user.utm_source,
-            utm_campaign=bot_user.utm_campaign,
-            campaign_code=bot_user.campaign_code
+            utm_source=bot_user.utm_source,  # ✅ Do BotUser
+            utm_campaign=bot_user.utm_campaign,  # ✅ Do BotUser
+            campaign_code=bot_user.campaign_code  # ✅ Do BotUser
         )
+        
+        logger.info(f"📊 ViewContent com UTM: source={bot_user.utm_source}, " +
+                   f"campaign={bot_user.utm_campaign}, external_id={bot_user.external_id}")
         
         # ✅ VERIFICAÇÃO 5: Meta confirmou recebimento?
         if result['success']:
@@ -571,6 +597,73 @@ class BotManager:
                 ).first()
                 
                 # ============================================================================
+                # ✅ EXTRAIR TRACKING DATA DO START PARAM (QI 540 - FIX CRÍTICO)
+                # ============================================================================
+                # Formato V3: t{base64_json} → decodifica para {p: pool_id, e: external_id, s: utm_source, c: utm_campaign, ...}
+                # ============================================================================
+                pool_id_from_start = None
+                external_id_from_start = None
+                utm_data_from_start = {}
+                
+                if start_param:
+                    # Formato V3 com tracking completo: t{base64}
+                    if start_param.startswith('t'):
+                        try:
+                            import base64
+                            import json
+                            
+                            # Decodificar base64
+                            tracking_encoded = start_param[1:]  # Remove 't' inicial
+                            
+                            # Adicionar padding se necessário
+                            missing_padding = len(tracking_encoded) % 4
+                            if missing_padding:
+                                tracking_encoded += '=' * (4 - missing_padding)
+                            
+                            tracking_json = base64.urlsafe_b64decode(tracking_encoded).decode()
+                            tracking_data = json.loads(tracking_json)
+                            
+                            # Extrair dados
+                            pool_id_from_start = tracking_data.get('p')
+                            external_id_from_start = tracking_data.get('e')
+                            
+                            # Extrair UTMs
+                            if tracking_data.get('s'):
+                                utm_data_from_start['utm_source'] = tracking_data['s']
+                            if tracking_data.get('c'):
+                                utm_data_from_start['utm_campaign'] = tracking_data['c']
+                            if tracking_data.get('cc'):
+                                utm_data_from_start['campaign_code'] = tracking_data['cc']
+                            if tracking_data.get('f'):
+                                utm_data_from_start['fbclid'] = tracking_data['f']
+                            
+                            logger.info(f"🔗 Tracking decodificado (V3): pool_id={pool_id_from_start}, " +
+                                       f"external_id={external_id_from_start}, utm_source={utm_data_from_start.get('utm_source')}")
+                        
+                        except Exception as e:
+                            logger.error(f"Erro ao decodificar tracking V3: {e}")
+                    
+                    # Formato fallback simples: p{pool_id}
+                    elif start_param.startswith('p') and start_param[1:].isdigit():
+                        try:
+                            pool_id_from_start = int(start_param[1:])
+                            logger.info(f"🔗 Tracking fallback: pool_id={pool_id_from_start}")
+                        except Exception as e:
+                            logger.error(f"Erro ao extrair pool_id do fallback: {e}")
+                    
+                    # Formato legado: pool_{pool_id}_{external_id}
+                    elif start_param.startswith('pool_'):
+                        try:
+                            parts = start_param.split('_')
+                            if len(parts) >= 2:
+                                pool_id_from_start = int(parts[1])
+                            if len(parts) >= 4:
+                                external_id_from_start = '_'.join(parts[2:])
+                            logger.info(f"🔗 Tracking legado: pool_id={pool_id_from_start}, external_id={external_id_from_start}")
+                        except Exception as e:
+                            logger.error(f"Erro ao extrair tracking legado: {e}")
+                
+                # ============================================================================
                 # ✅ LÓGICA INTELIGENTE DE RECUPERAÇÃO AUTOMÁTICA
                 # ============================================================================
                 should_send_welcome = False  # Flag para controlar envio
@@ -583,13 +676,19 @@ class BotManager:
                         telegram_user_id=telegram_user_id,
                         first_name=first_name,
                         username=username,
-                        welcome_sent=False  # Ainda não enviou
+                        welcome_sent=False,  # Ainda não enviou
+                        external_id=external_id_from_start,  # ✅ Salvar external_id
+                        # ✅ SALVAR UTMs DO TRACKING (QI 540 - FIX CRÍTICO)
+                        utm_source=utm_data_from_start.get('utm_source'),
+                        utm_campaign=utm_data_from_start.get('utm_campaign'),
+                        campaign_code=utm_data_from_start.get('campaign_code'),
+                        fbclid=utm_data_from_start.get('fbclid')
                     )
                     
-                    # 📊 TRACKING: Log do parâmetro de deep linking
-                    if start_param:
-                        logger.info(f"🔗 Deep link detectado: parâmetro='{start_param}' | user={first_name}")
-                        # TODO: Adicionar campo 'start_param' no modelo BotUser para analytics
+                    logger.info(f"👤 Novo usuário criado: {first_name} | " +
+                               f"external_id={external_id_from_start} | " +
+                               f"utm_source={utm_data_from_start.get('utm_source')} | " +
+                               f"utm_campaign={utm_data_from_start.get('utm_campaign')}")
                     
                     db.session.add(bot_user)
                     
@@ -607,7 +706,7 @@ class BotManager:
                     # ✅ META PIXEL: VIEWCONTENT TRACKING (NOVO USUÁRIO)
                     # ============================================================================
                     try:
-                        send_meta_pixel_viewcontent_event(bot, bot_user, message)
+                        send_meta_pixel_viewcontent_event(bot, bot_user, message, pool_id_from_start)
                     except Exception as e:
                         logger.error(f"Erro ao enviar ViewContent para Meta Pixel: {e}")
                         # Não impedir o funcionamento do bot se Meta falhar
