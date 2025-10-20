@@ -436,7 +436,7 @@ class RedirectPool(db.Model):
     meta_events_viewcontent = db.Column(db.Boolean, default=True)
     meta_events_purchase = db.Column(db.Boolean, default=True)
     meta_cloaker_enabled = db.Column(db.Boolean, default=False)
-    meta_cloaker_param_name = db.Column(db.String(20), default='apx')
+    meta_cloaker_param_name = db.Column(db.String(20), default='grim')
     meta_cloaker_param_value = db.Column(db.String(50), nullable=True)
     
     # Relacionamentos

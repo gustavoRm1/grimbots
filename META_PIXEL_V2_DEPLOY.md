@@ -221,7 +221,7 @@ sqlite3 instance/saas_bot_manager.db
    ☑ Purchase (compra confirmada)
 ✅ Cloaker + AntiClone:
    ☑ Ativar proteção
-   Parâmetro: apx = ohx9lury
+   Parâmetro: grim = xyz123abc
 ```
 
 ### **3. Testar Conexão**
@@ -237,7 +237,7 @@ URL no Meta Ads:
 https://seudominio.com/go/seu-pool
 
 Parâmetros de URL (com Cloaker):
-apx=ohx9lury&utm_source=facebook&utm_campaign=teste
+grim=xyz123abc&utm_source=facebook&utm_campaign=teste
 ```
 
 ---

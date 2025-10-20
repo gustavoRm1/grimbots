@@ -2675,7 +2675,7 @@ def get_pool_meta_pixel_config(pool_id):
         'meta_events_viewcontent': pool.meta_events_viewcontent,
         'meta_events_purchase': pool.meta_events_purchase,
         'meta_cloaker_enabled': pool.meta_cloaker_enabled,
-        'meta_cloaker_param_name': pool.meta_cloaker_param_name or 'apx',
+        'meta_cloaker_param_name': pool.meta_cloaker_param_name or 'grim',
         'meta_cloaker_param_value': pool.meta_cloaker_param_value
     })
 
@@ -2744,7 +2744,7 @@ def update_pool_meta_pixel_config(pool_id):
             pool.meta_cloaker_enabled = bool(data['meta_cloaker_enabled'])
         
         if 'meta_cloaker_param_name' in data:
-            pool.meta_cloaker_param_name = data['meta_cloaker_param_name'].strip() or 'apx'
+            pool.meta_cloaker_param_name = data['meta_cloaker_param_name'].strip() or 'grim'
         
         if 'meta_cloaker_param_value' in data:
             pool.meta_cloaker_param_value = data['meta_cloaker_param_value'].strip() or None
@@ -3600,7 +3600,7 @@ def update_meta_pixel_config(bot_id):
         bot.meta_events_viewcontent = data.get('meta_events_viewcontent', True)
         bot.meta_events_purchase = data.get('meta_events_purchase', True)
         bot.meta_cloaker_enabled = data.get('meta_cloaker_enabled', False)
-        bot.meta_cloaker_param_name = data.get('meta_cloaker_param_name', 'apx')
+        bot.meta_cloaker_param_name = data.get('meta_cloaker_param_name', 'grim')
         
         # Gerar valor único para cloaker se ativado
         if bot.meta_cloaker_enabled and not bot.meta_cloaker_param_value:

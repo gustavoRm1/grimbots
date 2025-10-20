@@ -95,7 +95,7 @@ def migrate_database(db_path):
             ("meta_events_viewcontent", "BOOLEAN DEFAULT 1"),
             ("meta_events_purchase", "BOOLEAN DEFAULT 1"),
             ("meta_cloaker_enabled", "BOOLEAN DEFAULT 0"),
-            ("meta_cloaker_param_name", "VARCHAR(20) DEFAULT 'apx'"),
+            ("meta_cloaker_param_name", "VARCHAR(20) DEFAULT 'grim'"),
             ("meta_cloaker_param_value", "VARCHAR(50)"),
         ]
         

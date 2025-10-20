@@ -538,16 +538,16 @@
                                 <label class="block text-sm font-medium text-gray-300 mb-2">Parâmetro</label>
                                 <input type="text" 
                                        x-model="metaPixelConfig.meta_cloaker_param_name"
-                                       placeholder="apx"
+                                       placeholder="grim"
                                        class="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none">
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-300 mb-2">Valor</label>
                                 <input type="text" 
                                        x-model="metaPixelConfig.meta_cloaker_param_value"
-                                       placeholder="ohx9lury"
+                                       placeholder="xyz123abc"
                                        class="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none">
-                                <p class="text-xs text-gray-400 mt-1">Use nos Parâmetros de URL: <code class="text-yellow-400">apx=ohx9lury</code></p>
+                                <p class="text-xs text-gray-400 mt-1">Use nos Parâmetros de URL: <code class="text-yellow-400">grim=xyz123abc</code></p>
                             </div>
                         </div>
                     </div>
@@ -710,7 +710,7 @@ function poolsApp() {
             meta_events_viewcontent: true,
             meta_events_purchase: true,
             meta_cloaker_enabled: false,
-            meta_cloaker_param_name: 'apx',
+            meta_cloaker_param_name: 'grim',
             meta_cloaker_param_value: ''
         },
 
@@ -887,7 +887,7 @@ function poolsApp() {
                         meta_events_viewcontent: data.meta_events_viewcontent !== false,
                         meta_events_purchase: data.meta_events_purchase !== false,
                         meta_cloaker_enabled: data.meta_cloaker_enabled || false,
-                        meta_cloaker_param_name: data.meta_cloaker_param_name || 'apx',
+                        meta_cloaker_param_name: data.meta_cloaker_param_name || 'grim',
                         meta_cloaker_param_value: data.meta_cloaker_param_value || ''
                     };
                     this.showMetaPixelModal = true;
