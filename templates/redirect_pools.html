@@ -573,45 +573,157 @@
                 <!-- Body -->
                 <div class="p-6 space-y-6">
                     
-                    <!-- Ativar Tracking -->
-                    <div class="flex items-center justify-between p-4 rounded-lg border border-gray-700 bg-gray-800">
-                        <div>
-                            <label class="text-sm font-bold text-white">Ativar Meta Pixel Tracking</label>
-                            <p class="text-xs text-gray-400 mt-1">Rastrear eventos PageView, ViewContent e Purchase</p>
+                    <!-- Toggle: Modo Simplificado / Avançado -->
+                    <div class="flex items-center justify-center gap-2 p-3 bg-gray-800 rounded-lg border border-gray-700">
+                        <button @click="metaPixelSimpleMode = true"
+                                :class="metaPixelSimpleMode ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-400'"
+                                class="px-4 py-2 rounded-lg text-sm font-bold transition">
+                            <i class="fas fa-magic mr-2"></i>Modo Assistido
+                        </button>
+                        <button @click="metaPixelSimpleMode = false"
+                                :class="!metaPixelSimpleMode ? 'bg-gray-600 text-white' : 'bg-gray-700 text-gray-400'"
+                                class="px-4 py-2 rounded-lg text-sm font-bold transition">
+                            <i class="fas fa-cog mr-2"></i>Modo Avançado
+                        </button>
+                    </div>
+
+                    <!-- MODO ASSISTIDO (Padrão) -->
+                    <div x-show="metaPixelSimpleMode" class="space-y-6">
+                        
+                        <!-- Passo 1: Criar/Acessar Pixel -->
+                        <div class="p-4 rounded-xl bg-gradient-to-r from-blue-900/30 to-blue-800/30 border border-blue-500/50">
+                            <div class="flex items-start gap-3 mb-3">
+                                <div class="flex-shrink-0 w-8 h-8 rounded-full bg-blue-500 text-white font-bold flex items-center justify-center">1</div>
+                                <div class="flex-1">
+                                    <p class="text-sm font-bold text-white mb-1">Criar ou Acessar seu Pixel</p>
+                                    <p class="text-xs text-gray-400 mb-3">
+                                        Você precisa ter um Pixel no Meta Business Manager
+                                    </p>
+                                    <div class="flex gap-2">
+                                        <a href="https://business.facebook.com/events_manager2/list/pixel" 
+                                           target="_blank"
+                                           class="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition">
+                                            <i class="fas fa-external-link-alt mr-1"></i>
+                                            Abrir Meta Business
+                                        </a>
+                                        <button class="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs rounded-lg transition"
+                                                @click="alert('1. Entre no Meta Business Manager\n2. Vá em Gerenciador de Eventos\n3. Clique em \"Conectar Fontes de Dados\"\n4. Escolha \"Pixel da Web\"\n5. Clique em \"Começar\"')">
+                                            <i class="fas fa-question-circle mr-1"></i>
+                                            Como criar?
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <label class="relative inline-flex items-center cursor-pointer">
-                            <input type="checkbox" x-model="metaPixelConfig.meta_tracking_enabled" class="sr-only peer">
-                            <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                        </label>
+
+                        <!-- Passo 2: Copiar Pixel ID -->
+                        <div class="p-4 rounded-xl bg-gradient-to-r from-yellow-900/30 to-yellow-800/30 border border-yellow-500/50">
+                            <div class="flex items-start gap-3 mb-3">
+                                <div class="flex-shrink-0 w-8 h-8 rounded-full bg-yellow-500 text-black font-bold flex items-center justify-center">2</div>
+                                <div class="flex-1">
+                                    <p class="text-sm font-bold text-white mb-1">Copiar Pixel ID</p>
+                                    <p class="text-xs text-gray-400 mb-3">
+                                        Número de 15-16 dígitos que identifica seu pixel
+                                    </p>
+                                    <button class="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs rounded-lg transition mb-3"
+                                            @click="alert('1. No Gerenciador de Eventos\n2. Clique no seu Pixel\n3. Vá em \"Configurações\"\n4. Copie o número de 15-16 dígitos')">
+                                        <i class="fas fa-map-marked-alt mr-1"></i>
+                                        Onde encontrar?
+                                    </button>
+                                    <input type="text" 
+                                           x-model="metaPixelConfig.meta_pixel_id"
+                                           placeholder="Ex: 123456789012345"
+                                           class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:border-yellow-500 focus:outline-none text-sm">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Passo 3: Gerar Access Token -->
+                        <div class="p-4 rounded-xl bg-gradient-to-r from-green-900/30 to-green-800/30 border border-green-500/50">
+                            <div class="flex items-start gap-3 mb-3">
+                                <div class="flex-shrink-0 w-8 h-8 rounded-full bg-green-500 text-black font-bold flex items-center justify-center">3</div>
+                                <div class="flex-1">
+                                    <p class="text-sm font-bold text-white mb-1">Gerar Access Token</p>
+                                    <p class="text-xs text-gray-400 mb-3">
+                                        Token que permite enviar dados para o Meta
+                                    </p>
+                                    <div class="flex gap-2 mb-3">
+                                        <a href="https://business.facebook.com/settings/system-users" 
+                                           target="_blank"
+                                           class="px-3 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg transition">
+                                            <i class="fas fa-key mr-1"></i>
+                                            Gerar Token
+                                        </a>
+                                        <button class="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs rounded-lg transition"
+                                                @click="alert('1. Vá em Configurações do Negócio\n2. Usuários do Sistema → Adicionar\n3. Crie um usuário (ex: GrimBots)\n4. Gerar Token → Selecione:\n   - ads_management\n   - ads_read\n5. Copie o token gerado')">
+                                            <i class="fas fa-question-circle mr-1"></i>
+                                            Como gerar?
+                                        </button>
+                                    </div>
+                                    <input type="password" 
+                                           x-model="metaPixelConfig.meta_access_token"
+                                           placeholder="Ex: EAABwzLixnjYBO..."
+                                           class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:border-green-500 focus:outline-none text-sm">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Ativar Tracking -->
+                        <div class="flex items-center justify-between p-4 rounded-lg border-2 border-blue-500 bg-blue-900/20">
+                            <div>
+                                <label class="text-sm font-bold text-white">✅ Ativar Meta Pixel</label>
+                                <p class="text-xs text-gray-400 mt-1">Rastreamento automático de todos os eventos</p>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" x-model="metaPixelConfig.meta_tracking_enabled" class="sr-only peer">
+                                <div class="w-14 h-7 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-blue-600"></div>
+                            </label>
+                        </div>
+
                     </div>
 
-                    <!-- Pixel ID -->
-                    <div>
-                        <label class="block text-sm font-bold text-white mb-2">
-                            <i class="fas fa-hashtag mr-2"></i>
-                            Pixel ID
-                        </label>
-                        <input type="text" 
-                               x-model="metaPixelConfig.meta_pixel_id"
-                               placeholder="123456789012345"
-                               class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none"
-                               :disabled="!metaPixelConfig.meta_tracking_enabled">
-                        <p class="text-xs text-gray-400 mt-1">15-16 dígitos numéricos</p>
-                    </div>
+                    <!-- MODO AVANÇADO -->
+                    <div x-show="!metaPixelSimpleMode" class="space-y-6">
+                        
+                        <!-- Ativar Tracking -->
+                        <div class="flex items-center justify-between p-4 rounded-lg border border-gray-700 bg-gray-800">
+                            <div>
+                                <label class="text-sm font-bold text-white">Ativar Meta Pixel Tracking</label>
+                                <p class="text-xs text-gray-400 mt-1">Rastrear eventos PageView, ViewContent e Purchase</p>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" x-model="metaPixelConfig.meta_tracking_enabled" class="sr-only peer">
+                                <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                            </label>
+                        </div>
 
-                    <!-- Access Token -->
-                    <div>
-                        <label class="block text-sm font-bold text-white mb-2">
-                            <i class="fas fa-key mr-2"></i>
-                            Access Token
-                        </label>
-                        <input type="password" 
-                               x-model="metaPixelConfig.meta_access_token"
-                               placeholder="EAABwzLixnjYBO..."
-                               class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none"
-                               :disabled="!metaPixelConfig.meta_tracking_enabled">
-                        <p class="text-xs text-gray-400 mt-1">Token de acesso do Meta Business Manager</p>
-                    </div>
+                        <!-- Pixel ID -->
+                        <div>
+                            <label class="block text-sm font-bold text-white mb-2">
+                                <i class="fas fa-hashtag mr-2"></i>
+                                Pixel ID
+                            </label>
+                            <input type="text" 
+                                   x-model="metaPixelConfig.meta_pixel_id"
+                                   placeholder="123456789012345"
+                                   class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none"
+                                   :disabled="!metaPixelConfig.meta_tracking_enabled">
+                            <p class="text-xs text-gray-400 mt-1">15-16 dígitos numéricos</p>
+                        </div>
+
+                        <!-- Access Token -->
+                        <div>
+                            <label class="block text-sm font-bold text-white mb-2">
+                                <i class="fas fa-key mr-2"></i>
+                                Access Token
+                            </label>
+                            <input type="password" 
+                                   x-model="metaPixelConfig.meta_access_token"
+                                   placeholder="EAABwzLixnjYBO..."
+                                   class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none"
+                                   :disabled="!metaPixelConfig.meta_tracking_enabled">
+                            <p class="text-xs text-gray-400 mt-1">Token de acesso do Meta Business Manager</p>
+                        </div>
 
                     <!-- Eventos -->
                     <div class="space-y-3">
@@ -851,6 +963,8 @@ function poolsApp() {
             meta_cloaker_param_name: 'grim',
             meta_cloaker_param_value: ''
         },
+        
+        metaPixelSimpleMode: true,  // Modo Assistido por padrão
 
         async init() {
             await this.loadPools();
