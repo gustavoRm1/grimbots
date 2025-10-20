@@ -1958,6 +1958,230 @@ def bot_stats_page(bot_id):
     bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
     return render_template('bot_stats.html', bot=bot)
 
+@app.route('/api/bots/<int:bot_id>/analytics-v2', methods=['GET'])
+@login_required
+def get_bot_analytics_v2(bot_id):
+    """
+    Analytics V2.0 - Dashboard Inteligente e Acionável
+    
+    FOCO: Decisões claras em 5 segundos
+    - Lucro/Prejuízo HOJE
+    - Problemas que precisam ação AGORA
+    - Oportunidades para escalar AGORA
+    
+    Implementado por: QI 540
+    """
+    from sqlalchemy import func, extract, case
+    from models import BotUser, PoolBot
+    from datetime import datetime, timedelta
+    
+    bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
+    
+    # ============================================================================
+    # 💰 CARD 1: LUCRO/PREJUÍZO HOJE
+    # ============================================================================
+    today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    # Vendas de hoje
+    today_payments = Payment.query.filter(
+        Payment.bot_id == bot_id,
+        Payment.status == 'paid',
+        Payment.created_at >= today_start
+    ).all()
+    
+    today_sales_count = len(today_payments)
+    today_revenue = sum(p.amount for p in today_payments)
+    
+    # Acessos de hoje (PageView)
+    today_pageviews = BotUser.query.filter(
+        BotUser.bot_id == bot_id,
+        BotUser.meta_pageview_sent == True,
+        BotUser.meta_pageview_sent_at >= today_start
+    ).count()
+    
+    # Estimativa de gasto (CPC médio R$ 2,00)
+    cpc_medio = 2.0
+    today_spend = today_pageviews * cpc_medio
+    
+    # Lucro/Prejuízo
+    today_profit = today_revenue - today_spend
+    today_roi = ((today_revenue / today_spend) - 1) * 100 if today_spend > 0 else 0
+    
+    # Comparação com ontem
+    yesterday_start = today_start - timedelta(days=1)
+    yesterday_end = today_start
+    
+    yesterday_revenue = db.session.query(func.sum(Payment.amount)).filter(
+        Payment.bot_id == bot_id,
+        Payment.status == 'paid',
+        Payment.created_at >= yesterday_start,
+        Payment.created_at < yesterday_end
+    ).scalar() or 0.0
+    
+    revenue_change = ((today_revenue / yesterday_revenue) - 1) * 100 if yesterday_revenue > 0 else 0
+    
+    # ============================================================================
+    # ⚠️ CARD 2: PROBLEMAS (AÇÃO IMEDIATA)
+    # ============================================================================
+    problems = []
+    
+    # Problema 1: ROI negativo
+    if today_roi < 0:
+        problems.append({
+            'severity': 'CRITICAL',
+            'title': f'ROI negativo: {today_roi:.1f}%',
+            'description': f'Gastando R$ {today_spend:.2f}, faturando R$ {today_revenue:.2f}',
+            'action': 'Pausar bot ou trocar campanha',
+            'action_button': 'Pausar Bot'
+        })
+    
+    # Problema 2: Conversão baixa (< 5%)
+    total_users = BotUser.query.filter_by(bot_id=bot_id, archived=False).count()
+    total_sales = Payment.query.filter_by(bot_id=bot_id, status='paid').count()
+    conversion_rate = (total_sales / total_users * 100) if total_users > 0 else 0
+    
+    if conversion_rate < 5 and total_users > 20:
+        problems.append({
+            'severity': 'HIGH',
+            'title': f'Conversão muito baixa: {conversion_rate:.1f}%',
+            'description': f'{total_users} usuários mas apenas {total_sales} compraram',
+            'action': 'Melhorar oferta ou copy do bot',
+            'action_button': 'Ver Funil'
+        })
+    
+    # Problema 3: Funil vazando
+    pageview_count = BotUser.query.filter_by(bot_id=bot_id, meta_pageview_sent=True).count()
+    viewcontent_count = BotUser.query.filter_by(bot_id=bot_id, meta_viewcontent_sent=True).count()
+    
+    if pageview_count > 0:
+        pageview_to_viewcontent_rate = (viewcontent_count / pageview_count) * 100
+        
+        if pageview_to_viewcontent_rate < 30 and pageview_count > 50:
+            problems.append({
+                'severity': 'HIGH',
+                'title': f'{100 - pageview_to_viewcontent_rate:.0f}% desistem antes de conversar',
+                'description': f'{pageview_count} acessos, apenas {viewcontent_count} iniciaram conversa',
+                'action': 'Copy do anúncio não está atraindo público certo',
+                'action_button': 'Melhorar Copy'
+            })
+    
+    # Problema 4: Zero vendas hoje
+    if today_sales_count == 0 and today_pageviews > 20:
+        problems.append({
+            'severity': 'CRITICAL',
+            'title': 'Zero vendas hoje!',
+            'description': f'{today_pageviews} acessos mas nenhuma conversão',
+            'action': 'Verificar bot, PIX ou oferta',
+            'action_button': 'Verificar Bot'
+        })
+    
+    # ============================================================================
+    # 🚀 CARD 3: OPORTUNIDADES (ESCALAR)
+    # ============================================================================
+    opportunities = []
+    
+    # Oportunidade 1: ROI muito alto
+    if today_roi > 200 and today_sales_count >= 3:
+        opportunities.append({
+            'type': 'SCALE',
+            'title': f'ROI excelente: +{today_roi:.0f}%',
+            'description': f'{today_sales_count} vendas com ticket médio R$ {today_revenue/today_sales_count:.2f}',
+            'action': 'Dobrar budget dessa campanha',
+            'action_button': 'Escalar +100%'
+        })
+    
+    # Oportunidade 2: Alta taxa de recompra
+    repeat_customers = db.session.query(
+        Payment.customer_user_id,
+        func.count(Payment.id).label('purchases')
+    ).filter(
+        Payment.bot_id == bot_id,
+        Payment.status == 'paid'
+    ).group_by(Payment.customer_user_id)\
+     .having(func.count(Payment.id) > 1)\
+     .count()
+    
+    if total_sales > 0:
+        repeat_rate = (repeat_customers / total_sales) * 100
+        
+        if repeat_rate > 25:
+            opportunities.append({
+                'type': 'UPSELL',
+                'title': f'{repeat_rate:.0f}% dos clientes compram 2+ vezes',
+                'description': f'{repeat_customers} clientes recorrentes',
+                'action': 'Criar sequência de upsells',
+                'action_button': 'Criar Upsell'
+            })
+    
+    # Oportunidade 3: Horário quente
+    best_hour = db.session.query(
+        extract('hour', Payment.created_at).label('hour'),
+        func.count(Payment.id).label('sales')
+    ).filter(
+        Payment.bot_id == bot_id,
+        Payment.status == 'paid'
+    ).group_by(extract('hour', Payment.created_at))\
+     .order_by(func.count(Payment.id).desc())\
+     .first()
+    
+    if best_hour and best_hour.sales >= 5:
+        opportunities.append({
+            'type': 'TIMING',
+            'title': f'Horário quente: {int(best_hour.hour):02d}h-{int(best_hour.hour)+1:02d}h',
+            'description': f'{best_hour.sales} vendas nesse horário',
+            'action': 'Concentrar budget nesse período',
+            'action_button': 'Ajustar Horários'
+        })
+    
+    # ============================================================================
+    # 📊 DADOS COMPLEMENTARES (PARA EXPANSÃO)
+    # ============================================================================
+    
+    # UTM Performance (top 3)
+    utm_performance = db.session.query(
+        Payment.utm_source,
+        Payment.utm_campaign,
+        func.count(Payment.id).label('sales'),
+        func.sum(Payment.amount).label('revenue')
+    ).filter(
+        Payment.bot_id == bot_id,
+        Payment.status == 'paid',
+        Payment.utm_source.isnot(None)
+    ).group_by(Payment.utm_source, Payment.utm_campaign)\
+     .order_by(func.sum(Payment.amount).desc())\
+     .limit(3)\
+     .all()
+    
+    utm_stats = [{
+        'source': u.utm_source or 'Direto',
+        'campaign': u.utm_campaign or 'Sem campanha',
+        'sales': u.sales,
+        'revenue': float(u.revenue or 0)
+    } for u in utm_performance]
+    
+    return jsonify({
+        'summary': {
+            'today_revenue': float(today_revenue),
+            'today_spend': float(today_spend),
+            'today_profit': float(today_profit),
+            'today_roi': round(today_roi, 1),
+            'today_sales': today_sales_count,
+            'revenue_change': round(revenue_change, 1),
+            'status': 'profit' if today_profit > 0 else 'loss'
+        },
+        'problems': problems,
+        'opportunities': opportunities,
+        'utm_performance': utm_stats,
+        'conversion_funnel': {
+            'pageviews': pageview_count,
+            'viewcontents': viewcontent_count,
+            'purchases': total_sales,
+            'pageview_to_viewcontent': round(pageview_to_viewcontent_rate, 1) if pageview_count > 0 else 0,
+            'viewcontent_to_purchase': round((total_sales / viewcontent_count * 100), 1) if viewcontent_count > 0 else 0
+        }
+    })
+
+
 @app.route('/api/bots/<int:bot_id>/stats', methods=['GET'])
 @login_required
 def get_bot_stats(bot_id):

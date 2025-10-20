@@ -257,6 +257,86 @@
         </div>
     </div>
     
+    <!-- ============================================================================ -->
+    <!-- ANALYTICS V2.0 - DECISÕES EM 5 SEGUNDOS (QI 540) -->
+    <!-- ============================================================================ -->
+    
+    <!-- Card 1: Lucro/Prejuízo HOJE -->
+    <div class="config-section" x-show="analyticsV2.summary" style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(16, 185, 129, 0.02)); border-color: rgba(16, 185, 129, 0.3);" x-bind:style="analyticsV2.summary.status === 'loss' ? 'background: linear-gradient(135deg, rgba(239, 68, 68, 0.08), rgba(239, 68, 68, 0.02)); border-color: rgba(239, 68, 68, 0.3);' : ''">
+        <div class="flex items-center justify-between">
+            <div>
+                <div class="text-sm font-semibold text-gray-400 uppercase mb-2">💰 Resultado de Hoje</div>
+                <div class="flex items-baseline gap-4 mb-2">
+                    <div class="text-5xl font-black" x-bind:class="analyticsV2.summary.status === 'profit' ? 'text-green-400' : 'text-red-500'" x-text="'R$ ' + analyticsV2.summary.today_profit.toFixed(2)"></div>
+                    <div class="text-xl font-bold" x-bind:class="analyticsV2.summary.today_roi > 0 ? 'text-green-400' : 'text-red-500'" x-text="'ROI: ' + (analyticsV2.summary.today_roi > 0 ? '+' : '') + analyticsV2.summary.today_roi.toFixed(0) + '%'"></div>
+                </div>
+                <div class="flex gap-6 text-sm">
+                    <span class="text-gray-400">Faturou: <strong class="text-white" x-text="'R$ ' + analyticsV2.summary.today_revenue.toFixed(2)"></strong></span>
+                    <span class="text-gray-400">Gastou: <strong class="text-white" x-text="'R$ ' + analyticsV2.summary.today_spend.toFixed(2)"></strong></span>
+                    <span class="text-gray-400">Vendas: <strong class="text-white" x-text="analyticsV2.summary.today_sales"></strong></span>
+                </div>
+            </div>
+            <div class="text-right">
+                <div class="text-xs text-gray-500 mb-1">vs Ontem</div>
+                <div class="text-2xl font-bold" x-bind:class="analyticsV2.summary.revenue_change > 0 ? 'text-green-400' : 'text-red-400'" x-text="(analyticsV2.summary.revenue_change > 0 ? '+' : '') + analyticsV2.summary.revenue_change.toFixed(1) + '%'"></div>
+                <div class="text-xs" x-bind:class="analyticsV2.summary.revenue_change > 0 ? 'text-green-400' : 'text-red-400'">
+                    <i class="fas" x-bind:class="analyticsV2.summary.revenue_change > 0 ? 'fa-arrow-up' : 'fa-arrow-down'"></i>
+                    <span x-text="analyticsV2.summary.revenue_change > 0 ? 'Cresceu' : 'Caiu'"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Card 2: Problemas (Ação Imediata) -->
+    <div class="config-section" x-show="analyticsV2.problems && analyticsV2.problems.length > 0" style="background: linear-gradient(135deg, rgba(239, 68, 68, 0.08), rgba(239, 68, 68, 0.02)); border-color: rgba(239, 68, 68, 0.3);">
+        <div class="config-section-header">
+            <i class="fas fa-exclamation-triangle text-2xl text-red-500"></i>
+            <div>
+                <div class="config-section-title text-red-400">⚠️ Problemas Detectados</div>
+                <div class="config-section-description">Ação imediata necessária</div>
+            </div>
+        </div>
+        <div class="space-y-3">
+            <template x-for="problem in analyticsV2.problems" :key="problem.title">
+                <div class="p-4 rounded-lg border" x-bind:class="problem.severity === 'CRITICAL' ? 'bg-red-900/20 border-red-500/50' : 'bg-orange-900/20 border-orange-500/50'">
+                    <div class="flex items-start justify-between gap-4">
+                        <div class="flex-1">
+                            <div class="font-bold text-white mb-1" x-text="problem.title"></div>
+                            <div class="text-sm text-gray-400 mb-2" x-text="problem.description"></div>
+                            <div class="text-xs text-gray-500 italic" x-text="'💡 ' + problem.action"></div>
+                        </div>
+                        <button class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded-lg transition whitespace-nowrap" x-text="problem.action_button"></button>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+
+    <!-- Card 3: Oportunidades (Escalar) -->
+    <div class="config-section" x-show="analyticsV2.opportunities && analyticsV2.opportunities.length > 0" style="background: linear-gradient(135deg, rgba(255, 184, 0, 0.08), rgba(255, 184, 0, 0.02)); border-color: rgba(255, 184, 0, 0.3);">
+        <div class="config-section-header">
+            <i class="fas fa-rocket text-2xl" style="color: var(--brand-gold-500);"></i>
+            <div>
+                <div class="config-section-title" style="color: var(--brand-gold-500);">🚀 Oportunidades</div>
+                <div class="config-section-description">Ações para escalar resultados</div>
+            </div>
+        </div>
+        <div class="space-y-3">
+            <template x-for="opp in analyticsV2.opportunities" :key="opp.title">
+                <div class="p-4 rounded-lg border bg-yellow-900/20 border-yellow-500/50">
+                    <div class="flex items-start justify-between gap-4">
+                        <div class="flex-1">
+                            <div class="font-bold text-white mb-1" x-text="opp.title"></div>
+                            <div class="text-sm text-gray-400 mb-2" x-text="opp.description"></div>
+                            <div class="text-xs text-yellow-300 italic" x-text="'⚡ ' + opp.action"></div>
+                        </div>
+                        <button class="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-black text-sm font-bold rounded-lg transition whitespace-nowrap" x-text="opp.action_button"></button>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+    
     <!-- Métricas Principais -->
     <div class="config-section">
         <div class="config-section-header">
@@ -566,6 +646,30 @@ function botStatsApp() {
         _initialized: false,
         botId: {{ bot.id }},
         loading: true,
+        
+        // ✅ ANALYTICS V2.0 (QI 540)
+        analyticsV2: {
+            summary: {
+                today_revenue: 0,
+                today_spend: 0,
+                today_profit: 0,
+                today_roi: 0,
+                today_sales: 0,
+                revenue_change: 0,
+                status: 'neutral'
+            },
+            problems: [],
+            opportunities: [],
+            utm_performance: [],
+            conversion_funnel: {
+                pageviews: 0,
+                viewcontents: 0,
+                purchases: 0,
+                pageview_to_viewcontent: 0,
+                viewcontent_to_purchase: 0
+            }
+        },
+        
         stats: {
             general: {
                 total_users: 0,
@@ -603,6 +707,11 @@ function botStatsApp() {
             this._initialized = true;
             
             console.log('📊 Bot Stats inicializando...');
+            
+            // ✅ CARREGAR ANALYTICS V2.0 (QI 540)
+            await this.loadAnalyticsV2();
+            
+            // Carregar stats normais
             await this.loadStats();
             
             // ✅ FIX: Usar $nextTick para garantir DOM pronto
@@ -629,6 +738,21 @@ function botStatsApp() {
             setInterval(() => {
                 this.loadStats();
             }, 30000);
+        },
+        
+        async loadAnalyticsV2() {
+            // ✅ CARREGAR ANALYTICS V2.0 - DECISÕES EM 5 SEGUNDOS
+            try {
+                const response = await fetch(`/api/bots/${this.botId}/analytics-v2`);
+                if (response.ok) {
+                    this.analyticsV2 = await response.json();
+                    console.log('✅ Analytics V2.0 carregado:', this.analyticsV2);
+                } else {
+                    console.error('❌ Erro ao carregar Analytics V2.0');
+                }
+            } catch (error) {
+                console.error('💥 Erro ao carregar Analytics V2.0:', error);
+            }
         },
         
         async loadStats() {
