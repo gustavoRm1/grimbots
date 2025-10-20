@@ -265,11 +265,8 @@
             </div>
         </div>
         <div class="flex items-center space-x-3">
-            <a href="/bots/{{ bot.id }}/meta-pixel" 
-               class="btn-action btn-action-info">
-                <i class="fab fa-facebook mr-2"></i>
-                Meta Pixel
-            </a>
+            <!-- ❌ REMOVIDO: Meta Pixel agora é configurado POR POOL (não por bot) -->
+            <!-- Acesse: Redirecionadores → Editar Pool → Meta Pixel -->
             <button @click="saveConfig()" 
                     :disabled="loading"
                     :class="{'opacity-50 cursor-not-allowed': loading}"

@@ -283,6 +283,12 @@
                         <i class="fas fa-robot mr-2"></i>
                         Gerenciar Bots
                     </button>
+                    <button @click="openMetaPixelModal(pool)" 
+                            class="py-2 px-4 rounded-lg text-sm font-bold transition-all"
+                            style="background: rgba(59, 130, 246, 0.1); color: #3B82F6; border: 1px solid rgba(59, 130, 246, 0.3);"
+                            title="Configurar Meta Pixel">
+                        <i class="fab fa-facebook"></i>
+                    </button>
                     <button @click="deletePool(pool)" 
                             class="py-2 px-4 rounded-lg text-sm font-bold transition-all"
                             style="background: rgba(239, 68, 68, 0.1); color: #EF4444; border: 1px solid rgba(239, 68, 68, 0.3);">
@@ -401,6 +407,175 @@
         </div>
     </div>
 
+    <!-- Modal: Meta Pixel Configuration -->
+    <div x-show="showMetaPixelModal" 
+         x-cloak
+         class="fixed inset-0 z-50 overflow-y-auto"
+         style="background: rgba(0, 0, 0, 0.9); backdrop-filter: blur(8px);">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-gray-900 rounded-xl shadow-2xl w-full max-w-2xl border border-gray-700"
+                 @click.away="showMetaPixelModal = false">
+                
+                <!-- Header -->
+                <div class="p-6 border-b border-gray-700">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h2 class="text-2xl font-bold text-white flex items-center gap-3">
+                                <i class="fab fa-facebook text-blue-500"></i>
+                                Meta Pixel Configuration
+                            </h2>
+                            <p class="text-sm text-gray-400 mt-1" x-text="selectedPool ? selectedPool.name : ''"></p>
+                        </div>
+                        <button @click="showMetaPixelModal = false" 
+                                class="text-gray-400 hover:text-white transition">
+                            <i class="fas fa-times text-xl"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Body -->
+                <div class="p-6 space-y-6">
+                    
+                    <!-- Ativar Tracking -->
+                    <div class="flex items-center justify-between p-4 rounded-lg border border-gray-700 bg-gray-800">
+                        <div>
+                            <label class="text-sm font-bold text-white">Ativar Meta Pixel Tracking</label>
+                            <p class="text-xs text-gray-400 mt-1">Rastrear eventos PageView, ViewContent e Purchase</p>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" x-model="metaPixelConfig.meta_tracking_enabled" class="sr-only peer">
+                            <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                        </label>
+                    </div>
+
+                    <!-- Pixel ID -->
+                    <div>
+                        <label class="block text-sm font-bold text-white mb-2">
+                            <i class="fas fa-hashtag mr-2"></i>
+                            Pixel ID
+                        </label>
+                        <input type="text" 
+                               x-model="metaPixelConfig.meta_pixel_id"
+                               placeholder="123456789012345"
+                               class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none"
+                               :disabled="!metaPixelConfig.meta_tracking_enabled">
+                        <p class="text-xs text-gray-400 mt-1">15-16 dígitos numéricos</p>
+                    </div>
+
+                    <!-- Access Token -->
+                    <div>
+                        <label class="block text-sm font-bold text-white mb-2">
+                            <i class="fas fa-key mr-2"></i>
+                            Access Token
+                        </label>
+                        <input type="password" 
+                               x-model="metaPixelConfig.meta_access_token"
+                               placeholder="EAABwzLixnjYBO..."
+                               class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none"
+                               :disabled="!metaPixelConfig.meta_tracking_enabled">
+                        <p class="text-xs text-gray-400 mt-1">Token de acesso do Meta Business Manager</p>
+                    </div>
+
+                    <!-- Eventos -->
+                    <div class="space-y-3">
+                        <label class="block text-sm font-bold text-white mb-3">
+                            <i class="fas fa-chart-line mr-2"></i>
+                            Eventos Rastreados
+                        </label>
+                        
+                        <label class="flex items-center justify-between p-3 rounded-lg border border-gray-700 bg-gray-800 cursor-pointer hover:border-blue-500 transition">
+                            <div>
+                                <span class="text-sm font-medium text-white">PageView</span>
+                                <p class="text-xs text-gray-400">Quando usuário acessa o link</p>
+                            </div>
+                            <input type="checkbox" 
+                                   x-model="metaPixelConfig.meta_events_pageview"
+                                   :disabled="!metaPixelConfig.meta_tracking_enabled"
+                                   class="w-5 h-5 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500">
+                        </label>
+
+                        <label class="flex items-center justify-between p-3 rounded-lg border border-gray-700 bg-gray-800 cursor-pointer hover:border-blue-500 transition">
+                            <div>
+                                <span class="text-sm font-medium text-white">ViewContent</span>
+                                <p class="text-xs text-gray-400">Quando usuário inicia conversa (/start)</p>
+                            </div>
+                            <input type="checkbox" 
+                                   x-model="metaPixelConfig.meta_events_viewcontent"
+                                   :disabled="!metaPixelConfig.meta_tracking_enabled"
+                                   class="w-5 h-5 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500">
+                        </label>
+
+                        <label class="flex items-center justify-between p-3 rounded-lg border border-gray-700 bg-gray-800 cursor-pointer hover:border-blue-500 transition">
+                            <div>
+                                <span class="text-sm font-medium text-white">Purchase</span>
+                                <p class="text-xs text-gray-400">Quando compra é confirmada</p>
+                            </div>
+                            <input type="checkbox" 
+                                   x-model="metaPixelConfig.meta_events_purchase"
+                                   :disabled="!metaPixelConfig.meta_tracking_enabled"
+                                   class="w-5 h-5 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500">
+                        </label>
+                    </div>
+
+                    <!-- Cloaker -->
+                    <div class="border-t border-gray-700 pt-4">
+                        <div class="flex items-center justify-between p-4 rounded-lg border border-gray-700 bg-gray-800 mb-3">
+                            <div>
+                                <label class="text-sm font-bold text-white">Cloaker + AntiClone</label>
+                                <p class="text-xs text-gray-400 mt-1">Proteção contra clonagem e biblioteca de anúncios</p>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" 
+                                       x-model="metaPixelConfig.meta_cloaker_enabled"
+                                       :disabled="!metaPixelConfig.meta_tracking_enabled"
+                                       class="sr-only peer">
+                                <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                            </label>
+                        </div>
+
+                        <div x-show="metaPixelConfig.meta_cloaker_enabled" class="space-y-3">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-2">Parâmetro</label>
+                                <input type="text" 
+                                       x-model="metaPixelConfig.meta_cloaker_param_name"
+                                       placeholder="apx"
+                                       class="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-2">Valor</label>
+                                <input type="text" 
+                                       x-model="metaPixelConfig.meta_cloaker_param_value"
+                                       placeholder="ohx9lury"
+                                       class="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none">
+                                <p class="text-xs text-gray-400 mt-1">Use nos Parâmetros de URL: <code class="text-yellow-400">apx=ohx9lury</code></p>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Footer -->
+                <div class="p-6 border-t border-gray-700 flex gap-3">
+                    <button @click="testMetaPixelConnection()" 
+                            :disabled="loading || !metaPixelConfig.meta_tracking_enabled || !metaPixelConfig.meta_pixel_id || !metaPixelConfig.meta_access_token"
+                            class="flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all"
+                            :class="loading ? 'bg-gray-700 text-gray-400 cursor-not-allowed' : 'bg-yellow-600 text-white hover:bg-yellow-700'">
+                        <i class="fas fa-plug mr-2" :class="{'fa-spin fa-spinner': loading}"></i>
+                        <span x-text="loading ? 'Testando...' : 'Testar Conexão'"></span>
+                    </button>
+                    <button @click="saveMetaPixelConfig()" 
+                            :disabled="loading"
+                            class="flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all"
+                            :class="loading ? 'bg-gray-700 text-gray-400 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'">
+                        <i class="fas fa-save mr-2" :class="{'fa-spin fa-spinner': loading}"></i>
+                        <span x-text="loading ? 'Salvando...' : 'Salvar Configuração'"></span>
+                    </button>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
     <!-- Modal: Gerenciar Bots -->
     <div x-show="showManageBotsModal" 
          x-cloak
@@ -511,6 +686,7 @@ function poolsApp() {
         loading: true,
         showCreatePoolModal: false,
         showManageBotsModal: false,
+        showMetaPixelModal: false,
         
         pools: [],
         allBots: [],
@@ -523,6 +699,19 @@ function poolsApp() {
             slug: '',
             strategy: 'round_robin',
             description: ''
+        },
+        
+        metaPixelConfig: {
+            meta_tracking_enabled: false,
+            meta_pixel_id: '',
+            meta_access_token: '',
+            meta_test_event_code: '',
+            meta_events_pageview: true,
+            meta_events_viewcontent: true,
+            meta_events_purchase: true,
+            meta_cloaker_enabled: false,
+            meta_cloaker_param_name: 'apx',
+            meta_cloaker_param_value: ''
         },
 
         async init() {
@@ -677,6 +866,87 @@ function poolsApp() {
                 }
             } catch (error) {
                 alert('Erro: ' + error.message);
+            }
+        },
+
+        async openMetaPixelModal(pool) {
+            this.selectedPool = pool;
+            this.loading = true;
+            
+            try {
+                const response = await fetch(`/api/redirect-pools/${pool.id}/meta-pixel`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    this.metaPixelConfig = {
+                        meta_tracking_enabled: data.meta_tracking_enabled || false,
+                        meta_pixel_id: data.meta_pixel_id || '',
+                        meta_access_token: data.meta_access_token || '',
+                        meta_test_event_code: data.meta_test_event_code || '',
+                        meta_events_pageview: data.meta_events_pageview !== false,
+                        meta_events_viewcontent: data.meta_events_viewcontent !== false,
+                        meta_events_purchase: data.meta_events_purchase !== false,
+                        meta_cloaker_enabled: data.meta_cloaker_enabled || false,
+                        meta_cloaker_param_name: data.meta_cloaker_param_name || 'apx',
+                        meta_cloaker_param_value: data.meta_cloaker_param_value || ''
+                    };
+                    this.showMetaPixelModal = true;
+                } else {
+                    alert('Erro ao carregar configuração Meta Pixel');
+                }
+            } catch (error) {
+                alert('Erro: ' + error.message);
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async testMetaPixelConnection() {
+            this.loading = true;
+            try {
+                const response = await fetch(`/api/redirect-pools/${this.selectedPool.id}/meta-pixel/test`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        pixel_id: this.metaPixelConfig.meta_pixel_id,
+                        access_token: this.metaPixelConfig.meta_access_token
+                    })
+                });
+
+                const data = await response.json();
+                if (response.ok && data.success) {
+                    this.showNotification('✅ Conexão com Meta Pixel bem-sucedida!');
+                } else {
+                    alert('❌ Falha na conexão: ' + (data.error || 'Erro desconhecido'));
+                }
+            } catch (error) {
+                alert('Erro: ' + error.message);
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async saveMetaPixelConfig() {
+            this.loading = true;
+            try {
+                const response = await fetch(`/api/redirect-pools/${this.selectedPool.id}/meta-pixel`, {
+                    method: 'PUT',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(this.metaPixelConfig)
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    this.showMetaPixelModal = false;
+                    await this.loadPools();
+                    this.showNotification('✅ Meta Pixel configurado com sucesso!');
+                } else {
+                    alert('❌ Erro: ' + (data.error || 'Erro desconhecido'));
+                }
+            } catch (error) {
+                alert('Erro: ' + error.message);
+            } finally {
+                this.loading = false;
             }
         },
 
