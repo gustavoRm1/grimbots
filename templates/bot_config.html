@@ -1729,25 +1729,35 @@ function botConfigApp() {
         },
         
         async saveConfig() {
+            console.log('🔄 Iniciando salvamento de configuração...');
             this.loading = true;
             
             try {
+                console.log('📊 Dados a serem enviados:', this.config);
+                
                 const response = await fetch('/api/bots/{{ bot.id }}/config', {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(this.config)
                 });
                 
+                console.log('📡 Resposta recebida:', response.status, response.statusText);
+                
                 const data = await response.json();
+                console.log('📊 Dados da resposta:', data);
                 
                 if (response.ok) {
+                    console.log('✅ Configurações salvas com sucesso!');
                     this.showNotification('✅ Configurações salvas!', 'success');
                 } else {
+                    console.error('❌ Erro na resposta:', data);
                     alert('Erro: ' + data.error);
                 }
             } catch (error) {
+                console.error('💥 Erro na requisição:', error);
                 alert('Erro: ' + error.message);
             } finally {
+                console.log('🏁 Finalizando salvamento...');
                 this.loading = false;
             }
         },

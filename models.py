@@ -300,7 +300,12 @@ class BotConfig(db.Model):
     
     def set_main_buttons(self, buttons):
         """Define botões principais"""
-        self.main_buttons = json.dumps(buttons)
+        try:
+            self.main_buttons = json.dumps(buttons, ensure_ascii=False)
+        except (TypeError, ValueError) as e:
+            logger.error(f"Erro ao serializar main_buttons: {e}")
+            logger.error(f"Dados recebidos: {buttons}")
+            raise ValueError(f"Erro ao salvar botões: {e}")
     
     def get_downsells(self):
         """Retorna downsells parseados"""

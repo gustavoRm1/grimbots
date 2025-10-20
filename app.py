@@ -2485,13 +2485,19 @@ def get_bot_config(bot_id):
 @csrf.exempt
 def update_bot_config(bot_id):
     """Atualiza configuração de um bot"""
+    logger.info(f"🔄 Iniciando atualização de config para bot {bot_id}")
+    
     bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
     data = request.json
     
+    logger.info(f"📊 Dados recebidos: {list(data.keys())}")
+    
     if not bot.config:
+        logger.info(f"📝 Criando nova configuração para bot {bot_id}")
         config = BotConfig(bot_id=bot.id)
         db.session.add(config)
     else:
+        logger.info(f"📝 Atualizando configuração existente para bot {bot_id}")
         config = bot.config
     
     try:
@@ -2509,7 +2515,9 @@ def update_bot_config(bot_id):
         
         # Botões principais
         if 'main_buttons' in data:
+            logger.info(f"🔘 Salvando {len(data['main_buttons'])} botões principais")
             config.set_main_buttons(data['main_buttons'])
+            logger.info(f"✅ Botões principais salvos com sucesso")
         
         # Botões de redirecionamento
         if 'redirect_buttons' in data:
@@ -2549,13 +2557,17 @@ def update_bot_config(bot_id):
         if 'pending_message' in data:
             config.pending_message = data['pending_message']
         
+        logger.info(f"💾 Fazendo commit no banco de dados...")
         db.session.commit()
+        logger.info(f"✅ Commit realizado com sucesso")
         
         # Se bot está rodando, atualizar configuração em tempo real
         if bot.is_running:
+            logger.info(f"🔄 Bot está rodando, atualizando configuração em tempo real...")
             bot_manager.update_bot_config(bot.id, config.to_dict())
+            logger.info(f"✅ Configuração atualizada em tempo real")
         
-        logger.info(f"Configuração do bot {bot.name} atualizada por {current_user.email}")
+        logger.info(f"✅ Configuração do bot {bot.name} atualizada por {current_user.email}")
         return jsonify(config.to_dict())
     
     except Exception as e:
