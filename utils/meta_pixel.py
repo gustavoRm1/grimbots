@@ -455,6 +455,15 @@ class MetaPixelAPI:
         É sobre PROVAR que funciona.
         """
         try:
+            # ✅ PRIMEIRO: VALIDAR TOKEN DE ACESSO
+            token_valid = MetaPixelAPI._validate_access_token(access_token)
+            if not token_valid:
+                return {
+                    'success': False,
+                    'pixel_info': None,
+                    'error': 'Token de acesso inválido ou expirado. Gere um novo token no Meta Business Manager.'
+                }
+            
             # Importar Celery task
             from celery_app import send_meta_event
             import time
@@ -565,6 +574,37 @@ class MetaPixelAPI:
                     'pixel_info': None,
                     'error': f'Celery e envio direto falharam: {str(e)}'
                 }
+    
+    @staticmethod
+    def _validate_access_token(access_token: str) -> bool:
+        """
+        Valida se o token de acesso é válido fazendo uma requisição simples
+        
+        Args:
+            access_token: Token de acesso do Meta
+            
+        Returns:
+            bool: True se válido, False se inválido
+        """
+        try:
+            import requests
+            
+            # Fazer uma requisição simples para validar o token
+            url = f"{MetaPixelAPI.BASE_URL}/{MetaPixelAPI.API_VERSION}/me"
+            
+            response = requests.get(
+                url,
+                params={'access_token': access_token},
+                timeout=10
+            )
+            
+            if response.status_code == 200:
+                return True
+            else:
+                return False
+                
+        except Exception as e:
+            return False
     
     @staticmethod
     def validate_pixel_config(pixel_id: str, access_token: str) -> Dict:
