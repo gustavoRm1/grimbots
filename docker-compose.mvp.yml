@@ -1,0 +1,124 @@
+version: '3.8'
+
+services:
+  # ============================================================================
+  # REDIS - Message Broker + Cache
+  # ============================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: grimbots_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - grimbots_network
+
+  # ============================================================================
+  # POSTGRESQL - Database
+  # ============================================================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: grimbots_postgres
+    environment:
+      POSTGRES_DB: grimbots
+      POSTGRES_USER: grimbots
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-grimbots_secure_2024}
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init_db_mvp.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U grimbots"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - grimbots_network
+
+  # ============================================================================
+  # CELERY WORKER - Async Event Processor
+  # ============================================================================
+  celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: grimbots_celery_worker
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - DATABASE_URL=postgresql://grimbots:${DB_PASSWORD:-grimbots_secure_2024}@postgres:5432/grimbots
+      - REDIS_URL=redis://redis:6379/2
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - PYTHONUNBUFFERED=1
+    command: celery -A celery_app worker --loglevel=info --concurrency=4 --max-tasks-per-child=100
+    depends_on:
+      - redis
+      - postgres
+    restart: unless-stopped
+    networks:
+      - grimbots_network
+    volumes:
+      - ./logs:/app/logs
+
+  # ============================================================================
+  # CELERY BEAT - Scheduler (para jobs periódicos)
+  # ============================================================================
+  celery_beat:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: grimbots_celery_beat
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+      - DATABASE_URL=postgresql://grimbots:${DB_PASSWORD:-grimbots_secure_2024}@postgres:5432/grimbots
+      - REDIS_URL=redis://redis:6379/2
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+    command: celery -A celery_app beat --loglevel=info
+    depends_on:
+      - redis
+      - postgres
+    restart: unless-stopped
+    networks:
+      - grimbots_network
+
+  # ============================================================================
+  # FLOWER - Celery Monitoring (opcional, útil para debug)
+  # ============================================================================
+  flower:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: grimbots_flower
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/1
+    command: celery -A celery_app flower --port=5555
+    ports:
+      - "5555:5555"
+    depends_on:
+      - redis
+      - celery_worker
+    restart: unless-stopped
+    networks:
+      - grimbots_network
+
+networks:
+  grimbots_network:
+    driver: bridge
+
+volumes:
+  redis_data:
+  postgres_data:
+
