@@ -505,10 +505,20 @@ class BotManager:
                 
                 logger.info(f"💬 De: {user.get('first_name', 'Usuário')} | Mensagem: '{text}'")
                 
-                # Comando /start
-                if text == '/start':
-                    logger.info(f"⭐ COMANDO /START - Enviando mensagem de boas-vindas...")
-                    self._handle_start_command(bot_id, token, config, chat_id, message)
+                # Comando /start (com ou sem parâmetros deep linking)
+                # Exemplos: "/start", "/start acesso", "/start promo123"
+                if text.startswith('/start'):
+                    # Extrair parâmetro do deep link (se houver)
+                    start_param = None
+                    if len(text) > 6 and text[6] == ' ':  # "/start " tem 7 caracteres
+                        start_param = text[7:].strip()  # Tudo após "/start "
+                    
+                    if start_param:
+                        logger.info(f"⭐ COMANDO /START com parâmetro: '{start_param}' - Enviando mensagem de boas-vindas...")
+                    else:
+                        logger.info(f"⭐ COMANDO /START - Enviando mensagem de boas-vindas...")
+                    
+                    self._handle_start_command(bot_id, token, config, chat_id, message, start_param)
             
             # Processar callback (botões)
             elif 'callback_query' in update:
@@ -522,9 +532,9 @@ class BotManager:
             traceback.print_exc()
     
     def _handle_start_command(self, bot_id: int, token: str, config: Dict[str, Any], 
-                             chat_id: int, message: Dict[str, Any]):
+                             chat_id: int, message: Dict[str, Any], start_param: str = None):
         """
-        Processa comando /start
+        Processa comando /start (com ou sem parâmetros de deep linking)
         
         Args:
             bot_id: ID do bot
@@ -532,6 +542,7 @@ class BotManager:
             config: Configuração do bot (será recarregada do banco)
             chat_id: ID do chat
             message: Dados da mensagem
+            start_param: Parâmetro do deep link (ex: "acesso", "promo123", None se não houver)
         """
         try:
             # ✅ CORREÇÃO CRÍTICA: Buscar config atualizada do BANCO (não da memória)
@@ -574,6 +585,12 @@ class BotManager:
                         username=username,
                         welcome_sent=False  # Ainda não enviou
                     )
+                    
+                    # 📊 TRACKING: Log do parâmetro de deep linking
+                    if start_param:
+                        logger.info(f"🔗 Deep link detectado: parâmetro='{start_param}' | user={first_name}")
+                        # TODO: Adicionar campo 'start_param' no modelo BotUser para analytics
+                    
                     db.session.add(bot_user)
                     
                     # Atualizar contador do bot (bot já foi carregado acima)
