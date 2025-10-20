@@ -24,7 +24,7 @@ from typing import Tuple, Optional
 BASE_URL = "https://app.grimbots.online"
 TEST_SLUG = "red1"  # Pool real com cloaker ativo
 PARAM_NAME = "grim"
-CORRECT_VALUE = "escalafull"  # Valor real do cloaker
+CORRECT_VALUE = "testecamu01"  # Valor REAL do banco
 WRONG_VALUE = "wrongvalue"
 TIMEOUT = 10
 
