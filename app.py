@@ -1965,9 +1965,12 @@ def get_bot_analytics_v2(bot_id):
     Analytics V2.0 - Dashboard Inteligente e Acionável
     
     FOCO: Decisões claras em 5 segundos
-    - Lucro/Prejuízo HOJE
+    - Lucro/Prejuízo HOJE (apenas para bots em POOLS)
     - Problemas que precisam ação AGORA
     - Oportunidades para escalar AGORA
+    
+    ⚠️ FIX QI 540: Apenas para bots que estão em redirecionadores (tráfego pago)
+    Bot orgânico não tem gasto/ROI, então Analytics V2 não faz sentido.
     
     Implementado por: QI 540
     """
@@ -1978,7 +1981,30 @@ def get_bot_analytics_v2(bot_id):
     bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
     
     # ============================================================================
-    # 💰 CARD 1: LUCRO/PREJUÍZO HOJE
+    # ✅ VERIFICAR SE BOT ESTÁ EM ALGUM POOL (REDIRECIONADOR)
+    # ============================================================================
+    is_in_pool = PoolBot.query.filter_by(bot_id=bot_id).count() > 0
+    
+    if not is_in_pool:
+        # Bot orgânico (sem pool) - Analytics V2 não se aplica
+        return jsonify({
+            'is_organic': True,
+            'message': 'Analytics V2.0 é exclusivo para bots em redirecionadores (tráfego pago)',
+            'summary': None,
+            'problems': [],
+            'opportunities': [],
+            'utm_performance': [],
+            'conversion_funnel': {
+                'pageviews': 0,
+                'viewcontents': 0,
+                'purchases': 0,
+                'pageview_to_viewcontent': 0,
+                'viewcontent_to_purchase': 0
+            }
+        })
+    
+    # ============================================================================
+    # 💰 CARD 1: LUCRO/PREJUÍZO HOJE (APENAS PARA BOTS EM POOLS)
     # ============================================================================
     today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     
