@@ -2364,10 +2364,10 @@ def public_redirect(slug):
     logger.info(f"Redirect: /go/{slug} → @{pool_bot.bot.username} | Estratégia: {pool.distribution_strategy} | Total: {pool_bot.total_redirects}")
     
     # ============================================================================
-    # ✅ META PIXEL: PAGEVIEW TRACKING
+    # ✅ META PIXEL: PAGEVIEW TRACKING (NÍVEL DE POOL)
     # ============================================================================
     try:
-        send_meta_pixel_pageview_event(pool_bot.bot, request)
+        send_meta_pixel_pageview_event(pool, request)
     except Exception as e:
         logger.error(f"Erro ao enviar PageView para Meta Pixel: {e}")
         # Não impedir o redirect se Meta falhar
@@ -2638,6 +2638,172 @@ def update_pool_bot_config(pool_id, pool_bot_id):
         'message': 'Configurações atualizadas!',
         'pool_bot': pool_bot.to_dict()
     })
+
+
+# ==================== META PIXEL (CONFIGURAÇÃO POR POOL) ====================
+
+@app.route('/api/redirect-pools/<int:pool_id>/meta-pixel', methods=['GET'])
+@login_required
+def get_pool_meta_pixel_config(pool_id):
+    """
+    Obtém configuração do Meta Pixel do pool
+    
+    ARQUITETURA V2.0: Pixel configurado no POOL (não no bot)
+    """
+    pool = RedirectPool.query.filter_by(id=pool_id, user_id=current_user.id).first_or_404()
+    
+    from utils.encryption import decrypt
+    
+    # Descriptografar access_token para exibição (mascarado)
+    access_token_display = None
+    if pool.meta_access_token:
+        try:
+            access_token_decrypted = decrypt(pool.meta_access_token)
+            # Mostrar apenas primeiros e últimos caracteres
+            access_token_display = access_token_decrypted[:10] + '...' + access_token_decrypted[-4:]
+        except:
+            access_token_display = '***erro_descriptografia***'
+    
+    return jsonify({
+        'pool_id': pool.id,
+        'pool_name': pool.name,
+        'meta_pixel_id': pool.meta_pixel_id,
+        'meta_access_token': access_token_display,
+        'meta_tracking_enabled': pool.meta_tracking_enabled,
+        'meta_test_event_code': pool.meta_test_event_code,
+        'meta_events_pageview': pool.meta_events_pageview,
+        'meta_events_viewcontent': pool.meta_events_viewcontent,
+        'meta_events_purchase': pool.meta_events_purchase,
+        'meta_cloaker_enabled': pool.meta_cloaker_enabled,
+        'meta_cloaker_param_name': pool.meta_cloaker_param_name or 'apx',
+        'meta_cloaker_param_value': pool.meta_cloaker_param_value
+    })
+
+
+@app.route('/api/redirect-pools/<int:pool_id>/meta-pixel', methods=['PUT'])
+@login_required
+@csrf.exempt
+def update_pool_meta_pixel_config(pool_id):
+    """
+    Atualiza configuração do Meta Pixel do pool
+    
+    VALIDAÇÕES:
+    - Pixel ID deve ser numérico (15-16 dígitos)
+    - Access Token deve ter pelo menos 50 caracteres
+    - Testa conexão antes de salvar (se fornecido)
+    """
+    pool = RedirectPool.query.filter_by(id=pool_id, user_id=current_user.id).first_or_404()
+    
+    data = request.get_json()
+    
+    from utils.meta_pixel import MetaPixelHelper, MetaPixelAPI
+    from utils.encryption import encrypt
+    
+    try:
+        # Validar Pixel ID
+        pixel_id = data.get('meta_pixel_id', '').strip()
+        if pixel_id and not MetaPixelHelper.is_valid_pixel_id(pixel_id):
+            return jsonify({'error': 'Pixel ID inválido (deve ter 15-16 dígitos numéricos)'}), 400
+        
+        # Validar Access Token
+        access_token = data.get('meta_access_token', '').strip()
+        if access_token:
+            # Se começar com "..." significa que não foi alterado (campo mascarado)
+            if not access_token.startswith('...'):
+                if not MetaPixelHelper.is_valid_access_token(access_token):
+                    return jsonify({'error': 'Access Token inválido (mínimo 50 caracteres)'}), 400
+                
+                # Testar conexão antes de salvar
+                test_result = MetaPixelAPI.test_connection(pixel_id, access_token)
+                if not test_result['success']:
+                    return jsonify({'error': f'Falha ao conectar: {test_result["error"]}'}), 400
+                
+                # Criptografar antes de salvar
+                pool.meta_access_token = encrypt(access_token)
+        
+        # Atualizar campos
+        if pixel_id:
+            pool.meta_pixel_id = pixel_id
+        
+        if 'meta_tracking_enabled' in data:
+            pool.meta_tracking_enabled = bool(data['meta_tracking_enabled'])
+        
+        if 'meta_test_event_code' in data:
+            pool.meta_test_event_code = data['meta_test_event_code'].strip() or None
+        
+        if 'meta_events_pageview' in data:
+            pool.meta_events_pageview = bool(data['meta_events_pageview'])
+        
+        if 'meta_events_viewcontent' in data:
+            pool.meta_events_viewcontent = bool(data['meta_events_viewcontent'])
+        
+        if 'meta_events_purchase' in data:
+            pool.meta_events_purchase = bool(data['meta_events_purchase'])
+        
+        if 'meta_cloaker_enabled' in data:
+            pool.meta_cloaker_enabled = bool(data['meta_cloaker_enabled'])
+        
+        if 'meta_cloaker_param_name' in data:
+            pool.meta_cloaker_param_name = data['meta_cloaker_param_name'].strip() or 'apx'
+        
+        if 'meta_cloaker_param_value' in data:
+            pool.meta_cloaker_param_value = data['meta_cloaker_param_value'].strip() or None
+        
+        db.session.commit()
+        
+        logger.info(f"Meta Pixel configurado para pool {pool.name} por {current_user.email}")
+        
+        return jsonify({
+            'message': 'Meta Pixel configurado com sucesso!',
+            'pool_id': pool.id,
+            'meta_tracking_enabled': pool.meta_tracking_enabled
+        })
+    
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao configurar Meta Pixel: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/redirect-pools/<int:pool_id>/meta-pixel/test', methods=['POST'])
+@login_required
+@csrf.exempt
+def test_pool_meta_pixel_connection(pool_id):
+    """
+    Testa conexão com Meta Pixel API
+    
+    Usado para validar credenciais antes de salvar
+    """
+    pool = RedirectPool.query.filter_by(id=pool_id, user_id=current_user.id).first_or_404()
+    
+    data = request.get_json()
+    
+    pixel_id = data.get('pixel_id', '').strip()
+    access_token = data.get('access_token', '').strip()
+    
+    if not pixel_id or not access_token:
+        return jsonify({'error': 'Pixel ID e Access Token são obrigatórios'}), 400
+    
+    from utils.meta_pixel import MetaPixelAPI
+    
+    try:
+        result = MetaPixelAPI.test_connection(pixel_id, access_token)
+        
+        if result['success']:
+            return jsonify({
+                'success': True,
+                'message': 'Conexão com Meta Pixel estabelecida com sucesso!',
+                'pixel_info': result['pixel_info']
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': result['error']
+            }), 400
+            
+    except Exception as e:
+        logger.error(f"Erro ao testar Meta Pixel: {e}")
+        return jsonify({'error': str(e)}), 500
 
 
 # ==================== GATEWAYS DE PAGAMENTO ====================
@@ -3349,12 +3515,20 @@ def meta_pixel_config_page(bot_id):
         logger.error(f"Erro ao carregar página Meta Pixel: {e}")
         return redirect('/dashboard')
 
-# ==================== META PIXEL INTEGRATION ====================
+# ==================== META PIXEL INTEGRATION (DEPRECATED - MOVIDO PARA POOLS) ====================
+# ❌ ATENÇÃO: Estas rotas foram DEPRECATED na V2.0
+# Meta Pixel agora é configurado POR POOL (não por bot)
+# Use as rotas /api/redirect-pools/<pool_id>/meta-pixel ao invés
+# Estas rotas antigas permanecem apenas para retrocompatibilidade temporária
 
 @app.route('/api/bots/<int:bot_id>/meta-pixel', methods=['GET'])
 @login_required
 def get_meta_pixel_config(bot_id):
-    """Retorna configuração atual do Meta Pixel do bot"""
+    """
+    [DEPRECATED] Retorna configuração atual do Meta Pixel do bot
+    
+    ATENÇÃO: Esta rota foi deprecated. Use /api/redirect-pools/<pool_id>/meta-pixel
+    """
     try:
         bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
         
@@ -3490,27 +3664,32 @@ def test_meta_pixel_connection(bot_id):
         logger.error(f"Erro ao testar Meta Pixel: {e}")
         return jsonify({'error': str(e)}), 500
 
-def send_meta_pixel_pageview_event(bot, request):
+def send_meta_pixel_pageview_event(pool, request):
     """
     Envia evento PageView para Meta Pixel quando usuário acessa redirecionador
+    
+    ARQUITETURA V2.0 (QI 240):
+    - Pixel configurado no POOL (não no bot)
+    - Alta disponibilidade: bot cai, pool continua tracking
+    - Dados consolidados: 1 campanha = 1 pool = 1 pixel
     
     CRÍTICO: Anti-duplicação via IP + User-Agent + timestamp
     """
     try:
-        # ✅ VERIFICAÇÃO 1: Bot tem Meta Pixel configurado?
-        if not bot.meta_tracking_enabled:
+        # ✅ VERIFICAÇÃO 1: Pool tem Meta Pixel configurado?
+        if not pool.meta_tracking_enabled:
             return
         
-        if not bot.meta_pixel_id or not bot.meta_access_token:
-            logger.warning(f"Bot {bot.id} tem tracking ativo mas sem pixel_id ou access_token")
+        if not pool.meta_pixel_id or not pool.meta_access_token:
+            logger.warning(f"Pool {pool.id} tem tracking ativo mas sem pixel_id ou access_token")
             return
         
         # ✅ VERIFICAÇÃO 2: Evento PageView está habilitado?
-        if not bot.meta_events_pageview:
-            logger.info(f"Evento PageView desabilitado para bot {bot.id}")
+        if not pool.meta_events_pageview:
+            logger.info(f"Evento PageView desabilitado para pool {pool.id}")
             return
         
-        logger.info(f"📊 Preparando envio Meta PageView: Bot {bot.id}")
+        logger.info(f"📊 Preparando envio Meta PageView: Pool {pool.id} ({pool.name})")
         
         # Importar Meta Pixel API
         from utils.meta_pixel import MetaPixelAPI, MetaPixelHelper
@@ -3525,9 +3704,9 @@ def send_meta_pixel_pageview_event(bot, request):
         
         # Descriptografar access token
         try:
-            access_token = decrypt(bot.meta_access_token)
+            access_token = decrypt(pool.meta_access_token)
         except Exception as e:
-            logger.error(f"Erro ao descriptografar access_token: {e}")
+            logger.error(f"Erro ao descriptografar access_token do pool {pool.id}: {e}")
             return
         
         # Extrair UTM parameters e cookies
@@ -3536,7 +3715,7 @@ def send_meta_pixel_pageview_event(bot, request):
         
         # Enviar evento PageView
         result = MetaPixelAPI.send_pageview_event(
-            pixel_id=bot.meta_pixel_id,
+            pixel_id=pool.meta_pixel_id,
             access_token=access_token,
             event_id=event_id,
             external_id=external_id,
@@ -3551,10 +3730,10 @@ def send_meta_pixel_pageview_event(bot, request):
         
         # ✅ VERIFICAÇÃO 3: Meta confirmou recebimento?
         if result['success']:
-            logger.info(f"✅ Meta PageView confirmado: Bot {bot.id} | Event ID: {event_id}")
+            logger.info(f"✅ Meta PageView confirmado: Pool {pool.id} ({pool.name}) | Event ID: {event_id}")
         else:
             # Falhou - log do erro
-            logger.error(f"❌ Meta PageView falhou: {result['error']} | Bot: {bot.id}")
+            logger.error(f"❌ Meta PageView falhou: {result['error']} | Pool: {pool.id} ({pool.name})")
     
     except Exception as e:
         logger.error(f"💥 Erro ao enviar Meta PageView: {e}")
@@ -3564,28 +3743,44 @@ def send_meta_pixel_purchase_event(payment):
     """
     Envia evento Purchase para Meta Pixel quando pagamento é confirmado
     
+    ARQUITETURA V2.0 (QI 240):
+    - Busca pixel do POOL associado ao bot (não do bot diretamente)
+    - Alta disponibilidade: dados consolidados no pool
+    - Tracking preciso mesmo com múltiplos bots
+    
     CRÍTICO: Zero duplicação garantida via meta_purchase_sent flag
     """
     try:
-        # ✅ VERIFICAÇÃO 1: Bot tem Meta Pixel configurado?
-        if not payment.bot.meta_tracking_enabled:
+        # ✅ VERIFICAÇÃO 1: Buscar pool associado ao bot
+        from models import PoolBot
+        
+        pool_bot = PoolBot.query.filter_by(bot_id=payment.bot_id).first()
+        
+        if not pool_bot:
+            logger.info(f"Bot {payment.bot_id} não está associado a nenhum pool - Meta Pixel ignorado")
             return
         
-        if not payment.bot.meta_pixel_id or not payment.bot.meta_access_token:
-            logger.warning(f"Bot {payment.bot.id} tem tracking ativo mas sem pixel_id ou access_token")
+        pool = pool_bot.pool
+        
+        # ✅ VERIFICAÇÃO 2: Pool tem Meta Pixel configurado?
+        if not pool.meta_tracking_enabled:
             return
         
-        # ✅ VERIFICAÇÃO 2: Evento Purchase está habilitado?
-        if not payment.bot.meta_events_purchase:
-            logger.info(f"Evento Purchase desabilitado para bot {payment.bot.id}")
+        if not pool.meta_pixel_id or not pool.meta_access_token:
+            logger.warning(f"Pool {pool.id} tem tracking ativo mas sem pixel_id ou access_token")
             return
         
-        # ✅ VERIFICAÇÃO 3: Já enviou este pagamento? (ANTI-DUPLICAÇÃO)
+        # ✅ VERIFICAÇÃO 3: Evento Purchase está habilitado?
+        if not pool.meta_events_purchase:
+            logger.info(f"Evento Purchase desabilitado para pool {pool.id}")
+            return
+        
+        # ✅ VERIFICAÇÃO 4: Já enviou este pagamento? (ANTI-DUPLICAÇÃO)
         if payment.meta_purchase_sent:
             logger.info(f"⚠️ Purchase já enviado ao Meta, ignorando: {payment.payment_id}")
             return
         
-        logger.info(f"📊 Preparando envio Meta Purchase: {payment.payment_id}")
+        logger.info(f"📊 Preparando envio Meta Purchase: {payment.payment_id} | Pool: {pool.name}")
         
         # Importar Meta Pixel API
         from utils.meta_pixel import MetaPixelAPI
@@ -3599,9 +3794,9 @@ def send_meta_pixel_purchase_event(payment):
         
         # Descriptografar access token
         try:
-            access_token = decrypt(payment.bot.meta_access_token)
+            access_token = decrypt(pool.meta_access_token)
         except Exception as e:
-            logger.error(f"Erro ao descriptografar access_token: {e}")
+            logger.error(f"Erro ao descriptografar access_token do pool {pool.id}: {e}")
             return
         
         # Determinar tipo de venda
@@ -3611,13 +3806,13 @@ def send_meta_pixel_purchase_event(payment):
         
         # Enviar evento Purchase
         result = MetaPixelAPI.send_purchase_event(
-            pixel_id=payment.bot.meta_pixel_id,
+            pixel_id=pool.meta_pixel_id,
             access_token=access_token,
             event_id=event_id,
             value=payment.amount,
             currency='BRL',
             customer_user_id=payment.customer_user_id,
-            content_id=str(payment.bot.id),
+            content_id=str(pool.id),  # Usar pool ID para consistência
             content_name=payment.product_name or payment.bot.name,
             content_type='product',
             num_items=1,
@@ -3634,7 +3829,7 @@ def send_meta_pixel_purchase_event(payment):
             campaign_code=payment.campaign_code
         )
         
-        # ✅ VERIFICAÇÃO 4: Meta confirmou recebimento?
+        # ✅ VERIFICAÇÃO 5: Meta confirmou recebimento?
         if result['success']:
             # Marcar como enviado (ANTI-DUPLICAÇÃO)
             payment.meta_purchase_sent = True
@@ -3642,12 +3837,14 @@ def send_meta_pixel_purchase_event(payment):
             payment.meta_event_id = event_id
             
             logger.info(f"✅ Meta Purchase confirmado: R$ {payment.amount} | " +
+                       f"Pool: {pool.name} | " +
                        f"Event ID: {event_id} | " +
                        f"Type: {'Downsell' if is_downsell else 'Normal'}")
         else:
             # Falhou - NÃO marca como enviado
             # Próximo webhook tentará novamente
             logger.error(f"❌ Meta Purchase falhou: {result['error']} | " +
+                        f"Pool: {pool.name} | " +
                         f"Payment: {payment.payment_id}")
     
     except Exception as e:

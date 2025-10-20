@@ -22,28 +22,44 @@ def send_meta_pixel_viewcontent_event(bot, bot_user, message):
     """
     Envia evento ViewContent para Meta Pixel quando usuário inicia conversa com bot
     
+    ARQUITETURA V2.0 (QI 240):
+    - Busca pixel do POOL associado ao bot (não do bot diretamente)
+    - Alta disponibilidade: dados consolidados no pool
+    - Tracking preciso mesmo com múltiplos bots
+    
     CRÍTICO: Anti-duplicação via meta_viewcontent_sent flag
     """
     try:
-        # ✅ VERIFICAÇÃO 1: Bot tem Meta Pixel configurado?
-        if not bot.meta_tracking_enabled:
+        # ✅ VERIFICAÇÃO 1: Buscar pool associado ao bot
+        from models import PoolBot
+        
+        pool_bot = PoolBot.query.filter_by(bot_id=bot.id).first()
+        
+        if not pool_bot:
+            logger.info(f"Bot {bot.id} não está associado a nenhum pool - Meta Pixel ignorado")
             return
         
-        if not bot.meta_pixel_id or not bot.meta_access_token:
-            logger.warning(f"Bot {bot.id} tem tracking ativo mas sem pixel_id ou access_token")
+        pool = pool_bot.pool
+        
+        # ✅ VERIFICAÇÃO 2: Pool tem Meta Pixel configurado?
+        if not pool.meta_tracking_enabled:
             return
         
-        # ✅ VERIFICAÇÃO 2: Evento ViewContent está habilitado?
-        if not bot.meta_events_viewcontent:
-            logger.info(f"Evento ViewContent desabilitado para bot {bot.id}")
+        if not pool.meta_pixel_id or not pool.meta_access_token:
+            logger.warning(f"Pool {pool.id} tem tracking ativo mas sem pixel_id ou access_token")
             return
         
-        # ✅ VERIFICAÇÃO 3: Já enviou ViewContent para este usuário? (ANTI-DUPLICAÇÃO)
+        # ✅ VERIFICAÇÃO 3: Evento ViewContent está habilitado?
+        if not pool.meta_events_viewcontent:
+            logger.info(f"Evento ViewContent desabilitado para pool {pool.id}")
+            return
+        
+        # ✅ VERIFICAÇÃO 4: Já enviou ViewContent para este usuário? (ANTI-DUPLICAÇÃO)
         if bot_user.meta_viewcontent_sent:
             logger.info(f"⚠️ ViewContent já enviado ao Meta, ignorando: BotUser {bot_user.id}")
             return
         
-        logger.info(f"📊 Preparando envio Meta ViewContent: Bot {bot.id} | User {bot_user.telegram_user_id}")
+        logger.info(f"📊 Preparando envio Meta ViewContent: Pool {pool.name} | User {bot_user.telegram_user_id}")
         
         # Importar Meta Pixel API
         from utils.meta_pixel import MetaPixelAPI
@@ -52,30 +68,30 @@ def send_meta_pixel_viewcontent_event(bot, bot_user, message):
         # Gerar event_id único para deduplicação
         event_id = MetaPixelAPI._generate_event_id(
             event_type='viewcontent',
-            unique_id=f"{bot.id}_{bot_user.telegram_user_id}"
+            unique_id=f"{pool.id}_{bot_user.telegram_user_id}"
         )
         
         # Descriptografar access token
         try:
-            access_token = decrypt(bot.meta_access_token)
+            access_token = decrypt(pool.meta_access_token)
         except Exception as e:
-            logger.error(f"Erro ao descriptografar access_token: {e}")
+            logger.error(f"Erro ao descriptografar access_token do pool {pool.id}: {e}")
             return
         
         # Enviar evento ViewContent
         result = MetaPixelAPI.send_viewcontent_event(
-            pixel_id=bot.meta_pixel_id,
+            pixel_id=pool.meta_pixel_id,
             access_token=access_token,
             event_id=event_id,
             customer_user_id=bot_user.telegram_user_id,
-            content_id=str(bot.id),
-            content_name=bot.name,
+            content_id=str(pool.id),  # Usar pool ID para consistência
+            content_name=pool.name,
             utm_source=bot_user.utm_source,
             utm_campaign=bot_user.utm_campaign,
             campaign_code=bot_user.campaign_code
         )
         
-        # ✅ VERIFICAÇÃO 4: Meta confirmou recebimento?
+        # ✅ VERIFICAÇÃO 5: Meta confirmou recebimento?
         if result['success']:
             # Marcar como enviado (ANTI-DUPLICAÇÃO)
             bot_user.meta_viewcontent_sent = True
@@ -85,11 +101,11 @@ def send_meta_pixel_viewcontent_event(bot, bot_user, message):
             from app import db
             db.session.commit()
             
-            logger.info(f"✅ Meta ViewContent confirmado: Bot {bot.id} | User {bot_user.telegram_user_id} | Event ID: {event_id}")
+            logger.info(f"✅ Meta ViewContent confirmado: Pool {pool.name} | User {bot_user.telegram_user_id} | Event ID: {event_id}")
         else:
             # Falhou - NÃO marca como enviado
             # Próximo /start tentará novamente
-            logger.error(f"❌ Meta ViewContent falhou: {result['error']} | Bot: {bot.id} | User: {bot_user.telegram_user_id}")
+            logger.error(f"❌ Meta ViewContent falhou: {result['error']} | Pool: {pool.name} | User: {bot_user.telegram_user_id}")
     
     except Exception as e:
         logger.error(f"💥 Erro ao enviar Meta ViewContent: {e}")
@@ -543,13 +559,20 @@ class BotManager:
                     telegram_user_id=telegram_user_id
                 ).first()
                 
+                # ============================================================================
+                # ✅ LÓGICA INTELIGENTE DE RECUPERAÇÃO AUTOMÁTICA
+                # ============================================================================
+                should_send_welcome = False  # Flag para controlar envio
+                is_new_user = False
+                
                 if not bot_user:
                     # Novo usuário - criar registro
                     bot_user = BotUser(
                         bot_id=bot_id,
                         telegram_user_id=telegram_user_id,
                         first_name=first_name,
-                        username=username
+                        username=username,
+                        welcome_sent=False  # Ainda não enviou
                     )
                     db.session.add(bot_user)
                     
@@ -560,6 +583,8 @@ class BotManager:
                     
                     db.session.commit()
                     logger.info(f"👤 Novo usuário registrado: {first_name} (@{username})")
+                    should_send_welcome = True
+                    is_new_user = True
                     
                     # ============================================================================
                     # ✅ META PIXEL: VIEWCONTENT TRACKING (NOVO USUÁRIO)
@@ -570,57 +595,79 @@ class BotManager:
                         logger.error(f"Erro ao enviar ViewContent para Meta Pixel: {e}")
                         # Não impedir o funcionamento do bot se Meta falhar
                 else:
-                    # Atualizar last_interaction
+                    # Usuário já existe
                     bot_user.last_interaction = datetime.now()
+                    
+                    # ✅ RECUPERAÇÃO AUTOMÁTICA: Se não recebeu boas-vindas, enviar agora!
+                    if not bot_user.welcome_sent:
+                        logger.warning(f"🔄 RECUPERAÇÃO AUTOMÁTICA: Usuário {first_name} nunca recebeu boas-vindas! Enviando agora...")
+                        should_send_welcome = True
+                    else:
+                        logger.info(f"👤 Usuário retornou: {first_name} (@{username}) - Boas-vindas já enviadas antes")
+                        should_send_welcome = False
+                    
                     db.session.commit()
-                    logger.info(f"👤 Usuário retornou: {first_name} (@{username})")
             
-            welcome_message = config.get('welcome_message', 'Olá! Bem-vindo!')
-            welcome_media_url = config.get('welcome_media_url')
-            welcome_media_type = config.get('welcome_media_type', 'video')
-            welcome_audio_enabled = config.get('welcome_audio_enabled', False)
-            welcome_audio_url = config.get('welcome_audio_url', '')
-            main_buttons = config.get('main_buttons', [])
-            redirect_buttons = config.get('redirect_buttons', [])
-            
-            # Preparar botões de venda (incluir índice para identificar qual botão tem order bump)
-            buttons = []
-            for index, btn in enumerate(main_buttons):
-                if btn.get('text') and btn.get('price'):
-                    buttons.append({
-                        'text': btn['text'],
-                        'callback_data': f"buy_{index}"  # ✅ CORREÇÃO: Usar apenas o índice (max 10 bytes)
-                    })
-            
-            # Adicionar botões de redirecionamento (com URL)
-            for btn in redirect_buttons:
-                if btn.get('text') and btn.get('url'):
-                    buttons.append({
-                        'text': btn['text'],
-                        'url': btn['url']  # Botão com URL abre direto no navegador
-                    })
-            
-            # Verificar se URL de mídia é válida (não pode ser canal privado)
-            valid_media = False
-            if welcome_media_url:
-                # URLs de canais privados começam com /c/ - não funcionam
-                if '/c/' not in welcome_media_url and welcome_media_url.startswith('http'):
-                    valid_media = True
+            # ============================================================================
+            # ✅ ENVIAR MENSAGEM DE BOAS-VINDAS (apenas se necessário)
+            # ============================================================================
+            if should_send_welcome:
+                welcome_message = config.get('welcome_message', 'Olá! Bem-vindo!')
+                welcome_media_url = config.get('welcome_media_url')
+                welcome_media_type = config.get('welcome_media_type', 'video')
+                welcome_audio_enabled = config.get('welcome_audio_enabled', False)
+                welcome_audio_url = config.get('welcome_audio_url', '')
+                main_buttons = config.get('main_buttons', [])
+                redirect_buttons = config.get('redirect_buttons', [])
+                
+                # Preparar botões de venda (incluir índice para identificar qual botão tem order bump)
+                buttons = []
+                for index, btn in enumerate(main_buttons):
+                    if btn.get('text') and btn.get('price'):
+                        buttons.append({
+                            'text': btn['text'],
+                            'callback_data': f"buy_{index}"  # ✅ CORREÇÃO: Usar apenas o índice (max 10 bytes)
+                        })
+                
+                # Adicionar botões de redirecionamento (com URL)
+                for btn in redirect_buttons:
+                    if btn.get('text') and btn.get('url'):
+                        buttons.append({
+                            'text': btn['text'],
+                            'url': btn['url']  # Botão com URL abre direto no navegador
+                        })
+                
+                # Verificar se URL de mídia é válida (não pode ser canal privado)
+                valid_media = False
+                if welcome_media_url:
+                    # URLs de canais privados começam com /c/ - não funcionam
+                    if '/c/' not in welcome_media_url and welcome_media_url.startswith('http'):
+                        valid_media = True
+                    else:
+                        logger.info(f"⚠️ Mídia de canal privado detectada - enviando só texto")
+                
+                if valid_media:
+                    # Tentar com mídia
+                    result = self.send_telegram_message(
+                        token=token,
+                        chat_id=str(chat_id),
+                        message=welcome_message,
+                        media_url=welcome_media_url,
+                        media_type=welcome_media_type,
+                        buttons=buttons
+                    )
+                    if not result:
+                        logger.warning(f"⚠️ Falha com mídia. Enviando só texto...")
+                        result = self.send_telegram_message(
+                            token=token,
+                            chat_id=str(chat_id),
+                            message=welcome_message,
+                            media_url=None,
+                            media_type=None,
+                            buttons=buttons
+                        )
                 else:
-                    logger.info(f"⚠️ Mídia de canal privado detectada - enviando só texto")
-            
-            if valid_media:
-                # Tentar com mídia
-                result = self.send_telegram_message(
-                    token=token,
-                    chat_id=str(chat_id),
-                    message=welcome_message,
-                    media_url=welcome_media_url,
-                    media_type=welcome_media_type,
-                    buttons=buttons
-                )
-                if not result:
-                    logger.warning(f"⚠️ Falha com mídia. Enviando só texto...")
+                    # Enviar direto sem mídia (mais rápido e confiável)
                     result = self.send_telegram_message(
                         token=token,
                         chat_id=str(chat_id),
@@ -629,37 +676,44 @@ class BotManager:
                         media_type=None,
                         buttons=buttons
                     )
-            else:
-                # Enviar direto sem mídia (mais rápido e confiável)
-                result = self.send_telegram_message(
-                    token=token,
-                    chat_id=str(chat_id),
-                    message=welcome_message,
-                    media_url=None,
-                    media_type=None,
-                    buttons=buttons
-                )
-            
-            if result:
-                logger.info(f"✅ Mensagem /start enviada com {len(buttons)} botão(ões)")
                 
-                # ✅ Enviar áudio adicional se habilitado
-                if welcome_audio_enabled and welcome_audio_url:
-                    logger.info(f"🎤 Enviando áudio complementar...")
-                    audio_result = self.send_telegram_message(
-                        token=token,
-                        chat_id=str(chat_id),
-                        message="",  # Sem caption
-                        media_url=welcome_audio_url,
-                        media_type='audio',
-                        buttons=None  # Sem botões no áudio
-                    )
-                    if audio_result:
-                        logger.info(f"✅ Áudio complementar enviado")
-                    else:
-                        logger.warning(f"⚠️ Falha ao enviar áudio complementar")
+                if result:
+                    logger.info(f"✅ Mensagem /start enviada com {len(buttons)} botão(ões)")
+                    
+                    # ✅ MARCAR COMO ENVIADO NO BANCO
+                    with app.app_context():
+                        try:
+                            bot_user_update = BotUser.query.filter_by(
+                                bot_id=bot_id,
+                                telegram_user_id=telegram_user_id
+                            ).first()
+                            if bot_user_update:
+                                bot_user_update.welcome_sent = True
+                                bot_user_update.welcome_sent_at = datetime.now()
+                                db.session.commit()
+                                logger.info(f"✅ Marcado como welcome_sent=True")
+                        except Exception as e:
+                            logger.error(f"Erro ao marcar welcome_sent: {e}")
+                    
+                    # ✅ Enviar áudio adicional se habilitado
+                    if welcome_audio_enabled and welcome_audio_url:
+                        logger.info(f"🎤 Enviando áudio complementar...")
+                        audio_result = self.send_telegram_message(
+                            token=token,
+                            chat_id=str(chat_id),
+                            message="",  # Sem caption
+                            media_url=welcome_audio_url,
+                            media_type='audio',
+                            buttons=None  # Sem botões no áudio
+                        )
+                        if audio_result:
+                            logger.info(f"✅ Áudio complementar enviado")
+                        else:
+                            logger.warning(f"⚠️ Falha ao enviar áudio complementar")
+                else:
+                    logger.error(f"❌ Falha ao enviar mensagem")
             else:
-                logger.error(f"❌ Falha ao enviar mensagem")
+                logger.info(f"⏭️ Mensagem de boas-vindas já foi enviada antes, pulando...")
             
             # Emitir evento via WebSocket
             self.socketio.emit('bot_interaction', {

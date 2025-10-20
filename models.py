@@ -202,17 +202,27 @@ class Bot(db.Model):
     last_started = db.Column(db.DateTime)
     last_stopped = db.Column(db.DateTime)
     
-    # ✅ META PIXEL INTEGRATION
-    meta_pixel_id = db.Column(db.String(50), nullable=True)
-    meta_access_token = db.Column(db.String(255), nullable=True)  # Será criptografado
-    meta_tracking_enabled = db.Column(db.Boolean, default=False)
-    meta_test_event_code = db.Column(db.String(100), nullable=True)
-    meta_events_pageview = db.Column(db.Boolean, default=True)
-    meta_events_viewcontent = db.Column(db.Boolean, default=True)
-    meta_events_purchase = db.Column(db.Boolean, default=True)
-    meta_cloaker_enabled = db.Column(db.Boolean, default=False)
-    meta_cloaker_param_name = db.Column(db.String(20), default='apx')
-    meta_cloaker_param_value = db.Column(db.String(50), nullable=True)
+    # ============================================================================
+    # ❌ META PIXEL (DEPRECATED - MOVIDO PARA REDIRECT_POOLS)
+    # ============================================================================
+    # ATENÇÃO: Estes campos foram MOVIDOS para RedirectPool (arquitetura correta)
+    # SQLite não suporta DROP COLUMN, então eles permanecem no banco mas são IGNORADOS
+    # Meta Pixel agora é configurado POR POOL (não por bot) para:
+    # - Rastreamento centralizado (1 campanha = 1 pool = 1 pixel)
+    # - Alta disponibilidade (bot cai, pool continua tracking)
+    # - Dados consolidados (todos eventos no mesmo pixel)
+    # NÃO USE ESTES CAMPOS - USE RedirectPool.meta_* ao invés
+    # ============================================================================
+    # meta_pixel_id = db.Column(db.String(50), nullable=True)
+    # meta_access_token = db.Column(db.String(255), nullable=True)
+    # meta_tracking_enabled = db.Column(db.Boolean, default=False)
+    # meta_test_event_code = db.Column(db.String(100), nullable=True)
+    # meta_events_pageview = db.Column(db.Boolean, default=True)
+    # meta_events_viewcontent = db.Column(db.Boolean, default=True)
+    # meta_events_purchase = db.Column(db.Boolean, default=True)
+    # meta_cloaker_enabled = db.Column(db.Boolean, default=False)
+    # meta_cloaker_param_name = db.Column(db.String(20), default='apx')
+    # meta_cloaker_param_value = db.Column(db.String(50), nullable=True)
     
     # Relacionamentos
     config = db.relationship('BotConfig', backref='bot', uselist=False, cascade='all, delete-orphan')
@@ -408,6 +418,26 @@ class RedirectPool(db.Model):
     # Timestamps
     created_at = db.Column(db.DateTime, default=get_brazil_time)
     updated_at = db.Column(db.DateTime, default=get_brazil_time, onupdate=get_brazil_time)
+    
+    # ============================================================================
+    # ✅ META PIXEL INTEGRATION (NÍVEL DE POOL - ARQUITETURA CORRETA)
+    # ============================================================================
+    # Pixel configurado POR POOL (não por bot) para:
+    # - Rastreamento centralizado (1 campanha = 1 pool = 1 pixel)
+    # - Alta disponibilidade (bot cai, pool continua tracking)
+    # - Dados consolidados (todos eventos no mesmo pixel)
+    # - Configuração simplificada (1 vez por pool vs N vezes por bot)
+    # ============================================================================
+    meta_pixel_id = db.Column(db.String(50), nullable=True)
+    meta_access_token = db.Column(db.String(255), nullable=True)  # Criptografado
+    meta_tracking_enabled = db.Column(db.Boolean, default=False)
+    meta_test_event_code = db.Column(db.String(100), nullable=True)
+    meta_events_pageview = db.Column(db.Boolean, default=True)
+    meta_events_viewcontent = db.Column(db.Boolean, default=True)
+    meta_events_purchase = db.Column(db.Boolean, default=True)
+    meta_cloaker_enabled = db.Column(db.Boolean, default=False)
+    meta_cloaker_param_name = db.Column(db.String(20), default='apx')
+    meta_cloaker_param_value = db.Column(db.String(50), nullable=True)
     
     # Relacionamentos
     pool_bots = db.relationship('PoolBot', backref='pool', lazy='dynamic', cascade='all, delete-orphan')
@@ -827,6 +857,10 @@ class BotUser(db.Model):
     archived = db.Column(db.Boolean, default=False, index=True)  # Usuario de token antigo
     archived_reason = db.Column(db.String(100))  # Ex: "token_changed"
     archived_at = db.Column(db.DateTime)  # Quando foi arquivado
+    
+    # ✅ WELCOME MESSAGE TRACKING (recuperação automática de crashes)
+    welcome_sent = db.Column(db.Boolean, default=False, index=True)  # Se já recebeu boas-vindas
+    welcome_sent_at = db.Column(db.DateTime, nullable=True)  # Quando recebeu
     
     # ✅ META PIXEL INTEGRATION
     meta_pageview_sent = db.Column(db.Boolean, default=False)

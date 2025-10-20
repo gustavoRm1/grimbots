@@ -8,6 +8,12 @@ IMPLEMENTAÇÃO QI 300:
 - Retry inteligente com backoff exponencial
 - Logs detalhados para auditoria
 - Validação completa de dados
+
+ARQUITETURA V2.0 (QI 240):
+- Pixel configurado POR POOL (RedirectPool) ao invés de por Bot
+- Alta disponibilidade: bot cai, pool continua tracking
+- Dados consolidados: 1 campanha = 1 pool = 1 pixel
+- Configuração simplificada: 1 vez por pool vs N vezes por bot
 """
 
 import requests
