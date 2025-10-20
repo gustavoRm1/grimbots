@@ -442,25 +442,55 @@ class MetaPixelAPI:
     @staticmethod
     def test_connection(pixel_id: str, access_token: str) -> Dict:
         """
-        Testa conexão com Meta API
+        Testa conexão com Meta API enviando evento de teste
+        
+        MVP FIX (QI 540):
+        - Não faz GET no pixel (requer permissão extra)
+        - Envia evento PageView de teste
+        - Valida que token funciona para ENVIAR eventos
         
         Usado na tela de configuração para validar credenciais
         """
-        url = f"{MetaPixelAPI.BASE_URL}/{MetaPixelAPI.API_VERSION}/{pixel_id}"
+        url = f"{MetaPixelAPI.BASE_URL}/{MetaPixelAPI.API_VERSION}/{pixel_id}/events"
+        
+        import time
+        
+        # Criar evento de teste
+        test_payload = {
+            'data': [{
+                'event_name': 'PageView',
+                'event_time': int(time.time()),
+                'event_id': f'test_connection_{int(time.time())}',
+                'action_source': 'website',
+                'user_data': {
+                    'client_ip_address': '127.0.0.1',
+                    'client_user_agent': 'GrimBots-Test/1.0'
+                },
+                'custom_data': {
+                    'test': True,
+                    'source': 'connection_test'
+                }
+            }],
+            'access_token': access_token,
+            'test_event_code': 'TEST_CONNECTION'  # Meta ignora eventos com test_event_code
+        }
         
         try:
-            response = requests.get(
+            response = requests.post(
                 url,
-                params={'access_token': access_token},
+                json=test_payload,
                 timeout=10,
-                headers={'User-Agent': 'GrimPay-MetaPixel/1.0'}
+                headers={'Content-Type': 'application/json'}
             )
             
             if response.status_code == 200:
-                pixel_info = response.json()
+                result = response.json()
                 return {
                     'success': True,
-                    'pixel_info': pixel_info,
+                    'pixel_info': {
+                        'events_received': result.get('events_received', 0),
+                        'fbtrace_id': result.get('fbtrace_id')
+                    },
                     'error': None
                 }
             else:
