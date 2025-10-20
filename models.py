@@ -800,6 +800,10 @@ class Payment(db.Model):
     order_bump_value = db.Column(db.Float, default=0.0)
     is_downsell = db.Column(db.Boolean, default=False)
     downsell_index = db.Column(db.Integer)
+    is_upsell = db.Column(db.Boolean, default=False)
+    upsell_index = db.Column(db.Integer)
+    is_remarketing = db.Column(db.Boolean, default=False)
+    remarketing_campaign_id = db.Column(db.Integer)
     
     # Status
     status = db.Column(db.String(20), default='pending', index=True)  # pending, paid, failed, cancelled (indexado para queries frequentes)

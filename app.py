@@ -2351,24 +2351,31 @@ def public_redirect(slug):
         param_name = pool.meta_cloaker_param_name or 'grim'
         expected_value = pool.meta_cloaker_param_value
         
-        # Verificar se parâmetro está presente e correto
-        actual_value = request.args.get(param_name)
-        
-        if actual_value != expected_value:
-            # ❌ ACESSO BLOQUEADO
-            logger.warning(f"🛡️ Cloaker bloqueou acesso ao pool '{slug}' | " +
-                          f"IP: {request.remote_addr} | " +
-                          f"User-Agent: {request.headers.get('User-Agent')} | " +
-                          f"Parâmetro esperado: {param_name}={expected_value} | " +
-                          f"Recebido: {param_name}={actual_value}")
+        # ✅ FIX BUG CRÍTICO: Validar se expected_value foi configurado
+        if not expected_value or not expected_value.strip():
+            logger.error(f"🔥 BUG: Cloaker ativo no pool '{slug}' mas sem valor configurado! Desabilitando validação.")
+            # Pool mal configurado, permitir acesso (não bloquear tudo)
+            # Admin precisa configurar corretamente
+        else:
+            # Normalizar valores (strip para evitar problemas com espaços)
+            expected_value = expected_value.strip()
+            actual_value = (request.args.get(param_name) or '').strip()
             
-            return render_template('cloaker_block.html', 
-                                 pool_name=pool.name,
-                                 slug=slug), 403
-        
-        # ✅ ACESSO AUTORIZADO
-        logger.info(f"✅ Cloaker validou acesso ao pool '{slug}' | " +
-                   f"Parâmetro: {param_name}={actual_value}")
+            if actual_value != expected_value:
+                # ❌ ACESSO BLOQUEADO
+                logger.warning(f"🛡️ Cloaker bloqueou acesso ao pool '{slug}' | " +
+                              f"IP: {request.remote_addr} | " +
+                              f"User-Agent: {request.headers.get('User-Agent')} | " +
+                              f"Parâmetro esperado: {param_name}={expected_value} | " +
+                              f"Recebido: {param_name}={actual_value}")
+                
+                return render_template('cloaker_block.html', 
+                                     pool_name=pool.name,
+                                     slug=slug), 403
+            
+            # ✅ ACESSO AUTORIZADO
+            logger.info(f"✅ Cloaker validou acesso ao pool '{slug}' | " +
+                       f"Parâmetro: {param_name}={actual_value}")
     
     # Selecionar bot usando estratégia configurada
     pool_bot = pool.select_bot()
@@ -2828,7 +2835,13 @@ def update_pool_meta_pixel_config(pool_id):
             pool.meta_cloaker_param_name = data['meta_cloaker_param_name'].strip() or 'grim'
         
         if 'meta_cloaker_param_value' in data:
-            pool.meta_cloaker_param_value = data['meta_cloaker_param_value'].strip() or None
+            # ✅ FIX BUG: Strip e validar valor antes de salvar
+            cloaker_value = data['meta_cloaker_param_value']
+            if cloaker_value:
+                cloaker_value = cloaker_value.strip()
+                if not cloaker_value:  # String vazia após strip
+                    cloaker_value = None
+            pool.meta_cloaker_param_value = cloaker_value
         
         db.session.commit()
         
@@ -3899,10 +3912,10 @@ def send_meta_pixel_purchase_event(payment):
             logger.error(f"Erro ao descriptografar access_token do pool {pool.id}: {e}")
             return
         
-        # Determinar tipo de venda
-        is_downsell = payment.is_downsell
-        is_upsell = False  # TODO: Implementar detecção de upsell
-        is_remarketing = False  # TODO: Implementar detecção de remarketing
+        # Determinar tipo de venda (QI 540 - FIX BUG)
+        is_downsell = payment.is_downsell or False
+        is_upsell = payment.is_upsell or False
+        is_remarketing = payment.is_remarketing or False
         
         # Enviar evento Purchase
         result = MetaPixelAPI.send_purchase_event(
