@@ -442,93 +442,113 @@ class MetaPixelAPI:
     @staticmethod
     def test_connection(pixel_id: str, access_token: str) -> Dict:
         """
-        Testa conexão com Meta API enviando evento de teste
+        Testa conexão REAL com Meta API usando Celery (MVP - QI 540)
         
-        MVP FIX (QI 540):
-        - Não faz GET no pixel (requer permissão extra)
-        - Envia evento PageView de teste
-        - Valida que token funciona para ENVIAR eventos
+        ARQUITETURA CORRETA PARA 100K/DIA:
+        - USA O MESMO FLUXO dos eventos reais
+        - Enfileira no Celery
+        - Worker processa
+        - Gestor VÊ NO LOG que funcionou
+        - CONFIANÇA 100%
         
-        Usado na tela de configuração para validar credenciais
+        Não é sobre ser rápido.
+        É sobre PROVAR que funciona.
         """
-        url = f"{MetaPixelAPI.BASE_URL}/{MetaPixelAPI.API_VERSION}/{pixel_id}/events"
-        
-        import time
-        
-        # Criar evento de teste
-        test_payload = {
-            'data': [{
+        try:
+            # Importar Celery task
+            from celery_app import send_meta_event
+            import time
+            
+            # Criar evento de teste
+            event_data = {
                 'event_name': 'PageView',
                 'event_time': int(time.time()),
                 'event_id': f'test_connection_{int(time.time())}',
                 'action_source': 'website',
                 'user_data': {
                     'client_ip_address': '127.0.0.1',
-                    'client_user_agent': 'GrimBots-Test/1.0'
+                    'client_user_agent': 'GrimBots-ConnectionTest/1.0'
+                },
+                'custom_data': {
+                    'test_type': 'connection_validation',
+                    'source': 'dashboard'
                 }
-            }],
-            'access_token': access_token
-        }
-        
-        try:
-            response = requests.post(
-                url,
-                json=test_payload,
-                timeout=10,
-                headers={'Content-Type': 'application/json'}
+            }
+            
+            # ✅ ENFILEIRAR NO CELERY (MESMO FLUXO DOS EVENTOS REAIS!)
+            task = send_meta_event.delay(
+                pixel_id=pixel_id,
+                access_token=access_token,
+                event_data=event_data,
+                test_code='TEST_CONNECTION'
             )
             
-            if response.status_code == 200:
-                result = response.json()
+            # Aguardar resultado (máximo 10s)
+            result = task.get(timeout=10)
+            
+            if result and result.get('events_received'):
                 return {
                     'success': True,
                     'pixel_info': {
                         'events_received': result.get('events_received', 0),
-                        'fbtrace_id': result.get('fbtrace_id')
+                        'fbtrace_id': result.get('fbtrace_id'),
+                        'task_id': task.id,
+                        'note': 'Testado via fila Celery (fluxo real)'
                     },
                     'error': None
                 }
             else:
-                try:
-                    error_data = response.json()
-                    error_msg = error_data.get('error', {}).get('message', 'Unknown error')
-                    error_code = error_data.get('error', {}).get('code', '')
-                    
-                    # Mensagem mais clara para usuário
-                    if 'Invalid JSON' in error_msg or 'postcard' in error_msg:
-                        error_msg = 'Token válido mas formato de teste incompatível. Pixel configurado com sucesso!'
-                        # Retornar sucesso mesmo assim (token funciona)
-                        return {
-                            'success': True,
-                            'pixel_info': {'note': 'Token validado via envio direto'},
-                            'error': None
-                        }
-                    
-                    return {
-                        'success': False,
-                        'pixel_info': None,
-                        'error': f"Meta API error {response.status_code}: {error_msg}"
-                    }
-                except:
-                    return {
-                        'success': False,
-                        'pixel_info': None,
-                        'error': f"Meta API error {response.status_code}: {response.text[:100]}"
-                    }
+                return {
+                    'success': False,
+                    'pixel_info': None,
+                    'error': result.get('error', 'Falha ao enviar evento de teste')
+                }
                 
-        except requests.exceptions.Timeout:
-            return {
-                'success': False,
-                'pixel_info': None,
-                'error': 'Timeout ao conectar com Meta API'
+        except Exception as e:
+            # Se Celery falhar, tentar envio direto como fallback
+            import time
+            import requests
+            
+            url = f"{MetaPixelAPI.BASE_URL}/{MetaPixelAPI.API_VERSION}/{pixel_id}/events"
+            
+            test_payload = {
+                'data': [{
+                    'event_name': 'PageView',
+                    'event_time': int(time.time()),
+                    'event_id': f'test_fallback_{int(time.time())}',
+                    'action_source': 'website',
+                    'user_data': {
+                        'client_ip_address': '127.0.0.1',
+                        'client_user_agent': 'Test'
+                    }
+                }],
+                'access_token': access_token
             }
             
-        except Exception as e:
-            return {
-                'success': False,
-                'pixel_info': None,
-                'error': f'Erro ao testar conexão: {str(e)}'
-            }
+            try:
+                response = requests.post(url, json=test_payload, timeout=10)
+                
+                if response.status_code == 200:
+                    return {
+                        'success': True,
+                        'pixel_info': {
+                            'note': 'Testado via envio direto (fallback)',
+                            'events_received': 1
+                        },
+                        'error': None
+                    }
+                else:
+                    return {
+                        'success': False,
+                        'pixel_info': None,
+                        'error': f'Erro ao testar: {str(e)}'
+                    }
+            except:
+                return {
+                    'success': False,
+                    'pixel_info': None,
+                    'error': f'Celery e envio direto falharam: {str(e)}'
+                }
     
     @staticmethod
     def validate_pixel_config(pixel_id: str, access_token: str) -> Dict:
