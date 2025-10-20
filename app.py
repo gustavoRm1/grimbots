@@ -2579,17 +2579,19 @@ def update_bot_config(bot_id):
 
 def validate_cloaker_access(request, pool, slug):
     """
-    ✅ CLOAKER SIMPLIFICADO - Foco em efetividade, não complexidade
+    🔐 CLOAKER V2.0 - À PROVA DE BURRICE HUMANA
     
-    VALIDAÇÕES:
-    1. Parâmetro obrigatório correto
-    2. User-Agent não é bot conhecido
+    REGRAS SIMPLES:
+    1. Parâmetro grim obrigatório e válido
+    2. Aceita qualquer ordem de parâmetros
+    3. Ignora fbclid, utm_source, etc.
+    4. SEM validação de User-Agent (Facebook pode usar qualquer UA)
     
     Retorna score 100 se OK, 0 se bloqueado
     """
     details = {}
     
-    # VALIDAÇÃO 1: Parâmetro obrigatório
+    # VALIDAÇÃO ÚNICA: Parâmetro grim obrigatório
     param_name = pool.meta_cloaker_param_name or 'grim'
     expected_value = pool.meta_cloaker_param_value
     
@@ -2597,25 +2599,29 @@ def validate_cloaker_access(request, pool, slug):
         return {'allowed': False, 'reason': 'cloaker_misconfigured', 'score': 0, 'details': {}}
     
     expected_value = expected_value.strip()
+    
+    # ✅ CLOAKER V2.0: Busca apenas o parâmetro grim (ignora outros)
     actual_value = (request.args.get(param_name) or '').strip()
     
+    # Log estruturado para auditoria
+    all_params = dict(request.args)
+    logger.info(f"🔍 CLOAKER V2.0 | Slug: {slug} | Grim: {actual_value} | Expected: {expected_value} | All params: {list(all_params.keys())}")
+    
+    # VALIDAÇÃO CRÍTICA: grim deve estar presente e correto
     if actual_value != expected_value:
-        return {'allowed': False, 'reason': 'invalid_parameter', 'score': 0, 'details': {'param_match': False}}
+        return {'allowed': False, 'reason': 'invalid_grim', 'score': 0, 'details': {
+            'param_match': False, 
+            'expected': expected_value,
+            'actual': actual_value,
+            'all_params': list(all_params.keys())
+        }}
     
-    # VALIDAÇÃO 2: Bot Detection via User-Agent
-    user_agent = request.headers.get('User-Agent', '').lower()
-    bot_patterns = [
-        'facebookexternalhit', 'facebot', 'twitterbot', 'linkedinbot', 'googlebot', 'bingbot',
-        'bot', 'crawler', 'spider', 'scraper', 'python-requests', 'curl', 'wget', 'scrapy'
-    ]
-    
-    for pattern in bot_patterns:
-        if pattern in user_agent:
-            return {'allowed': False, 'reason': 'bot_detected_ua', 'score': 0, 
-                   'details': {'pattern': pattern, 'user_agent': user_agent[:200]}}
-    
-    # Passou em todas as validações
-    return {'allowed': True, 'reason': 'authorized', 'score': 100, 'details': {'param_match': True, 'bot_check': 'passed'}}
+    # ✅ SUCESSO: grim válido encontrado
+    return {'allowed': True, 'reason': 'grim_valid', 'score': 100, 'details': {
+        'param_match': True, 
+        'grim_value': actual_value,
+        'total_params': len(all_params)
+    }}
 
 
 def log_cloaker_event_json(event_type, slug, validation_result, request, pool, latency_ms=0):
