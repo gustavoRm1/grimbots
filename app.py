@@ -885,18 +885,34 @@ def update_bot_token(bot_id):
         bot.is_running = False  # ✅ Garantir que está offline
         bot.last_error = None  # Limpar erros antigos
         
+        # ✅ ARQUIVAR USUÁRIOS DO TOKEN ANTIGO
+        from models import BotUser
+        archived_count = BotUser.query.filter_by(bot_id=bot_id, archived=False).count()
+        if archived_count > 0:
+            BotUser.query.filter_by(bot_id=bot_id, archived=False).update({
+                'archived': True,
+                'archived_reason': 'token_changed',
+                'archived_at': datetime.now()
+            })
+            logger.info(f"📦 {archived_count} usuários do token antigo arquivados")
+        
+        # ✅ RESETAR CONTADOR DE USUÁRIOS
+        bot.total_users = 0
+        logger.info(f"🔄 Contador total_users resetado para 0")
+        
         db.session.commit()
         
         logger.info(f"✅ Token atualizado: Bot {bot.name} | @{old_username} → @{bot.username} | ID {old_bot_id} → {bot.bot_id} | por {current_user.email}")
         
         return jsonify({
-            'message': 'Token atualizado com sucesso! Bot parado e limpo.' if was_running else 'Token atualizado com sucesso!',
+            'message': f'Token atualizado! {archived_count} usuários antigos arquivados. Contador resetado.' if archived_count > 0 else 'Token atualizado com sucesso!',
             'bot': bot.to_dict(),
             'changes': {
                 'old_username': old_username,
                 'new_username': bot.username,
                 'old_bot_id': old_bot_id,
                 'new_bot_id': bot.bot_id,
+                'users_archived': archived_count,
                 'was_auto_stopped': was_running,
                 'cache_cleared': was_running,
                 'configurations_preserved': True,
@@ -1953,7 +1969,11 @@ def get_bot_stats(bot_id):
     bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
     
     # 1. ESTATÍSTICAS GERAIS
-    total_users = BotUser.query.filter_by(bot_id=bot_id).count()
+    # ✅ Contar apenas usuários ativos (não arquivados)
+    total_users = BotUser.query.filter_by(bot_id=bot_id, archived=False).count()
+    # ✅ Usuários arquivados (histórico de tokens antigos)
+    archived_users = BotUser.query.filter_by(bot_id=bot_id, archived=True).count()
+    
     total_sales = Payment.query.filter_by(bot_id=bot_id, status='paid').count()
     total_revenue = db.session.query(func.sum(Payment.amount)).filter(
         Payment.bot_id == bot_id, Payment.status == 'paid'
@@ -2067,6 +2087,7 @@ def get_bot_stats(bot_id):
     return jsonify({
         'general': {
             'total_users': total_users,
+            'archived_users': archived_users,  # ✅ Histórico de tokens antigos
             'total_sales': total_sales,
             'total_revenue': float(total_revenue),
             'pending_sales': pending_sales,

@@ -795,6 +795,11 @@ class BotUser(db.Model):
     first_name = db.Column(db.String(100))
     username = db.Column(db.String(100))
     
+    # Arquivamento (quando bot troca de token)
+    archived = db.Column(db.Boolean, default=False, index=True)  # Usuario de token antigo
+    archived_reason = db.Column(db.String(100))  # Ex: "token_changed"
+    archived_at = db.Column(db.DateTime)  # Quando foi arquivado
+    
     # Datas
     first_interaction = db.Column(db.DateTime, default=get_brazil_time)
     last_interaction = db.Column(db.DateTime, default=get_brazil_time, onupdate=get_brazil_time)

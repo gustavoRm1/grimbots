@@ -477,8 +477,9 @@ class BotManager:
                     db.session.add(bot_user)
                     
                     # Atualizar contador do bot (bot já foi carregado acima)
+                    # ✅ Contar apenas usuários ativos (não arquivados)
                     if bot:
-                        bot.total_users = BotUser.query.filter_by(bot_id=bot_id).count()
+                        bot.total_users = BotUser.query.filter_by(bot_id=bot_id, archived=False).count()
                     
                     db.session.commit()
                     logger.info(f"👤 Novo usuário registrado: {first_name} (@{username})")
@@ -2599,8 +2600,8 @@ Seu pagamento ainda não foi confirmado.
             # Data limite de último contato
             contact_limit = datetime.now() - timedelta(days=days_since_last_contact)
             
-            # Query base: usuários do bot
-            query = BotUser.query.filter_by(bot_id=bot_id)
+            # Query base: usuários do bot (apenas ativos, não arquivados)
+            query = BotUser.query.filter_by(bot_id=bot_id, archived=False)
             
             # Filtro: último contato há X dias
             if days_since_last_contact > 0:
@@ -2670,10 +2671,10 @@ Seu pagamento ainda não foi confirmado.
                 
                 logger.info(f"📢 Iniciando envio de remarketing: {campaign.name}")
                 
-                # Buscar leads elegíveis
+                # Buscar leads elegíveis (apenas usuários ativos, não arquivados)
                 contact_limit = datetime.now() - timedelta(days=campaign.days_since_last_contact)
                 
-                query = BotUser.query.filter_by(bot_id=campaign.bot_id)
+                query = BotUser.query.filter_by(bot_id=campaign.bot_id, archived=False)
                 
                 # Filtro de último contato
                 if campaign.days_since_last_contact > 0:
