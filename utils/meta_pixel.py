@@ -459,13 +459,14 @@ class MetaPixelAPI:
             from celery_app import send_meta_event
             import time
             
-            # Criar evento de teste
+            # Criar evento de teste (USANDO ESTRUTURA CORRETA)
             event_data = {
-                'event_name': 'PageView',
+                'event_name': 'ViewContent',  # ✅ Nome correto (mesmo dos eventos reais)
                 'event_time': int(time.time()),
                 'event_id': f'test_connection_{int(time.time())}',
                 'action_source': 'website',
                 'user_data': {
+                    'external_id': f'test_user_{int(time.time())}',  # ✅ External ID obrigatório
                     'client_ip_address': '127.0.0.1',
                     'client_user_agent': 'GrimBots-ConnectionTest/1.0'
                 },
@@ -513,11 +514,12 @@ class MetaPixelAPI:
             
             test_payload = {
                 'data': [{
-                    'event_name': 'PageView',
+                    'event_name': 'ViewContent',  # ✅ Nome correto
                     'event_time': int(time.time()),
                     'event_id': f'test_fallback_{int(time.time())}',
                     'action_source': 'website',
                     'user_data': {
+                        'external_id': f'test_fallback_{int(time.time())}',  # ✅ External ID obrigatório
                         'client_ip_address': '127.0.0.1',
                         'client_user_agent': 'Test'
                     }
