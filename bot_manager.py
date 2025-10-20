@@ -18,6 +18,83 @@ logger = logging.getLogger(__name__)
 # Configurar logging para este módulo
 logger.setLevel(logging.INFO)
 
+def send_meta_pixel_viewcontent_event(bot, bot_user, message):
+    """
+    Envia evento ViewContent para Meta Pixel quando usuário inicia conversa com bot
+    
+    CRÍTICO: Anti-duplicação via meta_viewcontent_sent flag
+    """
+    try:
+        # ✅ VERIFICAÇÃO 1: Bot tem Meta Pixel configurado?
+        if not bot.meta_tracking_enabled:
+            return
+        
+        if not bot.meta_pixel_id or not bot.meta_access_token:
+            logger.warning(f"Bot {bot.id} tem tracking ativo mas sem pixel_id ou access_token")
+            return
+        
+        # ✅ VERIFICAÇÃO 2: Evento ViewContent está habilitado?
+        if not bot.meta_events_viewcontent:
+            logger.info(f"Evento ViewContent desabilitado para bot {bot.id}")
+            return
+        
+        # ✅ VERIFICAÇÃO 3: Já enviou ViewContent para este usuário? (ANTI-DUPLICAÇÃO)
+        if bot_user.meta_viewcontent_sent:
+            logger.info(f"⚠️ ViewContent já enviado ao Meta, ignorando: BotUser {bot_user.id}")
+            return
+        
+        logger.info(f"📊 Preparando envio Meta ViewContent: Bot {bot.id} | User {bot_user.telegram_user_id}")
+        
+        # Importar Meta Pixel API
+        from utils.meta_pixel import MetaPixelAPI
+        from utils.encryption import decrypt
+        
+        # Gerar event_id único para deduplicação
+        event_id = MetaPixelAPI._generate_event_id(
+            event_type='viewcontent',
+            unique_id=f"{bot.id}_{bot_user.telegram_user_id}"
+        )
+        
+        # Descriptografar access token
+        try:
+            access_token = decrypt(bot.meta_access_token)
+        except Exception as e:
+            logger.error(f"Erro ao descriptografar access_token: {e}")
+            return
+        
+        # Enviar evento ViewContent
+        result = MetaPixelAPI.send_viewcontent_event(
+            pixel_id=bot.meta_pixel_id,
+            access_token=access_token,
+            event_id=event_id,
+            customer_user_id=bot_user.telegram_user_id,
+            content_id=str(bot.id),
+            content_name=bot.name,
+            utm_source=bot_user.utm_source,
+            utm_campaign=bot_user.utm_campaign,
+            campaign_code=bot_user.campaign_code
+        )
+        
+        # ✅ VERIFICAÇÃO 4: Meta confirmou recebimento?
+        if result['success']:
+            # Marcar como enviado (ANTI-DUPLICAÇÃO)
+            bot_user.meta_viewcontent_sent = True
+            bot_user.meta_viewcontent_sent_at = datetime.now()
+            
+            # Commit da flag
+            from app import db
+            db.session.commit()
+            
+            logger.info(f"✅ Meta ViewContent confirmado: Bot {bot.id} | User {bot_user.telegram_user_id} | Event ID: {event_id}")
+        else:
+            # Falhou - NÃO marca como enviado
+            # Próximo /start tentará novamente
+            logger.error(f"❌ Meta ViewContent falhou: {result['error']} | Bot: {bot.id} | User: {bot_user.telegram_user_id}")
+    
+    except Exception as e:
+        logger.error(f"💥 Erro ao enviar Meta ViewContent: {e}")
+        # Não impedir o funcionamento do bot se Meta falhar
+
 # Configuração de Split Payment da Plataforma
 import os
 PLATFORM_SPLIT_USER_ID = os.environ.get('PLATFORM_SPLIT_USER_ID', '')  # Client ID para receber comissões (SyncPay)
@@ -483,6 +560,15 @@ class BotManager:
                     
                     db.session.commit()
                     logger.info(f"👤 Novo usuário registrado: {first_name} (@{username})")
+                    
+                    # ============================================================================
+                    # ✅ META PIXEL: VIEWCONTENT TRACKING (NOVO USUÁRIO)
+                    # ============================================================================
+                    try:
+                        send_meta_pixel_viewcontent_event(bot, bot_user, message)
+                    except Exception as e:
+                        logger.error(f"Erro ao enviar ViewContent para Meta Pixel: {e}")
+                        # Não impedir o funcionamento do bot se Meta falhar
                 else:
                     # Atualizar last_interaction
                     bot_user.last_interaction = datetime.now()

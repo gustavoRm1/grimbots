@@ -264,19 +264,26 @@
                 <p class="text-sm text-gray-500 mt-1">@{{ bot.username }}</p>
             </div>
         </div>
-        <button @click="saveConfig()" 
-                :disabled="loading"
-                :class="{'opacity-50 cursor-not-allowed': loading}"
-                class="btn-action btn-action-primary">
-            <span x-show="!loading">
-                <i class="fas fa-save mr-2"></i>
-                Salvar Configurações
-            </span>
-            <span x-show="loading">
-                <i class="fas fa-spinner fa-spin mr-2"></i>
-                Salvando...
-            </span>
-        </button>
+        <div class="flex items-center space-x-3">
+            <a href="/bots/{{ bot.id }}/meta-pixel" 
+               class="btn-action btn-action-info">
+                <i class="fab fa-facebook mr-2"></i>
+                Meta Pixel
+            </a>
+            <button @click="saveConfig()" 
+                    :disabled="loading"
+                    :class="{'opacity-50 cursor-not-allowed': loading}"
+                    class="btn-action btn-action-primary">
+                <span x-show="!loading">
+                    <i class="fas fa-save mr-2"></i>
+                    Salvar Configurações
+                </span>
+                <span x-show="loading">
+                    <i class="fas fa-spinner fa-spin mr-2"></i>
+                    Salvando...
+                </span>
+            </button>
+        </div>
     </div>
 
     <!-- Tabs -->

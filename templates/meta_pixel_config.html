@@ -1,0 +1,383 @@
+{% extends "base.html" %}
+
+{% block title %}Meta Pixel - {{ bot.name }}{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <!-- Header -->
+    <div class="mb-8">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900">Meta Pixel</h1>
+                <p class="text-gray-600 mt-2">Configure o rastreamento do Facebook/Meta para otimizar suas campanhas</p>
+            </div>
+            <a href="/dashboard" class="btn-secondary">
+                <i class="fas fa-arrow-left mr-2"></i>
+                Voltar ao Dashboard
+            </a>
+        </div>
+        
+        <!-- Bot Info -->
+        <div class="mt-4 p-4 bg-blue-50 rounded-lg">
+            <div class="flex items-center">
+                <div class="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold text-lg">
+                    {{ bot.name[0].upper() }}
+                </div>
+                <div class="ml-4">
+                    <h3 class="font-semibold text-gray-900">{{ bot.name }}</h3>
+                    <p class="text-sm text-gray-600">@{{ bot.username or 'N/A' }}</p>
+                </div>
+                <div class="ml-auto">
+                    <span class="px-3 py-1 rounded-full text-sm font-medium" 
+                          :class="bot.is_running ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'">
+                        {{ 'Online' if bot.is_running else 'Offline' }}
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Meta Pixel Configuration -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <!-- Main Configuration -->
+        <div class="lg:col-span-2">
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+                <div class="px-6 py-4 border-b border-gray-200">
+                    <h2 class="text-xl font-semibold text-gray-900">Configuração do Pixel</h2>
+                    <p class="text-sm text-gray-600 mt-1">Configure seu Pixel ID e Access Token do Meta Business Manager</p>
+                </div>
+                
+                <div class="p-6">
+                    <form id="metaPixelForm" @submit.prevent="saveConfig">
+                        <!-- Enable Tracking -->
+                        <div class="mb-6">
+                            <label class="flex items-center">
+                                <input type="checkbox" v-model="config.meta_tracking_enabled" 
+                                       class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                                <span class="ml-2 text-sm font-medium text-gray-900">Ativar Meta Pixel Tracking</span>
+                            </label>
+                            <p class="text-xs text-gray-500 mt-1">Quando ativado, eventos serão enviados para o Meta</p>
+                        </div>
+
+                        <!-- Pixel ID -->
+                        <div class="mb-6" v-show="config.meta_tracking_enabled">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                Pixel ID <span class="text-red-500">*</span>
+                            </label>
+                            <input type="text" v-model="config.meta_pixel_id" 
+                                   placeholder="Ex: 123456789012345"
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                   maxlength="16">
+                            <p class="text-xs text-gray-500 mt-1">ID numérico do seu pixel (15-16 dígitos)</p>
+                        </div>
+
+                        <!-- Access Token -->
+                        <div class="mb-6" v-show="config.meta_tracking_enabled">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                Access Token <span class="text-red-500">*</span>
+                            </label>
+                            <div class="relative">
+                                <input :type="showAccessToken ? 'text' : 'password'" 
+                                       v-model="config.meta_access_token" 
+                                       placeholder="Ex: EAABwzLixnjYBO..."
+                                       class="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                                <button type="button" @click="showAccessToken = !showAccessToken"
+                                        class="absolute inset-y-0 right-0 pr-3 flex items-center">
+                                    <i :class="showAccessToken ? 'fas fa-eye-slash' : 'fas fa-eye'" 
+                                       class="text-gray-400 hover:text-gray-600"></i>
+                                </button>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-1">Token de acesso do Meta Business Manager</p>
+                        </div>
+
+                        <!-- Test Event Code -->
+                        <div class="mb-6" v-show="config.meta_tracking_enabled">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">
+                                Test Event Code (Opcional)
+                            </label>
+                            <input type="text" v-model="config.meta_test_event_code" 
+                                   placeholder="Ex: TEST12345"
+                                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                            <p class="text-xs text-gray-500 mt-1">Código para testar eventos no Meta Events Manager</p>
+                        </div>
+
+                        <!-- Events Configuration -->
+                        <div class="mb-6" v-show="config.meta_tracking_enabled">
+                            <h3 class="text-sm font-medium text-gray-900 mb-3">Eventos Ativos</h3>
+                            <div class="space-y-3">
+                                <label class="flex items-center">
+                                    <input type="checkbox" v-model="config.meta_events_pageview" 
+                                           class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                                    <span class="ml-2 text-sm text-gray-700">PageView</span>
+                                    <span class="ml-2 text-xs text-gray-500">(Acesso ao redirecionador)</span>
+                                </label>
+                                <label class="flex items-center">
+                                    <input type="checkbox" v-model="config.meta_events_viewcontent" 
+                                           class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                                    <span class="ml-2 text-sm text-gray-700">ViewContent</span>
+                                    <span class="ml-2 text-xs text-gray-500">(Usuário inicia conversa)</span>
+                                </label>
+                                <label class="flex items-center">
+                                    <input type="checkbox" v-model="config.meta_events_purchase" 
+                                           class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                                    <span class="ml-2 text-sm text-gray-700">Purchase</span>
+                                    <span class="ml-2 text-xs text-gray-500">(Compra confirmada)</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Cloaker Configuration -->
+                        <div class="mb-6" v-show="config.meta_tracking_enabled">
+                            <h3 class="text-sm font-medium text-gray-900 mb-3">Cloaker + AntiClone</h3>
+                            <label class="flex items-center mb-3">
+                                <input type="checkbox" v-model="config.meta_cloaker_enabled" 
+                                       class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                                <span class="ml-2 text-sm text-gray-700">Ativar proteção de funil</span>
+                            </label>
+                            <p class="text-xs text-gray-500 mb-3">Protege contra acesso direto e clonadores</p>
+                            
+                            <div v-show="config.meta_cloaker_enabled" class="space-y-3">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                                        Nome do Parâmetro
+                                    </label>
+                                    <input type="text" v-model="config.meta_cloaker_param_name" 
+                                           placeholder="apx"
+                                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500">
+                                </div>
+                                <div v-if="config.meta_cloaker_param_value">
+                                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                                        Valor do Parâmetro
+                                    </label>
+                                    <div class="flex items-center space-x-2">
+                                        <input type="text" :value="config.meta_cloaker_param_value" 
+                                               readonly
+                                               class="flex-1 px-3 py-2 border border-gray-300 rounded-md bg-gray-50">
+                                        <button type="button" @click="generateCloakerValue"
+                                                class="px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                                            Gerar Novo
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="flex items-center space-x-4">
+                            <button type="submit" :disabled="loading"
+                                    class="btn-primary" :class="{ 'opacity-50 cursor-not-allowed': loading }">
+                                <i v-if="loading" class="fas fa-spinner fa-spin mr-2"></i>
+                                <i v-else class="fas fa-save mr-2"></i>
+                                {{ loading ? 'Salvando...' : 'Salvar Configuração' }}
+                            </button>
+                            
+                            <button type="button" @click="testConnection" :disabled="loading || !config.meta_tracking_enabled"
+                                    class="btn-secondary" :class="{ 'opacity-50 cursor-not-allowed': loading || !config.meta_tracking_enabled }">
+                                <i class="fas fa-wifi mr-2"></i>
+                                Testar Conexão
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="space-y-6">
+            <!-- Status Card -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+                <div class="px-6 py-4 border-b border-gray-200">
+                    <h3 class="text-lg font-semibold text-gray-900">Status do Pixel</h3>
+                </div>
+                <div class="p-6">
+                    <div class="space-y-4">
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm text-gray-600">Tracking Ativo</span>
+                            <span class="px-2 py-1 rounded-full text-xs font-medium"
+                                  :class="config.meta_tracking_enabled ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'">
+                                {{ config.meta_tracking_enabled ? 'Ativo' : 'Inativo' }}
+                            </span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm text-gray-600">Pixel ID</span>
+                            <span class="text-sm font-medium text-gray-900">
+                                {{ config.meta_pixel_id || 'Não configurado' }}
+                            </span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-sm text-gray-600">Access Token</span>
+                            <span class="px-2 py-1 rounded-full text-xs font-medium"
+                                  :class="config.has_access_token ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'">
+                                {{ config.has_access_token ? 'Configurado' : 'Não configurado' }}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Instructions Card -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+                <div class="px-6 py-4 border-b border-gray-200">
+                    <h3 class="text-lg font-semibold text-gray-900">Como Configurar</h3>
+                </div>
+                <div class="p-6">
+                    <div class="space-y-4 text-sm text-gray-600">
+                        <div>
+                            <h4 class="font-medium text-gray-900 mb-2">1. Obter Pixel ID</h4>
+                            <p>No Meta Business Manager → Gerenciador de Eventos → Seu Pixel → ID do Pixel</p>
+                        </div>
+                        <div>
+                            <h4 class="font-medium text-gray-900 mb-2">2. Obter Access Token</h4>
+                            <p>Meta Business Manager → Configurações do Sistema → Tokens de Acesso → Gerar Token</p>
+                        </div>
+                        <div>
+                            <h4 class="font-medium text-gray-900 mb-2">3. Configurar Campanhas</h4>
+                            <p>Use o link do redirecionador nas campanhas do Meta Ads</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Important Notes -->
+            <div class="bg-yellow-50 rounded-lg border border-yellow-200">
+                <div class="px-6 py-4">
+                    <h3 class="text-lg font-semibold text-yellow-800 mb-2">
+                        <i class="fas fa-exclamation-triangle mr-2"></i>
+                        Importante
+                    </h3>
+                    <div class="text-sm text-yellow-700 space-y-2">
+                        <p>• Remova TODOS os outros códigos de pixel</p>
+                        <p>• Use apenas nosso redirecionador</p>
+                        <p>• Teste antes de ativar campanhas</p>
+                        <p>• Monitore os eventos no Meta</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Success/Error Messages -->
+<div v-if="message" class="fixed top-4 right-4 z-50">
+    <div class="p-4 rounded-lg shadow-lg" :class="messageType === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'">
+        <div class="flex items-center">
+            <i :class="messageType === 'success' ? 'fas fa-check-circle' : 'fas fa-exclamation-circle'" class="mr-2"></i>
+            {{ message }}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const { createApp } = Vue;
+    
+    createApp({
+        data() {
+            return {
+                bot: {{ bot.to_dict() | tojson }},
+                config: {
+                    meta_pixel_id: '',
+                    meta_tracking_enabled: false,
+                    meta_test_event_code: '',
+                    meta_events_pageview: true,
+                    meta_events_viewcontent: true,
+                    meta_events_purchase: true,
+                    meta_cloaker_enabled: false,
+                    meta_cloaker_param_name: 'apx',
+                    meta_cloaker_param_value: '',
+                    has_access_token: false
+                },
+                showAccessToken: false,
+                loading: false,
+                message: '',
+                messageType: 'success'
+            }
+        },
+        
+        async mounted() {
+            await this.loadConfig();
+        },
+        
+        methods: {
+            async loadConfig() {
+                try {
+                    const response = await fetch(`/api/bots/{{ bot.id }}/meta-pixel`);
+                    if (response.ok) {
+                        this.config = await response.json();
+                    }
+                } catch (error) {
+                    console.error('Erro ao carregar configuração:', error);
+                }
+            },
+            
+            async saveConfig() {
+                this.loading = true;
+                try {
+                    const response = await fetch(`/api/bots/{{ bot.id }}/meta-pixel`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(this.config)
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        this.showMessage('Configuração salva com sucesso!', 'success');
+                        this.config = data.config;
+                    } else {
+                        this.showMessage(data.error || 'Erro ao salvar configuração', 'error');
+                    }
+                } catch (error) {
+                    this.showMessage('Erro de conexão', 'error');
+                } finally {
+                    this.loading = false;
+                }
+            },
+            
+            async testConnection() {
+                this.loading = true;
+                try {
+                    const response = await fetch(`/api/bots/{{ bot.id }}/meta-pixel/test`, {
+                        method: 'POST'
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (response.ok) {
+                        this.showMessage('Conexão testada com sucesso!', 'success');
+                    } else {
+                        this.showMessage(data.error || 'Erro ao testar conexão', 'error');
+                    }
+                } catch (error) {
+                    this.showMessage('Erro de conexão', 'error');
+                } finally {
+                    this.loading = false;
+                }
+            },
+            
+            generateCloakerValue() {
+                // Gerar valor aleatório de 8 caracteres
+                const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+                let result = '';
+                for (let i = 0; i < 8; i++) {
+                    result += chars.charAt(Math.floor(Math.random() * chars.length));
+                }
+                this.config.meta_cloaker_param_value = result;
+            },
+            
+            showMessage(text, type) {
+                this.message = text;
+                this.messageType = type;
+                setTimeout(() => {
+                    this.message = '';
+                }, 5000);
+            }
+        }
+    }).mount('#app');
+});
+</script>
+{% endblock %}

@@ -2318,7 +2318,7 @@ def update_bot_config(bot_id):
 @app.route('/go/<slug>')
 def public_redirect(slug):
     """
-    Endpoint PÚBLICO de redirecionamento com Load Balancing
+    Endpoint PÚBLICO de redirecionamento com Load Balancing + Meta Pixel Tracking
     
     URL: /go/{slug} (ex: /go/red1)
     
@@ -2329,6 +2329,7 @@ def public_redirect(slug):
     - Failover automático
     - Circuit breaker
     - Métricas de uso
+    - ✅ META PIXEL: PageView tracking
     """
     from datetime import datetime
     
@@ -2361,6 +2362,15 @@ def public_redirect(slug):
     
     # Log
     logger.info(f"Redirect: /go/{slug} → @{pool_bot.bot.username} | Estratégia: {pool.distribution_strategy} | Total: {pool_bot.total_redirects}")
+    
+    # ============================================================================
+    # ✅ META PIXEL: PAGEVIEW TRACKING
+    # ============================================================================
+    try:
+        send_meta_pixel_pageview_event(pool_bot.bot, request)
+    except Exception as e:
+        logger.error(f"Erro ao enviar PageView para Meta Pixel: {e}")
+        # Não impedir o redirect se Meta falhar
     
     # Emitir evento WebSocket para o dono do pool
     socketio.emit('pool_redirect', {
@@ -3328,6 +3338,322 @@ def update_password():
         logger.error(f"Erro ao atualizar senha: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/bots/<int:bot_id>/meta-pixel')
+@login_required
+def meta_pixel_config_page(bot_id):
+    """Página de configuração do Meta Pixel"""
+    try:
+        bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
+        return render_template('meta_pixel_config.html', bot=bot)
+    except Exception as e:
+        logger.error(f"Erro ao carregar página Meta Pixel: {e}")
+        return redirect('/dashboard')
+
+# ==================== META PIXEL INTEGRATION ====================
+
+@app.route('/api/bots/<int:bot_id>/meta-pixel', methods=['GET'])
+@login_required
+def get_meta_pixel_config(bot_id):
+    """Retorna configuração atual do Meta Pixel do bot"""
+    try:
+        bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
+        
+        return jsonify({
+            'meta_pixel_id': bot.meta_pixel_id,
+            'meta_tracking_enabled': bot.meta_tracking_enabled,
+            'meta_test_event_code': bot.meta_test_event_code,
+            'meta_events_pageview': bot.meta_events_pageview,
+            'meta_events_viewcontent': bot.meta_events_viewcontent,
+            'meta_events_purchase': bot.meta_events_purchase,
+            'meta_cloaker_enabled': bot.meta_cloaker_enabled,
+            'meta_cloaker_param_name': bot.meta_cloaker_param_name,
+            'meta_cloaker_param_value': bot.meta_cloaker_param_value,
+            'has_access_token': bool(bot.meta_access_token)
+        })
+        
+    except Exception as e:
+        logger.error(f"Erro ao buscar configuração Meta Pixel: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/bots/<int:bot_id>/meta-pixel', methods=['PUT'])
+@login_required
+@csrf.exempt
+def update_meta_pixel_config(bot_id):
+    """Atualiza configuração do Meta Pixel do bot"""
+    try:
+        bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
+        
+        data = request.get_json()
+        
+        # Validar dados obrigatórios se tracking estiver ativo
+        if data.get('meta_tracking_enabled'):
+            pixel_id = data.get('meta_pixel_id', '').strip()
+            access_token = data.get('meta_access_token', '').strip()
+            
+            if not pixel_id:
+                return jsonify({'error': 'Pixel ID é obrigatório quando tracking está ativo'}), 400
+            
+            if not access_token:
+                return jsonify({'error': 'Access Token é obrigatório quando tracking está ativo'}), 400
+            
+            # Validar formato do Pixel ID
+            from utils.meta_pixel import MetaPixelHelper
+            if not MetaPixelHelper.is_valid_pixel_id(pixel_id):
+                return jsonify({'error': 'Pixel ID deve ter 15-16 dígitos numéricos'}), 400
+            
+            # Validar formato do Access Token
+            if not MetaPixelHelper.is_valid_access_token(access_token):
+                return jsonify({'error': 'Access Token deve ter pelo menos 50 caracteres'}), 400
+            
+            # Testar conexão com Meta API
+            from utils.meta_pixel import MetaPixelAPI
+            test_result = MetaPixelAPI.test_connection(pixel_id, access_token)
+            
+            if not test_result['success']:
+                return jsonify({'error': f'Falha na conexão com Meta API: {test_result["error"]}'}), 400
+            
+            # Criptografar access token
+            from utils.encryption import encrypt
+            bot.meta_access_token = encrypt(access_token)
+            bot.meta_pixel_id = pixel_id
+            
+            logger.info(f"✅ Meta Pixel configurado para bot {bot_id}: Pixel {pixel_id}")
+        
+        # Atualizar configurações
+        bot.meta_tracking_enabled = data.get('meta_tracking_enabled', False)
+        bot.meta_test_event_code = data.get('meta_test_event_code', '').strip()
+        bot.meta_events_pageview = data.get('meta_events_pageview', True)
+        bot.meta_events_viewcontent = data.get('meta_events_viewcontent', True)
+        bot.meta_events_purchase = data.get('meta_events_purchase', True)
+        bot.meta_cloaker_enabled = data.get('meta_cloaker_enabled', False)
+        bot.meta_cloaker_param_name = data.get('meta_cloaker_param_name', 'apx')
+        
+        # Gerar valor único para cloaker se ativado
+        if bot.meta_cloaker_enabled and not bot.meta_cloaker_param_value:
+            import uuid
+            bot.meta_cloaker_param_value = uuid.uuid4().hex[:8]
+        
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Configuração Meta Pixel atualizada com sucesso',
+            'config': {
+                'meta_pixel_id': bot.meta_pixel_id,
+                'meta_tracking_enabled': bot.meta_tracking_enabled,
+                'meta_events_pageview': bot.meta_events_pageview,
+                'meta_events_viewcontent': bot.meta_events_viewcontent,
+                'meta_events_purchase': bot.meta_events_purchase,
+                'meta_cloaker_enabled': bot.meta_cloaker_enabled,
+                'meta_cloaker_param_name': bot.meta_cloaker_param_name,
+                'meta_cloaker_param_value': bot.meta_cloaker_param_value
+            }
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao atualizar configuração Meta Pixel: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/bots/<int:bot_id>/meta-pixel/test', methods=['POST'])
+@login_required
+@csrf.exempt
+def test_meta_pixel_connection(bot_id):
+    """Testa conexão com Meta Pixel"""
+    try:
+        bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
+        
+        if not bot.meta_pixel_id or not bot.meta_access_token:
+            return jsonify({'error': 'Pixel ID e Access Token são obrigatórios'}), 400
+        
+        # Descriptografar access token
+        from utils.encryption import decrypt
+        from utils.meta_pixel import MetaPixelAPI
+        
+        access_token = decrypt(bot.meta_access_token)
+        
+        # Testar conexão
+        result = MetaPixelAPI.test_connection(bot.meta_pixel_id, access_token)
+        
+        if result['success']:
+            return jsonify({
+                'success': True,
+                'message': 'Conexão com Meta Pixel bem-sucedida',
+                'pixel_info': result['pixel_info']
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': result['error']
+            }), 400
+            
+    except Exception as e:
+        logger.error(f"Erro ao testar Meta Pixel: {e}")
+        return jsonify({'error': str(e)}), 500
+
+def send_meta_pixel_pageview_event(bot, request):
+    """
+    Envia evento PageView para Meta Pixel quando usuário acessa redirecionador
+    
+    CRÍTICO: Anti-duplicação via IP + User-Agent + timestamp
+    """
+    try:
+        # ✅ VERIFICAÇÃO 1: Bot tem Meta Pixel configurado?
+        if not bot.meta_tracking_enabled:
+            return
+        
+        if not bot.meta_pixel_id or not bot.meta_access_token:
+            logger.warning(f"Bot {bot.id} tem tracking ativo mas sem pixel_id ou access_token")
+            return
+        
+        # ✅ VERIFICAÇÃO 2: Evento PageView está habilitado?
+        if not bot.meta_events_pageview:
+            logger.info(f"Evento PageView desabilitado para bot {bot.id}")
+            return
+        
+        logger.info(f"📊 Preparando envio Meta PageView: Bot {bot.id}")
+        
+        # Importar Meta Pixel API
+        from utils.meta_pixel import MetaPixelAPI, MetaPixelHelper
+        from utils.encryption import decrypt
+        
+        # Gerar event_id único para deduplicação
+        external_id = MetaPixelHelper.generate_external_id()
+        event_id = MetaPixelAPI._generate_event_id(
+            event_type='pageview',
+            unique_id=external_id
+        )
+        
+        # Descriptografar access token
+        try:
+            access_token = decrypt(bot.meta_access_token)
+        except Exception as e:
+            logger.error(f"Erro ao descriptografar access_token: {e}")
+            return
+        
+        # Extrair UTM parameters e cookies
+        utm_params = MetaPixelHelper.extract_utm_params(request)
+        cookies = MetaPixelHelper.extract_cookies(request)
+        
+        # Enviar evento PageView
+        result = MetaPixelAPI.send_pageview_event(
+            pixel_id=bot.meta_pixel_id,
+            access_token=access_token,
+            event_id=event_id,
+            external_id=external_id,
+            client_ip=request.remote_addr,
+            client_user_agent=request.headers.get('User-Agent'),
+            fbp=cookies.get('fbp'),
+            fbc=cookies.get('fbc'),
+            utm_source=utm_params.get('utm_source'),
+            utm_campaign=utm_params.get('utm_campaign'),
+            campaign_code=utm_params.get('code')  # Parâmetro customizado
+        )
+        
+        # ✅ VERIFICAÇÃO 3: Meta confirmou recebimento?
+        if result['success']:
+            logger.info(f"✅ Meta PageView confirmado: Bot {bot.id} | Event ID: {event_id}")
+        else:
+            # Falhou - log do erro
+            logger.error(f"❌ Meta PageView falhou: {result['error']} | Bot: {bot.id}")
+    
+    except Exception as e:
+        logger.error(f"💥 Erro ao enviar Meta PageView: {e}")
+        # Não impedir o redirect se Meta falhar
+
+def send_meta_pixel_purchase_event(payment):
+    """
+    Envia evento Purchase para Meta Pixel quando pagamento é confirmado
+    
+    CRÍTICO: Zero duplicação garantida via meta_purchase_sent flag
+    """
+    try:
+        # ✅ VERIFICAÇÃO 1: Bot tem Meta Pixel configurado?
+        if not payment.bot.meta_tracking_enabled:
+            return
+        
+        if not payment.bot.meta_pixel_id or not payment.bot.meta_access_token:
+            logger.warning(f"Bot {payment.bot.id} tem tracking ativo mas sem pixel_id ou access_token")
+            return
+        
+        # ✅ VERIFICAÇÃO 2: Evento Purchase está habilitado?
+        if not payment.bot.meta_events_purchase:
+            logger.info(f"Evento Purchase desabilitado para bot {payment.bot.id}")
+            return
+        
+        # ✅ VERIFICAÇÃO 3: Já enviou este pagamento? (ANTI-DUPLICAÇÃO)
+        if payment.meta_purchase_sent:
+            logger.info(f"⚠️ Purchase já enviado ao Meta, ignorando: {payment.payment_id}")
+            return
+        
+        logger.info(f"📊 Preparando envio Meta Purchase: {payment.payment_id}")
+        
+        # Importar Meta Pixel API
+        from utils.meta_pixel import MetaPixelAPI
+        from utils.encryption import decrypt
+        
+        # Gerar event_id único para deduplicação
+        event_id = MetaPixelAPI._generate_event_id(
+            event_type='purchase',
+            unique_id=payment.payment_id
+        )
+        
+        # Descriptografar access token
+        try:
+            access_token = decrypt(payment.bot.meta_access_token)
+        except Exception as e:
+            logger.error(f"Erro ao descriptografar access_token: {e}")
+            return
+        
+        # Determinar tipo de venda
+        is_downsell = payment.is_downsell
+        is_upsell = False  # TODO: Implementar detecção de upsell
+        is_remarketing = False  # TODO: Implementar detecção de remarketing
+        
+        # Enviar evento Purchase
+        result = MetaPixelAPI.send_purchase_event(
+            pixel_id=payment.bot.meta_pixel_id,
+            access_token=access_token,
+            event_id=event_id,
+            value=payment.amount,
+            currency='BRL',
+            customer_user_id=payment.customer_user_id,
+            content_id=str(payment.bot.id),
+            content_name=payment.product_name or payment.bot.name,
+            content_type='product',
+            num_items=1,
+            is_downsell=is_downsell,
+            is_upsell=is_upsell,
+            is_remarketing=is_remarketing,
+            order_bump_value=payment.order_bump_value if payment.order_bump_accepted else 0,
+            client_ip=request.remote_addr if request else None,
+            client_user_agent=request.headers.get('User-Agent') if request else None,
+            fbp=request.cookies.get('_fbp') if request else None,
+            fbc=request.cookies.get('_fbc') if request else None,
+            utm_source=payment.utm_source,
+            utm_campaign=payment.utm_campaign,
+            campaign_code=payment.campaign_code
+        )
+        
+        # ✅ VERIFICAÇÃO 4: Meta confirmou recebimento?
+        if result['success']:
+            # Marcar como enviado (ANTI-DUPLICAÇÃO)
+            payment.meta_purchase_sent = True
+            payment.meta_purchase_sent_at = datetime.now()
+            payment.meta_event_id = event_id
+            
+            logger.info(f"✅ Meta Purchase confirmado: R$ {payment.amount} | " +
+                       f"Event ID: {event_id} | " +
+                       f"Type: {'Downsell' if is_downsell else 'Normal'}")
+        else:
+            # Falhou - NÃO marca como enviado
+            # Próximo webhook tentará novamente
+            logger.error(f"❌ Meta Purchase falhou: {result['error']} | " +
+                        f"Payment: {payment.payment_id}")
+    
+    except Exception as e:
+        logger.error(f"💥 Erro ao enviar Meta Purchase: {e}")
+        # Não impedir o commit do pagamento se Meta falhar
+
 # ==================== WEBHOOKS E NOTIFICAÇÕES EM TEMPO REAL ====================
 
 @app.route('/webhook/telegram/<int:bot_id>', methods=['POST'])
@@ -3426,6 +3752,11 @@ def payment_webhook(gateway_type):
                         payment.bot.owner.total_commission_paid += commission_amount
                         
                         logger.info(f"💰 Receita da plataforma: R$ {commission_amount:.2f} (split automático) - Usuário: {payment.bot.owner.email}")
+                    
+                    # ============================================================================
+                    # ✅ META PIXEL: ENVIAR PURCHASE EVENT
+                    # ============================================================================
+                    send_meta_pixel_purchase_event(payment)
                     
                     # ============================================================================
                     # GAMIFICAÇÃO V2.0 - ATUALIZAR STREAK, RANKING E CONQUISTAS
@@ -3735,6 +4066,11 @@ def simulate_payment(payment_id):
                 db.session.add(commission)
                 # Split payment - receita já caiu automaticamente via SyncPay
                 payment.bot.owner.total_commission_paid += commission_amount
+            
+            # ============================================================================
+            # ✅ META PIXEL: ENVIAR PURCHASE EVENT (SIMULAÇÃO)
+            # ============================================================================
+            send_meta_pixel_purchase_event(payment)
             
             # ============================================================================
             # GAMIFICAÇÃO V2.0 - SIMULAR PAGAMENTO

@@ -202,6 +202,18 @@ class Bot(db.Model):
     last_started = db.Column(db.DateTime)
     last_stopped = db.Column(db.DateTime)
     
+    # ✅ META PIXEL INTEGRATION
+    meta_pixel_id = db.Column(db.String(50), nullable=True)
+    meta_access_token = db.Column(db.String(255), nullable=True)  # Será criptografado
+    meta_tracking_enabled = db.Column(db.Boolean, default=False)
+    meta_test_event_code = db.Column(db.String(100), nullable=True)
+    meta_events_pageview = db.Column(db.Boolean, default=True)
+    meta_events_viewcontent = db.Column(db.Boolean, default=True)
+    meta_events_purchase = db.Column(db.Boolean, default=True)
+    meta_cloaker_enabled = db.Column(db.Boolean, default=False)
+    meta_cloaker_param_name = db.Column(db.String(20), default='apx')
+    meta_cloaker_param_value = db.Column(db.String(50), nullable=True)
+    
     # Relacionamentos
     config = db.relationship('BotConfig', backref='bot', uselist=False, cascade='all, delete-orphan')
     payments = db.relationship('Payment', backref='bot', lazy='dynamic', cascade='all, delete-orphan')
@@ -762,6 +774,22 @@ class Payment(db.Model):
     # Status
     status = db.Column(db.String(20), default='pending', index=True)  # pending, paid, failed, cancelled (indexado para queries frequentes)
     
+    # ✅ META PIXEL INTEGRATION
+    meta_purchase_sent = db.Column(db.Boolean, default=False)
+    meta_purchase_sent_at = db.Column(db.DateTime, nullable=True)
+    meta_event_id = db.Column(db.String(100), nullable=True)
+    meta_viewcontent_sent = db.Column(db.Boolean, default=False)
+    meta_viewcontent_sent_at = db.Column(db.DateTime, nullable=True)
+    
+    # ✅ UTM TRACKING
+    utm_source = db.Column(db.String(50), nullable=True)
+    utm_campaign = db.Column(db.String(100), nullable=True)
+    utm_content = db.Column(db.String(100), nullable=True)
+    utm_medium = db.Column(db.String(50), nullable=True)
+    utm_term = db.Column(db.String(100), nullable=True)
+    fbclid = db.Column(db.String(200), nullable=True)
+    campaign_code = db.Column(db.String(50), nullable=True)
+    
     # Datas
     created_at = db.Column(db.DateTime, default=get_brazil_time, index=True)
     paid_at = db.Column(db.DateTime)
@@ -799,6 +827,22 @@ class BotUser(db.Model):
     archived = db.Column(db.Boolean, default=False, index=True)  # Usuario de token antigo
     archived_reason = db.Column(db.String(100))  # Ex: "token_changed"
     archived_at = db.Column(db.DateTime)  # Quando foi arquivado
+    
+    # ✅ META PIXEL INTEGRATION
+    meta_pageview_sent = db.Column(db.Boolean, default=False)
+    meta_pageview_sent_at = db.Column(db.DateTime, nullable=True)
+    meta_viewcontent_sent = db.Column(db.Boolean, default=False)
+    meta_viewcontent_sent_at = db.Column(db.DateTime, nullable=True)
+    
+    # ✅ UTM TRACKING
+    utm_source = db.Column(db.String(50), nullable=True)
+    utm_campaign = db.Column(db.String(100), nullable=True)
+    utm_content = db.Column(db.String(100), nullable=True)
+    utm_medium = db.Column(db.String(50), nullable=True)
+    utm_term = db.Column(db.String(100), nullable=True)
+    fbclid = db.Column(db.String(200), nullable=True)
+    campaign_code = db.Column(db.String(50), nullable=True)
+    external_id = db.Column(db.String(100), nullable=True)  # Para tracking de cliques
     
     # Datas
     first_interaction = db.Column(db.DateTime, default=get_brazil_time)
