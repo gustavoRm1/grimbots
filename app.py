@@ -4010,18 +4010,19 @@ def test_meta_pixel_connection(bot_id):
 
 def send_meta_pixel_pageview_event(pool, request):
     """
-    Envia evento PageView para Meta Pixel quando usuário acessa redirecionador
+    Enfileira evento PageView para Meta Pixel (ASSÍNCRONO - MVP DIA 2)
     
-    ARQUITETURA V3.0 (QI 540 - CORREÇÃO CRÍTICA):
-    - Pixel configurado no POOL (não no bot)
-    - Alta disponibilidade: bot cai, pool continua tracking
-    - Dados consolidados: 1 campanha = 1 pool = 1 pixel
-    - ✅ RETORNA external_id e utm_data para vincular eventos posteriores
+    ARQUITETURA V4.0 - ASYNC (QI 540):
+    - NÃO BLOQUEIA o redirect (< 5ms)
+    - Enfileira evento no Celery
+    - Worker processa em background
+    - Retry persistente se falhar
+    - ✅ RETORNA external_id e utm_data IMEDIATAMENTE
     
-    CRÍTICO: Anti-duplicação via IP + User-Agent + timestamp
+    CRÍTICO: Não espera resposta da Meta API
     
     Returns:
-        tuple: (external_id, utm_data) para salvar no BotUser
+        tuple: (external_id, utm_data) para vincular eventos posteriores
     """
     try:
         # ✅ VERIFICAÇÃO 1: Pool tem Meta Pixel configurado?
@@ -4037,18 +4038,14 @@ def send_meta_pixel_pageview_event(pool, request):
             logger.info(f"Evento PageView desabilitado para pool {pool.id}")
             return None, {}
         
-        logger.info(f"📊 Preparando envio Meta PageView: Pool {pool.id} ({pool.name})")
-        
-        # Importar Meta Pixel API
-        from utils.meta_pixel import MetaPixelAPI, MetaPixelHelper
+        # Importar helpers
+        from utils.meta_pixel import MetaPixelHelper
         from utils.encryption import decrypt
+        import time
         
-        # Gerar event_id único para deduplicação
+        # Gerar external_id único
         external_id = MetaPixelHelper.generate_external_id()
-        event_id = MetaPixelAPI._generate_event_id(
-            event_type='pageview',
-            unique_id=external_id
-        )
+        event_id = f"pageview_{pool.id}_{int(time.time())}_{external_id[:8]}"
         
         # Descriptografar access token
         try:
@@ -4072,33 +4069,51 @@ def send_meta_pixel_pageview_event(pool, request):
             'campaign_code': utm_params.get('code')
         }
         
-        # Enviar evento PageView
-        result = MetaPixelAPI.send_pageview_event(
+        # ============================================================================
+        # ✅ ENFILEIRAR EVENTO (ASSÍNCRONO - NÃO BLOQUEIA!)
+        # ============================================================================
+        from celery_app import send_meta_event
+        
+        event_data = {
+            'event_name': 'PageView',
+            'event_time': int(time.time()),
+            'event_id': event_id,
+            'action_source': 'website',
+            'user_data': {
+                'external_id': external_id,
+                'client_ip_address': request.remote_addr,
+                'client_user_agent': request.headers.get('User-Agent', ''),
+                'fbp': cookies.get('_fbp'),
+                'fbc': cookies.get('_fbc')
+            },
+            'custom_data': {
+                'pool_id': pool.id,
+                'pool_name': pool.name,
+                'utm_source': utm_data['utm_source'],
+                'utm_campaign': utm_data['utm_campaign'],
+                'utm_content': utm_data['utm_content'],
+                'utm_medium': utm_data['utm_medium'],
+                'utm_term': utm_data['utm_term'],
+                'fbclid': utm_data['fbclid'],
+                'campaign_code': utm_data['campaign_code']
+            }
+        }
+        
+        # ✅ ENFILEIRAR (NÃO ESPERA RESPOSTA)
+        task = send_meta_event.delay(
             pixel_id=pool.meta_pixel_id,
             access_token=access_token,
-            event_id=event_id,
-            external_id=external_id,
-            client_ip=request.remote_addr,
-            client_user_agent=request.headers.get('User-Agent'),
-            fbp=cookies.get('fbp'),
-            fbc=cookies.get('fbc'),
-            utm_source=utm_data['utm_source'],
-            utm_campaign=utm_data['utm_campaign'],
-            campaign_code=utm_data['campaign_code']
+            event_data=event_data,
+            test_code=pool.meta_test_event_code
         )
         
-        # ✅ VERIFICAÇÃO 3: Meta confirmou recebimento?
-        if result['success']:
-            logger.info(f"✅ Meta PageView confirmado: Pool {pool.id} ({pool.name}) | Event ID: {event_id}")
-            # ✅ RETORNAR external_id e utm_data para salvar no BotUser
-            return external_id, utm_data
-        else:
-            # Falhou - log do erro
-            logger.error(f"❌ Meta PageView falhou: {result['error']} | Pool: {pool.id} ({pool.name})")
-            return external_id, utm_data  # Retorna mesmo se falhou (para salvar UTM)
+        logger.info(f"📤 PageView enfileirado: Pool {pool.id} | Event ID: {event_id} | Task: {task.id}")
+        
+        # ✅ RETORNAR IMEDIATAMENTE (não espera envio!)
+        return external_id, utm_data
     
     except Exception as e:
-        logger.error(f"💥 Erro ao enviar Meta PageView: {e}")
+        logger.error(f"💥 Erro ao enfileirar Meta PageView: {e}")
         # Não impedir o redirect se Meta falhar
         return None, {}
 
@@ -4167,48 +4182,66 @@ def send_meta_pixel_purchase_event(payment):
         is_upsell = payment.is_upsell or False
         is_remarketing = payment.is_remarketing or False
         
-        # Enviar evento Purchase
-        result = MetaPixelAPI.send_purchase_event(
-            pixel_id=pool.meta_pixel_id,
-            access_token=access_token,
-            event_id=event_id,
-            value=payment.amount,
-            currency='BRL',
-            customer_user_id=payment.customer_user_id,
-            content_id=str(pool.id),  # Usar pool ID para consistência
-            content_name=payment.product_name or payment.bot.name,
-            content_type='product',
-            num_items=1,
-            is_downsell=is_downsell,
-            is_upsell=is_upsell,
-            is_remarketing=is_remarketing,
-            order_bump_value=payment.order_bump_value if payment.order_bump_accepted else 0,
-            client_ip=request.remote_addr if request else None,
-            client_user_agent=request.headers.get('User-Agent') if request else None,
-            fbp=request.cookies.get('_fbp') if request else None,
-            fbc=request.cookies.get('_fbc') if request else None,
-            utm_source=payment.utm_source,
-            utm_campaign=payment.utm_campaign,
-            campaign_code=payment.campaign_code
+        # Buscar BotUser para pegar IP e User-Agent
+        from models import BotUser
+        bot_user = BotUser.query.filter_by(
+            bot_id=payment.bot_id,
+            telegram_user_id=int(payment.customer_user_id.replace('user_', '')) if payment.customer_user_id and payment.customer_user_id.startswith('user_') else None
+        ).first()
+        
+        # ============================================================================
+        # ✅ ENFILEIRAR EVENTO PURCHASE (ASSÍNCRONO - MVP DIA 2)
+        # ============================================================================
+        from celery_app import send_meta_event
+        import time
+        
+        event_data = {
+            'event_name': 'Purchase',
+            'event_time': int(time.time()),
+            'event_id': event_id,
+            'action_source': 'website',
+            'user_data': {
+                'external_id': bot_user.external_id if bot_user else f'payment_{payment.id}',
+                'client_ip_address': bot_user.ip_address if bot_user else None,
+                'client_user_agent': bot_user.user_agent if bot_user else None
+            },
+            'custom_data': {
+                'currency': 'BRL',
+                'value': float(payment.amount),
+                'content_id': str(pool.id),
+                'content_name': payment.product_name or payment.bot.name,
+                'content_type': 'product',
+                'payment_id': payment.payment_id,
+                'is_downsell': is_downsell,
+                'is_upsell': is_upsell,
+                'is_remarketing': is_remarketing,
+                'utm_source': payment.utm_source,
+                'utm_campaign': payment.utm_campaign,
+                'campaign_code': payment.campaign_code
+            }
+        }
+        
+        # ✅ ENFILEIRAR COM PRIORIDADE ALTA (Purchase é crítico!)
+        task = send_meta_event.apply_async(
+            args=[
+                pool.meta_pixel_id,
+                access_token,
+                event_data,
+                pool.meta_test_event_code
+            ],
+            priority=1  # Alta prioridade
         )
         
-        # ✅ VERIFICAÇÃO 5: Meta confirmou recebimento?
-        if result['success']:
-            # Marcar como enviado (ANTI-DUPLICAÇÃO)
-            payment.meta_purchase_sent = True
-            payment.meta_purchase_sent_at = datetime.now()
-            payment.meta_event_id = event_id
-            
-            logger.info(f"✅ Meta Purchase confirmado: R$ {payment.amount} | " +
-                       f"Pool: {pool.name} | " +
-                       f"Event ID: {event_id} | " +
-                       f"Type: {'Downsell' if is_downsell else 'Normal'}")
-        else:
-            # Falhou - NÃO marca como enviado
-            # Próximo webhook tentará novamente
-            logger.error(f"❌ Meta Purchase falhou: {result['error']} | " +
-                        f"Pool: {pool.name} | " +
-                        f"Payment: {payment.payment_id}")
+        # Marcar como enviado IMEDIATAMENTE (flag otimista)
+        payment.meta_purchase_sent = True
+        payment.meta_purchase_sent_at = datetime.now()
+        payment.meta_event_id = event_id
+        
+        logger.info(f"📤 Purchase enfileirado: R$ {payment.amount} | " +
+                   f"Pool: {pool.name} | " +
+                   f"Event ID: {event_id} | " +
+                   f"Task: {task.id} | " +
+                   f"Type: {'Downsell' if is_downsell else 'Upsell' if is_upsell else 'Remarketing' if is_remarketing else 'Normal'}")
     
     except Exception as e:
         logger.error(f"💥 Erro ao enviar Meta Purchase: {e}")

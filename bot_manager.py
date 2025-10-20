@@ -101,37 +101,57 @@ def send_meta_pixel_viewcontent_event(bot, bot_user, message, pool_id=None):
         # Dados foram salvos quando usuário acessou /go/<slug>
         # ✅ Agora eventos ViewContent e Purchase têm origem correta!
         
-        # Enviar evento ViewContent
-        result = MetaPixelAPI.send_viewcontent_event(
-            pixel_id=pool.meta_pixel_id,
-            access_token=access_token,
-            event_id=event_id,
-            customer_user_id=bot_user.telegram_user_id,
-            content_id=str(pool.id),  # Usar pool ID para consistência
-            content_name=pool.name,
-            utm_source=bot_user.utm_source,  # ✅ Do BotUser
-            utm_campaign=bot_user.utm_campaign,  # ✅ Do BotUser
-            campaign_code=bot_user.campaign_code  # ✅ Do BotUser
+        # ============================================================================
+        # ✅ ENFILEIRAR EVENTO VIEWCONTENT (ASSÍNCRONO - MVP DIA 2)
+        # ============================================================================
+        from celery_app import send_meta_event
+        import time
+        
+        event_data = {
+            'event_name': 'ViewContent',
+            'event_time': int(time.time()),
+            'event_id': event_id,
+            'action_source': 'website',
+            'user_data': {
+                'external_id': bot_user.external_id or f'user_{bot_user.telegram_user_id}',
+                'client_ip_address': bot_user.ip_address,
+                'client_user_agent': bot_user.user_agent
+            },
+            'custom_data': {
+                'content_id': str(pool.id),
+                'content_name': pool.name,
+                'bot_id': bot.id,
+                'bot_username': bot.username,
+                'utm_source': bot_user.utm_source,
+                'utm_campaign': bot_user.utm_campaign,
+                'campaign_code': bot_user.campaign_code
+            }
+        }
+        
+        # ✅ ENFILEIRAR COM PRIORIDADE MÉDIA
+        task = send_meta_event.apply_async(
+            args=[
+                pool.meta_pixel_id,
+                access_token,
+                event_data,
+                pool.meta_test_event_code
+            ],
+            priority=5  # Média prioridade
         )
         
-        logger.info(f"📊 ViewContent com UTM: source={bot_user.utm_source}, " +
-                   f"campaign={bot_user.utm_campaign}, external_id={bot_user.external_id}")
+        # Marcar como enviado IMEDIATAMENTE (flag otimista)
+        bot_user.meta_viewcontent_sent = True
+        bot_user.meta_viewcontent_sent_at = datetime.now()
         
-        # ✅ VERIFICAÇÃO 5: Meta confirmou recebimento?
-        if result['success']:
-            # Marcar como enviado (ANTI-DUPLICAÇÃO)
-            bot_user.meta_viewcontent_sent = True
-            bot_user.meta_viewcontent_sent_at = datetime.now()
-            
-            # Commit da flag
-            from app import db
-            db.session.commit()
-            
-            logger.info(f"✅ Meta ViewContent confirmado: Pool {pool.name} | User {bot_user.telegram_user_id} | Event ID: {event_id}")
-        else:
-            # Falhou - NÃO marca como enviado
-            # Próximo /start tentará novamente
-            logger.error(f"❌ Meta ViewContent falhou: {result['error']} | Pool: {pool.name} | User: {bot_user.telegram_user_id}")
+        # Commit da flag
+        from app import db
+        db.session.commit()
+        
+        logger.info(f"📤 ViewContent enfileirado: Pool {pool.name} | " +
+                   f"User {bot_user.telegram_user_id} | " +
+                   f"Event ID: {event_id} | " +
+                   f"Task: {task.id} | " +
+                   f"UTM: {bot_user.utm_source}/{bot_user.utm_campaign}")
     
     except Exception as e:
         logger.error(f"💥 Erro ao enviar Meta ViewContent: {e}")
