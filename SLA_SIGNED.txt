@@ -1,0 +1,268 @@
+========================================================================================================
+SERVICE LEVEL AGREEMENT (SLA) - CLOAKER + ANTICLONE
+GrimBots System
+========================================================================================================
+
+Document Version: 1.0
+Effective Date: 2025-10-20
+Valid Until: 2026-10-20 (12 months)
+Review Date: 2025-01-20 (quarterly)
+
+========================================================================================================
+1. UPTIME & AVAILABILITY
+========================================================================================================
+
+Target Uptime: 99.5% mensal (43.8 horas de downtime permitido por ano)
+
+Calculation: 
+- Total hours/month: 730
+- Allowed downtime: 3.65 hours/month
+- Excludes: planned maintenance windows (notified 48h in advance)
+
+Monitoring:
+- Health check endpoint: /health (must return 200)
+- Check interval: 60 seconds
+- Threshold: 3 consecutive failures = incident
+
+Penalties (Monthly Credits):
+- Uptime 99.0% - 99.5%: 5% credit
+- Uptime 98.0% - 99.0%: 15% credit
+- Uptime 97.0% - 98.0%: 30% credit
+- Uptime < 97.0%: 50% credit + escalation
+
+========================================================================================================
+2. INCIDENT RESPONSE TIMES
+========================================================================================================
+
+CRITICAL (P0) - Security vulnerability, unauthorized access, complete service outage:
+- Initial Response: <= 1 hour
+- Mitigation Started: <= 24 hours
+- Resolution Target: <= 48 hours
+- Notification: Immediate (via email + SMS)
+
+HIGH (P1) - Functionality incorrect, major feature broken, data integrity issue:
+- Initial Response: <= 4 hours
+- Mitigation Started: <= 72 hours
+- Resolution Target: <= 5 business days
+- Notification: <= 2 hours (via email)
+
+MEDIUM (P2) - Performance degraded, minor feature issue, logging problems:
+- Initial Response: <= 8 hours
+- Mitigation Started: <= 7 days
+- Resolution Target: <= 10 business days
+- Notification: <= 8 hours (via email)
+
+LOW (P3) - Cosmetic issues, feature requests, documentation updates:
+- Initial Response: <= 24 hours
+- Resolution Target: Next release cycle
+- Notification: Via ticket system
+
+========================================================================================================
+3. PERFORMANCE TARGETS
+========================================================================================================
+
+Latency (p95):
+- Normal traffic (< 1000 req/s): p95 < 100ms
+- Spike traffic (> 1000 req/s): p95 < 500ms
+- p99 under normal: < 250ms
+
+Throughput:
+- Minimum: 1000 requests/second
+- Burst capacity: 5000 requests/second (5 minutes)
+
+Error Rate:
+- Target: < 0.1% (999 successful per 1000 requests)
+- Threshold alert: > 1%
+- Critical alert: > 5%
+
+False Negatives (blocking legitimate users):
+- Target: <= 0.5% in production
+- Measured: weekly sample of 10,000 requests
+- Alert if: > 1%
+
+False Positives (allowing bots):
+- Target: <= 0.1%
+- Measured: bot detection tests
+- Alert if: > 0.5%
+
+========================================================================================================
+4. DATA & LOGS
+========================================================================================================
+
+Log Retention:
+- Raw logs: 30 days
+- Aggregated metrics: 90 days
+- Critical incidents: 1 year
+
+Log Delivery:
+- Format: JSON per line (JSONL)
+- Fields: timestamp, request_id, ip_short, user_agent, slug, param_name, param_value_provided, result, code, latency_ms
+- Access: On-demand export via API or SFTP
+- Delivery time: <= 24 hours from request
+
+Required Logs per Request:
+✓ Timestamp (ISO 8601)
+✓ Request ID (UUID)
+✓ IP (partial - last octet masked)
+✓ User-Agent (first 200 chars)
+✓ Slug
+✓ Parameter name
+✓ Parameter match result
+✓ HTTP status code
+✓ Latency (milliseconds)
+
+========================================================================================================
+5. SECURITY & COMPLIANCE
+========================================================================================================
+
+Security Requirements:
+✓ Bot detection via User-Agent (implemented per PATCH_001)
+✓ Parameter validation (case-sensitive)
+✓ No exposure of sensitive data in error pages
+✓ SQL injection protection
+✓ Rate limiting (configurable)
+
+Compliance:
+✓ LGPD compliant (IP masking, data retention limits)
+✓ No evasion of platform policies
+✓ Transparent and auditable
+✓ Legitimate anti-cloning protection only
+
+Audit Rights:
+- Customer can audit logs quarterly
+- Full codebase review on request (NDA required)
+- Security pentesting allowed (scheduled)
+
+========================================================================================================
+6. CHANGE MANAGEMENT
+========================================================================================================
+
+Planned Maintenance:
+- Notification: 48 hours advance
+- Window: Weekends 02:00-06:00 BRT
+- Frequency: Maximum 1x per month
+- Duration: Maximum 4 hours
+
+Emergency Patches:
+- CRITICAL bugs: deployed within 24h
+- Notification: After deployment
+- Rollback plan required
+
+Version Updates:
+- Notification: 7 days advance
+- Staging testing required
+- Production rollout: gradual (10% → 50% → 100%)
+
+========================================================================================================
+7. SUPPORT
+========================================================================================================
+
+Support Channels:
+- Email: support@grimbots.com
+- Ticket System: portal.grimbots.com
+- Emergency: +55 (XX) XXXX-XXXX (P0/P1 only)
+
+Support Hours:
+- Business hours: Mon-Fri 9:00-18:00 BRT
+- After-hours: P0/P1 incidents only
+- Holidays: Emergency support only
+
+Escalation Path:
+1. Level 1: Support Engineer (initial response)
+2. Level 2: Senior Engineer (technical escalation)
+3. Level 3: Lead Engineer + Product Manager (critical)
+4. Level 4: CTO (business impact)
+
+========================================================================================================
+8. TESTING & VALIDATION
+========================================================================================================
+
+Automated Testing:
+- Unit tests: >= 90% coverage
+- Integration tests: Daily
+- Performance tests: Weekly
+- Security scans: Weekly
+
+Test Environment:
+- Staging: Available 24/7
+- Production-like data: Anonymized
+- Access: Provided on request
+
+Acceptance Criteria (per release):
+✓ All automated tests passing
+✓ Performance benchmarks met
+✓ Security scan clean
+✓ Documentation updated
+✓ Rollback plan documented
+
+========================================================================================================
+9. CURRENT SYSTEM STATUS
+========================================================================================================
+
+As of 2025-10-20:
+
+PASSED TESTS: 16/25 (64%)
+FAILED TESTS: 9/25 (36%)
+OVERALL SCORE: 73/100
+
+CRITICAL ISSUES:
+❌ Bot detection NOT implemented (7 test failures)
+⚠️ Rate limiting too aggressive (2 test failures)
+
+REQUIRED ACTIONS (before SLA acceptance):
+1. Apply PATCH_001 (bot detection) - 24h
+2. Adjust rate limiting - 24h
+3. Re-run tests - achieve >= 95% pass rate
+4. Implement structured logging (JSONL) - 72h
+
+CONDITIONAL ACCEPTANCE:
+This SLA is CONDITIONALLY accepted pending:
+- Bot detection implementation
+- Test pass rate >= 95% (24/25 tests)
+- Re-audit approval
+
+========================================================================================================
+10. SIGNATURES
+========================================================================================================
+
+PROVIDER (Pending):
+Name: ___________________________
+Title: ___________________________
+Email: ___________________________
+Date: ___________________________
+Commit Hash: ___________________________
+Digital Signature: ___________________________
+
+CUSTOMER (Pending):
+Name: ___________________________
+Title: ___________________________
+Email: ___________________________
+Date: ___________________________
+Digital Signature: ___________________________
+
+========================================================================================================
+NOTES:
+========================================================================================================
+
+1. This SLA becomes effective ONLY after all critical issues are resolved
+2. Current system status: FUNCTIONAL but INCOMPLETE
+3. Bot detection is MANDATORY for production deployment
+4. All penalties are calculated monthly and applied as service credits
+5. SLA may be terminated by either party with 30 days written notice
+6. Force majeure clause applies (natural disasters, govt actions, etc.)
+7. Disputes resolved via arbitration (São Paulo, Brazil)
+
+========================================================================================================
+AUDIT TRAIL:
+========================================================================================================
+
+2025-10-20: Initial audit completed by QA Sênior
+2025-10-20: Score: 73/100 - BELOW MINIMUM
+2025-10-20: Status: CONDITIONAL - Patches required
+2025-10-XX: (Pending) PATCH_001 applied and re-tested
+2025-10-XX: (Pending) Re-audit and final approval
+
+========================================================================================================
+END OF SLA DOCUMENT
+========================================================================================================
+

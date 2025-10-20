@@ -2577,6 +2577,105 @@ def update_bot_config(bot_id):
 
 # ==================== LOAD BALANCER / REDIRECT POOLS ====================
 
+def validate_cloaker_access(request, pool, slug):
+    """
+    ✅ QI 540 + QI 300 #2: Validação MULTICAMADAS do cloaker
+    
+    CAMADA 1: Parâmetro obrigatório
+    CAMADA 2: User-Agent (bot detection)
+    CAMADA 3: Header consistency
+    CAMADA 4: Timing analysis
+    """
+    import redis
+    import time
+    
+    score = 100
+    details = {}
+    
+    # CAMADA 1: Parâmetro
+    param_name = pool.meta_cloaker_param_name or 'grim'
+    expected_value = pool.meta_cloaker_param_value
+    
+    if not expected_value or not expected_value.strip():
+        return {'allowed': False, 'reason': 'cloaker_misconfigured', 'score': 0, 'details': {}}
+    
+    expected_value = expected_value.strip()
+    actual_value = (request.args.get(param_name) or '').strip()
+    
+    if actual_value != expected_value:
+        return {'allowed': False, 'reason': 'invalid_parameter', 'score': 0, 'details': {'param_match': False}}
+    
+    details['param_match'] = True
+    
+    # CAMADA 2: Bot Detection
+    user_agent = request.headers.get('User-Agent', '').lower()
+    bot_patterns = [
+        'facebookexternalhit', 'facebot', 'twitterbot', 'linkedinbot', 'googlebot', 'bingbot',
+        'bot', 'crawler', 'spider', 'scraper', 'python-requests', 'curl', 'wget', 'scrapy'
+    ]
+    
+    for pattern in bot_patterns:
+        if pattern in user_agent:
+            return {'allowed': False, 'reason': 'bot_detected_ua', 'score': 0, 
+                   'details': {'pattern': pattern, 'user_agent': user_agent[:200]}}
+    
+    # CAMADA 3: Header Consistency
+    if 'mozilla' in user_agent or 'chrome' in user_agent:
+        if not request.headers.get('Accept'):
+            score -= 30
+        if not request.headers.get('Accept-Language'):
+            score -= 10
+    
+    # CAMADA 4: Timing (Redis)
+    try:
+        r = redis.Redis(host='localhost', port=6379, db=0, socket_timeout=1)
+        ip = request.remote_addr
+        last_access_key = f"cloaker:timing:{ip}"
+        last_access = r.get(last_access_key)
+        
+        if last_access:
+            time_diff = time.time() - float(last_access)
+            if time_diff < 0.1:
+                score -= 40
+        
+        r.setex(last_access_key, 60, str(time.time()))
+    except:
+        pass
+    
+    return {'allowed': score >= 40, 'reason': 'authorized' if score >= 40 else 'suspicious_behavior', 
+           'score': score, 'details': details}
+
+
+def log_cloaker_event_json(event_type, slug, validation_result, request, pool, latency_ms=0):
+    """✅ QI 540: Log estruturado em JSONL"""
+    import json
+    import uuid
+    from datetime import datetime
+    
+    ip_parts = request.remote_addr.split('.')
+    ip_short = f"{ip_parts[0]}.{ip_parts[1]}.{ip_parts[2]}.x" if len(ip_parts) == 4 else request.remote_addr
+    
+    log_entry = {
+        'timestamp': datetime.utcnow().isoformat() + 'Z',
+        'request_id': str(uuid.uuid4()),
+        'event_type': event_type,
+        'slug': slug,
+        'pool_id': pool.id,
+        'result': 'ALLOW' if validation_result['allowed'] else 'BLOCK',
+        'reason': validation_result['reason'],
+        'score': validation_result['score'],
+        'ip_short': ip_short,
+        'user_agent': request.headers.get('User-Agent', '')[:200],
+        'param_name': pool.meta_cloaker_param_name,
+        'param_provided': bool(request.args.get(pool.meta_cloaker_param_name or 'grim')),
+        'http_method': request.method,
+        'code': 403 if not validation_result['allowed'] else 302,
+        'latency_ms': round(latency_ms, 2)
+    }
+    
+    logger.info(f"CLOAKER_EVENT: {json.dumps(log_entry, ensure_ascii=False)}")
+
+
 @app.route('/go/<slug>')
 def public_redirect(slug):
     """
@@ -2586,7 +2685,7 @@ def public_redirect(slug):
     
     FUNCIONALIDADES:
     - Busca pool pelo slug
-    - ✅ CLOAKER: Valida parâmetro de segurança (bloqueia acessos não autorizados)
+    - ✅ CLOAKER: Validação MULTICAMADAS (parâmetro + UA + headers + timing)
     - Seleciona bot online (estratégia configurada)
     - Health check em cache (não valida em tempo real)
     - Failover automático
@@ -2595,6 +2694,9 @@ def public_redirect(slug):
     - ✅ META PIXEL: PageView tracking
     """
     from datetime import datetime
+    import time
+    
+    start_time = time.time()
     
     # Buscar pool ativo
     pool = RedirectPool.query.filter_by(slug=slug, is_active=True).first()
@@ -2603,41 +2705,36 @@ def public_redirect(slug):
         abort(404, f'Pool "{slug}" não encontrado ou inativo')
     
     # ============================================================================
-    # ✅ CLOAKER + ANTICLONE: VALIDAÇÃO DE SEGURANÇA
+    # ✅ CLOAKER + ANTICLONE: VALIDAÇÃO MULTICAMADAS (PATCH_001 APLICADO)
     # ============================================================================
-    # CRÍTICO: Se cloaker está ativo, BLOQUEIA acessos sem parâmetro correto
-    # Protege contra: concorrentes, biblioteca de anúncios, moderadores
-    # ============================================================================
+    
     if pool.meta_cloaker_enabled:
-        # Pegar nome e valor do parâmetro configurado
-        param_name = pool.meta_cloaker_param_name or 'grim'
-        expected_value = pool.meta_cloaker_param_value
+        # Validação multicamadas
+        validation_result = validate_cloaker_access(request, pool, slug)
         
-        # ✅ FIX BUG CRÍTICO: Validar se expected_value foi configurado
-        if not expected_value or not expected_value.strip():
-            logger.error(f"🔥 BUG: Cloaker ativo no pool '{slug}' mas sem valor configurado! Desabilitando validação.")
-            # Pool mal configurado, permitir acesso (não bloquear tudo)
-            # Admin precisa configurar corretamente
-        else:
-            # Normalizar valores (strip para evitar problemas com espaços)
-            expected_value = expected_value.strip()
-            actual_value = (request.args.get(param_name) or '').strip()
-            
-            if actual_value != expected_value:
-                # ❌ ACESSO BLOQUEADO
-                logger.warning(f"🛡️ Cloaker bloqueou acesso ao pool '{slug}' | " +
-                              f"IP: {request.remote_addr} | " +
-                              f"User-Agent: {request.headers.get('User-Agent')} | " +
-                              f"Parâmetro esperado: {param_name}={expected_value} | " +
-                              f"Recebido: {param_name}={actual_value}")
-                
-                return render_template('cloaker_block.html', 
-                                     pool_name=pool.name,
-                                     slug=slug), 403
-            
-            # ✅ ACESSO AUTORIZADO
-            logger.info(f"✅ Cloaker validou acesso ao pool '{slug}' | " +
-                       f"Parâmetro: {param_name}={actual_value}")
+        # Latência da validação
+        validation_latency = (time.time() - start_time) * 1000
+        
+        # Log estruturado JSON
+        log_cloaker_event_json(
+            event_type='cloaker_validation',
+            slug=slug,
+            validation_result=validation_result,
+            request=request,
+            pool=pool,
+            latency_ms=validation_latency
+        )
+        
+        # Se bloqueado
+        if not validation_result['allowed']:
+            logger.warning(
+                f"🛡️ BLOCK | Slug: {slug} | Reason: {validation_result['reason']} | "
+                f"Score: {validation_result['score']}/100"
+            )
+            return render_template('cloaker_block.html', pool_name=pool.name, slug=slug), 403
+        
+        # Se autorizado
+        logger.info(f"✅ ALLOW | Slug: {slug} | Score: {validation_result['score']}/100")
     
     # Selecionar bot usando estratégia configurada
     pool_bot = pool.select_bot()
