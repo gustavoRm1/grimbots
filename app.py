@@ -2579,20 +2579,17 @@ def update_bot_config(bot_id):
 
 def validate_cloaker_access(request, pool, slug):
     """
-    ✅ QI 540 + QI 300 #2: Validação MULTICAMADAS do cloaker
+    ✅ CLOAKER SIMPLIFICADO - Foco em efetividade, não complexidade
     
-    CAMADA 1: Parâmetro obrigatório
-    CAMADA 2: User-Agent (bot detection)
-    CAMADA 3: Header consistency
-    CAMADA 4: Timing analysis
+    VALIDAÇÕES:
+    1. Parâmetro obrigatório correto
+    2. User-Agent não é bot conhecido
+    
+    Retorna score 100 se OK, 0 se bloqueado
     """
-    import redis
-    import time
-    
-    score = 100
     details = {}
     
-    # CAMADA 1: Parâmetro
+    # VALIDAÇÃO 1: Parâmetro obrigatório
     param_name = pool.meta_cloaker_param_name or 'grim'
     expected_value = pool.meta_cloaker_param_value
     
@@ -2605,9 +2602,7 @@ def validate_cloaker_access(request, pool, slug):
     if actual_value != expected_value:
         return {'allowed': False, 'reason': 'invalid_parameter', 'score': 0, 'details': {'param_match': False}}
     
-    details['param_match'] = True
-    
-    # CAMADA 2: Bot Detection
+    # VALIDAÇÃO 2: Bot Detection via User-Agent
     user_agent = request.headers.get('User-Agent', '').lower()
     bot_patterns = [
         'facebookexternalhit', 'facebot', 'twitterbot', 'linkedinbot', 'googlebot', 'bingbot',
@@ -2619,43 +2614,8 @@ def validate_cloaker_access(request, pool, slug):
             return {'allowed': False, 'reason': 'bot_detected_ua', 'score': 0, 
                    'details': {'pattern': pattern, 'user_agent': user_agent[:200]}}
     
-    # CAMADA 3: Header Consistency (DESABILITADO para testes)
-    # Nota: Headers são opcionais, muitos clientes legítimos não enviam
-    # Apenas logar, não penalizar
-    if 'mozilla' in user_agent or 'chrome' in user_agent:
-        if not request.headers.get('Accept'):
-            details['missing_accept'] = True
-        if not request.headers.get('Accept-Language'):
-            details['missing_language'] = True
-    
-    # CAMADA 4: Timing (Redis) - APENAS LOGGING por enquanto
-    # Nota: Timing analysis desabilitado para evitar falsos positivos
-    # Será re-habilitado após calibração com dados reais
-    try:
-        r = redis.Redis(host='localhost', port=6379, db=0, socket_timeout=1)
-        ip = request.remote_addr
-        count_key = f"cloaker:count:{ip}:60s"
-        
-        # Apenas contar para estatísticas (não penalizar)
-        request_count = r.incr(count_key)
-        if request_count == 1:
-            r.expire(count_key, 60)
-        
-        # Logar frequência mas não penalizar
-        details['request_count_60s'] = request_count
-        
-    except Exception as e:
-        # Se Redis falhar, não bloquear
-        details['timing_check_failed'] = str(e)
-        pass
-    
-    # Threshold: score > 0 para permitir
-    # Bot detectado retorna score 0, então qualquer score > 0 = não é bot conhecido
-    # Após calibração com dados reais, aumentaremos o threshold
-    is_allowed = score > 0
-    reason = 'authorized' if is_allowed else 'bot_or_suspicious'
-    
-    return {'allowed': is_allowed, 'reason': reason, 'score': score, 'details': details}
+    # Passou em todas as validações
+    return {'allowed': True, 'reason': 'authorized', 'score': 100, 'details': {'param_match': True, 'bot_check': 'passed'}}
 
 
 def log_cloaker_event_json(event_type, slug, validation_result, request, pool, latency_ms=0):
