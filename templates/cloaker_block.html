@@ -247,9 +247,10 @@
         }
         
         .feature-list li:before {
-            content: "✅";
+            content: "•";
             font-size: 1rem;
             flex-shrink: 0;
+            color: var(--accent-500);
         }
         
         /* Footer - Estilo Dashboard */
@@ -346,27 +347,6 @@
                     o GrimBots mostra <strong>QUAL campanha está vendendo AGORA</strong>.
                 </p>
                 
-                <div class="bg-surface700 rounded-lg p-4 mb-4 border border-accent500 border-opacity-20">
-                    <h3 class="text-lg font-bold text-accent500 mb-2">📊 Resultados REAIS. Não é hype. É engenharia.</h3>
-                    <div class="grid grid-cols-2 gap-2 text-sm">
-                        <div class="flex justify-between">
-                            <span class="text-textSecondary">CPA</span>
-                            <span class="text-success500 font-bold">-60%</span>
-                        </div>
-                        <div class="flex justify-between">
-                            <span class="text-textSecondary">ROI</span>
-                            <span class="text-success500 font-bold">100% rastreável</span>
-                        </div>
-                        <div class="flex justify-between">
-                            <span class="text-textSecondary">Latência Pixel</span>
-                            <span class="text-accent500 font-bold">1 segundo</span>
-                        </div>
-                        <div class="flex justify-between">
-                            <span class="text-textSecondary">Eventos/Dia</span>
-                            <span class="text-accent500 font-bold">+690.000</span>
-                        </div>
-                    </div>
-                </div>
                 
                 <p class="text-textSecondary mb-4">
                     <strong>O que o UTMfy tenta prometer, o GrimBots entrega.</strong><br><br>
@@ -377,13 +357,14 @@
                 
                 <div class="bg-danger500 bg-opacity-10 border border-danger500 border-opacity-30 rounded-lg p-4 mb-4">
                     <p class="text-textPrimary font-bold text-center">
-                        Se você ainda opera no escuro...<br>
-                        <span class="text-danger500">... você está pagando por leads que nunca chegaram.</span>
+                        <strong>Se você ainda opera no escuro...</strong><br>
+                        <span class="text-danger500 text-lg">... você está QUEIMANDO dinheiro com leads que nunca chegaram.</span><br>
+                        <span class="text-textSecondary text-sm mt-2 block">Cada clique sem rastreamento = dinheiro jogado fora.</span>
                     </p>
                 </div>
                 
                 <!-- Stats Grid -->
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
                     <div class="stat-card p-4 text-center">
                         <div class="stat-value text-success500">60%</div>
                         <div class="stat-label">Redução CPA</div>
@@ -396,16 +377,11 @@
                         <div class="stat-value text-accent500">1s</div>
                         <div class="stat-label">Latência Pixel</div>
                     </div>
-                    <div class="stat-card p-4 text-center">
-                        <div class="stat-value text-accent500">690K</div>
-                        <div class="stat-label">Eventos/Dia</div>
-                    </div>
                 </div>
                 
                 <div class="text-center">
                     <a href="https://grimbots.com" class="cta-button inline-block" target="_blank">
-                        <i class="fas fa-rocket mr-2"></i>
-                        🚀 Escale com inteligência
+                        Escale com inteligência
                     </a>
                 </div>
                 
