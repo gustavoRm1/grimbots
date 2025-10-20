@@ -1,133 +1,121 @@
 """
-🚀 CELERY APP - MVP Meta Pixel Async
-Sistema de envio assíncrono de eventos para Meta Pixel
+🚀 CELERY APP - MVP Meta Pixel Async (VPS - SEM DOCKER)
 
-FEATURES:
-- Envio não-bloqueante
-- Retry persistente com backoff exponencial
-- Rate limiting distribuído
-- Deduplicação
-- Batching inteligente
-- Dead Letter Queue
+SETUP:
+- Redis: localhost:6379
+- SQLite: instance/saas_bot_manager.db  
+- Workers: systemd
+
+USAR:
+celery -A celery_app worker --loglevel=info
 
 Implementado por: QI 540
 """
 
 import os
 from celery import Celery
-from kombu import Exchange, Queue
 
 # ============================================================================
 # CONFIGURAÇÃO
 # ============================================================================
 
-CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
-CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', 'redis://localhost:6379/1')
+# Broker e Backend
+BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')
+BACKEND_URL = os.getenv('CELERY_RESULT_BACKEND', 'redis://localhost:6379/1')
 
-# Criar app Celery
-celery_app = Celery('grimbots_meta_pixel')
+# Criar app
+celery_app = Celery('grimbots')
 
-# Configuração
+# Configuração simples
 celery_app.conf.update(
-    # Broker e Backend
-    broker_url=CELERY_BROKER_URL,
-    result_backend=CELERY_RESULT_BACKEND,
-    
-    # Serialização
+    broker_url=BROKER_URL,
+    result_backend=BACKEND_URL,
     task_serializer='json',
     accept_content=['json'],
     result_serializer='json',
-    
-    # Timezone
     timezone='America/Sao_Paulo',
     enable_utc=True,
-    
-    # Task execution
-    task_acks_late=True,  # Garante retry se worker morrer
+    task_acks_late=True,
     task_reject_on_worker_lost=True,
-    worker_prefetch_multiplier=1,  # Processa um por vez (garante ordem)
-    task_time_limit=300,  # 5 minutos max por task
-    task_soft_time_limit=240,  # 4 minutos soft limit
-    
-    # Retry
-    task_default_retry_delay=60,  # 1 minuto entre retries
+    worker_prefetch_multiplier=1,
+    task_time_limit=300,
+    task_default_retry_delay=60,
     task_max_retries=10,
-    
-    # Result
-    result_expires=3600,  # Resultados expiram em 1h
-    
-    # Monitoramento
-    worker_send_task_events=True,
-    task_send_sent_event=True,
-    
-    # Rotas
-    task_routes={
-        'celery_app.send_meta_event': {
-            'queue': 'meta_events',
-            'routing_key': 'meta.event'
-        },
-        'celery_app.send_meta_batch': {
-            'queue': 'meta_batches',
-            'routing_key': 'meta.batch'
-        },
-        'celery_app.process_dlq': {
-            'queue': 'meta_dlq',
-            'routing_key': 'meta.dlq'
-        }
-    },
-    
-    # Queues com prioridades
-    task_queues=(
-        Queue('meta_events', Exchange('meta'), routing_key='meta.event', priority=5),
-        Queue('meta_batches', Exchange('meta'), routing_key='meta.batch', priority=3),
-        Queue('meta_dlq', Exchange('meta'), routing_key='meta.dlq', priority=1),
-    ),
-    
-    # Beat schedule (jobs periódicos)
-    beat_schedule={
-        'aggregate-metrics-every-5-min': {
-            'task': 'celery_app.aggregate_metrics',
-            'schedule': 300.0,  # 5 minutos
-        },
-        'cleanup-old-logs-daily': {
-            'task': 'celery_app.cleanup_old_logs',
-            'schedule': 86400.0,  # 24 horas
-        },
-        'check-health-every-minute': {
-            'task': 'celery_app.check_system_health',
-            'schedule': 60.0,  # 1 minuto
-        }
-    },
+    result_expires=3600,
 )
 
 # ============================================================================
-# IMPORTS DE TASKS
+# TASKS
 # ============================================================================
 
-# Importar tasks para registro
-from tasks.meta_sender import send_meta_event, send_meta_batch, process_dlq
-from tasks.metrics import aggregate_metrics, cleanup_old_logs
-from tasks.health import check_system_health
+@celery_app.task(bind=True, max_retries=10)
+def send_meta_event(self, pixel_id, access_token, event_data, test_code=None):
+    """
+    Envia evento para Meta Conversions API
+    
+    Retry automático com backoff exponencial
+    """
+    import requests
+    import time
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    
+    url = f'https://graph.facebook.com/v18.0/{pixel_id}/events'
+    
+    payload = {
+        'data': [event_data],
+        'access_token': access_token
+    }
+    
+    if test_code:
+        payload['test_event_code'] = test_code
+    
+    try:
+        start = time.time()
+        
+        response = requests.post(url, json=payload, timeout=10)
+        
+        latency = int((time.time() - start) * 1000)
+        
+        if response.status_code == 200:
+            result = response.json()
+            logger.info(f"✅ Evento enviado: {event_data.get('event_name')} | " +
+                       f"ID: {event_data.get('event_id')} | " +
+                       f"Latência: {latency}ms")
+            return result
+        
+        elif response.status_code in [429, 500, 502, 503, 504]:
+            # Erro temporário - retry
+            logger.warning(f"⚠️ Erro {response.status_code}, retry {self.request.retries + 1}/10")
+            raise self.retry(countdown=2 ** self.request.retries)
+        
+        else:
+            # Erro permanente - não retry
+            logger.error(f"❌ Erro {response.status_code}: {response.text}")
+            return {'error': response.text, 'status_code': response.status_code}
+    
+    except requests.exceptions.Timeout:
+        logger.warning(f"⏰ Timeout, retry {self.request.retries + 1}/10")
+        raise self.retry(countdown=2 ** self.request.retries)
+    
+    except Exception as e:
+        logger.error(f"💥 Erro: {e}")
+        raise self.retry(countdown=2 ** self.request.retries)
 
-# Registrar tasks
-celery_app.tasks.register(send_meta_event)
-celery_app.tasks.register(send_meta_batch)
-celery_app.tasks.register(process_dlq)
-celery_app.tasks.register(aggregate_metrics)
-celery_app.tasks.register(cleanup_old_logs)
-celery_app.tasks.register(check_system_health)
 
-# ============================================================================
-# EXPORT
-# ============================================================================
-
-__all__ = [
-    'celery_app',
-    'send_meta_event',
-    'send_meta_batch',
-    'process_dlq',
-    'aggregate_metrics',
-    'cleanup_old_logs',
-    'check_system_health'
-]
-
+@celery_app.task
+def check_health():
+    """Health check do sistema"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    try:
+        import redis
+        r = redis.Redis(host='localhost', port=6379, db=0)
+        r.ping()
+        logger.info("✅ Health check OK")
+        return {'status': 'ok'}
+    except Exception as e:
+        logger.error(f"❌ Health check falhou: {e}")
+        return {'status': 'error', 'error': str(e)}
