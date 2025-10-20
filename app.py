@@ -819,15 +819,21 @@ def get_bot(bot_id):
 @csrf.exempt
 def update_bot_token(bot_id):
     """
-    Atualiza o token de um bot (CRÍTICO para recuperação de bot banido)
+    Atualiza o token de um bot (V2 - AUTO-STOP)
     
-    REQUISITOS:
-    - Bot deve estar parado
+    FUNCIONALIDADES:
+    ✅ Para automaticamente o bot se estiver rodando (limpa cache)
+    ✅ Valida novo token com Telegram API
+    ✅ Atualiza bot_id, username e nome automaticamente
+    ✅ Reseta status para offline
+    ✅ Limpa erros antigos
+    ✅ Mantém TODAS as configurações (BotConfig, pagamentos, usuários, stats)
+    
+    VALIDAÇÕES:
     - Token novo obrigatório
-    - Validação do token com Telegram
-    - Token deve ser único no sistema
-    - Atualiza bot_id e username automaticamente
-    - Mantém TODAS as configurações do fluxo
+    - Token diferente do atual
+    - Token único no sistema
+    - Token válido no Telegram
     """
     bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
     
@@ -838,21 +844,32 @@ def update_bot_token(bot_id):
     if not new_token:
         return jsonify({'error': 'Token é obrigatório'}), 400
     
-    # VALIDAÇÃO 2: Bot deve estar parado
-    if bot.is_running:
-        return jsonify({'error': 'Pare o bot antes de trocar o token'}), 400
-    
-    # VALIDAÇÃO 3: Token diferente do atual
+    # VALIDAÇÃO 2: Token diferente do atual
     if new_token == bot.token:
         return jsonify({'error': 'Este token já está em uso neste bot'}), 400
     
-    # VALIDAÇÃO 4: Token único no sistema (exceto o bot atual)
+    # VALIDAÇÃO 3: Token único no sistema (exceto o bot atual)
     existing_bot = Bot.query.filter(Bot.token == new_token, Bot.id != bot_id).first()
     if existing_bot:
         return jsonify({'error': 'Este token já está cadastrado em outro bot'}), 400
     
     try:
-        # VALIDAÇÃO 5: Token válido no Telegram
+        # ✅ AUTO-STOP: Parar bot se estiver rodando (limpeza completa do cache)
+        was_running = bot.is_running
+        if was_running:
+            logger.info(f"🛑 Auto-stop: Parando bot {bot_id} antes de trocar token...")
+            try:
+                bot_manager.stop_bot(bot_id)
+            except Exception as e:
+                logger.warning(f"⚠️ Erro ao parar bot (pode já estar parado): {e}")
+            
+            # Força atualização no banco
+            bot.is_running = False
+            bot.last_stopped = datetime.now()
+            db.session.commit()
+            logger.info(f"✅ Bot {bot_id} parado e cache limpo")
+        
+        # VALIDAÇÃO 4: Token válido no Telegram
         bot_info = bot_manager.validate_token(new_token)
         
         # Armazenar dados antigos para log
@@ -860,23 +877,28 @@ def update_bot_token(bot_id):
         old_username = bot.username
         old_bot_id = bot.bot_id
         
-        # ATUALIZAR BOT (mantém todas as configurações)
+        # ✅ ATUALIZAR BOT (mantém todas as configurações)
         bot.token = new_token
         bot.username = bot_info.get('username')
+        bot.name = bot_info.get('first_name', bot.name)  # Atualiza nome também
         bot.bot_id = str(bot_info.get('id'))
+        bot.is_running = False  # ✅ Garantir que está offline
+        bot.last_error = None  # Limpar erros antigos
         
         db.session.commit()
         
-        logger.info(f"Token atualizado: Bot {bot.name} | @{old_username} → @{bot.username} | ID {old_bot_id} → {bot.bot_id} | por {current_user.email}")
+        logger.info(f"✅ Token atualizado: Bot {bot.name} | @{old_username} → @{bot.username} | ID {old_bot_id} → {bot.bot_id} | por {current_user.email}")
         
         return jsonify({
-            'message': 'Token atualizado com sucesso!',
+            'message': 'Token atualizado com sucesso! Bot parado e limpo.' if was_running else 'Token atualizado com sucesso!',
             'bot': bot.to_dict(),
             'changes': {
                 'old_username': old_username,
                 'new_username': bot.username,
                 'old_bot_id': old_bot_id,
                 'new_bot_id': bot.bot_id,
+                'was_auto_stopped': was_running,
+                'cache_cleared': was_running,
                 'configurations_preserved': True,
                 'can_start': True
             }
