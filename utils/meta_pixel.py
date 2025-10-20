@@ -471,8 +471,13 @@ class MetaPixelAPI:
                     'client_user_agent': 'GrimBots-ConnectionTest/1.0'
                 },
                 'custom_data': {
-                    'test_type': 'connection_validation',
-                    'source': 'dashboard'
+                    'content_id': 'test_connection',
+                    'content_name': 'Teste de Conexão',
+                    'bot_id': 0,
+                    'bot_username': 'test_bot',
+                    'utm_source': 'test',
+                    'utm_campaign': 'connection_test',
+                    'campaign_code': 'TEST_CONNECTION'
                 }
             }
             
@@ -522,6 +527,15 @@ class MetaPixelAPI:
                         'external_id': f'test_fallback_{int(time.time())}',  # ✅ External ID obrigatório
                         'client_ip_address': '127.0.0.1',
                         'client_user_agent': 'Test'
+                    },
+                    'custom_data': {
+                        'content_id': 'test_fallback',
+                        'content_name': 'Teste Fallback',
+                        'bot_id': 0,
+                        'bot_username': 'test_bot',
+                        'utm_source': 'test',
+                        'utm_campaign': 'fallback_test',
+                        'campaign_code': 'TEST_FALLBACK'
                     }
                 }],
                 'access_token': access_token
