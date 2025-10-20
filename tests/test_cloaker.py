@@ -22,9 +22,9 @@ from typing import Tuple, Optional
 # CONFIGURAÇÃO
 # ============================================================================
 BASE_URL = "https://app.grimbots.online"
-TEST_SLUG = "testslug"
+TEST_SLUG = "red1"  # Pool real com cloaker ativo
 PARAM_NAME = "grim"
-CORRECT_VALUE = "abc123xyz"
+CORRECT_VALUE = "escalafull"  # Valor real do cloaker
 WRONG_VALUE = "wrongvalue"
 TIMEOUT = 10
 

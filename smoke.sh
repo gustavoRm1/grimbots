@@ -2,9 +2,9 @@
 # 🔬 SMOKE TEST - CLOAKER VALIDATION
 # Executa testes básicos de validação do cloaker
 
-BASE="https://app.grimbots.online/go/testslug"
+BASE="https://app.grimbots.online/go/red1"
 PARAM_NAME="grim"
-CORRECT="abc123xyz"
+CORRECT="escalafull"
 WRONG="badval"
 BOT_UA="facebookexternalhit/1.1"
 LEGIT_UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"

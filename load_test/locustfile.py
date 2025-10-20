@@ -26,9 +26,9 @@ from datetime import datetime
 # CONFIGURAÇÃO
 # ============================================================================
 PARAM_NAME = "grim"
-CORRECT_VALUE = "abc123xyz"
+CORRECT_VALUE = "escalafull"  # Valor real do cloaker
 WRONG_VALUE = "wrongvalue"
-TEST_SLUG = "testslug"
+TEST_SLUG = "red1"  # Pool real com cloaker ativo
 
 # ============================================================================
 # USER CLASSES
