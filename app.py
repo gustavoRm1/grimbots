@@ -2649,6 +2649,7 @@ def log_cloaker_event_json(event_type, slug, validation_result, request, pool, l
 
 
 @app.route('/go/<slug>')
+@limiter.limit("10000 per hour")  # Override: endpoint público precisa de limite alto
 def public_redirect(slug):
     """
     Endpoint PÚBLICO de redirecionamento com Load Balancing + Meta Pixel Tracking + Cloaker
