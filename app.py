@@ -2619,31 +2619,57 @@ def validate_cloaker_access(request, pool, slug):
             return {'allowed': False, 'reason': 'bot_detected_ua', 'score': 0, 
                    'details': {'pattern': pattern, 'user_agent': user_agent[:200]}}
     
-    # CAMADA 3: Header Consistency
+    # CAMADA 3: Header Consistency (ajustado para não ser muito rigoroso)
     if 'mozilla' in user_agent or 'chrome' in user_agent:
         if not request.headers.get('Accept'):
-            score -= 30
+            score -= 10  # Reduzido de 30 para 10
+            details['missing_accept'] = True
         if not request.headers.get('Accept-Language'):
-            score -= 10
+            score -= 5  # Reduzido de 10 para 5
+            details['missing_language'] = True
     
-    # CAMADA 4: Timing (Redis)
+    # CAMADA 4: Timing (Redis) - ajustado para permitir alguns requests rápidos
     try:
         r = redis.Redis(host='localhost', port=6379, db=0, socket_timeout=1)
         ip = request.remote_addr
-        last_access_key = f"cloaker:timing:{ip}"
-        last_access = r.get(last_access_key)
+        timing_key = f"cloaker:timing:{ip}"
+        count_key = f"cloaker:count:{ip}:60s"
         
+        # Contar requests nos últimos 60s
+        request_count = r.incr(count_key)
+        if request_count == 1:
+            r.expire(count_key, 60)
+        
+        # Se mais de 20 requests em 60s = suspeito (mas não bloquear)
+        if request_count > 20:
+            score -= 20
+            details['high_frequency'] = request_count
+        
+        # Se mais de 50 requests em 60s = muito suspeito
+        if request_count > 50:
+            score -= 30
+            details['very_high_frequency'] = request_count
+        
+        # Timing entre requests (só penalizar se MUITO rápido)
+        last_access = r.get(timing_key)
         if last_access:
             time_diff = time.time() - float(last_access)
-            if time_diff < 0.1:
-                score -= 40
+            if time_diff < 0.05:  # 50ms - muito rápido
+                score -= 20
+                details['timing_very_fast'] = f'{time_diff*1000:.0f}ms'
         
-        r.setex(last_access_key, 60, str(time.time()))
-    except:
+        r.setex(timing_key, 5, str(time.time()))
+    except Exception as e:
+        # Se Redis falhar, não bloquear
+        details['timing_check_failed'] = str(e)
         pass
     
-    return {'allowed': score >= 40, 'reason': 'authorized' if score >= 40 else 'suspicious_behavior', 
-           'score': score, 'details': details}
+    # Threshold ajustado: score >= 50 para permitir (era 40)
+    # Isso permite usuários legítimos sem todos os headers
+    is_allowed = score >= 50
+    reason = 'authorized' if is_allowed else 'suspicious_behavior'
+    
+    return {'allowed': is_allowed, 'reason': reason, 'score': score, 'details': details}
 
 
 def log_cloaker_event_json(event_type, slug, validation_result, request, pool, latency_ms=0):
