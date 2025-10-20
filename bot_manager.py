@@ -1621,6 +1621,10 @@ Seu pagamento ainda não foi confirmado.
                         downsell_index=downsell_index
                     )
                     db.session.add(payment)
+                    
+                    # ✅ ATUALIZAR CONTADOR DE TRANSAÇÕES DO GATEWAY
+                    gateway.total_transactions += 1
+                    
                     db.session.commit()
                     
                     logger.info(f"✅ Pagamento registrado | Nosso ID: {payment_id} | SyncPay ID: {pix_result.get('transaction_id')}")

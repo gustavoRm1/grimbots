@@ -3346,6 +3346,17 @@ def payment_webhook(gateway_type):
                     payment.bot.owner.total_sales += payment.amount
                     payment.bot.owner.total_revenue += payment.amount
                     
+                    # ✅ ATUALIZAR ESTATÍSTICAS DO GATEWAY
+                    if payment.gateway_type:
+                        gateway = Gateway.query.filter_by(
+                            user_id=payment.bot.user_id,
+                            gateway_type=payment.gateway_type
+                        ).first()
+                        if gateway:
+                            gateway.total_transactions += 1
+                            gateway.successful_transactions += 1
+                            logger.info(f"✅ Estatísticas do gateway {gateway.gateway_type} atualizadas: {gateway.total_transactions} transações, {gateway.successful_transactions} bem-sucedidas")
+                    
                     # REGISTRAR COMISSÃO
                     from models import Commission
                     
@@ -3650,6 +3661,17 @@ def simulate_payment(payment_id):
             payment.paid_at = datetime.now()
             payment.bot.total_sales += 1
             payment.bot.total_revenue += payment.amount
+            
+            # ✅ ATUALIZAR ESTATÍSTICAS DO GATEWAY
+            if payment.gateway_type:
+                gateway = Gateway.query.filter_by(
+                    user_id=payment.bot.user_id,
+                    gateway_type=payment.gateway_type
+                ).first()
+                if gateway:
+                    gateway.total_transactions += 1
+                    gateway.successful_transactions += 1
+                    logger.info(f"✅ [SIMULAR] Estatísticas do gateway {gateway.gateway_type} atualizadas")
             
             # Registrar comissão
             from models import Commission
