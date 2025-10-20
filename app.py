@@ -2619,55 +2619,41 @@ def validate_cloaker_access(request, pool, slug):
             return {'allowed': False, 'reason': 'bot_detected_ua', 'score': 0, 
                    'details': {'pattern': pattern, 'user_agent': user_agent[:200]}}
     
-    # CAMADA 3: Header Consistency (ajustado para não ser muito rigoroso)
+    # CAMADA 3: Header Consistency (DESABILITADO para testes)
+    # Nota: Headers são opcionais, muitos clientes legítimos não enviam
+    # Apenas logar, não penalizar
     if 'mozilla' in user_agent or 'chrome' in user_agent:
         if not request.headers.get('Accept'):
-            score -= 10  # Reduzido de 30 para 10
             details['missing_accept'] = True
         if not request.headers.get('Accept-Language'):
-            score -= 5  # Reduzido de 10 para 5
             details['missing_language'] = True
     
-    # CAMADA 4: Timing (Redis) - ajustado para permitir alguns requests rápidos
+    # CAMADA 4: Timing (Redis) - APENAS LOGGING por enquanto
+    # Nota: Timing analysis desabilitado para evitar falsos positivos
+    # Será re-habilitado após calibração com dados reais
     try:
         r = redis.Redis(host='localhost', port=6379, db=0, socket_timeout=1)
         ip = request.remote_addr
-        timing_key = f"cloaker:timing:{ip}"
         count_key = f"cloaker:count:{ip}:60s"
         
-        # Contar requests nos últimos 60s
+        # Apenas contar para estatísticas (não penalizar)
         request_count = r.incr(count_key)
         if request_count == 1:
             r.expire(count_key, 60)
         
-        # Se mais de 20 requests em 60s = suspeito (mas não bloquear)
-        if request_count > 20:
-            score -= 20
-            details['high_frequency'] = request_count
+        # Logar frequência mas não penalizar
+        details['request_count_60s'] = request_count
         
-        # Se mais de 50 requests em 60s = muito suspeito
-        if request_count > 50:
-            score -= 30
-            details['very_high_frequency'] = request_count
-        
-        # Timing entre requests (só penalizar se MUITO rápido)
-        last_access = r.get(timing_key)
-        if last_access:
-            time_diff = time.time() - float(last_access)
-            if time_diff < 0.05:  # 50ms - muito rápido
-                score -= 20
-                details['timing_very_fast'] = f'{time_diff*1000:.0f}ms'
-        
-        r.setex(timing_key, 5, str(time.time()))
     except Exception as e:
         # Se Redis falhar, não bloquear
         details['timing_check_failed'] = str(e)
         pass
     
-    # Threshold ajustado: score >= 50 para permitir (era 40)
-    # Isso permite usuários legítimos sem todos os headers
-    is_allowed = score >= 50
-    reason = 'authorized' if is_allowed else 'suspicious_behavior'
+    # Threshold: score > 0 para permitir
+    # Bot detectado retorna score 0, então qualquer score > 0 = não é bot conhecido
+    # Após calibração com dados reais, aumentaremos o threshold
+    is_allowed = score > 0
+    reason = 'authorized' if is_allowed else 'bot_or_suspicious'
     
     return {'allowed': is_allowed, 'reason': reason, 'score': score, 'details': details}
 
