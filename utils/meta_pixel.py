@@ -465,14 +465,9 @@ class MetaPixelAPI:
                 'user_data': {
                     'client_ip_address': '127.0.0.1',
                     'client_user_agent': 'GrimBots-Test/1.0'
-                },
-                'custom_data': {
-                    'test': True,
-                    'source': 'connection_test'
                 }
             }],
-            'access_token': access_token,
-            'test_event_code': 'TEST_CONNECTION'  # Meta ignora eventos com test_event_code
+            'access_token': access_token
         }
         
         try:
