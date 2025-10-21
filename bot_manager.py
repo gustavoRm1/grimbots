@@ -1661,6 +1661,16 @@ Desculpe, não foi possível processar seu pagamento.
                     # PAGAMENTO CONFIRMADO! Liberar acesso
                     logger.info(f"✅ PAGAMENTO CONFIRMADO! Liberando acesso...")
                     
+                    # ============================================================================
+                    # 🎯 META PIXEL PURCHASE (CRÍTICO!)
+                    # ============================================================================
+                    try:
+                        from app import send_meta_pixel_purchase_event
+                        send_meta_pixel_purchase_event(payment)
+                        logger.info(f"📊 Meta Purchase disparado para {payment.payment_id}")
+                    except Exception as e:
+                        logger.error(f"❌ Erro ao enviar Meta Purchase: {e}")
+                    
                     # Cancelar downsells agendados
                     self.cancel_downsells(payment.payment_id)
                     
