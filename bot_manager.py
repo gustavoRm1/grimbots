@@ -755,9 +755,10 @@ class BotManager:
                                 if tracking_elite.get('timestamp'):
                                     bot_user.click_timestamp = datetime.fromisoformat(tracking_elite['timestamp'])
                                 
-                                # ✅ SALVAR FBCLID COMPLETO DO REDIS (prioridade sobre hash)
+                                # ✅ SALVAR FBCLID COMPLETO DO REDIS como external_id (SEMPRE!)
                                 fbclid_completo_redis = tracking_elite.get('fbclid')
-                                if fbclid_completo_redis and not bot_user.fbclid:
+                                if fbclid_completo_redis:
+                                    # Sempre atualizar fbclid e external_id (prioridade do Redis)
                                     bot_user.fbclid = fbclid_completo_redis
                                     bot_user.external_id = fbclid_completo_redis  # ✅ external_id = fbclid COMPLETO!
                                     logger.info(f"🎯 external_id atualizado: {fbclid_completo_redis[:30]}...")
