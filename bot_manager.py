@@ -1354,17 +1354,18 @@ class BotManager:
                     )
             
             elif callback_data.startswith('downsell_'):
-                # Formato FIXO: downsell_INDEX_PRICE_CENTAVOS
+                # Formato: downsell_INDEX_PRICE_CENTAVOS_BUTTON_INDEX
                 parts = callback_data.replace('downsell_', '').split('_')
                 downsell_idx = int(parts[0])
                 price = float(parts[1]) / 100  # Converter centavos para reais
+                original_button_idx = int(parts[2]) if len(parts) > 2 else downsell_idx  # Fallback para downsell antigo
                 
-                # ✅ QI 500 FIX: Buscar descrição do produto original (como no downsell percentual)
+                # ✅ QI 500 FIX V2: Buscar descrição do BOTÃO ORIGINAL que gerou o downsell
                 from app import app, db
                 from models import Bot as BotModel
                 
-                product_name = f'Produto {downsell_idx + 1}'  # Default
-                description = f"Downsell {downsell_idx + 1} - {product_name}"  # Default
+                # Default seguro (sem índice de downsell)
+                description = "Oferta Especial"
                 
                 with app.app_context():
                     bot = db.session.get(BotModel, bot_id)
@@ -1372,20 +1373,20 @@ class BotManager:
                         fresh_config = bot.config.to_dict()
                         main_buttons = fresh_config.get('main_buttons', [])
                         
-                        # Downsell vem do botão principal (índice extraído do callback)
-                        # Precisamos descobrir qual botão gerou este downsell
-                        # Por segurança, vamos usar o índice do próprio downsell como referência
-                        if downsell_idx < len(main_buttons):
-                            button_data = main_buttons[downsell_idx]
-                            product_name = button_data.get('description', button_data.get('text', product_name))
+                        # Buscar o botão ORIGINAL (não o índice do downsell)
+                        if original_button_idx >= 0 and original_button_idx < len(main_buttons):
+                            button_data = main_buttons[original_button_idx]
+                            product_name = button_data.get('description') or button_data.get('text') or f'Produto {original_button_idx + 1}'
                             description = f"{product_name} (Downsell)"
+                            logger.info(f"✅ Descrição do produto original encontrada: {product_name}")
                         else:
-                            # Fallback: Se não encontrar, pelo menos melhorar a descrição
-                            description = f"Oferta Especial {downsell_idx + 1}"
+                            # Fallback: Se não encontrar o botão, usar genérico
+                            description = "Oferta Especial (Downsell)"
+                            logger.warning(f"⚠️ Botão original {original_button_idx} não encontrado em {len(main_buttons)} botões")
                 
                 button_index = -1  # Sinalizar que é downsell
                 
-                logger.info(f"💙 DOWNSELL FIXO CLICADO | Índice: {downsell_idx} | Produto: {description} | Valor: R$ {price:.2f}")
+                logger.info(f"💙 DOWNSELL FIXO CLICADO | Downsell: {downsell_idx} | Botão Original: {original_button_idx} | Produto: {description} | Valor: R$ {price:.2f}")
                 
                 # Responder callback
                 requests.post(url, json={
@@ -2866,28 +2867,28 @@ Seu pagamento ainda não foi confirmado.
                     if not button_text:
                         button_text = f'🛒 Comprar por R$ {price:.2f} ({int(discount_percentage)}% OFF)'
                     
-                    buttons = [{
-                        'text': button_text,
-                        'callback_data': f'downsell_{index}_{int(price*100)}'
-                    }]
-            
-            else:
-                # 💙 MODO FIXO: Um único botão com preço fixo (comportamento original)
-                price = float(downsell.get('price', 0))
-                logger.info(f"💙 MODO FIXO: R$ {price:.2f}")
-                
-                if price < 0.50:
-                    logger.error(f"❌ Preço muito baixo (R$ {price:.2f}), mínimo R$ 0,50")
-                    return
-                
-                button_text = downsell.get('button_text', '').strip()
-                if not button_text:
-                    button_text = f'🛒 Comprar por R$ {price:.2f}'
-                
                 buttons = [{
                     'text': button_text,
-                    'callback_data': f'downsell_{index}_{int(price*100)}'
+                    'callback_data': f'downsell_{index}_{int(price*100)}_{original_button_index}'
                 }]
+        
+        else:
+            # 💙 MODO FIXO: Um único botão com preço fixo (comportamento original)
+            price = float(downsell.get('price', 0))
+            logger.info(f"💙 MODO FIXO: R$ {price:.2f}")
+            
+            if price < 0.50:
+                logger.error(f"❌ Preço muito baixo (R$ {price:.2f}), mínimo R$ 0,50")
+                return
+            
+            button_text = downsell.get('button_text', '').strip()
+            if not button_text:
+                button_text = f'🛒 Comprar por R$ {price:.2f}'
+            
+            buttons = [{
+                'text': button_text,
+                'callback_data': f'downsell_{index}_{int(price*100)}_{original_button_index}'
+            }]
             
             logger.info(f"🔍 DEBUG _send_downsell - Botões criados: {len(buttons)}")
             logger.info(f"  - message: {message}")
