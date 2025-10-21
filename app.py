@@ -2852,14 +2852,19 @@ def public_redirect(slug):
         tracking_json = json.dumps(tracking_data, separators=(',', ':'))
         tracking_base64 = base64.urlsafe_b64encode(tracking_json.encode()).decode()
         
+        # Debug: mostrar tamanhos
+        logger.info(f"📏 Tracking data: {tracking_json}")
+        logger.info(f"📏 Base64 length: {len(tracking_base64)} chars")
+        
         # Telegram limita start param a 64 chars
         # Se exceder, usar apenas pool_id
         if len(tracking_base64) + 1 > 64:  # +1 para o 't' inicial
             # Fallback: apenas pool_id
             tracking_param = f"p{pool.id}"
-            logger.warning(f"Tracking param muito longo ({len(tracking_base64)} chars), usando fallback: {tracking_param}")
+            logger.warning(f"⚠️ Tracking param muito longo ({len(tracking_base64)} chars), usando fallback: {tracking_param}")
         else:
             tracking_param = f"t{tracking_base64}"
+            logger.info(f"✅ Tracking param: {tracking_param} ({len(tracking_param)} chars)")
     except Exception as e:
         # Fallback simples se encoding falhar
         logger.error(f"Erro ao encodar tracking: {e}")
