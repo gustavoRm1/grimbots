@@ -657,7 +657,21 @@ class BotManager:
                             if tracking_data.get('cc'):
                                 utm_data_from_start['campaign_code'] = tracking_data['cc']
                             if tracking_data.get('f'):
-                                utm_data_from_start['fbclid'] = tracking_data['f']
+                                # 🎯 TRACKING ELITE: 'f' é um HASH, buscar fbclid completo no Redis
+                                fbclid_hash = tracking_data['f']
+                                try:
+                                    import redis
+                                    r = redis.Redis(host='localhost', port=6379, decode_responses=True)
+                                    fbclid_completo = r.get(f'tracking_hash:{fbclid_hash}')
+                                    if fbclid_completo:
+                                        utm_data_from_start['fbclid'] = fbclid_completo
+                                        logger.info(f"🔑 HASH {fbclid_hash} → fbclid completo recuperado")
+                                    else:
+                                        # Fallback: usar hash como fbclid
+                                        utm_data_from_start['fbclid'] = fbclid_hash
+                                        logger.warning(f"⚠️ fbclid completo não encontrado, usando hash")
+                                except:
+                                    utm_data_from_start['fbclid'] = fbclid_hash
                             
                             logger.info(f"🔗 Tracking decodificado (V3): pool_id={pool_id_from_start}, " +
                                        f"external_id={external_id_from_start}, utm_source={utm_data_from_start.get('utm_source')}")
@@ -714,8 +728,20 @@ class BotManager:
                         try:
                             import redis
                             r = redis.Redis(host='localhost', port=6379, decode_responses=True)
-                            tracking_key = f"tracking:{utm_data_from_start['fbclid']}"
+                            
+                            # fbclid pode ser hash ou completo, tentar ambos
+                            fbclid_value = utm_data_from_start['fbclid']
+                            tracking_key = f"tracking:{fbclid_value}"
                             tracking_json = r.get(tracking_key)
+                            
+                            # Se não encontrou, pode ser que fbclid seja um hash, buscar o completo
+                            if not tracking_json and len(fbclid_value) <= 12:
+                                # É um hash, buscar fbclid completo
+                                fbclid_completo = r.get(f'tracking_hash:{fbclid_value}')
+                                if fbclid_completo:
+                                    tracking_key = f"tracking:{fbclid_completo}"
+                                    tracking_json = r.get(tracking_key)
+                                    logger.info(f"🔑 Usado hash {fbclid_value} para encontrar tracking completo")
                             
                             if tracking_json:
                                 tracking_elite = json.loads(tracking_json)
@@ -728,6 +754,13 @@ class BotManager:
                                 # Parse timestamp
                                 if tracking_elite.get('timestamp'):
                                     bot_user.click_timestamp = datetime.fromisoformat(tracking_elite['timestamp'])
+                                
+                                # ✅ SALVAR FBCLID COMPLETO DO REDIS (prioridade sobre hash)
+                                fbclid_completo_redis = tracking_elite.get('fbclid')
+                                if fbclid_completo_redis and not bot_user.fbclid:
+                                    bot_user.fbclid = fbclid_completo_redis
+                                    bot_user.external_id = fbclid_completo_redis  # ✅ external_id = fbclid COMPLETO!
+                                    logger.info(f"🎯 external_id atualizado: {fbclid_completo_redis[:30]}...")
                                 
                                 # Enriquecer UTMs com dados do Redis (podem ter sido perdidos no start_param)
                                 if not bot_user.utm_source and tracking_elite.get('utm_source'):

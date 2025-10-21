@@ -2821,10 +2821,23 @@ def public_redirect(slug):
     if external_id:
         tracking_data['e'] = external_id[:12]  # Primeiros 12 chars do external_id
     
-    # 🎯 TRACKING ELITE: Adicionar fbclid DIRETAMENTE do request (não do utm_data)
+    # 🎯 TRACKING ELITE: Usar HASH do fbclid (fbclid completo é muito longo!)
     fbclid_param = request.args.get('fbclid', '')
     if fbclid_param:
-        tracking_data['f'] = fbclid_param[:20]  # Primeiros 20 chars do fbclid
+        # Gerar hash curto do fbclid (8 chars)
+        import hashlib
+        fbclid_hash = hashlib.sha256(fbclid_param.encode()).hexdigest()[:12]
+        tracking_data['f'] = fbclid_hash  # Hash curto ao invés do fbclid completo
+        
+        # ✅ SALVAR MAPEAMENTO: hash → fbclid completo no Redis
+        if fbclid:  # fbclid da linha 2752
+            try:
+                r = redis.Redis(host='localhost', port=6379, decode_responses=True)
+                # Criar entrada extra: tracking_hash:{hash} → fbclid completo
+                r.setex(f'tracking_hash:{fbclid_hash}', 180, fbclid_param)
+                logger.info(f"🔑 HASH: {fbclid_hash} → fbclid completo (salvo)")
+            except:
+                pass
     
     if utm_data:
         if utm_data.get('utm_source'):
