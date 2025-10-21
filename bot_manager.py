@@ -597,7 +597,7 @@ class BotManager:
             from models import BotUser, Bot
             
             with app.app_context():
-                bot = Bot.query.get(bot_id)
+                bot = db.session.get(Bot, bot_id)
                 if bot and bot.config:
                     config = bot.config.to_dict()  # Usar config do banco
                     logger.info(f"🔄 Config recarregada do banco para /start")
@@ -968,7 +968,7 @@ class BotManager:
                 from models import RemarketingCampaign
                 
                 with app.app_context():
-                    campaign = RemarketingCampaign.query.get(campaign_id)
+                    campaign = db.session.get(RemarketingCampaign, campaign_id)
                     if campaign and campaign.buttons:
                         # ✅ CORREÇÃO: Parsear JSON se for string
                         buttons_list = campaign.buttons
@@ -1117,7 +1117,7 @@ class BotManager:
                     from models import Bot as BotModel
                     
                     with app.app_context():
-                        bot = BotModel.query.get(bot_id)
+                        bot = db.session.get(BotModel, bot_id)
                         if bot and bot.config:
                             config = bot.config.to_dict()
                         else:
@@ -1213,7 +1213,7 @@ class BotManager:
                     from models import Bot as BotModel
                     
                     with app.app_context():
-                        bot = BotModel.query.get(bot_id)
+                        bot = db.session.get(BotModel, bot_id)
                         if bot and bot.config:
                             config = bot.config.to_dict()
                         else:
@@ -1258,7 +1258,7 @@ class BotManager:
                 description = f"Downsell {downsell_idx + 1} - {product_name}"
                 
                 with app.app_context():
-                    bot = BotModel.query.get(bot_id)
+                    bot = db.session.get(BotModel, bot_id)
                     if bot and bot.config:
                         fresh_config = bot.config.to_dict()
                         main_buttons = fresh_config.get('main_buttons', [])
@@ -1467,7 +1467,7 @@ class BotManager:
                     from models import Bot as BotModel
                     
                     with app.app_context():
-                        bot = BotModel.query.get(bot_id)
+                        bot = db.session.get(BotModel, bot_id)
                         if bot and bot.config:
                             config = bot.config.to_dict()
                         else:
@@ -1847,7 +1847,7 @@ Seu pagamento ainda não foi confirmado.
             
             with app.app_context():
                 # Buscar bot e gateway
-                bot = Bot.query.get(bot_id)
+                bot = db.session.get(Bot, bot_id)
                 if not bot:
                     logger.error(f"Bot {bot_id} não encontrado")
                     return None
@@ -1960,7 +1960,7 @@ Seu pagamento ainda não foi confirmado.
                         from models import Bot
                         
                         with app.app_context():
-                            bot = Bot.query.get(bot_id)
+                            bot = db.session.get(Bot, bot_id)
                             if bot:
                                 # Emitir evento 'new_sale' (BROADCAST - sem room)
                                 socketio.emit('new_sale', {
@@ -2984,7 +2984,7 @@ Seu pagamento ainda não foi confirmado.
         
         def send_campaign():
             with app.app_context():
-                campaign = RemarketingCampaign.query.get(campaign_id)
+                campaign = db.session.get(RemarketingCampaign, campaign_id)
                 if not campaign:
                     return
                 
