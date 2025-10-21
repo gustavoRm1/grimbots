@@ -2839,7 +2839,7 @@ Seu pagamento ainda não foi confirmado.
                         
                         buttons.append({
                             'text': btn_text,
-                            'callback_data': f'dwnsl_{index}_{btn_index}_{int(discounted_price*100)}'
+                            'callback_data': f'downsell_{index}_{btn_index}_{int(discounted_price*100)}_{original_button_index}'
                         })
                         
                         logger.info(f"  ✅ {btn.get('text')}: R$ {original_btn_price:.2f} → R$ {discounted_price:.2f} ({discount_percentage}% OFF)")
@@ -2867,10 +2867,10 @@ Seu pagamento ainda não foi confirmado.
                     if not button_text:
                         button_text = f'🛒 Comprar por R$ {price:.2f} ({int(discount_percentage)}% OFF)'
                     
-                buttons = [{
-                    'text': button_text,
-                    'callback_data': f'downsell_{index}_{int(price*100)}_{original_button_index}'
-                }]
+                    buttons = [{
+                        'text': button_text,
+                        'callback_data': f'downsell_{index}_{int(price*100)}_{original_button_index}'
+                    }]
             
             else:
                 # 💙 MODO FIXO: Um único botão com preço fixo (comportamento original)
