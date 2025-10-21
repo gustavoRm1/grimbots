@@ -4395,6 +4395,7 @@ def send_meta_pixel_purchase_event(payment):
         payment.meta_purchase_sent = True
         payment.meta_purchase_sent_at = datetime.now()
         payment.meta_event_id = event_id
+        db.session.commit()  # ✅ CRÍTICO: Persistir no banco!
         
         logger.info(f"📤 Purchase enfileirado: R$ {payment.amount} | " +
                    f"Pool: {pool.name} | " +
@@ -4404,6 +4405,7 @@ def send_meta_pixel_purchase_event(payment):
     
     except Exception as e:
         logger.error(f"💥 Erro ao enviar Meta Purchase: {e}")
+        db.session.rollback()  # ✅ Rollback se falhar
         # Não impedir o commit do pagamento se Meta falhar
 
 # ==================== WEBHOOKS E NOTIFICAÇÕES EM TEMPO REAL ====================
