@@ -2821,6 +2821,11 @@ def public_redirect(slug):
     if external_id:
         tracking_data['e'] = external_id[:12]  # Primeiros 12 chars do external_id
     
+    # 🎯 TRACKING ELITE: Adicionar fbclid DIRETAMENTE do request (não do utm_data)
+    fbclid_param = request.args.get('fbclid', '')
+    if fbclid_param:
+        tracking_data['f'] = fbclid_param[:20]  # Primeiros 20 chars do fbclid
+    
     if utm_data:
         if utm_data.get('utm_source'):
             tracking_data['s'] = utm_data['utm_source'][:10]
@@ -2828,8 +2833,6 @@ def public_redirect(slug):
             tracking_data['c'] = utm_data['utm_campaign'][:10]
         if utm_data.get('campaign_code'):
             tracking_data['cc'] = utm_data['campaign_code'][:8]
-        if utm_data.get('fbclid'):
-            tracking_data['f'] = utm_data['fbclid'][:15]
     
     # Serializar e encodar (base64 para reduzir tamanho)
     try:
@@ -4173,8 +4176,18 @@ def send_meta_pixel_pageview_event(pool, request):
         from utils.encryption import decrypt
         import time
         
-        # Gerar external_id único
-        external_id = MetaPixelHelper.generate_external_id()
+        # 🎯 TRACKING ELITE: Usar fbclid como external_id (NÃO gerar sintético!)
+        fbclid_from_request = request.args.get('fbclid', '')
+        
+        if fbclid_from_request:
+            # ✅ USAR FBCLID REAL como external_id
+            external_id = fbclid_from_request
+            logger.info(f"🎯 TRACKING ELITE | Using fbclid as external_id: {external_id[:30]}...")
+        else:
+            # Fallback: gerar sintético apenas se não tiver fbclid
+            external_id = MetaPixelHelper.generate_external_id()
+            logger.warning(f"⚠️ Sem fbclid, usando external_id sintético: {external_id}")
+        
         event_id = f"pageview_{pool.id}_{int(time.time())}_{external_id[:8]}"
         
         # Descriptografar access token
