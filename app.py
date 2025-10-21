@@ -2600,8 +2600,16 @@ def validate_cloaker_access(request, pool, slug):
     
     expected_value = expected_value.strip()
     
-    # ✅ CLOAKER V2.0: Busca apenas o parâmetro grim (ignora outros)
+    # ✅ CLOAKER V2.0: Busca o parâmetro grim de DUAS FORMAS
+    # FORMA 1: ?grim=testecamu01 (padrão)
     actual_value = (request.args.get(param_name) or '').strip()
+    
+    # FORMA 2: ?testecamu01 (Facebook format - parâmetro sem valor)
+    if not actual_value:
+        # Verifica se expected_value aparece como NOME de parâmetro
+        if expected_value in request.args:
+            actual_value = expected_value
+            logger.info(f"✅ CLOAKER V2.0 | Facebook format detected: ?{expected_value}")
     
     # Log estruturado para auditoria
     all_params = dict(request.args)
