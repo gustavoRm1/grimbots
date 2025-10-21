@@ -2818,10 +2818,8 @@ def public_redirect(slug):
         'p': pool.id,  # pool_id
     }
     
-    if external_id:
-        tracking_data['e'] = external_id[:12]  # Primeiros 12 chars do external_id
-    
     # 🎯 TRACKING ELITE: Usar HASH do fbclid (fbclid completo é muito longo!)
+    # NÃO incluir external_id no start_param - será recuperado do Redis via hash
     fbclid_param = request.args.get('fbclid', '')
     if fbclid_param:
         # Gerar hash curto do fbclid (8 chars)
