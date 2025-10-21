@@ -595,6 +595,7 @@ class BotManager:
             # ✅ CORREÇÃO CRÍTICA: Buscar config atualizada do BANCO (não da memória)
             from app import app, db
             from models import BotUser, Bot
+            from datetime import datetime  # Import explícito no escopo da função
             
             with app.app_context():
                 bot = db.session.get(Bot, bot_id)
@@ -726,7 +727,6 @@ class BotManager:
                                 
                                 # Parse timestamp
                                 if tracking_elite.get('timestamp'):
-                                    from datetime import datetime
                                     bot_user.click_timestamp = datetime.fromisoformat(tracking_elite['timestamp'])
                                 
                                 # Enriquecer UTMs com dados do Redis (podem ter sido perdidos no start_param)
