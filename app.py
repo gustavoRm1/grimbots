@@ -2821,37 +2821,29 @@ def public_redirect(slug):
     import base64
     import json
     
-    # Construir payload de tracking
+    # Construir payload de tracking (MÍNIMO - só pool e hash!)
+    # UTMs já estão no Redis, não precisa repetir no start_param
     tracking_data = {
         'p': pool.id,  # pool_id
     }
     
     # 🎯 TRACKING ELITE: Usar HASH do fbclid (fbclid completo é muito longo!)
-    # NÃO incluir external_id no start_param - será recuperado do Redis via hash
     fbclid_param = request.args.get('fbclid', '')
     if fbclid_param:
-        # Gerar hash curto do fbclid (8 chars)
+        # Gerar hash curto do fbclid (12 chars)
         import hashlib
         fbclid_hash = hashlib.sha256(fbclid_param.encode()).hexdigest()[:12]
-        tracking_data['f'] = fbclid_hash  # Hash curto ao invés do fbclid completo
+        tracking_data['f'] = fbclid_hash  # Apenas hash!
         
         # ✅ SALVAR MAPEAMENTO: hash → fbclid completo no Redis
         try:
-            # Reutilizar conexão Redis da linha 2758 ou criar nova
             r = redis.Redis(host='localhost', port=6379, decode_responses=True)
-            # Criar entrada extra: tracking_hash:{hash} → fbclid completo
             r.setex(f'tracking_hash:{fbclid_hash}', 180, fbclid_param)
             logger.info(f"🔑 HASH: {fbclid_hash} → fbclid completo (salvo)")
         except Exception as e:
             logger.error(f"Erro ao salvar hash no Redis: {e}")
     
-    if utm_data:
-        if utm_data.get('utm_source'):
-            tracking_data['s'] = utm_data['utm_source'][:10]
-        if utm_data.get('utm_campaign'):
-            tracking_data['c'] = utm_data['utm_campaign'][:10]
-        if utm_data.get('campaign_code'):
-            tracking_data['cc'] = utm_data['campaign_code'][:8]
+    # ✅ NÃO incluir UTMs no start_param - economiza espaço e já estão no Redis!
     
     # Serializar e encodar (base64 para reduzir tamanho)
     try:
