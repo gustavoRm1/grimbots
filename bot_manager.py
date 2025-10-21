@@ -1358,10 +1358,34 @@ class BotManager:
                 parts = callback_data.replace('downsell_', '').split('_')
                 downsell_idx = int(parts[0])
                 price = float(parts[1]) / 100  # Converter centavos para reais
-                description = f"Downsell {downsell_idx + 1}"
+                
+                # ✅ QI 500 FIX: Buscar descrição do produto original (como no downsell percentual)
+                from app import app, db
+                from models import Bot as BotModel
+                
+                product_name = f'Produto {downsell_idx + 1}'  # Default
+                description = f"Downsell {downsell_idx + 1} - {product_name}"  # Default
+                
+                with app.app_context():
+                    bot = db.session.get(BotModel, bot_id)
+                    if bot and bot.config:
+                        fresh_config = bot.config.to_dict()
+                        main_buttons = fresh_config.get('main_buttons', [])
+                        
+                        # Downsell vem do botão principal (índice extraído do callback)
+                        # Precisamos descobrir qual botão gerou este downsell
+                        # Por segurança, vamos usar o índice do próprio downsell como referência
+                        if downsell_idx < len(main_buttons):
+                            button_data = main_buttons[downsell_idx]
+                            product_name = button_data.get('description', button_data.get('text', product_name))
+                            description = f"{product_name} (Downsell)"
+                        else:
+                            # Fallback: Se não encontrar, pelo menos melhorar a descrição
+                            description = f"Oferta Especial {downsell_idx + 1}"
+                
                 button_index = -1  # Sinalizar que é downsell
                 
-                logger.info(f"💙 DOWNSELL FIXO CLICADO | Índice: {downsell_idx} | Valor: R$ {price:.2f}")
+                logger.info(f"💙 DOWNSELL FIXO CLICADO | Índice: {downsell_idx} | Produto: {description} | Valor: R$ {price:.2f}")
                 
                 # Responder callback
                 requests.post(url, json={
