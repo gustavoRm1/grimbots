@@ -4343,10 +4343,21 @@ def send_meta_pixel_purchase_event(payment):
         
         # Buscar BotUser para pegar IP e User-Agent
         from models import BotUser
-        bot_user = BotUser.query.filter_by(
-            bot_id=payment.bot_id,
-            telegram_user_id=int(payment.customer_user_id.replace('user_', '')) if payment.customer_user_id and payment.customer_user_id.startswith('user_') else None
-        ).first()
+        
+        # ✅ FIX: customer_user_id pode vir com ou sem prefixo "user_"
+        telegram_user_id = None
+        if payment.customer_user_id:
+            if payment.customer_user_id.startswith('user_'):
+                telegram_user_id = int(payment.customer_user_id.replace('user_', ''))
+            elif payment.customer_user_id.isdigit():
+                telegram_user_id = int(payment.customer_user_id)
+        
+        bot_user = None
+        if telegram_user_id:
+            bot_user = BotUser.query.filter_by(
+                bot_id=payment.bot_id,
+                telegram_user_id=telegram_user_id
+            ).first()
         
         # ============================================================================
         # ✅ ENFILEIRAR EVENTO PURCHASE (ASSÍNCRONO - MVP DIA 2)
