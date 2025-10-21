@@ -2871,24 +2871,24 @@ Seu pagamento ainda não foi confirmado.
                     'text': button_text,
                     'callback_data': f'downsell_{index}_{int(price*100)}_{original_button_index}'
                 }]
-        
-        else:
-            # 💙 MODO FIXO: Um único botão com preço fixo (comportamento original)
-            price = float(downsell.get('price', 0))
-            logger.info(f"💙 MODO FIXO: R$ {price:.2f}")
             
-            if price < 0.50:
-                logger.error(f"❌ Preço muito baixo (R$ {price:.2f}), mínimo R$ 0,50")
-                return
-            
-            button_text = downsell.get('button_text', '').strip()
-            if not button_text:
-                button_text = f'🛒 Comprar por R$ {price:.2f}'
-            
-            buttons = [{
-                'text': button_text,
-                'callback_data': f'downsell_{index}_{int(price*100)}_{original_button_index}'
-            }]
+            else:
+                # 💙 MODO FIXO: Um único botão com preço fixo (comportamento original)
+                price = float(downsell.get('price', 0))
+                logger.info(f"💙 MODO FIXO: R$ {price:.2f}")
+                
+                if price < 0.50:
+                    logger.error(f"❌ Preço muito baixo (R$ {price:.2f}), mínimo R$ 0,50")
+                    return
+                
+                button_text = downsell.get('button_text', '').strip()
+                if not button_text:
+                    button_text = f'🛒 Comprar por R$ {price:.2f}'
+                
+                buttons = [{
+                    'text': button_text,
+                    'callback_data': f'downsell_{index}_{int(price*100)}_{original_button_index}'
+                }]
             
             logger.info(f"🔍 DEBUG _send_downsell - Botões criados: {len(buttons)}")
             logger.info(f"  - message: {message}")
