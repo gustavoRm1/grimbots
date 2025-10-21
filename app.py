@@ -2830,14 +2830,14 @@ def public_redirect(slug):
         tracking_data['f'] = fbclid_hash  # Hash curto ao invés do fbclid completo
         
         # ✅ SALVAR MAPEAMENTO: hash → fbclid completo no Redis
-        if fbclid:  # fbclid da linha 2752
-            try:
-                r = redis.Redis(host='localhost', port=6379, decode_responses=True)
-                # Criar entrada extra: tracking_hash:{hash} → fbclid completo
-                r.setex(f'tracking_hash:{fbclid_hash}', 180, fbclid_param)
-                logger.info(f"🔑 HASH: {fbclid_hash} → fbclid completo (salvo)")
-            except:
-                pass
+        try:
+            # Reutilizar conexão Redis da linha 2758 ou criar nova
+            r = redis.Redis(host='localhost', port=6379, decode_responses=True)
+            # Criar entrada extra: tracking_hash:{hash} → fbclid completo
+            r.setex(f'tracking_hash:{fbclid_hash}', 180, fbclid_param)
+            logger.info(f"🔑 HASH: {fbclid_hash} → fbclid completo (salvo)")
+        except Exception as e:
+            logger.error(f"Erro ao salvar hash no Redis: {e}")
     
     if utm_data:
         if utm_data.get('utm_source'):
