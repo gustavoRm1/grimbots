@@ -887,6 +887,12 @@ class BotUser(db.Model):
     campaign_code = db.Column(db.String(50), nullable=True)
     external_id = db.Column(db.String(100), nullable=True)  # Para tracking de cliques
     
+    # ✅ TRACKING ELITE (IP/User-Agent capturados no redirect)
+    ip_address = db.Column(db.String(50), nullable=True)  # IP do primeiro click
+    user_agent = db.Column(db.Text, nullable=True)  # User-Agent completo
+    tracking_session_id = db.Column(db.String(100), nullable=True)  # UUID para correlação
+    click_timestamp = db.Column(db.DateTime, nullable=True)  # Timestamp do click
+    
     # Datas
     first_interaction = db.Column(db.DateTime, default=get_brazil_time)
     last_interaction = db.Column(db.DateTime, default=get_brazil_time, onupdate=get_brazil_time)

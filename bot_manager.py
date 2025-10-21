@@ -114,8 +114,9 @@ def send_meta_pixel_viewcontent_event(bot, bot_user, message, pool_id=None):
             'action_source': 'website',
             'user_data': {
                 'external_id': bot_user.external_id or f'user_{bot_user.telegram_user_id}',
-                'client_ip_address': bot_user.ip_address,
-                'client_user_agent': bot_user.user_agent
+                # 🎯 TRACKING ELITE: Usar IP/UA capturados no redirect
+                'client_ip_address': bot_user.ip_address if hasattr(bot_user, 'ip_address') and bot_user.ip_address else None,
+                'client_user_agent': bot_user.user_agent if hasattr(bot_user, 'user_agent') and bot_user.user_agent else None
             },
             'custom_data': {
                 'content_id': str(pool.id),
@@ -704,6 +705,53 @@ class BotManager:
                         campaign_code=utm_data_from_start.get('campaign_code'),
                         fbclid=utm_data_from_start.get('fbclid')
                     )
+                    
+                    # ============================================================================
+                    # 🎯 TRACKING ELITE: BUSCAR DADOS DO REDIS E ASSOCIAR
+                    # ============================================================================
+                    if utm_data_from_start.get('fbclid'):
+                        try:
+                            import redis
+                            r = redis.Redis(host='localhost', port=6379, decode_responses=True)
+                            tracking_key = f"tracking:{utm_data_from_start['fbclid']}"
+                            tracking_json = r.get(tracking_key)
+                            
+                            if tracking_json:
+                                tracking_elite = json.loads(tracking_json)
+                                
+                                # Associar dados capturados no redirect
+                                bot_user.ip_address = tracking_elite.get('ip')
+                                bot_user.user_agent = tracking_elite.get('user_agent')
+                                bot_user.tracking_session_id = tracking_elite.get('session_id')
+                                
+                                # Parse timestamp
+                                if tracking_elite.get('timestamp'):
+                                    from datetime import datetime
+                                    bot_user.click_timestamp = datetime.fromisoformat(tracking_elite['timestamp'])
+                                
+                                # Enriquecer UTMs com dados do Redis (podem ter sido perdidos no start_param)
+                                if not bot_user.utm_source and tracking_elite.get('utm_source'):
+                                    bot_user.utm_source = tracking_elite['utm_source']
+                                if not bot_user.utm_campaign and tracking_elite.get('utm_campaign'):
+                                    bot_user.utm_campaign = tracking_elite['utm_campaign']
+                                if not bot_user.utm_medium:
+                                    bot_user.utm_medium = tracking_elite.get('utm_medium')
+                                if not bot_user.utm_content:
+                                    bot_user.utm_content = tracking_elite.get('utm_content')
+                                if not bot_user.utm_term:
+                                    bot_user.utm_term = tracking_elite.get('utm_term')
+                                
+                                logger.info(f"🎯 TRACKING ELITE | Dados associados | " +
+                                           f"IP={bot_user.ip_address} | " +
+                                           f"Session={bot_user.tracking_session_id[:8] if bot_user.tracking_session_id else 'N/A'}...")
+                                
+                                # Deletar do Redis após usar (não deixar lixo)
+                                r.delete(tracking_key)
+                            else:
+                                logger.warning(f"⚠️ TRACKING ELITE | fbclid={utm_data_from_start['fbclid'][:20]}... não encontrado no Redis (expirou?)")
+                        except Exception as e:
+                            logger.error(f"❌ TRACKING ELITE | Erro ao buscar Redis: {e}")
+                            # Não quebrar o fluxo se Redis falhar
                     
                     logger.info(f"👤 Novo usuário criado: {first_name} | " +
                                f"external_id={external_id_from_start} | " +

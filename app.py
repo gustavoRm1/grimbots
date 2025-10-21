@@ -2740,6 +2740,48 @@ def public_redirect(slug):
     logger.info(f"Redirect: /go/{slug} → @{pool_bot.bot.username} | Estratégia: {pool.distribution_strategy} | Total: {pool_bot.total_redirects}")
     
     # ============================================================================
+    # ✅ TRACKING ELITE: CAPTURA IP + USER-AGENT + SESSION (TOP 1%)
+    # ============================================================================
+    import uuid
+    import redis
+    from datetime import datetime
+    
+    # Capturar dados do request
+    user_ip = request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0].strip()
+    user_agent = request.headers.get('User-Agent', '')
+    fbclid = request.args.get('fbclid', '')
+    session_id = str(uuid.uuid4())
+    
+    # Salvar em Redis (TTL 180s = 3 min)
+    if fbclid:
+        try:
+            r = redis.Redis(host='localhost', port=6379, decode_responses=True)
+            tracking_data = {
+                'ip': user_ip,
+                'user_agent': user_agent,
+                'fbclid': fbclid,
+                'session_id': session_id,
+                'timestamp': datetime.now().isoformat(),
+                'pool_id': pool.id,
+                'slug': slug,
+                # Capturar TODOS os UTMs
+                'utm_source': request.args.get('utm_source', ''),
+                'utm_campaign': request.args.get('utm_campaign', ''),
+                'utm_medium': request.args.get('utm_medium', ''),
+                'utm_content': request.args.get('utm_content', ''),
+                'utm_term': request.args.get('utm_term', ''),
+                'utm_id': request.args.get('utm_id', '')
+            }
+            
+            # Salvar com TTL de 180 segundos
+            import json
+            r.setex(f'tracking:{fbclid}', 180, json.dumps(tracking_data))
+            logger.info(f"🎯 TRACKING ELITE | fbclid={fbclid[:20]}... | IP={user_ip} | Session={session_id[:8]}...")
+        except Exception as e:
+            logger.error(f"⚠️ Erro ao salvar tracking no Redis: {e}")
+            # Não quebrar o redirect se Redis falhar
+    
+    # ============================================================================
     # ✅ META PIXEL: PAGEVIEW TRACKING + UTM CAPTURE (NÍVEL DE POOL)
     # ============================================================================
     # CRÍTICO: Captura UTM e External ID para vincular eventos posteriores
