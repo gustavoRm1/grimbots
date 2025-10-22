@@ -816,13 +816,9 @@ class BotManager:
                     # Usuário já existe
                     bot_user.last_interaction = datetime.now()
                     
-                    # ✅ RECUPERAÇÃO AUTOMÁTICA: Se não recebeu boas-vindas, enviar agora!
-                    if not bot_user.welcome_sent:
-                        logger.warning(f"🔄 RECUPERAÇÃO AUTOMÁTICA: Usuário {first_name} nunca recebeu boas-vindas! Enviando agora...")
-                        should_send_welcome = True
-                    else:
-                        logger.info(f"👤 Usuário retornou: {first_name} (@{username}) - Boas-vindas já enviadas antes")
-                        should_send_welcome = False
+                    # ✅ CORREÇÃO: Sempre enviar boas-vindas quando /start for digitado
+                    logger.info(f"👤 Usuário retornou: {first_name} (@{username}) - Enviando boas-vindas novamente")
+                    should_send_welcome = True
                     
                     db.session.commit()
             
