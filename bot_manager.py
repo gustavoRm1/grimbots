@@ -566,6 +566,12 @@ class BotManager:
                         logger.info(f"⭐ COMANDO /START - Enviando mensagem de boas-vindas...")
                     
                     self._handle_start_command(bot_id, token, config, chat_id, message, start_param)
+                
+                # ✅ SOLUÇÃO HÍBRIDA: Mensagens de texto também reiniciam o funil
+                # Mas com proteções para evitar spam e problemas de tracking
+                elif text and text.strip():  # Mensagem de texto não vazia
+                    logger.info(f"💬 MENSAGEM DE TEXTO: '{text}' - Reiniciando funil...")
+                    self._handle_text_message(bot_id, token, config, chat_id, message)
             
             # Processar callback (botões)
             elif 'callback_query' in update:
@@ -577,6 +583,164 @@ class BotManager:
             logger.error(f"❌ Erro ao processar update do bot {bot_id}: {e}")
             import traceback
             traceback.print_exc()
+    
+    def _handle_text_message(self, bot_id: int, token: str, config: Dict[str, Any], 
+                            chat_id: int, message: Dict[str, Any]):
+        """
+        Processa mensagens de texto (não comandos) - reinicia funil com proteções
+        
+        PROTEÇÕES IMPLEMENTADAS:
+        - Rate limiting (máximo 1 mensagem por minuto)
+        - Não envia Meta Pixel ViewContent (evita duplicação)
+        - Logs diferenciados para análise
+        """
+        try:
+            from app import app, db
+            from models import BotUser, Bot
+            from datetime import datetime, timedelta
+            
+            with app.app_context():
+                # Buscar usuário
+                user_from = message.get('from', {})
+                telegram_user_id = str(user_from.get('id', ''))
+                first_name = user_from.get('first_name', 'Usuário')
+                
+                bot_user = BotUser.query.filter_by(
+                    bot_id=bot_id,
+                    telegram_user_id=telegram_user_id
+                ).first()
+                
+                if not bot_user:
+                    # Usuário não existe - tratar como /start
+                    logger.info(f"👤 Usuário não encontrado, tratando como /start")
+                    self._handle_start_command(bot_id, token, config, chat_id, message, None)
+                    return
+                
+                # ✅ PROTEÇÃO 1: Rate limiting (máximo 1 mensagem por minuto)
+                now = datetime.now()
+                if bot_user.last_interaction and (now - bot_user.last_interaction).seconds < 60:
+                    logger.info(f"⏱️ Rate limiting: Usuário {first_name} enviou mensagem muito recente")
+                    return
+                
+                # ✅ PROTEÇÃO 2: Não enviar Meta Pixel (evita duplicação)
+                logger.info(f"💬 Reiniciando funil para usuário existente: {first_name}")
+                
+                # Atualizar última interação
+                bot_user.last_interaction = now
+                db.session.commit()
+                
+                # Enviar mensagem de boas-vindas (sem Meta Pixel)
+                self._send_welcome_message_only(bot_id, token, config, chat_id, message)
+                
+        except Exception as e:
+            logger.error(f"❌ Erro ao processar mensagem de texto: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    def _send_welcome_message_only(self, bot_id: int, token: str, config: Dict[str, Any], 
+                                  chat_id: int, message: Dict[str, Any]):
+        """
+        Envia apenas a mensagem de boas-vindas (sem Meta Pixel)
+        Usado para mensagens de texto que reiniciam o funil
+        """
+        try:
+            from app import app, db
+            from models import BotUser
+            from datetime import datetime
+            
+            with app.app_context():
+                # Buscar usuário para atualizar welcome_sent
+                user_from = message.get('from', {})
+                telegram_user_id = str(user_from.get('id', ''))
+                
+                bot_user = BotUser.query.filter_by(
+                    bot_id=bot_id,
+                    telegram_user_id=telegram_user_id
+                ).first()
+                
+                # Preparar mensagem de boas-vindas
+                welcome_message = config.get('welcome_message', 'Olá! Bem-vindo!')
+                welcome_media_url = config.get('welcome_media_url')
+                welcome_media_type = config.get('welcome_media_type', 'video')
+                welcome_audio_enabled = config.get('welcome_audio_enabled', False)
+                welcome_audio_url = config.get('welcome_audio_url', '')
+                main_buttons = config.get('main_buttons', [])
+                redirect_buttons = config.get('redirect_buttons', [])
+                
+                # Preparar botões
+                buttons = []
+                for index, btn in enumerate(main_buttons):
+                    if btn.get('text') and btn.get('price'):
+                        buttons.append({
+                            'text': btn['text'],
+                            'callback_data': f"buy_{index}"
+                        })
+                
+                for btn in redirect_buttons:
+                    if btn.get('text') and btn.get('url'):
+                        buttons.append({
+                            'text': btn['text'],
+                            'url': btn['url']
+                        })
+                
+                # Verificar mídia válida
+                valid_media = False
+                if welcome_media_url and '/c/' not in welcome_media_url and welcome_media_url.startswith('http'):
+                    valid_media = True
+                
+                # Enviar mensagem
+                if valid_media:
+                    result = self.send_telegram_message(
+                        token=token,
+                        chat_id=str(chat_id),
+                        message=welcome_message,
+                        media_url=welcome_media_url,
+                        media_type=welcome_media_type,
+                        buttons=buttons
+                    )
+                    if not result:
+                        result = self.send_telegram_message(
+                            token=token,
+                            chat_id=str(chat_id),
+                            message=welcome_message,
+                            media_url=None,
+                            media_type=None,
+                            buttons=buttons
+                        )
+                else:
+                    result = self.send_telegram_message(
+                        token=token,
+                        chat_id=str(chat_id),
+                        message=welcome_message,
+                        media_url=None,
+                        media_type=None,
+                        buttons=buttons
+                    )
+                
+                if result:
+                    logger.info(f"✅ Mensagem de texto reiniciou funil com {len(buttons)} botão(ões)")
+                    
+                    # Marcar como enviado (sem afetar Meta Pixel)
+                    if bot_user:
+                        bot_user.welcome_sent = True
+                        bot_user.welcome_sent_at = datetime.now()
+                        db.session.commit()
+                    
+                    # Enviar áudio se habilitado
+                    if welcome_audio_enabled and welcome_audio_url:
+                        self.send_telegram_message(
+                            token=token,
+                            chat_id=str(chat_id),
+                            message="",
+                            media_url=welcome_audio_url,
+                            media_type='audio',
+                            buttons=None
+                        )
+                else:
+                    logger.error(f"❌ Falha ao enviar mensagem de boas-vindas")
+                    
+        except Exception as e:
+            logger.error(f"❌ Erro ao enviar mensagem de boas-vindas: {e}")
     
     def _handle_start_command(self, bot_id: int, token: str, config: Dict[str, Any], 
                              chat_id: int, message: Dict[str, Any], start_param: str = None):
