@@ -618,8 +618,8 @@ class BotManager:
                 
                 # ✅ PROTEÇÃO 1: Rate limiting (máximo 1 mensagem por minuto)
                 now = datetime.now()
-                if bot_user.last_interaction and (now - bot_user.last_interaction).seconds < 60:
-                    logger.info(f"⏱️ Rate limiting: Usuário {first_name} enviou mensagem muito recente")
+                if bot_user.last_interaction and (now - bot_user.last_interaction).total_seconds() < 60:
+                    logger.info(f"⏱️ Rate limiting: Usuário {first_name} enviou mensagem muito recente ({(now - bot_user.last_interaction).total_seconds():.1f}s atrás)")
                     return
                 
                 # ✅ PROTEÇÃO 2: Não enviar Meta Pixel (evita duplicação)
