@@ -503,6 +503,13 @@
                                                class="form-input"
                                                placeholder="prod_...">
                                     </div>
+                                    <div>
+                                        <label class="text-xs font-bold text-gray-400 block mb-1">Store ID</label>
+                                        <input type="text" 
+                                               x-model="editGateway.store_id" 
+                                               class="form-input"
+                                               placeholder="177">
+                                    </div>
                                     <button type="submit" :disabled="loading" class="btn-action btn-action-primary w-full">
                                         <i class="fas fa-save mr-2"></i>
                                         <span x-text="loading ? 'Salvando...' : 'Atualizar'"></span>
@@ -660,6 +667,13 @@
                                    class="form-input"
                                    placeholder="prod_...">
                         </div>
+                        <div>
+                            <label class="text-xs font-bold text-gray-400 block mb-1">Store ID</label>
+                            <input type="text" 
+                                   x-model="gateways.paradise.store_id" 
+                                   class="form-input"
+                                   placeholder="177">
+                        </div>
                         <button type="submit" 
                                 :disabled="loading"
                                 class="btn-action btn-action-primary w-full">
@@ -775,7 +789,7 @@ function settingsApp() {
         },
         gateways: {
             pushynpay: { api_key: '' },
-            paradise: { api_key: '', offer_hash: '', product_hash: '' },
+            paradise: { api_key: '', offer_hash: '', product_hash: '', store_id: '' },
             wiinpay: { api_key: '', split_user_id: '' }
         },
         editGateway: {},
