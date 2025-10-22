@@ -625,7 +625,7 @@ class BotManager:
                 # ✅ PROTEÇÃO 2: Não enviar Meta Pixel (evita duplicação)
                 logger.info(f"💬 Reiniciando funil para usuário existente: {first_name}")
                 
-                # Atualizar última interação
+                # Atualizar última interação APÓS verificar rate limiting
                 bot_user.last_interaction = now
                 db.session.commit()
                 
