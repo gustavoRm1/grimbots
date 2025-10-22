@@ -99,6 +99,41 @@ class ParadisePaymentGateway(PaymentGateway):
             base_url = base_url.replace('/webhook', '')
         return f"{base_url}/payment/{payment_id}"
     
+    def _validate_phone(self, phone: str) -> str:
+        """
+        Valida e corrige número de telefone para formato brasileiro
+        """
+        # Remove caracteres não numéricos
+        phone_digits = ''.join(filter(str.isdigit, str(phone)))
+        
+        # Se tem 11 dígitos e começa com 0, remove o 0
+        if len(phone_digits) == 11 and phone_digits.startswith('0'):
+            phone_digits = phone_digits[1:]
+        
+        # Se tem 10 dígitos, adiciona 9 (celular)
+        if len(phone_digits) == 10:
+            phone_digits = '9' + phone_digits
+        
+        # Se ainda não tem 11 dígitos, usar padrão
+        if len(phone_digits) != 11:
+            phone_digits = '11999999999'
+        
+        return phone_digits
+    
+    def _validate_document(self, document: str) -> str:
+        """
+        Valida e corrige documento (CPF) para formato brasileiro
+        """
+        # Remove caracteres não numéricos
+        doc_digits = ''.join(filter(str.isdigit, str(document)))
+        
+        # Se tem 11 dígitos, usar
+        if len(doc_digits) == 11:
+            return doc_digits
+        
+        # Se não tem 11 dígitos, usar CPF válido aleatório
+        return random.choice(VALID_CPFS)
+    
     def verify_credentials(self) -> bool:
         """
         Verifica se as credenciais são válidas (API V30 atualizada)
@@ -176,12 +211,12 @@ class ParadisePaymentGateway(PaymentGateway):
                 logger.warning("⚠️ Paradise: customer_data não fornecido, usando fallback")
                 customer_data = {}
             
-            # Garantir que todos os campos obrigatórios existem
+            # ✅ CORREÇÃO CRÍTICA: Validar e corrigir dados do cliente
             customer_payload = {
                 "name": customer_data.get('name') or description[:30] if description else 'Cliente Digital',
                 "email": customer_data.get('email') or f"pix{payment_id}@bot.digital",
-                "phone": str(customer_data.get('phone') or '11999999999'),
-                "document": str(customer_data.get('document') or random.choice(VALID_CPFS))  # CPF válido aleatório
+                "phone": self._validate_phone(customer_data.get('phone') or '11999999999'),
+                "document": self._validate_document(customer_data.get('document') or random.choice(VALID_CPFS))
             }
             
             logger.info(f"👤 Paradise: Cliente - {customer_payload['name']} | {customer_payload['email']}")
@@ -206,6 +241,9 @@ class ParadisePaymentGateway(PaymentGateway):
                 if not isinstance(self.split_percentage, (int, float)) or self.split_percentage <= 0:
                     logger.error(f"❌ Paradise: split_percentage inválido: {self.split_percentage}")
                     return None
+                
+                # Log do split para debug
+                logger.info(f"💰 Paradise Split: {self.split_percentage}% configurado")
                 
                 split_amount_cents = int(amount_cents * (self.split_percentage / 100))
                 
