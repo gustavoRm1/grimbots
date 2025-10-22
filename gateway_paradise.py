@@ -60,7 +60,10 @@ class ParadisePaymentGateway(PaymentGateway):
         self.api_key = credentials.get('api_key', 'sk_c3728b109649c7ab1d4e19a61189dbb2b07161d6955b8f20b6023c55b8a9e722')
         self.product_hash = credentials.get('product_hash', 'prod_6c60b3dd3ae2c63e')
         self.offer_hash = credentials.get('offer_hash', '')
-        self.store_id = credentials.get('store_id', '177')  # ✅ Store ID fornecido
+        
+        # ✅ STORE ID DO SISTEMA (SPLIT DA PLATAFORMA) - NÃO DO USUÁRIO
+        from os import environ
+        self.store_id = environ.get('PARADISE_STORE_ID', '177')  # Store ID do dono do sistema
         
         # ✅ CORREÇÃO CRÍTICA: Validar split_percentage
         try:
