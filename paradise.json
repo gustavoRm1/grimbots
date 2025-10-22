@@ -1,0 +1,126 @@
+{
+  "type": "page",
+  "backgroundColor": "#f3f4f6",
+  "buttonColor": "#21bfeb",
+  "buttonText": "PAGAR AGORA",
+  "title": "Flix",
+  "platformProductName": "Flix",
+  "subtitle": "",
+  "isDropshipping": false,
+  "fields": {
+    "name": true,
+    "email": true,
+    "phone": false,
+    "document": false,
+    "cep": false,
+    "street": false,
+    "number": false,
+    "complement": false,
+    "neighborhood": false,
+    "city": false,
+    "state": false
+  },
+  "timerMinutes": 0,
+  "timerText": "Esta oferta expira em: {{tempo}}",
+  "timerBackgroundColor": "#111827",
+  "timerTextColor": "#ffffff",
+  "amount": 1997,
+  "productHash": "prod_6c60b3dd3ae2c63e",
+  "offerHash": "",
+  "customDomain": "pag.compraassegura.digital",
+  "headerText": "Compra Segura e Rápida",
+  "productLogoURL": "https://multi.paradisepags.com/uploads/product_images/store_177_68cc0b6d75e9c_ONLYPRIV.png",
+  "summaryText": "Você está adquirindo:",
+  "guaranteeText": "Compra 100% segura. Reembolso garantido em até 7 dias.",
+  "headerColor": "#21bfeb",
+  "headerTextColor": "#ffffff",
+  "threeStepCheckout": false,
+  "pixModalTitle": "Pagamento via PIX",
+  "pixModalCopyButtonText": "Copiar código PIX",
+  "pixModalBackgroundColor": "#ffffff",
+  "pixModalTextColor": "#1f2937",
+  "pixModalButtonColor": "#00c27a",
+  "pixModalButtonTextColor": "#FFFFFF",
+  "pixModalValueText": "💰 Valor:",
+  "pixModalExpirationText": "🕒 Válido até:",
+  "pixModalSecurePaymentText": "Pagamento seguro via PIX",
+  "pixModalInfoTextColor": "#0f172a",
+  "pixModalSecurePaymentTextColor": "#00c27a",
+  "pixModalInputBackgroundColor": "#f9fafb",
+  "pixModalInputBorderColor": "#d1d5db",
+  "pixModalInputTextColor": "#374151",
+  "pixExpirationMinutes": 10,
+  "elementBorderRadius": 12,
+  "elementBackgroundColor": "#FFFFFF",
+  "orderBumps": [],
+  "coupons": [],
+  "testimonials": [],
+  "banners": [],
+  "videos": [],
+  "textBlocks": [],
+  "componentOrder": [
+    "singleton_identity",
+    "singleton_payment"
+  ],
+  "stepComponentOrders": {
+    "step1": [
+      "singleton_identity"
+    ],
+    "step2": [
+      "singleton_address"
+    ],
+    "step3": [
+      "singleton_summary",
+      "singleton_bumps",
+      "singleton_payment",
+      "singleton_security_seal"
+    ]
+  },
+  "facebookPixelId": "",
+  "tiktokPixelId": "",
+  "upsellUrl": "https://oacessoliberado.shop/comprarealizada",
+  "backRedirectUrl": "https://t.me/desejuflixbot",
+  "socialProof": {
+    "enabled": false,
+    "names": [],
+    "payoutMessage": "{{name}} acabou de pagar {{value}}",
+    "payoutMin": 150,
+    "payoutMax": 500,
+    "initialDelay": 5,
+    "displayDuration": 4,
+    "intervalMin": 8,
+    "intervalMax": 20
+  },
+  "securitySeal": {
+    "enabled": false,
+    "backgroundColor": "#FFFFFF",
+    "items": [
+      {
+        "id": "seal-1",
+        "icon": "eye-slash",
+        "title": "Dados protegidos",
+        "text": "Os seus dados são confidenciais e seguros."
+      },
+      {
+        "id": "seal-2",
+        "icon": "lock",
+        "title": "Pagamento 100% Seguro",
+        "text": "As informações desta compra são criptografadas."
+      },
+      {
+        "id": "seal-3",
+        "icon": "academic-cap",
+        "title": "Conteúdo Aprovado",
+        "text": "100% revisado e aprovado por profissionais"
+      },
+      {
+        "id": "seal-4",
+        "icon": "shield",
+        "title": "Garantia de 7 dias",
+        "text": "Você esta protegido por uma garantia de satisfação"
+      }
+    ]
+  },
+  "name": "Flix",
+  "hash": "e87f909afc"
+}

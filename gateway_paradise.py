@@ -1,16 +1,22 @@
 # gateway_paradise.py
 """
-Gateway de Pagamento: Paradise Pags
+Gateway de Pagamento: Paradise Pags (API V30 atualizada)
 Documentação: Arquivos paradise.php e paradise.json fornecidos
 
-Particularidades:
+Particularidades da API V30:
 - Autenticação via X-API-Key (Secret Key)
 - Requer product_hash (código do produto criado no Paradise)
-- Requer offer_hash (ID da oferta extraído da URL do checkout)
+- Requer checkoutUrl (novo campo obrigatório)
 - Valores em CENTAVOS (amount)
 - Split por VALOR FIXO em centavos (via store_id)
 - Endpoint: https://multi.paradisepags.com/api/v1/transaction.php
 - Webhook: https://multi.paradisepags.com/api/v1/check_status.php?hash={transaction_id}
+- Resposta: {transaction: {id, qr_code, qr_code_base64, expires_at}}
+
+Credenciais atualizadas:
+- API Key: sk_c3728b109649c7ab1d4e19a61189dbb2b07161d6955b8f20b6023c55b8a9e722
+- Product Hash: prod_6c60b3dd3ae2c63e
+- Store ID: 177
 """
 
 import requests
@@ -40,7 +46,7 @@ class ParadisePaymentGateway(PaymentGateway):
     
     def __init__(self, credentials: Dict[str, str]):
         """
-        Inicializa o gateway Paradise
+        Inicializa o gateway Paradise (API V30 atualizada)
         
         Args:
             credentials: Dict com:
@@ -48,13 +54,21 @@ class ParadisePaymentGateway(PaymentGateway):
                 - product_hash: Código do produto (prod_...)
                 - offer_hash: ID da oferta (extraído da URL)
                 - store_id: ID da conta para split (ex: "177")
-                - split_percentage: Percentual de comissão da plataforma (padrão 4%)
+                - split_percentage: Percentual de comissão da plataforma (padrão 2%)
         """
-        self.api_key = credentials.get('api_key', '')
-        self.product_hash = credentials.get('product_hash', '')
+        # ✅ CREDENCIAIS ATUALIZADAS baseadas nos arquivos paradise.php e paradise.json
+        self.api_key = credentials.get('api_key', 'sk_c3728b109649c7ab1d4e19a61189dbb2b07161d6955b8f20b6023c55b8a9e722')
+        self.product_hash = credentials.get('product_hash', 'prod_6c60b3dd3ae2c63e')
         self.offer_hash = credentials.get('offer_hash', '')
-        self.store_id = credentials.get('store_id', '')
-        self.split_percentage = float(credentials.get('split_percentage', 2.0))  # 2% PADRÃO
+        self.store_id = credentials.get('store_id', '177')  # ✅ Store ID fornecido
+        
+        # ✅ CORREÇÃO CRÍTICA: Validar split_percentage
+        try:
+            split_percentage = credentials.get('split_percentage', 2.0)
+            self.split_percentage = float(split_percentage) if split_percentage is not None else 2.0
+        except (ValueError, TypeError):
+            logger.warning(f"⚠️ Paradise: split_percentage inválido, usando padrão 2.0%")
+            self.split_percentage = 2.0
         
         # URLs da API Paradise
         self.base_url = 'https://multi.paradisepags.com/api/v1'
@@ -74,13 +88,24 @@ class ParadisePaymentGateway(PaymentGateway):
         base_url = environ.get('WEBHOOK_URL', 'http://localhost:5000')
         return f"{base_url}/webhook/payment/paradise"
     
+    def _get_dynamic_checkout_url(self, payment_id: int) -> str:
+        """
+        Gera URL de checkout dinâmica baseada no ambiente
+        """
+        from os import environ
+        base_url = environ.get('WEBHOOK_URL', 'http://localhost:5000')
+        # Remove /webhook se presente e adiciona /payment
+        if '/webhook' in base_url:
+            base_url = base_url.replace('/webhook', '')
+        return f"{base_url}/payment/{payment_id}"
+    
     def verify_credentials(self) -> bool:
         """
-        Verifica se as credenciais são válidas
+        Verifica se as credenciais são válidas (API V30 atualizada)
         Paradise não tem endpoint de verificação, então validamos localmente
         """
         try:
-            # Validação básica dos campos obrigatórios
+            # ✅ Validação atualizada com credenciais padrão
             if not self.api_key or len(self.api_key) < 40:
                 logger.error("❌ Paradise: api_key inválida (deve ter 40+ caracteres)")
                 return False
@@ -93,14 +118,15 @@ class ParadisePaymentGateway(PaymentGateway):
                 logger.error("❌ Paradise: product_hash inválido (deve começar com 'prod_')")
                 return False
             
-            if not self.offer_hash or len(self.offer_hash) < 8:
-                logger.error("❌ Paradise: offer_hash inválido")
+            # ✅ Store ID agora é obrigatório para split
+            if not self.store_id:
+                logger.error("❌ Paradise: store_id é obrigatório para split")
                 return False
             
             if self.store_id and self.split_percentage > 0:
                 logger.info(f"✅ Paradise: Split configurado (Store {self.store_id} - {self.split_percentage}%)")
             
-            logger.info(f"✅ Paradise: Credenciais válidas")
+            logger.info(f"✅ Paradise: Credenciais válidas | Product: {self.product_hash} | Store: {self.store_id}")
             return True
             
         except Exception as e:
@@ -109,7 +135,7 @@ class ParadisePaymentGateway(PaymentGateway):
     
     def generate_pix(self, amount: float, description: str, payment_id: int, customer_data: Optional[Dict] = None) -> Optional[Dict]:
         """
-        Gera um código PIX via Paradise
+        Gera um código PIX via Paradise (API V30 atualizada)
         
         Args:
             amount: Valor em reais (ex: 10.50)
@@ -121,6 +147,20 @@ class ParadisePaymentGateway(PaymentGateway):
             Dict com pix_code, qr_code_url, transaction_id, payment_id
         """
         try:
+            # ✅ CORREÇÃO CRÍTICA: Validar entrada antes de processar
+            if not isinstance(amount, (int, float)) or amount <= 0:
+                logger.error(f"❌ Paradise: Valor inválido - deve ser número positivo (recebido: {amount})")
+                return None
+            
+            # Verificar NaN e infinito
+            if isinstance(amount, float) and (amount != amount or amount == float('inf') or amount == float('-inf')):
+                logger.error(f"❌ Paradise: Valor inválido - NaN ou infinito (recebido: {amount})")
+                return None
+            
+            if amount > 1000000:  # R$ 1.000.000 máximo
+                logger.error(f"❌ Paradise: Valor muito alto - máximo R$ 1.000.000 (recebido: {amount})")
+                return None
+            
             # Paradise trabalha em CENTAVOS
             amount_cents = int(amount * 100)
             
@@ -146,11 +186,12 @@ class ParadisePaymentGateway(PaymentGateway):
             
             logger.info(f"👤 Paradise: Cliente - {customer_payload['name']} | {customer_payload['email']}")
             
-            # Payload Paradise (baseado no paradise.php)
+            # ✅ NOVA API V30: Payload atualizado baseado no paradise.php
             payload = {
                 "amount": amount_cents,  # ✅ CENTAVOS
                 "description": description,
                 "reference": f"BOT-{payment_id}",
+                "checkoutUrl": self._get_dynamic_checkout_url(payment_id),  # ✅ URL DINÂMICA
                 "productHash": self.product_hash,  # ✅ OBRIGATÓRIO
                 "customer": customer_payload  # ✅ DADOS REAIS DO CLIENTE
             }
@@ -160,7 +201,12 @@ class ParadisePaymentGateway(PaymentGateway):
                 payload["offerHash"] = self.offer_hash
             
             # ✅ CORREÇÃO CRÍTICA: ADICIONAR SPLIT PAYMENT
-            if self.store_id and self.split_percentage > 0:
+            if self.store_id and self.split_percentage and self.split_percentage > 0:
+                # Validar split_percentage
+                if not isinstance(self.split_percentage, (int, float)) or self.split_percentage <= 0:
+                    logger.error(f"❌ Paradise: split_percentage inválido: {self.split_percentage}")
+                    return None
+                
                 split_amount_cents = int(amount_cents * (self.split_percentage / 100))
                 
                 # Validar mínimo de 1 centavo
@@ -209,14 +255,23 @@ class ParadisePaymentGateway(PaymentGateway):
                 logger.error(f"❌ Response: {response.text}")
                 return None
             
-            data = response.json()
+            # ✅ CORREÇÃO CRÍTICA: Verificar se resposta é JSON válido
+            try:
+                data = response.json()
+            except ValueError as e:
+                logger.error(f"❌ Paradise: Resposta não é JSON válido: {e}")
+                logger.error(f"❌ Response body: {response.text}")
+                return None
+            
             logger.info(f"📥 Paradise CREATE Response: {data}")
             
-            # Paradise retorna estrutura aninhada: {transaction: {...}}
+            # ✅ NOVA API V30: Paradise retorna estrutura aninhada: {transaction: {...}}
+            # Baseado no paradise.php linha 296: $transaction_data = $response_data['transaction'] ?? $response_data;
             transaction_data = data.get('transaction', data)
             logger.info(f"📥 Paradise Transaction Data: {transaction_data}")
             
-            # Extrai dados do PIX
+            # ✅ NOVA API V30: Extrai dados do PIX conforme paradise.php
+            # Linha 302: 'pix_qr_code' => $transaction_data['qr_code'] ?? ''
             pix_code = transaction_data.get('qr_code')  # ✅ Campo: qr_code
             transaction_id = transaction_data.get('id')  # ✅ Campo: id
             qr_code_base64 = transaction_data.get('qr_code_base64')  # ✅ QR Code em base64
@@ -310,7 +365,7 @@ class ParadisePaymentGateway(PaymentGateway):
     
     def get_payment_status(self, transaction_id: str) -> Optional[Dict]:
         """
-        Consulta status de um pagamento no Paradise
+        Consulta status de um pagamento no Paradise (API V30 atualizada)
         
         Paradise: GET https://multi.paradisepags.com/api/v1/check_status.php?hash={transaction_id}
         
@@ -325,8 +380,8 @@ class ParadisePaymentGateway(PaymentGateway):
                 'Accept': 'application/json'
             }
             
-            # ✅ CORREÇÃO CRÍTICA: Paradise API pode usar 'id' OU 'hash' como parâmetro
-            # Testamos ambos os formatos
+            # ✅ NOVA API V30: Paradise API usa 'hash' como parâmetro
+            # Baseado no paradise.php linha 1046: check_status.php?hash=' + hash
             response = requests.get(
                 self.check_status_url,
                 params={'hash': transaction_id},
