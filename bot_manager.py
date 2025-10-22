@@ -185,6 +185,9 @@ class BotManager:
         # ✅ THREAD SAFETY: Lock para acesso concorrente
         self._bots_lock = threading.RLock()  # RLock permite re-entrada na mesma thread
         
+        # ✅ CACHE DE RATE LIMITING (em memória)
+        self.rate_limit_cache = {}  # {user_key: timestamp}
+        
         logger.info("BotManager inicializado")
     
     def validate_token(self, token: str) -> Dict[str, Any]:
@@ -616,16 +619,24 @@ class BotManager:
                     self._handle_start_command(bot_id, token, config, chat_id, message, None)
                     return
                 
-                # ✅ PROTEÇÃO 1: Rate limiting (máximo 1 mensagem por minuto)
+                # ✅ PROTEÇÃO 1: Rate limiting usando cache em memória (máximo 1 mensagem por minuto)
+                user_key = f"{bot_id}_{telegram_user_id}"
                 now = datetime.now()
-                if bot_user.last_interaction and (now - bot_user.last_interaction).total_seconds() < 60:
-                    logger.info(f"⏱️ Rate limiting: Usuário {first_name} enviou mensagem muito recente ({(now - bot_user.last_interaction).total_seconds():.1f}s atrás)")
-                    return
+                
+                if user_key in self.rate_limit_cache:
+                    last_time = self.rate_limit_cache[user_key]
+                    time_diff = (now - last_time).total_seconds()
+                    if time_diff < 60:
+                        logger.info(f"⏱️ Rate limiting: Usuário {first_name} enviou mensagem muito recente ({time_diff:.1f}s atrás)")
+                        return
                 
                 # ✅ PROTEÇÃO 2: Não enviar Meta Pixel (evita duplicação)
                 logger.info(f"💬 Reiniciando funil para usuário existente: {first_name}")
                 
-                # Atualizar última interação APÓS verificar rate limiting
+                # Atualizar cache de rate limiting
+                self.rate_limit_cache[user_key] = now
+                
+                # Atualizar última interação no banco (para analytics)
                 bot_user.last_interaction = now
                 db.session.commit()
                 
