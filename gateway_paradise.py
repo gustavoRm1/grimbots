@@ -444,7 +444,7 @@ class ParadisePaymentGateway(PaymentGateway):
                 response = requests.get(
                     check_url,
                     headers=headers,
-                    timeout=10
+                    timeout=30  # ✅ Aumentar timeout para 30 segundos
                 )
                 
                 # 🔍 DEBUG COMPLETO: Ver o que o Paradise REALMENTE retorna
