@@ -223,6 +223,8 @@ class ParadisePaymentGateway(PaymentGateway):
             }
             
             logger.info(f"👤 Paradise: Cliente - {customer_payload['name']} | {customer_payload['email']}")
+            logger.info(f"🔗 Paradise: Webhook URL - {self.get_webhook_url()}")
+            logger.info(f"🔗 Paradise: Checkout URL - {self._get_dynamic_checkout_url(payment_id)}")
             
             # ✅ NOVA API V30: Payload atualizado baseado no paradise.php
             payload = {
@@ -230,6 +232,7 @@ class ParadisePaymentGateway(PaymentGateway):
                 "description": description,
                 "reference": f"BOT-{payment_id}",
                 "checkoutUrl": self._get_dynamic_checkout_url(payment_id),  # ✅ URL DINÂMICA
+                "webhookUrl": self.get_webhook_url(),  # ✅ WEBHOOK URL
                 "productHash": self.product_hash,  # ✅ OBRIGATÓRIO
                 "customer": customer_payload  # ✅ DADOS REAIS DO CLIENTE
             }

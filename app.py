@@ -4463,7 +4463,10 @@ def telegram_webhook(bot_id):
 def payment_webhook(gateway_type):
     """Webhook para confirmação de pagamento"""
     data = request.json
-    logger.info(f"Webhook recebido de {gateway_type}: {data}")
+    logger.info(f"🔔 WEBHOOK RECEBIDO de {gateway_type}")
+    logger.info(f"📦 Dados do webhook: {data}")
+    logger.info(f"🌐 IP do remetente: {request.remote_addr}")
+    logger.info(f"📋 Headers: {dict(request.headers)}")
     
     try:
         # Processar webhook do gateway
@@ -4473,9 +4476,16 @@ def payment_webhook(gateway_type):
             payment_id = result.get('payment_id')
             status = result.get('status')
             
+            logger.info(f"✅ Webhook processado com sucesso: {payment_id} -> {status}")
+            
             # Buscar pagamento no banco (pode vir pelo payment_id ou gateway_transaction_id)
             payment = (Payment.query.filter_by(payment_id=payment_id).first() or
                       Payment.query.filter_by(gateway_transaction_id=payment_id).first())
+            
+            if payment:
+                logger.info(f"💰 Pagamento encontrado: {payment.payment_id} | Status atual: {payment.status}")
+            else:
+                logger.warning(f"⚠️ Pagamento não encontrado: {payment_id}")
             
             if payment:
                 # Verificar se já foi processado (idempotência)
