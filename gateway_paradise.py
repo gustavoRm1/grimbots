@@ -435,32 +435,51 @@ class ParadisePaymentGateway(PaymentGateway):
             # Usar transaction_hash se disponível, senão usar transaction_id
             hash_to_use = transaction_hash or transaction_id  # ✅ Usar hash se disponível
             check_url = f"{self.check_status_url}?hash={hash_to_use}"
-            response = requests.get(
-                check_url,
-                headers=headers,
-                timeout=10
-            )
             
-            # 🔍 DEBUG COMPLETO: Ver o que o Paradise REALMENTE retorna
-            logger.info(f"🔍 Paradise API - Request URL: {response.url}")
-            logger.info(f"🔍 Paradise API - Response Status: {response.status_code}")
-            logger.info(f"🔍 Paradise API - Response Headers: {dict(response.headers)}")
-            logger.info(f"🔍 Paradise API - Response Body (raw): {response.text}")
-            
-            if response.status_code == 404:
-                logger.warning(f"⚠️ Paradise: Transação não encontrada | ID: {transaction_id}")
-                return None
-            
-            if response.status_code != 200:
-                logger.error(f"❌ Paradise: Erro ao consultar | Status: {response.status_code} | Body: {response.text}")
-                return None
-            
-            # Tenta parsear JSON
-            try:
-                data = response.json()
-            except ValueError as e:
-                logger.error(f"❌ Paradise: Resposta não é JSON válido | Body: {response.text}")
-                return None
+            # ✅ SOLUÇÃO CRÍTICA: Paradise tem delay interno - tentar até 5 vezes com delay
+            import time
+            for attempt in range(5):
+                logger.info(f"🔍 Paradise: Tentativa {attempt + 1}/5 | Hash: {hash_to_use}")
+                
+                response = requests.get(
+                    check_url,
+                    headers=headers,
+                    timeout=10
+                )
+                
+                # 🔍 DEBUG COMPLETO: Ver o que o Paradise REALMENTE retorna
+                logger.info(f"🔍 Paradise API - Request URL: {response.url}")
+                logger.info(f"🔍 Paradise API - Response Status: {response.status_code}")
+                logger.info(f"🔍 Paradise API - Response Body (raw): {response.text}")
+                
+                if response.status_code == 404:
+                    logger.warning(f"⚠️ Paradise: Transação não encontrada | ID: {transaction_id}")
+                    return None
+                
+                if response.status_code != 200:
+                    logger.error(f"❌ Paradise: Erro ao consultar | Status: {response.status_code} | Body: {response.text}")
+                    return None
+                
+                # Tenta parsear JSON
+                try:
+                    data = response.json()
+                except ValueError as e:
+                    logger.error(f"❌ Paradise: Resposta não é JSON válido | Body: {response.text}")
+                    return None
+                
+                # Verificar se encontrou a transação
+                if data.get('payment_status') != 'not_found':
+                    logger.info(f"✅ Paradise: Transação encontrada na tentativa {attempt + 1}")
+                    break
+                
+                # Se não encontrou e não é a última tentativa, aguardar
+                if attempt < 4:
+                    wait_time = (attempt + 1) * 10  # 10, 20, 30, 40 segundos
+                    logger.info(f"⏳ Paradise: Aguardando {wait_time} segundos antes da próxima tentativa...")
+                    time.sleep(wait_time)
+                else:
+                    logger.warning(f"⚠️ Paradise: Transação não encontrada após 5 tentativas | ID: {transaction_id}")
+                    return None
             
             logger.info(f"🔍 Paradise API - Data JSON: {data}")
             
