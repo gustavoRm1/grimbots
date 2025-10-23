@@ -188,6 +188,27 @@ class BotManager:
         # ✅ CACHE DE RATE LIMITING (em memória)
         self.rate_limit_cache = {}  # {user_key: timestamp}
         
+        # ✅ LIMPEZA AUTOMÁTICA DO CACHE (a cada 5 minutos)
+        import threading
+        def cleanup_cache():
+            while True:
+                import time
+                time.sleep(300)  # 5 minutos
+                now = datetime.now()
+                expired_keys = []
+                for user_key, timestamp in self.rate_limit_cache.items():
+                    if (now - timestamp).total_seconds() > 300:  # 5 minutos
+                        expired_keys.append(user_key)
+                
+                for key in expired_keys:
+                    del self.rate_limit_cache[key]
+                
+                if expired_keys:
+                    logger.info(f"🧹 Rate limiting cache limpo: {len(expired_keys)} entradas removidas")
+        
+        cleanup_thread = threading.Thread(target=cleanup_cache, daemon=True)
+        cleanup_thread.start()
+        
         logger.info("BotManager inicializado")
     
     def validate_token(self, token: str) -> Dict[str, Any]:

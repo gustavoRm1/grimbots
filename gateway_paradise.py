@@ -202,9 +202,9 @@ class ParadisePaymentGateway(PaymentGateway):
             # Paradise trabalha em CENTAVOS
             amount_cents = int(amount * 100)
             
-            # Validação de valor mínimo (Paradise não especifica, mas usamos 50 centavos como padrão)
-            if amount_cents < 50:
-                logger.error(f"❌ Paradise: Valor mínimo é R$ 0,50 (recebido: {amount})")
+            # Validação de valor mínimo (ajustado para downsells)
+            if amount_cents < 1:  # R$ 0,01 mínimo
+                logger.error(f"❌ Paradise: Valor mínimo é R$ 0,01 (recebido: {amount})")
                 return None
             
             logger.info(f"💰 Paradise: Gerando PIX - R$ {amount:.2f} ({amount_cents} centavos)")
@@ -248,24 +248,29 @@ class ParadisePaymentGateway(PaymentGateway):
                 # Log do split para debug
                 logger.info(f"💰 Paradise Split: {self.split_percentage}% configurado")
                 
-                split_amount_cents = int(amount_cents * (self.split_percentage / 100))
-                
-                # Validar mínimo de 1 centavo
-                if split_amount_cents < 1:
-                    split_amount_cents = 1
-                
-                # Garantir que sobra pelo menos 1 centavo para o vendedor
-                seller_amount_cents = amount_cents - split_amount_cents
-                if seller_amount_cents < 1:
-                    logger.warning(f"⚠️ Paradise: Split deixaria menos de 1 centavo para vendedor. Ajustando...")
-                    split_amount_cents = amount_cents - 1
-                
-                payload["split"] = {
-                    "store_id": self.store_id,
-                    "amount": split_amount_cents
-                }
-                
-                logger.info(f"💰 Paradise Split: {split_amount_cents} centavos ({self.split_percentage}%) para store {self.store_id}")
+                # ✅ CORREÇÃO CRÍTICA: Para valores muito pequenos, não aplicar split
+                if amount_cents < 10:  # Menos de R$ 0,10
+                    logger.warning(f"⚠️ Paradise: Valor muito pequeno (R$ {amount:.2f}), não aplicando split")
+                    # Não adiciona split para valores muito pequenos
+                else:
+                    split_amount_cents = int(amount_cents * (self.split_percentage / 100))
+                    
+                    # Validar mínimo de 1 centavo para split
+                    if split_amount_cents < 1:
+                        split_amount_cents = 1
+                    
+                    # Garantir que sobra pelo menos 1 centavo para o vendedor
+                    seller_amount_cents = amount_cents - split_amount_cents
+                    if seller_amount_cents < 1:
+                        logger.warning(f"⚠️ Paradise: Split deixaria menos de 1 centavo para vendedor. Ajustando...")
+                        split_amount_cents = amount_cents - 1
+                    
+                    payload["split"] = {
+                        "store_id": self.store_id,
+                        "amount": split_amount_cents
+                    }
+                    
+                    logger.info(f"💰 Paradise Split: {split_amount_cents} centavos ({self.split_percentage}%) para store {self.store_id}")
             
             # ✅ LOG DETALHADO para debug
             logger.info(f"📤 Paradise Payload: {payload}")
@@ -496,8 +501,8 @@ class ParadisePaymentGateway(PaymentGateway):
         """Valida se o valor está dentro dos limites aceitos pelo Paradise"""
         amount_cents = int(amount * 100)
         
-        if amount_cents < 50:
-            logger.error(f"❌ Paradise: Valor mínimo é R$ 0,50")
+        if amount_cents < 1:  # R$ 0,01 mínimo
+            logger.error(f"❌ Paradise: Valor mínimo é R$ 0,01")
             return False
         
         # Paradise não especifica limite máximo na documentação
