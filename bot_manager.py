@@ -1464,6 +1464,132 @@ class BotManager:
                     else:
                         logger.info(f"ℹ️ Downsells desabilitados ou não configurados (bump_no)")
             
+            # ✅ NOVO: Order Bump Downsell - Aceitar
+            elif callback_data.startswith('downsell_bump_yes_'):
+                # Formato: downsell_bump_yes_DOWNSELL_INDEX_TOTAL_PRICE_CENTAVOS
+                parts = callback_data.replace('downsell_bump_yes_', '').split('_')
+                downsell_idx = int(parts[0])
+                total_price = float(parts[1]) / 100  # Converter centavos para reais
+                
+                logger.info(f"🎁 Order Bump Downsell ACEITO | Downsell: {downsell_idx} | Valor Total: R$ {total_price:.2f}")
+                
+                # Responder callback
+                requests.post(url, json={
+                    'callback_query_id': callback_id,
+                    'text': '🔄 Gerando pagamento PIX...'
+                }, timeout=3)
+                
+                # Gerar PIX com valor total (downsell + order bump)
+                pix_data = self._generate_pix_payment(
+                    bot_id=bot_id,
+                    amount=total_price,
+                    description=f"Oferta Especial + Bônus",
+                    customer_name=user_info.get('first_name', ''),
+                    customer_username=user_info.get('username', ''),
+                    customer_user_id=str(user_info.get('id', '')),
+                    order_bump_shown=True,
+                    order_bump_accepted=True,
+                    order_bump_value=total_price - (total_price * 0.7),  # Estimativa do bump
+                    is_downsell=True,
+                    downsell_index=downsell_idx
+                )
+                
+                if pix_data and pix_data.get('pix_code'):
+                    payment_message = f"""🎯 <b>Produto:</b> Oferta Especial + Bônus
+💰 <b>Valor:</b> R$ {total_price:.2f}
+
+📱 <b>PIX Copia e Cola:</b>
+<code>{pix_data['pix_code']}</code>
+
+<i>👆 Toque no código acima para copiar</i>
+
+⏰ <b>Válido por:</b> 30 minutos
+
+💡 <b>Após pagar, clique no botão abaixo para verificar e receber seu acesso!</b>"""
+                    
+                    buttons = [{
+                        'text': '✅ Verificar Pagamento',
+                        'callback_data': f'verify_{pix_data.get("payment_id")}'
+                    }]
+                    
+                    self.send_telegram_message(
+                        token=token,
+                        chat_id=str(chat_id),
+                        message=payment_message.strip(),
+                        buttons=buttons
+                    )
+                    
+                    logger.info(f"✅ PIX DOWNSELL COM ORDER BUMP ENVIADO! ID: {pix_data.get('payment_id')}")
+                else:
+                    self.send_telegram_message(
+                        token=token,
+                        chat_id=str(chat_id),
+                        message="❌ Erro ao gerar PIX. Entre em contato com o suporte."
+                    )
+            
+            # ✅ NOVO: Order Bump Downsell - Recusar
+            elif callback_data.startswith('downsell_bump_no_'):
+                # Formato: downsell_bump_no_DOWNSELL_INDEX_DOWNSELL_PRICE_CENTAVOS
+                parts = callback_data.replace('downsell_bump_no_', '').split('_')
+                downsell_idx = int(parts[0])
+                downsell_price = float(parts[1]) / 100  # Converter centavos para reais
+                
+                logger.info(f"🎁 Order Bump Downsell RECUSADO | Downsell: {downsell_idx} | Valor: R$ {downsell_price:.2f}")
+                
+                # Responder callback
+                requests.post(url, json={
+                    'callback_query_id': callback_id,
+                    'text': '🔄 Gerando pagamento PIX...'
+                }, timeout=3)
+                
+                # Gerar PIX apenas com valor do downsell (sem order bump)
+                pix_data = self._generate_pix_payment(
+                    bot_id=bot_id,
+                    amount=downsell_price,
+                    description="Oferta Especial",
+                    customer_name=user_info.get('first_name', ''),
+                    customer_username=user_info.get('username', ''),
+                    customer_user_id=str(user_info.get('id', '')),
+                    order_bump_shown=True,
+                    order_bump_accepted=False,
+                    order_bump_value=0.0,
+                    is_downsell=True,
+                    downsell_index=downsell_idx
+                )
+                
+                if pix_data and pix_data.get('pix_code'):
+                    payment_message = f"""🎯 <b>Produto:</b> Oferta Especial
+💰 <b>Valor:</b> R$ {downsell_price:.2f}
+
+📱 <b>PIX Copia e Cola:</b>
+<code>{pix_data['pix_code']}</code>
+
+<i>👆 Toque no código acima para copiar</i>
+
+⏰ <b>Válido por:</b> 30 minutos
+
+💡 <b>Após pagar, clique no botão abaixo para verificar e receber seu acesso!</b>"""
+                    
+                    buttons = [{
+                        'text': '✅ Verificar Pagamento',
+                        'callback_data': f'verify_{pix_data.get("payment_id")}'
+                    }]
+                    
+                    self.send_telegram_message(
+                        token=token,
+                        chat_id=str(chat_id),
+                        message=payment_message.strip(),
+                        buttons=buttons
+                    )
+                    
+                    logger.info(f"✅ PIX DOWNSELL SEM ORDER BUMP ENVIADO! ID: {pix_data.get('payment_id')}")
+                else:
+                    self.send_telegram_message(
+                        token=token,
+                        chat_id=str(chat_id),
+                        message="❌ Erro ao gerar PIX. Entre em contato com o suporte."
+                    )
+            
             # ✅ NOVO: Downsell com formato simplificado
             elif callback_data.startswith('dwnsl_'):
                 # ✅ NOVO FORMATO PERCENTUAL: dwnsl_DOWNSELL_IDX_BUTTON_IDX_PRICE_CENTAVOS
@@ -1645,6 +1771,34 @@ class BotManager:
                 
                 logger.info(f"💙 DOWNSELL FIXO CLICADO | Downsell: {downsell_idx} | Botão Original: {original_button_idx} | Produto: {description} | Valor: R$ {price:.2f}")
                 
+                # ✅ VERIFICAR SE TEM ORDER BUMP PARA ESTE DOWNSELL
+                from app import app, db
+                from models import Bot as BotModel
+                
+                order_bump = None
+                with app.app_context():
+                    bot = db.session.get(BotModel, bot_id)
+                    if bot and bot.config:
+                        config = bot.config.to_dict()
+                        downsells = config.get('downsells', [])
+                        
+                        if downsell_idx < len(downsells):
+                            downsell_config = downsells[downsell_idx]
+                            order_bump = downsell_config.get('order_bump', {})
+                
+                if order_bump and order_bump.get('enabled'):
+                    # Responder callback - AGUARDANDO order bump
+                    requests.post(url, json={
+                        'callback_query_id': callback_id,
+                        'text': '🎁 Oferta especial para você!'
+                    }, timeout=3)
+                    
+                    logger.info(f"🎁 Order Bump detectado para downsell {downsell_idx + 1}!")
+                    self._show_downsell_order_bump(bot_id, token, chat_id, user_info, 
+                                                 price, description, downsell_idx, order_bump)
+                    return  # Aguarda resposta do order bump
+                
+                # SEM ORDER BUMP - Gerar PIX direto
                 # Responder callback
                 requests.post(url, json={
                     'callback_query_id': callback_id,
@@ -2056,6 +2210,93 @@ Seu pagamento ainda não foi confirmado.
             import traceback
             traceback.print_exc()
     
+    def _show_downsell_order_bump(self, bot_id: int, token: str, chat_id: int, user_info: Dict[str, Any],
+                                 downsell_price: float, downsell_description: str, downsell_index: int,
+                                 order_bump: Dict[str, Any]):
+        """
+        Exibe Order Bump PERSONALIZADO para DOWSELL com MÍDIA e BOTÕES CUSTOMIZÁVEIS
+        
+        Args:
+            bot_id: ID do bot
+            token: Token do bot
+            chat_id: ID do chat
+            user_info: Dados do usuário
+            downsell_price: Preço do downsell
+            downsell_description: Descrição do downsell
+            downsell_index: Índice do downsell
+            order_bump: Dados completos do order bump
+        """
+        try:
+            bump_message = order_bump.get('message', '')
+            bump_price = float(order_bump.get('price', 0))
+            bump_description = order_bump.get('description', 'Bônus')
+            bump_media_url = order_bump.get('media_url')
+            bump_media_type = order_bump.get('media_type', 'video')
+            accept_text = order_bump.get('accept_text', '')
+            decline_text = order_bump.get('decline_text', '')
+            total_price = downsell_price + bump_price
+            
+            logger.info(f"🎁 Exibindo Order Bump para Downsell: {bump_description} (+R$ {bump_price:.2f})")
+            
+            # Usar APENAS a mensagem configurada pelo usuário
+            order_bump_message = bump_message.strip()
+            
+            # Textos personalizados ou padrão
+            accept_button_text = accept_text.strip() if accept_text else f'✅ SIM! Quero por R$ {total_price:.2f}'
+            decline_button_text = decline_text.strip() if decline_text else f'❌ NÃO, continuar com R$ {downsell_price:.2f}'
+            
+            # Botões com callback_data específico para downsell
+            buttons = [
+                {
+                    'text': accept_button_text,
+                    'callback_data': f'downsell_bump_yes_{downsell_index}_{int(total_price*100)}'
+                },
+                {
+                    'text': decline_button_text,
+                    'callback_data': f'downsell_bump_no_{downsell_index}_{int(downsell_price*100)}'
+                }
+            ]
+            
+            logger.info(f"🎁 Order Bump Downsell - Botões: {len(buttons)}")
+            logger.info(f"  - Aceitar: {accept_button_text}")
+            logger.info(f"  - Recusar: {decline_button_text}")
+            
+            # Verificar se mídia é válida
+            valid_media = bump_media_url and '/c/' not in bump_media_url and bump_media_url.startswith('http')
+            
+            # Enviar com ou sem mídia
+            if valid_media:
+                result = self.send_telegram_message(
+                    token=token,
+                    chat_id=str(chat_id),
+                    message=order_bump_message.strip(),
+                    media_url=bump_media_url,
+                    media_type=bump_media_type,
+                    buttons=buttons
+                )
+                if not result:
+                    # Fallback sem mídia se falhar
+                    self.send_telegram_message(
+                        token=token,
+                        chat_id=str(chat_id),
+                        message=order_bump_message.strip(),
+                        buttons=buttons
+                    )
+            else:
+                self.send_telegram_message(
+                    token=token,
+                    chat_id=str(chat_id),
+                    message=order_bump_message.strip(),
+                    buttons=buttons
+                )
+            
+            logger.info(f"✅ Order Bump Downsell exibido!")
+            
+        except Exception as e:
+            logger.error(f"❌ Erro ao exibir Order Bump Downsell: {e}")
+            import traceback
+            traceback.print_exc()
+
     def _show_order_bump(self, bot_id: int, token: str, chat_id: int, user_info: Dict[str, Any],
                         original_price: float, original_description: str, button_index: int,
                         order_bump: Dict[str, Any]):
@@ -3171,9 +3412,13 @@ Seu pagamento ainda não foi confirmado.
                     'callback_data': f'downsell_{index}_{int(price*100)}_{0}'  # Formato: downsell_INDEX_PRICE_ORIGINAL_BTN
                 }]
             
+            # ✅ VERIFICAR SE TEM ORDER BUMP PARA ESTE DOWNSELL
+            order_bump = downsell.get('order_bump', {})
+            
             logger.info(f"🔍 DEBUG _send_downsell - Botões criados: {len(buttons)}")
             logger.info(f"  - message: {message}")
             logger.info(f"  - media_url: {media_url}")
+            logger.info(f"  - order_bump_enabled: {order_bump.get('enabled', False)}")
             
             logger.info(f"📨 Enviando downsell {index+1} para chat {chat_id}")
             
