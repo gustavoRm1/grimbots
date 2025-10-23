@@ -3064,12 +3064,17 @@ Seu pagamento ainda não foi confirmado.
                     
                 else:
                     # Fallback: se não tiver main_buttons, usar preço original (comportamento antigo)
+                    logger.info(f"🔍 DEBUG fallback - original_price: {original_price}")
+                    logger.info(f"🔍 DEBUG fallback - discount_percentage: {discount_percentage}")
+                    
                     if original_price > 0:
                         price = original_price * (1 - discount_percentage / 100)
                         logger.info(f"💜 MODO PERCENTUAL (fallback): {discount_percentage}% OFF de R$ {original_price:.2f} = R$ {price:.2f}")
                     else:
-                        price = float(downsell.get('price', 0))
-                        logger.warning(f"⚠️ Preço original não disponível, usando preço fixo: R$ {price:.2f}")
+                        # ✅ CORREÇÃO CRÍTICA: Se original_price for 0, usar preço padrão de downsell
+                        logger.warning(f"⚠️ original_price é 0! Usando preço padrão para downsell")
+                        price = 9.97  # Preço padrão para downsells
+                        logger.info(f"💜 MODO PERCENTUAL (corrigido): Usando preço padrão R$ {price:.2f}")
                     
                     if price < 0.50:
                         logger.error(f"❌ Preço muito baixo (R$ {price:.2f}), mínimo R$ 0,50")
