@@ -8,7 +8,7 @@ import threading
 import time
 import logging
 import json
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta
 import hashlib
 import hmac
@@ -187,6 +187,9 @@ class BotManager:
         
         # ✅ CACHE DE RATE LIMITING (em memória)
         self.rate_limit_cache = {}  # {user_key: timestamp}
+        
+        # ✅ SESSÕES DE MÚLTIPLOS ORDER BUMPS
+        self.order_bump_sessions = {}  # {user_key: session_data}
         
         # ✅ LIMPEZA AUTOMÁTICA DO CACHE (a cada 5 minutos)
         def cleanup_cache():
@@ -1464,6 +1467,68 @@ class BotManager:
                     else:
                         logger.info(f"ℹ️ Downsells desabilitados ou não configurados (bump_no)")
             
+            # ✅ NOVO: Múltiplos Order Bumps - Aceitar
+            elif callback_data.startswith('multi_bump_yes_'):
+                # Formato: multi_bump_yes_USER_KEY_BUMP_INDEX_TOTAL_PRICE_CENTAVOS
+                parts = callback_data.replace('multi_bump_yes_', '').split('_')
+                user_key = f"{parts[0]}_{parts[1]}"
+                bump_index = int(parts[2])
+                total_price = float(parts[3]) / 100  # Converter centavos para reais
+                
+                logger.info(f"🎁 Order Bump {bump_index + 1} ACEITO | User: {user_key} | Valor Total: R$ {total_price:.2f}")
+                
+                # Responder callback
+                requests.post(url, json={
+                    'callback_query_id': callback_id,
+                    'text': '✅ Bônus adicionado!'
+                }, timeout=3)
+                
+                # Atualizar sessão
+                if user_key in self.order_bump_sessions:
+                    session = self.order_bump_sessions[user_key]
+                    current_bump = session['order_bumps'][bump_index]
+                    bump_price = float(current_bump.get('price', 0))
+                    
+                    # Adicionar bump aceito
+                    session['accepted_bumps'].append(current_bump)
+                    session['total_bump_value'] += bump_price
+                    session['current_index'] = bump_index + 1
+                    
+                    logger.info(f"🎁 Bump aceito: {current_bump.get('description', 'Bônus')} (+R$ {bump_price:.2f})")
+                    
+                    # Exibir próximo order bump ou finalizar
+                    self._show_next_order_bump(bot_id, token, chat_id, user_key)
+                else:
+                    logger.error(f"❌ Sessão de order bump não encontrada: {user_key}")
+            
+            # ✅ NOVO: Múltiplos Order Bumps - Recusar
+            elif callback_data.startswith('multi_bump_no_'):
+                # Formato: multi_bump_no_USER_KEY_BUMP_INDEX_CURRENT_PRICE_CENTAVOS
+                parts = callback_data.replace('multi_bump_no_', '').split('_')
+                user_key = f"{parts[0]}_{parts[1]}"
+                bump_index = int(parts[2])
+                current_price = float(parts[3]) / 100  # Converter centavos para reais
+                
+                logger.info(f"🎁 Order Bump {bump_index + 1} RECUSADO | User: {user_key} | Valor Atual: R$ {current_price:.2f}")
+                
+                # Responder callback
+                requests.post(url, json={
+                    'callback_query_id': callback_id,
+                    'text': '❌ Bônus recusado'
+                }, timeout=3)
+                
+                # Atualizar sessão
+                if user_key in self.order_bump_sessions:
+                    session = self.order_bump_sessions[user_key]
+                    session['current_index'] = bump_index + 1
+                    
+                    logger.info(f"🎁 Bump recusado: {session['order_bumps'][bump_index].get('description', 'Bônus')}")
+                    
+                    # Exibir próximo order bump ou finalizar
+                    self._show_next_order_bump(bot_id, token, chat_id, user_key)
+                else:
+                    logger.error(f"❌ Sessão de order bump não encontrada: {user_key}")
+            
             # ✅ NOVO: Order Bump Downsell - Aceitar
             elif callback_data.startswith('downsell_bump_yes_'):
                 # Formato: downsell_bump_yes_DOWNSELL_INDEX_TOTAL_PRICE_CENTAVOS
@@ -1869,20 +1934,21 @@ class BotManager:
                 
                 logger.info(f"💰 Produto: {description} | Valor: R$ {price:.2f} | Botão: {button_index}")
                 
-                # VERIFICAR SE TEM ORDER BUMP PARA ESTE BOTÃO
-                order_bump = button_data.get('order_bump', {}) if button_index < len(main_buttons) else None
+                # ✅ VERIFICAR SE TEM ORDER BUMPS PARA ESTE BOTÃO
+                order_bumps = button_data.get('order_bumps', []) if button_index < len(main_buttons) else []
+                enabled_order_bumps = [bump for bump in order_bumps if bump.get('enabled')]
                 
-                if order_bump and order_bump.get('enabled'):
+                if enabled_order_bumps:
                     # Responder callback - AGUARDANDO order bump
                     requests.post(url, json={
                         'callback_query_id': callback_id,
                         'text': '🎁 Oferta especial para você!'
                     }, timeout=3)
                     
-                    logger.info(f"🎁 Order Bump detectado para este botão!")
-                    self._show_order_bump(bot_id, token, chat_id, user_info, 
-                                         price, description, button_index, order_bump)
-                    return  # Aguarda resposta do order bump
+                    logger.info(f"🎁 {len(enabled_order_bumps)} Order Bumps detectados para este botão!")
+                    self._show_multiple_order_bumps(bot_id, token, chat_id, user_info, 
+                                                   price, description, button_index, enabled_order_bumps)
+                    return  # Aguarda resposta dos order bumps
                 
                 # SEM ORDER BUMP - Gerar PIX direto
                 # Responder callback
@@ -2210,6 +2276,227 @@ Seu pagamento ainda não foi confirmado.
             import traceback
             traceback.print_exc()
     
+    def _show_multiple_order_bumps(self, bot_id: int, token: str, chat_id: int, user_info: Dict[str, Any],
+                                   original_price: float, original_description: str, button_index: int,
+                                   order_bumps: List[Dict[str, Any]]):
+        """
+        Exibe múltiplos Order Bumps SEQUENCIAIS
+        
+        Args:
+            bot_id: ID do bot
+            token: Token do bot
+            chat_id: ID do chat
+            user_info: Dados do usuário
+            original_price: Preço original
+            original_description: Descrição original
+            button_index: Índice do botão
+            order_bumps: Lista de order bumps habilitados
+        """
+        try:
+            # Salvar dados do usuário para continuar a sequência
+            user_key = f"{bot_id}_{chat_id}"
+            self.order_bump_sessions[user_key] = {
+                'original_price': original_price,
+                'original_description': original_description,
+                'button_index': button_index,
+                'order_bumps': order_bumps,
+                'current_index': 0,
+                'accepted_bumps': [],
+                'total_bump_value': 0.0
+            }
+            
+            # Exibir primeiro order bump
+            self._show_next_order_bump(bot_id, token, chat_id, user_key)
+            
+        except Exception as e:
+            logger.error(f"❌ Erro ao iniciar múltiplos order bumps: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    def _show_next_order_bump(self, bot_id: int, token: str, chat_id: int, user_key: str):
+        """
+        Exibe o próximo order bump na sequência
+        
+        Args:
+            bot_id: ID do bot
+            token: Token do bot
+            chat_id: ID do chat
+            user_key: Chave da sessão do usuário
+        """
+        try:
+            if user_key not in self.order_bump_sessions:
+                logger.error(f"❌ Sessão de order bump não encontrada: {user_key}")
+                return
+            
+            session = self.order_bump_sessions[user_key]
+            current_index = session['current_index']
+            order_bumps = session['order_bumps']
+            
+            if current_index >= len(order_bumps):
+                # Todos os order bumps foram exibidos, gerar PIX final
+                self._finalize_order_bump_session(bot_id, token, chat_id, user_key)
+                return
+            
+            order_bump = order_bumps[current_index]
+            bump_price = float(order_bump.get('price', 0))
+            bump_message = order_bump.get('message', '')
+            bump_description = order_bump.get('description', 'Bônus')
+            bump_media_url = order_bump.get('media_url')
+            bump_media_type = order_bump.get('media_type', 'video')
+            accept_text = order_bump.get('accept_text', '')
+            decline_text = order_bump.get('decline_text', '')
+            
+            # Calcular preço total atual
+            current_total = session['original_price'] + session['total_bump_value']
+            total_with_this_bump = current_total + bump_price
+            
+            logger.info(f"🎁 Exibindo Order Bump {current_index + 1}/{len(order_bumps)}: {bump_description} (+R$ {bump_price:.2f})")
+            
+            # Usar APENAS a mensagem configurada pelo usuário
+            order_bump_message = bump_message.strip()
+            
+            # Textos personalizados ou padrão
+            accept_button_text = accept_text.strip() if accept_text else f'✅ SIM! Quero por R$ {total_with_this_bump:.2f}'
+            decline_button_text = decline_text.strip() if decline_text else f'❌ NÃO, continuar com R$ {current_total:.2f}'
+            
+            # Botões com callback_data específico para múltiplos order bumps
+            buttons = [
+                {
+                    'text': accept_button_text,
+                    'callback_data': f'multi_bump_yes_{user_key}_{current_index}_{int(total_with_this_bump*100)}'
+                },
+                {
+                    'text': decline_button_text,
+                    'callback_data': f'multi_bump_no_{user_key}_{current_index}_{int(current_total*100)}'
+                }
+            ]
+            
+            logger.info(f"🎁 Order Bump {current_index + 1} - Botões: {len(buttons)}")
+            logger.info(f"  - Aceitar: {accept_button_text}")
+            logger.info(f"  - Recusar: {decline_button_text}")
+            
+            # Verificar se mídia é válida
+            valid_media = bump_media_url and '/c/' not in bump_media_url and bump_media_url.startswith('http')
+            
+            # Enviar com ou sem mídia
+            if valid_media:
+                result = self.send_telegram_message(
+                    token=token,
+                    chat_id=str(chat_id),
+                    message=order_bump_message.strip(),
+                    media_url=bump_media_url,
+                    media_type=bump_media_type,
+                    buttons=buttons
+                )
+                if not result:
+                    # Fallback sem mídia se falhar
+                    self.send_telegram_message(
+                        token=token,
+                        chat_id=str(chat_id),
+                        message=order_bump_message.strip(),
+                        buttons=buttons
+                    )
+            else:
+                self.send_telegram_message(
+                    token=token,
+                    chat_id=str(chat_id),
+                    message=order_bump_message.strip(),
+                    buttons=buttons
+                )
+            
+            logger.info(f"✅ Order Bump {current_index + 1} exibido!")
+            
+        except Exception as e:
+            logger.error(f"❌ Erro ao exibir próximo order bump: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    def _finalize_order_bump_session(self, bot_id: int, token: str, chat_id: int, user_key: str):
+        """
+        Finaliza a sessão de order bumps e gera PIX final
+        
+        Args:
+            bot_id: ID do bot
+            token: Token do bot
+            chat_id: ID do chat
+            user_key: Chave da sessão do usuário
+        """
+        try:
+            if user_key not in self.order_bump_sessions:
+                logger.error(f"❌ Sessão de order bump não encontrada: {user_key}")
+                return
+            
+            session = self.order_bump_sessions[user_key]
+            original_price = session['original_price']
+            original_description = session['original_description']
+            button_index = session['button_index']
+            accepted_bumps = session['accepted_bumps']
+            total_bump_value = session['total_bump_value']
+            
+            final_price = original_price + total_bump_value
+            
+            logger.info(f"🎁 Finalizando sessão - Preço original: R$ {original_price:.2f}, Bumps aceitos: {len(accepted_bumps)}, Valor total: R$ {final_price:.2f}")
+            
+            # Gerar PIX final
+            pix_data = self._generate_pix_payment(
+                bot_id=bot_id,
+                amount=final_price,
+                description=f"{original_description} + {len(accepted_bumps)} bônus" if accepted_bumps else original_description,
+                customer_name="",  # Será preenchido pelo sistema
+                customer_username="",
+                customer_user_id="",
+                order_bump_shown=True,
+                order_bump_accepted=len(accepted_bumps) > 0,
+                order_bump_value=total_bump_value
+            )
+            
+            if pix_data and pix_data.get('pix_code'):
+                # Criar descrição detalhada
+                bump_descriptions = [bump.get('description', 'Bônus') for bump in accepted_bumps]
+                description_text = f"{original_description}"
+                if bump_descriptions:
+                    description_text += f" + {', '.join(bump_descriptions)}"
+                
+                payment_message = f"""🎯 <b>Produto:</b> {description_text}
+💰 <b>Valor:</b> R$ {final_price:.2f}
+
+📱 <b>PIX Copia e Cola:</b>
+<code>{pix_data['pix_code']}</code>
+
+<i>👆 Toque no código acima para copiar</i>
+
+⏰ <b>Válido por:</b> 30 minutos
+
+💡 <b>Após pagar, clique no botão abaixo para verificar e receber seu acesso!</b>"""
+                
+                buttons = [{
+                    'text': '✅ Verificar Pagamento',
+                    'callback_data': f'verify_{pix_data.get("payment_id")}'
+                }]
+                
+                self.send_telegram_message(
+                    token=token,
+                    chat_id=str(chat_id),
+                    message=payment_message.strip(),
+                    buttons=buttons
+                )
+                
+                logger.info(f"✅ PIX FINAL COM {len(accepted_bumps)} ORDER BUMPS ENVIADO! ID: {pix_data.get('payment_id')}")
+            else:
+                self.send_telegram_message(
+                    token=token,
+                    chat_id=str(chat_id),
+                    message="❌ Erro ao gerar PIX. Entre em contato com o suporte."
+                )
+            
+            # Limpar sessão
+            del self.order_bump_sessions[user_key]
+            
+        except Exception as e:
+            logger.error(f"❌ Erro ao finalizar sessão de order bumps: {e}")
+            import traceback
+            traceback.print_exc()
+
     def _show_downsell_order_bump(self, bot_id: int, token: str, chat_id: int, user_info: Dict[str, Any],
                                  downsell_price: float, downsell_description: str, downsell_index: int,
                                  order_bump: Dict[str, Any]):
