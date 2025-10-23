@@ -3054,6 +3054,7 @@ Seu pagamento ainda não foi confirmado.
             
             # ✅ NOVO: Calcular preço baseado no modo (fixo ou percentual)
             pricing_mode = downsell.get('pricing_mode', 'fixed')
+            logger.info(f"🔍 DEBUG pricing_mode: {pricing_mode}")
             
             # 🎯 ESTRATÉGIA DE CONVERSÃO: MODO PERCENTUAL = TODOS OS BOTÕES COM DESCONTO
             if pricing_mode == 'percentage':
@@ -3070,11 +3071,15 @@ Seu pagamento ainda não foi confirmado.
                     
                     for btn_index, btn in enumerate(main_buttons):
                         original_btn_price = float(btn.get('price', 0))
+                        logger.info(f"🔍 DEBUG btn_index={btn_index}, btn={btn}, original_btn_price={original_btn_price}")
+                        
                         if original_btn_price <= 0:
+                            logger.warning(f"⚠️ Botão {btn_index} sem preço válido: {original_btn_price}")
                             continue  # Pular botões sem preço
                         
                         # Calcular preço com desconto
                         discounted_price = original_btn_price * (1 - discount_percentage / 100)
+                        logger.info(f"🔍 DEBUG cálculo: {original_btn_price} * (1 - {discount_percentage}/100) = {discounted_price}")
                         
                         # Validar mínimo
                         if discounted_price < 0.50:
