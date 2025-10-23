@@ -427,11 +427,11 @@ class ParadisePaymentGateway(PaymentGateway):
                 'Accept': 'application/json'
             }
             
-            # ✅ NOVA API V30: Paradise API usa 'hash' como parâmetro
+            # ✅ CORREÇÃO CRÍTICA: Paradise API espera hash diretamente na URL
             # Baseado no paradise.php linha 1046: check_status.php?hash=' + hash
+            check_url = f"{self.check_status_url}?hash={transaction_id}"
             response = requests.get(
-                self.check_status_url,
-                params={'hash': transaction_id},
+                check_url,
                 headers=headers,
                 timeout=10
             )
