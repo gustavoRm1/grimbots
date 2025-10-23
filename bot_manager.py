@@ -1559,7 +1559,14 @@ class BotManager:
                 # ✅ VALIDAÇÃO: Preço deve ser > 0
                 if price <= 0:
                     logger.error(f"❌ Downsell com preço inválido: R$ {price:.2f} (centavos: {price_cents})")
+                    logger.error(f"❌ CALLBACK_DATA PROBLEMÁTICO: {callback_data}")
+                    logger.error(f"❌ PARTS PROBLEMÁTICAS: {parts}")
                     return
+                
+                # ✅ CORREÇÃO CRÍTICA: Se preço for muito baixo, usar valor padrão de downsell
+                if price < 1.00:  # Menos de R$ 1,00
+                    logger.warning(f"⚠️ Downsell com preço muito baixo (R$ {price:.2f}), usando valor padrão R$ 9,97")
+                    price = 9.97  # Valor padrão para downsells
                 
                 # ✅ QI 500 FIX V2: Buscar descrição do BOTÃO ORIGINAL que gerou o downsell
                 from app import app, db
