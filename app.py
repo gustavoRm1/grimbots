@@ -4288,19 +4288,28 @@ def send_meta_pixel_purchase_event(payment):
     CRÍTICO: Zero duplicação garantida via meta_purchase_sent flag
     """
     try:
+        logger.info(f"🔍 DEBUG Meta Pixel Purchase - Iniciando para {payment.payment_id}")
+        
         # ✅ VERIFICAÇÃO 1: Buscar pool associado ao bot
         from models import PoolBot
         
         pool_bot = PoolBot.query.filter_by(bot_id=payment.bot_id).first()
+        logger.info(f"🔍 DEBUG Meta Pixel Purchase - Pool Bot encontrado: {pool_bot is not None}")
         
         if not pool_bot:
             logger.info(f"Bot {payment.bot_id} não está associado a nenhum pool - Meta Pixel ignorado")
             return
         
         pool = pool_bot.pool
+        logger.info(f"🔍 DEBUG Meta Pixel Purchase - Pool ID: {pool.id}, Nome: {pool.name}")
         
         # ✅ VERIFICAÇÃO 2: Pool tem Meta Pixel configurado?
+        logger.info(f"🔍 DEBUG Meta Pixel Purchase - Tracking habilitado: {pool.meta_tracking_enabled}")
+        logger.info(f"🔍 DEBUG Meta Pixel Purchase - Pixel ID: {pool.meta_pixel_id is not None}")
+        logger.info(f"🔍 DEBUG Meta Pixel Purchase - Access Token: {pool.meta_access_token is not None}")
+        
         if not pool.meta_tracking_enabled:
+            logger.info(f"Meta tracking desabilitado para pool {pool.id}")
             return
         
         if not pool.meta_pixel_id or not pool.meta_access_token:
@@ -4308,11 +4317,13 @@ def send_meta_pixel_purchase_event(payment):
             return
         
         # ✅ VERIFICAÇÃO 3: Evento Purchase está habilitado?
+        logger.info(f"🔍 DEBUG Meta Pixel Purchase - Evento Purchase habilitado: {pool.meta_events_purchase}")
         if not pool.meta_events_purchase:
             logger.info(f"Evento Purchase desabilitado para pool {pool.id}")
             return
         
         # ✅ VERIFICAÇÃO 4: Já enviou este pagamento? (ANTI-DUPLICAÇÃO)
+        logger.info(f"🔍 DEBUG Meta Pixel Purchase - Já enviado: {payment.meta_purchase_sent}")
         if payment.meta_purchase_sent:
             logger.info(f"⚠️ Purchase já enviado ao Meta, ignorando: {payment.payment_id}")
             return

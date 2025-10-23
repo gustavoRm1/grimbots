@@ -1948,11 +1948,17 @@ Desculpe, não foi possível processar seu pagamento.
                     # 🎯 META PIXEL PURCHASE (CRÍTICO!)
                     # ============================================================================
                     try:
+                        logger.info(f"🔍 DEBUG Meta Pixel - Iniciando envio para {payment.payment_id}")
+                        logger.info(f"🔍 DEBUG Meta Pixel - Bot ID: {payment.bot_id}")
+                        logger.info(f"🔍 DEBUG Meta Pixel - Gateway: {payment.gateway_type}")
+                        logger.info(f"🔍 DEBUG Meta Pixel - Valor: R$ {payment.amount:.2f}")
+                        
                         from app import send_meta_pixel_purchase_event
                         send_meta_pixel_purchase_event(payment)
                         logger.info(f"📊 Meta Purchase disparado para {payment.payment_id}")
                     except Exception as e:
                         logger.error(f"❌ Erro ao enviar Meta Purchase: {e}")
+                        logger.error(f"❌ Traceback completo: {traceback.format_exc()}")
                     
                     # Cancelar downsells agendados
                     self.cancel_downsells(payment.payment_id)
