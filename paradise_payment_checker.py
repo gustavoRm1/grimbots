@@ -35,8 +35,9 @@ def check_paradise_payments():
     """
     with app.app_context():
         try:
-            # Buscar pagamentos Paradise pendentes dos últimos 30 minutos
-            cutoff_time = datetime.now() - timedelta(minutes=30)
+            # Buscar pagamentos Paradise pendentes dos últimos 2 horas
+            # Paradise demora para processar transações na API de consulta
+            cutoff_time = datetime.now() - timedelta(hours=2)
             
             pending_payments = Payment.query.filter(
                 Payment.gateway_type == 'paradise',
@@ -76,10 +77,22 @@ def check_paradise_payments():
                         logger.error(f"❌ Erro ao criar gateway Paradise para payment {payment.payment_id}")
                         continue
                     
-                    # Consultar status na API
+                    # Consultar status na API com retry
                     logger.info(f"🔍 Consultando status: {payment.payment_id} | Transaction ID: {payment.gateway_transaction_id}")
                     
-                    api_status = gateway.get_payment_status(payment.gateway_transaction_id)
+                    # Paradise demora para processar - tentar até 3 vezes com delay
+                    api_status = None
+                    for attempt in range(3):
+                        api_status = gateway.get_payment_status(payment.gateway_transaction_id)
+                        
+                        if api_status and api_status.get('status') != 'pending':
+                            logger.info(f"✅ Status encontrado na tentativa {attempt + 1}")
+                            break
+                        
+                        if attempt < 2:  # Não é a última tentativa
+                            logger.info(f"⏳ Tentativa {attempt + 1} - aguardando 30 segundos...")
+                            import time
+                            time.sleep(30)
                     
                     if api_status and api_status.get('status') == 'paid':
                         logger.info(f"💰 Pagamento APROVADO: {payment.payment_id}")
