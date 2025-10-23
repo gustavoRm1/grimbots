@@ -311,20 +311,18 @@ class ParadisePaymentGateway(PaymentGateway):
             
             logger.info(f"📥 Paradise CREATE Response: {data}")
             
-            # ✅ NOVA API V30: Paradise retorna estrutura aninhada: {transaction: {...}}
-            # Baseado no paradise.php linha 296: $transaction_data = $response_data['transaction'] ?? $response_data;
-            transaction_data = data.get('transaction', data)
-            logger.info(f"📥 Paradise Transaction Data: {transaction_data}")
+            # ✅ CORREÇÃO CRÍTICA: Paradise retorna estrutura DIRETA, não aninhada
+            # Resposta real: {"status": "success", "transaction_id": "145732", "qr_code": "...", "id": "TEST-1"}
+            # NÃO é: {"transaction": {"id": "145732", "qr_code": "..."}}
             
-            # ✅ NOVA API V30: Extrai dados do PIX conforme paradise.php
-            # Linha 302: 'pix_qr_code' => $transaction_data['qr_code'] ?? ''
-            pix_code = transaction_data.get('qr_code')  # ✅ Campo: qr_code
-            transaction_id = transaction_data.get('id')  # ✅ Campo: id
-            qr_code_base64 = transaction_data.get('qr_code_base64')  # ✅ QR Code em base64
+            # ✅ CORREÇÃO: Usar dados diretamente da resposta
+            pix_code = data.get('qr_code')  # ✅ Campo direto: qr_code
+            transaction_id = data.get('transaction_id') or data.get('id')  # ✅ Campo direto: transaction_id ou id
+            qr_code_base64 = data.get('qr_code_base64')  # ✅ QR Code em base64
             
-            logger.info(f"🔍 Extracted - PIX Code: {pix_code[:50] if pix_code else None}...")
-            logger.info(f"🔍 Extracted - Transaction ID: {transaction_id}")
-            logger.info(f"🔍 Extracted - QR Code Base64: {'presente' if qr_code_base64 else 'ausente'}")
+            logger.info(f"📥 Paradise Response Data: {data}")
+            logger.info(f"📥 Paradise PIX Code: {pix_code[:50] if pix_code else None}...")
+            logger.info(f"📥 Paradise Transaction ID: {transaction_id}")
             
             if not pix_code or not transaction_id:
                 logger.error(f"❌ Paradise: Resposta incompleta - pix_code ou id ausente")

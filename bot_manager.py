@@ -189,10 +189,8 @@ class BotManager:
         self.rate_limit_cache = {}  # {user_key: timestamp}
         
         # ✅ LIMPEZA AUTOMÁTICA DO CACHE (a cada 5 minutos)
-        import threading
         def cleanup_cache():
             while True:
-                import time
                 time.sleep(300)  # 5 minutos
                 now = datetime.now()
                 expired_keys = []
