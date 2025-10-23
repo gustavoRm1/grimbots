@@ -1563,10 +1563,45 @@ class BotManager:
                     logger.error(f"❌ PARTS PROBLEMÁTICAS: {parts}")
                     return
                 
-                # ✅ CORREÇÃO CRÍTICA: Se preço for muito baixo, usar valor padrão de downsell
+                # ✅ CORREÇÃO CRÍTICA: Se preço for muito baixo, calcular valor real do downsell
                 if price < 1.00:  # Menos de R$ 1,00
-                    logger.warning(f"⚠️ Downsell com preço muito baixo (R$ {price:.2f}), usando valor padrão R$ 9,97")
-                    price = 9.97  # Valor padrão para downsells
+                    logger.warning(f"⚠️ Downsell com preço muito baixo (R$ {price:.2f}), calculando valor real")
+                    
+                    # ✅ CORREÇÃO: Buscar configuração do downsell para calcular valor real
+                    from app import app, db
+                    from models import Bot as BotModel
+                    
+                    with app.app_context():
+                        bot = db.session.get(BotModel, bot_id)
+                        if bot and bot.config:
+                            config = bot.config.to_dict()
+                            downsells = config.get('downsells', [])
+                            
+                            if downsell_idx < len(downsells):
+                                downsell_config = downsells[downsell_idx]
+                                discount_percentage = float(downsell_config.get('discount_percentage', 50))
+                                
+                                # ✅ CORREÇÃO: Usar preço original do botão clicado
+                                main_buttons = config.get('main_buttons', [])
+                                if original_button_idx < len(main_buttons):
+                                    original_button = main_buttons[original_button_idx]
+                                    original_price = float(original_button.get('price', 0))
+                                    
+                                    if original_price > 0:
+                                        price = original_price * (1 - discount_percentage / 100)
+                                        logger.info(f"✅ Valor real calculado: R$ {original_price:.2f} com {discount_percentage}% OFF = R$ {price:.2f}")
+                                    else:
+                                        price = 9.97  # Fallback
+                                        logger.warning(f"⚠️ Preço original não encontrado, usando fallback R$ {price:.2f}")
+                                else:
+                                    price = 9.97  # Fallback
+                                    logger.warning(f"⚠️ Botão original não encontrado, usando fallback R$ {price:.2f}")
+                            else:
+                                price = 9.97  # Fallback
+                                logger.warning(f"⚠️ Configuração de downsell não encontrada, usando fallback R$ {price:.2f}")
+                        else:
+                            price = 9.97  # Fallback
+                            logger.warning(f"⚠️ Configuração do bot não encontrada, usando fallback R$ {price:.2f}")
                 
                 # ✅ QI 500 FIX V2: Buscar descrição do BOTÃO ORIGINAL que gerou o downsell
                 from app import app, db
