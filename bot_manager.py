@@ -1546,9 +1546,20 @@ class BotManager:
             elif callback_data.startswith('downsell_'):
                 # Formato: downsell_INDEX_PRICE_CENTAVOS_BUTTON_INDEX
                 parts = callback_data.replace('downsell_', '').split('_')
+                logger.info(f"🔍 DEBUG downsell callback_data: {callback_data}")
+                logger.info(f"🔍 DEBUG downsell parts: {parts}")
+                
                 downsell_idx = int(parts[0])
-                price = float(parts[1]) / 100  # Converter centavos para reais
+                price_cents = int(parts[1]) if len(parts) > 1 else 0
+                price = float(price_cents) / 100  # Converter centavos para reais
                 original_button_idx = int(parts[2]) if len(parts) > 2 else downsell_idx  # Fallback para downsell antigo
+                
+                logger.info(f"🔍 DEBUG downsell parsed: idx={downsell_idx}, price_cents={price_cents}, price={price:.2f}, original_button={original_button_idx}")
+                
+                # ✅ VALIDAÇÃO: Preço deve ser > 0
+                if price <= 0:
+                    logger.error(f"❌ Downsell com preço inválido: R$ {price:.2f} (centavos: {price_cents})")
+                    return
                 
                 # ✅ QI 500 FIX V2: Buscar descrição do BOTÃO ORIGINAL que gerou o downsell
                 from app import app, db
