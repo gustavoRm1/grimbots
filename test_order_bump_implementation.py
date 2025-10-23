@@ -47,7 +47,12 @@ def test_order_bump_implementation():
             for i, button in enumerate(main_buttons):
                 print(f"\n   🔘 BOTÃO {i+1}:")
                 print(f"      Texto: {button.get('text', 'N/A')}")
-                print(f"      Preço: R$ {button.get('price', 0):.2f}")
+                price = button.get('price', 0)
+                try:
+                    price_float = float(price) if price else 0
+                    print(f"      Preço: R$ {price_float:.2f}")
+                except (ValueError, TypeError):
+                    print(f"      Preço: {price} (formato inválido)")
                 print(f"      Descrição: {button.get('description', 'N/A')}")
                 
                 # Verificar order bump
@@ -55,7 +60,12 @@ def test_order_bump_implementation():
                 if order_bump.get('enabled'):
                     print(f"      🎁 ORDER BUMP ATIVO:")
                     print(f"         Mensagem: {order_bump.get('message', 'N/A')[:50]}...")
-                    print(f"         Preço adicional: R$ {order_bump.get('price', 0):.2f}")
+                    bump_price = order_bump.get('price', 0)
+                    try:
+                        bump_price_float = float(bump_price) if bump_price else 0
+                        print(f"         Preço adicional: R$ {bump_price_float:.2f}")
+                    except (ValueError, TypeError):
+                        print(f"         Preço adicional: {bump_price} (formato inválido)")
                     print(f"         Descrição: {order_bump.get('description', 'N/A')}")
                     print(f"         Mídia: {order_bump.get('media_url', 'N/A')}")
                     print(f"         Tipo: {order_bump.get('media_type', 'N/A')}")
