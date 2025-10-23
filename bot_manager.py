@@ -3091,7 +3091,7 @@ Seu pagamento ainda não foi confirmado.
                         
                         buttons.append({
                             'text': btn_text,
-                            'callback_data': f'downsell_{index}_{btn_index}_{int(discounted_price*100)}_{btn_index}'  # ✅ CORREÇÃO: Usar btn_index em vez de original_button_index
+                            'callback_data': f'downsell_{index}_{int(discounted_price*100)}_{btn_index}'  # Formato: downsell_INDEX_PRICE_ORIGINAL_BTN
                         })
                         
                         logger.info(f"  ✅ {btn.get('text')}: R$ {original_btn_price:.2f} → R$ {discounted_price:.2f} ({discount_percentage}% OFF)")
@@ -3126,7 +3126,7 @@ Seu pagamento ainda não foi confirmado.
                     
                     buttons = [{
                         'text': button_text,
-                        'callback_data': f'downsell_{index}_{int(price*100)}_{0}'  # ✅ CORREÇÃO: Usar índice 0 para modo fixo
+                        'callback_data': f'downsell_{index}_{int(price*100)}_{0}'  # Formato: downsell_INDEX_PRICE_ORIGINAL_BTN
                     }]
             
             else:
@@ -3144,7 +3144,7 @@ Seu pagamento ainda não foi confirmado.
                 
                 buttons = [{
                     'text': button_text,
-                    'callback_data': f'downsell_{index}_{int(price*100)}_{0}'  # ✅ CORREÇÃO: Usar índice 0 para modo fixo
+                    'callback_data': f'downsell_{index}_{int(price*100)}_{0}'  # Formato: downsell_INDEX_PRICE_ORIGINAL_BTN
                 }]
             
             logger.info(f"🔍 DEBUG _send_downsell - Botões criados: {len(buttons)}")
