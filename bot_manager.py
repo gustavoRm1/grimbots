@@ -2955,6 +2955,10 @@ Seu pagamento ainda não foi confirmado.
             original_button_index: Índice do botão original clicado
         """
         logger.info(f"🚨 FUNCAO _SEND_DOWNSELL CHAMADA! bot_id={bot_id}, payment_id={payment_id}, index={index}")
+        logger.info(f"🔍 DEBUG _send_downsell - downsell config: {downsell}")
+        logger.info(f"🔍 DEBUG _send_downsell - original_price: {original_price}")
+        logger.info(f"🔍 DEBUG _send_downsell - original_button_index: {original_button_index}")
+        
         try:
             logger.info(f"🔍 DEBUG _send_downsell - Verificando pagamento...")
             # Verificar se pagamento ainda está pendente
