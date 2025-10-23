@@ -785,6 +785,7 @@ class Payment(db.Model):
     payment_id = db.Column(db.String(100), unique=True, nullable=False, index=True)
     gateway_type = db.Column(db.String(30))
     gateway_transaction_id = db.Column(db.String(100))
+    gateway_transaction_hash = db.Column(db.String(100))  # ✅ Hash para consulta de status (Paradise)
     
     # Valores
     amount = db.Column(db.Float, nullable=False)

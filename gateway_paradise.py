@@ -318,29 +318,32 @@ class ParadisePaymentGateway(PaymentGateway):
             # Resposta real: {"status": "success", "transaction_id": "145732", "qr_code": "...", "id": "TEST-1"}
             # NÃO é: {"transaction": {"id": "145732", "qr_code": "..."}}
             
-            # ✅ CORREÇÃO: Usar dados diretamente da resposta
+            # ✅ CORREÇÃO CRÍTICA: Usar dados diretamente da resposta
             pix_code = data.get('qr_code')  # ✅ Campo direto: qr_code
             transaction_id = data.get('transaction_id') or data.get('id')  # ✅ Campo direto: transaction_id ou id
+            transaction_hash = data.get('hash')  # ✅ Campo hash para consulta de status
             qr_code_base64 = data.get('qr_code_base64')  # ✅ QR Code em base64
             
             logger.info(f"📥 Paradise Response Data: {data}")
             logger.info(f"📥 Paradise PIX Code: {pix_code[:50] if pix_code else None}...")
             logger.info(f"📥 Paradise Transaction ID: {transaction_id}")
+            logger.info(f"📥 Paradise Transaction Hash: {transaction_hash}")
             
             if not pix_code or not transaction_id:
                 logger.error(f"❌ Paradise: Resposta incompleta - pix_code ou id ausente")
                 logger.error(f"❌ PIX Code: {pix_code}")
                 logger.error(f"❌ Transaction ID: {transaction_id}")
-                logger.error(f"❌ Transaction Data completo: {transaction_data}")
+                logger.error(f"❌ Transaction Hash: {transaction_hash}")
                 return None
             
-            logger.info(f"✅ Paradise: PIX gerado | ID: {transaction_id}")
+            logger.info(f"✅ Paradise: PIX gerado | ID: {transaction_id} | Hash: {transaction_hash}")
             
             # Retorna padrão unificado
             return {
                 'pix_code': pix_code,  # ✅ Padronizado
                 'qr_code_url': qr_code_base64 if qr_code_base64 else f'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={pix_code}',
                 'transaction_id': transaction_id,  # ✅ Convertido de 'id'
+                'transaction_hash': transaction_hash,  # ✅ Hash para consulta de status
                 'payment_id': payment_id
             }
             
@@ -410,7 +413,7 @@ class ParadisePaymentGateway(PaymentGateway):
             logger.error(f"❌ Paradise: Erro ao processar webhook: {e}", exc_info=True)
             return None
     
-    def get_payment_status(self, transaction_id: str) -> Optional[Dict]:
+    def get_payment_status(self, transaction_id: str, transaction_hash: str = None) -> Optional[Dict]:
         """
         Consulta status de um pagamento no Paradise (API V30 atualizada)
         
@@ -429,7 +432,9 @@ class ParadisePaymentGateway(PaymentGateway):
             
             # ✅ CORREÇÃO CRÍTICA: Paradise API espera hash diretamente na URL
             # Baseado no paradise.php linha 1046: check_status.php?hash=' + hash
-            check_url = f"{self.check_status_url}?hash={transaction_id}"
+            # Usar transaction_hash se disponível, senão usar transaction_id
+            hash_to_use = transaction_hash or transaction_id  # ✅ Usar hash se disponível
+            check_url = f"{self.check_status_url}?hash={hash_to_use}"
             response = requests.get(
                 check_url,
                 headers=headers,

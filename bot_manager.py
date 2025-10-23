@@ -1906,7 +1906,10 @@ Desculpe, não foi possível processar seu pagamento.
                         
                         if payment_gateway:
                             # Consultar status na API
-                            api_status = payment_gateway.get_payment_status(payment.gateway_transaction_id)
+                            api_status = payment_gateway.get_payment_status(
+                                payment.gateway_transaction_id,
+                                payment.gateway_transaction_hash  # ✅ Passar hash para Paradise
+                            )
                             
                             if api_status and api_status.get('status') == 'paid':
                                 # ✅ PROTEÇÃO: Só atualiza se estava pendente (evita race condition)
@@ -2263,6 +2266,7 @@ Seu pagamento ainda não foi confirmado.
                         payment_id=payment_id,
                         gateway_type=gateway.gateway_type,
                         gateway_transaction_id=pix_result.get('transaction_id'),  # Identifier da SyncPay
+                        gateway_transaction_hash=pix_result.get('transaction_hash'),  # ✅ Hash para consulta de status (Paradise)
                         amount=amount,
                         customer_name=customer_name,
                         customer_username=customer_username,

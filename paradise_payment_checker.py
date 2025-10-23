@@ -83,7 +83,10 @@ def check_paradise_payments():
                     # Paradise demora para processar - tentar até 3 vezes com delay
                     api_status = None
                     for attempt in range(3):
-                        api_status = gateway.get_payment_status(payment.gateway_transaction_id)
+                                   api_status = gateway.get_payment_status(
+                                       payment.gateway_transaction_id,
+                                       payment.gateway_transaction_hash  # ✅ Passar hash para Paradise
+                                   )
                         
                         if api_status and api_status.get('status') != 'pending':
                             logger.info(f"✅ Status encontrado na tentativa {attempt + 1}")
