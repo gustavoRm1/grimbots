@@ -1550,9 +1550,23 @@ class BotManager:
                 logger.info(f"🔍 DEBUG downsell parts: {parts}")
                 
                 downsell_idx = int(parts[0])
-                price_cents = int(parts[1]) if len(parts) > 1 else 0
+                
+                # ✅ CORREÇÃO: Detectar formato antigo vs novo
+                if len(parts) == 4:
+                    # Formato antigo: downsell_INDEX_BUTTON_PRICE_BUTTON
+                    original_button_idx = int(parts[1])
+                    price_cents = int(parts[2])
+                    logger.info(f"🔍 Formato ANTIGO detectado: idx={downsell_idx}, btn={original_button_idx}, price_cents={price_cents}")
+                elif len(parts) == 3:
+                    # Formato novo: downsell_INDEX_PRICE_BUTTON
+                    price_cents = int(parts[1])
+                    original_button_idx = int(parts[2])
+                    logger.info(f"🔍 Formato NOVO detectado: idx={downsell_idx}, price_cents={price_cents}, btn={original_button_idx}")
+                else:
+                    logger.error(f"❌ Formato de callback_data inválido: {callback_data}")
+                    return
+                
                 price = float(price_cents) / 100  # Converter centavos para reais
-                original_button_idx = int(parts[2]) if len(parts) > 2 else downsell_idx  # Fallback para downsell antigo
                 
                 logger.info(f"🔍 DEBUG downsell parsed: idx={downsell_idx}, price_cents={price_cents}, price={price:.2f}, original_button={original_button_idx}")
                 
