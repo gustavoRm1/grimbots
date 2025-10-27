@@ -8,6 +8,7 @@ Data: 2025-10-27
 
 from models import db, BotUser, Payment
 import logging
+from sqlalchemy import text
 
 logger = logging.getLogger(__name__)
 
@@ -17,156 +18,187 @@ def add_demographic_fields():
     try:
         logger.info("🔄 Iniciando migration de campos demográficos...")
         
-        with db.session.begin():
-            # ✅ 1. ADICIONAR EM BotUser
-            logger.info("📊 Adicionando campos em bot_users...")
-            
-            try:
-                db.engine.execute("""
+        # ✅ 1. ADICIONAR EM BotUser
+        logger.info("📊 Adicionando campos em bot_users...")
+        
+        try:
+            with db.engine.connect() as conn:
+                conn.execute(text("""
                     ALTER TABLE bot_users 
                     ADD COLUMN IF NOT EXISTS customer_age INTEGER
-                """)
+                """))
+                conn.commit()
                 logger.info("✅ customer_age adicionado em bot_users")
-            except Exception as e:
-                logger.warning(f"⚠️ Campo customer_age já existe ou erro: {e}")
-            
-            try:
-                db.engine.execute("""
+        except Exception as e:
+            logger.warning(f"⚠️ Campo customer_age já existe ou erro: {e}")
+        
+        try:
+            with db.engine.connect() as conn:
+                conn.execute(text("""
                     ALTER TABLE bot_users 
                     ADD COLUMN IF NOT EXISTS customer_city VARCHAR(100)
-                """)
+                """))
+                conn.commit()
                 logger.info("✅ customer_city adicionado em bot_users")
-            except Exception as e:
-                logger.warning(f"⚠️ Campo customer_city já existe ou erro: {e}")
-            
-            try:
-                db.engine.execute("""
+        except Exception as e:
+            logger.warning(f"⚠️ Campo customer_city já existe ou erro: {e}")
+        
+        try:
+            with db.engine.connect() as conn:
+                conn.execute(text("""
                     ALTER TABLE bot_users 
                     ADD COLUMN IF NOT EXISTS customer_state VARCHAR(50)
-                """)
+                """))
+                conn.commit()
                 logger.info("✅ customer_state adicionado em bot_users")
-            except Exception as e:
-                logger.warning(f"⚠️ Campo customer_state já existe ou erro: {e}")
-            
-            try:
-                db.engine.execute("""
+        except Exception as e:
+            logger.warning(f"⚠️ Campo customer_state já existe ou erro: {e}")
+        
+        try:
+            with db.engine.connect() as conn:
+                conn.execute(text("""
                     ALTER TABLE bot_users 
                     ADD COLUMN IF NOT EXISTS customer_country VARCHAR(50) DEFAULT 'BR'
-                """)
+                """))
+                conn.commit()
                 logger.info("✅ customer_country adicionado em bot_users")
-            except Exception as e:
-                logger.warning(f"⚠️ Campo customer_country já existe ou erro: {e}")
-            
-            try:
-                db.engine.execute("""
+        except Exception as e:
+            logger.warning(f"⚠️ Campo customer_country já existe ou erro: {e}")
+        
+        try:
+            with db.engine.connect() as conn:
+                conn.execute(text("""
                     ALTER TABLE bot_users 
                     ADD COLUMN IF NOT EXISTS customer_gender VARCHAR(20)
-                """)
+                """))
+                conn.commit()
                 logger.info("✅ customer_gender adicionado em bot_users")
-            except Exception as e:
-                logger.warning(f"⚠️ Campo customer_gender já existe ou erro: {e}")
-            
-            try:
-                db.engine.execute("""
+        except Exception as e:
+            logger.warning(f"⚠️ Campo customer_gender já existe ou erro: {e}")
+        
+        try:
+            with db.engine.connect() as conn:
+                conn.execute(text("""
                     ALTER TABLE bot_users 
                     ADD COLUMN IF NOT EXISTS device_type VARCHAR(20)
-                """)
+                """))
+                conn.commit()
                 logger.info("✅ device_type adicionado em bot_users")
-            except Exception as e:
-                logger.warning(f"⚠️ Campo device_type já existe ou erro: {e}")
-            
-            try:
-                db.engine.execute("""
+        except Exception as e:
+            logger.warning(f"⚠️ Campo device_type já existe ou erro: {e}")
+        
+        try:
+            with db.engine.connect() as conn:
+                conn.execute(text("""
                     ALTER TABLE bot_users 
                     ADD COLUMN IF NOT EXISTS os_type VARCHAR(50)
-                """)
+                """))
+                conn.commit()
                 logger.info("✅ os_type adicionado em bot_users")
-            except Exception as e:
-                logger.warning(f"⚠️ Campo os_type já existe ou erro: {e}")
-            
-            try:
-                db.engine.execute("""
+        except Exception as e:
+            logger.warning(f"⚠️ Campo os_type já existe ou erro: {e}")
+        
+        try:
+            with db.engine.connect() as conn:
+                conn.execute(text("""
                     ALTER TABLE bot_users 
                     ADD COLUMN IF NOT EXISTS browser VARCHAR(50)
-                """)
+                """))
+                conn.commit()
                 logger.info("✅ browser adicionado em bot_users")
-            except Exception as e:
-                logger.warning(f"⚠️ Campo browser já existe ou erro: {e}")
-            
-            # ✅ 2. ADICIONAR EM Payment
-            logger.info("📊 Adicionando campos em payments...")
-            
-            try:
-                db.engine.execute("""
+        except Exception as e:
+            logger.warning(f"⚠️ Campo browser já existe ou erro: {e}")
+        
+        # ✅ 2. ADICIONAR EM Payment
+        logger.info("📊 Adicionando campos em payments...")
+        
+        try:
+            with db.engine.connect() as conn:
+                conn.execute(text("""
                     ALTER TABLE payments 
                     ADD COLUMN IF NOT EXISTS customer_age INTEGER
-                """)
+                """))
+                conn.commit()
                 logger.info("✅ customer_age adicionado em payments")
-            except Exception as e:
-                logger.warning(f"⚠️ Campo customer_age já existe ou erro: {e}")
-            
-            try:
-                db.engine.execute("""
+        except Exception as e:
+            logger.warning(f"⚠️ Campo customer_age já existe ou erro: {e}")
+        
+        try:
+            with db.engine.connect() as conn:
+                conn.execute(text("""
                     ALTER TABLE payments 
                     ADD COLUMN IF NOT EXISTS customer_city VARCHAR(100)
-                """)
+                """))
+                conn.commit()
                 logger.info("✅ customer_city adicionado em payments")
-            except Exception as e:
-                logger.warning(f"⚠️ Campo customer_city já existe ou erro: {e}")
-            
-            try:
-                db.engine.execute("""
+        except Exception as e:
+            logger.warning(f"⚠️ Campo customer_city já existe ou erro: {e}")
+        
+        try:
+            with db.engine.connect() as conn:
+                conn.execute(text("""
                     ALTER TABLE payments 
                     ADD COLUMN IF NOT EXISTS customer_state VARCHAR(50)
-                """)
+                """))
+                conn.commit()
                 logger.info("✅ customer_state adicionado em payments")
-            except Exception as e:
-                logger.warning(f"⚠️ Campo customer_state já existe ou erro: {e}")
-            
-            try:
-                db.engine.execute("""
+        except Exception as e:
+            logger.warning(f"⚠️ Campo customer_state já existe ou erro: {e}")
+        
+        try:
+            with db.engine.connect() as conn:
+                conn.execute(text("""
                     ALTER TABLE payments 
                     ADD COLUMN IF NOT EXISTS customer_country VARCHAR(50) DEFAULT 'BR'
-                """)
+                """))
+                conn.commit()
                 logger.info("✅ customer_country adicionado em payments")
-            except Exception as e:
-                logger.warning(f"⚠️ Campo customer_country já existe ou erro: {e}")
-            
-            try:
-                db.engine.execute("""
+        except Exception as e:
+            logger.warning(f"⚠️ Campo customer_country já existe ou erro: {e}")
+        
+        try:
+            with db.engine.connect() as conn:
+                conn.execute(text("""
                     ALTER TABLE payments 
                     ADD COLUMN IF NOT EXISTS customer_gender VARCHAR(20)
-                """)
+                """))
+                conn.commit()
                 logger.info("✅ customer_gender adicionado em payments")
-            except Exception as e:
-                logger.warning(f"⚠️ Campo customer_gender já existe ou erro: {e}")
-            
-            try:
-                db.engine.execute("""
+        except Exception as e:
+            logger.warning(f"⚠️ Campo customer_gender já existe ou erro: {e}")
+        
+        try:
+            with db.engine.connect() as conn:
+                conn.execute(text("""
                     ALTER TABLE payments 
                     ADD COLUMN IF NOT EXISTS device_type VARCHAR(20)
-                """)
+                """))
+                conn.commit()
                 logger.info("✅ device_type adicionado em payments")
-            except Exception as e:
-                logger.warning(f"⚠️ Campo device_type já existe ou erro: {e}")
-            
-            try:
-                db.engine.execute("""
+        except Exception as e:
+            logger.warning(f"⚠️ Campo device_type já existe ou erro: {e}")
+        
+        try:
+            with db.engine.connect() as conn:
+                conn.execute(text("""
                     ALTER TABLE payments 
                     ADD COLUMN IF NOT EXISTS os_type VARCHAR(50)
-                """)
+                """))
+                conn.commit()
                 logger.info("✅ os_type adicionado em payments")
-            except Exception as e:
-                logger.warning(f"⚠️ Campo os_type já existe ou erro: {e}")
-            
-            try:
-                db.engine.execute("""
+        except Exception as e:
+            logger.warning(f"⚠️ Campo os_type já existe ou erro: {e}")
+        
+        try:
+            with db.engine.connect() as conn:
+                conn.execute(text("""
                     ALTER TABLE payments 
                     ADD COLUMN IF NOT EXISTS browser VARCHAR(50)
-                """)
+                """))
+                conn.commit()
                 logger.info("✅ browser adicionado em payments")
-            except Exception as e:
-                logger.warning(f"⚠️ Campo browser já existe ou erro: {e}")
+        except Exception as e:
+            logger.warning(f"⚠️ Campo browser já existe ou erro: {e}")
         
         logger.info("✅ Migration concluída com sucesso!")
         return True
