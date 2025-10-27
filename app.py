@@ -4492,19 +4492,29 @@ def payment_webhook(gateway_type):
                 logger.warning(f"⚠️ Pagamento não encontrado: transaction_id={gateway_transaction_id}")
             
             if payment:
-                # Verificar se já foi processado (idempotência)
+                # ✅ PROTEÇÃO CRÍTICA: Verificar se já foi processado ANTES de atualizar (idempotência)
                 if payment.status == 'paid':
-                    logger.info(f"⚠️ Webhook duplicado ignorado: {payment.payment_id} já está pago")
+                    logger.info(f"⚠️ Webhook duplicado ignorado: {payment.payment_id} já está pago (status: {payment.status})")
                     return jsonify({'status': 'already_processed'}), 200
                 
-                payment.status = status
-                if status == 'paid':
+                # ✅ VERIFICA SE JÁ FOI PROCESSADO (CRÍTICO PARA PARADISE MULTI-WEBHOOK!)
+                was_pending = payment.status == 'pending'
+                logger.info(f"📊 Status ANTES: {payment.status} | Novo status: {status} | Era pending: {was_pending}")
+                
+                # ✅ ATUALIZA STATUS DO PAGAMENTO APENAS SE NÃO ERA PAID
+                if payment.status != 'paid':
+                    payment.status = status
+                
+                # ✅ PROCESSAR APENAS SE ERA PENDENTE E AGORA É PAID (EVITA DUPLICAÇÃO!)
+                # CRÍTICO: Verificar was_pending para evitar race condition em múltiplos webhooks
+                if status == 'paid' and was_pending:
+                    logger.info(f"✅ Processando pagamento confirmado (era pending): {payment.payment_id}")
+                    
                     payment.paid_at = datetime.now()
                     payment.bot.total_sales += 1
                     payment.bot.total_revenue += payment.amount
                     payment.bot.owner.total_sales += 1
                     payment.bot.owner.total_revenue += payment.amount
-                    
                     # ✅ ATUALIZAR ESTATÍSTICAS DO GATEWAY
                     if payment.gateway_type:
                         gateway = Gateway.query.filter_by(
@@ -4665,14 +4675,14 @@ Aproveite! 🚀
                 
                 # Notificar em tempo real via WebSocket
                 socketio.emit('payment_update', {
-                    'payment_id': payment_id,
+                    'payment_id': payment.payment_id,
                     'status': status,
                     'bot_id': payment.bot_id,
                     'amount': payment.amount,
                     'customer_name': payment.customer_name
                 }, room=f'user_{payment.bot.user_id}')
                 
-                logger.info(f"💰 Pagamento atualizado: {payment_id} - {status}")
+                logger.info(f"💰 Pagamento atualizado: {payment.payment_id} - {status}")
         
         return jsonify({'status': 'success'}), 200
         

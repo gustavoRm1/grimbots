@@ -415,7 +415,7 @@ class ParadisePaymentGateway(PaymentGateway):
             logger.error(f"❌ Paradise: Erro ao processar webhook: {e}", exc_info=True)
             return None
     
-    def get_payment_status(self, transaction_id: str, transaction_hash: str = None) -> Optional[Dict]:
+    def get_payment_status(self, transaction_id: str) -> Optional[Dict]:
         """
         Consulta status de um pagamento no Paradise (API V30 atualizada)
         
