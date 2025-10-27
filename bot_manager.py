@@ -2244,7 +2244,7 @@ Desculpe, não foi possível processar seu pagamento.
                         # ✅ PIX em linha única dentro de <code> para copiar com um toque
                         # ✅ Paradise usa APENAS webhooks agora - mensagem específica
                         if payment.gateway_type == 'paradise':
-                        pending_message = f"""⏳ <b>Aguardando confirmação</b>
+                            pending_message = f"""⏳ <b>Aguardando confirmação</b>
 
 Seu pagamento está sendo processado.
 
@@ -2257,8 +2257,8 @@ Seu pagamento está sendo processado.
 Se você já pagou, o sistema confirmará automaticamente em até 2 minutos via webhook.
 
 ✅ Você será notificado assim que o pagamento for confirmado!"""
-                    else:
-                        pending_message = f"""⏳ <b>Pagamento ainda não identificado</b>
+                        else:
+                            pending_message = f"""⏳ <b>Pagamento ainda não identificado</b>
 
 Seu pagamento ainda não foi confirmado.
 
