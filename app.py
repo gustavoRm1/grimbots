@@ -4498,7 +4498,7 @@ def payment_webhook(gateway_type):
                     payment.paid_at = datetime.now()
                     payment.bot.total_sales += 1
                     payment.bot.total_revenue += payment.amount
-                    payment.bot.owner.total_sales += payment.amount
+                    payment.bot.owner.total_sales += 1
                     payment.bot.owner.total_revenue += payment.amount
                     
                     # ✅ ATUALIZAR ESTATÍSTICAS DO GATEWAY

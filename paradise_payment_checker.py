@@ -107,7 +107,7 @@ def check_paradise_payments():
                         # Atualizar estatísticas
                         payment.bot.total_sales += 1
                         payment.bot.total_revenue += payment.amount
-                        payment.bot.owner.total_sales += payment.amount
+                        payment.bot.owner.total_sales += 1
                         payment.bot.owner.total_revenue += payment.amount
                         
                         # Atualizar estatísticas do gateway
