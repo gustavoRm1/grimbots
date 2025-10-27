@@ -1,0 +1,14 @@
+# Comandos para executar no VPS
+
+# 1. Fazer pull (vai buscar as correções)
+git pull origin main
+
+# 2. Executar migration (agora sem IF NOT EXISTS)
+python migrate_add_demographic_fields.py
+
+# 3. Reiniciar serviço
+sudo systemctl restart grimbots
+
+# 4. Verificar status
+sudo systemctl status grimbots
+
