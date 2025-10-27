@@ -952,9 +952,13 @@ class BotManager:
                                     from utils.device_parser import parse_user_agent
                                     device_info = parse_user_agent(bot_user.user_agent)
                                     
-                                    bot_user.device_type = device_info.get('device_type')
-                                    bot_user.os_type = device_info.get('os_type')
-                                    bot_user.browser = device_info.get('browser')
+                                    # ✅ Salvar com getattr seguro
+                                    if hasattr(bot_user, 'device_type'):
+                                        bot_user.device_type = device_info.get('device_type')
+                                    if hasattr(bot_user, 'os_type'):
+                                        bot_user.os_type = device_info.get('os_type')
+                                    if hasattr(bot_user, 'browser'):
+                                        bot_user.browser = device_info.get('browser')
                                     
                                     logger.info(f"📱 Device parseado: {device_info}")
                                 except Exception as e:
@@ -2831,16 +2835,16 @@ Seu pagamento ainda não foi confirmado.
                         order_bump_value=order_bump_value,
                         is_downsell=is_downsell,
                         downsell_index=downsell_index,
-                        # ✅ DEMOGRAPHIC DATA (Copiar de bot_user se disponível)
-                        customer_age=bot_user.customer_age if bot_user else None,
-                        customer_city=bot_user.customer_city if bot_user else None,
-                        customer_state=bot_user.customer_state if bot_user else None,
-                        customer_country=bot_user.customer_country if bot_user else 'BR',
-                        customer_gender=bot_user.customer_gender if bot_user else None,
-                        # ✅ DEVICE DATA (Copiar de bot_user se disponível)
-                        device_type=bot_user.device_type if bot_user else None,
-                        os_type=bot_user.os_type if bot_user else None,
-                        browser=bot_user.browser if bot_user else None
+                        # ✅ DEMOGRAPHIC DATA (Copiar de bot_user se disponível, com fallback seguro)
+                        customer_age=getattr(bot_user, 'customer_age', None) if bot_user else None,
+                        customer_city=getattr(bot_user, 'customer_city', None) if bot_user else None,
+                        customer_state=getattr(bot_user, 'customer_state', None) if bot_user else None,
+                        customer_country=getattr(bot_user, 'customer_country', 'BR') if bot_user else 'BR',
+                        customer_gender=getattr(bot_user, 'customer_gender', None) if bot_user else None,
+                        # ✅ DEVICE DATA (Copiar de bot_user se disponível, com fallback seguro)
+                        device_type=getattr(bot_user, 'device_type', None) if bot_user else None,
+                        os_type=getattr(bot_user, 'os_type', None) if bot_user else None,
+                        browser=getattr(bot_user, 'browser', None) if bot_user else None
                     )
                     db.session.add(payment)
                     
