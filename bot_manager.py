@@ -2127,6 +2127,8 @@ Desculpe, não foi possível processar seu pagamento.
                         if payment_gateway:
                             # ✅ Paradise agora usa APENAS webhooks (postbacks)
                             # Consulta manual retorna None intencionalmente
+                            api_status = None
+                            
                             if payment.gateway_type == 'paradise':
                                 logger.info(f"📡 Paradise: Status só via webhook (postback) - aguarde confirmação automática")
                             else:
@@ -2148,7 +2150,7 @@ Desculpe, não foi possível processar seu pagamento.
                                     db.session.commit()
                                     logger.info(f"💾 Pagamento atualizado via consulta ativa")
                                     
-                                        # ✅ VERIFICAR CONQUISTAS
+                                    # ✅ VERIFICAR CONQUISTAS
                                     try:
                                         from app import check_and_unlock_achievements
                                         new_achievements = check_and_unlock_achievements(payment.bot.owner)
