@@ -12,6 +12,7 @@ Testa se após processar webhook Paradise:
 
 import os
 import sys
+import logging
 from datetime import datetime, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
