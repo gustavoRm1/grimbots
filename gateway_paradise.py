@@ -384,6 +384,7 @@ class ParadisePaymentGateway(PaymentGateway):
                 return None
             
             # Extrai status (já normalizado pela get_payment_status)
+            # Paradise envia: "approved", "pending", "refunded"
             status = data.get('payment_status', '').lower()
             logger.info(f"🔍 Status bruto: {status}")
             
@@ -395,10 +396,11 @@ class ParadisePaymentGateway(PaymentGateway):
             amount = amount_cents / 100 if amount_cents else 0
             
             # Mapeia status Paradise → Sistema
+            # Paradise envia: approved, pending, refunded
             mapped_status = 'pending'
-            if status == 'paid' or status == 'approved' or status == 'completed':
+            if status == 'approved':  # ✅ Paradise envia "approved", não "paid"!
                 mapped_status = 'paid'
-            elif status in ['refunded', 'cancelled', 'expired', 'failed']:
+            elif status == 'refunded':
                 mapped_status = 'failed'
             
             logger.info(f"✅ Paradise processado | ID: {transaction_id} | Status: '{status}' → '{mapped_status}' | Amount: R$ {amount:.2f}")

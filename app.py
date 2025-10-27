@@ -4473,24 +4473,28 @@ def payment_webhook(gateway_type):
         result = bot_manager.process_payment_webhook(gateway_type, data)
         
         if result:
-            payment_id = result.get('payment_id')
+            gateway_transaction_id = result.get('gateway_transaction_id')
             status = result.get('status')
             
-            logger.info(f"✅ Webhook processado com sucesso: {payment_id} -> {status}")
+            logger.info(f"✅ Webhook processado: transaction_id={gateway_transaction_id}, status={status}")
             
-            # Buscar pagamento no banco (pode vir pelo payment_id ou gateway_transaction_id)
-            payment = (Payment.query.filter_by(payment_id=payment_id).first() or
-                      Payment.query.filter_by(gateway_transaction_id=payment_id).first())
+            # Buscar pagamento pelo gateway_transaction_id (Paradise retorna o ID da transação)
+            payment = None
+            if gateway_transaction_id:
+                payment = Payment.query.filter_by(gateway_transaction_id=gateway_transaction_id).first()
+                if not payment:
+                    # Tentar pelo payment_id como fallback
+                    payment = Payment.query.filter_by(payment_id=gateway_transaction_id).first()
             
             if payment:
                 logger.info(f"💰 Pagamento encontrado: {payment.payment_id} | Status atual: {payment.status}")
             else:
-                logger.warning(f"⚠️ Pagamento não encontrado: {payment_id}")
+                logger.warning(f"⚠️ Pagamento não encontrado: transaction_id={gateway_transaction_id}")
             
             if payment:
                 # Verificar se já foi processado (idempotência)
                 if payment.status == 'paid':
-                    logger.info(f"⚠️ Webhook duplicado ignorado: {payment_id} já está pago")
+                    logger.info(f"⚠️ Webhook duplicado ignorado: {payment.payment_id} já está pago")
                     return jsonify({'status': 'already_processed'}), 200
                 
                 payment.status = status
