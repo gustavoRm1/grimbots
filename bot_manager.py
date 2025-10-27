@@ -2242,8 +2242,8 @@ Desculpe, não foi possível processar seu pagamento.
                         pending_message = pending_message.replace('{valor}', f'R$ {payment.amount:.2f}')
                     else:
                         # ✅ PIX em linha única dentro de <code> para copiar com um toque
-                    # ✅ Paradise usa APENAS webhooks agora - mensagem específica
-                    if payment.gateway_type == 'paradise':
+                        # ✅ Paradise usa APENAS webhooks agora - mensagem específica
+                        if payment.gateway_type == 'paradise':
                         pending_message = f"""⏳ <b>Aguardando confirmação</b>
 
 Seu pagamento está sendo processado.
