@@ -2810,6 +2810,7 @@ Seu pagamento ainda não foi confirmado.
                     logger.info(f"✅ PIX gerado com sucesso pelo gateway!")
                     
                     # ✅ BUSCAR BOT_USER PARA COPIAR DADOS DEMOGRÁFICOS
+                    from models import BotUser
                     bot_user = BotUser.query.filter_by(
                         bot_id=bot_id,
                         telegram_user_id=customer_user_id
