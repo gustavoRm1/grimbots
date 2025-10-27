@@ -4501,7 +4501,7 @@ def payment_webhook(gateway_type):
                 was_pending = payment.status == 'pending'
                 logger.info(f"📊 Status ANTES: {payment.status} | Novo status: {status} | Era pending: {was_pending}")
                 
-                # ✅ ATUALIZA STATUS DO PAGAMENTO APENAS SE NÃO ERA PAID
+                # ✅ ATUALIZA STATUS DO PAGAMENTO APENAS SE NÃO ERA PAID (SEM COMMIT AINDA!)
                 if payment.status != 'paid':
                     payment.status = status
                 

@@ -2136,6 +2136,16 @@ Desculpe, não foi possível processar seu pagamento.
                                         payment.bot.total_revenue += payment.amount
                                         payment.bot.owner.total_sales += 1
                                         payment.bot.owner.total_revenue += payment.amount
+                                        
+                                        # ✅ META PIXEL PURCHASE (ANTES DO COMMIT!)
+                                        try:
+                                            from app import send_meta_pixel_purchase_event
+                                            logger.info(f"📊 Disparando Meta Pixel Purchase para {payment.payment_id}")
+                                            send_meta_pixel_purchase_event(payment)
+                                            logger.info(f"✅ Meta Pixel Purchase enviado")
+                                        except Exception as e:
+                                            logger.error(f"❌ Erro ao enviar Meta Purchase: {e}")
+                                        
                                         db.session.commit()
                                         logger.info(f"💾 Pagamento atualizado via consulta ativa")
                                         
@@ -2157,20 +2167,8 @@ Desculpe, não foi possível processar seu pagamento.
                     logger.info(f"✅ PAGAMENTO CONFIRMADO! Liberando acesso...")
                     
                     # ============================================================================
-                    # 🎯 META PIXEL PURCHASE (CRÍTICO!)
+                    # ⚠️ META PIXEL REMOVIDO AQUI - JÁ FOI DISPARADO NA CONSULTA ATIVA (linha 2144)
                     # ============================================================================
-                    try:
-                        logger.info(f"🔍 DEBUG Meta Pixel - Iniciando envio para {payment.payment_id}")
-                        logger.info(f"🔍 DEBUG Meta Pixel - Bot ID: {payment.bot_id}")
-                        logger.info(f"🔍 DEBUG Meta Pixel - Gateway: {payment.gateway_type}")
-                        logger.info(f"🔍 DEBUG Meta Pixel - Valor: R$ {payment.amount:.2f}")
-                        
-                        from app import send_meta_pixel_purchase_event
-                        send_meta_pixel_purchase_event(payment)
-                        logger.info(f"📊 Meta Purchase disparado para {payment.payment_id}")
-                    except Exception as e:
-                        logger.error(f"❌ Erro ao enviar Meta Purchase: {e}")
-                        logger.error(f"❌ Traceback completo: {traceback.format_exc()}")
                     
                     # Cancelar downsells agendados
                     self.cancel_downsells(payment.payment_id)
