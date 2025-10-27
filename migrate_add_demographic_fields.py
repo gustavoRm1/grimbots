@@ -25,7 +25,7 @@ def add_demographic_fields():
             with db.engine.begin() as conn:
                 conn.execute(text("""
                     ALTER TABLE bot_users 
-                    ADD COLUMN IF NOT EXISTS customer_age INTEGER
+                    ADD COLUMN customer_age INTEGER
                 """))
                 logger.info("✅ customer_age adicionado em bot_users")
         except Exception as e:
@@ -35,7 +35,7 @@ def add_demographic_fields():
             with db.engine.begin() as conn:
                 conn.execute(text("""
                     ALTER TABLE bot_users 
-                    ADD COLUMN IF NOT EXISTS customer_city VARCHAR(100)
+                    ADD COLUMN customer_city VARCHAR(100)
                 """))
                 logger.info("✅ customer_city adicionado em bot_users")
         except Exception as e:
@@ -45,7 +45,7 @@ def add_demographic_fields():
             with db.engine.begin() as conn:
                 conn.execute(text("""
                     ALTER TABLE bot_users 
-                    ADD COLUMN IF NOT EXISTS customer_state VARCHAR(50)
+                    ADD COLUMN customer_state VARCHAR(50)
                 """))
                 logger.info("✅ customer_state adicionado em bot_users")
         except Exception as e:
@@ -55,7 +55,7 @@ def add_demographic_fields():
             with db.engine.begin() as conn:
                 conn.execute(text("""
                     ALTER TABLE bot_users 
-                    ADD COLUMN IF NOT EXISTS customer_country VARCHAR(50) DEFAULT 'BR'
+                    ADD COLUMN customer_country VARCHAR(50) DEFAULT 'BR'
                 """))
                 logger.info("✅ customer_country adicionado em bot_users")
         except Exception as e:
@@ -65,7 +65,7 @@ def add_demographic_fields():
             with db.engine.begin() as conn:
                 conn.execute(text("""
                     ALTER TABLE bot_users 
-                    ADD COLUMN IF NOT EXISTS customer_gender VARCHAR(20)
+                    ADD COLUMN customer_gender VARCHAR(20)
                 """))
                 logger.info("✅ customer_gender adicionado em bot_users")
         except Exception as e:
@@ -75,7 +75,7 @@ def add_demographic_fields():
             with db.engine.begin() as conn:
                 conn.execute(text("""
                     ALTER TABLE bot_users 
-                    ADD COLUMN IF NOT EXISTS device_type VARCHAR(20)
+                    ADD COLUMN device_type VARCHAR(20)
                 """))
                 logger.info("✅ device_type adicionado em bot_users")
         except Exception as e:
@@ -85,7 +85,7 @@ def add_demographic_fields():
             with db.engine.begin() as conn:
                 conn.execute(text("""
                     ALTER TABLE bot_users 
-                    ADD COLUMN IF NOT EXISTS os_type VARCHAR(50)
+                    ADD COLUMN os_type VARCHAR(50)
                 """))
                 logger.info("✅ os_type adicionado em bot_users")
         except Exception as e:
@@ -95,7 +95,7 @@ def add_demographic_fields():
             with db.engine.begin() as conn:
                 conn.execute(text("""
                     ALTER TABLE bot_users 
-                    ADD COLUMN IF NOT EXISTS browser VARCHAR(50)
+                    ADD COLUMN browser VARCHAR(50)
                 """))
                 logger.info("✅ browser adicionado em bot_users")
         except Exception as e:
@@ -108,7 +108,7 @@ def add_demographic_fields():
             with db.engine.begin() as conn:
                 conn.execute(text("""
                     ALTER TABLE payments 
-                    ADD COLUMN IF NOT EXISTS customer_age INTEGER
+                    ADD COLUMN customer_age INTEGER
                 """))
                 logger.info("✅ customer_age adicionado em payments")
         except Exception as e:
@@ -118,7 +118,7 @@ def add_demographic_fields():
             with db.engine.begin() as conn:
                 conn.execute(text("""
                     ALTER TABLE payments 
-                    ADD COLUMN IF NOT EXISTS customer_city VARCHAR(100)
+                    ADD COLUMN customer_city VARCHAR(100)
                 """))
                 logger.info("✅ customer_city adicionado em payments")
         except Exception as e:
@@ -128,7 +128,7 @@ def add_demographic_fields():
             with db.engine.begin() as conn:
                 conn.execute(text("""
                     ALTER TABLE payments 
-                    ADD COLUMN IF NOT EXISTS customer_state VARCHAR(50)
+                    ADD COLUMN customer_state VARCHAR(50)
                 """))
                 logger.info("✅ customer_state adicionado em payments")
         except Exception as e:
@@ -138,7 +138,7 @@ def add_demographic_fields():
             with db.engine.begin() as conn:
                 conn.execute(text("""
                     ALTER TABLE payments 
-                    ADD COLUMN IF NOT EXISTS customer_country VARCHAR(50) DEFAULT 'BR'
+                    ADD COLUMN customer_country VARCHAR(50) DEFAULT 'BR'
                 """))
                 logger.info("✅ customer_country adicionado em payments")
         except Exception as e:
@@ -148,7 +148,7 @@ def add_demographic_fields():
             with db.engine.begin() as conn:
                 conn.execute(text("""
                     ALTER TABLE payments 
-                    ADD COLUMN IF NOT EXISTS customer_gender VARCHAR(20)
+                    ADD COLUMN customer_gender VARCHAR(20)
                 """))
                 logger.info("✅ customer_gender adicionado em payments")
         except Exception as e:
@@ -158,7 +158,7 @@ def add_demographic_fields():
             with db.engine.begin() as conn:
                 conn.execute(text("""
                     ALTER TABLE payments 
-                    ADD COLUMN IF NOT EXISTS device_type VARCHAR(20)
+                    ADD COLUMN device_type VARCHAR(20)
                 """))
                 logger.info("✅ device_type adicionado em payments")
         except Exception as e:
@@ -168,7 +168,7 @@ def add_demographic_fields():
             with db.engine.begin() as conn:
                 conn.execute(text("""
                     ALTER TABLE payments 
-                    ADD COLUMN IF NOT EXISTS os_type VARCHAR(50)
+                    ADD COLUMN os_type VARCHAR(50)
                 """))
                 logger.info("✅ os_type adicionado em payments")
         except Exception as e:
@@ -178,7 +178,7 @@ def add_demographic_fields():
             with db.engine.begin() as conn:
                 conn.execute(text("""
                     ALTER TABLE payments 
-                    ADD COLUMN IF NOT EXISTS browser VARCHAR(50)
+                    ADD COLUMN browser VARCHAR(50)
                 """))
                 logger.info("✅ browser adicionado em payments")
         except Exception as e:
