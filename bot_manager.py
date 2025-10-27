@@ -1015,7 +1015,7 @@ class BotManager:
                     
                     # ✅ CORREÇÃO: Sempre enviar boas-vindas quando /start for digitado
                     logger.info(f"👤 Usuário retornou: {first_name} (@{username}) - Enviando boas-vindas novamente")
-                    should_send_welcome = True
+                        should_send_welcome = True
                     
                     db.session.commit()
             
@@ -2125,15 +2125,18 @@ Desculpe, não foi possível processar seu pagamento.
                         )
                         
                         if payment_gateway:
-                            # Consultar status na API
-                            # ✅ Paradise: não retorna hash separado, usa transaction_id direto
-                            api_status = payment_gateway.get_payment_status(
-                                payment.gateway_transaction_id,
-                                None  # ✅ Paradise não usa hash, apenas transaction_id
-                            )
+                            # ✅ Paradise agora usa APENAS webhooks (postbacks)
+                            # Consulta manual retorna None intencionalmente
+                            if payment.gateway_type == 'paradise':
+                                logger.info(f"📡 Paradise: Status só via webhook (postback) - aguarde confirmação automática")
+                            else:
+                                # Outros gateways podem ter consulta manual
+                                api_status = payment_gateway.get_payment_status(
+                                    payment.gateway_transaction_id,
+                                    None
+                                )
                             
                             if api_status and api_status.get('status') == 'paid':
-                                # ✅ PROTEÇÃO: Só atualiza se estava pendente (evita race condition)
                                 if payment.status == 'pending':
                                     logger.info(f"✅ API confirmou pagamento! Atualizando status...")
                                     payment.status = 'paid'
@@ -2145,7 +2148,7 @@ Desculpe, não foi possível processar seu pagamento.
                                     db.session.commit()
                                     logger.info(f"💾 Pagamento atualizado via consulta ativa")
                                     
-                                    # ✅ VERIFICAR CONQUISTAS (Gamification V2.0)
+                                        # ✅ VERIFICAR CONQUISTAS
                                     try:
                                         from app import check_and_unlock_achievements
                                         new_achievements = check_and_unlock_achievements(payment.bot.owner)
@@ -2153,8 +2156,6 @@ Desculpe, não foi possível processar seu pagamento.
                                             logger.info(f"🏆 {len(new_achievements)} conquista(s) desbloqueada(s)!")
                                     except Exception as e:
                                         logger.warning(f"⚠️ Erro ao verificar conquistas: {e}")
-                                else:
-                                    logger.info(f"⚠️ Pagamento já estava confirmado (status: {payment.status})")
                             elif api_status:
                                 logger.info(f"⏳ API retornou status: {api_status.get('status')}")
                         else:
@@ -2241,6 +2242,22 @@ Desculpe, não foi possível processar seu pagamento.
                         pending_message = pending_message.replace('{valor}', f'R$ {payment.amount:.2f}')
                     else:
                         # ✅ PIX em linha única dentro de <code> para copiar com um toque
+                    # ✅ Paradise usa APENAS webhooks agora - mensagem específica
+                    if payment.gateway_type == 'paradise':
+                        pending_message = f"""⏳ <b>Aguardando confirmação</b>
+
+Seu pagamento está sendo processado.
+
+📱 <b>PIX Copia e Cola:</b>
+<code>{pix_code}</code>
+
+<i>👆 Toque no código acima para copiar</i>
+
+⏱️ <b>Confirmação automática:</b>
+Se você já pagou, o sistema confirmará automaticamente em até 2 minutos via webhook.
+
+✅ Você será notificado assim que o pagamento for confirmado!"""
+                    else:
                         pending_message = f"""⏳ <b>Pagamento ainda não identificado</b>
 
 Seu pagamento ainda não foi confirmado.
@@ -2584,7 +2601,7 @@ Seu pagamento ainda não foi confirmado.
             logger.error(f"❌ Erro ao exibir Order Bump Downsell: {e}")
             import traceback
             traceback.print_exc()
-
+    
     def _show_order_bump(self, bot_id: int, token: str, chat_id: int, user_info: Dict[str, Any],
                         original_price: float, original_description: str, button_index: int,
                         order_bump: Dict[str, Any]):

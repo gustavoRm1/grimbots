@@ -419,107 +419,21 @@ class ParadisePaymentGateway(PaymentGateway):
         """
         Consulta status de um pagamento no Paradise (API V30 atualizada)
         
-        Paradise: GET https://multi.paradisepags.com/api/v1/check_status.php?hash={transaction_id}
+        ⚠️ ATENÇÃO: Paradise agora SÓ aceita webhooks (postbacks)!
+        Este método é mantido apenas para fallback/consulta manual.
+        O status correto vem via webhook em tempo real.
         
-        IMPORTANTE: transaction_id deve ser o ID retornado pela API Paradise na criação,
-        NÃO o reference customizado.
+        Paradise webhook: POST https://app.grimbots.online/webhook/payment/paradise
+        Eventos: approved, pending, refunded
         """
         try:
-            logger.info(f"🔍 Paradise: Consultando status | ID: {transaction_id}")
+            logger.warning(f"⚠️ Paradise: Consulta manual via check_status.php DESCONTINUADA!")
+            logger.warning(f"⚠️ Paradise agora usa APENAS webhooks (postbacks)")
+            logger.info(f"📡 Para verificar pagamento, aguarde webhook ou use polling")
             
-            headers = {
-                'X-API-Key': self.api_key,
-                'Accept': 'application/json'
-            }
-            
-            # ✅ CORREÇÃO CRÍTICA: Paradise API espera hash diretamente na URL
-            # Baseado no paradise.php linha 1046: check_status.php?hash=' + hash
-            # IMPORTANTE: Paradise NÃO retorna um campo "hash" separado
-            # Retorna "transaction_id" e "id", então usamos o ID para consulta
-            hash_to_use = transaction_id  # ✅ Usar transaction_id (Paradise não retorna hash separado)
-            check_url = f"{self.check_status_url}?hash={hash_to_use}"
-            
-            # ✅ SOLUÇÃO CRÍTICA: Paradise tem delay interno - tentar até 5 vezes com delay
-            import time
-            for attempt in range(5):
-                logger.info(f"🔍 Paradise: Tentativa {attempt + 1}/5 | Hash: {hash_to_use}")
-                
-                response = requests.get(
-                    check_url,
-                    headers=headers,
-                    timeout=30  # ✅ Aumentar timeout para 30 segundos
-                )
-                
-                # 🔍 DEBUG COMPLETO: Ver o que o Paradise REALMENTE retorna
-                logger.info(f"🔍 Paradise API - Request URL: {response.url}")
-                logger.info(f"🔍 Paradise API - Response Status: {response.status_code}")
-                logger.info(f"🔍 Paradise API - Response Body (raw): {response.text}")
-                
-                if response.status_code == 404:
-                    logger.warning(f"⚠️ Paradise: Transação não encontrada | ID: {transaction_id}")
-                    return None
-                
-                if response.status_code != 200:
-                    logger.error(f"❌ Paradise: Erro ao consultar | Status: {response.status_code} | Body: {response.text}")
-                    return None
-                
-                # Tenta parsear JSON
-                try:
-                    data = response.json()
-                except ValueError as e:
-                    logger.error(f"❌ Paradise: Resposta não é JSON válido | Body: {response.text}")
-                    return None
-                
-                # Verificar se encontrou a transação
-                if data.get('payment_status') != 'not_found':
-                    logger.info(f"✅ Paradise: Transação encontrada na tentativa {attempt + 1}")
-                    break
-                
-                # Se não encontrou e não é a última tentativa, aguardar
-                if attempt < 4:
-                    wait_time = (attempt + 1) * 10  # 10, 20, 30, 40 segundos
-                    logger.info(f"⏳ Paradise: Aguardando {wait_time} segundos antes da próxima tentativa...")
-                    time.sleep(wait_time)
-                else:
-                    logger.warning(f"⚠️ Paradise: Transação não encontrada após 5 tentativas | ID: {transaction_id}")
-                    return None
-            
-            logger.info(f"🔍 Paradise API - Data JSON: {data}")
-            
-            # ✅ CORREÇÃO: Normalizar a resposta para o formato esperado pelo process_webhook
-            # Paradise check_status pode retornar formato diferente do webhook
-            normalized_data = {}
-            
-            # Tenta extrair ID (pode vir como 'id', 'hash', 'transaction_id')
-            normalized_data['id'] = (
-                data.get('id') or 
-                data.get('hash') or 
-                data.get('transaction_id') or 
-                transaction_id  # Fallback para o ID enviado
-            )
-            
-            # Tenta extrair status (pode vir como 'payment_status', 'status', 'state')
-            status_raw = (
-                data.get('payment_status') or 
-                data.get('status') or 
-                data.get('state') or 
-                'pending'
-            )
-            normalized_data['payment_status'] = str(status_raw).lower()
-            
-            # Tenta extrair valor (pode vir como 'amount', 'amount_paid', 'value')
-            amount_raw = (
-                data.get('amount_paid') or 
-                data.get('amount') or 
-                data.get('value') or 
-                0
-            )
-            normalized_data['amount'] = amount_raw
-            
-            logger.info(f"🔍 Paradise API - Normalized Data: {normalized_data}")
-            
-            # Usa a mesma lógica de processamento do webhook
-            return self.process_webhook(normalized_data)
+            # Retorna None para forçar uso do webhook
+            # O sistema já tem polling automático (paradise_payment_checker.py) e webhook como solução principal
+            return None
             
         except Exception as e:
             logger.error(f"❌ Paradise: Erro ao consultar status: {e}")
