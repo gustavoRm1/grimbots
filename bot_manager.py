@@ -2124,10 +2124,15 @@ Desculpe, não foi possível processar seu pagamento.
                             )
                             
                             if payment_gateway:
-                                api_status = payment_gateway.get_payment_status(
-                                    payment.gateway_transaction_id,
-                                    None
-                                )
+                                # ✅ CORREÇÃO: PushynGateway.get_payment_status() aceita apenas 1 argumento (transaction_id)
+                                # Outros gateways podem aceitar 2 argumentos
+                                if payment.gateway_type == 'pushynpay':
+                                    api_status = payment_gateway.get_payment_status(payment.gateway_transaction_id)
+                                else:
+                                    api_status = payment_gateway.get_payment_status(
+                                        payment.gateway_transaction_id,
+                                        None
+                                    )
                                 
                                 if api_status and api_status.get('status') == 'paid':
                                     if payment.status == 'pending':
