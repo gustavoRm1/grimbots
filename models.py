@@ -830,6 +830,18 @@ class Payment(db.Model):
     fbclid = db.Column(db.String(200), nullable=True)
     campaign_code = db.Column(db.String(50), nullable=True)
     
+    # ✅ DEMOGRAPHIC DATA (Para Analytics Avançado)
+    customer_age = db.Column(db.Integer, nullable=True)
+    customer_city = db.Column(db.String(100), nullable=True)
+    customer_state = db.Column(db.String(50), nullable=True)
+    customer_country = db.Column(db.String(50), nullable=True, default='BR')
+    customer_gender = db.Column(db.String(20), nullable=True)
+    
+    # ✅ DEVICE DATA
+    device_type = db.Column(db.String(20), nullable=True)  # mobile/desktop
+    os_type = db.Column(db.String(50), nullable=True)  # iOS/Android/Windows/Linux/macOS
+    browser = db.Column(db.String(50), nullable=True)  # Chrome/Safari/Firefox
+    
     # Datas
     created_at = db.Column(db.DateTime, default=get_brazil_time, index=True)
     paid_at = db.Column(db.DateTime)
@@ -893,6 +905,18 @@ class BotUser(db.Model):
     user_agent = db.Column(db.Text, nullable=True)  # User-Agent completo
     tracking_session_id = db.Column(db.String(100), nullable=True)  # UUID para correlação
     click_timestamp = db.Column(db.DateTime, nullable=True)  # Timestamp do click
+    
+    # ✅ DEMOGRAPHIC DATA (Para Analytics Avançado)
+    customer_age = db.Column(db.Integer, nullable=True)
+    customer_city = db.Column(db.String(100), nullable=True)
+    customer_state = db.Column(db.String(50), nullable=True)
+    customer_country = db.Column(db.String(50), nullable=True, default='BR')
+    customer_gender = db.Column(db.String(20), nullable=True)
+    
+    # ✅ DEVICE DATA
+    device_type = db.Column(db.String(20), nullable=True)  # mobile/desktop
+    os_type = db.Column(db.String(50), nullable=True)  # iOS/Android/Windows/Linux/macOS
+    browser = db.Column(db.String(50), nullable=True)  # Chrome/Safari/Firefox
     
     # Datas
     first_interaction = db.Column(db.DateTime, default=get_brazil_time)

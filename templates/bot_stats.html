@@ -589,6 +589,79 @@
         </div>
     </div>
 
+    <!-- ============================================================================ -->
+    <!-- 📊 ANALYTICS DEMOGRÁFICOS - GESTOR DE TRÁFEGO -->
+    <!-- ============================================================================ -->
+    
+    <div class="config-section" style="background: linear-gradient(135deg, rgba(139, 92, 246, 0.08), rgba(139, 92, 246, 0.02)); border-color: rgba(139, 92, 246, 0.3);">
+        <div class="config-section-header">
+            <i class="fas fa-chart-pie text-2xl text-purple-500"></i>
+            <div>
+                <div class="config-section-title">📊 Analytics Demográficos</div>
+                <div class="config-section-description">Perfil completo do seu público (para otimização de campanhas)</div>
+            </div>
+        </div>
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Distribuição por Idade -->
+            <div class="bg-gray-900 rounded-lg p-4 border border-gray-800">
+                <div class="flex items-center gap-3 mb-4">
+                    <i class="fas fa-birthday-cake text-2xl text-purple-500"></i>
+                    <div>
+                        <div class="text-lg font-bold text-white">Distribuição por Idade</div>
+                        <div class="text-sm text-gray-400">Segmentação etária dos compradores</div>
+                    </div>
+                </div>
+                <canvas id="ageChart" style="max-height: 200px;"></canvas>
+            </div>
+            
+            <!-- Distribuição por Cidade -->
+            <div class="bg-gray-900 rounded-lg p-4 border border-gray-800">
+                <div class="flex items-center gap-3 mb-4">
+                    <i class="fas fa-map-marker-alt text-2xl text-blue-500"></i>
+                    <div>
+                        <div class="text-lg font-bold text-white">Top Cidades</div>
+                        <div class="text-sm text-gray-400">Onde estão seus melhores clientes</div>
+                    </div>
+                </div>
+                <div id="cityData" class="space-y-2">
+                    <!-- Dados serão inseridos via JS -->
+                </div>
+            </div>
+            
+            <!-- Distribuição por Device -->
+            <div class="bg-gray-900 rounded-lg p-4 border border-gray-800">
+                <div class="flex items-center gap-3 mb-4">
+                    <i class="fas fa-mobile-alt text-2xl text-green-500"></i>
+                    <div>
+                        <div class="text-lg font-bold text-white">Device e OS</div>
+                        <div class="text-sm text-gray-400">Como seus clientes acessam</div>
+                    </div>
+                </div>
+                <canvas id="deviceChart" style="max-height: 200px;"></canvas>
+            </div>
+            
+            <!-- Distribuição por Gender -->
+            <div class="bg-gray-900 rounded-lg p-4 border border-gray-800">
+                <div class="flex items-center gap-3 mb-4">
+                    <i class="fas fa-user-friends text-2xl text-pink-500"></i>
+                    <div>
+                        <div class="text-lg font-bold text-white">Distribuição por Gênero</div>
+                        <div class="text-sm text-gray-400">Segmentação de audience</div>
+                    </div>
+                </div>
+                <canvas id="genderChart" style="max-height: 200px;"></canvas>
+            </div>
+        </div>
+        
+        <div class="info-box-warning info-box mt-4">
+            <p class="text-sm text-gray-300">
+                <i class="fas fa-lightbulb mr-2 text-yellow-500"></i>
+                <strong>💡 Dica de Gestor:</strong> Use esses dados para criar Lookalike Audiences no Facebook Ads e otimizar suas campanhas de tráfego pago.
+            </p>
+        </div>
+    </div>
+
     <!-- Últimas Vendas -->
     <div class="config-section">
         <div class="config-section-header">
@@ -715,6 +788,9 @@ function botStatsApp() {
             recent_sales: []
         },
         salesChart: null,
+        ageChart: null,
+        deviceChart: null,
+        genderChart: null,
         
         async init() {
             // ✅ FIX: Prevenir inicialização dupla
@@ -736,11 +812,13 @@ function botStatsApp() {
             this.$nextTick(() => {
                 setTimeout(() => {
                     this.initChart();
+                    this.initDemographicCharts(); // ✅ NOVO: Gráficos demográficos
                     // Após criar gráfico, atualizar com dados
                     setTimeout(() => {
                         if (this.stats.daily_chart && this.stats.daily_chart.length > 0) {
                             this.updateChart();
                         }
+                        this.updateDemographicCharts(); // ✅ NOVO: Atualizar gráficos demográficos
                     }, 300);
                 }, 150);
             });
@@ -1010,6 +1088,194 @@ function botStatsApp() {
                 hour: '2-digit',
                 minute: '2-digit'
             });
+        },
+        
+        // ============================================================================
+        // 📊 GRÁFICOS DEMOGRÁFICOS (GESTOR DE TRÁFEGO)
+        // ============================================================================
+        
+        initDemographicCharts() {
+            console.log('📊 Inicializando gráficos demográficos...');
+        },
+        
+        updateDemographicCharts() {
+            if (!this.stats.recent_sales || this.stats.recent_sales.length === 0) {
+                console.log('⏳ Aguardando dados demográficos...');
+                return;
+            }
+            
+            console.log('📊 Atualizando gráficos demográficos...');
+            
+            // ===== DISTRIBUIÇÃO POR IDADE =====
+            const ageGroups = this.analyzeAgeDistribution();
+            if (this.ageChart) this.ageChart.destroy();
+            const ageCtx = document.getElementById('ageChart');
+            if (ageCtx) {
+                this.ageChart = new Chart(ageCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: Object.keys(ageGroups),
+                        datasets: [{
+                            data: Object.values(ageGroups),
+                            backgroundColor: [
+                                'rgba(139, 92, 246, 0.8)',
+                                'rgba(59, 130, 246, 0.8)',
+                                'rgba(16, 185, 129, 0.8)',
+                                'rgba(251, 191, 36, 0.8)',
+                                'rgba(239, 68, 68, 0.8)'
+                            ]
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'bottom', labels: { color: '#9CA3AF' } }
+                        }
+                    }
+                });
+            }
+            
+            // ===== DISTRIBUIÇÃO POR DEVICE =====
+            const deviceData = this.analyzeDeviceDistribution();
+            if (this.deviceChart) this.deviceChart.destroy();
+            const deviceCtx = document.getElementById('deviceChart');
+            if (deviceCtx) {
+                this.deviceChart = new Chart(deviceCtx, {
+                    type: 'pie',
+                    data: {
+                        labels: Object.keys(deviceData),
+                        datasets: [{
+                            data: Object.values(deviceData),
+                            backgroundColor: [
+                                'rgba(16, 185, 129, 0.8)',
+                                'rgba(59, 130, 246, 0.8)',
+                                'rgba(239, 68, 68, 0.8)'
+                            ]
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'bottom', labels: { color: '#9CA3AF' } }
+                        }
+                    }
+                });
+            }
+            
+            // ===== DISTRIBUIÇÃO POR GÊNERO =====
+            const genderData = this.analyzeGenderDistribution();
+            if (this.genderChart) this.genderChart.destroy();
+            const genderCtx = document.getElementById('genderChart');
+            if (genderCtx) {
+                this.genderChart = new Chart(genderCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: Object.keys(genderData),
+                        datasets: [{
+                            data: Object.values(genderData),
+                            backgroundColor: [
+                                'rgba(236, 72, 153, 0.8)',
+                                'rgba(59, 130, 246, 0.8)',
+                                'rgba(107, 114, 128, 0.8)'
+                            ]
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'bottom', labels: { color: '#9CA3AF' } }
+                        }
+                    }
+                });
+            }
+            
+            // ===== TOP CIDADES =====
+            const cities = this.analyzeTopCities();
+            const cityContainer = document.getElementById('cityData');
+            if (cityContainer) {
+                cityContainer.innerHTML = cities.slice(0, 5).map((city, index) => `
+                    <div class="flex items-center justify-between p-3 bg-gray-800 rounded-lg border border-gray-700">
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm"
+                                 style="background: ${index === 0 ? '#FFB800' : index === 1 ? '#C0C0C0' : '#CD7F32'}; color: #000;"
+                                 x-text="${index + 1}"></div>
+                            <div>
+                                <div class="text-sm font-bold text-white">${city.city}</div>
+                                <div class="text-xs text-gray-500">${city.state}</div>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-lg font-bold" style="color: var(--brand-gold-500);">${city.count}</div>
+                            <div class="text-xs text-gray-400">vendas</div>
+                        </div>
+                    </div>
+                `).join('');
+            }
+        },
+        
+        analyzeAgeDistribution() {
+            const ages = this.stats.recent_sales
+                .filter(s => s.customer_age)
+                .map(s => s.customer_age);
+            
+            const groups = { '18-24': 0, '25-34': 0, '35-44': 0, '45-54': 0, '55+': 0 };
+            ages.forEach(age => {
+                if (age < 25) groups['18-24']++;
+                else if (age < 35) groups['25-34']++;
+                else if (age < 45) groups['35-44']++;
+                else if (age < 55) groups['45-54']++;
+                else groups['55+']++;
+            });
+            
+            // Remover grupos vazios
+            Object.keys(groups).forEach(key => {
+                if (groups[key] === 0) delete groups[key];
+            });
+            
+            return groups;
+        },
+        
+        analyzeDeviceDistribution() {
+            const devices = {};
+            this.stats.recent_sales
+                .filter(s => s.device_type)
+                .forEach(s => {
+                    const type = s.device_type;
+                    devices[type] = (devices[type] || 0) + 1;
+                });
+            
+            return devices;
+        },
+        
+        analyzeGenderDistribution() {
+            const genders = {};
+            this.stats.recent_sales
+                .filter(s => s.customer_gender)
+                .forEach(s => {
+                    const gender = s.customer_gender;
+                    genders[gender] = (genders[gender] || 0) + 1;
+                });
+            
+            return genders;
+        },
+        
+        analyzeTopCities() {
+            const cities = {};
+            this.stats.recent_sales
+                .filter(s => s.customer_city)
+                .forEach(s => {
+                    const key = `${s.customer_city} - ${s.customer_state || 'N/A'}`;
+                    cities[key] = {
+                        city: s.customer_city,
+                        state: s.customer_state || 'N/A',
+                        count: (cities[key]?.count || 0) + 1
+                    };
+                });
+            
+            return Object.values(cities).sort((a, b) => b.count - a.count);
         }
     };
 }

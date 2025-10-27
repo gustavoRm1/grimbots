@@ -2331,7 +2331,17 @@ def get_bot_stats(bot_id):
         'status': p.status,
         'is_downsell': p.is_downsell,
         'order_bump_accepted': p.order_bump_accepted,
-        'created_at': p.created_at.isoformat()
+        'created_at': p.created_at.isoformat(),
+        # ✅ DEMOGRAPHIC DATA
+        'customer_age': p.customer_age,
+        'customer_city': p.customer_city,
+        'customer_state': p.customer_state,
+        'customer_country': p.customer_country,
+        'customer_gender': p.customer_gender,
+        # ✅ DEVICE DATA
+        'device_type': p.device_type,
+        'os_type': p.os_type,
+        'browser': p.browser
     } for p in recent_sales]
     
     return jsonify({

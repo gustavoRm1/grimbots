@@ -946,6 +946,19 @@ class BotManager:
                                 # Associar dados capturados no redirect
                                 bot_user.ip_address = tracking_elite.get('ip')
                                 bot_user.user_agent = tracking_elite.get('user_agent')
+                                
+                                # ✅ NOVO: PARSER DE DEVICE INFO (para analytics demográfico)
+                                try:
+                                    from utils.device_parser import parse_user_agent
+                                    device_info = parse_user_agent(bot_user.user_agent)
+                                    
+                                    bot_user.device_type = device_info.get('device_type')
+                                    bot_user.os_type = device_info.get('os_type')
+                                    bot_user.browser = device_info.get('browser')
+                                    
+                                    logger.info(f"📱 Device parseado: {device_info}")
+                                except Exception as e:
+                                    logger.warning(f"⚠️ Erro ao parsear device: {e}")
                                 bot_user.tracking_session_id = tracking_elite.get('session_id')
                                 
                                 # Parse timestamp
@@ -2791,6 +2804,13 @@ Seu pagamento ainda não foi confirmado.
                 
                 if pix_result:
                     logger.info(f"✅ PIX gerado com sucesso pelo gateway!")
+                    
+                    # ✅ BUSCAR BOT_USER PARA COPIAR DADOS DEMOGRÁFICOS
+                    bot_user = BotUser.query.filter_by(
+                        bot_id=bot_id,
+                        telegram_user_id=customer_user_id
+                    ).first()
+                    
                     # Salvar pagamento no banco (incluindo código PIX para reenvio + analytics)
                     payment = Payment(
                         bot_id=bot_id,
@@ -2810,7 +2830,17 @@ Seu pagamento ainda não foi confirmado.
                         order_bump_accepted=order_bump_accepted,
                         order_bump_value=order_bump_value,
                         is_downsell=is_downsell,
-                        downsell_index=downsell_index
+                        downsell_index=downsell_index,
+                        # ✅ DEMOGRAPHIC DATA (Copiar de bot_user se disponível)
+                        customer_age=bot_user.customer_age if bot_user else None,
+                        customer_city=bot_user.customer_city if bot_user else None,
+                        customer_state=bot_user.customer_state if bot_user else None,
+                        customer_country=bot_user.customer_country if bot_user else 'BR',
+                        customer_gender=bot_user.customer_gender if bot_user else None,
+                        # ✅ DEVICE DATA (Copiar de bot_user se disponível)
+                        device_type=bot_user.device_type if bot_user else None,
+                        os_type=bot_user.os_type if bot_user else None,
+                        browser=bot_user.browser if bot_user else None
                     )
                     db.session.add(payment)
                     
