@@ -131,7 +131,7 @@
     {% endif %}
     
     <!-- Navbar Premium -->
-    <nav class="navbar-premium" style="border-bottom: 1px solid var(--border-subtle);">
+    <nav class="navbar-premium" style="border-bottom: 1px solid var(--border-subtle);" x-data="{ mobileMenuOpen: false }">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between h-16">
                 <div class="flex">
@@ -139,6 +139,8 @@
                         <i class="fas fa-robot text-3xl logo-brand"></i>
                         <span class="ml-2 text-xl font-black logo-brand">grimbots</span>
                     </div>
+                    
+                    <!-- Desktop Navigation -->
                     <div class="hidden sm:ml-6 sm:flex sm:space-x-8">
                         <!-- Início -->
                         <a href="{{ url_for('dashboard') }}" class="nav-link {% if request.endpoint == 'dashboard' %}nav-link-active{% endif %} inline-flex items-center px-1 pt-1 border-b-2 text-sm font-semibold transition-all" title="Página inicial com resumo das suas vendas">
@@ -167,7 +169,8 @@
                     </div>
                 </div>
                 <div class="flex items-center gap-4">
-                    <div class="flex-shrink-0">
+                    <!-- Desktop User Info -->
+                    <div class="hidden sm:flex flex-shrink-0 items-center gap-4">
                         <span class="text-sm font-semibold" style="color: var(--text-secondary);">
                             <i class="fas fa-user" style="color: var(--brand-gold-500);"></i> {{ current_user.username }}
                             {% if current_user.is_admin %}
@@ -177,9 +180,54 @@
                             {% endif %}
                         </span>
                     </div>
-                    <a href="{{ url_for('logout') }}" class="px-4 py-2 text-sm font-semibold rounded-lg transition-all" style="background: var(--brand-red-500); color: var(--txt-primary);" onmouseover="this.style.background='var(--brand-red-700)'" onmouseout="this.style.background='var(--brand-red-500)'">
+                    
+                    <!-- Mobile Menu Button -->
+                    <button @click="mobileMenuOpen = !mobileMenuOpen" class="sm:hidden p-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-all">
+                        <i class="fas fa-bars text-xl"></i>
+                    </button>
+                    
+                    <!-- Desktop Logout -->
+                    <a href="{{ url_for('logout') }}" class="hidden sm:inline-flex px-4 py-2 text-sm font-semibold rounded-lg transition-all" style="background: var(--brand-red-500); color: var(--txt-primary);" onmouseover="this.style.background='var(--brand-red-700)'" onmouseout="this.style.background='var(--brand-red-500)'">
                         <i class="fas fa-sign-out-alt mr-1"></i> Sair
                     </a>
+                </div>
+            </div>
+            
+            <!-- Mobile Menu Dropdown -->
+            <div x-show="mobileMenuOpen" 
+                 x-cloak
+                 class="sm:hidden mt-4 pb-4 border-t border-gray-800"
+                 x-transition>
+                <div class="flex flex-col space-y-2 pt-4">
+                    <a href="{{ url_for('dashboard') }}" class="flex items-center px-4 py-3 rounded-lg transition-all {% if request.endpoint == 'dashboard' %}bg-gray-800 text-white{% else %}text-gray-400 hover:text-white hover:bg-gray-800{% endif %}">
+                        <i class="fas fa-home mr-3"></i> Início
+                    </a>
+                    <a href="{{ url_for('ranking') }}" class="flex items-center px-4 py-3 rounded-lg transition-all {% if request.endpoint == 'ranking' %}bg-gray-800 text-white{% else %}text-gray-400 hover:text-white hover:bg-gray-800{% endif %}">
+                        <i class="fas fa-trophy mr-3" style="color: var(--brand-gold-500);"></i> Ranking
+                    </a>
+                    <a href="{{ url_for('redirect_pools_page') }}" class="flex items-center px-4 py-3 rounded-lg transition-all {% if request.endpoint == 'redirect_pools_page' %}bg-gray-800 text-white{% else %}text-gray-400 hover:text-white hover:bg-gray-800{% endif %}">
+                        <i class="fas fa-share-alt mr-3"></i> 
+                        <div class="flex flex-col">
+                            <span class="font-semibold">Distribuidor</span>
+                            <span class="text-xs opacity-70">Rotacione bots</span>
+                        </div>
+                    </a>
+                    <a href="{{ url_for('settings') }}" class="flex items-center px-4 py-3 rounded-lg transition-all {% if request.endpoint == 'settings' %}bg-gray-800 text-white{% else %}text-gray-400 hover:text-white hover:bg-gray-800{% endif %}">
+                        <i class="fas fa-cog mr-3"></i> Configurações
+                    </a>
+                    {% if current_user.is_admin and not session.get('impersonate_admin_id') %}
+                    <a href="{{ url_for('admin_dashboard') }}" class="flex items-center px-4 py-3 rounded-lg transition-all {% if request.endpoint is not none and 'admin' in request.endpoint %}bg-gray-800 text-yellow-500{% else %}text-gray-400 hover:text-white hover:bg-gray-800{% endif %}">
+                        <i class="fas fa-shield-alt mr-3"></i> Painel Admin
+                    </a>
+                    {% endif %}
+                    <div class="border-t border-gray-800 pt-2 mt-2">
+                        <div class="px-4 py-2 text-sm text-gray-400">
+                            <i class="fas fa-user mr-2" style="color: var(--brand-gold-500);"></i> {{ current_user.username }}
+                        </div>
+                        <a href="{{ url_for('logout') }}" class="flex items-center px-4 py-3 rounded-lg transition-all text-red-400 hover:text-red-300 hover:bg-red-900/20">
+                            <i class="fas fa-sign-out-alt mr-3"></i> Sair
+                        </a>
+                    </div>
                 </div>
             </div>
         </div>

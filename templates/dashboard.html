@@ -411,7 +411,8 @@
             </div>
 
         <template x-if="filteredPayments.length > 0">
-        <div class="overflow-x-auto">
+        <!-- ✅ TABELA PARA DESKTOP (oculta no mobile) -->
+        <div class="hidden md:block overflow-x-auto">
                 <table class="table-premium">
                 <thead>
                     <tr>
@@ -447,6 +448,25 @@
                     </template>
                 </tbody>
             </table>
+        </div>
+        
+        <!-- ✅ CARDS PARA MOBILE (mostra apenas no mobile) -->
+        <div class="md:hidden space-y-3">
+            <template x-for="payment in filteredPayments.slice(0, 10)" :key="payment.id">
+                <div class="bg-gray-800 border border-gray-700 rounded-lg p-4">
+                    <div class="flex justify-between items-start mb-3">
+                        <div>
+                            <div class="font-bold text-white" x-text="payment.customer_name || 'Cliente'"></div>
+                            <div class="text-sm text-gray-400" x-text="payment.product_name || 'Produto'"></div>
+                        </div>
+                        <span class="badge-status badge-paid" x-text="payment.status === 'paid' ? 'Pago' : 'Pendente'"></span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <div class="text-lg font-bold" style="color: var(--brand-gold-300);">R$ <span x-text="formatMoney(payment.amount)"></span></div>
+                        <div class="text-xs text-gray-500" x-text="formatDate(payment.created_at)"></div>
+                    </div>
+                </div>
+            </template>
         </div>
         </template>
 
@@ -965,7 +985,88 @@ function dashboardApp() {
             // Recarregar dados dos bots (garante dados atualizados após salvar config)
             this.refreshBots();
             
+            // ✅ CONECTAR WEBSOCKET PARA NOTIFICAÇÕES EM TEMPO REAL
+            this.initWebSocket();
+            
             console.log('✅ Dashboard V2.0 pronto!');
+        },
+        
+        // ✅ WebSocket para notificações em tempo real
+        initWebSocket() {
+            if (typeof io === 'undefined') {
+                console.error('❌ Socket.IO não carregado!');
+                return;
+            }
+            
+            const socket = io();
+            
+            socket.on('connect', () => {
+                console.log('🔌 WebSocket conectado!');
+            });
+            
+            // ✅ ESCUTAR EVENTO DE PAGAMENTO ATUALIZADO
+            socket.on('payment_update', (data) => {
+                console.log('💰 Nova venda!', data);
+                
+                // Atualizar estatísticas locais
+                if (data.status === 'paid') {
+                    this.stats.total_sales += 1;
+                    this.stats.total_revenue += data.amount;
+                    
+                    // Adicionar à lista de pagamentos recentes
+                    this.payments.unshift({
+                        id: data.payment_id,
+                        customer_name: data.customer_name || 'Cliente',
+                        amount: data.amount,
+                        status: 'paid',
+                        created_at: new Date().toISOString()
+                    });
+                    
+                    // Mostrar notificação toast (mobile-friendly)
+                    this.showSaleNotification(data);
+                }
+                
+                // Atualizar gráfico
+                this.loadChartData();
+                
+                // Atualizar lista de bots
+                this.refreshBots();
+            });
+            
+            socket.on('disconnect', () => {
+                console.log('🔌 WebSocket desconectado!');
+            });
+        },
+        
+        // ✅ Mostrar notificação de venda no mobile
+        showSaleNotification(data) {
+            // Criar elemento de notificação
+            const notification = document.createElement('div');
+            notification.className = 'fixed top-4 right-4 max-w-sm bg-gradient-to-r from-green-600 to-green-500 text-white p-4 rounded-xl shadow-2xl z-50 animate-slide-in notification-mobile';
+            notification.innerHTML = `
+                <div class="flex items-center gap-3">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-check-circle text-3xl animate-pulse"></i>
+                    </div>
+                    <div class="flex-1">
+                        <div class="font-bold text-lg">💰 Nova venda confirmada!</div>
+                        <div class="text-sm opacity-95 mt-1">R$ ${data.amount.toFixed(2)}</div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(notification);
+            
+            // ✅ VIBRAÇÃO NO MOBILE (se suportado)
+            if (navigator.vibrate) {
+                navigator.vibrate([200, 100, 200]);
+            }
+            
+            // Remover após 5 segundos
+            setTimeout(() => {
+                notification.classList.add('animate-slide-out');
+                setTimeout(() => notification.remove(), 300);
+            }, 5000);
         },
         
         // Chart
@@ -1465,6 +1566,51 @@ function dashboardApp() {
         }
     };
 }
+
+// ✅ Animations CSS para notificações (mobile-friendly)
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes slide-in {
+        from {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+    
+    @keyframes slide-out {
+        from {
+            transform: translateX(0);
+            opacity: 1;
+        }
+        to {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+    }
+    
+    .animate-slide-in {
+        animation: slide-in 0.3s ease-out;
+    }
+    
+    .animate-slide-out {
+        animation: slide-out 0.3s ease-in;
+    }
+    
+    /* ✅ RESPONSIVO PARA MOBILE */
+    @media (max-width: 640px) {
+        .notification-mobile {
+            right: 1rem !important;
+            top: 1rem !important;
+            left: 1rem !important;
+            width: auto !important;
+        }
+    }
+`;
+document.head.appendChild(style);
 </script>
 {% endblock %}
 
