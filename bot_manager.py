@@ -2087,83 +2087,70 @@ Desculpe, não foi possível processar seu pagamento.
                 
                 logger.info(f"📊 Status do pagamento LOCAL: {payment.status}")
                 
-                # MELHORIA CRÍTICA: Consultar status na API do gateway se ainda pendente
-                # Isso garante que mesmo se webhook falhar, conseguimos confirmar pagamento
-                if payment.status == 'pending' and payment.gateway_transaction_id:
-                    logger.info(f"🔍 Pagamento pendente. Consultando status na API do gateway...")
-                    
-                    # Buscar gateway para obter credenciais
-                    bot = payment.bot
-                    gateway = Gateway.query.filter_by(
-                        user_id=bot.user_id,
-                        gateway_type=payment.gateway_type,
-                        is_verified=True
-                    ).first()
-                    
-                    if gateway:
-                        # Criar instância do gateway
-                        # ✅ CORREÇÃO: Passar TODOS os campos necessários
-                        credentials = {
-                            # SyncPay usa client_id/client_secret
-                            'client_id': gateway.client_id,
-                            'client_secret': gateway.client_secret,
-                            # Outros gateways usam api_key
-                            'api_key': gateway.api_key,
-                            # Paradise
-                            'product_hash': gateway.product_hash,
-                            'offer_hash': gateway.offer_hash,
-                            'store_id': gateway.store_id,
-                            # WiinPay
-                            'split_user_id': gateway.split_user_id,
-                            # Comum a todos
-                            'split_percentage': gateway.split_percentage or 2.0  # 2% PADRÃO
-                        }
+                # ✅ PARADISE: Consulta manual DESATIVADA (usa apenas webhooks)
+                # O job automático (check_paradise_pending_sales.py) processa pagamentos a cada 2 minutos
+                # Se Paradise enviar webhook, o sistema marca automaticamente
+                # Ao clicar em "Verificar Pagamento", apenas verifica o status NO BANCO
+                if payment.status == 'pending':
+                    if payment.gateway_type == 'paradise':
+                        logger.info(f"📡 Paradise: Webhook será processado automaticamente pelo job")
+                        logger.info(f"⏰ Se pagamento já está aprovado no painel Paradise, aguarde até 2 minutos")
+                    else:
+                        # Outros gateways podem ter consulta manual
+                        logger.info(f"🔍 Gateway {payment.gateway_type}: Consultando status na API...")
                         
-                        payment_gateway = GatewayFactory.create_gateway(
+                        bot = payment.bot
+                        gateway = Gateway.query.filter_by(
+                            user_id=bot.user_id,
                             gateway_type=payment.gateway_type,
-                            credentials=credentials
-                        )
+                            is_verified=True
+                        ).first()
                         
-                        if payment_gateway:
-                            # ✅ Paradise agora usa APENAS webhooks (postbacks)
-                            # Consulta manual retorna None intencionalmente
-                            api_status = None
+                        if gateway:
+                            credentials = {
+                                'client_id': gateway.client_id,
+                                'client_secret': gateway.client_secret,
+                                'api_key': gateway.api_key,
+                                'product_hash': gateway.product_hash,
+                                'offer_hash': gateway.offer_hash,
+                                'store_id': gateway.store_id,
+                                'split_user_id': gateway.split_user_id,
+                                'split_percentage': gateway.split_percentage or 2.0
+                            }
                             
-                            if payment.gateway_type == 'paradise':
-                                logger.info(f"📡 Paradise: Status só via webhook (postback) - aguarde confirmação automática")
-                            else:
-                                # Outros gateways podem ter consulta manual
+                            payment_gateway = GatewayFactory.create_gateway(
+                                gateway_type=payment.gateway_type,
+                                credentials=credentials
+                            )
+                            
+                            if payment_gateway:
                                 api_status = payment_gateway.get_payment_status(
                                     payment.gateway_transaction_id,
                                     None
                                 )
-                            
-                            if api_status and api_status.get('status') == 'paid':
-                                if payment.status == 'pending':
-                                    logger.info(f"✅ API confirmou pagamento! Atualizando status...")
-                                    payment.status = 'paid'
-                                    payment.paid_at = datetime.now()
-                                    payment.bot.total_sales += 1
-                                    payment.bot.total_revenue += payment.amount
-                                    payment.bot.owner.total_sales += 1
-                                    payment.bot.owner.total_revenue += payment.amount
-                                    db.session.commit()
-                                    logger.info(f"💾 Pagamento atualizado via consulta ativa")
-                                    
-                                    # ✅ VERIFICAR CONQUISTAS
-                                    try:
-                                        from app import check_and_unlock_achievements
-                                        new_achievements = check_and_unlock_achievements(payment.bot.owner)
-                                        if new_achievements:
-                                            logger.info(f"🏆 {len(new_achievements)} conquista(s) desbloqueada(s)!")
-                                    except Exception as e:
-                                        logger.warning(f"⚠️ Erro ao verificar conquistas: {e}")
-                            elif api_status:
-                                logger.info(f"⏳ API retornou status: {api_status.get('status')}")
-                        else:
-                            logger.warning(f"⚠️ Não foi possível criar gateway para consulta")
-                    else:
-                        logger.warning(f"⚠️ Gateway não encontrado para consulta")
+                                
+                                if api_status and api_status.get('status') == 'paid':
+                                    if payment.status == 'pending':
+                                        logger.info(f"✅ API confirmou pagamento! Atualizando status...")
+                                        payment.status = 'paid'
+                                        payment.paid_at = datetime.now()
+                                        payment.bot.total_sales += 1
+                                        payment.bot.total_revenue += payment.amount
+                                        payment.bot.owner.total_sales += 1
+                                        payment.bot.owner.total_revenue += payment.amount
+                                        db.session.commit()
+                                        logger.info(f"💾 Pagamento atualizado via consulta ativa")
+                                        
+                                        # ✅ VERIFICAR CONQUISTAS
+                                        try:
+                                            from app import check_and_unlock_achievements
+                                            new_achievements = check_and_unlock_achievements(payment.bot.owner)
+                                            if new_achievements:
+                                                logger.info(f"🏆 {len(new_achievements)} conquista(s) desbloqueada(s)!")
+                                        except Exception as e:
+                                            logger.warning(f"⚠️ Erro ao verificar conquistas: {e}")
+                                elif api_status:
+                                    logger.info(f"⏳ API retornou status: {api_status.get('status')}")
                 
                 logger.info(f"📊 Status FINAL do pagamento: {payment.status}")
                 
