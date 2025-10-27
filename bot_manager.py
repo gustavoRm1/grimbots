@@ -2126,9 +2126,10 @@ Desculpe, não foi possível processar seu pagamento.
                         
                         if payment_gateway:
                             # Consultar status na API
+                            # ✅ Paradise: não retorna hash separado, usa transaction_id direto
                             api_status = payment_gateway.get_payment_status(
                                 payment.gateway_transaction_id,
-                                payment.gateway_transaction_hash  # ✅ Passar hash para Paradise
+                                None  # ✅ Paradise não usa hash, apenas transaction_id
                             )
                             
                             if api_status and api_status.get('status') == 'paid':

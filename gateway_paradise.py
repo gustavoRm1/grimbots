@@ -432,8 +432,9 @@ class ParadisePaymentGateway(PaymentGateway):
             
             # ✅ CORREÇÃO CRÍTICA: Paradise API espera hash diretamente na URL
             # Baseado no paradise.php linha 1046: check_status.php?hash=' + hash
-            # Usar transaction_hash se disponível, senão usar transaction_id
-            hash_to_use = transaction_hash or transaction_id  # ✅ Usar hash se disponível
+            # IMPORTANTE: Paradise NÃO retorna um campo "hash" separado
+            # Retorna "transaction_id" e "id", então usamos o ID para consulta
+            hash_to_use = transaction_id  # ✅ Usar transaction_id (Paradise não retorna hash separado)
             check_url = f"{self.check_status_url}?hash={hash_to_use}"
             
             # ✅ SOLUÇÃO CRÍTICA: Paradise tem delay interno - tentar até 5 vezes com delay
