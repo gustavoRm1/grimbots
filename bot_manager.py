@@ -1015,7 +1015,7 @@ class BotManager:
                     
                     # ✅ CORREÇÃO: Sempre enviar boas-vindas quando /start for digitado
                     logger.info(f"👤 Usuário retornou: {first_name} (@{username}) - Enviando boas-vindas novamente")
-                        should_send_welcome = True
+                    should_send_welcome = True
                     
                     db.session.commit()
             
