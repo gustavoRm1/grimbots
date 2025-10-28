@@ -12,12 +12,13 @@ with app.app_context():
     print("🔄 REENVIAR META PIXEL - VENDAS RECENTES")
     print("=" * 80)
     
-    # Buscar vendas dos últimos 3 horas com meta_purchase_sent = True
+    # Buscar vendas de HOJE (00:00 até agora) com meta_purchase_sent = True
     # mas que provavelmente não foram enviadas porque Celery estava parado
+    today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     recent_payments = Payment.query.filter(
         Payment.status == 'paid',
         Payment.gateway_type == 'pushynpay',
-        Payment.created_at >= datetime.now() - timedelta(hours=3),
+        Payment.created_at >= today_start,
         Payment.meta_purchase_sent == True
     ).order_by(Payment.id.desc()).all()
     
