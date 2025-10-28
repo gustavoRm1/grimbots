@@ -1494,37 +1494,6 @@ def admin_dashboard():
     
     return render_template('admin/dashboard.html', stats=stats, top_users=top_users_list)
 
-@app.route('/admin/download_csv')
-@login_required
-@admin_required
-def admin_download_csv():
-    """Endpoint TEMPORÁRIO para download do CSV de vendas Paradise"""
-    import os
-    from flask import send_file, jsonify
-    
-    # Tenta vários caminhos possíveis onde o CSV pode estar
-    possible_paths = [
-        'vendas_paradise_2025-10-21_to_2025-10-27.csv',
-        '/root/grimbots/vendas_paradise_2025-10-21_to_2025-10-27.csv',
-        '/home/grimbots/vendas_paradise_2025-10-21_to_2025-10-27.csv'
-    ]
-    
-    for csv_path in possible_paths:
-        if os.path.exists(csv_path):
-            logger.info(f"✅ Arquivo CSV encontrado em: {csv_path}")
-            return send_file(
-                csv_path,
-                as_attachment=True,
-                download_name='vendas_paradise_2025-10-21_to_2025-10-27.csv',
-                mimetype='text/csv'
-            )
-    
-    logger.error("❌ Arquivo CSV não encontrado em nenhum dos caminhos")
-    return jsonify({
-        'error': 'Arquivo CSV não encontrado no servidor',
-        'possible_paths': possible_paths
-    }), 404
-
 @app.route('/admin/users')
 @login_required
 @admin_required
