@@ -15,14 +15,26 @@ with app.app_context():
     # Buscar vendas de HOJE (00:00 até agora) com meta_purchase_sent = True
     # mas que provavelmente não foram enviadas porque Celery estava parado
     today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-    recent_payments = Payment.query.filter(
+    
+    # Debug: mostrar filtros
+    print(f"🔍 Buscando vendas desde: {today_start}")
+    print(f"   Status: paid")
+    print(f"   Gateway: pushynpay")
+    print(f"   Meta Purchase Sent: True")
+    
+    # Buscar TODAS as vendas (sem filtro de data primeiro)
+    all_payments = Payment.query.filter(
         Payment.status == 'paid',
         Payment.gateway_type == 'pushynpay',
-        Payment.created_at >= today_start,
         Payment.meta_purchase_sent == True
-    ).order_by(Payment.id.desc()).all()
+    ).order_by(Payment.id.desc()).limit(20).all()
     
-    print(f"\n📊 VENDAS ENCONTRADAS: {len(recent_payments)}")
+    print(f"\n📊 TOTAL DE VENDAS (últimas 20): {len(all_payments)}")
+    
+    # Depois filtrar por data
+    recent_payments = [p for p in all_payments if p.created_at >= today_start]
+    
+    print(f"📊 VENDAS DE HOJE: {len(recent_payments)}")
     
     if not recent_payments:
         print("✅ Nenhuma venda recente encontrada")
