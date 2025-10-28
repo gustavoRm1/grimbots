@@ -947,12 +947,14 @@ class BotManager:
                                 bot_user.ip_address = tracking_elite.get('ip')
                                 bot_user.user_agent = tracking_elite.get('user_agent')
                                 
-                                # ✅ NOVO: PARSER DE DEVICE INFO (para analytics demográfico)
+                                # ✅ NOVO: PARSER DE DEVICE INFO E GEOLOCALIZAÇÃO
                                 try:
-                                    from utils.device_parser import parse_user_agent
+                                    from utils.device_parser import parse_user_agent, parse_ip_to_location
+                                    
+                                    # Parse device (mobile/desktop, iOS/Android, etc)
                                     device_info = parse_user_agent(bot_user.user_agent)
                                     
-                                    # ✅ Salvar com getattr seguro
+                                    # Salvar device info com getattr seguro
                                     if hasattr(bot_user, 'device_type'):
                                         bot_user.device_type = device_info.get('device_type')
                                     if hasattr(bot_user, 'os_type'):
@@ -961,8 +963,22 @@ class BotManager:
                                         bot_user.browser = device_info.get('browser')
                                     
                                     logger.info(f"📱 Device parseado: {device_info}")
+                                    
+                                    # Parse geolocalização pelo IP
+                                    if bot_user.ip_address:
+                                        location_info = parse_ip_to_location(bot_user.ip_address)
+                                        
+                                        if hasattr(bot_user, 'customer_city'):
+                                            bot_user.customer_city = location_info.get('city', 'Unknown')
+                                        if hasattr(bot_user, 'customer_state'):
+                                            bot_user.customer_state = location_info.get('state', 'Unknown')
+                                        if hasattr(bot_user, 'customer_country'):
+                                            bot_user.customer_country = location_info.get('country', 'BR')
+                                        
+                                        logger.info(f"🌍 Geolocalização parseada: {location_info}")
+                                    
                                 except Exception as e:
-                                    logger.warning(f"⚠️ Erro ao parsear device: {e}")
+                                    logger.warning(f"⚠️ Erro ao parsear device/geolocalização: {e}")
                                 bot_user.tracking_session_id = tracking_elite.get('session_id')
                                 
                                 # Parse timestamp

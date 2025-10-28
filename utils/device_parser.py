@@ -73,7 +73,7 @@ def parse_user_agent(user_agent: str) -> Dict[str, Optional[str]]:
 
 def parse_ip_to_location(ip_address: str) -> Dict[str, Optional[str]]:
     """
-    Tenta inferir localização baseado no IP
+    Tenta inferir localização baseado no IP usando ip-api.com (GRATUITA)
     
     Args:
         ip_address: Endereço IP
@@ -81,12 +81,46 @@ def parse_ip_to_location(ip_address: str) -> Dict[str, Optional[str]]:
     Returns:
         Dict com city, state, country
     """
-    # TODO: Implementar integração com API de geolocalização
-    # Opções: MaxMind GeoIP2, ipinfo.io, ip-api.com
+    if not ip_address:
+        return {
+            'city': 'Unknown',
+            'state': 'Unknown',
+            'country': 'BR'
+        }
     
-    return {
-        'city': 'Unknown',
-        'state': 'Unknown',
-        'country': 'BR'
-    }
+    try:
+        import requests
+        import time
+        
+        # API gratuita ip-api.com (15 req/min = suficiente)
+        # https://ip-api.com/docs/api:json
+        response = requests.get(
+            f'http://ip-api.com/json/{ip_address}',
+            timeout=2,  # Max 2 segundos para não bloquear
+            headers={'User-Agent': 'GrimbotsAnalytics/1.0'}
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            if data.get('status') == 'success':
+                return {
+                    'city': data.get('city', 'Unknown'),
+                    'state': data.get('regionName', 'Unknown'),
+                    'country': data.get('countryCode', 'BR')
+                }
+        
+        # Rate limit ou erro - esperar e retornar default
+        return {
+            'city': 'Unknown',
+            'state': 'Unknown',
+            'country': 'BR'
+        }
+        
+    except Exception as e:
+        # Em caso de erro, retornar defaults
+        return {
+            'city': 'Unknown',
+            'state': 'Unknown',
+            'country': 'BR'
+        }
 
