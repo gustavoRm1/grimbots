@@ -2050,10 +2050,45 @@ class BotManager:
                         logger.info(f"ℹ️ Downsells desabilitados ou não configurados")
                     
                     logger.info(f"{'='*60}\n")
+                elif pix_data is not None and pix_data.get('rate_limit'):
+                    # Rate limit ativado: cliente já tem PIX pendente e quer gerar outro
+                    logger.warning(f"⚠️ Rate limit: cliente precisa aguardar {pix_data.get('wait_time')}")
+                    
+                    rate_limit_message = f"""
+⏳ <b>AGUARDE PARA GERAR NOVO PIX</b>
+
+Você já tem um PIX pendente para outro produto.
+
+⏰ <b>Por favor, aguarde {pix_data.get('wait_time', 'alguns segundos')}</b> para gerar um novo PIX para um produto diferente.
+
+💡 <b>Ou:</b> Pague o PIX atual e depois gere um novo PIX.
+
+<i>Você pode verificar seu PIX atual em "Verificar Pagamento"</i>
+                    """
+                    self.send_telegram_message(
+                        token=token,
+                        chat_id=str(chat_id),
+                        message=rate_limit_message.strip()
+                    )
+                elif pix_data is None:
+                    # PIX não foi gerado (erro no gateway)
+                    logger.error(f"❌ pix_data é None - erro no gateway")
+                    error_message = """
+❌ <b>ERRO AO GERAR PAGAMENTO</b>
+
+Desculpe, não foi possível processar seu pagamento.
+
+<b>Entre em contato com o suporte.</b>
+                    """
+                    self.send_telegram_message(
+                        token=token,
+                        chat_id=str(chat_id),
+                        message=error_message.strip()
+                    )
                 else:
                     # Erro CRÍTICO ao gerar PIX
                     logger.error(f"❌ FALHA CRÍTICA: Não foi possível gerar PIX!")
-                    logger.error(f"Verifique suas credenciais SyncPay no painel!")
+                    logger.error(f"Verifique suas credenciais no painel!")
                     
                     error_message = """
 ❌ <b>ERRO AO GERAR PAGAMENTO</b>
@@ -2748,7 +2783,73 @@ Seu pagamento ainda não foi confirmado.
                 
                 logger.info(f"💳 Gateway: {gateway.gateway_type.upper()}")
                 
-                # Gerar ID único do pagamento
+                # ✅ PROTEÇÃO CONTRA MÚLTIPLOS PIX (SOLUÇÃO HÍBRIDA - SENIOR QI 500 + QI 502)
+                
+                # 1. Verificar se cliente tem PIX pendente para MESMO PRODUTO
+                # ✅ CORREÇÃO: Normalizar descrição para comparação precisa
+                def normalize_product_name(name):
+                    """Remove emojis e normaliza para comparação"""
+                    if not name:
+                        return ''
+                    import re
+                    # Remove emojis e caracteres especiais
+                    normalized = re.sub(r'[^\w\s]', '', name)
+                    return normalized.lower().strip()
+                
+                normalized_description = normalize_product_name(description)
+                
+                # Buscar todos os PIX pendentes do cliente
+                all_pending = Payment.query.filter_by(
+                    bot_id=bot_id,
+                    customer_user_id=customer_user_id,
+                    status='pending'
+                ).all()
+                
+                pending_same_product = None
+                for p in all_pending:
+                    if normalize_product_name(p.product_name) == normalized_description:
+                        pending_same_product = p
+                        break
+                
+                if pending_same_product:
+                    logger.warning(f"⚠️ Cliente já tem PIX pendente para {description}")
+                    logger.info(f"🔄 Retornando PIX existente ao invés de criar novo")
+                    
+                    # Retornar dados do PIX existente
+                    pix_result = {
+                        'pix_code': pending_same_product.product_description,
+                        'pix_code_base64': None,
+                        'qr_code_url': None,
+                        'transaction_id': pending_same_product.gateway_transaction_id,
+                        'payment_id': pending_same_product.payment_id,
+                        'expires_at': None
+                    }
+                    
+                    logger.info(f"✅ PIX reutilizado: {pending_same_product.payment_id}")
+                    return pix_result
+                
+                # 2. Verificar rate limiting para OUTRO PRODUTO (2 minutos)
+                last_pix = Payment.query.filter_by(
+                    bot_id=bot_id,
+                    customer_user_id=customer_user_id
+                ).order_by(Payment.id.desc()).first()
+                
+                if last_pix and last_pix.status == 'pending':
+                    time_since = (datetime.now() - last_pix.created_at).total_seconds()
+                    if time_since < 120:  # 2 minutos
+                        wait_time = 120 - int(time_since)
+                        wait_minutes = wait_time // 60
+                        wait_seconds = wait_time % 60
+                        
+                        if wait_minutes > 0:
+                            time_msg = f"{wait_minutes} minuto{'s' if wait_minutes > 1 else ''} e {wait_seconds} segundo{'s' if wait_seconds > 1 else ''}"
+                        else:
+                            time_msg = f"{wait_seconds} segundo{'s' if wait_seconds > 1 else ''}"
+                        
+                        logger.warning(f"⚠️ Rate limit: cliente deve aguardar {time_msg} para gerar novo PIX")
+                        return {'rate_limit': True, 'wait_time': time_msg}  # Retorna tempo para frontend
+                
+                # Gerar ID único do pagamento (só se não houver PIX pendente)
                 import uuid
                 payment_id = f"BOT{bot_id}_{int(time.time())}_{uuid.uuid4().hex[:8]}"
                 
