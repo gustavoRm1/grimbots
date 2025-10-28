@@ -2788,7 +2788,13 @@ def public_redirect(slug):
                 'utm_medium': request.args.get('utm_medium', ''),
                 'utm_content': request.args.get('utm_content', ''),
                 'utm_term': request.args.get('utm_term', ''),
-                'utm_id': request.args.get('utm_id', '')
+                'utm_id': request.args.get('utm_id', ''),
+                # ✅ NOVO: Dados adicionais para analytics (QI 502)
+                'referer': request.headers.get('Referer', ''),
+                'accept_language': request.headers.get('Accept-Language', ''),
+                'adset_id': request.args.get('adset_id', ''),
+                'ad_id': request.args.get('ad_id', ''),
+                'campaign_id': request.args.get('campaign_id', '')
             }
             
             # Salvar com TTL de 180 segundos
