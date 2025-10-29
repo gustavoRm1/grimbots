@@ -279,23 +279,26 @@
 
     <!-- Meus Bots -->
     <div class="chart-container mb-8">
-        <div class="flex justify-between items-center mb-6">
+        <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 sm:gap-6 mb-6">
             <div>
-                <h2 class="text-2xl font-bold text-white">Meus Bots</h2>
-                <p class="text-sm text-gray-500 mt-1">
+                <h2 class="text-xl sm:text-2xl font-bold text-white">Meus Bots</h2>
+                <p class="text-xs sm:text-sm text-gray-500 mt-1">
                     <span x-text="filteredBots.length"></span> bot(s) configurado(s)
                 </p>
             </div>
-            <div class="flex gap-3">
+            <div class="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto">
                 <button @click="showGeneralRemarketingModal = true" 
-                        class="btn-action flex items-center"
+                        class="btn-action flex items-center justify-center flex-1 sm:flex-initial text-sm sm:text-base px-4 py-2.5 sm:py-3 whitespace-nowrap"
                         style="background: rgba(255, 184, 0, 0.1); color: #FFB800; border: 1px solid rgba(255, 184, 0, 0.3);">
-                    <i class="fas fa-broadcast-tower mr-2"></i>
-                    Remarketing Geral
+                    <i class="fas fa-broadcast-tower mr-1.5 sm:mr-2"></i>
+                    <span class="hidden sm:inline">Remarketing Geral</span>
+                    <span class="sm:hidden">Remarketing</span>
                 </button>
-                <button @click="showAddBotModal = true" class="btn-action btn-action-primary">
-                    <i class="fas fa-plus mr-2"></i>
-                    Adicionar Bot
+                <button @click="showAddBotModal = true" 
+                        class="btn-action btn-action-primary flex items-center justify-center flex-1 sm:flex-initial text-sm sm:text-base px-4 py-2.5 sm:py-3 whitespace-nowrap">
+                    <i class="fas fa-plus mr-1.5 sm:mr-2"></i>
+                    <span class="hidden sm:inline">Adicionar Bot</span>
+                    <span class="sm:hidden">Novo Bot</span>
                 </button>
             </div>
         </div>
