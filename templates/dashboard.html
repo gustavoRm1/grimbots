@@ -1005,6 +1005,16 @@ function dashboardApp() {
             });
             
             // ✅ ESCUTAR EVENTO DE PAGAMENTO ATUALIZADO
+            // ✅ LISTENER: Atualização de status de bot
+            socket.on('bot_status_update', (data) => {
+                console.log('🔔 Status do bot atualizado:', data);
+                const bot = this.bots.find(b => b.id === data.bot_id);
+                if (bot) {
+                    bot.is_running = data.is_running;
+                    console.log(`✅ Bot ${bot.name} agora está ${data.is_running ? 'Online' : 'Offline'}`);
+                }
+            });
+            
             socket.on('payment_update', (data) => {
                 console.log('💰 Nova venda!', data);
                 
