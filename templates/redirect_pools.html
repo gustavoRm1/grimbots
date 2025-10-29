@@ -863,7 +863,6 @@ function poolsApp() {
         showCreatePoolModal: false,
         showManageBotsModal: false,
         showMetaPixelModal: false,
-        showMetaPixelInfoModal: false,
         
         pools: [],
         allBots: [],
@@ -896,33 +895,6 @@ function poolsApp() {
             await this.loadPools();
             await this.loadBots();
             this.loading = false;
-            
-            // Verificar se deve mostrar modal de info do Meta Pixel
-            this.checkMetaPixelInfoModal();
-        },
-        
-        checkMetaPixelInfoModal() {
-            // Verificar se já viu o modal (localStorage)
-            const hasSeenMetaPixelInfo = localStorage.getItem('hasSeenMetaPixelInfo');
-            
-            // Verificar se tem algum pool sem Meta Pixel configurado
-            const hasPoolWithoutPixel = this.pools.some(pool => !pool.meta_tracking_enabled);
-            
-            // Mostrar modal se:
-            // 1. Nunca viu antes
-            // 2. Tem pelo menos 1 pool
-            // 3. Tem algum pool sem pixel configurado
-            if (!hasSeenMetaPixelInfo && this.pools.length > 0 && hasPoolWithoutPixel) {
-                setTimeout(() => {
-                    this.showMetaPixelInfoModal = true;
-                }, 1000); // Delay de 1s para não assustar o usuário
-            }
-        },
-        
-        closeMetaPixelInfo() {
-            this.showMetaPixelInfoModal = false;
-            // Marcar que já viu o modal
-            localStorage.setItem('hasSeenMetaPixelInfo', 'true');
         },
 
         async loadPools() {
