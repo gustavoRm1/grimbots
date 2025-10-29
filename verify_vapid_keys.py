@@ -41,13 +41,17 @@ if vapid_private:
     # Verificar se termina com caractere estranho (pode ter sido cortada)
     if vapid_private.endswith('>') or vapid_private.endswith('...'):
         print("   ❌ ERRO: Chave privada parece estar cortada!")
-        print("   ⚠️ Regere as chaves com: python generate_vapid_keys.py")
-    elif len(vapid_private) < 200:
-        print("   ⚠️ ATENÇÃO: Chave privada parece muito curta!")
-        print("   ⚠️ Esperado: ~300+ caracteres")
-        print("   ⚠️ Regere as chaves com: python generate_vapid_keys.py")
+        print("   ⚠️ Use: python setup_vapid_keys.py (configura automaticamente)")
+    elif len(vapid_private) < 160:
+        print("   ❌ ERRO: Chave privada muito curta (< 160 chars)!")
+        print("   ⚠️ Esperado: 160-200 caracteres (base64 DER)")
+        print("   ⚠️ Use: python setup_vapid_keys.py (configura automaticamente)")
+    elif len(vapid_private) > 300:
+        print("   ⚠️ ATENÇÃO: Chave privada muito longa (> 300 chars)")
+        print("   ℹ️ Pode estar em formato PEM ao invés de base64")
+        print("   ✅ Mas se funciona, está OK")
     else:
-        print("   ✅ Tamanho parece correto")
+        print("   ✅ Tamanho parece correto (160-300 chars é normal)")
 else:
     print("   ❌ NÃO CONFIGURADA")
 
@@ -61,13 +65,13 @@ else:
 print()
 print("="*70)
 
-if vapid_public and vapid_private and len(vapid_private) > 200 and not vapid_private.endswith('>'):
+if vapid_public and vapid_private and len(vapid_private) >= 160 and not vapid_private.endswith('>') and not vapid_private.endswith('...'):
     print("✅ Todas as chaves parecem estar corretas!")
     print("   Reinicie o servidor: systemctl restart grimbots")
 else:
     print("❌ Há problemas com as chaves!")
-    print("   Execute: python generate_vapid_keys.py")
-    print("   E copie COMPLETAMENTE todas as linhas geradas")
+    print("   Use: python setup_vapid_keys.py")
+    print("   (Configura automaticamente no .env, sem risco de cópia truncada)")
 
 print("="*70)
 

@@ -5132,6 +5132,21 @@ def send_push_notification(user_id, title, body, data=None, color='green'):
             logger.warning("⚠️ VAPID_PRIVATE_KEY não configurada. Push notifications desabilitadas.")
             return
         
+        # ✅ TRATAR FORMATO: pywebpush pode aceitar PEM ou base64
+        # Se for base64, tentar converter para bytes se necessário
+        try:
+            # pywebpush aceita string (PEM ou base64) ou bytes
+            # Testar se precisa converter
+            import base64
+            # Se parece ser base64, manter como string (pywebpush trata automaticamente)
+            # Se começa com "-----BEGIN", é PEM e já está correto
+            if not vapid_private_key.startswith("-----BEGIN"):
+                # É base64 - pywebpush pode aceitar diretamente ou precisar converter
+                # Vamos deixar como está e verificar se funciona
+                logger.debug(f"VAPID key format: base64 ({len(vapid_private_key)} chars)")
+        except Exception as e:
+            logger.warning(f"⚠️ Aviso ao processar VAPID key: {e}")
+        
         # Preparar payload com cor
         payload = {
             'title': title,

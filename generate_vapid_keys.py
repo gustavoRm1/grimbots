@@ -23,13 +23,13 @@ try:
         # Salvar chave privada (formato PEM)
         vapid.save_key(temp_private)
         
-        # Ler chave privada do arquivo
-        with open(temp_private, 'rb') as f:
-            private_key_pem = f.read()
+        # Ler chave privada do arquivo (formato PEM completo)
+        with open(temp_private, 'r') as f:
+            private_key_pem = f.read().strip()
         
-        # Carregar chave privada para extrair informações
+        # Carregar para extrair chave pública
         private_key_obj = serialization.load_pem_private_key(
-            private_key_pem,
+            private_key_pem.encode('utf-8'),
             password=None,
             backend=default_backend()
         )
@@ -38,7 +38,6 @@ try:
         public_key_obj = private_key_obj.public_key()
         
         # Converter chave pública para formato uncompressed point
-        # Formato: 0x04 + 64 bytes (X e Y coordenadas)
         public_key_uncompressed = public_key_obj.public_bytes(
             encoding=serialization.Encoding.X962,
             format=serialization.PublicFormat.UncompressedPoint
@@ -50,13 +49,22 @@ try:
         # Converter para base64 URL-safe (formato usado pela Web Push API)
         public_key = base64.urlsafe_b64encode(public_key_raw).decode('utf-8').rstrip('=')
         
-        # Para chave privada, converter para DER e depois base64
+        # ✅ MÉTODO ALTERNATIVO: Usar formato PEM diretamente para privada
+        # pywebpush aceita PEM ou pode extrair automaticamente
+        # Mas vamos usar base64 do PEM para facilitar armazenamento no .env
+        # Converter PEM para uma linha (remover quebras)
+        private_key_pem_one_line = private_key_pem.replace('\n', '\\n')
+        
+        # Ou converter DER para base64 (mais compacto)
         private_key_der = private_key_obj.private_bytes(
             encoding=serialization.Encoding.DER,
             format=serialization.PrivateFormat.PKCS8,
             encryption_algorithm=serialization.NoEncryption()
         )
-        private_key = base64.urlsafe_b64encode(private_key_der).decode('utf-8').rstrip('=')
+        private_key_base64 = base64.urlsafe_b64encode(private_key_der).decode('utf-8').rstrip('=')
+        
+        # Usar o formato base64 (mais fácil de armazenar no .env)
+        private_key = private_key_base64
         
     finally:
         # Limpar arquivo temporário
@@ -66,18 +74,23 @@ try:
     print("\n" + "="*70)
     print("✅ CHAVES GERADAS COM SUCESSO!")
     print("="*70)
+    print(f"\n📊 Informações:")
+    print(f"   Chave Pública: {len(public_key)} caracteres")
+    print(f"   Chave Privada: {len(private_key)} caracteres")
     print("\n📋 Adicione estas linhas ao seu arquivo .env:\n")
     print(f"VAPID_PUBLIC_KEY={public_key}")
     print(f"VAPID_PRIVATE_KEY={private_key}")
     print(f"VAPID_EMAIL=admin@grimbots.com")
     print("\n" + "="*70)
     print("⚠️ IMPORTANTE:")
-    print("1. Copie as linhas acima (as chaves são longas)")
-    print("2. Adicione ao arquivo .env na raiz do projeto:")
+    print("1. Copie TODAS as 3 linhas acima (sem quebrar as linhas!)")
+    print("2. No nano, cole tudo de uma vez (Ctrl+Shift+V)")
+    print("3. Certifique-se de que VAPID_PRIVATE_KEY está em UMA linha só")
+    print("4. Adicione ao arquivo .env:")
     print("   nano .env")
-    print("3. Reinicie o servidor:")
+    print("5. Reinicie o servidor:")
     print("   systemctl restart grimbots")
-    print("4. Verifique se funcionou:")
+    print("6. Verifique:")
     print("   python diagnose_push_notifications.py")
     print("="*70)
     
