@@ -117,19 +117,23 @@ self.addEventListener('push', (event) => {
             if (pushData.color === 'orange') {
                 // Pendente: Amarelo/Laranja (#FFB800)
                 bgColor = '#FFB800';
-                iconColor = '#FFB800';
                 notificationData.tag = 'pending-sale';
             } else {
                 // Aprovada: Verde (#10B981)
                 bgColor = '#10B981';
-                iconColor = '#10B981';
                 notificationData.tag = 'approved-sale';
             }
             
-            // Som (apenas Android, iOS não suporta som customizado em push)
-            if (pushData.sound !== false) {
-                notificationData.sound = '/static/sounds/money-drop.mp3';
-            }
+            // ✅ ANDROID: Configurações específicas
+            // Android requer image/icon no formato base64 ou URL válida
+            // Som: Android suporta som customizado, mas precisa estar acessível
+            // Vibrate: Android suporta padrões de vibração
+            notificationData.actions = [];
+            notificationData.requireInteraction = false; // Não bloquear até interação
+            notificationData.renotify = true; // Permitir notificações repetidas
+            
+            // Log para debug
+            console.log('[SW] Push data recebido:', pushData);
         } catch (e) {
             console.error('[SW] Erro ao parsear dados do push:', e);
         }

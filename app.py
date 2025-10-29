@@ -5151,23 +5151,34 @@ def send_push_notification(user_id, title, body, data=None, color='green'):
         sent_count = 0
         for subscription in subscriptions:
             try:
+                # Log detalhado para debug
+                logger.info(f"📤 Enviando push para subscription {subscription.id} (user {user_id})")
+                logger.debug(f"   Endpoint: {subscription.endpoint[:50]}...")
+                logger.debug(f"   Device: {subscription.device_info}")
+                logger.debug(f"   Payload: {payload}")
+                
                 webpush(
                     subscription_info=subscription.to_dict(),
                     data=json.dumps(payload),
                     vapid_private_key=vapid_private_key,
-                    vapid_claims=vapid_claims
+                    vapid_claims=vapid_claims,
+                    ttl=86400  # 24 horas - tempo de vida do push
                 )
                 subscription.last_used_at = datetime.now()
                 sent_count += 1
-                logger.debug(f"✅ Push enviado para subscription {subscription.id}")
+                logger.info(f"✅ Push enviado com sucesso para subscription {subscription.id}")
             except WebPushException as e:
                 logger.error(f"❌ Erro ao enviar push para subscription {subscription.id}: {e}")
+                # Log detalhado do erro
+                if hasattr(e, 'response') and e.response:
+                    logger.error(f"   Status Code: {e.response.status_code}")
+                    logger.error(f"   Response: {e.response.text[:200] if hasattr(e.response, 'text') else 'N/A'}")
                 # Se subscription inválida (404, 410), marcar como inativa
-                if e.response and e.response.status_code in [404, 410]:
+                if hasattr(e, 'response') and e.response and e.response.status_code in [404, 410]:
                     subscription.is_active = False
                     logger.info(f"🔄 Subscription {subscription.id} marcada como inativa (endpoint inválido)")
             except Exception as e:
-                logger.error(f"❌ Erro inesperado ao enviar push: {e}")
+                logger.error(f"❌ Erro inesperado ao enviar push: {e}", exc_info=True)
         
         # Salvar atualizações no banco
         if sent_count > 0:
