@@ -279,6 +279,11 @@
                 class="tab-button whitespace-nowrap flex-shrink-0">
             <i class="fas fa-crown mr-2"></i><span class="hidden sm:inline">Plano</span>
         </button>
+        <button @click="activeTab = 'notifications'" 
+                :class="{'active': activeTab === 'notifications'}"
+                class="tab-button whitespace-nowrap flex-shrink-0">
+            <i class="fas fa-bell mr-2"></i><span class="hidden sm:inline">Notificações</span>
+        </button>
     </div>
 
     <!-- Profile Tab -->
@@ -789,6 +794,57 @@
         </div>
     </div>
 
+    <!-- Notifications Tab -->
+    <div x-show="activeTab === 'notifications'" x-cloak>
+        <div class="chart-container">
+            <div class="flex items-center justify-between mb-6">
+                <div>
+                    <h3 class="text-2xl font-bold text-white">🔔 Notificações</h3>
+                    <p class="text-sm text-gray-500 mt-1">Configure quais notificações você quer receber</p>
+                </div>
+            </div>
+            <div class="space-y-3">
+                <label class="flex items-center justify-between p-4 rounded-lg" style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.1);">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background: rgba(16, 185, 129, 0.1);">
+                            <i class="fas fa-check-circle text-green-500"></i>
+                        </div>
+                        <div>
+                            <div class="text-sm font-semibold text-white">Vendas Aprovadas</div>
+                            <div class="text-xs text-gray-400">Receber notificação quando pagamento for confirmado</div>
+                        </div>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" 
+                               x-model="notificationSettings.notify_approved_sales"
+                               @change="saveNotificationSettings()"
+                               class="sr-only peer">
+                        <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
+                    </label>
+                </label>
+                
+                <label class="flex items-center justify-between p-4 rounded-lg" style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.1);">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background: rgba(255, 184, 0, 0.1);">
+                            <i class="fas fa-clock text-yellow-500"></i>
+                        </div>
+                        <div>
+                            <div class="text-sm font-semibold text-white">Vendas Pendentes</div>
+                            <div class="text-xs text-gray-400">Receber notificação quando pagamento estiver pendente</div>
+                        </div>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" 
+                               x-model="notificationSettings.notify_pending_sales"
+                               @change="saveNotificationSettings()"
+                               class="sr-only peer">
+                        <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-600"></div>
+                    </label>
+                </label>
+            </div>
+        </div>
+    </div>
+
 </div>
 {% endblock %}
 
@@ -809,14 +865,19 @@ function settingsApp() {
         },
         gateways: {
             pushynpay: { api_key: '' },
-            paradise: { api_key: '', offer_hash: '', product_hash: '' },
+            paradise: { api_key-reference: '', offer_hash: '', product_hash: '' },
             wiinpay: { api_key: '', split_user_id: '' }
         },
         editGateway: {},
         gatewaysList: [],
+        notificationSettings: {
+            notify_approved_sales: true,
+            notify_pending_sales: false
+        },
 
         async init() {
             await this.loadGateways();
+            await this.loadNotificationSettings();
         },
 
         async loadGateways() {
@@ -965,6 +1026,46 @@ function settingsApp() {
             notification.textContent = '✅ ' + message;
             document.body.appendChild(notification);
             setTimeout(() => notification.remove(), 3000);
+        },
+
+        // Carregar configurações de notificações
+        async loadNotificationSettings() {
+            try {
+                const response = await fetch('/api/notification-settings');
+                if (response.ok) {
+                    const data = await response.json();
+                    this.notificationSettings = {
+                        notify_approved_sales: data.notify_approved_sales ?? true,
+                        notify_pending_sales: data.notify_pending_sales ?? false
+                    };
+                    console.log('✅ Configurações de notificações carregadas:', this.notificationSettings);
+                }
+            } catch (error) {
+                console.error('❌ Erro ao carregar configurações:', error);
+            }
+        },
+        
+        // Salvar configurações de notificações
+        async saveNotificationSettings() {
+            try {
+                const response = await fetch('/api/notification-settings', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify(this.notificationSettings)
+                });
+                
+                if (response.ok) {
+                    this.showNotification('Configurações de notificações salvas!');
+                    console.log('✅ Configurações de notificações salvas!');
+                } else {
+                    console.error('❌ Erro ao salvar configurações:', await response.text());
+                }
+            } catch (error) {
+                console.error('❌ Erro ao salvar configurações:', error);
+            }
         }
     }
 }
