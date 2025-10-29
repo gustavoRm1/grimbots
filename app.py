@@ -5009,16 +5009,9 @@ def get_vapid_public_key():
     vapid_public_key = os.getenv('VAPID_PUBLIC_KEY')
     
     if not vapid_public_key:
-        logger.warning("⚠️ VAPID_PUBLIC_KEY não configurada. Gerando chaves temporárias...")
-        # Gerar chaves temporárias (não recomendado para produção)
-        try:
-            from py_vapid import Vapid01
-            vapid = Vapid01()
-            vapid.generate_keys()
-            vapid_public_key = vapid.public_key.public_bytes_raw().hex()
-            logger.warning("⚠️ Usando chaves temporárias. Configure VAPID_PUBLIC_KEY e VAPID_PRIVATE_KEY no .env")
-        except ImportError:
-            return jsonify({'error': 'VAPID keys não configuradas. Instale py-vapid: pip install py-vapid'}), 500
+        logger.warning("⚠️ VAPID_PUBLIC_KEY não configurada. Não é possível gerar chaves temporárias dinamicamente.")
+        logger.warning("⚠️ Configure VAPID_PUBLIC_KEY e VAPID_PRIVATE_KEY no .env")
+        return jsonify({'error': 'VAPID keys não configuradas. Execute: python generate_vapid_keys.py'}), 500
     
     return jsonify({'publicKey': vapid_public_key})
 
