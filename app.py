@@ -2318,7 +2318,7 @@ def get_bot_stats(bot_id):
     
     hours_stats = [{'hour': f"{int(h.hour):02d}:00", 'sales': h.sales} for h in peak_hours]
     
-    # 7. ÚLTIMAS VENDAS
+    # 7. ÚLTIMAS VENDAS (para lista de vendas)
     recent_sales = db.session.query(Payment).filter(
         Payment.bot_id == bot_id
     ).order_by(Payment.id.desc()).limit(20).all()
@@ -2343,6 +2343,24 @@ def get_bot_stats(bot_id):
         'os_type': getattr(p, 'os_type', None),
         'browser': getattr(p, 'browser', None)
     } for p in recent_sales]
+    
+    # 8. ✅ DADOS DEMOGRÁFICOS (TODAS AS VENDAS PAGAS - não apenas recent_sales)
+    # Buscar todas as vendas pagas com dados demográficos para analytics
+    all_paid_sales = db.session.query(Payment).filter(
+        Payment.bot_id == bot_id,
+        Payment.status == 'paid'
+    ).all()
+    
+    demographic_sales = [{
+        'customer_age': getattr(p, 'customer_age', None),
+        'customer_city': getattr(p, 'customer_city', None),
+        'customer_state': getattr(p, 'customer_state', None),
+        'customer_country': getattr(p, 'customer_country', None),
+        'customer_gender': getattr(p, 'customer_gender', None),
+        'device_type': getattr(p, 'device_type', None),
+        'os_type': getattr(p, 'os_type', None),
+        'browser': getattr(p, 'browser', None)
+    } for p in all_paid_sales]
     
     return jsonify({
         'general': {
@@ -2369,7 +2387,9 @@ def get_bot_stats(bot_id):
         },
         'daily_chart': daily_stats,
         'peak_hours': hours_stats,
-        'recent_sales': sales_list
+        'recent_sales': sales_list,
+        # ✅ DEMOGRAPHIC DATA (todas as vendas pagas para analytics)
+        'demographic_sales': demographic_sales
     })
 
 @app.route('/bots/<int:bot_id>/config')

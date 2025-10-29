@@ -1049,15 +1049,18 @@ function botStatsApp() {
         },
         
         updateDemographicCharts() {
-            if (!this.stats.recent_sales || this.stats.recent_sales.length === 0) {
+            // ✅ Usar demographic_sales (todas as vendas pagas) ou recent_sales como fallback
+            const salesData = this.stats.demographic_sales || this.stats.recent_sales || [];
+            
+            if (!salesData || salesData.length === 0) {
                 console.log('⏳ Aguardando dados demográficos...');
                 return;
             }
             
-            console.log('📊 Atualizando gráficos demográficos...');
+            console.log('📊 Atualizando gráficos demográficos...', salesData.length, 'vendas');
             
             // ===== DISTRIBUIÇÃO POR IDADE =====
-            const ageGroups = this.analyzeAgeDistribution();
+            const ageGroups = this.analyzeAgeDistribution(salesData);
             if (this.ageChart) this.ageChart.destroy();
             const ageCtx = document.getElementById('ageChart');
             if (ageCtx) {
@@ -1087,7 +1090,7 @@ function botStatsApp() {
             }
             
             // ===== DISTRIBUIÇÃO POR DEVICE =====
-            const deviceData = this.analyzeDeviceDistribution();
+            const deviceData = this.analyzeDeviceDistribution(salesData);
             if (this.deviceChart) this.deviceChart.destroy();
             const deviceCtx = document.getElementById('deviceChart');
             if (deviceCtx) {
@@ -1115,7 +1118,7 @@ function botStatsApp() {
             }
             
             // ===== DISTRIBUIÇÃO POR GÊNERO =====
-            const genderData = this.analyzeGenderDistribution();
+            const genderData = this.analyzeGenderDistribution(salesData);
             if (this.genderChart) this.genderChart.destroy();
             const genderCtx = document.getElementById('genderChart');
             if (genderCtx) {
@@ -1143,7 +1146,7 @@ function botStatsApp() {
             }
             
             // ===== TOP CIDADES =====
-            const cities = this.analyzeTopCities();
+            const cities = this.analyzeTopCities(salesData);
             const cityContainer = document.getElementById('cityData');
             if (cityContainer) {
                 cityContainer.innerHTML = cities.slice(0, 5).map((city, index) => `
@@ -1166,8 +1169,9 @@ function botStatsApp() {
             }
         },
         
-        analyzeAgeDistribution() {
-            const ages = this.stats.recent_sales
+        analyzeAgeDistribution(salesData = null) {
+            const sales = salesData || this.stats.recent_sales || [];
+            const ages = sales
                 .filter(s => s.customer_age)
                 .map(s => s.customer_age);
             
@@ -1188,9 +1192,10 @@ function botStatsApp() {
             return groups;
         },
         
-        analyzeDeviceDistribution() {
+        analyzeDeviceDistribution(salesData = null) {
+            const sales = salesData || this.stats.recent_sales || [];
             const devices = {};
-            this.stats.recent_sales
+            sales
                 .filter(s => s.device_type)
                 .forEach(s => {
                     const type = s.device_type;
@@ -1200,9 +1205,10 @@ function botStatsApp() {
             return devices;
         },
         
-        analyzeGenderDistribution() {
+        analyzeGenderDistribution(salesData = null) {
+            const sales = salesData || this.stats.recent_sales || [];
             const genders = {};
-            this.stats.recent_sales
+            sales
                 .filter(s => s.customer_gender)
                 .forEach(s => {
                     const gender = s.customer_gender;
@@ -1212,9 +1218,10 @@ function botStatsApp() {
             return genders;
         },
         
-        analyzeTopCities() {
+        analyzeTopCities(salesData = null) {
+            const sales = salesData || this.stats.recent_sales || [];
             const cities = {};
-            this.stats.recent_sales
+            sales
                 .filter(s => s.customer_city)
                 .forEach(s => {
                     const key = `${s.customer_city} - ${s.customer_state || 'N/A'}`;
