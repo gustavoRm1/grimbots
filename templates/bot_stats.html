@@ -277,32 +277,6 @@
         </div>
     </div>
     
-    <!-- Card 1: Lucro/Prejuízo HOJE (apenas para bots em pools) -->
-    <div class="config-section" x-show="analyticsV2.summary" style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(16, 185, 129, 0.02)); border-color: rgba(16, 185, 129, 0.3);" x-bind:style="analyticsV2.summary.status === 'loss' ? 'background: linear-gradient(135deg, rgba(239, 68, 68, 0.08), rgba(239, 68, 68, 0.02)); border-color: rgba(239, 68, 68, 0.3);' : ''">
-        <div class="flex items-center justify-between">
-            <div>
-                <div class="text-sm font-semibold text-gray-400 uppercase mb-2">💰 Resultado de Hoje</div>
-                <div class="flex items-baseline gap-4 mb-2">
-                    <div class="text-5xl font-black" x-bind:class="analyticsV2.summary.status === 'profit' ? 'text-green-400' : 'text-red-500'" x-text="'R$ ' + analyticsV2.summary.today_profit.toFixed(2)"></div>
-                    <div class="text-xl font-bold" x-bind:class="analyticsV2.summary.today_roi > 0 ? 'text-green-400' : 'text-red-500'" x-text="'ROI: ' + (analyticsV2.summary.today_roi > 0 ? '+' : '') + analyticsV2.summary.today_roi.toFixed(0) + '%'"></div>
-                </div>
-                <div class="flex gap-6 text-sm">
-                    <span class="text-gray-400">Faturou: <strong class="text-white" x-text="'R$ ' + analyticsV2.summary.today_revenue.toFixed(2)"></strong></span>
-                    <span class="text-gray-400">Gastou: <strong class="text-white" x-text="'R$ ' + analyticsV2.summary.today_spend.toFixed(2)"></strong></span>
-                    <span class="text-gray-400">Vendas: <strong class="text-white" x-text="analyticsV2.summary.today_sales"></strong></span>
-                </div>
-            </div>
-            <div class="text-right">
-                <div class="text-xs text-gray-500 mb-1">vs Ontem</div>
-                <div class="text-2xl font-bold" x-bind:class="analyticsV2.summary.revenue_change > 0 ? 'text-green-400' : 'text-red-400'" x-text="(analyticsV2.summary.revenue_change > 0 ? '+' : '') + analyticsV2.summary.revenue_change.toFixed(1) + '%'"></div>
-                <div class="text-xs" x-bind:class="analyticsV2.summary.revenue_change > 0 ? 'text-green-400' : 'text-red-400'">
-                    <i class="fas" x-bind:class="analyticsV2.summary.revenue_change > 0 ? 'fa-arrow-up' : 'fa-arrow-down'"></i>
-                    <span x-text="analyticsV2.summary.revenue_change > 0 ? 'Cresceu' : 'Caiu'"></span>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <!-- Card 2: Problemas (Ação Imediata) -->
     <div class="config-section" x-show="analyticsV2.problems && analyticsV2.problems.length > 0" style="background: linear-gradient(135deg, rgba(239, 68, 68, 0.08), rgba(239, 68, 68, 0.02)); border-color: rgba(239, 68, 68, 0.3);">
         <div class="config-section-header">
@@ -328,30 +302,6 @@
         </div>
     </div>
 
-    <!-- Card 3: Oportunidades (Escalar) -->
-    <div class="config-section" x-show="analyticsV2.opportunities && analyticsV2.opportunities.length > 0" style="background: linear-gradient(135deg, rgba(255, 184, 0, 0.08), rgba(255, 184, 0, 0.02)); border-color: rgba(255, 184, 0, 0.3);">
-        <div class="config-section-header">
-            <i class="fas fa-rocket text-2xl" style="color: var(--brand-gold-500);"></i>
-            <div>
-                <div class="config-section-title" style="color: var(--brand-gold-500);">🚀 Oportunidades</div>
-                <div class="config-section-description">Ações para escalar resultados</div>
-            </div>
-        </div>
-        <div class="space-y-3">
-            <template x-for="opp in analyticsV2.opportunities" :key="opp.title">
-                <div class="p-4 rounded-lg border bg-yellow-900/20 border-yellow-500/50">
-                    <div class="flex items-start justify-between gap-4">
-                        <div class="flex-1">
-                            <div class="font-bold text-white mb-1" x-text="opp.title"></div>
-                            <div class="text-sm text-gray-400 mb-2" x-text="opp.description"></div>
-                            <div class="text-xs text-yellow-300 italic" x-text="'⚡ ' + opp.action"></div>
-                        </div>
-                        <button class="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-black text-sm font-bold rounded-lg transition whitespace-nowrap" x-text="opp.action_button"></button>
-                    </div>
-                </div>
-            </template>
-        </div>
-    </div>
     
     <!-- Métricas Principais -->
     <div class="config-section">
