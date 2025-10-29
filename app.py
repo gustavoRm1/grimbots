@@ -1219,6 +1219,81 @@ def start_bot(bot_id):
         logger.error(f"Erro ao iniciar bot: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/bots/verify-status', methods=['POST'])
+@login_required
+@csrf.exempt
+def verify_bots_status():
+    """
+    API para verificar status REAL dos bots de forma assíncrona
+    Chamada pelo frontend após carregar dashboard (sem bloquear carregamento inicial)
+    """
+    try:
+        user_bots = Bot.query.filter_by(user_id=current_user.id).all()
+        
+        if not user_bots:
+            return jsonify({'bots': []})
+        
+        bots_status = []
+        bots_to_update = []
+        
+        for bot in user_bots:
+            # Verificar status em memória
+            status_memory = bot_manager.get_bot_status(bot.id, verify_telegram=False)
+            is_in_memory = status_memory.get('is_running', False)
+            
+            # Verificar status no Telegram (pode demorar)
+            status_telegram = bot_manager.get_bot_status(bot.id, verify_telegram=True)
+            is_running_telegram = status_telegram.get('is_running', False)
+            reason = status_telegram.get('reason')
+            
+            # Bot só está realmente online se ambas verificações passarem
+            # Mas se API falhar, manter status atual (não derrubar por erro de rede)
+            if not is_in_memory:
+                actual_is_running = False
+            elif is_running_telegram:
+                actual_is_running = True
+            elif reason in ('api_error', 'telegram_unreachable'):
+                # Erro de API: manter status atual do banco (não mudar por instabilidade)
+                actual_is_running = bot.is_running
+            else:
+                actual_is_running = False
+            
+            # Adicionar ao resultado
+            bots_status.append({
+                'id': bot.id,
+                'is_running': actual_is_running,
+                'verified': True
+            })
+            
+            # Marcar para atualizar banco se status mudou
+            if bot.is_running != actual_is_running:
+                bots_to_update.append((bot.id, actual_is_running))
+                bot.is_running = actual_is_running
+                
+                if not actual_is_running:
+                    bot.last_stopped = datetime.now()
+                    # Se estava em memória mas não responde, remover
+                    if is_in_memory and not is_running_telegram:
+                        try:
+                            bot_manager.stop_bot(bot.id)
+                        except:
+                            pass
+        
+        # Atualizar banco em batch
+        if bots_to_update:
+            db.session.commit()
+            logger.info(f"✅ Status verificado e atualizado: {len(bots_to_update)} bots corrigidos")
+        
+        return jsonify({
+            'bots': bots_status,
+            'updated_count': len(bots_to_update)
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Erro ao verificar status dos bots: {e}", exc_info=True)
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/bots/<int:bot_id>/stop', methods=['POST'])
 @login_required
 @csrf.exempt

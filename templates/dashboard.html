@@ -96,6 +96,21 @@
     letter-spacing: 0.5px;
 }
 
+.bot-status-verifying {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    background: rgba(251, 191, 36, 0.1);
+    border: 1px solid rgba(251, 191, 36, 0.3);
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #FBBF24;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
 /* Action Buttons */
 .btn-action {
     display: inline-flex;
@@ -517,10 +532,15 @@
                                     <p class="text-xs text-gray-500">@<span x-text="bot.username"></span></p>
                         </div>
                             </div>
-                            <span :class="bot.is_running ? 'bot-status-online' : 'bot-status-offline'">
+                            <span :class="botsStatusVerifying[bot.id] ? 'bot-status-verifying' : (bot.is_running ? 'bot-status-online' : 'bot-status-offline')">
                                 <span class="w-2 h-2 rounded-full" 
-                                      :class="bot.is_running ? 'bg-green-400 animate-pulse' : 'bg-gray-600'"></span>
+                                      :class="botsStatusVerifying[bot.id] ? 'bg-yellow-400 animate-pulse' : (bot.is_running ? 'bg-green-400 animate-pulse' : 'bg-gray-600')"></span>
+                                <template x-if="botsStatusVerifying[bot.id]">
+                                    <span>Verificando...</span>
+                                </template>
+                                <template x-if="!botsStatusVerifying[bot.id]">
                                     <span x-text="bot.is_running ? 'Online' : 'Offline'"></span>
+                                </template>
                         </span>
                     </div>
                     
@@ -1217,6 +1237,8 @@ function dashboardApp() {
             notify_approved_sales: true,
             notify_pending_sales: false
         },
+        // Estado de verificação de status dos bots
+        botsStatusVerifying: {},
 
         // Inicialização
         init() {
@@ -1267,6 +1289,11 @@ function dashboardApp() {
             
             // ✅ Carregar configurações de notificações
             this.loadNotificationSettings();
+            
+            // ✅ Verificar status dos bots de forma assíncrona (não bloqueia carregamento)
+            setTimeout(() => {
+                this.verifyBotsStatus();
+            }, 500); // Aguardar 500ms para dashboard carregar primeiro
             
             console.log('✅ Dashboard V2.0 pronto!');
         },
@@ -1834,6 +1861,60 @@ function dashboardApp() {
                 }
             } catch (error) {
                 console.error('❌ Erro ao recarregar bots:', error);
+            }
+        },
+        
+        // ✅ Verificar status dos bots de forma assíncrona
+        async verifyBotsStatus() {
+            try {
+                console.log('🔄 Verificando status dos bots...');
+                
+                // Marcar todos os bots como "verificando"
+                this.bots.forEach(bot => {
+                    this.$set(this.botsStatusVerifying, bot.id, true);
+                });
+                
+                const response = await fetch('/api/bots/verify-status', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Erro ao verificar status');
+                }
+                
+                const data = await response.json();
+                console.log('✅ Status verificado:', data);
+                
+                // Atualizar status dos bots
+                data.bots.forEach(botStatus => {
+                    const bot = this.bots.find(b => b.id === botStatus.id);
+                    if (bot) {
+                        bot.is_running = botStatus.is_running;
+                    }
+                    // Remover flag de verificação
+                    this.$delete(this.botsStatusVerifying, botStatus.id);
+                });
+                
+                // Se algum bot não foi retornado, remover flag também
+                Object.keys(this.botsStatusVerifying).forEach(botId => {
+                    if (!data.bots.find(b => b.id === parseInt(botId))) {
+                        this.$delete(this.botsStatusVerifying, botId);
+                    }
+                });
+                
+                if (data.updated_count > 0) {
+                    console.log(`✅ ${data.updated_count} bots tiveram status atualizado`);
+                }
+                
+            } catch (error) {
+                console.error('❌ Erro ao verificar status dos bots:', error);
+                // Remover todas as flags de verificação em caso de erro
+                this.bots.forEach(bot => {
+                    this.$delete(this.botsStatusVerifying, bot.id);
+                });
             }
         },
         
