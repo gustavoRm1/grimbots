@@ -185,25 +185,39 @@ def sync_bots_status():
                 # ✅ VERIFICAÇÃO 1: Status no BotManager (memória)
                 status_memory = bot_manager.get_bot_status(bot.id, verify_telegram=False)
                 is_running_in_memory = status_memory.get('is_running', False)
-                
+
                 # ✅ VERIFICAÇÃO 2: Bot REALMENTE responde no Telegram
                 status_telegram = bot_manager.get_bot_status(bot.id, verify_telegram=True)
                 is_running_telegram = status_telegram.get('is_running', False)
-                
-                # ✅ DECISÃO: Bot só está online se AMBAS verificações passarem
-                actual_is_running = is_running_in_memory and is_running_telegram
+                reason_telegram = status_telegram.get('reason')
+
+                # ✅ DECISÃO ROBUSTA CONTRA FALSOS NEGATIVOS:
+                # - Se API do Telegram falhar (api_error/timeout), NÃO derruba o bot.
+                # - Só marca offline automaticamente quando NÃO está rodando em memória.
+                if not is_running_in_memory:
+                    actual_is_running = False
+                else:
+                    # Em memória está rodando: só considera offline se verificação explícita falhar
+                    # e a razão NÃO for erro de API (instabilidade momentânea)
+                    if is_running_telegram:
+                        actual_is_running = True
+                    elif reason_telegram in ('api_error', 'telegram_unreachable'):
+                        # Tratamos como desconhecido, mas mantemos online para não causar queda indevida
+                        actual_is_running = True
+                    else:
+                        actual_is_running = False
                 
                 # Se bot está marcado como running mas não está realmente online, corrigir
                 if not actual_is_running:
                     bots_to_update.append(bot.id)
                     bot.is_running = False
                     bot.last_stopped = datetime.now()
-                    
+
                     reason = status_telegram.get('reason', 'unknown')
                     logger.info(f"🔴 Bot {bot.id} ({bot.name}) marcado como offline (memória: {is_running_in_memory}, telegram: {is_running_telegram}, motivo: {reason})")
-                    
-                    # Se bot estava em active_bots mas não responde, remover
-                    if is_running_in_memory and not is_running_telegram:
+
+                    # Remover de active_bots só quando realmente não está em memória (queda real)
+                    if not is_running_in_memory:
                         try:
                             bot_manager.stop_bot(bot.id)
                             logger.info(f"🧹 Bot {bot.id} removido de active_bots")
