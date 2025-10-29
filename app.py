@@ -160,6 +160,61 @@ scheduler.start()
 # Inicializar gerenciador de bots
 bot_manager = BotManager(socketio, scheduler)
 
+# ✅ JOB PERIÓDICO: Verificar e sincronizar status dos bots
+def sync_bots_status():
+    """
+    Verifica e corrige status dos bots periodicamente
+    
+    Roda a cada 30 segundos para garantir que bots que caíram
+    sejam marcados como offline automaticamente
+    """
+    try:
+        with app.app_context():
+            from models import Bot
+            
+            # Buscar todos os bots marcados como is_running=True
+            running_bots = Bot.query.filter_by(is_running=True).all()
+            
+            bots_to_update = []
+            for bot in running_bots:
+                # Verificar status real no BotManager
+                actual_status = bot_manager.get_bot_status(bot.id)
+                actual_is_running = actual_status.get('is_running', False)
+                
+                # Se bot está marcado como running mas não está ativo, corrigir
+                if not actual_is_running:
+                    bots_to_update.append(bot.id)
+                    bot.is_running = False
+                    bot.last_stopped = datetime.now()
+                    logger.info(f"🔴 Bot {bot.id} ({bot.name}) marcado como offline (não está ativo no BotManager)")
+            
+            if bots_to_update:
+                db.session.commit()
+                logger.info(f"✅ {len(bots_to_update)} bots sincronizados e marcados como offline")
+                
+                # Notificar via WebSocket
+                for bot_id in bots_to_update:
+                    bot = next((b for b in running_bots if b.id == bot_id), None)
+                    if bot:
+                        socketio.emit('bot_status_update', {
+                            'bot_id': bot_id,
+                            'is_running': False
+                        }, room=f'user_{bot.user_id}')
+    
+    except Exception as e:
+        logger.error(f"❌ Erro ao sincronizar status dos bots: {e}")
+
+# Registrar job periódico (a cada 30 segundos)
+scheduler.add_job(
+    id='sync_bots_status',
+    func=sync_bots_status,
+    trigger='interval',
+    seconds=30,
+    max_instances=1,
+    replace_existing=True
+)
+logger.info("✅ Job de sincronização de status dos bots configurado (30s)")
+
 # Registrar eventos WebSocket de gamificação
 if GAMIFICATION_V2_ENABLED:
     register_gamification_events(socketio)
