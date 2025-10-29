@@ -1270,30 +1270,38 @@ function dashboardApp() {
                 this.toggleBodyScroll(value);
             });
             
-            // ✅ FIX: Esperar DOM estar 100% pronto (Alpine.js $nextTick)
-            this.$nextTick(() => {
-                setTimeout(() => {
-            this.initChart();
-                    setTimeout(() => this.loadChartData(), 300);
-                }, 150);  // ✅ Delay maior para garantir renderização
-            });
-            
-            // Recarregar dados dos bots (garante dados atualizados após salvar config)
-            this.refreshBots();
-            
-            // ✅ CONECTAR WEBSOCKET PARA NOTIFICAÇÕES EM TEMPO REAL
+            // ✅ PERFORMANCE: Carregar apenas o essencial no início, resto em background
+            // Conectar WebSocket primeiro (não bloqueia)
             this.initWebSocket();
             
-            // ✅ REGISTRAR SERVICE WORKER (PWA - Push Notifications)
+            // ✅ REGISTRAR SERVICE WORKER (PWA - Push Notifications) - não bloqueia
             this.initPWA();
             
-            // ✅ Carregar configurações de notificações
+            // ✅ Carregar configurações de notificações - não bloqueia
             this.loadNotificationSettings();
             
-            // ✅ Verificar status dos bots de forma assíncrona (não bloqueia carregamento)
-            setTimeout(() => {
+            // ✅ CARREGAMENTO LAZY: Gráficos e verificações só DEPOIS que página carregar
+            // Usar requestIdleCallback se disponível, senão setTimeout
+            const loadInBackground = (callback) => {
+                if ('requestIdleCallback' in window) {
+                    requestIdleCallback(callback, { timeout: 1000 });
+                } else {
+                    setTimeout(callback, 1000);
+                }
+            };
+            
+            // Carregar gráfico após página estar interativa
+            loadInBackground(() => {
+                this.$nextTick(() => {
+                    this.initChart();
+                    setTimeout(() => this.loadChartData(), 200);
+                });
+            });
+            
+            // Verificar status dos bots após tudo carregado
+            loadInBackground(() => {
                 this.verifyBotsStatus();
-            }, 500); // Aguardar 500ms para dashboard carregar primeiro
+            });
             
             console.log('✅ Dashboard V2.0 pronto!');
         },

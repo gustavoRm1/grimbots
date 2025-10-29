@@ -519,30 +519,53 @@ def politica_privacidade():
 @login_required
 def dashboard():
     """Dashboard principal com modo simples/avançado"""
-    from sqlalchemy import func, case
+    from sqlalchemy import func
     from models import BotUser
     
-    # Query única otimizada para todas as estatísticas dos bots
-    # ✅ CORREÇÃO: Usar os campos já calculados do modelo Bot ao invés de JOIN
-    # Isso evita produto cartesiano quando há múltiplos BotUsers e Payments
-    bot_stats_query = db.session.query(
-        Bot.id,
-        Bot.name,
-        Bot.username,
-        Bot.is_running,
-        Bot.is_active,
-        Bot.created_at,
-        Bot.total_sales,  # ✅ Campo já calculado corretamente
-        Bot.total_revenue,  # ✅ Campo já calculado corretamente
-        func.count(func.distinct(BotUser.telegram_user_id)).label('total_users'),
-        func.count(func.distinct(case((Payment.status == 'pending', Payment.id)))).label('pending_sales')
-    ).outerjoin(BotUser, Bot.id == BotUser.bot_id)\
-     .outerjoin(Payment, Bot.id == Payment.bot_id)\
-     .filter(Bot.user_id == current_user.id)\
-     .group_by(Bot.id, Bot.name, Bot.username, Bot.is_running, Bot.is_active, Bot.created_at, Bot.total_sales, Bot.total_revenue)\
-     .order_by(Bot.created_at.desc())
+    # ✅ PERFORMANCE: Query simplificada - usar campos calculados do modelo Bot
+    # Evitar JOINs pesados no carregamento inicial, calcular contagens depois se necessário
+    bots = Bot.query.filter(Bot.user_id == current_user.id).order_by(Bot.created_at.desc()).all()
     
-    bot_stats = bot_stats_query.all()
+    # Calcular pending_sales e total_users de forma otimizada (queries separadas)
+    bot_ids = [b.id for b in bots]
+    pending_count_per_bot = {}
+    user_count_per_bot = {}
+    
+    if bot_ids:
+        # Query para pending_sales (mais leve que JOIN)
+        pending_counts = db.session.query(
+            Payment.bot_id,
+            func.count(Payment.id).label('count')
+        ).filter(
+            Payment.bot_id.in_(bot_ids),
+            Payment.status == 'pending'
+        ).group_by(Payment.bot_id).all()
+        
+        pending_count_per_bot = {bot_id: count for bot_id, count in pending_counts}
+        
+        # Query para total_users (mais leve que JOIN)
+        user_counts = db.session.query(
+            BotUser.bot_id,
+            func.count(func.distinct(BotUser.telegram_user_id)).label('count')
+        ).filter(BotUser.bot_id.in_(bot_ids)).group_by(BotUser.bot_id).all()
+        
+        user_count_per_bot = {bot_id: count for bot_id, count in user_counts}
+    
+    # Montar bot_stats sem JOIN pesado
+    bot_stats = []
+    for bot in bots:
+        bot_stats.append(type('BotStat', (), {
+            'id': bot.id,
+            'name': bot.name,
+            'username': bot.username,
+            'is_running': bot.is_running,
+            'is_active': bot.is_active,
+            'created_at': bot.created_at,
+            'total_sales': bot.total_sales,
+            'total_revenue': bot.total_revenue,
+            'total_users': user_count_per_bot.get(bot.id, 0),
+            'pending_sales': pending_count_per_bot.get(bot.id, 0)
+        })())
     
     # ✅ PERFORMANCE: Não fazer verificações síncronas de Telegram no carregamento
     # O job de background (sync_bots_status) já cuida de atualizar o status a cada 30s
@@ -569,13 +592,17 @@ def dashboard():
         'total_commission_paid': current_user.total_commission_paid
     }
     
-    # Últimos pagamentos (query otimizada com limit 20)
-    recent_payments = db.session.query(Payment).join(Bot).filter(
-        Bot.user_id == current_user.id
-    ).order_by(Payment.id.desc()).limit(20).all()
+    # ✅ PERFORMANCE: Últimos pagamentos - usar índices se disponíveis
+    # Se bot_ids já temos, filtrar diretamente por bot_id (mais rápido que JOIN)
+    if bot_ids:
+        recent_payments = db.session.query(Payment).filter(
+            Payment.bot_id.in_(bot_ids)
+        ).order_by(Payment.id.desc()).limit(20).all()
+    else:
+        recent_payments = []
     
     # Buscar configs de todos os bots de uma vez (otimizado)
-    bot_ids = [b.id for b in bot_stats]
+    # bot_ids já foi definido acima, reutilizar
     configs_dict = {}
     if bot_ids:
         configs = db.session.query(BotConfig).filter(BotConfig.bot_id.in_(bot_ids)).all()
