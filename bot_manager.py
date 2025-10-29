@@ -961,6 +961,8 @@ class BotManager:
                                         bot_user.os_type = device_info.get('os_type')
                                     if hasattr(bot_user, 'browser'):
                                         bot_user.browser = device_info.get('browser')
+                                    if hasattr(bot_user, 'device_model'):
+                                        bot_user.device_model = device_info.get('device_model')
                                     
                                     logger.info(f"📱 Device parseado: {device_info}")
                                     
@@ -2962,7 +2964,8 @@ Seu pagamento ainda não foi confirmado.
                         # ✅ DEVICE DATA (Copiar de bot_user se disponível, com fallback seguro)
                         device_type=getattr(bot_user, 'device_type', None) if bot_user else None,
                         os_type=getattr(bot_user, 'os_type', None) if bot_user else None,
-                        browser=getattr(bot_user, 'browser', None) if bot_user else None
+                        browser=getattr(bot_user, 'browser', None) if bot_user else None,
+                        device_model=getattr(bot_user, 'device_model', None) if bot_user else None
                     )
                     db.session.add(payment)
                     

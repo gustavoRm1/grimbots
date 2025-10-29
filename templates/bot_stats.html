@@ -572,8 +572,8 @@
                 <div class="flex items-center gap-3 mb-4">
                     <i class="fas fa-mobile-alt text-2xl text-green-500"></i>
                     <div>
-                        <div class="text-lg font-bold text-white">Device e OS</div>
-                        <div class="text-sm text-gray-400">Como seus clientes acessam</div>
+                        <div class="text-lg font-bold text-white">Dispositivos</div>
+                        <div class="text-sm text-gray-400">Modelos de dispositivos dos clientes</div>
                     </div>
                 </div>
                 <canvas id="deviceChart" style="max-height: 200px;"></canvas>
@@ -1089,10 +1089,11 @@ function botStatsApp() {
             const sales = salesData || this.stats.recent_sales || [];
             const devices = {};
             sales
-                .filter(s => s.device_type)
+                .filter(s => s.device_model || s.os_type)
                 .forEach(s => {
-                    const type = s.device_type;
-                    devices[type] = (devices[type] || 0) + 1;
+                    // Priorizar device_model (iPhone 14, Galaxy S23) ou usar os_type + device_type
+                    const label = s.device_model || `${s.os_type} (${s.device_type || 'mobile'})`;
+                    devices[label] = (devices[label] || 0) + 1;
                 });
             
             return devices;

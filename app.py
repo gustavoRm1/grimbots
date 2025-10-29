@@ -2341,7 +2341,8 @@ def get_bot_stats(bot_id):
         # ✅ DEVICE DATA (com fallback seguro)
         'device_type': getattr(p, 'device_type', None),
         'os_type': getattr(p, 'os_type', None),
-        'browser': getattr(p, 'browser', None)
+        'browser': getattr(p, 'browser', None),
+        'device_model': getattr(p, 'device_model', None)
     } for p in recent_sales]
     
     # 8. ✅ DADOS DEMOGRÁFICOS (TODAS AS VENDAS PAGAS - não apenas recent_sales)

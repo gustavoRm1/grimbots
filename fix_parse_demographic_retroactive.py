@@ -25,13 +25,15 @@ def fix_demographic_parsing():
             updated_location = False
             
             # 1. Parsear Device (User-Agent)
-            if not bot_user.device_type and bot_user.user_agent:
+            if (not bot_user.device_type or not bot_user.device_model) and bot_user.user_agent:
                 try:
                     device_info = parse_user_agent(bot_user.user_agent)
                     if device_info.get('device_type'):
                         bot_user.device_type = device_info.get('device_type')
                         bot_user.os_type = device_info.get('os_type')
                         bot_user.browser = device_info.get('browser')
+                        if device_info.get('device_model'):
+                            bot_user.device_model = device_info.get('device_model')
                         updated_device = True
                 except Exception as e:
                     parse_error_count += 1
@@ -122,6 +124,9 @@ def fix_demographic_parsing():
                 updated = True
             if not payment.browser and bot_user.browser:
                 payment.browser = bot_user.browser
+                updated = True
+            if not payment.device_model and bot_user.device_model:
+                payment.device_model = bot_user.device_model
                 updated = True
             
             if updated:

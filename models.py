@@ -841,6 +841,7 @@ class Payment(db.Model):
     device_type = db.Column(db.String(20), nullable=True)  # mobile/desktop
     os_type = db.Column(db.String(50), nullable=True)  # iOS/Android/Windows/Linux/macOS
     browser = db.Column(db.String(50), nullable=True)  # Chrome/Safari/Firefox
+    device_model = db.Column(db.String(100), nullable=True)  # iPhone 14 Pro, Galaxy S23, etc.
     
     # Datas
     created_at = db.Column(db.DateTime, default=get_brazil_time, index=True)
@@ -917,6 +918,7 @@ class BotUser(db.Model):
     device_type = db.Column(db.String(20), nullable=True)  # mobile/desktop
     os_type = db.Column(db.String(50), nullable=True)  # iOS/Android/Windows/Linux/macOS
     browser = db.Column(db.String(50), nullable=True)  # Chrome/Safari/Firefox
+    device_model = db.Column(db.String(100), nullable=True)  # iPhone 14 Pro, Galaxy S23, etc.
     
     # Datas
     first_interaction = db.Column(db.DateTime, default=get_brazil_time)
