@@ -530,40 +530,9 @@ def dashboard():
     
     bot_stats = bot_stats_query.all()
     
-    # ✅ VERIFICAÇÃO REAL: Sincronizar is_running com o estado real no BotManager E Telegram
-    bots_to_update = []
-    for bot_stat in bot_stats:
-        # Verificar status em memória
-        status_memory = bot_manager.get_bot_status(bot_stat.id, verify_telegram=False)
-        is_in_memory = status_memory.get('is_running', False)
-        
-        # ✅ VERIFICAÇÃO REAL: Bot responde no Telegram?
-        status_telegram = bot_manager.get_bot_status(bot_stat.id, verify_telegram=True)
-        is_running_telegram = status_telegram.get('is_running', False)
-        
-        # Bot só está realmente online se AMBAS verificações passarem
-        actual_is_running = is_in_memory and is_running_telegram
-        
-        # Se o estado no banco está diferente do estado real, corrigir
-        if bot_stat.is_running != actual_is_running:
-            bots_to_update.append((bot_stat.id, actual_is_running))
-    
-    # Atualizar no banco em batch
-    if bots_to_update:
-        for bot_id, new_status in bots_to_update:
-            db.session.query(Bot).filter_by(id=bot_id).update({'is_running': new_status})
-            if not new_status:
-                # Se marcando como offline, também remover de active_bots
-                try:
-                    bot_manager.stop_bot(bot_id)
-                except:
-                    pass
-        
-        db.session.commit()
-        logger.info(f"✅ Corrigidos {len(bots_to_update)} bots com status inconsistente")
-        
-        # Re-executar query para pegar status atualizado
-        bot_stats = bot_stats_query.all()
+    # ✅ PERFORMANCE: Não fazer verificações síncronas de Telegram no carregamento
+    # O job de background (sync_bots_status) já cuida de atualizar o status a cada 30s
+    # Isso evita múltiplas chamadas HTTP que tornam o dashboard lento
     
     # Estatísticas gerais (calculadas a partir dos bot_stats)
     total_users = sum(b.total_users for b in bot_stats)
@@ -647,37 +616,9 @@ def api_dashboard_stats():
     from sqlalchemy import func, case
     from models import BotUser, Bot
     
-    # Buscar bots do usuário
-    user_bots = Bot.query.filter_by(user_id=current_user.id).all()
-    
-    # ✅ SINCRONIZAR STATUS REAL: Verificar cada bot com BotManager E Telegram API
-    bots_to_update = []
-    for bot in user_bots:
-        # Verificar status em memória
-        status_memory = bot_manager.get_bot_status(bot.id, verify_telegram=False)
-        is_in_memory = status_memory.get('is_running', False)
-        
-        # ✅ VERIFICAÇÃO REAL: Bot responde no Telegram?
-        status_telegram = bot_manager.get_bot_status(bot.id, verify_telegram=True)
-        is_running_telegram = status_telegram.get('is_running', False)
-        
-        # Bot só está realmente online se AMBAS verificações passarem
-        actual_is_running = is_in_memory and is_running_telegram
-        
-        if bot.is_running != actual_is_running:
-            bots_to_update.append((bot.id, actual_is_running))
-            bot.is_running = actual_is_running
-            
-            # Se marcando como offline, remover de active_bots
-            if not actual_is_running and is_in_memory:
-                try:
-                    bot_manager.stop_bot(bot.id)
-                except:
-                    pass
-    
-    if bots_to_update:
-        db.session.commit()
-        logger.info(f"✅ Status sincronizado: {len(bots_to_update)} bots corrigidos")
+    # ✅ PERFORMANCE: Não fazer verificações síncronas de Telegram na API
+    # O job de background (sync_bots_status) já cuida de atualizar o status a cada 30s
+    # Isso evita múltiplas chamadas HTTP que tornam a API lenta
     
     # Query otimizada
     # ✅ CORREÇÃO: Usar campos calculados do modelo para evitar produto cartesiano
