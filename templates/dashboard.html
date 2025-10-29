@@ -148,6 +148,14 @@
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 16px;
     padding: 24px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+@media (min-width: 768px) {
+    .chart-container {
+        padding: 32px;
+    }
 }
 
 /* Table Premium */
@@ -212,6 +220,193 @@
     color: #FCA5A5;
     border: 1px solid rgba(239, 68, 68, 0.3);
 }
+
+/* ===================================================
+   RESPONSIVIDADE DESKTOP - CORREÇÕES
+   =================================================== */
+
+/* Garantir que o container principal seja responsivo */
+@media (min-width: 1024px) {
+    .max-w-7xl {
+        max-width: 80rem;
+        margin-left: auto;
+        margin-right: auto;
+    }
+}
+
+/* Grid de Stats Cards - Responsivo */
+@media (min-width: 768px) {
+    .grid.grid-cols-1.md\:grid-cols-3 {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+/* Grid de Bots - Responsivo */
+@media (min-width: 1024px) {
+    .grid.grid-cols-1.md\:grid-cols-2.lg\:grid-cols-3 {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+    .grid.grid-cols-1.md\:grid-cols-2.lg\:grid-cols-3 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+/* Chart Container - Responsivo */
+.chart-container {
+    min-height: auto;
+    width: 100%;
+}
+
+@media (min-width: 1280px) {
+    .chart-container {
+        padding: 32px;
+    }
+}
+
+/* Bot Cards - Ajustes Desktop */
+@media (min-width: 1024px) {
+    .bot-card {
+        min-width: 0;
+        width: 100%;
+        max-width: 100%;
+    }
+}
+
+/* Notificações - Responsivo */
+@media (min-width: 768px) {
+    .notification-settings .space-y-3 > label {
+        padding: 16px;
+    }
+}
+
+/* Table - Responsivo Desktop */
+@media (min-width: 768px) {
+    .table-premium {
+        width: 100%;
+        display: table;
+    }
+    
+    .table-premium thead {
+        display: table-header-group;
+    }
+    
+    .table-premium tbody {
+        display: table-row-group;
+    }
+}
+
+/* Garantir que espaçamentos sejam consistentes */
+@media (min-width: 1024px) {
+    .mb-8 {
+        margin-bottom: 2rem;
+    }
+    
+    .gap-4 {
+        gap: 1rem;
+    }
+    
+    .gap-6 {
+        gap: 1.5rem;
+    }
+}
+
+/* Fix para elementos que podem quebrar layout */
+* {
+    box-sizing: border-box;
+}
+
+/* Garantir que flex items não quebrem */
+.flex {
+    min-width: 0;
+}
+
+/* Fix para textos longos */
+.text-sm, .text-xs {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}
+
+/* Garantir que grids sejam responsivos */
+.grid {
+    display: grid;
+    width: 100%;
+}
+
+/* Fix para container principal - garantir padding correto */
+@media (min-width: 1280px) {
+    .max-w-7xl.mx-auto {
+        padding-left: 2rem;
+        padding-right: 2rem;
+    }
+}
+
+/* Garantir que bot-cards não quebrem layout */
+.bot-card {
+    width: 100%;
+    max-width: 100%;
+    overflow: hidden;
+}
+
+/* Fix para flex items que possam quebrar */
+.flex {
+    flex-wrap: nowrap;
+}
+
+@media (max-width: 767px) {
+    .flex {
+        flex-wrap: wrap;
+    }
+}
+
+/* Garantir que espaçamentos sejam consistentes */
+.space-y-3 > * + * {
+    margin-top: 0.75rem;
+}
+
+.space-y-2 > * + * {
+    margin-top: 0.5rem;
+}
+
+/* Fix para tabelas responsivas */
+@media (min-width: 768px) {
+    .table-premium {
+        table-layout: auto;
+        width: 100%;
+    }
+    
+    .table-premium th,
+    .table-premium td {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+}
+
+/* Garantir que modais sejam responsivos */
+@media (min-width: 768px) {
+    .fixed.inset-0.z-50 > .flex > div {
+        max-width: 42rem;
+    }
+}
+
+/* Fix para grids que podem quebrar em desktop grande */
+@media (min-width: 1536px) {
+    .grid.grid-cols-1.md\:grid-cols-3 {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    
+    .grid.grid-cols-1.md\:grid-cols-2.lg\:grid-cols-3 {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+/* Garantir altura mínima dos chart containers */
+.chart-container {
+    min-height: 200px;
+}
 </style>
 {% endblock %}
 
@@ -255,6 +450,7 @@
                 {{ stats.running_bots }}<span class="text-2xl text-gray-600">/{{ stats.total_bots }}</span>
             </div>
             <div class="text-sm text-gray-500">Bots ativos agora</div>
+    </div>
     </div>
         
     <!-- Configurações de Notificações -->
@@ -300,11 +496,11 @@
                            x-model="notificationSettings.notify_pending_sales"
                            @change="saveNotificationSettings()"
                            class="sr-only peer">
-                    <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-600" style="peer-checked:bg: #FFB800;"></div>
+                    <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-600"></div>
                 </label>
             </label>
         </div>
-    </div>
+        </div>
         
     <!-- Gráfico -->
     <div class="chart-container mb-8">
