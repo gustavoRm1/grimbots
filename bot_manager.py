@@ -220,10 +220,12 @@ class BotManager:
             token: Token do bot
             
         Returns:
-            Informações do bot
+            Dict com 'bot_info' e 'error_type' (None se OK)
+            Exemplo: {'bot_info': {...}, 'error_type': None}
+                   ou {'bot_info': None, 'error_type': 'banned'}
             
         Raises:
-            Exception: Se token for inválido
+            Exception: Se token for inválido (com error_type no exception)
         """
         try:
             url = f"https://api.telegram.org/bot{token}/getMe"
@@ -231,18 +233,47 @@ class BotManager:
             data = response.json()
             
             if not data.get('ok'):
-                raise Exception(data.get('description', 'Token inválido'))
+                error_description = data.get('description', 'Token inválido').lower()
+                error_code = data.get('error_code')
+                
+                # ✅ DETECÇÃO DE BANIMENTO
+                if error_code == 401 or 'unauthorized' in error_description:
+                    # Verificar se é banimento ou token inválido
+                    if any(keyword in error_description for keyword in ['revoked', 'blocked', 'banned', 'deactivated']):
+                        error = Exception('Bot foi banido ou token foi revogado')
+                        error.error_type = 'banned'
+                        raise error
+                    else:
+                        error = Exception('Token inválido ou expirado')
+                        error.error_type = 'invalid_token'
+                        raise error
+                else:
+                    error = Exception(data.get('description', 'Token inválido'))
+                    error.error_type = 'unknown'
+                    raise error
             
             bot_info = data.get('result', {})
             logger.info(f"Token validado: @{bot_info.get('username')}")
             
-            return bot_info
+            return {
+                'bot_info': bot_info,
+                'error_type': None
+            }
             
+        except requests.exceptions.Timeout:
+            error = Exception('Timeout ao conectar com API do Telegram')
+            error.error_type = 'connection_error'
+            raise error
         except requests.exceptions.RequestException as e:
             logger.error(f"Erro ao validar token: {e}")
-            raise Exception(f"Erro de conexão com API do Telegram: {str(e)}")
+            error = Exception(f"Erro de conexão com API do Telegram: {str(e)}")
+            error.error_type = 'connection_error'
+            raise error
         except Exception as e:
-            logger.error(f"Erro ao validar token: {e}")
+            # Se já tem error_type, preservar
+            if not hasattr(e, 'error_type'):
+                e.error_type = 'unknown'
+            logger.error(f"Erro ao validar token: {e} (tipo: {getattr(e, 'error_type', 'unknown')})")
             raise
     
     def start_bot(self, bot_id: int, token: str, config: Dict[str, Any]):

@@ -615,6 +615,69 @@
         </div>
     </div>
 
+    <!-- Modal: Bot Banido -->
+    <div x-show="showBannedBotModal" 
+         x-cloak
+         class="fixed inset-0 z-50 overflow-y-auto"
+         style="background: rgba(0, 0, 0, 0.95); backdrop-filter: blur(8px);">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div @click.away="showBannedBotModal = false" 
+                 class="relative bg-gray-900 rounded-2xl shadow-2xl max-w-lg w-full"
+                 style="border: 2px solid rgba(239, 68, 68, 0.5);">
+                
+                <!-- Header com ícone de erro -->
+                <div class="px-8 py-6 border-b border-gray-800 text-center" style="background: rgba(239, 68, 68, 0.05);">
+                    <div class="inline-flex items-center justify-center w-20 h-20 rounded-full bg-red-500 bg-opacity-20 mb-4" style="border: 3px solid rgba(239, 68, 68, 0.5);">
+                        <i class="fas fa-ban text-4xl" style="color: #EF4444;"></i>
+                    </div>
+                    <h3 class="text-2xl font-bold text-white mb-2">Bot Banido</h3>
+                    <p class="text-sm text-gray-400" x-text="bannedBotInfo?.bot_name || 'Bot'">Bot</p>
+                </div>
+                
+                <!-- Warning Box -->
+                <div class="px-8 py-6">
+                    <div class="bg-red-500 bg-opacity-10 border-l-4 border-red-500 rounded-lg p-4 mb-6">
+                        <p class="text-sm text-white font-semibold mb-2">
+                            <i class="fas fa-exclamation-triangle mr-2" style="color: #EF4444;"></i>
+                            Token do bot foi revogado ou o bot foi banido
+                        </p>
+                        <p class="text-sm text-gray-300 mt-2" x-text="bannedBotInfo?.message || ''">
+                            O bot foi banido ou o token foi revogado. Acesse as configurações do bot e atualize o token com um novo token do @BotFather.
+                        </p>
+                    </div>
+                    
+                    <!-- Instruções -->
+                    <div class="bg-gray-800 rounded-lg p-4 mb-6">
+                        <p class="text-sm font-semibold text-white mb-3">
+                            <i class="fas fa-list-ol mr-2 text-yellow-400"></i>
+                            Como resolver:
+                        </p>
+                        <ol class="text-sm text-gray-300 space-y-2 ml-6 list-decimal">
+                            <li>Acesse o <a href="https://t.me/BotFather" target="_blank" class="text-yellow-400 hover:underline">@BotFather</a> no Telegram</li>
+                            <li>Crie um novo bot com o comando <code class="bg-gray-700 px-2 py-1 rounded">/newbot</code></li>
+                            <li>Copie o novo token gerado</li>
+                            <li>Vá em "Configurar Bot" e atualize o token</li>
+                        </ol>
+                    </div>
+                    
+                    <!-- Botões -->
+                    <div class="flex gap-3">
+                        <button @click="showBannedBotModal = false" 
+                                class="flex-1 px-6 py-3 bg-transparent border border-gray-700 rounded-lg text-gray-400 font-bold hover:bg-gray-800 transition-colors">
+                            Fechar
+                        </button>
+                        <a :href="`/bots/${bannedBotInfo?.bot_id}/config`" 
+                           @click="showBannedBotModal = false"
+                           class="flex-1 px-6 py-3 bg-red-600 text-white rounded-lg font-bold hover:bg-red-700 transition-colors text-center">
+                            <i class="fas fa-cog mr-2"></i>
+                            Configurar Bot
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
 <!-- Modal: Remarketing Geral (Multi-Bot) -->
 <div x-show="showGeneralRemarketingModal" 
      x-cloak
@@ -907,6 +970,8 @@ function dashboardApp() {
         showAddBotModal: false,
         showDuplicateBotModal: false,
         showGeneralRemarketingModal: false,
+        showBannedBotModal: false,
+        bannedBotInfo: null,  // { bot_id, bot_name }
         newBotToken: '',
         newBotName: '',
         duplicateBotToken: '',
@@ -971,6 +1036,10 @@ function dashboardApp() {
             });
             
             this.$watch('showGeneralRemarketingModal', (value) => {
+                this.toggleBodyScroll(value);
+            });
+            
+            this.$watch('showBannedBotModal', (value) => {
                 this.toggleBodyScroll(value);
             });
             
@@ -1364,6 +1433,19 @@ function dashboardApp() {
                 } else {
                     const data = await response.json();
                     console.error('❌ Erro ao iniciar bot:', data);
+                    
+                    // ✅ DETECÇÃO DE BANIMENTO (QI 500)
+                    if (data.error_type === 'banned') {
+                        // Encontrar nome do bot
+                        const bot = this.bots.find(b => b.id === botId);
+                        this.bannedBotInfo = {
+                            bot_id: botId,
+                            bot_name: bot ? bot.name : `Bot #${botId}`,
+                            message: data.message || 'O bot foi banido ou o token foi revogado. Acesse as configurações do bot e atualize o token com um novo token do @BotFather.'
+                        };
+                        this.showBannedBotModal = true;
+                        return;
+                    }
                     
                     // Se o erro for de configuração, redirecionar
                     if (data.error && data.error.includes('Configure')) {

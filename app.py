@@ -925,7 +925,8 @@ def create_bot():
     
     try:
         # Validar token com a API do Telegram
-        bot_info = bot_manager.validate_token(token)
+        validation_result = bot_manager.validate_token(token)
+        bot_info = validation_result.get('bot_info')
         
         # Criar bot
         bot = Bot(
@@ -1015,7 +1016,8 @@ def update_bot_token(bot_id):
             logger.info(f"✅ Bot {bot_id} parado e cache limpo")
         
         # VALIDAÇÃO 4: Token válido no Telegram
-        bot_info = bot_manager.validate_token(new_token)
+        validation_result = bot_manager.validate_token(new_token)
+        bot_info = validation_result.get('bot_info')
         
         # Armazenar dados antigos para log
         old_token_preview = bot.token[:10] + '...'
@@ -1121,7 +1123,8 @@ def duplicate_bot(bot_id):
     
     try:
         # VALIDAÇÃO 4: Token válido no Telegram
-        bot_info = bot_manager.validate_token(new_token)
+        validation_result = bot_manager.validate_token(new_token)
+        bot_info = validation_result.get('bot_info')
         
         # Criar nome automático se não fornecido
         if not new_name:
@@ -1199,6 +1202,41 @@ def start_bot(bot_id):
     # Verificar se tem configuração
     if not bot.config or not bot.config.welcome_message:
         return jsonify({'error': 'Configure a mensagem de boas-vindas antes de iniciar'}), 400
+    
+    # ✅ VALIDAR TOKEN ANTES DE INICIAR (QI 500)
+    try:
+        validation_result = bot_manager.validate_token(bot.token)
+        if validation_result.get('error_type'):
+            error_type = validation_result.get('error_type')
+            return jsonify({
+                'error': 'Token do bot inválido ou banido',
+                'error_type': error_type,
+                'bot_id': bot.id
+            }), 400
+    except Exception as e:
+        error_type = getattr(e, 'error_type', 'unknown')
+        logger.error(f"❌ Token inválido/banido para bot {bot_id}: {e} (tipo: {error_type})")
+        
+        # Se for banimento, retornar resposta específica
+        if error_type == 'banned':
+            return jsonify({
+                'error': 'Bot foi banido pelo Telegram. É necessário trocar o token.',
+                'error_type': 'banned',
+                'bot_id': bot.id,
+                'message': 'O bot foi banido ou o token foi revogado. Acesse as configurações do bot e atualize o token com um novo token do @BotFather.'
+            }), 400
+        elif error_type == 'invalid_token':
+            return jsonify({
+                'error': 'Token inválido ou expirado',
+                'error_type': 'invalid_token',
+                'bot_id': bot.id
+            }), 400
+        else:
+            return jsonify({
+                'error': str(e),
+                'error_type': error_type,
+                'bot_id': bot.id
+            }), 400
     
     try:
         bot_manager.start_bot(bot.id, bot.token, bot.config.to_dict())
@@ -5131,7 +5169,13 @@ def health_check_all_pools():
                                 pool_bot.circuit_breaker_until = None  # Liberado
                         
                         # Health check no Telegram
-                        health = bot_manager.validate_token(pool_bot.bot.token)
+                        try:
+                            validation_result = bot_manager.validate_token(pool_bot.bot.token)
+                            if validation_result.get('error_type'):
+                                raise Exception('Token inválido')
+                        except Exception:
+                            # Token inválido ou banido
+                            raise
                         
                         # Bot está saudável
                         pool_bot.status = 'online'
