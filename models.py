@@ -66,6 +66,7 @@ class User(UserMixin, db.Model):
     # Relacionamentos
     bots = db.relationship('Bot', backref='owner', lazy='dynamic', cascade='all, delete-orphan')
     gateways = db.relationship('Gateway', backref='owner', lazy='dynamic', cascade='all, delete-orphan')
+    push_subscriptions = db.relationship('PushSubscription', backref='user', lazy='dynamic', cascade='all, delete-orphan')
     
     def set_password(self, password):
         """Define senha com hash"""
@@ -1137,3 +1138,79 @@ class UserAchievement(db.Model):
     __table_args__ = (
         db.UniqueConstraint('user_id', 'achievement_id', name='unique_user_achievement'),
     )
+
+
+class PushSubscription(db.Model):
+    """Subscription de Push Notification do usuário"""
+    __tablename__ = 'push_subscriptions'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    
+    # Dados da subscription (JSON)
+    endpoint = db.Column(db.Text, nullable=False, unique=True, index=True)
+    p256dh = db.Column(db.Text, nullable=False)  # Chave pública do cliente
+    auth = db.Column(db.Text, nullable=False)    # Auth secret
+    
+    # Metadata
+    user_agent = db.Column(db.String(500))
+    device_info = db.Column(db.String(200))  # "mobile", "desktop", etc
+    
+    # Status
+    is_active = db.Column(db.Boolean, default=True, index=True)
+    last_used_at = db.Column(db.DateTime)
+    
+    # Datas
+    created_at = db.Column(db.DateTime, default=get_brazil_time)
+    updated_at = db.Column(db.DateTime, default=get_brazil_time, onupdate=get_brazil_time)
+    
+    def to_dict(self):
+        """Converte para dict (formato Web Push API)"""
+        return {
+            'endpoint': self.endpoint,
+            'keys': {
+                'p256dh': self.p256dh,
+                'auth': self.auth
+            }
+        }
+    
+    def __repr__(self):
+        return f'<PushSubscription {self.id} user={self.user_id}>'
+
+
+class NotificationSettings(db.Model):
+    """Configurações de notificações do usuário (simples)"""
+    __tablename__ = 'notification_settings'
+    
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), primary_key=True)
+    
+    # Toggles simples (sem filtros, sem cooldown, sem limites)
+    notify_approved_sales = db.Column(db.Boolean, default=True, nullable=False)  # Vendas aprovadas
+    notify_pending_sales = db.Column(db.Boolean, default=False, nullable=False)  # Vendas pendentes (default: off)
+    
+    # Datas
+    created_at = db.Column(db.DateTime, default=get_brazil_time)
+    updated_at = db.Column(db.DateTime, default=get_brazil_time, onupdate=get_brazil_time)
+    
+    # Relacionamento
+    user = db.relationship('User', backref='notification_settings')
+    
+    @classmethod
+    def get_or_create(cls, user_id):
+        """Busca ou cria settings para o usuário"""
+        settings = cls.query.filter_by(user_id=user_id).first()
+        if not settings:
+            settings = cls(user_id=user_id)
+            db.session.add(settings)
+            db.session.commit()
+        return settings
+    
+    def to_dict(self):
+        """Converte para dict"""
+        return {
+            'notify_approved_sales': self.notify_approved_sales,
+            'notify_pending_sales': self.notify_pending_sales
+        }
+    
+    def __repr__(self):
+        return f'<NotificationSettings user={self.user_id} approved={self.notify_approved_sales} pending={self.notify_pending_sales}>'

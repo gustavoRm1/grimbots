@@ -6,7 +6,7 @@ Sistema de gerenciamento de bots do Telegram com painel web
 from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, abort, session
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from flask_socketio import SocketIO, emit, join_room, leave_room
-from models import db, User, Bot, BotConfig, Gateway, Payment, AuditLog, Achievement, UserAchievement, BotUser, RedirectPool, PoolBot, RemarketingCampaign, RemarketingBlacklist
+from models import db, User, Bot, BotConfig, Gateway, Payment, AuditLog, Achievement, UserAchievement, BotUser, RedirectPool, PoolBot, RemarketingCampaign, RemarketingBlacklist, PushSubscription, NotificationSettings
 from bot_manager import BotManager
 from datetime import datetime, timedelta
 from functools import wraps
@@ -4902,6 +4902,14 @@ Aproveite! 🚀
                     'customer_name': payment.customer_name
                 }, room=f'user_{payment.bot.user_id}')
                 
+                # ✅ ENVIAR NOTIFICAÇÃO DE VENDA (respeita configurações do usuário)
+                if status == 'paid':
+                    send_sale_notification(
+                        user_id=payment.bot.user_id,
+                        payment=payment,
+                        status='approved'
+                    )
+                
                 logger.info(f"💰 Pagamento atualizado: {payment.payment_id} - {status}")
         
         return jsonify({'status': 'success'}), 200
@@ -4926,6 +4934,269 @@ def handle_disconnect():
     if current_user.is_authenticated:
         leave_room(f'user_{current_user.id}')
         logger.info(f"User {current_user.id} desconectado via WebSocket")
+
+# ==================== PWA PUSH NOTIFICATIONS ====================
+
+@app.route('/api/push/vapid-public-key', methods=['GET'])
+@login_required
+def get_vapid_public_key():
+    """Retorna chave pública VAPID para registro de subscription"""
+    # Chaves VAPID devem ser geradas e configuradas em variáveis de ambiente
+    vapid_public_key = os.getenv('VAPID_PUBLIC_KEY')
+    
+    if not vapid_public_key:
+        logger.warning("⚠️ VAPID_PUBLIC_KEY não configurada. Gerando chaves temporárias...")
+        # Gerar chaves temporárias (não recomendado para produção)
+        try:
+            from py_vapid import Vapid01
+            vapid = Vapid01()
+            vapid.generate_keys()
+            vapid_public_key = vapid.public_key.public_bytes_raw().hex()
+            logger.warning("⚠️ Usando chaves temporárias. Configure VAPID_PUBLIC_KEY e VAPID_PRIVATE_KEY no .env")
+        except ImportError:
+            return jsonify({'error': 'VAPID keys não configuradas. Instale py-vapid: pip install py-vapid'}), 500
+    
+    return jsonify({'publicKey': vapid_public_key})
+
+@app.route('/api/push/subscribe', methods=['POST'])
+@login_required
+@csrf.exempt
+def subscribe_push():
+    """Registra subscription de Push Notification do usuário"""
+    try:
+        data = request.get_json()
+        subscription = data.get('subscription')
+        
+        if not subscription:
+            return jsonify({'error': 'Subscription não fornecida'}), 400
+        
+        endpoint = subscription.get('endpoint')
+        keys = subscription.get('keys', {})
+        
+        if not endpoint or not keys.get('p256dh') or not keys.get('auth'):
+            return jsonify({'error': 'Dados de subscription inválidos'}), 400
+        
+        # Verificar se já existe subscription com este endpoint
+        existing = PushSubscription.query.filter_by(endpoint=endpoint, user_id=current_user.id).first()
+        
+        if existing:
+            # Atualizar existente
+            existing.p256dh = keys['p256dh']
+            existing.auth = keys['auth']
+            existing.user_agent = data.get('user_agent', request.headers.get('User-Agent', ''))
+            existing.device_info = data.get('device_info', 'unknown')
+            existing.is_active = True
+            existing.updated_at = datetime.now()
+            logger.info(f"✅ Subscription atualizada para user {current_user.id}")
+        else:
+            # Criar nova
+            new_subscription = PushSubscription(
+                user_id=current_user.id,
+                endpoint=endpoint,
+                p256dh=keys['p256dh'],
+                auth=keys['auth'],
+                user_agent=data.get('user_agent', request.headers.get('User-Agent', '')),
+                device_info=data.get('device_info', 'unknown'),
+                is_active=True
+            )
+            db.session.add(new_subscription)
+            logger.info(f"✅ Nova subscription registrada para user {current_user.id}")
+        
+        db.session.commit()
+        return jsonify({'message': 'Subscription registrada com sucesso'}), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"❌ Erro ao registrar subscription: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/push/unsubscribe', methods=['POST'])
+@login_required
+@csrf.exempt
+def unsubscribe_push():
+    """Remove subscription de Push Notification"""
+    try:
+        data = request.get_json()
+        endpoint = data.get('endpoint')
+        
+        if not endpoint:
+            return jsonify({'error': 'Endpoint não fornecido'}), 400
+        
+        subscription = PushSubscription.query.filter_by(
+            endpoint=endpoint,
+            user_id=current_user.id
+        ).first()
+        
+        if subscription:
+            subscription.is_active = False
+            db.session.commit()
+            logger.info(f"✅ Subscription desativada para user {current_user.id}")
+            return jsonify({'message': 'Subscription removida com sucesso'}), 200
+        else:
+            return jsonify({'error': 'Subscription não encontrada'}), 404
+            
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"❌ Erro ao remover subscription: {e}")
+        return jsonify({'error': str(e)}), 500
+
+def send_push_notification(user_id, title, body, data=None, color='green'):
+    """
+    Envia Push Notification para todas as subscriptions ativas do usuário
+    
+    Args:
+        user_id: ID do usuário
+        title: Título da notificação
+        body: Corpo da notificação
+        data: Dados adicionais (dict)
+        color: Cor da notificação ('green' para aprovada, 'orange' para pendente)
+    """
+    try:
+        from pywebpush import webpush, WebPushException
+        import json
+        
+        # Buscar todas as subscriptions ativas do usuário
+        subscriptions = PushSubscription.query.filter_by(
+            user_id=user_id,
+            is_active=True
+        ).all()
+        
+        if not subscriptions:
+            logger.debug(f"⚠️ Nenhuma subscription ativa para user {user_id}")
+            return
+        
+        # Chave privada VAPID
+        vapid_private_key = os.getenv('VAPID_PRIVATE_KEY')
+        vapid_claims = {
+            "sub": f"mailto:{os.getenv('VAPID_EMAIL', 'admin@grimbots.com')}"
+        }
+        
+        if not vapid_private_key:
+            logger.warning("⚠️ VAPID_PRIVATE_KEY não configurada. Push notifications desabilitadas.")
+            return
+        
+        # Preparar payload com cor
+        payload = {
+            'title': title,
+            'body': body,
+            'data': data or {},
+            'color': color  # 'green' ou 'orange'
+        }
+        
+        # Enviar para cada subscription
+        sent_count = 0
+        for subscription in subscriptions:
+            try:
+                webpush(
+                    subscription_info=subscription.to_dict(),
+                    data=json.dumps(payload),
+                    vapid_private_key=vapid_private_key,
+                    vapid_claims=vapid_claims
+                )
+                subscription.last_used_at = datetime.now()
+                sent_count += 1
+                logger.debug(f"✅ Push enviado para subscription {subscription.id}")
+            except WebPushException as e:
+                logger.error(f"❌ Erro ao enviar push para subscription {subscription.id}: {e}")
+                # Se subscription inválida (404, 410), marcar como inativa
+                if e.response and e.response.status_code in [404, 410]:
+                    subscription.is_active = False
+                    logger.info(f"🔄 Subscription {subscription.id} marcada como inativa (endpoint inválido)")
+            except Exception as e:
+                logger.error(f"❌ Erro inesperado ao enviar push: {e}")
+        
+        # Salvar atualizações no banco
+        if sent_count > 0:
+            db.session.commit()
+        
+        logger.info(f"📱 Push notifications enviadas: {sent_count}/{len(subscriptions)} para user {user_id}")
+        
+    except ImportError:
+        logger.error("❌ pywebpush não instalado. Execute: pip install pywebpush")
+    except Exception as e:
+        logger.error(f"❌ Erro ao enviar push notifications: {e}")
+
+def send_sale_notification(user_id, payment, status='approved'):
+    """
+    Envia notificação de venda (pendente ou aprovada) conforme configurações do usuário spread
+    
+    Args:
+        user_id: ID do usuário
+        payment: Objeto Payment
+        status: 'approved' ou 'pending'
+    """
+    try:
+        # Buscar configurações do usuário
+        settings = NotificationSettings.get_or_create(user_id)
+        
+        if status == 'approved':
+            if not settings.notify_approved_sales:
+                return  # Usuário desativou notificações de vendas aprovadas
+            
+            send_push_notification(
+                user_id=user_id,
+                title='💰 Venda Aprovada!',
+                body=f'Você recebeu: R$ {payment.amount:.2f}',
+                data={
+                    'payment_id': payment.payment_id,
+                    'amount': float(payment.amount),
+                    'bot_id': payment.bot_id,
+                    'url': '/dashboard'
+                },
+                color='green'  # Verde (#10B981)
+            )
+            
+        elif status == 'pending':
+            if not settings.notify_pending_sales:
+                return  # Usuário desativou notificações de vendas pendentes
+            
+            send_push_notification(
+                user_id=user_id,
+                title='🔄 Venda Pendente',
+                body=f'Aguardando pagamento: R$ {payment.amount:.2f}',
+                data={
+                    'payment_id': payment.payment_id,
+                    'amount': float(payment.amount),
+                    'bot_id': payment.bot_id,
+                    'url': '/dashboard'
+                },
+                color='orange'  # Amarelo/Laranja (#FFB800)
+            )
+            
+    except Exception as e:
+        logger.error(f"❌ Erro ao enviar notificação de venda: {e}")
+
+@app.route('/api/notification-settings', methods=['GET'])
+@login_required
+def get_notification_settings():
+    """Retorna configurações de notificações do usuário"""
+    settings = NotificationSettings.get_or_create(current_user.id)
+    return jsonify(settings.to_dict())
+
+@app.route('/api/notification-settings', methods=['PUT'])
+@login_required
+@csrf.exempt
+def update_notification_settings():
+    """Atualiza configurações de notificações do usuário"""
+    try:
+        data = request.get_json()
+        settings = NotificationSettings.get_or_create(current_user.id)
+        
+        if 'notify_approved_sales' in data:
+            settings.notify_approved_sales = bool(data['notify_approved_sales'])
+        if 'notify_pending_sales' in data:
+            settings.notify_pending_sales = bool(data['notify_pending_sales'])
+        
+        settings.updated_at = datetime.now()
+        db.session.commit()
+        
+        logger.info(f"✅ Configurações de notificações atualizadas para user {current_user.id}")
+        return jsonify(settings.to_dict())
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"❌ Erro ao atualizar configurações: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @socketio.on('subscribe_bot')
 def handle_subscribe_bot(data):

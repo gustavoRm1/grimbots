@@ -3009,7 +3009,7 @@ Seu pagamento ainda não foi confirmado.
                     
                     # NOTIFICAR VIA WEBSOCKET (tempo real - BROADCAST para todos do usuário)
                     try:
-                        from app import socketio, app
+                        from app import socketio, app, send_sale_notification
                         from models import Bot
                         
                         with app.app_context():
@@ -3025,6 +3025,13 @@ Seu pagamento ainda não foi confirmado.
                                     'created_at': payment.created_at.isoformat()
                                 })
                                 logger.info(f"📡 Evento 'new_sale' emitido - R$ {amount}")
+                                
+                                # ✅ NOTIFICAR VENDA PENDENTE (Push Notification - respeita configurações)
+                                send_sale_notification(
+                                    user_id=bot.user_id,
+                                    payment=payment,
+                                    status='pending'
+                                )
                     except Exception as ws_error:
                         logger.warning(f"⚠️ Erro ao emitir WebSocket: {ws_error}")
                     

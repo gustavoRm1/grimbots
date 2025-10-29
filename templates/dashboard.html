@@ -256,7 +256,55 @@
             </div>
             <div class="text-sm text-gray-500">Bots ativos agora</div>
     </div>
+        
+    <!-- Configurações de Notificações -->
+    <div class="chart-container mb-8">
+        <div class="flex items-center justify-between mb-4">
+            <div>
+                <h3 class="text-lg font-bold text-white">🔔 Notificações</h3>
+                <p class="text-xs text-gray-500 mt-1">Configure quais notificações você quer receber</p>
+            </div>
         </div>
+        <div class="space-y-3">
+            <label class="flex items-center justify-between p-3 rounded-lg" style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.1);">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background: rgba(16, 185, 129, 0.1);">
+                        <i class="fas fa-check-circle text-green-500"></i>
+                    </div>
+                    <div>
+                        <div class="text-sm font-semibold text-white">Vendas Aprovadas</div>
+                        <div class="text-xs text-gray-400">Receber notificação quando pagamento for confirmado</div>
+                    </div>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" 
+                           x-model="notificationSettings.notify_approved_sales"
+                           @change="saveNotificationSettings()"
+                           class="sr-only peer">
+                    <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
+                </label>
+            </label>
+            
+            <label class="flex items-center justify-between p-3 rounded-lg" style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.1);">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background: rgba(255, 184, 0, 0.1);">
+                        <i class="fas fa-clock text-yellow-500"></i>
+                    </div>
+                    <div>
+                        <div class="text-sm font-semibold text-white">Vendas Pendentes</div>
+                        <div class="text-xs text-gray-400">Receber notificação quando cliente gerar pagamento PIX</div>
+                    </div>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" 
+                           x-model="notificationSettings.notify_pending_sales"
+                           @change="saveNotificationSettings()"
+                           class="sr-only peer">
+                    <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-600" style="peer-checked:bg: #FFB800;"></div>
+                </label>
+            </label>
+        </div>
+    </div>
         
     <!-- Gráfico -->
     <div class="chart-container mb-8">
@@ -1015,8 +1063,11 @@ function dashboardApp() {
         },
         
         salesChart: null,
-        // Controle simples de som (cooldown curto para evitar spam)
-        _lastSaleSoundAt: 0,
+        // Configurações de notificações
+        notificationSettings: {
+            notify_approved_sales: true,
+            notify_pending_sales: false
+        },
 
         // Inicialização
         init() {
@@ -1062,6 +1113,12 @@ function dashboardApp() {
             // ✅ CONECTAR WEBSOCKET PARA NOTIFICAÇÕES EM TEMPO REAL
             this.initWebSocket();
             
+            // ✅ REGISTRAR SERVICE WORKER (PWA - Push Notifications)
+            this.initPWA();
+            
+            // ✅ Carregar configurações de notificações
+            this.loadNotificationSettings();
+            
             console.log('✅ Dashboard V2.0 pronto!');
         },
         
@@ -1106,8 +1163,10 @@ function dashboardApp() {
                         created_at: new Date().toISOString()
                     });
                     
-                    // Mostrar notificação toast (mobile-friendly)
-                    this.showSaleNotification(data);
+                    // Mostrar notificação toast in-app (se configuração permitir)
+                    if (this.notificationSettings.notify_approved_sales) {
+                        this.showSaleNotification({...data, status: 'paid'});
+                    }
                 }
                 
                 // Atualizar gráfico
@@ -1117,16 +1176,259 @@ function dashboardApp() {
                 this.refreshBots();
             });
             
+            // ✅ ESCUTAR VENDAS PENDENTES (quando cria PIX)
+            socket.on('new_sale', (data) => {
+                console.log('🔄 Nova venda pendente!', data);
+                
+                // Mostrar notificação in-app (se configuração permitir) - IMEDIATO!
+                if (this.notificationSettings.notify_pending_sales) {
+                    this.showSaleNotification({
+                        ...data,
+                        status: 'pending',
+                        amount: data.amount || 0
+                    });
+                }
+            });
+            
             socket.on('disconnect', () => {
                 console.log('🔌 WebSocket desconectado!');
             });
         },
         
-        // ✅ Mostrar notificação de venda no mobile
+        // ✅ PWA - Service Worker e Push Notifications
+        async initPWA() {
+            if ('serviceWorker' in navigator) {
+                try {
+                    // Registrar Service Worker
+                    const registration = await navigator.serviceWorker.register('/static/sw.js');
+                    console.log('✅ Service Worker registrado:', registration.scope);
+                    
+                    // Verificar se já está instalado
+                    if (registration.installing) {
+                        console.log('⏳ Service Worker instalando...');
+                    } else if (registration.waiting) {
+                        console.log('⏳ Service Worker aguardando...');
+                    } else if (registration.active) {
+                        console.log('✅ Service Worker ativo!');
+                    }
+                    
+                    // Solicitar permissão de notificações
+                    await this.requestNotificationPermission(registration);
+                    
+                    // Verificar atualizações
+                    registration.addEventListener('updatefound', () => {
+                        console.log('🔄 Nova versão do Service Worker encontrada!');
+                        const newWorker = registration.installing;
+                        newWorker.addEventListener('statechange', () => {
+                            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                console.log('🔄 Nova versão disponível! Recarregando...');
+                                window.location.reload();
+                            }
+                        });
+                    });
+                    
+                } catch (error) {
+                    console.error('❌ Erro ao registrar Service Worker:', error);
+                }
+            } else {
+                console.warn('⚠️ Service Worker não suportado neste navegador');
+            }
+        },
+        
+        // Solicitar permissão de notificações e registrar subscription
+        async requestNotificationPermission(registration) {
+            if (!('Notification' in window)) {
+                console.warn('⚠️ Notificações não suportadas');
+                return;
+            }
+            
+            // Verificar se já tem permissão
+            if (Notification.permission === 'granted') {
+                console.log('✅ Permissão de notificações já concedida');
+                await this.subscribeToPush(registration);
+                return;
+            }
+            
+            // Se não foi negada, solicitar
+            if (Notification.permission !== 'denied') {
+                try {
+                    const permission = await Notification.requestPermission();
+                    if (permission === 'granted') {
+                        console.log('✅ Permissão de notificações concedida!');
+                        await this.subscribeToPush(registration);
+                    } else {
+                        console.log('❌ Permissão de notificações negada');
+                    }
+                } catch (error) {
+                    console.error('❌ Erro ao solicitar permissão:', error);
+                }
+            }
+        },
+        
+        // Registrar subscription para Push Notifications
+        async subscribeToPush(registration) {
+            try {
+                // Buscar chave VAPID do backend
+                const vapidPublicKey = await this.getVAPIDPublicKey();
+                if (!vapidPublicKey) {
+                    console.warn('⚠️ Chave VAPID não disponível');
+                    return;
+                }
+                
+                const subscription = await registration.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: this.urlBase64ToUint8Array(vapidPublicKey)
+                });
+                
+                console.log('✅ Subscription criada:', subscription.endpoint);
+                
+                // Enviar subscription para o backend
+                await this.sendSubscriptionToServer(subscription);
+                
+            } catch (error) {
+                if (error.name === 'NotAllowedError') {
+                    console.warn('⚠️ Push subscription não permitida');
+                } else {
+                    console.error('❌ Erro ao criar subscription:', error);
+                }
+            }
+        },
+        
+        // Converter chave VAPID de base64 para Uint8Array
+        urlBase64ToUint8Array(base64String) {
+            const padding = '='.repeat((4 - base64String.length % 4) % 4);
+            const base64 = (base64String + padding)
+                .replace(/\-/g, '+')
+                .replace(/_/g, '/');
+            
+            const rawData = window.atob(base64);
+            const outputArray = new Uint8Array(rawData.length);
+            
+            for (let i = 0; i < rawData.length; ++i) {
+                outputArray[i] = rawData.charCodeAt(i);
+            }
+            return outputArray;
+        },
+        
+        // Obter chave pública VAPID (busca do backend)
+        async getVAPIDPublicKey() {
+            try {
+                const response = await fetch('/api/push/vapid-public-key');
+                if (response.ok) {
+                    const data = await response.json();
+                    return data.publicKey;
+                }
+            } catch (error) {
+                console.error('❌ Erro ao buscar chave VAPID:', error);
+            }
+            return null;
+        },
+        
+        // Enviar subscription para o servidor
+        async sendSubscriptionToServer(subscription) {
+            try {
+                const response = await fetch('/api/push/subscribe', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({
+                        subscription: {
+                            endpoint: subscription.endpoint,
+                            keys: {
+                                p256dh: this.arrayBufferToBase64(subscription.getKey('p256dh')),
+                                auth: this.arrayBufferToBase64(subscription.getKey('auth'))
+                            }
+                        },
+                        user_agent: navigator.userAgent,
+                        device_info: this.getDeviceInfo()
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('✅ Subscription registrada no servidor:', data);
+                } else {
+                    console.error('❌ Erro ao registrar subscription:', await response.text());
+                }
+            } catch (error) {
+                console.error('❌ Erro ao enviar subscription:', error);
+            }
+        },
+        
+        // Converter ArrayBuffer para Base64
+        arrayBufferToBase64(buffer) {
+            const bytes = new Uint8Array(buffer);
+            let binary = '';
+            for (let i = 0; i < bytes.byteLength; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            return window.btoa(binary);
+        },
+        
+        // Detectar tipo de dispositivo
+        getDeviceInfo() {
+            const ua = navigator.userAgent;
+            if (/mobile|android|iphone|ipad|ipod/i.test(ua)) {
+                return 'mobile';
+            }
+            return 'desktop';
+        },
+        
+        // ✅ Carregar configurações de notificações
+        async loadNotificationSettings() {
+            try {
+                const response = await fetch('/api/notification-settings');
+                if (response.ok) {
+                    const data = await response.json();
+                    this.notificationSettings = {
+                        notify_approved_sales: data.notify_approved_sales ?? true,
+                        notify_pending_sales: data.notify_pending_sales ?? false
+                    };
+                    console.log('✅ Configurações de notificações carregadas:', this.notificationSettings);
+                }
+            } catch (error) {
+                console.error('❌ Erro ao carregar configurações:', error);
+            }
+        },
+        
+        // ✅ Salvar configurações de notificações
+        async saveNotificationSettings() {
+            try {
+                const response = await fetch('/api/notification-settings', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'same-origin',
+                    body: JSON.stringify(this.notificationSettings)
+                });
+                
+                if (response.ok) {
+                    console.log('✅ Configurações de notificações salvas!');
+                } else {
+                    console.error('❌ Erro ao salvar configurações:', await response.text());
+                }
+            } catch (error) {
+                console.error('❌ Erro ao salvar configurações:', error);
+            }
+        },
+        
+        // ✅ Mostrar notificação de venda (pendente ou aprovada) - SEM LIMITAÇÕES!
         showSaleNotification(data) {
+            // Determinar cor e texto baseado no status
+            const isPending = data.status === 'pending';
+            const bgColor = isPending ? '#FFB800' : '#10B981'; // Amarelo ou Verde
+            const title = isPending ? '🔄 Venda Pendente' : '💰 Venda Aprovada!';
+            const message = isPending 
+                ? `Aguardando pagamento: R$ ${Number(data.amount || 0).toFixed(2)}`
+                : `Você recebeu: R$ ${Number(data.amount || 0).toFixed(2)}`;
+            
             // Criar elemento de notificação com ícone do sistema Grimbots
             const notification = document.createElement('div');
-            notification.className = 'fixed top-4 right-4 max-w-sm bg-gradient-to-r from-green-600 to-green-500 text-white p-4 rounded-xl shadow-2xl z-50 animate-slide-in notification-mobile';
+            notification.className = 'fixed top-4 right-4 max-w-sm text-white p-4 rounded-xl shadow-2xl z-50 animate-slide-in notification-mobile';
+            notification.style.background = `linear-gradient(135deg, ${bgColor} 0%, ${isPending ? '#DAA520' : '#059669'} 100%)`;
 
             // Ícone do sistema (mesmo usado no favicon/base.html)
             const grimbotsIconDataUrl = "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23FFB800'/><text x='50' y='70' font-size='60' text-anchor='middle' fill='%23111827'>🤖</text></svg>";
@@ -1137,29 +1439,25 @@ function dashboardApp() {
                         <img src="${grimbotsIconDataUrl}" alt="grimbots" class="w-12 h-12 rounded-2xl shadow-md border border-white/20" />
                     </div>
                     <div class="flex-1">
-                        <div class="font-bold text-lg">Venda aprovada!</div>
-                        <div class="text-sm opacity-95 mt-1">Você recebeu: R$ ${Number(data.amount || 0).toFixed(2)}</div>
+                        <div class="font-bold text-lg">${title}</div>
+                        <div class="text-sm opacity-95 mt-1">${message}</div>
                     </div>
                 </div>
             `;
             
             document.body.appendChild(notification);
             
-            // ✅ VIBRAÇÃO NO MOBILE (se suportado)
+            // ✅ VIBRAÇÃO NO MOBILE (se suportado) - SEMPRE! Cada notificação conta!
             if (navigator.vibrate) {
                 navigator.vibrate([200, 100, 200]);
             }
 
-            // ✅ SOM DE DINHEIRO (cooldown 3s para evitar spam)
+            // ✅ SOM DE DINHEIRO - SEM COOLDOWN! Cada notificação = experiência única!
             try {
-                const now = Date.now();
-                if (!this._lastSaleSoundAt || now - this._lastSaleSoundAt > 3000) {
-                    const audio = new Audio('/static/sounds/money-drop.mp3');
-                    audio.volume = 0.8;
-                    // Tocar sem bloquear; navegadores podem exigir interação prévia
-                    audio.play().catch(() => {});
-                    this._lastSaleSoundAt = now;
-                }
+                const audio = new Audio('/static/sounds/money-drop.mp3');
+                audio.volume = 0.8;
+                // Tocar sem bloquear; navegadores podem exigir interação prévia
+                audio.play().catch(() => {});
             } catch (e) {
                 // Silencioso: não interromper UX se áudio falhar
             }
