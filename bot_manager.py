@@ -3615,31 +3615,67 @@ Seu pagamento ainda não foi confirmado.
             logger.error(f"❌ Erro ao enviar mensagem Telegram: {e}")
             return False
     
-    def get_bot_status(self, bot_id: int) -> Dict[str, Any]:
+    def get_bot_status(self, bot_id: int, verify_telegram: bool = False) -> Dict[str, Any]:
         """
         Obtém status de um bot
         
         Args:
             bot_id: ID do bot
-            
+            verify_telegram: Se True, verifica REALMENTE se bot responde no Telegram
+        
         Returns:
             Informações de status
         """
         # ✅ CORREÇÃO: Acessar com LOCK
         with self._bots_lock:
-            if bot_id in self.active_bots:
-                bot_info = self.active_bots[bot_id].copy()
-                return {
-                    'is_running': True,
-                    'status': bot_info['status'],
-                    'started_at': bot_info['started_at'].isoformat(),
-                    'uptime': (datetime.now() - bot_info['started_at']).total_seconds()
-                }
-            else:
+            if bot_id not in self.active_bots:
                 return {
                     'is_running': False,
                     'status': 'stopped'
                 }
+            
+            bot_info = self.active_bots[bot_id].copy()
+            token = bot_info.get('token')
+        
+        # ✅ VERIFICAÇÃO REAL: Se solicitado, verificar se bot responde no Telegram
+        if verify_telegram and token:
+            try:
+                url = f"https://api.telegram.org/bot{token}/getMe"
+                response = requests.get(url, timeout=5)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if not data.get('ok'):
+                        # Token inválido ou bot não responde
+                        logger.warning(f"⚠️ Bot {bot_id} não responde no Telegram (token inválido/bloqueado)")
+                        return {
+                            'is_running': False,
+                            'status': 'offline',
+                            'reason': 'telegram_unreachable'
+                        }
+                else:
+                    # Erro de conexão
+                    logger.warning(f"⚠️ Bot {bot_id} não acessível via Telegram API (status {response.status_code})")
+                    return {
+                        'is_running': False,
+                        'status': 'offline',
+                        'reason': 'api_error'
+                    }
+            except Exception as e:
+                logger.warning(f"⚠️ Erro ao verificar bot {bot_id} no Telegram: {e}")
+                return {
+                    'is_running': False,
+                    'status': 'offline',
+                    'reason': 'verification_failed'
+                }
+        
+        # Bot está em active_bots e (se verificado) responde no Telegram
+        return {
+            'is_running': True,
+            'status': bot_info['status'],
+            'started_at': bot_info['started_at'].isoformat(),
+            'uptime': (datetime.now() - bot_info['started_at']).total_seconds()
+        }
     
     def schedule_downsells(self, bot_id: int, payment_id: str, chat_id: int, downsells: list, original_price: float = 0, original_button_index: int = -1):
         """
