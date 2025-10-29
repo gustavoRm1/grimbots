@@ -656,12 +656,19 @@ def api_dashboard_stats():
 @app.route('/api/dashboard/sales-chart')
 @login_required
 def api_sales_chart():
-    """API para dados do gráfico de vendas (últimos 7 dias)"""
+    """API para dados do gráfico de vendas (últimos N dias: 7/30/90)"""
     from sqlalchemy import func
     from datetime import datetime, timedelta
     
-    # Últimos 7 dias
-    seven_days_ago = datetime.now() - timedelta(days=7)
+    # Ler período desejado (default 7). Aceitar apenas 7, 30, 90
+    try:
+        period = int(request.args.get('period', 7))
+    except Exception:
+        period = 7
+    if period not in (7, 30, 90):
+        period = 7
+    
+    start_date = datetime.now() - timedelta(days=period)
     
     # Query para vendas por dia
     sales_by_day = db.session.query(
@@ -670,21 +677,21 @@ def api_sales_chart():
         func.sum(Payment.amount).label('revenue')
     ).join(Bot).filter(
         Bot.user_id == current_user.id,
-        Payment.created_at >= seven_days_ago,
+        Payment.created_at >= start_date,
         Payment.status == 'paid'
     ).group_by(func.date(Payment.created_at))\
      .order_by(func.date(Payment.created_at))\
      .all()
     
-    # Preencher dias sem vendas
+    # Preencher dias sem vendas (do mais antigo ao mais recente)
     result = []
-    for i in range(7):
-        date = (datetime.now() - timedelta(days=6-i)).date()
+    for i in range(period):
+        date = (datetime.now() - timedelta(days=(period - 1 - i))).date()
         day_data = next((s for s in sales_by_day if str(s.date) == str(date)), None)
         result.append({
             'date': date.strftime('%d/%m'),
             'sales': day_data.sales if day_data else 0,
-            'revenue': float(day_data.revenue) if day_data else 0.0
+            'revenue': float(day_data.revenue) if day_data and day_data.revenue is not None else 0.0
         })
     
     return jsonify(result)

@@ -1725,7 +1725,7 @@ function dashboardApp() {
         async loadChartData() {
             try {
                 console.log('📊 Carregando dados do gráfico...');
-                const response = await fetch('/api/dashboard/sales-chart');
+                const response = await fetch(`/api/dashboard/sales-chart?period=${this.filters.period}`);
                 
                 if (!response.ok) {
                     console.error('❌ API retornou erro:', response.status);
