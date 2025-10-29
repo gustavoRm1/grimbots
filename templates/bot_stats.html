@@ -553,18 +553,6 @@
         </div>
         
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <!-- Distribuição por Idade -->
-            <div class="bg-gray-900 rounded-lg p-4 border border-gray-800">
-                <div class="flex items-center gap-3 mb-4">
-                    <i class="fas fa-birthday-cake text-2xl text-purple-500"></i>
-                    <div>
-                        <div class="text-lg font-bold text-white">Distribuição por Idade</div>
-                        <div class="text-sm text-gray-400">Segmentação etária dos compradores</div>
-                    </div>
-                </div>
-                <canvas id="ageChart" style="max-height: 200px;"></canvas>
-            </div>
-            
             <!-- Distribuição por Cidade -->
             <div class="bg-gray-900 rounded-lg p-4 border border-gray-800">
                 <div class="flex items-center gap-3 mb-4">
@@ -589,18 +577,6 @@
                     </div>
                 </div>
                 <canvas id="deviceChart" style="max-height: 200px;"></canvas>
-            </div>
-            
-            <!-- Distribuição por Gender -->
-            <div class="bg-gray-900 rounded-lg p-4 border border-gray-800">
-                <div class="flex items-center gap-3 mb-4">
-                    <i class="fas fa-user-friends text-2xl text-pink-500"></i>
-                    <div>
-                        <div class="text-lg font-bold text-white">Distribuição por Gênero</div>
-                        <div class="text-sm text-gray-400">Segmentação de audience</div>
-                    </div>
-                </div>
-                <canvas id="genderChart" style="max-height: 200px;"></canvas>
             </div>
         </div>
         
@@ -738,9 +714,7 @@ function botStatsApp() {
             recent_sales: []
         },
         salesChart: null,
-        ageChart: null,
         deviceChart: null,
-        genderChart: null,
         
         async init() {
             // ✅ FIX: Prevenir inicialização dupla
@@ -1059,36 +1033,6 @@ function botStatsApp() {
             
             console.log('📊 Atualizando gráficos demográficos...', salesData.length, 'vendas');
             
-            // ===== DISTRIBUIÇÃO POR IDADE =====
-            const ageGroups = this.analyzeAgeDistribution(salesData);
-            if (this.ageChart) this.ageChart.destroy();
-            const ageCtx = document.getElementById('ageChart');
-            if (ageCtx) {
-                this.ageChart = new Chart(ageCtx, {
-                    type: 'doughnut',
-                    data: {
-                        labels: Object.keys(ageGroups),
-                        datasets: [{
-                            data: Object.values(ageGroups),
-                            backgroundColor: [
-                                'rgba(139, 92, 246, 0.8)',
-                                'rgba(59, 130, 246, 0.8)',
-                                'rgba(16, 185, 129, 0.8)',
-                                'rgba(251, 191, 36, 0.8)',
-                                'rgba(239, 68, 68, 0.8)'
-                            ]
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: { position: 'bottom', labels: { color: '#9CA3AF' } }
-                        }
-                    }
-                });
-            }
-            
             // ===== DISTRIBUIÇÃO POR DEVICE =====
             const deviceData = this.analyzeDeviceDistribution(salesData);
             if (this.deviceChart) this.deviceChart.destroy();
@@ -1104,34 +1048,6 @@ function botStatsApp() {
                                 'rgba(16, 185, 129, 0.8)',
                                 'rgba(59, 130, 246, 0.8)',
                                 'rgba(239, 68, 68, 0.8)'
-                            ]
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: { position: 'bottom', labels: { color: '#9CA3AF' } }
-                        }
-                    }
-                });
-            }
-            
-            // ===== DISTRIBUIÇÃO POR GÊNERO =====
-            const genderData = this.analyzeGenderDistribution(salesData);
-            if (this.genderChart) this.genderChart.destroy();
-            const genderCtx = document.getElementById('genderChart');
-            if (genderCtx) {
-                this.genderChart = new Chart(genderCtx, {
-                    type: 'doughnut',
-                    data: {
-                        labels: Object.keys(genderData),
-                        datasets: [{
-                            data: Object.values(genderData),
-                            backgroundColor: [
-                                'rgba(236, 72, 153, 0.8)',
-                                'rgba(59, 130, 246, 0.8)',
-                                'rgba(107, 114, 128, 0.8)'
                             ]
                         }]
                     },
@@ -1169,29 +1085,6 @@ function botStatsApp() {
             }
         },
         
-        analyzeAgeDistribution(salesData = null) {
-            const sales = salesData || this.stats.recent_sales || [];
-            const ages = sales
-                .filter(s => s.customer_age)
-                .map(s => s.customer_age);
-            
-            const groups = { '18-24': 0, '25-34': 0, '35-44': 0, '45-54': 0, '55+': 0 };
-            ages.forEach(age => {
-                if (age < 25) groups['18-24']++;
-                else if (age < 35) groups['25-34']++;
-                else if (age < 45) groups['35-44']++;
-                else if (age < 55) groups['45-54']++;
-                else groups['55+']++;
-            });
-            
-            // Remover grupos vazios
-            Object.keys(groups).forEach(key => {
-                if (groups[key] === 0) delete groups[key];
-            });
-            
-            return groups;
-        },
-        
         analyzeDeviceDistribution(salesData = null) {
             const sales = salesData || this.stats.recent_sales || [];
             const devices = {};
@@ -1203,19 +1096,6 @@ function botStatsApp() {
                 });
             
             return devices;
-        },
-        
-        analyzeGenderDistribution(salesData = null) {
-            const sales = salesData || this.stats.recent_sales || [];
-            const genders = {};
-            sales
-                .filter(s => s.customer_gender)
-                .forEach(s => {
-                    const gender = s.customer_gender;
-                    genders[gender] = (genders[gender] || 0) + 1;
-                });
-            
-            return genders;
         },
         
         analyzeTopCities(salesData = null) {
