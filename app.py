@@ -191,23 +191,17 @@ def sync_bots_status():
                 is_running_telegram = status_telegram.get('is_running', False)
                 reason_telegram = status_telegram.get('reason')
 
-                # ✅ DECISÃO ROBUSTA CONTRA FALSOS NEGATIVOS:
-                # - Se API do Telegram falhar (api_error/timeout), NÃO derruba o bot.
-                # - Só marca offline automaticamente quando NÃO está rodando em memória.
-                if not is_running_in_memory:
-                    actual_is_running = False
+                # ✅ NOVA REGRA (mais segura):
+                # Se o bot está rodando em memória, NÃO marcar offline via job.
+                # Isso evita falsos negativos do Telegram derrubarem o status no dashboard.
+                # Só marcar offline automaticamente quando NÃO está rodando em memória.
+                if is_running_in_memory:
+                    actual_is_running = True
                 else:
-                    # Em memória está rodando: só considera offline se verificação explícita falhar
-                    # e a razão NÃO for erro de API (instabilidade momentânea)
-                    if is_running_telegram:
-                        actual_is_running = True
-                    elif reason_telegram in ('api_error', 'telegram_unreachable'):
-                        # Tratamos como desconhecido, mas mantemos online para não causar queda indevida
-                        actual_is_running = True
-                    else:
-                        actual_is_running = False
+                    # Não está em memória: considerar offline
+                    actual_is_running = False
                 
-                # Se bot está marcado como running mas não está realmente online, corrigir
+                # Se bot está marcado como running mas não está realmente online (fora de memória), corrigir
                 if not actual_is_running:
                     bots_to_update.append(bot.id)
                     bot.is_running = False
@@ -216,13 +210,12 @@ def sync_bots_status():
                     reason = status_telegram.get('reason', 'unknown')
                     logger.info(f"🔴 Bot {bot.id} ({bot.name}) marcado como offline (memória: {is_running_in_memory}, telegram: {is_running_telegram}, motivo: {reason})")
 
-                    # Remover de active_bots só quando realmente não está em memória (queda real)
-                    if not is_running_in_memory:
-                        try:
-                            bot_manager.stop_bot(bot.id)
-                            logger.info(f"🧹 Bot {bot.id} removido de active_bots")
-                        except:
-                            pass
+                    # Remover de active_bots somente quando realmente não está em memória (queda real)
+                    try:
+                        bot_manager.stop_bot(bot.id)
+                        logger.info(f"🧹 Bot {bot.id} removido de active_bots")
+                    except:
+                        pass
             
             if bots_to_update:
                 db.session.commit()
@@ -1270,18 +1263,13 @@ def verify_bots_status():
             
             # Verificar status no Telegram (pode demorar)
             status_telegram = bot_manager.get_bot_status(bot.id, verify_telegram=True)
-            is_running_telegram = status_telegram.get('is_running', False)
-            reason = status_telegram.get('reason')
+            # is_running_telegram = status_telegram.get('is_running', False)
+            # reason = status_telegram.get('reason')
             
-            # Bot só está realmente online se ambas verificações passarem
-            # Mas se API falhar, manter status atual (não derrubar por erro de rede)
-            if not is_in_memory:
-                actual_is_running = False
-            elif is_running_telegram:
+            # ✅ NOVA REGRA (coerente com o job): se está em memória, considerar online
+            # para evitar falsos negativos de API derrubarem o status no dashboard
+            if is_in_memory:
                 actual_is_running = True
-            elif reason in ('api_error', 'telegram_unreachable'):
-                # Erro de API: manter status atual do banco (não mudar por instabilidade)
-                actual_is_running = bot.is_running
             else:
                 actual_is_running = False
             
