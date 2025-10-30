@@ -886,6 +886,22 @@ def get_bots():
     bots_data = []
     for bot in bots:
         bot_dict = bot.to_dict()
+        # Corrigir status inicial usando memória/heartbeat (evita mostrar "Iniciar" indevidamente)
+        try:
+            status_memory = bot_manager.get_bot_status(bot.id, verify_telegram=False)
+            is_in_memory = status_memory.get('is_running', False)
+            has_recent_heartbeat = False
+            try:
+                import redis
+                r = redis.Redis(host='localhost', port=6379, decode_responses=True)
+                if r.get(f'bot_heartbeat:{bot.id}'):
+                    has_recent_heartbeat = True
+            except Exception:
+                pass
+            bot_dict['is_running'] = bool(is_in_memory or has_recent_heartbeat)
+        except Exception:
+            # Fallback ao valor do banco em caso de erro
+            bot_dict['is_running'] = bot.is_running
         # Incluir dados da configuração para verificar se está configurado
         if bot.config:
             bot_dict['config'] = {
