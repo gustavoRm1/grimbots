@@ -5163,12 +5163,15 @@ def send_push_notification(user_id, title, body, data=None, color='green'):
             logger.warning(f"⚠️ Aviso ao processar VAPID key: {e}")
         
         # Preparar payload com cor
+        # ✅ IMPORTANTE: Incluir todos os dados no nível raiz para fácil acesso no Service Worker
         payload = {
             'title': title,
             'body': body,
-            'data': data or {},
-            'color': color  # 'green' ou 'orange'
+            'color': color,  # 'green' ou 'orange'
+            **(data or {})  # Spread dos dados adicionais (payment_id, amount, bot_id, url, etc.)
         }
+        
+        logger.debug(f"📦 Payload sendo enviado: {payload}")
         
         # Enviar para cada subscription
         sent_count = 0
