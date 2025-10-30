@@ -2870,7 +2870,8 @@ def validate_cloaker_access(request, pool, slug):
     details = {}
     
     # VALIDAÇÃO ÚNICA: Parâmetro grim obrigatório
-    param_name = pool.meta_cloaker_param_name or 'grim'
+    # ✅ IMPORTANTE: Parâmetro sempre será "grim", nunca pode ser alterado
+    param_name = 'grim'
     expected_value = pool.meta_cloaker_param_value
     
     if not expected_value or not expected_value.strip():
@@ -2930,8 +2931,8 @@ def log_cloaker_event_json(event_type, slug, validation_result, request, pool, l
         'score': validation_result['score'],
         'ip_short': ip_short,
         'user_agent': request.headers.get('User-Agent', '')[:200],
-        'param_name': pool.meta_cloaker_param_name,
-        'param_provided': bool(request.args.get(pool.meta_cloaker_param_name or 'grim')),
+        'param_name': 'grim',  # Sempre fixo
+        'param_provided': bool(request.args.get('grim')),
         'http_method': request.method,
         'code': 403 if not validation_result['allowed'] else 302,
         'latency_ms': round(latency_ms, 2)
@@ -3446,7 +3447,7 @@ def get_pool_meta_pixel_config(pool_id):
         'meta_events_viewcontent': pool.meta_events_viewcontent,
         'meta_events_purchase': pool.meta_events_purchase,
         'meta_cloaker_enabled': pool.meta_cloaker_enabled,
-        'meta_cloaker_param_name': pool.meta_cloaker_param_name or 'grim',
+        'meta_cloaker_param_name': 'grim',  # Sempre fixo como "grim"
         'meta_cloaker_param_value': pool.meta_cloaker_param_value
     })
 
@@ -3514,8 +3515,9 @@ def update_pool_meta_pixel_config(pool_id):
         if 'meta_cloaker_enabled' in data:
             pool.meta_cloaker_enabled = bool(data['meta_cloaker_enabled'])
         
-        if 'meta_cloaker_param_name' in data:
-            pool.meta_cloaker_param_name = data['meta_cloaker_param_name'].strip() or 'grim'
+        # ✅ IMPORTANTE: O parâmetro sempre será "grim", nunca pode ser alterado
+        # Forçar "grim" sempre, ignorando qualquer valor vindo do frontend
+        pool.meta_cloaker_param_name = 'grim'
         
         if 'meta_cloaker_param_value' in data:
             # ✅ FIX BUG: Strip e validar valor antes de salvar
@@ -4321,7 +4323,7 @@ def get_meta_pixel_config(bot_id):
             'meta_events_viewcontent': bot.meta_events_viewcontent,
             'meta_events_purchase': bot.meta_events_purchase,
             'meta_cloaker_enabled': bot.meta_cloaker_enabled,
-            'meta_cloaker_param_name': bot.meta_cloaker_param_name,
+            'meta_cloaker_param_name': 'grim',  # Sempre fixo como "grim"
             'meta_cloaker_param_value': bot.meta_cloaker_param_value,
             'has_access_token': bool(bot.meta_access_token)
         })
@@ -4381,7 +4383,8 @@ def update_meta_pixel_config(bot_id):
         bot.meta_events_viewcontent = data.get('meta_events_viewcontent', True)
         bot.meta_events_purchase = data.get('meta_events_purchase', True)
         bot.meta_cloaker_enabled = data.get('meta_cloaker_enabled', False)
-        bot.meta_cloaker_param_name = data.get('meta_cloaker_param_name', 'grim')
+        # ✅ IMPORTANTE: O parâmetro sempre será "grim", nunca pode ser alterado
+        bot.meta_cloaker_param_name = 'grim'
         
         # Gerar valor único para cloaker se ativado
         if bot.meta_cloaker_enabled and not bot.meta_cloaker_param_value:
@@ -4399,7 +4402,7 @@ def update_meta_pixel_config(bot_id):
                 'meta_events_viewcontent': bot.meta_events_viewcontent,
                 'meta_events_purchase': bot.meta_events_purchase,
                 'meta_cloaker_enabled': bot.meta_cloaker_enabled,
-                'meta_cloaker_param_name': bot.meta_cloaker_param_name,
+                'meta_cloaker_param_name': 'grim',  # Sempre fixo como "grim"
                 'meta_cloaker_param_value': bot.meta_cloaker_param_value
             }
         })
