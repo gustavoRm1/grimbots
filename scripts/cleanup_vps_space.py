@@ -35,6 +35,25 @@ RUNTIME_KEEP_FILES = {
     'paradise.json',
 }
 
+# Itens críticos que NUNCA serão removidos
+NEVER_DELETE_FILES = {
+    '.env',
+    'app.py',
+    'wsgi.py',
+    'models.py',
+    'celery_app.py',
+    'gunicorn_config.py',
+    'requirements.txt',
+    'gateway_interface.py',
+    'gateway_factory.py',
+    'gateway_paradise.py',
+    'gateway_pushyn.py',
+    'gateway_syncpay.py',
+    'gateway_wiinpay.py',
+    'paradise.json',
+    'paradise.php',
+}
+
 # Diretórios/arquivos tipicamente não essenciais para runtime em produção
 PURGE_DIRS = [
     'archive',
@@ -47,8 +66,7 @@ PURGE_DIRS = [
 ]
 
 # Padrões de arquivos a considerar para remoção (fora da allowlist)
-PURGE_FILE_EXTENSIONS = {
-    '.md',  # documentação
+PURGE_FILE_EXTENSIONS_BASE = {
     '.log', # logs antigos no workspace
 }
 
@@ -88,7 +106,7 @@ def dir_size(path: Path) -> int:
     return total
 
 
-def collect_candidates(repo_root: Path):
+def collect_candidates(repo_root: Path, include_docs: bool):
     candidates = []
 
     # Diretórios inteiros
@@ -103,14 +121,21 @@ def collect_candidates(repo_root: Path):
             })
 
     # Arquivos por extensão
-    for ext in PURGE_FILE_EXTENSIONS:
+    purge_exts = set(PURGE_FILE_EXTENSIONS_BASE)
+    if include_docs:
+        purge_exts.add('.md')
+
+    for ext in purge_exts:
         for p in repo_root.rglob(f'*{ext}'):
             # manter arquivos explicitamente na allowlist
-            if p.name in RUNTIME_KEEP_FILES:
+            if p.name in RUNTIME_KEEP_FILES or p.name in NEVER_DELETE_FILES:
                 continue
             # pular dentro de diretórios de runtime
             if any(part in RUNTIME_KEEP_DIRS for part in p.parts):
                 # documentação dentro de static/templates raramente é crítica, mas seja conservador
+                continue
+            # pular venv e .git SEMPRE
+            if any(part in ('.git', 'venv') for part in p.parts):
                 continue
             size = 0
             try:
@@ -146,6 +171,7 @@ def main():
     parser.add_argument('--apply', action='store_true', help='Aplica as remoções (sem isso, apenas simula).')
     parser.add_argument('--confirm', action='store_true', help='Confirma remoção sem perguntar (modo não interativo).')
     parser.add_argument('--min-size-mb', type=int, default=0, help='Remover apenas itens com tamanho >= X MB.')
+    parser.add_argument('--delete-docs', action='store_true', help='Inclui arquivos .md na remoção (por padrão, NÃO remove documentação).')
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parents[1]
@@ -155,7 +181,7 @@ def main():
     print('🔍 INVENTÁRIO DE CANDIDATOS À LIMPEZA (dry-run por padrão)')
     print('=' * 80)
 
-    candidates = collect_candidates(repo_root)
+    candidates = collect_candidates(repo_root, include_docs=args.delete_docs)
     if args.min_size_mb > 0:
         threshold = args.min_size_mb * 1024 * 1024
         candidates = [c for c in candidates if c['size'] >= threshold]
