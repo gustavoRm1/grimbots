@@ -374,29 +374,37 @@ class BotManager:
             bot_id: ID do bot
         """
         logger.info(f"Monitor do bot {bot_id} iniciado")
+
+        # Watchdog com retry/backoff: nunca encerrar por exceções transitórias
+        error_count = 0
+        max_backoff_seconds = 60
         
-        # ✅ CORREÇÃO: Verificar status com LOCK
         while True:
             with self._bots_lock:
                 if bot_id not in self.active_bots or self.active_bots[bot_id]['status'] != 'running':
+                    logger.info(f"Monitor do bot {bot_id} encerrado (status não-running ou removido)")
                     break
-            
+
             try:
-                # Simular ping/heartbeat
+                # Heartbeat (mantém conexões em tempo real e sinaliza vivacidade)
                 self.socketio.emit('bot_heartbeat', {
                     'bot_id': bot_id,
                     'timestamp': datetime.now().isoformat(),
                     'status': 'online'
                 }, room=f'bot_{bot_id}')
-                
-                # Aguardar próximo ciclo (30 segundos)
+
+                # Reset de erros após sucesso
+                error_count = 0
+
+                # Intervalo padrão de monitoramento
                 time.sleep(30)
-                
+
             except Exception as e:
-                logger.error(f"Erro no monitor do bot {bot_id}: {e}")
-                break
-        
-        logger.info(f"Monitor do bot {bot_id} encerrado")
+                error_count += 1
+                backoff = min(2 ** min(error_count, 5), max_backoff_seconds)
+                logger.error(f"Erro no monitor do bot {bot_id} (tentativa {error_count}): {e}. Backoff {backoff}s")
+                time.sleep(backoff)
+                # Continua tentando até que o status seja alterado para não-running
     
     def _setup_webhook(self, token: str, bot_id: int):
         """

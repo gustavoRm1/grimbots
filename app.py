@@ -174,6 +174,22 @@ def sync_bots_status():
     3. Se qualquer verificação falhar → marca como offline
     """
     try:
+        # Guard para evitar concorrência entre múltiplos processos (file lock leve por tempo)
+        import os, time as _time
+        lock_path = "/tmp/grimbots_sync_bots_status.lock" if os.name != 'nt' else "C:/temp/grimbots_sync_bots_status.lock"
+        now = _time.time()
+        try:
+            # se o lock existir e for recente (< 10s), aborta esta execução
+            if os.path.exists(lock_path):
+                mtime = os.path.getmtime(lock_path)
+                if now - mtime < 10:
+                    return
+            # toca o arquivo (atualiza mtime)
+            os.makedirs(os.path.dirname(lock_path), exist_ok=True)
+            with open(lock_path, 'w') as f:
+                f.write(str(now))
+        except Exception as _e:
+            logger.debug(f"sync_bots_status lock warn: {_e}")
         with app.app_context():
             from models import Bot
             
