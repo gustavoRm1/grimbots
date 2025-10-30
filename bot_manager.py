@@ -378,6 +378,7 @@ class BotManager:
         # Watchdog com retry/backoff: nunca encerrar por exceções transitórias
         error_count = 0
         max_backoff_seconds = 60
+        cycle = 0
         
         while True:
             with self._bots_lock:
@@ -398,6 +399,31 @@ class BotManager:
 
                 # Intervalo padrão de monitoramento
                 time.sleep(30)
+
+                # Auto-verificação periódica do webhook (a cada ~5 min)
+                cycle += 1
+                if cycle % 10 == 0:
+                    try:
+                        with self._bots_lock:
+                            token = self.active_bots.get(bot_id, {}).get('token')
+                        if token:
+                            import os, requests as _rq
+                            expected_base = os.environ.get('WEBHOOK_URL', '')
+                            if expected_base:
+                                expected_url = f"{expected_base}/webhook/telegram/{bot_id}"
+                                info_url = f"https://api.telegram.org/bot{token}/getWebhookInfo"
+                                resp = _rq.get(info_url, timeout=10)
+                                if resp.status_code == 200:
+                                    info = resp.json().get('result', {})
+                                    configured = info.get('url')
+                                    last_error = info.get('last_error_message')
+                                    if configured != expected_url or last_error:
+                                        logger.warning(f"🔁 Auto-fix webhook bot {bot_id}: cfg='{configured}', expected='{expected_url}', last_error='{last_error}'")
+                                        self._setup_webhook(token, bot_id)
+                                else:
+                                    logger.warning(f"⚠️ getWebhookInfo {resp.status_code}: {resp.text}")
+                    except Exception as ie:
+                        logger.debug(f"Webhook auto-check falhou: {ie}")
 
             except Exception as e:
                 error_count += 1
