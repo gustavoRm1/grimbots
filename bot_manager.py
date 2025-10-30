@@ -429,6 +429,27 @@ class BotManager:
                                     if configured != expected_url or last_error:
                                         logger.warning(f"🔁 Auto-fix webhook bot {bot_id}: cfg='{configured}', expected='{expected_url}', last_error='{last_error}'")
                                         self._setup_webhook(token, bot_id)
+                                        # Se persistir 502, ativar failover polling (deleteWebhook + polling)
+                                        if last_error and '502 Bad Gateway' in str(last_error):
+                                            try:
+                                                del_url = f"https://api.telegram.org/bot{token}/deleteWebhook"
+                                                _rq.post(del_url, timeout=10)
+                                            except Exception:
+                                                pass
+                                            if self.scheduler:
+                                                job_id = f'bot_polling_{bot_id}'
+                                                self.scheduler.add_job(
+                                                    id=job_id,
+                                                    func=self._polling_cycle,
+                                                    args=[bot_id, token],
+                                                    trigger='interval',
+                                                    seconds=1,
+                                                    max_instances=1,
+                                                    replace_existing=True
+                                                )
+                                                self.polling_jobs[bot_id] = job_id
+                                            else:
+                                                threading.Thread(target=self._polling_mode, args=(bot_id, token), daemon=True).start()
                                 else:
                                     logger.warning(f"⚠️ getWebhookInfo {resp.status_code}: {resp.text}")
                     except Exception as ie:
@@ -481,6 +502,39 @@ class BotManager:
                                 logger.error(f"❌ getWebhookInfo: last_error='{last_error_message}' date={last_error_date}")
                             if isinstance(pending, int) and pending > 100:
                                 logger.warning(f"⚠️ pending_update_count alto: {pending}")
+
+                            # Failover automático para polling se o webhook estiver retornando 502
+                            if last_error_message and '502 Bad Gateway' in str(last_error_message):
+                                try:
+                                    # Remover webhook e habilitar polling para não perder vendas
+                                    del_url = f"https://api.telegram.org/bot{token}/deleteWebhook"
+                                    del_resp = requests.post(del_url, timeout=10)
+                                    logger.warning(f"🔁 Failover para polling (deleteWebhook status={del_resp.status_code}) para bot {bot_id}")
+                                except Exception as de:
+                                    logger.warning(f"⚠️ Falha ao deletar webhook para failover: {de}")
+                                
+                                # Ativar polling job/thread
+                                if self.scheduler:
+                                    job_id = f'bot_polling_{bot_id}'
+                                    self.scheduler.add_job(
+                                        id=job_id,
+                                        func=self._polling_cycle,
+                                        args=[bot_id, token],
+                                        trigger='interval',
+                                        seconds=1,
+                                        max_instances=1,
+                                        replace_existing=True
+                                    )
+                                    self.polling_jobs[bot_id] = job_id
+                                    logger.info(f"✅ Polling job (failover) criado: {job_id}")
+                                else:
+                                    polling_thread = threading.Thread(
+                                        target=self._polling_mode,
+                                        args=(bot_id, token),
+                                        daemon=True
+                                    )
+                                    polling_thread.start()
+                                    logger.info(f"✅ Polling thread (failover) iniciada para bot {bot_id}")
                         else:
                             logger.warning(f"⚠️ Falha ao consultar getWebhookInfo: {info_resp.status_code} {info_resp.text}")
                     except Exception as ie:
