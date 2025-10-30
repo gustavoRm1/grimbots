@@ -430,6 +430,26 @@ class BotManager:
                 
                 if response.status_code == 200:
                     logger.info(f"Webhook configurado: {webhook_url}")
+                    # Verificar estado do webhook imediatamente
+                    try:
+                        info_url = f"https://api.telegram.org/bot{token}/getWebhookInfo"
+                        info_resp = requests.get(info_url, timeout=10)
+                        if info_resp.status_code == 200:
+                            info = info_resp.json()
+                            url_cfg = (info.get('result') or {}).get('url')
+                            last_error_date = (info.get('result') or {}).get('last_error_date')
+                            last_error_message = (info.get('result') or {}).get('last_error_message')
+                            pending = (info.get('result') or {}).get('pending_update_count')
+                            if url_cfg != webhook_url:
+                                logger.warning(f"⚠️ Webhook não corresponde (cfg='{url_cfg}') ao esperado ('{webhook_url}')")
+                            if last_error_message:
+                                logger.error(f"❌ getWebhookInfo: last_error='{last_error_message}' date={last_error_date}")
+                            if isinstance(pending, int) and pending > 100:
+                                logger.warning(f"⚠️ pending_update_count alto: {pending}")
+                        else:
+                            logger.warning(f"⚠️ Falha ao consultar getWebhookInfo: {info_resp.status_code} {info_resp.text}")
+                    except Exception as ie:
+                        logger.warning(f"⚠️ Erro ao verificar getWebhookInfo: {ie}")
                 else:
                     logger.error(f"Erro ao configurar webhook: {response.text}")
             else:

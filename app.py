@@ -4752,6 +4752,28 @@ def telegram_webhook(bot_id):
         logger.error(f"Erro no webhook Telegram: {e}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/bots/<int:bot_id>/webhook-info', methods=['GET'])
+@login_required
+def get_bot_webhook_info(bot_id):
+    """Retorna getWebhookInfo do Telegram e a URL esperada para diagnóstico."""
+    try:
+        bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
+        expected_base = os.environ.get('WEBHOOK_URL', '')
+        expected_url = f"{expected_base}/webhook/telegram/{bot_id}" if expected_base else None
+
+        import requests
+        info_url = f"https://api.telegram.org/bot{bot.token}/getWebhookInfo"
+        resp = requests.get(info_url, timeout=10)
+        info = resp.json() if resp.status_code == 200 else {'ok': False, 'status_code': resp.status_code, 'text': resp.text}
+
+        return jsonify({
+            'expected_url': expected_url,
+            'webhook_info': info
+        })
+    except Exception as e:
+        logger.error(f"Erro ao obter webhook-info do bot {bot_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/webhook/payment/<string:gateway_type>', methods=['POST'])
 @limiter.limit("500 per minute")  # ✅ PROTEÇÃO: Webhooks de pagamento
 @csrf.exempt  # ✅ Webhooks externos não enviam CSRF token
