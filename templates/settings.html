@@ -1213,7 +1213,17 @@ function settingsApp() {
                 const response = await fetch('/api/push/vapid-public-key');
                 if (response.ok) {
                     const data = await response.json();
-                    return data.public_key;
+                    // ✅ Suporte para ambos os formatos (legacy e novo)
+                    const key = data.public_key || data.publicKey;
+                    if (!key) {
+                        console.error('❌ Chave VAPID não encontrada na resposta:', data);
+                        return null;
+                    }
+                    console.log('✅ Chave VAPID obtida, tamanho:', key.length, 'chars');
+                    return key;
+                } else {
+                    const errorText = await response.text();
+                    console.error('❌ Erro ao buscar chave VAPID:', response.status, errorText);
                 }
             } catch (error) {
                 console.error('❌ Erro ao buscar chave VAPID:', error);
@@ -1221,18 +1231,65 @@ function settingsApp() {
             return null;
         },
         
-        // Converter chave VAPID
+        // Converter chave VAPID de base64url para Uint8Array
         urlBase64ToUint8Array(base64String) {
-            const padding = '='.repeat((4 - base64String.length % 4) % 4);
-            const base64 = (base64String + padding)
-                .replace(/\-/g, '+')
-                .replace(/_/g, '/');
-            const rawData = window.atob(base64);
-            const outputArray = new Uint8Array(rawData.length);
-            for (let i = 0; i < rawData.length; ++i) {
-                outputArray[i] = rawData.charCodeAt(i);
+            try {
+                if (!base64String || typeof base64String !== 'string') {
+                    throw new Error('Chave VAPID inválida: não é uma string');
+                }
+                
+                // Remover espaços e quebras de linha
+                base64String = base64String.trim();
+                
+                // Adicionar padding se necessário (base64url não usa padding, mas alguns casos precisam)
+                const padding = '='.repeat((4 - base64String.length % 4) % 4);
+                
+                // Converter base64url para base64 padrão
+                const base64 = (base64String + padding)
+                    .replace(/\-/g, '+')  // base64url usa - ao invés de +
+                    .replace(/_/g, '/');  // base64url usa _ ao invés de /
+                
+                // Decodificar base64
+                const rawData = window.atob(base64);
+                
+                // Criar Uint8Array
+                const outputArray = new Uint8Array(rawData.length);
+                for (let i = 0; i < rawData.length; ++i) {
+                    outputArray[i] = rawData.charCodeAt(i);
+                }
+                
+                console.log('✅ Chave VAPID convertida:', {
+                    tamanhoOriginal: base64String.length,
+                    tamanhoDecodificado: outputArray.length,
+                    esperado: 65  // Chave pública ECC P-256 uncompressed: 1 byte prefixo (0x04) + 32 bytes X + 32 bytes Y
+                });
+                
+                // ✅ Validar tamanho esperado: EXATAMENTE 65 bytes
+                // Formato: 0x04 (1 byte) + coordenada X (32 bytes) + coordenada Y (32 bytes)
+                if (outputArray.length !== 65) {
+                    const errorMsg = `Chave VAPID inválida: tamanho ${outputArray.length} bytes (esperado: 65 bytes). Primeiro byte deve ser 0x04.`;
+                    console.error('❌', errorMsg);
+                    throw new Error(errorMsg);
+                }
+                
+                // ✅ Validar prefixo (deve ser 0x04)
+                if (outputArray[0] !== 0x04) {
+                    const errorMsg = `Chave VAPID inválida: primeiro byte é 0x${outputArray[0].toString(16)} (esperado: 0x04)`;
+                    console.error('❌', errorMsg);
+                    throw new Error(errorMsg);
+                }
+                
+                console.log('✅ Chave VAPID válida:', {
+                    tamanho: outputArray.length,
+                    prefixo: '0x' + outputArray[0].toString(16).padStart(2, '0'),
+                    prontosParaUsar: true
+                });
+                
+                return outputArray;
+            } catch (error) {
+                console.error('❌ Erro ao converter chave VAPID:', error);
+                throw new Error('Erro ao converter chave VAPID: ' + error.message);
             }
-            return outputArray;
         },
         
         // Enviar subscription para servidor

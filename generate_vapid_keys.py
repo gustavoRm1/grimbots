@@ -37,17 +37,23 @@ try:
         # Obter chave pública
         public_key_obj = private_key_obj.public_key()
         
-        # Converter chave pública para formato uncompressed point
+        # ✅ CORRIGIDO: Web Push API precisa de 65 bytes (com prefixo 0x04)
+        # Formato: uncompressed point = 1 byte (0x04) + 32 bytes (X) + 32 bytes (Y)
         public_key_uncompressed = public_key_obj.public_bytes(
             encoding=serialization.Encoding.X962,
             format=serialization.PublicFormat.UncompressedPoint
         )
         
-        # Web Push API usa apenas os 64 bytes (sem o prefixo 0x04)
-        public_key_raw = public_key_uncompressed[1:]
+        # ✅ IMPORTANTE: A Web Push API espera os 65 bytes COMPLETOS (com prefixo 0x04)
+        # Não remover o primeiro byte!
+        public_key_raw = public_key_uncompressed  # 65 bytes: 0x04 + 32 bytes X + 32 bytes Y
         
         # Converter para base64 URL-safe (formato usado pela Web Push API)
         public_key = base64.urlsafe_b64encode(public_key_raw).decode('utf-8').rstrip('=')
+        
+        # Validar tamanho
+        if len(public_key_raw) != 65:
+            raise ValueError(f"Chave pública deve ter 65 bytes, mas tem {len(public_key_raw)} bytes")
         
         # ✅ MÉTODO ALTERNATIVO: Usar formato PEM diretamente para privada
         # pywebpush aceita PEM ou pode extrair automaticamente
