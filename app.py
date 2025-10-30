@@ -160,6 +160,64 @@ scheduler.start()
 # Inicializar gerenciador de bots
 bot_manager = BotManager(socketio, scheduler)
 
+# ==================== RECONCILIADOR DE PAGAMENTOS PARADISE (POLLING) ====================
+def reconcile_paradise_payments():
+    """Consulta periodicamente pagamentos pendentes da Paradise e atualiza para paid quando aprovado."""
+    try:
+        with app.app_context():
+            from models import Payment, Gateway, db, Bot
+            pending = Payment.query.filter_by(status='pending', gateway_type='paradise').all()
+            if not pending:
+                return
+            for p in pending:
+                # Buscar gateway do dono do bot
+                gw = Gateway.query.filter_by(user_id=p.bot.owner.id if p.bot and p.bot.owner else None,
+                                             gateway_type='paradise', is_active=True, is_verified=True).first()
+                if not gw or not p.gateway_transaction_id:
+                    continue
+                # Criar gateway e consultar
+                from gateway_factory import GatewayFactory
+                creds = {
+                    'api_key': gw.api_key,
+                    'product_hash': gw.product_hash,
+                    'offer_hash': gw.offer_hash,
+                    'store_id': gw.store_id,
+                    'split_percentage': gw.split_percentage or 2.0,
+                }
+                g = GatewayFactory.create_gateway('paradise', creds)
+                result = g.get_payment_status(str(p.gateway_transaction_id)) if g else None
+                if result and result.get('status') == 'paid':
+                    # Atualizar pagamento e estatísticas (espelhando webhook)
+                    p.status = 'paid'
+                    p.paid_at = datetime.now()
+                    if p.bot:
+                        p.bot.total_sales += 1
+                        p.bot.total_revenue += p.amount
+                        if p.bot.owner:
+                            p.bot.owner.total_sales += 1
+                            p.bot.owner.total_revenue += p.amount
+                    db.session.commit()
+                    # Emitir evento em tempo real
+                    try:
+                        socketio.emit('payment_update', {
+                            'payment_id': p.id,
+                            'status': 'paid',
+                            'amount': float(p.amount),
+                            'bot_id': p.bot_id,
+                        })
+                    except Exception:
+                        pass
+    except Exception as e:
+        logger.error(f"❌ Reconciliador Paradise: erro: {e}", exc_info=True)
+
+# Registrar job no scheduler (a cada 60s)
+try:
+    scheduler.add_job(id='reconcile_paradise', func=reconcile_paradise_payments,
+                      trigger='interval', seconds=60, replace_existing=True, max_instances=1)
+    logger.info("✅ Job de reconciliação Paradise agendado (60s)")
+except Exception as _e:
+    logger.warning(f"⚠️ Não foi possível agendar reconciliador Paradise: {_e}")
+
 # ✅ JOB PERIÓDICO: Verificar e sincronizar status dos bots
 def sync_bots_status():
     """

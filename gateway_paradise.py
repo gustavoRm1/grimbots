@@ -417,26 +417,55 @@ class ParadisePaymentGateway(PaymentGateway):
     
     def get_payment_status(self, transaction_id: str) -> Optional[Dict]:
         """
-        Consulta status de um pagamento no Paradise (API V30 atualizada)
-        
-        ⚠️ ATENÇÃO: Paradise agora SÓ aceita webhooks (postbacks)!
-        Este método é mantido apenas para fallback/consulta manual.
-        O status correto vem via webhook em tempo real.
-        
-        Paradise webhook: POST https://app.grimbots.online/webhook/payment/paradise
-        Eventos: approved, pending, refunded
+        Consulta status de um pagamento no Paradise (API V30)
+        Retorna dict padronizado: { 'gateway_transaction_id', 'status', 'amount' }
         """
         try:
-            logger.warning(f"⚠️ Paradise: Consulta manual via check_status.php DESCONTINUADA!")
-            logger.warning(f"⚠️ Paradise agora usa APENAS webhooks (postbacks)")
-            logger.info(f"📡 Para verificar pagamento, aguarde webhook ou use polling")
-            
-            # Retorna None para forçar uso do webhook
-            # O sistema já tem polling automático (paradise_payment_checker.py) e webhook como solução principal
+            if not transaction_id:
+                logger.error("❌ Paradise: transaction_id vazio na consulta de status")
+                return None
+            params = { 'transaction_id': transaction_id }
+            headers = {
+                'Accept': 'application/json',
+                'X-API-Key': self.api_key
+            }
+            # Paradise aceita GET em check_status.php
+            resp = requests.get(self.check_status_url, params=params, headers=headers, timeout=15)
+            logger.info(f"📡 Paradise CHECK Response: {resp.status_code} | {resp.text}")
+            if resp.status_code != 200:
+                return None
+            try:
+                data = resp.json()
+            except ValueError:
+                return None
+
+            # Campos possíveis: status/payment_status, transaction_id/id/hash, amount/amount_paid
+            raw_status = (data.get('status') or data.get('payment_status') or '').lower()
+            mapped_status = 'pending'
+            if raw_status == 'approved':
+                mapped_status = 'paid'
+            elif raw_status == 'refunded':
+                mapped_status = 'failed'
+
+            amount_cents = data.get('amount_paid') or data.get('amount')
+            amount = (amount_cents / 100.0) if isinstance(amount_cents, (int, float)) else None
+
+            tx_id = data.get('transaction_id') or data.get('id') or data.get('hash') or str(transaction_id)
+
+            return {
+                'gateway_transaction_id': str(tx_id),
+                'status': mapped_status,
+                'amount': amount
+            }
+
+        except requests.Timeout:
+            logger.error("❌ Paradise: Timeout na consulta de status (15s)")
             return None
-            
+        except requests.RequestException as e:
+            logger.error(f"❌ Paradise: Erro de conexão na consulta de status: {e}")
+            return None
         except Exception as e:
-            logger.error(f"❌ Paradise: Erro ao consultar status: {e}")
+            logger.error(f"❌ Paradise: Erro inesperado na consulta de status: {e}", exc_info=True)
             return None
     
     def validate_amount(self, amount: float) -> bool:
