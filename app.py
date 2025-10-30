@@ -201,6 +201,15 @@ def sync_bots_status():
                 # ✅ VERIFICAÇÃO 1: Status no BotManager (memória)
                 status_memory = bot_manager.get_bot_status(bot.id, verify_telegram=False)
                 is_running_in_memory = status_memory.get('is_running', False)
+                # ✅ VERIFICAÇÃO 1b: Heartbeat compartilhado (Redis)
+                has_recent_heartbeat = False
+                try:
+                    import redis
+                    r = redis.Redis(host='localhost', port=6379, decode_responses=True)
+                    if r.get(f'bot_heartbeat:{bot.id}'):
+                        has_recent_heartbeat = True
+                except Exception:
+                    pass
 
                 # ✅ VERIFICAÇÃO 2: Bot REALMENTE responde no Telegram
                 status_telegram = bot_manager.get_bot_status(bot.id, verify_telegram=True)
@@ -211,7 +220,7 @@ def sync_bots_status():
                 # Se o bot está rodando em memória, NÃO marcar offline via job.
                 # Isso evita falsos negativos do Telegram derrubarem o status no dashboard.
                 # Só marcar offline automaticamente quando NÃO está rodando em memória.
-                if is_running_in_memory:
+                if is_running_in_memory or has_recent_heartbeat:
                     actual_is_running = True
                 else:
                     # Não está em memória: considerar offline
