@@ -422,17 +422,19 @@ class ParadisePaymentGateway(PaymentGateway):
         """
         try:
             if not transaction_id:
-                logger.error("❌ Paradise: transaction_id vazio na consulta de status")
+                logger.error("❌ Paradise: hash vazio na consulta de status")
                 return None
-            params = { 'transaction_id': transaction_id }
+            # ✅ CORREÇÃO: Paradise precisa de 'hash', não 'transaction_id'
+            params = { 'hash': str(transaction_id) }
             headers = {
                 'Accept': 'application/json',
                 'X-API-Key': self.api_key
             }
             # Paradise aceita GET em check_status.php
             resp = requests.get(self.check_status_url, params=params, headers=headers, timeout=15)
-            logger.info(f"📡 Paradise CHECK Response: {resp.status_code} | {resp.text}")
+            # ✅ Log apenas em caso de erro para reduzir spam
             if resp.status_code != 200:
+                logger.warning(f"⚠️ Paradise CHECK {resp.status_code}: {resp.text[:200]}")
                 return None
             try:
                 data = resp.json()

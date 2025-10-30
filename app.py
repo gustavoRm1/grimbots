@@ -162,59 +162,86 @@ bot_manager = BotManager(socketio, scheduler)
 
 # ==================== RECONCILIADOR DE PAGAMENTOS PARADISE (POLLING) ====================
 def reconcile_paradise_payments():
-    """Consulta periodicamente pagamentos pendentes da Paradise e atualiza para paid quando aprovado."""
+    """Consulta periodicamente pagamentos pendentes da Paradise (BATCH LIMITADO para evitar spam)."""
     try:
         with app.app_context():
             from models import Payment, Gateway, db, Bot
-            pending = Payment.query.filter_by(status='pending', gateway_type='paradise').all()
+            # ✅ BATCH LIMITADO: apenas 5 por execução para evitar spam
+            pending = Payment.query.filter_by(status='pending', gateway_type='paradise').order_by(Payment.id.asc()).limit(5).all()
             if not pending:
                 return
+            
+            # Agrupar por user_id para reusar instância do gateway
+            gateways_by_user = {}
+            
             for p in pending:
-                # Buscar gateway do dono do bot
-                gw = Gateway.query.filter_by(user_id=p.bot.owner.id if p.bot and p.bot.owner else None,
-                                             gateway_type='paradise', is_active=True, is_verified=True).first()
-                if not gw or not p.gateway_transaction_id:
+                try:
+                    # Buscar gateway do dono do bot
+                    user_id = p.bot.user_id if p.bot else None
+                    if not user_id:
+                        continue
+                    
+                    if user_id not in gateways_by_user:
+                        gw = Gateway.query.filter_by(user_id=user_id, gateway_type='paradise', is_active=True, is_verified=True).first()
+                        if not gw:
+                            continue
+                        from gateway_factory import GatewayFactory
+                        creds = {
+                            'api_key': gw.api_key,
+                            'product_hash': gw.product_hash,
+                            'offer_hash': gw.offer_hash,
+                            'store_id': gw.store_id,
+                            'split_percentage': gw.split_percentage or 2.0,
+                        }
+                        g = GatewayFactory.create_gateway('paradise', creds)
+                        if not g:
+                            continue
+                        gateways_by_user[user_id] = g
+                    
+                    gateway = gateways_by_user[user_id]
+                    
+                    # ✅ Usar hash se disponível, senão transaction_id
+                    hash_or_id = p.gateway_transaction_hash or p.gateway_transaction_id
+                    if not hash_or_id:
+                        continue
+                    
+                    result = gateway.get_payment_status(str(hash_or_id))
+                    if result and result.get('status') == 'paid':
+                        # Atualizar pagamento e estatísticas
+                        p.status = 'paid'
+                        p.paid_at = datetime.now()
+                        if p.bot:
+                            p.bot.total_sales += 1
+                            p.bot.total_revenue += p.amount
+                            if p.bot.user_id:
+                                from models import User
+                                user = User.query.get(p.bot.user_id)
+                                if user:
+                                    user.total_sales += 1
+                                    user.total_revenue += p.amount
+                        db.session.commit()
+                        logger.info(f"✅ Paradise: Payment {p.id} atualizado para paid via reconciliação")
+                        # Emitir evento em tempo real
+                        try:
+                            socketio.emit('payment_update', {
+                                'payment_id': p.id,
+                                'status': 'paid',
+                                'amount': float(p.amount),
+                                'bot_id': p.bot_id,
+                            })
+                        except Exception:
+                            pass
+                except Exception as e:
+                    logger.error(f"❌ Erro ao reconciliar payment {p.id}: {e}")
                     continue
-                # Criar gateway e consultar
-                from gateway_factory import GatewayFactory
-                creds = {
-                    'api_key': gw.api_key,
-                    'product_hash': gw.product_hash,
-                    'offer_hash': gw.offer_hash,
-                    'store_id': gw.store_id,
-                    'split_percentage': gw.split_percentage or 2.0,
-                }
-                g = GatewayFactory.create_gateway('paradise', creds)
-                result = g.get_payment_status(str(p.gateway_transaction_id)) if g else None
-                if result and result.get('status') == 'paid':
-                    # Atualizar pagamento e estatísticas (espelhando webhook)
-                    p.status = 'paid'
-                    p.paid_at = datetime.now()
-                    if p.bot:
-                        p.bot.total_sales += 1
-                        p.bot.total_revenue += p.amount
-                        if p.bot.owner:
-                            p.bot.owner.total_sales += 1
-                            p.bot.owner.total_revenue += p.amount
-                    db.session.commit()
-                    # Emitir evento em tempo real
-                    try:
-                        socketio.emit('payment_update', {
-                            'payment_id': p.id,
-                            'status': 'paid',
-                            'amount': float(p.amount),
-                            'bot_id': p.bot_id,
-                        })
-                    except Exception:
-                        pass
     except Exception as e:
         logger.error(f"❌ Reconciliador Paradise: erro: {e}", exc_info=True)
 
-# Registrar job no scheduler (a cada 60s)
+# ✅ Registrar job com INTERVALO MAIOR (5 minutos) e BATCH LIMITADO
 try:
     scheduler.add_job(id='reconcile_paradise', func=reconcile_paradise_payments,
-                      trigger='interval', seconds=60, replace_existing=True, max_instances=1)
-    logger.info("✅ Job de reconciliação Paradise agendado (60s)")
+                      trigger='interval', seconds=300, replace_existing=True, max_instances=1)
+    logger.info("✅ Job de reconciliação Paradise agendado (5min, batch=5)")
 except Exception as _e:
     logger.warning(f"⚠️ Não foi possível agendar reconciliador Paradise: {_e}")
 
@@ -3965,17 +3992,37 @@ def toggle_gateway(gateway_id):
         gateway.is_active = True
         message = f'Gateway {gateway.gateway_type} ativado'
     else:
+        # ✅ CORREÇÃO: Ao desativar, verificar se há outro gateway verificado disponível
         gateway.is_active = False
-        message = f'Gateway {gateway.gateway_type} desativado'
+        
+        # Procurar outro gateway verificado para ativar automaticamente
+        alternative_gateway = Gateway.query.filter(
+            Gateway.user_id == current_user.id,
+            Gateway.id != gateway_id,
+            Gateway.is_verified == True
+        ).first()
+        
+        if alternative_gateway:
+            alternative_gateway.is_active = True
+            message = f'Gateway {gateway.gateway_type} desativado. Gateway {alternative_gateway.gateway_type} ativado automaticamente.'
+            logger.info(f"🔄 Gateway {gateway.gateway_type} desativado → {alternative_gateway.gateway_type} ativado automaticamente por {current_user.email}")
+        else:
+            message = f'Gateway {gateway.gateway_type} desativado. ⚠️ Nenhum outro gateway verificado disponível - configure um para processar pagamentos.'
+            logger.warning(f"⚠️ Gateway {gateway.gateway_type} desativado por {current_user.email} mas NENHUM outro gateway verificado disponível")
     
     db.session.commit()
     
     logger.info(f"Gateway {gateway.gateway_type} {'ativado' if gateway.is_active else 'desativado'} por {current_user.email}")
     
+    # Buscar gateway que ficou ativo (pode ser o atual ou o alternativo)
+    active_gateway = Gateway.query.filter_by(user_id=current_user.id, is_active=True).first()
+    
     return jsonify({
         'success': True,
         'message': message,
-        'is_active': gateway.is_active
+        'is_active': gateway.is_active,
+        'active_gateway': active_gateway.gateway_type if active_gateway else None,
+        'warning': None if active_gateway else 'Nenhum gateway ativo - configure um para processar pagamentos'
     })
 
 @app.route('/api/gateways/<int:gateway_id>', methods=['PUT'])
