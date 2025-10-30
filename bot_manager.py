@@ -2977,22 +2977,29 @@ Seu pagamento ainda não foi confirmado.
                         pending_same_product = p
                         break
                 
+                # ✅ REGRA DE NEGÓCIO: Reutilizar APENAS se foi gerado há <= 5 minutos E o valor bater exatamente
                 if pending_same_product:
-                    logger.warning(f"⚠️ Cliente já tem PIX pendente para {description}")
-                    logger.info(f"🔄 Retornando PIX existente ao invés de criar novo")
-                    
-                    # Retornar dados do PIX existente
-                    pix_result = {
-                        'pix_code': pending_same_product.product_description,
-                        'pix_code_base64': None,
-                        'qr_code_url': None,
-                        'transaction_id': pending_same_product.gateway_transaction_id,
-                        'payment_id': pending_same_product.payment_id,
-                        'expires_at': None
-                    }
-                    
-                    logger.info(f"✅ PIX reutilizado: {pending_same_product.payment_id}")
-                    return pix_result
+                    try:
+                        age_seconds = (datetime.now() - pending_same_product.created_at).total_seconds() if pending_same_product.created_at else 999999
+                    except Exception:
+                        age_seconds = 999999
+                    amount_matches = abs(float(pending_same_product.amount) - float(amount)) < 0.01
+                    if pending_same_product.status == 'pending' and age_seconds <= 300 and amount_matches:
+                        logger.warning(f"⚠️ Já existe PIX pendente (<=5min) e valor igual para {description}. Reutilizando.")
+                        pix_result = {
+                            'pix_code': pending_same_product.product_description,
+                            'pix_code_base64': None,
+                            'qr_code_url': None,
+                            'transaction_id': pending_same_product.gateway_transaction_id,
+                            'payment_id': pending_same_product.payment_id,
+                            'expires_at': None
+                        }
+                        logger.info(f"✅ PIX reutilizado: {pending_same_product.payment_id} | idade={int(age_seconds)}s | valor_ok={amount_matches}")
+                        return pix_result
+                    else:
+                        logger.info(
+                            f"♻️ NÃO reutilizar PIX existente: status={pending_same_product.status}, idade={int(age_seconds)}s, valor_ok={amount_matches}. Gerando NOVO PIX."
+                        )
                 
                 # 2. Verificar rate limiting para OUTRO PRODUTO (2 minutos)
                 last_pix = Payment.query.filter_by(
