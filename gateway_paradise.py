@@ -375,17 +375,17 @@ class ParadisePaymentGateway(PaymentGateway):
             logger.info(f"📩 Paradise Webhook/Status recebido")
             logger.info(f"📩 Data completa: {data}")
             
-            # Extrai transaction_id (pode vir como 'id' ou 'hash')
-            transaction_id = data.get('id') or data.get('hash')
+            # Extrai transaction_id (pode vir como 'transaction_id', 'id' ou 'hash')
+            transaction_id = data.get('transaction_id') or data.get('id') or data.get('hash')
             logger.info(f"🔍 Transaction ID extraído: {transaction_id}")
             
             if not transaction_id:
                 logger.error(f"❌ Paradise: 'id'/'hash' ausente | Data recebida: {data}")
                 return None
             
-            # Extrai status (já normalizado pela get_payment_status)
-            # Paradise envia: "approved", "pending", "refunded"
-            status = data.get('payment_status', '').lower()
+            # Extrai status
+            # Paradise pode enviar: 'status' (approved|pending|refunded) ou 'payment_status'
+            status = (data.get('status') or data.get('payment_status') or '').lower()
             logger.info(f"🔍 Status bruto: {status}")
             
             # Extrai valor
