@@ -261,21 +261,7 @@
     <!-- ANALYTICS V2.0 - DECISÕES EM 5 SEGUNDOS (QI 540) -->
     <!-- ============================================================================ -->
     
-    <!-- Aviso: Bot Orgânico (não está em pool) -->
-    <div class="config-section" x-show="analyticsV2.is_organic" style="background: linear-gradient(135deg, rgba(96, 165, 250, 0.08), rgba(96, 165, 250, 0.02)); border-color: rgba(96, 165, 250, 0.3);">
-        <div class="flex items-center gap-4">
-            <i class="fas fa-info-circle text-4xl text-blue-400"></i>
-            <div class="flex-1">
-                <div class="text-lg font-bold text-white mb-2">📊 Analytics V2.0 - Tráfego Pago</div>
-                <div class="text-sm text-gray-400">
-                    Este dashboard é exclusivo para bots em <strong>redirecionadores</strong> (tráfego pago).
-                </div>
-                <div class="text-sm text-gray-500 mt-2">
-                    💡 Para ativar: Adicione este bot a um redirecionador em <a href="{{ url_for('redirect_pools_page') }}" class="text-blue-400 hover:text-blue-300 underline">Redirecionadores</a>
-                </div>
-            </div>
-        </div>
-    </div>
+    
     
     <!-- Card 2: Problemas (Ação Imediata) -->
     <div class="config-section" x-show="analyticsV2.problems && analyticsV2.problems.length > 0" style="background: linear-gradient(135deg, rgba(239, 68, 68, 0.08), rgba(239, 68, 68, 0.02)); border-color: rgba(239, 68, 68, 0.3);">
