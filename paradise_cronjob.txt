@@ -1,2 +1,0 @@
-*/2 * * * * cd /root/grimbots && /root/grimbots/venv/bin/python /root/grimbots/check_paradise_pending_sales.py >> /root/grimbots/logs/paradise_pending.log 2>&1
-
