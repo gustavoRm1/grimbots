@@ -3776,14 +3776,18 @@ def _reload_user_bots_config(user_id: int):
         logger.error(f"❌ Erro ao recarregar bots do usuário {user_id}: {e}")
 
 def restart_all_active_bots():
-    """Reinicia automaticamente todos os bots que estavam rodando (is_running=True) após restart do servidor"""
+    """Reinicia automaticamente todos os bots ativos de todos os usuários no startup da VPS.
+
+    Política: Considerar `is_active=True` (bot habilitado no painel) como critério de reinício,
+    independentemente do último `is_running`. Evita iniciar duplicado se já estiver ativo em memória.
+    """
     try:
         logger.info("🔄 INICIANDO REINICIALIZAÇÃO AUTOMÁTICA DOS BOTS...")
         
         # ✅ CORREÇÃO: Usar contexto do Flask para acessar banco
         with app.app_context():
-            # Buscar todos os bots que estavam rodando antes do restart
-            active_bots = Bot.query.filter_by(is_running=True).all()
+            # Buscar todos os bots marcados como ativos no painel
+            active_bots = Bot.query.filter_by(is_active=True).all()
             
             if not active_bots:
                 logger.info("ℹ️ Nenhum bot rodando encontrado para reiniciar")
