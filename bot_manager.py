@@ -394,6 +394,15 @@ class BotManager:
                     'status': 'online'
                 }, room=f'bot_{bot_id}')
 
+                # Registrar heartbeat compartilhado (Redis) para ambientes multi-worker
+                try:
+                    import redis, time as _t
+                    r = redis.Redis(host='localhost', port=6379, decode_responses=True)
+                    r.setex(f'bot_heartbeat:{bot_id}', 180, int(_t.time()))
+                except Exception:
+                    # Não interromper o monitor se Redis indisponível
+                    pass
+
                 # Reset de erros após sucesso
                 error_count = 0
 
