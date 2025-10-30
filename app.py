@@ -5013,7 +5013,7 @@ def get_vapid_public_key():
         logger.warning("⚠️ Configure VAPID_PUBLIC_KEY e VAPID_PRIVATE_KEY no .env")
         return jsonify({'error': 'VAPID keys não configuradas. Execute: python generate_vapid_keys.py'}), 500
     
-    return jsonify({'publicKey': vapid_public_key})
+    return jsonify({'public_key': vapid_public_key})
 
 @app.route('/api/push/subscribe', methods=['POST'])
 @login_required
@@ -5066,6 +5066,21 @@ def subscribe_push():
         db.session.rollback()
         logger.error(f"❌ Erro ao registrar subscription: {e}")
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/push/subscription-status', methods=['GET'])
+@login_required
+def get_subscription_status():
+    """Verifica se o usuário tem subscription ativa"""
+    try:
+        active_count = PushSubscription.query.filter_by(
+            user_id=current_user.id,
+            is_active=True
+        ).count()
+        
+        return jsonify({'has_active_subscription': active_count > 0, 'count': active_count})
+    except Exception as e:
+        logger.error(f"Erro ao verificar status da subscription: {e}")
+        return jsonify({'has_active_subscription': False, 'error': str(e)}), 500
 
 @app.route('/api/push/unsubscribe', methods=['POST'])
 @login_required
