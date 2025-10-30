@@ -5119,7 +5119,7 @@ def send_push_notification(user_id, title, body, data=None, color='green'):
         ).all()
         
         if not subscriptions:
-            logger.debug(f"⚠️ Nenhuma subscription ativa para user {user_id}")
+            logger.info(f"⚠️ [PUSH] Nenhuma subscription ativa para user {user_id}")
             return
         
         # Chave privada VAPID
@@ -5209,13 +5209,18 @@ def send_sale_notification(user_id, payment, status='approved'):
         status: 'approved' ou 'pending'
     """
     try:
+        logger.info(f"📱 [NOTIFICAÇÃO] Tentando enviar notificação de venda | User: {user_id} | Status: {status} | Valor: R$ {payment.amount:.2f}")
+        
         # Buscar configurações do usuário
         settings = NotificationSettings.get_or_create(user_id)
+        logger.info(f"📱 [NOTIFICAÇÃO] Configurações do usuário {user_id}: Aprovadas={settings.notify_approved_sales}, Pendentes={settings.notify_pending_sales}")
         
         if status == 'approved':
             if not settings.notify_approved_sales:
+                logger.info(f"📱 [NOTIFICAÇÃO] Usuário {user_id} desativou notificações de vendas aprovadas")
                 return  # Usuário desativou notificações de vendas aprovadas
             
+            logger.info(f"📱 [NOTIFICAÇÃO] Enviando push de venda aprovada para user {user_id}")
             send_push_notification(
                 user_id=user_id,
                 title='💰 Venda Aprovada!',
@@ -5231,8 +5236,10 @@ def send_sale_notification(user_id, payment, status='approved'):
             
         elif status == 'pending':
             if not settings.notify_pending_sales:
+                logger.info(f"📱 [NOTIFICAÇÃO] Usuário {user_id} desativou notificações de vendas pendentes")
                 return  # Usuário desativou notificações de vendas pendentes
             
+            logger.info(f"📱 [NOTIFICAÇÃO] Enviando push de venda pendente para user {user_id}")
             send_push_notification(
                 user_id=user_id,
                 title='🔄 Venda Pendente',
@@ -5247,7 +5254,7 @@ def send_sale_notification(user_id, payment, status='approved'):
             )
             
     except Exception as e:
-        logger.error(f"❌ Erro ao enviar notificação de venda: {e}")
+        logger.error(f"❌ Erro ao enviar notificação de venda: {e}", exc_info=True)
 
 @app.route('/api/notification-settings', methods=['GET'])
 @login_required
