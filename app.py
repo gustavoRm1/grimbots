@@ -4929,7 +4929,7 @@ def send_meta_pixel_purchase_event(payment):
         logger.info(f"🔍 DEBUG Meta Pixel Purchase - Pool Bot encontrado: {pool_bot is not None}")
         
         if not pool_bot:
-            logger.info(f"Bot {payment.bot_id} não está associado a nenhum pool - Meta Pixel ignorado")
+            logger.warning(f"⚠️ Bot {payment.bot_id} não está associado a nenhum pool - Meta Pixel ignorado (Payment {payment.id})")
             return
         
         pool = pool_bot.pool
@@ -4941,17 +4941,17 @@ def send_meta_pixel_purchase_event(payment):
         logger.info(f"🔍 DEBUG Meta Pixel Purchase - Access Token: {pool.meta_access_token is not None}")
         
         if not pool.meta_tracking_enabled:
-            logger.info(f"Meta tracking desabilitado para pool {pool.id}")
+            logger.warning(f"⚠️ Meta tracking desabilitado para pool {pool.id} ({pool.name}) - Purchase ignorado (Payment {payment.id})")
             return
         
         if not pool.meta_pixel_id or not pool.meta_access_token:
-            logger.warning(f"Pool {pool.id} tem tracking ativo mas sem pixel_id ou access_token")
+            logger.error(f"❌ Pool {pool.id} ({pool.name}) tem tracking ativo mas sem pixel_id ou access_token - Purchase ignorado (Payment {payment.id})")
             return
         
         # ✅ VERIFICAÇÃO 3: Evento Purchase está habilitado?
         logger.info(f"🔍 DEBUG Meta Pixel Purchase - Evento Purchase habilitado: {pool.meta_events_purchase}")
         if not pool.meta_events_purchase:
-            logger.info(f"Evento Purchase desabilitado para pool {pool.id}")
+            logger.warning(f"⚠️ Evento Purchase desabilitado para pool {pool.id} ({pool.name}) - Purchase ignorado (Payment {payment.id})")
             return
         
         # ✅ VERIFICAÇÃO 4: Já enviou este pagamento? (ANTI-DUPLICAÇÃO)
@@ -4975,8 +4975,8 @@ def send_meta_pixel_purchase_event(payment):
         # Descriptografar access token
         try:
             access_token = decrypt(pool.meta_access_token)
-        except Exception as e:
-            logger.error(f"Erro ao descriptografar access_token do pool {pool.id}: {e}")
+        except Exception as decrypt_error:
+            logger.error(f"❌ Erro ao descriptografar access_token do pool {pool.id} ({pool.name}): {decrypt_error} - Purchase ignorado (Payment {payment.id})")
             return
         
         # Determinar tipo de venda (QI 540 - FIX BUG)
@@ -5064,7 +5064,7 @@ def send_meta_pixel_purchase_event(payment):
             db.session.rollback()
     
     except Exception as e:
-        logger.error(f"💥 Erro ao enviar Meta Purchase: {e}")
+        logger.error(f"💥 Erro CRÍTICO ao enviar Meta Purchase para payment {payment.id if payment else 'None'}: {e}", exc_info=True)
         db.session.rollback()  # ✅ Rollback se falhar
         # Não impedir o commit do pagamento se Meta falhar
 

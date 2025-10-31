@@ -22,13 +22,14 @@ with app.app_context():
     # 1. Verificar pagamentos PAID de hoje sem Meta Purchase enviado
     hoje = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     
+    # ✅ TODAS AS VENDAS DE HOJE (TODOS OS GATEWAYS)
     pagamentos_paid_hoje = Payment.query.filter(
         Payment.status == 'paid',
-        Payment.paid_at >= hoje,
-        Payment.gateway_type == 'pushynpay'
+        Payment.paid_at >= hoje
+        # ✅ NÃO filtrar por gateway - verificar TODOS
     ).all()
     
-    print(f"\n1️⃣ PAGAMENTOS PAID HOJE (PushynPay): {len(pagamentos_paid_hoje)}")
+    print(f"\n1️⃣ PAGAMENTOS PAID HOJE (TODOS OS GATEWAYS): {len(pagamentos_paid_hoje)}")
     
     sem_meta = []
     com_meta = []

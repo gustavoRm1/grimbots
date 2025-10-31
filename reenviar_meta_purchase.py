@@ -18,14 +18,14 @@ with app.app_context():
     print("🔄 REENVIAR Meta Pixel Purchase Events")
     print("=" * 80)
     
-    # Buscar pagamentos PAID de hoje (últimas 24h) sem Meta Purchase
+    # Buscar pagamentos PAID de hoje (últimas 24h) sem Meta Purchase - TODOS OS GATEWAYS
     desde = datetime.now() - timedelta(hours=24)
     
     pagamentos = Payment.query.filter(
         Payment.status == 'paid',
         Payment.paid_at >= desde,
-        Payment.meta_purchase_sent == False,
-        Payment.gateway_type == 'pushynpay'
+        Payment.meta_purchase_sent == False
+        # ✅ TODOS OS GATEWAYS: pushynpay, paradise, syncpay, wiinpay
     ).order_by(Payment.id.desc()).all()
     
     if not pagamentos:
