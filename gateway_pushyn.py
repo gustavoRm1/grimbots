@@ -189,6 +189,12 @@ class PushynGateway(PaymentGateway):
             identifier = data.get('id')
             status = data.get('status', '').lower()
             value_cents = data.get('value', 0)
+            # ✅ CORREÇÃO: Converter para int antes de dividir (pode vir como string)
+            try:
+                value_cents = int(value_cents) if value_cents else 0
+            except (ValueError, TypeError):
+                logger.warning(f"⚠️ [{self.get_gateway_name()}] Valor inválido: {value_cents}, usando 0")
+                value_cents = 0
             amount = value_cents / 100  # Converter centavos para reais
             
             if not identifier:
