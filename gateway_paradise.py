@@ -231,12 +231,30 @@ class ParadisePaymentGateway(PaymentGateway):
             # Limitar tamanho e garantir unicidade
             # IMPORTANTE: Paradise pode gerar seu próprio ID baseado no reference
             # Usar payment_id diretamente (já é único: BOT{bot_id}_{timestamp}_{uuid})
+            # ✅ CRÍTICO: Garantir que reference SEMPRE seja único (adicionar timestamp se necessário)
             safe_reference = str(payment_id).replace('_', '-').replace(' ', '')[:50]  # Max 50 chars, substituir _ por -
             
             # ✅ VALIDAÇÃO: Verificar se reference não está vazio
             if not safe_reference or len(safe_reference.strip()) == 0:
                 logger.error(f"❌ Paradise: Reference inválido (vazio) - payment_id: {payment_id}")
                 return None
+            
+            # ✅ VALIDAÇÃO CRÍTICA: Verificar se já existe payment com mesmo reference
+            # Para evitar duplicação na Paradise, garantir que reference nunca seja reutilizado
+            from app import db
+            from models import Payment
+            existing_with_same_reference = Payment.query.filter_by(
+                gateway_transaction_hash=safe_reference  # Reference salvo como hash
+            ).first()
+            
+            if existing_with_same_reference and existing_with_same_reference.status == 'pending':
+                logger.error(f"❌ Paradise: Reference '{safe_reference}' já existe e está pendente!")
+                logger.error(f"   Payment ID existente: {existing_with_same_reference.payment_id}")
+                logger.error(f"   Isso não deveria acontecer - payment_id deve ser único!")
+                # ✅ CORREÇÃO: Adicionar sufixo único ao reference para forçar unicidade
+                import time
+                safe_reference = f"{safe_reference}_{int(time.time())}"
+                logger.warning(f"⚠️ Reference corrigido para garantir unicidade: {safe_reference}")
             
             payload = {
                 "amount": amount_cents,  # ✅ CENTAVOS
