@@ -123,29 +123,16 @@ def check_paradise_payments():
                         except Exception as e:
                             logger.error(f"❌ Erro ao disparar Meta Pixel: {e}")
                         
-                        # NOTIFICAR CLIENTE VIA TELEGRAM
+                        # ✅ ENVIAR ENTREGÁVEL AO CLIENTE (CORREÇÃO CRÍTICA)
                         try:
-                            from bot_manager import BotManager
-                            bot_manager = BotManager()
-                            
-                            # Buscar token do bot
-                            bot = Bot.query.get(payment.bot_id)
-                            if bot and bot.token:
-                                # Enviar mensagem de sucesso
-                                success_message = f"""✅ <b>PAGAMENTO CONFIRMADO!</b>
-
-Seu pagamento de <b>R$ {payment.amount:.2f}</b> foi aprovado!
-
-🎉 Seu acesso foi liberado com sucesso!"""
-                                
-                                bot_manager.send_telegram_message(
-                                    token=bot.token,
-                                    chat_id=str(payment.customer_user_id),
-                                    message=success_message
-                                )
-                                logger.info(f"✅ Cliente notificado: {payment.customer_user_id}")
+                            from app import send_payment_delivery, bot_manager
+                            resultado = send_payment_delivery(payment, bot_manager)
+                            if resultado:
+                                logger.info(f"✅ Entregável enviado para cliente {payment.customer_user_id} via checker")
+                            else:
+                                logger.warning(f"⚠️ Não foi possível enviar entregável para cliente {payment.customer_user_id}")
                         except Exception as e:
-                            logger.error(f"❌ Erro ao notificar cliente: {e}")
+                            logger.error(f"❌ Erro ao enviar entregável via checker: {e}", exc_info=True)
                         
                         db.session.commit()
                         updated_count += 1

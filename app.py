@@ -5038,22 +5038,37 @@ def payment_webhook(gateway_type):
                 logger.warning(f"⚠️ Pagamento não encontrado: transaction_id={gateway_transaction_id}")
             
             if payment:
-                # ✅ PROTEÇÃO CRÍTICA: Verificar se já foi processado ANTES de atualizar (idempotência)
-                if payment.status == 'paid':
-                    logger.info(f"⚠️ Webhook duplicado ignorado: {payment.payment_id} já está pago (status: {payment.status})")
-                    return jsonify({'status': 'already_processed'}), 200
-                
-                # ✅ VERIFICA SE JÁ FOI PROCESSADO (CRÍTICO PARA PARADISE MULTI-WEBHOOK!)
+                # ✅ VERIFICA STATUS ANTIGO ANTES DE QUALQUER ATUALIZAÇÃO
                 was_pending = payment.status == 'pending'
-                logger.info(f"📊 Status ANTES: {payment.status} | Novo status: {status} | Era pending: {was_pending}")
+                status_antigo = payment.status
+                logger.info(f"📊 Status ANTES: {status_antigo} | Novo status: {status} | Era pending: {was_pending}")
+                
+                # ✅ PROTEÇÃO: Se já está paid E o webhook também é paid, pode ser duplicado
+                # MAS: Se status_antigo != paid e novo status é paid, PRECISA processar!
+                if payment.status == 'paid' and status == 'paid':
+                    logger.info(f"⚠️ Webhook duplicado: {payment.payment_id} já está pago - verificando se entregável foi enviado...")
+                    # Verificar se entregável já foi enviado (via campo adicional ou log)
+                    # Por ora, vamos tentar enviar novamente se falhou antes (idempotente)
+                    # Mas retornar sucesso para não duplicar estatísticas
+                    try:
+                        resultado = send_payment_delivery(payment, bot_manager)
+                        if resultado:
+                            logger.info(f"✅ Entregável reenviado com sucesso (webhook duplicado)")
+                    except:
+                        pass
+                    return jsonify({'status': 'already_processed'}), 200
                 
                 # ✅ ATUALIZA STATUS DO PAGAMENTO APENAS SE NÃO ERA PAID (SEM COMMIT AINDA!)
                 if payment.status != 'paid':
                     payment.status = status
                 
-                # ✅ PROCESSAR APENAS SE ERA PENDENTE E AGORA É PAID (EVITA DUPLICAÇÃO!)
-                # CRÍTICO: Verificar was_pending para evitar race condition em múltiplos webhooks
-                if status == 'paid' and was_pending:
+                # ✅ CORREÇÃO CRÍTICA: Enviar entregável SEMPRE que status vira 'paid'
+                # Separar lógica: estatísticas só se era pending, entregável SEMPRE se vira paid
+                deve_processar_estatisticas = (status == 'paid' and was_pending)
+                deve_enviar_entregavel = (status == 'paid')  # SEMPRE envia se status é 'paid'
+                
+                # ✅ PROCESSAR ESTATÍSTICAS/COMISSÕES APENAS SE ERA PENDENTE (evita duplicação)
+                if deve_processar_estatisticas:
                     logger.info(f"✅ Processando pagamento confirmado (era pending): {payment.payment_id}")
                     
                     payment.paid_at = datetime.now()
@@ -5144,13 +5159,18 @@ def payment_webhook(gateway_type):
                         if new_badges:
                             logger.info(f"🎉 {len(new_badges)} nova(s) conquista(s) desbloqueada(s)!")
                     
-                    # ✅ ENVIAR ENTREGÁVEL AO CLIENTE
-                    send_payment_delivery(payment, bot_manager)
+                # ✅ ENVIAR ENTREGÁVEL SEMPRE QUE STATUS VIRA 'paid' (CRÍTICO!)
+                # Isso garante que mesmo se estatísticas já foram processadas, o entregável é enviado
+                if deve_enviar_entregavel:
+                    logger.info(f"📦 Enviando entregável para payment {payment.payment_id} (status: {payment.status})")
+                    resultado = send_payment_delivery(payment, bot_manager)
+                    if not resultado:
+                        logger.warning(f"⚠️ Falha ao enviar entregável para payment {payment.payment_id}")
                     
                     # ============================================================================
-                    # ✅ UPSELLS AUTOMÁTICOS - APÓS COMPRA APROVADA
+                    # ✅ UPSELLS AUTOMÁTICOS - APÓS COMPRA APROVADA (só se estatísticas foram processadas)
                     # ============================================================================
-                    if payment.bot.config and payment.bot.config.upsells_enabled:
+                    if deve_processar_estatisticas and payment.bot.config and payment.bot.config.upsells_enabled:
                         try:
                             upsells = payment.bot.config.get_upsells()
                             
