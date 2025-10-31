@@ -324,6 +324,92 @@ def reconcile_paradise_payments():
     except Exception as e:
         logger.error(f"❌ Reconciliador Paradise: erro: {e}", exc_info=True)
 
+# ==================== RECONCILIADOR DE PAGAMENTOS PUSHYNPAY (POLLING) ====================
+def reconcile_pushynpay_payments():
+    """Consulta periodicamente pagamentos pendentes da PushynPay (BATCH LIMITADO para evitar spam)."""
+    try:
+        with app.app_context():
+            from models import Payment, Gateway, db, Bot
+            # ✅ BATCH LIMITADO: apenas 5 por execução para evitar spam
+            pending = Payment.query.filter_by(status='pending', gateway_type='pushynpay').order_by(Payment.id.asc()).limit(5).all()
+            
+            if not pending:
+                return
+            
+            logger.info(f"🔍 PushynPay: Verificando {len(pending)} pagamento(s) pendente(s)...")
+            
+            # Agrupar por user_id para reusar instância do gateway
+            gateways_by_user = {}
+            
+            for p in pending:
+                try:
+                    # Buscar gateway do dono do bot
+                    user_id = p.bot.user_id if p.bot else None
+                    if not user_id:
+                        continue
+                    
+                    if user_id not in gateways_by_user:
+                        gw = Gateway.query.filter_by(user_id=user_id, gateway_type='pushynpay', is_active=True, is_verified=True).first()
+                        if not gw:
+                            continue
+                        from gateway_factory import GatewayFactory
+                        creds = {
+                            'api_key': gw.api_key,
+                        }
+                        g = GatewayFactory.create_gateway('pushynpay', creds)
+                        if not g:
+                            continue
+                        gateways_by_user[user_id] = g
+                    
+                    gateway = gateways_by_user[user_id]
+                    
+                    # ✅ Usar transaction_id
+                    transaction_id = p.gateway_transaction_id
+                    if not transaction_id:
+                        continue
+                    
+                    result = gateway.get_payment_status(str(transaction_id))
+                    if result and result.get('status') == 'paid':
+                        # Atualizar pagamento e estatísticas
+                        p.status = 'paid'
+                        p.paid_at = datetime.now()
+                        if p.bot:
+                            p.bot.total_sales += 1
+                            p.bot.total_revenue += p.amount
+                            if p.bot.user_id:
+                                from models import User
+                                user = User.query.get(p.bot.user_id)
+                                if user:
+                                    user.total_sales += 1
+                                    user.total_revenue += p.amount
+                        db.session.commit()
+                        logger.info(f"✅ PushynPay: Payment {p.id} atualizado para paid via reconciliação")
+                        
+                        # ✅ ENVIAR ENTREGÁVEL AO CLIENTE (CORREÇÃO CRÍTICA)
+                        try:
+                            from models import Payment
+                            payment_obj = Payment.query.get(p.id)
+                            if payment_obj:
+                                send_payment_delivery(payment_obj, bot_manager)
+                        except Exception as e:
+                            logger.error(f"❌ Erro ao enviar entregável via reconciliação PushynPay: {e}")
+                        
+                        # Emitir evento em tempo real
+                        try:
+                            socketio.emit('payment_update', {
+                                'payment_id': p.id,
+                                'status': 'paid',
+                                'amount': float(p.amount),
+                                'bot_id': p.bot_id,
+                            })
+                        except Exception:
+                            pass
+                except Exception as e:
+                    logger.error(f"❌ Erro ao reconciliar payment PushynPay {p.id}: {e}")
+                    continue
+    except Exception as e:
+        logger.error(f"❌ Reconciliador PushynPay: erro: {e}", exc_info=True)
+
 # ✅ Registrar job com INTERVALO MAIOR (5 minutos) e BATCH LIMITADO
 try:
     scheduler.add_job(id='reconcile_paradise', func=reconcile_paradise_payments,
@@ -331,6 +417,14 @@ try:
     logger.info("✅ Job de reconciliação Paradise agendado (5min, batch=5)")
 except Exception as _e:
     logger.warning(f"⚠️ Não foi possível agendar reconciliador Paradise: {_e}")
+
+# ✅ Registrar job PushynPay com INTERVALO MAIOR (5 minutos) e BATCH LIMITADO
+try:
+    scheduler.add_job(id='reconcile_pushynpay', func=reconcile_pushynpay_payments,
+                      trigger='interval', seconds=300, replace_existing=True, max_instances=1)
+    logger.info("✅ Job de reconciliação PushynPay agendado (5min, batch=5)")
+except Exception as _e:
+    logger.warning(f"⚠️ Não foi possível agendar reconciliador PushynPay: {_e}")
 
 # ✅ JOB PERIÓDICO: Verificar e sincronizar status dos bots
 def sync_bots_status():
