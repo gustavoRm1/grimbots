@@ -299,6 +299,13 @@ def reconcile_paradise_payments():
                         db.session.commit()
                         logger.info(f"✅ Paradise: Payment {p.id} atualizado para paid via reconciliação")
                         
+                        # ✅ ENVIAR META PIXEL PURCHASE EVENT (CORREÇÃO CRÍTICA)
+                        try:
+                            send_meta_pixel_purchase_event(p)
+                            logger.info(f"📊 Meta Pixel Purchase disparado para {p.payment_id} via reconciliador Paradise")
+                        except Exception as e:
+                            logger.error(f"❌ Erro ao disparar Meta Pixel via reconciliação Paradise: {e}", exc_info=True)
+                        
                         # ✅ ENVIAR ENTREGÁVEL AO CLIENTE (CORREÇÃO CRÍTICA)
                         try:
                             from models import Payment
@@ -384,6 +391,13 @@ def reconcile_pushynpay_payments():
                                     user.total_revenue += p.amount
                         db.session.commit()
                         logger.info(f"✅ PushynPay: Payment {p.id} atualizado para paid via reconciliação")
+                        
+                        # ✅ ENVIAR META PIXEL PURCHASE EVENT (CORREÇÃO CRÍTICA)
+                        try:
+                            send_meta_pixel_purchase_event(p)
+                            logger.info(f"📊 Meta Pixel Purchase disparado para {p.payment_id} via reconciliador PushynPay")
+                        except Exception as e:
+                            logger.error(f"❌ Erro ao disparar Meta Pixel via reconciliação PushynPay: {e}", exc_info=True)
                         
                         # ✅ ENVIAR ENTREGÁVEL AO CLIENTE (CORREÇÃO CRÍTICA)
                         try:
@@ -5021,27 +5035,33 @@ def send_meta_pixel_purchase_event(payment):
         }
         
         # ✅ ENFILEIRAR COM PRIORIDADE ALTA (Purchase é crítico!)
-        task = send_meta_event.apply_async(
-            args=[
-                pool.meta_pixel_id,
-                access_token,
-                event_data,
-                pool.meta_test_event_code
-            ],
-            priority=1  # Alta prioridade
-        )
-        
-        # Marcar como enviado IMEDIATAMENTE (flag otimista)
-        payment.meta_purchase_sent = True
-        payment.meta_purchase_sent_at = datetime.now()
-        payment.meta_event_id = event_id
-        db.session.commit()  # ✅ CRÍTICO: Persistir no banco!
-        
-        logger.info(f"📤 Purchase enfileirado: R$ {payment.amount} | " +
-                   f"Pool: {pool.name} | " +
-                   f"Event ID: {event_id} | " +
-                   f"Task: {task.id} | " +
-                   f"Type: {'Downsell' if is_downsell else 'Upsell' if is_upsell else 'Remarketing' if is_remarketing else 'Normal'}")
+        try:
+            task = send_meta_event.apply_async(
+                args=[
+                    pool.meta_pixel_id,
+                    access_token,
+                    event_data,
+                    pool.meta_test_event_code
+                ],
+                priority=1  # Alta prioridade
+            )
+            
+            # Marcar como enviado IMEDIATAMENTE (flag otimista)
+            payment.meta_purchase_sent = True
+            payment.meta_purchase_sent_at = datetime.now()
+            payment.meta_event_id = event_id
+            db.session.commit()  # ✅ CRÍTICO: Persistir no banco!
+            
+            logger.info(f"📤 Purchase enfileirado: R$ {payment.amount} | " +
+                       f"Pool: {pool.name} | " +
+                       f"Event ID: {event_id} | " +
+                       f"Task: {task.id} | " +
+                       f"Type: {'Downsell' if is_downsell else 'Upsell' if is_upsell else 'Remarketing' if is_remarketing else 'Normal'}")
+        except Exception as celery_error:
+            logger.error(f"❌ ERRO CRÍTICO ao enfileirar Purchase no Celery: {celery_error}", exc_info=True)
+            logger.error(f"   Payment ID: {payment.payment_id} | Pool: {pool.name} | Pixel: {pool.meta_pixel_id}")
+            # NÃO marcar como enviado se falhou
+            db.session.rollback()
     
     except Exception as e:
         logger.error(f"💥 Erro ao enviar Meta Purchase: {e}")
