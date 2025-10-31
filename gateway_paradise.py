@@ -227,10 +227,14 @@ class ParadisePaymentGateway(PaymentGateway):
             logger.info(f"🔗 Paradise: Checkout URL - {self._get_dynamic_checkout_url(payment_id)}")
             
             # ✅ NOVA API V30: Payload atualizado baseado no paradise.php
+            # ✅ CORREÇÃO CRÍTICA: Reference deve ser único e válido (sem caracteres especiais problemáticos)
+            # Limitar tamanho e garantir unicidade
+            safe_reference = str(payment_id).replace('_', '-')[:50]  # Max 50 chars, substituir _ por -
+            
             payload = {
                 "amount": amount_cents,  # ✅ CENTAVOS
-                "description": description,
-                "reference": f"BOT-{payment_id}",
+                "description": description[:100] if len(description) > 100 else description,  # ✅ Limitar descrição
+                "reference": safe_reference,  # ✅ Reference seguro e único
                 "checkoutUrl": self._get_dynamic_checkout_url(payment_id),  # ✅ URL DINÂMICA
                 "webhookUrl": self.get_webhook_url(),  # ✅ WEBHOOK URL
                 "productHash": self.product_hash,  # ✅ OBRIGATÓRIO
@@ -299,8 +303,15 @@ class ParadisePaymentGateway(PaymentGateway):
             logger.info(f"📡 Paradise Response: Status {response.status_code}")
             logger.info(f"📡 Paradise Response Body: {response.text}")
             
+            # ✅ VALIDAÇÃO CRÍTICA: Status code pode ser 200 mas ter erro no JSON
             if response.status_code != 200:
                 logger.error(f"❌ Paradise API Error: {response.status_code}")
+                logger.error(f"❌ Response: {response.text}")
+                return None
+            
+            # ✅ CORREÇÃO CRÍTICA: Verificar se response.text contém erro mesmo com 200
+            if 'error' in response.text.lower() or '"status":"error"' in response.text.lower():
+                logger.error(f"❌ Paradise: Resposta contém erro mesmo com status 200")
                 logger.error(f"❌ Response: {response.text}")
                 return None
             
@@ -314,29 +325,74 @@ class ParadisePaymentGateway(PaymentGateway):
             
             logger.info(f"📥 Paradise CREATE Response: {data}")
             
+            # ✅ VALIDAÇÃO CRÍTICA: Verificar se status é realmente "success"
+            response_status = data.get('status', '').lower()
+            if response_status != 'success':
+                logger.error(f"❌ Paradise: Status não é 'success' - recebido: '{response_status}'")
+                logger.error(f"❌ Response completa: {data}")
+                return None
+            
+            # ✅ VALIDAÇÃO CRÍTICA: Verificar se há erro na resposta
+            if 'error' in data:
+                logger.error(f"❌ Paradise: Erro na resposta: {data.get('error')}")
+                logger.error(f"❌ Response completa: {data}")
+                return None
+            
             # ✅ CORREÇÃO CRÍTICA: Paradise retorna estrutura DIRETA, não aninhada
             # Resposta real: {"status": "success", "transaction_id": "145732", "qr_code": "...", "id": "TEST-1"}
             # NÃO é: {"transaction": {"id": "145732", "qr_code": "..."}}
             
             # ✅ CORREÇÃO CRÍTICA: Usar dados diretamente da resposta
             pix_code = data.get('qr_code')  # ✅ Campo direto: qr_code
-            transaction_id = data.get('transaction_id') or data.get('id')  # ✅ Campo direto: transaction_id ou id
-            transaction_hash = data.get('hash')  # ✅ Campo hash para consulta de status
+            # ✅ CORREÇÃO DEFINITIVA: Paradise retorna 'id' como identificador do painel e 'transaction_id' como ID numérico
+            # O campo 'id' é o que aparece no painel Paradise, então deve ser o hash principal
+            transaction_id = data.get('transaction_id')  # ID numérico (ex: 151299)
+            paradise_id = data.get('id')  # ID do painel (ex: "BOT-BOT5_1761860711_cf29c4f3")
+            # ✅ CORREÇÃO CRÍTICA: Usar 'id' como hash principal (é o que aparece no painel)
+            transaction_hash = data.get('hash') or paradise_id or transaction_id  # ✅ Prioridade: hash > id > transaction_id
             qr_code_base64 = data.get('qr_code_base64')  # ✅ QR Code em base64
+            
+            # ✅ Se não temos transaction_id mas temos id, usar id como transaction_id também
+            if not transaction_id and paradise_id:
+                transaction_id = paradise_id
+            
+            # ✅ Se ainda não temos transaction_id, usar hash como fallback
+            if not transaction_id:
+                transaction_id = transaction_hash
             
             logger.info(f"📥 Paradise Response Data: {data}")
             logger.info(f"📥 Paradise PIX Code: {pix_code[:50] if pix_code else None}...")
-            logger.info(f"📥 Paradise Transaction ID: {transaction_id}")
-            logger.info(f"📥 Paradise Transaction Hash: {transaction_hash}")
+            logger.info(f"📥 Paradise Transaction ID (numérico): {transaction_id}")
+            logger.info(f"📥 Paradise ID (painel): {paradise_id}")
+            logger.info(f"📥 Paradise Transaction Hash (usado para consulta): {transaction_hash}")
             
-            if not pix_code or not transaction_id:
-                logger.error(f"❌ Paradise: Resposta incompleta - pix_code ou id ausente")
-                logger.error(f"❌ PIX Code: {pix_code}")
-                logger.error(f"❌ Transaction ID: {transaction_id}")
-                logger.error(f"❌ Transaction Hash: {transaction_hash}")
+            # ✅ VALIDAÇÃO RIGOROSA: Pix code é OBRIGATÓRIO
+            if not pix_code:
+                logger.error(f"❌ Paradise: qr_code ausente na resposta - transação NÃO criada no painel!")
+                logger.error(f"❌ Response completa: {data}")
                 return None
             
-            logger.info(f"✅ Paradise: PIX gerado | ID: {transaction_id} | Hash: {transaction_hash}")
+            # ✅ VALIDAÇÃO: Ao menos um identificador (transaction_id ou hash) deve existir
+            if not transaction_id and not transaction_hash:
+                logger.error(f"❌ Paradise: Nenhum identificador retornado (transaction_id ou id ausentes) - transação NÃO criada no painel!")
+                logger.error(f"❌ Response completa: {data}")
+                return None
+            
+            # ✅ Se não temos hash mas temos transaction_id, usar transaction_id como hash
+            if not transaction_hash and transaction_id:
+                transaction_hash = transaction_id
+            
+            # ✅ VALIDAÇÃO FINAL: Verificar se qr_code é válido (começa com 000201 para PIX)
+            if not pix_code.startswith('000201'):
+                logger.warning(f"⚠️ Paradise: qr_code não parece válido (não começa com 000201): {pix_code[:20]}...")
+            
+            # ✅ LOG CRÍTICO: Informações para debug
+            logger.info(f"✅ Paradise: PIX gerado com SUCESSO")
+            logger.info(f"   Transaction ID: {transaction_id}")
+            logger.info(f"   Transaction Hash: {transaction_hash}")
+            logger.info(f"   Reference enviado: {safe_reference}")
+            logger.info(f"   QR Code válido: {'✅' if pix_code.startswith('000201') else '⚠️'}")
+            logger.info(f"   💡 Se não aparecer no painel Paradise, verificar se reference é único e se productHash está correto")
             
             # Retorna padrão unificado
             return {
@@ -418,20 +474,28 @@ class ParadisePaymentGateway(PaymentGateway):
     def get_payment_status(self, transaction_id: str) -> Optional[Dict]:
         """
         Consulta status de um pagamento no Paradise (API V30)
+        Aceita: hash, id (painel) ou transaction_id (numérico)
         Retorna dict padronizado: { 'gateway_transaction_id', 'status', 'amount' }
         """
         try:
             if not transaction_id:
-                logger.error("❌ Paradise: hash vazio na consulta de status")
+                logger.error("❌ Paradise: hash/id vazio na consulta de status")
                 return None
-            # ✅ CORREÇÃO: Paradise precisa de 'hash', não 'transaction_id'
+            
+            # ✅ CORREÇÃO: Paradise aceita 'hash' como parâmetro (pode ser id ou hash real)
+            # Tentar primeiro com hash/id (que é o que aparece no painel)
             params = { 'hash': str(transaction_id) }
             headers = {
                 'Accept': 'application/json',
                 'X-API-Key': self.api_key
             }
+            
+            # ✅ LOG para debug (apenas quando necessário)
+            logger.debug(f"🔍 Paradise: Consultando status com hash/id: {transaction_id}")
+            
             # Paradise aceita GET em check_status.php
             resp = requests.get(self.check_status_url, params=params, headers=headers, timeout=15)
+            
             # ✅ Log apenas em caso de erro para reduzir spam
             if resp.status_code != 200:
                 logger.warning(f"⚠️ Paradise CHECK {resp.status_code}: {resp.text[:200]}")

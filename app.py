@@ -277,10 +277,14 @@ def reconcile_paradise_payments():
                     
                     gateway = gateways_by_user[user_id]
                     
-                    # ✅ Usar hash se disponível, senão transaction_id
+                    # ✅ CORREÇÃO CRÍTICA: Para Paradise, hash é o campo 'id' retornado (é o que aparece no painel)
+                    # Prioridade: hash > transaction_id
                     hash_or_id = p.gateway_transaction_hash or p.gateway_transaction_id
                     if not hash_or_id:
+                        logger.warning(f"⚠️ Paradise Payment {p.id}: sem hash ou transaction_id para consulta")
                         continue
+                    
+                    logger.info(f"🔍 Paradise: Consultando status de payment {p.id} usando: {hash_or_id}")
                     
                     result = gateway.get_payment_status(str(hash_or_id))
                     if result and result.get('status') == 'paid':
