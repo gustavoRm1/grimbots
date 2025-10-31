@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from app import app, db, send_meta_pixel_purchase_event
-from models import Payment, PoolBot, Pool
+from models import Payment, PoolBot
 
 with app.app_context():
     print("=" * 80)

@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from app import app, db
-from models import Payment, PoolBot, Pool
+from models import Payment, PoolBot
 import subprocess
 
 with app.app_context():
