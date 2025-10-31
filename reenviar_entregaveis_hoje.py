@@ -13,24 +13,23 @@ from app import app, bot_manager, send_payment_delivery
 from models import Payment, db
 
 def reenviar_entregaveis_hoje():
-    """Reenvia entregáveis para pagamentos paid das últimas 48 horas"""
+    """Reenvia entregáveis para pagamentos paid das últimas 7 dias"""
     with app.app_context():
         agora = datetime.now()
-        # Buscar pagamentos das últimas 48 horas para pegar vendas de ontem/today
-        desde = agora - timedelta(hours=48)
+        # Buscar pagamentos dos últimos 7 dias para garantir que pega tudo
+        desde = agora - timedelta(days=7)
         
-        # Buscar todos os pagamentos PAID das últimas 48 horas
+        # Buscar TODOS os pagamentos PAID dos últimos 7 dias (sem filtro de paid_at)
         pagamentos = Payment.query.filter(
-            Payment.status == 'paid'
-        ).filter(
-            (Payment.paid_at >= desde) if Payment.paid_at else (Payment.created_at >= desde)
+            Payment.status == 'paid',
+            Payment.created_at >= desde
         ).order_by(Payment.id.desc()).all()
         
         if not pagamentos:
-            print(f"❌ Nenhum pagamento PAID encontrado nas últimas 48 horas (desde {desde.strftime('%Y-%m-%d %H:%M')})")
+            print(f"❌ Nenhum pagamento PAID encontrado nos últimos 7 dias (desde {desde.strftime('%Y-%m-%d')})")
             return
         
-        print(f"📊 Encontrados {len(pagamentos)} pagamento(s) PAID nas últimas 48 horas")
+        print(f"📊 Encontrados {len(pagamentos)} pagamento(s) PAID nos últimos 7 dias")
         print("=" * 60)
         
         enviados = 0
@@ -50,16 +49,25 @@ def reenviar_entregaveis_hoje():
                     erros += 1
                     continue
                 
+                # Verificar se tem customer_user_id válido
+                if not payment.customer_user_id or str(payment.customer_user_id).strip() == '':
+                    print(f"   ❌ Cliente sem customer_user_id válido ({payment.customer_user_id}) - PULANDO")
+                    erros += 1
+                    continue
+                
                 # Verificar se tem access_link configurado
                 has_link = payment.bot.config and payment.bot.config.access_link
                 link_status = "✅ COM link" if has_link else "⚠️ SEM link (mensagem genérica)"
                 print(f"   {link_status}")
                 
-                # Enviar entregável
-                send_payment_delivery(payment, bot_manager)
-                
-                print(f"   ✅ Entregável reenviado!")
-                enviados += 1
+                # Enviar entregável e verificar retorno
+                resultado = send_payment_delivery(payment, bot_manager)
+                if resultado:
+                    print(f"   ✅ Entregável reenviado com sucesso!")
+                    enviados += 1
+                else:
+                    print(f"   ❌ ERRO: Não foi possível enviar entregável (ver logs acima)")
+                    erros += 1
                 
             except Exception as e:
                 print(f"   ❌ ERRO: {e}")

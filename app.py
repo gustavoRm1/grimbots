@@ -168,15 +168,23 @@ def send_payment_delivery(payment, bot_manager):
     Args:
         payment: Objeto Payment com status='paid'
         bot_manager: Instância do BotManager para enviar mensagem
+    
+    Returns:
+        bool: True se enviado com sucesso, False se houve erro
     """
     try:
         if not payment or not payment.bot:
             logger.warning(f"⚠️ Payment ou bot inválido para envio de entregável: payment={payment}")
-            return
+            return False
         
         if not payment.bot.token:
             logger.error(f"❌ Bot {payment.bot_id} não tem token configurado - não é possível enviar entregável")
-            return
+            return False
+        
+        # ✅ VALIDAÇÃO CRÍTICA: Verificar se customer_user_id é válido
+        if not payment.customer_user_id or str(payment.customer_user_id).strip() == '':
+            logger.error(f"❌ Payment {payment.id} não tem customer_user_id válido ({payment.customer_user_id}) - não é possível enviar")
+            return False
         
         # Verificar se bot tem config e access_link
         has_access_link = payment.bot.config and payment.bot.config.access_link
@@ -211,17 +219,23 @@ Aproveite! 🚀
             """
             logger.warning(f"⚠️ Bot {payment.bot_id} não tem access_link configurado - enviando mensagem genérica")
         
-        # Enviar via bot manager
-        bot_manager.send_telegram_message(
-            token=payment.bot.token,
-            chat_id=str(payment.customer_user_id),
-            message=access_message.strip()
-        )
-        
-        logger.info(f"✅ Entregável enviado para {payment.customer_name} (payment_id: {payment.id}, bot_id: {payment.bot_id})")
+        # Enviar via bot manager e capturar exceção se falhar
+        try:
+            bot_manager.send_telegram_message(
+                token=payment.bot.token,
+                chat_id=str(payment.customer_user_id),
+                message=access_message.strip()
+            )
+            logger.info(f"✅ Entregável enviado para {payment.customer_name} (payment_id: {payment.id}, bot_id: {payment.bot_id})")
+            return True
+        except Exception as send_error:
+            # Erro ao enviar mensagem (bot bloqueado, chat_id inválido, etc)
+            logger.error(f"❌ Erro ao enviar mensagem Telegram para payment {payment.id}: {send_error}")
+            return False
         
     except Exception as e:
         logger.error(f"❌ Erro ao enviar entregável para payment {payment.id if payment else 'None'}: {e}", exc_info=True)
+        return False
 
 # ==================== RECONCILIADOR DE PAGAMENTOS PARADISE (POLLING) ====================
 def reconcile_paradise_payments():
