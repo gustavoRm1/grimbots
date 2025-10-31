@@ -13,21 +13,24 @@ from app import app, bot_manager, send_payment_delivery
 from models import Payment, db
 
 def reenviar_entregaveis_hoje():
-    """Reenvia entregáveis para pagamentos paid de hoje"""
+    """Reenvia entregáveis para pagamentos paid das últimas 48 horas"""
     with app.app_context():
-        hoje = datetime.now().date()
+        agora = datetime.now()
+        # Buscar pagamentos das últimas 48 horas para pegar vendas de ontem/today
+        desde = agora - timedelta(hours=48)
         
-        # Buscar todos os pagamentos PAID de hoje
+        # Buscar todos os pagamentos PAID das últimas 48 horas
         pagamentos = Payment.query.filter(
-            Payment.status == 'paid',
-            db.func.date(Payment.paid_at) == hoje if Payment.paid_at else db.func.date(Payment.created_at) == hoje
-        ).all()
+            Payment.status == 'paid'
+        ).filter(
+            (Payment.paid_at >= desde) if Payment.paid_at else (Payment.created_at >= desde)
+        ).order_by(Payment.id.desc()).all()
         
         if not pagamentos:
-            print(f"❌ Nenhum pagamento PAID encontrado para hoje ({hoje})")
+            print(f"❌ Nenhum pagamento PAID encontrado nas últimas 48 horas (desde {desde.strftime('%Y-%m-%d %H:%M')})")
             return
         
-        print(f"📊 Encontrados {len(pagamentos)} pagamento(s) PAID de hoje")
+        print(f"📊 Encontrados {len(pagamentos)} pagamento(s) PAID nas últimas 48 horas")
         print("=" * 60)
         
         enviados = 0
