@@ -229,17 +229,29 @@ class ParadisePaymentGateway(PaymentGateway):
             # ✅ NOVA API V30: Payload atualizado baseado no paradise.php
             # ✅ CORREÇÃO CRÍTICA: Reference deve ser único e válido (sem caracteres especiais problemáticos)
             # Limitar tamanho e garantir unicidade
-            safe_reference = str(payment_id).replace('_', '-')[:50]  # Max 50 chars, substituir _ por -
+            # IMPORTANTE: Paradise pode gerar seu próprio ID baseado no reference
+            # Usar payment_id diretamente (já é único: BOT{bot_id}_{timestamp}_{uuid})
+            safe_reference = str(payment_id).replace('_', '-').replace(' ', '')[:50]  # Max 50 chars, substituir _ por -
+            
+            # ✅ VALIDAÇÃO: Verificar se reference não está vazio
+            if not safe_reference or len(safe_reference.strip()) == 0:
+                logger.error(f"❌ Paradise: Reference inválido (vazio) - payment_id: {payment_id}")
+                return None
             
             payload = {
                 "amount": amount_cents,  # ✅ CENTAVOS
-                "description": description[:100] if len(description) > 100 else description,  # ✅ Limitar descrição
+                "description": (description[:100] if len(description) > 100 else description) or "Pagamento",  # ✅ Limitar descrição
                 "reference": safe_reference,  # ✅ Reference seguro e único
                 "checkoutUrl": self._get_dynamic_checkout_url(payment_id),  # ✅ URL DINÂMICA
                 "webhookUrl": self.get_webhook_url(),  # ✅ WEBHOOK URL
                 "productHash": self.product_hash,  # ✅ OBRIGATÓRIO
                 "customer": customer_payload  # ✅ DADOS REAIS DO CLIENTE
             }
+            
+            # ✅ VALIDAÇÃO CRÍTICA: Verificar se productHash está configurado
+            if not self.product_hash or not self.product_hash.startswith('prod_'):
+                logger.error(f"❌ Paradise: productHash inválido ou não configurado: {self.product_hash}")
+                return None
             
             # Se offerHash foi configurado, adiciona
             if self.offer_hash:
@@ -388,11 +400,21 @@ class ParadisePaymentGateway(PaymentGateway):
             
             # ✅ LOG CRÍTICO: Informações para debug
             logger.info(f"✅ Paradise: PIX gerado com SUCESSO")
-            logger.info(f"   Transaction ID: {transaction_id}")
-            logger.info(f"   Transaction Hash: {transaction_hash}")
+            logger.info(f"   Transaction ID (numérico): {transaction_id}")
+            logger.info(f"   Paradise ID (aparece no painel): {paradise_id or 'N/A'}")
+            logger.info(f"   Transaction Hash (usado para consulta): {transaction_hash}")
             logger.info(f"   Reference enviado: {safe_reference}")
+            logger.info(f"   Product Hash: {self.product_hash}")
             logger.info(f"   QR Code válido: {'✅' if pix_code.startswith('000201') else '⚠️'}")
-            logger.info(f"   💡 Se não aparecer no painel Paradise, verificar se reference é único e se productHash está correto")
+            
+            # ✅ ALERTA: Se o ID retornado é diferente do reference, pode não aparecer no painel
+            if paradise_id and paradise_id != safe_reference:
+                logger.warning(f"⚠️ Paradise gerou ID diferente do reference enviado!")
+                logger.warning(f"   Reference enviado: {safe_reference}")
+                logger.warning(f"   ID retornado: {paradise_id}")
+                logger.warning(f"   💡 Use o ID retornado ({paradise_id}) para verificar no painel Paradise")
+            else:
+                logger.info(f"   ✅ Reference e ID coincidem - transação deve aparecer no painel")
             
             # Retorna padrão unificado
             return {
