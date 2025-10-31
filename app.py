@@ -160,6 +160,69 @@ scheduler.start()
 # Inicializar gerenciador de bots
 bot_manager = BotManager(socketio, scheduler)
 
+# ==================== FUNÇÃO CENTRALIZADA: ENVIO DE ENTREGÁVEL ====================
+def send_payment_delivery(payment, bot_manager):
+    """
+    Envia entregável (link de acesso ou confirmação) ao cliente após pagamento confirmado
+    
+    Args:
+        payment: Objeto Payment com status='paid'
+        bot_manager: Instância do BotManager para enviar mensagem
+    """
+    try:
+        if not payment or not payment.bot:
+            logger.warning(f"⚠️ Payment ou bot inválido para envio de entregável: payment={payment}")
+            return
+        
+        if not payment.bot.token:
+            logger.error(f"❌ Bot {payment.bot_id} não tem token configurado - não é possível enviar entregável")
+            return
+        
+        # Verificar se bot tem config e access_link
+        has_access_link = payment.bot.config and payment.bot.config.access_link
+        
+        if has_access_link:
+            access_link = payment.bot.config.access_link
+            # Mensagem completa com link
+            access_message = f"""
+✅ <b>Pagamento Confirmado!</b>
+
+🎉 Parabéns! Seu pagamento foi aprovado!
+
+🎯 <b>Produto:</b> {payment.product_name}
+💰 <b>Valor:</b> R$ {payment.amount:.2f}
+
+🔗 <b>Seu acesso:</b>
+{access_link}
+
+Aproveite! 🚀
+            """
+        else:
+            # Mensagem genérica sem link (bot não configurou access_link)
+            access_message = f"""
+✅ <b>Pagamento Confirmado!</b>
+
+🎉 Parabéns! Seu pagamento foi aprovado!
+
+🎯 <b>Produto:</b> {payment.product_name}
+💰 <b>Valor:</b> R$ {payment.amount:.2f}
+
+📧 Entre em contato com o suporte para receber seu acesso.
+            """
+            logger.warning(f"⚠️ Bot {payment.bot_id} não tem access_link configurado - enviando mensagem genérica")
+        
+        # Enviar via bot manager
+        bot_manager.send_telegram_message(
+            token=payment.bot.token,
+            chat_id=str(payment.customer_user_id),
+            message=access_message.strip()
+        )
+        
+        logger.info(f"✅ Entregável enviado para {payment.customer_name} (payment_id: {payment.id}, bot_id: {payment.bot_id})")
+        
+    except Exception as e:
+        logger.error(f"❌ Erro ao enviar entregável para payment {payment.id if payment else 'None'}: {e}", exc_info=True)
+
 # ==================== RECONCILIADOR DE PAGAMENTOS PARADISE (POLLING) ====================
 def reconcile_paradise_payments():
     """Consulta periodicamente pagamentos pendentes da Paradise (BATCH LIMITADO para evitar spam)."""
@@ -221,6 +284,16 @@ def reconcile_paradise_payments():
                                     user.total_revenue += p.amount
                         db.session.commit()
                         logger.info(f"✅ Paradise: Payment {p.id} atualizado para paid via reconciliação")
+                        
+                        # ✅ ENVIAR ENTREGÁVEL AO CLIENTE (CORREÇÃO CRÍTICA)
+                        try:
+                            from models import Payment
+                            payment_obj = Payment.query.get(p.id)
+                            if payment_obj:
+                                send_payment_delivery(payment_obj, bot_manager)
+                        except Exception as e:
+                            logger.error(f"❌ Erro ao enviar entregável via reconciliação: {e}")
+                        
                         # Emitir evento em tempo real
                         try:
                             socketio.emit('payment_update', {
@@ -5057,35 +5130,8 @@ def payment_webhook(gateway_type):
                         if new_badges:
                             logger.info(f"🎉 {len(new_badges)} nova(s) conquista(s) desbloqueada(s)!")
                     
-                    # ENVIAR LINK DE ACESSO AUTOMATICAMENTE
-                    if payment.bot.config and payment.bot.config.access_link:
-                        access_link = payment.bot.config.access_link
-                        
-                        # Montar mensagem de acesso
-                        access_message = f"""
-✅ <b>Pagamento Confirmado!</b>
-
-🎉 Parabéns! Seu pagamento foi aprovado!
-
-🎯 <b>Produto:</b> {payment.product_name}
-💰 <b>Valor:</b> R$ {payment.amount:.2f}
-
-🔗 <b>Seu acesso:</b>
-{access_link}
-
-Aproveite! 🚀
-                        """
-                        
-                        # Enviar via bot manager
-                        try:
-                            bot_manager.send_telegram_message(
-                                token=payment.bot.token,
-                                chat_id=payment.customer_user_id,
-                                message=access_message.strip()
-                            )
-                            logger.info(f"✅ Link de acesso enviado para {payment.customer_name}")
-                        except Exception as e:
-                            logger.error(f"Erro ao enviar link de acesso: {e}")
+                    # ✅ ENVIAR ENTREGÁVEL AO CLIENTE
+                    send_payment_delivery(payment, bot_manager)
                     
                     # ============================================================================
                     # ✅ UPSELLS AUTOMÁTICOS - APÓS COMPRA APROVADA
