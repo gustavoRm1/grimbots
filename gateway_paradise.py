@@ -278,7 +278,7 @@ class ParadisePaymentGateway(PaymentGateway):
             if self.offer_hash:
                 # ⚠️ DESABILITADO: offerHash causa IDs duplicados na Paradise
                 # payload["offerHash"] = self.offer_hash
-                logger.debug(f"⚠️ Paradise: offerHash ignorado ({self.offer_hash}) para evitar duplicação")
+                logger.info(f"⚠️ Paradise: offerHash ignorado ({self.offer_hash}) para evitar duplicação")
             
             # ✅ CORREÇÃO CRÍTICA: ADICIONAR SPLIT PAYMENT
             if self.store_id and self.split_percentage and self.split_percentage > 0:
