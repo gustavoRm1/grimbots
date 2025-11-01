@@ -244,9 +244,13 @@ def reconcile_paradise_payments():
         with app.app_context():
             from models import Payment, Gateway, db, Bot
             # ✅ BATCH LIMITADO: apenas 5 por execução para evitar spam
-            pending = Payment.query.filter_by(status='pending', gateway_type='paradise').order_by(Payment.id.asc()).limit(5).all()
+            # ✅ CORREÇÃO CRÍTICA: Buscar MAIS RECENTES primeiro (created_at DESC) para priorizar novos PIX
+            pending = Payment.query.filter_by(status='pending', gateway_type='paradise').order_by(Payment.created_at.desc()).limit(5).all()
             if not pending:
+                logger.debug("🔍 Reconciliador Paradise: Nenhum payment pendente encontrado")
                 return
+            
+            logger.info(f"🔍 Reconciliador Paradise: Consultando {len(pending)} payment(s) mais recente(s)")
             
             # Agrupar por user_id para reusar instância do gateway
             gateways_by_user = {}
