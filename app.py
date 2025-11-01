@@ -304,12 +304,14 @@ def reconcile_paradise_payments():
                     if result:
                         status = result.get('status')
                         amount = result.get('amount')
+                        # ✅ CORREÇÃO: Garantir que amount seja numérico antes de formatar
+                        amount_str = f"R$ {amount:.2f}" if amount is not None else "N/A"
                         if status == 'paid':
-                            logger.info(f"   ✅ Status: PAID | Amount: R$ {amount:.2f}")
+                            logger.info(f"   ✅ Status: PAID | Amount: {amount_str}")
                         elif status == 'pending':
-                            logger.debug(f"   ⏳ Status: PENDING | Amount: R$ {amount:.2f if amount else 0:.2f}")
+                            logger.debug(f"   ⏳ Status: PENDING | Amount: {amount_str}")
                         else:
-                            logger.info(f"   📊 Status: {status.upper()} | Amount: R$ {amount:.2f if amount else 0:.2f}")
+                            logger.info(f"   📊 Status: {status.upper()} | Amount: {amount_str}")
                     else:
                         logger.warning(f"   ⚠️ Paradise não retornou status para {hash_or_id} (pode não existir na API)")
                     if result and result.get('status') == 'paid':
@@ -355,7 +357,7 @@ def reconcile_paradise_payments():
                         except Exception:
                             pass
                 except Exception as e:
-                    logger.error(f"❌ Erro ao reconciliar payment {p.id}: {e}")
+                    logger.error(f"❌ Erro ao reconciliar payment {p.id} ({p.payment_id}): {e}", exc_info=True)
                     continue
     except Exception as e:
         logger.error(f"❌ Reconciliador Paradise: erro: {e}", exc_info=True)
