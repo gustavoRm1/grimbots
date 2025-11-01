@@ -535,19 +535,26 @@ class ParadisePaymentGateway(PaymentGateway):
                 'X-API-Key': self.api_key
             }
             
-            # ✅ LOG para debug (apenas quando necessário)
+            # ✅ LOG para debug
             logger.debug(f"🔍 Paradise: Consultando status com hash/id: {transaction_id}")
             
             # Paradise aceita GET em check_status.php
             resp = requests.get(self.check_status_url, params=params, headers=headers, timeout=15)
             
-            # ✅ Log apenas em caso de erro para reduzir spam
+            # ✅ Log de erro
             if resp.status_code != 200:
                 logger.warning(f"⚠️ Paradise CHECK {resp.status_code}: {resp.text[:200]}")
                 return None
+            
             try:
                 data = resp.json()
             except ValueError:
+                logger.warning(f"⚠️ Paradise: Resposta não é JSON válido: {resp.text[:200]}")
+                return None
+
+            # ✅ VALIDAÇÃO: Verificar se resposta contém erro
+            if data.get('error') or data.get('status') == 'error':
+                logger.warning(f"⚠️ Paradise: Erro na resposta: {data.get('error', data.get('message', 'Erro desconhecido'))}")
                 return None
 
             # Campos possíveis: status/payment_status, transaction_id/id/hash, amount/amount_paid
@@ -563,9 +570,8 @@ class ParadisePaymentGateway(PaymentGateway):
 
             tx_id = data.get('transaction_id') or data.get('id') or data.get('hash') or str(transaction_id)
 
-            # ✅ Log de status (apenas quando status muda)
-            if mapped_status != 'pending':
-                logger.info(f"🔍 Paradise Status Response: {raw_status} → {mapped_status} | Amount: {amount}")
+            # ✅ Log de status (sempre para debug)
+            logger.debug(f"🔍 Paradise Status: {raw_status} → {mapped_status} | Amount: {amount} | TX ID: {tx_id}")
 
             return {
                 'gateway_transaction_id': str(tx_id),

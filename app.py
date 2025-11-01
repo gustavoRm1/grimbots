@@ -285,12 +285,33 @@ def reconcile_paradise_payments():
                     # Prioridade: hash > transaction_id
                     hash_or_id = p.gateway_transaction_hash or p.gateway_transaction_id
                     if not hash_or_id:
-                        logger.warning(f"⚠️ Paradise Payment {p.id}: sem hash ou transaction_id para consulta")
+                        logger.warning(f"⚠️ Paradise Payment {p.id} ({p.payment_id}): sem hash ou transaction_id para consulta")
+                        logger.warning(f"   Gateway Hash: {p.gateway_transaction_hash} | Transaction ID: {p.gateway_transaction_id}")
                         continue
                     
-                    logger.info(f"🔍 Paradise: Consultando status de payment {p.id} usando: {hash_or_id}")
+                    logger.info(f"🔍 Paradise: Consultando payment {p.id} ({p.payment_id})")
+                    logger.info(f"   Valor: R$ {p.amount:.2f} | Hash: {p.gateway_transaction_hash} | Transaction ID: {p.gateway_transaction_id}")
+                    logger.info(f"   Usando para consulta (prioridade): {hash_or_id}")
                     
+                    # ✅ Tentar primeiro com hash/id (o que aparece no painel)
                     result = gateway.get_payment_status(str(hash_or_id))
+                    
+                    # ✅ Se falhar e tiver transaction_id numérico diferente, tentar com ele também
+                    if not result and p.gateway_transaction_id and p.gateway_transaction_id != hash_or_id:
+                        logger.info(f"   🔄 Tentando com transaction_id numérico: {p.gateway_transaction_id}")
+                        result = gateway.get_payment_status(str(p.gateway_transaction_id))
+                    
+                    if result:
+                        status = result.get('status')
+                        amount = result.get('amount')
+                        if status == 'paid':
+                            logger.info(f"   ✅ Status: PAID | Amount: R$ {amount:.2f}")
+                        elif status == 'pending':
+                            logger.debug(f"   ⏳ Status: PENDING | Amount: R$ {amount:.2f if amount else 0:.2f}")
+                        else:
+                            logger.info(f"   📊 Status: {status.upper()} | Amount: R$ {amount:.2f if amount else 0:.2f}")
+                    else:
+                        logger.warning(f"   ⚠️ Paradise não retornou status para {hash_or_id} (pode não existir na API)")
                     if result and result.get('status') == 'paid':
                         # Atualizar pagamento e estatísticas
                         p.status = 'paid'
