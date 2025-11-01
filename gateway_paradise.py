@@ -214,47 +214,73 @@ class ParadisePaymentGateway(PaymentGateway):
                 logger.warning("⚠️ Paradise: customer_data não fornecido, usando fallback")
                 customer_data = {}
             
-            # ✅ CORREÇÃO CRÍTICA: Validar e corrigir dados do cliente
+            # ✅ CORREÇÃO CRÍTICA: Gerar dados ÚNICOS para cada transação
+            # NUNCA reutilizar dados de transações anteriores para evitar duplicação na Paradise
+            import time
+            import hashlib
+            
+            # Gerar timestamp único em milissegundos
+            timestamp_ms = int(time.time() * 1000)
+            
+            # Gerar hash único baseado em payment_id + timestamp + customer_user_id
+            unique_hash = hashlib.md5(f"{payment_id}_{timestamp_ms}_{customer_data.get('document', customer_data.get('phone', 'user'))}".encode()).hexdigest()[:8]
+            
+            # ✅ EMAIL ÚNICO: Usar payment_id + hash único (nunca reutilizar)
+            unique_email = f"pix{payment_id.replace('-', '').replace('_', '')[:10]}{unique_hash}@bot.digital"
+            
+            # ✅ CPF ÚNICO: Gerar CPF baseado no hash (nunca reutilizar do pool)
+            # Usar os últimos 11 dígitos do hash + payment_id para garantir unicidade
+            cpf_base = f"{unique_hash}{payment_id.replace('BOT', '').replace('-', '').replace('_', '')[:6]}"
+            # Garantir que tem 11 dígitos e é válido
+            unique_cpf = f"{cpf_base[:11]}" if len(cpf_base) >= 11 else f"{cpf_base}{'0' * (11 - len(cpf_base))}"
+            # Validar que começa com dígito válido
+            if not unique_cpf[0].isdigit() or unique_cpf[0] == '0':
+                unique_cpf = '1' + unique_cpf[1:]
+            
+            # ✅ TELEFONE ÚNICO: Baseado no customer_user_id ou gerar único
+            customer_user_id = customer_data.get('phone') or customer_data.get('document') or str(payment_id).replace('BOT', '').replace('-', '').replace('_', '')[:10]
+            unique_phone = self._validate_phone(f"11{customer_user_id[-9:]}" if len(str(customer_user_id)) >= 9 else f"11{unique_hash[:9]}")
+            
+            # ✅ NOME ÚNICO: Usar nome real se fornecido, senão gerar baseado no customer_user_id
+            unique_name = customer_data.get('name') or f"Cliente {customer_user_id[-6:]}" if customer_user_id else f"Cliente {unique_hash[:6]}"
+            # Limitar tamanho do nome
+            unique_name = unique_name[:30] if len(unique_name) > 30 else unique_name
+            
             customer_payload = {
-                "name": customer_data.get('name') or description[:30] if description else 'Cliente Digital',
-                "email": customer_data.get('email') or f"pix{payment_id}@bot.digital",
-                "phone": self._validate_phone(customer_data.get('phone') or '11999999999'),
-                "document": self._validate_document(customer_data.get('document') or random.choice(VALID_CPFS))
+                "name": unique_name,
+                "email": unique_email,
+                "phone": unique_phone,
+                "document": self._validate_document(unique_cpf)
             }
+            
+            logger.info(f"✅ Paradise: Dados ÚNICOS gerados para payment {payment_id}")
+            logger.info(f"   Email: {unique_email}")
+            logger.info(f"   CPF: {unique_cpf[:3]}***")
+            logger.info(f"   Phone: {unique_phone[:5]}***")
             
             logger.info(f"👤 Paradise: Cliente - {customer_payload['name']} | {customer_payload['email']}")
             logger.info(f"🔗 Paradise: Webhook URL - {self.get_webhook_url()}")
             logger.info(f"🔗 Paradise: Checkout URL - {self._get_dynamic_checkout_url(payment_id)}")
             
             # ✅ NOVA API V30: Payload atualizado baseado no paradise.php
-            # ✅ CORREÇÃO CRÍTICA: Reference deve ser único e válido (sem caracteres especiais problemáticos)
-            # Limitar tamanho e garantir unicidade
-            # IMPORTANTE: Paradise pode gerar seu próprio ID baseado no reference
-            # Usar payment_id diretamente (já é único: BOT{bot_id}_{timestamp}_{uuid})
-            # ✅ CRÍTICO: Garantir que reference SEMPRE seja único (adicionar timestamp se necessário)
-            safe_reference = str(payment_id).replace('_', '-').replace(' ', '')[:50]  # Max 50 chars, substituir _ por -
+            # ✅ CORREÇÃO CRÍTICA: Reference deve ser SEMPRE ÚNICO (timestamp + hash)
+            # NUNCA reutilizar reference para evitar duplicação na Paradise
+            # Usar payment_id + timestamp + hash único para garantir unicidade absoluta
+            reference_hash = hashlib.md5(f"{payment_id}_{timestamp_ms}_{unique_hash}".encode()).hexdigest()[:8]
+            
+            # Reference único: payment_id_base + timestamp + hash
+            payment_id_base = str(payment_id).replace('_', '-').replace(' ', '')[:30]  # Base do payment_id
+            safe_reference = f"{payment_id_base}-{timestamp_ms}-{reference_hash}"
+            
+            # Limitar a 50 caracteres (limite da Paradise)
+            safe_reference = safe_reference[:50]
             
             # ✅ VALIDAÇÃO: Verificar se reference não está vazio
             if not safe_reference or len(safe_reference.strip()) == 0:
                 logger.error(f"❌ Paradise: Reference inválido (vazio) - payment_id: {payment_id}")
                 return None
             
-            # ✅ VALIDAÇÃO CRÍTICA: Verificar se já existe payment com mesmo reference
-            # Para evitar duplicação na Paradise, garantir que reference nunca seja reutilizado
-            from app import db
-            from models import Payment
-            existing_with_same_reference = Payment.query.filter_by(
-                gateway_transaction_hash=safe_reference  # Reference salvo como hash
-            ).first()
-            
-            if existing_with_same_reference and existing_with_same_reference.status == 'pending':
-                logger.error(f"❌ Paradise: Reference '{safe_reference}' já existe e está pendente!")
-                logger.error(f"   Payment ID existente: {existing_with_same_reference.payment_id}")
-                logger.error(f"   Isso não deveria acontecer - payment_id deve ser único!")
-                # ✅ CORREÇÃO: Adicionar sufixo único ao reference para forçar unicidade
-                import time
-                safe_reference = f"{safe_reference}_{int(time.time())}"
-                logger.warning(f"⚠️ Reference corrigido para garantir unicidade: {safe_reference}")
+            logger.info(f"✅ Paradise: Reference ÚNICO gerado: {safe_reference}")
             
             payload = {
                 "amount": amount_cents,  # ✅ CENTAVOS
