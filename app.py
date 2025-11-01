@@ -309,11 +309,13 @@ def reconcile_paradise_payments():
                         if status == 'paid':
                             logger.info(f"   ✅ Status: PAID | Amount: {amount_str}")
                         elif status == 'pending':
-                            logger.debug(f"   ⏳ Status: PENDING | Amount: {amount_str}")
+                            logger.info(f"   ⏳ Status: PENDING | Amount: {amount_str}")
                         else:
                             logger.info(f"   📊 Status: {status.upper()} | Amount: {amount_str}")
                     else:
-                        logger.warning(f"   ⚠️ Paradise não retornou status para {hash_or_id} (pode não existir na API)")
+                        logger.warning(f"   ⚠️ Paradise não retornou status para {hash_or_id}")
+                        logger.warning(f"      Transaction ID numérico: {p.gateway_transaction_id}")
+                        logger.warning(f"      Possíveis causas: transação não existe na API, ainda está sendo processada, ou hash/ID incorreto")
                     if result and result.get('status') == 'paid':
                         # Atualizar pagamento e estatísticas
                         p.status = 'paid'

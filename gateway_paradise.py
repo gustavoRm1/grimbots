@@ -554,8 +554,14 @@ class ParadisePaymentGateway(PaymentGateway):
 
             # ✅ VALIDAÇÃO: Verificar se resposta contém erro
             if data.get('error') or data.get('status') == 'error':
-                logger.warning(f"⚠️ Paradise: Erro na resposta: {data.get('error', data.get('message', 'Erro desconhecido'))}")
+                error_msg = data.get('error', data.get('message', 'Erro desconhecido'))
+                logger.warning(f"⚠️ Paradise: Erro na resposta: {error_msg}")
+                logger.debug(f"   Response completa: {data}")
                 return None
+            
+            # ✅ Log da resposta para debug (apenas se não for pending, para reduzir spam)
+            if data.get('status') and data.get('status').lower() != 'pending':
+                logger.info(f"📡 Paradise Response: {data}")
 
             # Campos possíveis: status/payment_status, transaction_id/id/hash, amount/amount_paid
             raw_status = (data.get('status') or data.get('payment_status') or '').lower()
@@ -570,8 +576,11 @@ class ParadisePaymentGateway(PaymentGateway):
 
             tx_id = data.get('transaction_id') or data.get('id') or data.get('hash') or str(transaction_id)
 
-            # ✅ Log de status (sempre para debug)
-            logger.debug(f"🔍 Paradise Status: {raw_status} → {mapped_status} | Amount: {amount} | TX ID: {tx_id}")
+            # ✅ Log de status (info para pending também, para debug)
+            if mapped_status == 'pending':
+                logger.info(f"🔍 Paradise Status Response: {raw_status} → {mapped_status} | Amount: {amount} | TX ID: {tx_id}")
+            else:
+                logger.info(f"🔍 Paradise Status Response: {raw_status} → {mapped_status} | Amount: {amount} | TX ID: {tx_id}")
 
             return {
                 'gateway_transaction_id': str(tx_id),
