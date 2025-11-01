@@ -563,8 +563,9 @@ class ParadisePaymentGateway(PaymentGateway):
 
             tx_id = data.get('transaction_id') or data.get('id') or data.get('hash') or str(transaction_id)
 
-            # ✅ LOG TEMPORÁRIO para debug
-            logger.info(f"🔍 Paradise Status Response: {raw_status} → {mapped_status} | Amount: {amount}")
+            # ✅ Log de status (apenas quando status muda)
+            if mapped_status != 'pending':
+                logger.info(f"🔍 Paradise Status Response: {raw_status} → {mapped_status} | Amount: {amount}")
 
             return {
                 'gateway_transaction_id': str(tx_id),
