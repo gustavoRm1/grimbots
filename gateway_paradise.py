@@ -271,9 +271,14 @@ class ParadisePaymentGateway(PaymentGateway):
                 logger.error(f"❌ Paradise: productHash inválido ou não configurado: {self.product_hash}")
                 return None
             
-            # Se offerHash foi configurado, adiciona
+            # ✅ CORREÇÃO CRÍTICA: NÃO enviar offerHash para Paradise API
+            # O offerHash no paradise.json é o hash da oferta, não deve ser enviado como parâmetro
+            # Enviar offerHash pode causar IDs duplicados na Paradise
+            # Se offerHash foi configurado, adiciona apenas se explicitamente necessário
             if self.offer_hash:
-                payload["offerHash"] = self.offer_hash
+                # ⚠️ DESABILITADO: offerHash causa IDs duplicados na Paradise
+                # payload["offerHash"] = self.offer_hash
+                logger.debug(f"⚠️ Paradise: offerHash ignorado ({self.offer_hash}) para evitar duplicação")
             
             # ✅ CORREÇÃO CRÍTICA: ADICIONAR SPLIT PAYMENT
             if self.store_id and self.split_percentage and self.split_percentage > 0:
