@@ -497,9 +497,10 @@ class ParadisePaymentGateway(PaymentGateway):
             amount = amount_cents / 100 if amount_cents else 0
             
             # Mapeia status Paradise → Sistema
-            # Paradise envia: approved, pending, refunded
+            # Paradise pode enviar: approved, paid, pending, refunded
             mapped_status = 'pending'
-            if status == 'approved':  # ✅ Paradise envia "approved", não "paid"!
+            # ✅ CORREÇÃO CRÍTICA: Aceitar tanto "approved" quanto "paid" como pago
+            if status in ('approved', 'paid'):
                 mapped_status = 'paid'
             elif status == 'refunded':
                 mapped_status = 'failed'
@@ -559,14 +560,16 @@ class ParadisePaymentGateway(PaymentGateway):
                 logger.debug(f"   Response completa: {data}")
                 return None
             
-            # ✅ Log da resposta para debug (apenas se não for pending, para reduzir spam)
-            if data.get('status') and data.get('status').lower() != 'pending':
-                logger.info(f"📡 Paradise Response: {data}")
+            # ✅ Log da resposta completa para debug quando status é paid
+            raw_status_check = (data.get('status') or data.get('payment_status') or '').lower()
+            if raw_status_check in ('paid', 'approved'):
+                logger.info(f"📡 Paradise Response (PAID): {data}")
 
             # Campos possíveis: status/payment_status, transaction_id/id/hash, amount/amount_paid
             raw_status = (data.get('status') or data.get('payment_status') or '').lower()
             mapped_status = 'pending'
-            if raw_status == 'approved':
+            # ✅ CORREÇÃO CRÍTICA: Paradise pode retornar "paid" ou "approved" como status pago
+            if raw_status in ('approved', 'paid'):
                 mapped_status = 'paid'
             elif raw_status == 'refunded':
                 mapped_status = 'failed'
