@@ -108,21 +108,21 @@ class GatewayFactory:
                 )
             
             elif gateway_type == 'paradise':
-                # Paradise requer: api_key, product_hash, offer_hash
+                # Paradise requer: api_key, product_hash (offer_hash é opcional)
                 api_key = credentials.get('api_key')
                 product_hash = credentials.get('product_hash')
-                offer_hash = credentials.get('offer_hash')
+                offer_hash = credentials.get('offer_hash', '')
                 store_id = credentials.get('store_id', '')
                 split_percentage = credentials.get('split_percentage', 2.0)  # 2% PADRÃO
                 
-                if not api_key or not product_hash or not offer_hash:
-                    logger.error(f"❌ [Factory] Paradise requer api_key, product_hash e offer_hash")
+                if not api_key or not product_hash:
+                    logger.error(f"❌ [Factory] Paradise requer api_key e product_hash")
                     return None
                 
                 gateway = gateway_class(credentials={
                     'api_key': api_key,
                     'product_hash': product_hash,
-                    'offer_hash': offer_hash,
+                    'offer_hash': offer_hash,  # ✅ Opcional (será ignorado no payload)
                     'store_id': store_id,
                     'split_percentage': split_percentage
                 })
