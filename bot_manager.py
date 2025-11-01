@@ -2985,10 +2985,10 @@ Seu pagamento ainda não foi confirmado.
                         age_seconds = 999999
                     amount_matches = abs(float(pending_same_product.amount) - float(amount)) < 0.01
                     if pending_same_product.status == 'pending' and age_seconds <= 300 and amount_matches:
-                        # ✅ CORREÇÃO CRÍTICA: Para Paradise, verificar se transaction_hash existe antes de reutilizar
-                        # Se não tem hash, pode ser que a transação não foi criada no painel
-                        if gateway.gateway_type == 'paradise' and not pending_same_product.gateway_transaction_hash:
-                            logger.warning(f"⚠️ PIX Paradise antigo sem hash - pode não estar no painel. Gerando NOVO.")
+                        # ✅ CORREÇÃO CRÍTICA: Paradise NÃO REUTILIZA PIX (evita duplicação de IDs)
+                        # Paradise gera IDs únicos e não aceita reutilização
+                        if gateway.gateway_type == 'paradise':
+                            logger.warning(f"⚠️ Paradise não permite reutilizar PIX - gerando NOVO para evitar IDs duplicados.")
                         else:
                             logger.warning(f"⚠️ Já existe PIX pendente (<=5min) e valor igual para {description}. Reutilizando.")
                             pix_result = {
