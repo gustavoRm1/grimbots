@@ -461,7 +461,7 @@
     </div>
     
     <!-- Stats Grid V2.0 -->
-    <div x-data="{ period: 'month' }" class="mb-8">
+    <div class="mb-8">
         <!-- Filtros de Período (Responsivo) -->
         <div class="flex flex-wrap justify-center sm:justify-end gap-2 mb-4">
             <button @click="period = 'today'" 
@@ -557,29 +557,27 @@
         </div>
         
         <!-- Vendas Pendentes V2.0 (Respeita Filtro de Período) -->
-        <template x-if="(stats.today_pending_sales > 0) || (stats.month_pending_sales > 0) || (stats.pending_sales > 0)">
-            <div x-data="{ getPeriod() { try { return Alpine.$data(document.querySelector('[x-data*=\"period\"]')).period || 'month'; } catch(e) { return 'month'; } } }">
-                <div class="stat-card" style="border-color: rgba(255, 184, 0, 0.3);">
-                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
-                        <div class="stat-label text-xs sm:text-sm">⏳ Vendas Pendentes</div>
-                        <div class="text-xs font-bold uppercase whitespace-nowrap" 
-                             style="color: #FFB800; background: rgba(255, 184, 0, 0.1); padding: 4px 8px; border-radius: 4px;"
-                             x-text="(() => { const p = getPeriod(); return p === 'today' ? 'HOJE' : (p === 'month' ? 'MÊS' : 'TOTAL'); })()">
-                        </div>
+        <template x-if="(period === 'today' && stats.today_pending_sales > 0) || (period === 'month' && stats.month_pending_sales > 0) || (period === 'all' && stats.pending_sales > 0)">
+            <div class="stat-card" style="border-color: rgba(255, 184, 0, 0.3);">
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
+                    <div class="stat-label text-xs sm:text-sm">⏳ Vendas Pendentes</div>
+                    <div class="text-xs font-bold uppercase whitespace-nowrap" 
+                         style="color: #FFB800; background: rgba(255, 184, 0, 0.1); padding: 4px 8px; border-radius: 4px;"
+                         x-text="period === 'today' ? 'HOJE' : (period === 'month' ? 'MÊS' : 'TOTAL')">
                     </div>
-                    <div class="stat-value transition-all duration-300 text-2xl sm:text-2.5rem" style="color: #FFB800;">
-                        <template x-if="(() => { const p = getPeriod(); return p === 'today'; })()">
-                            <span x-text="stats.today_pending_sales"></span>
-                        </template>
-                        <template x-if="(() => { const p = getPeriod(); return p === 'month'; })()">
-                            <span x-text="stats.month_pending_sales"></span>
-                        </template>
-                        <template x-if="(() => { const p = getPeriod(); return p === 'all'; })()">
-                            <span x-text="stats.pending_sales"></span>
-                        </template>
-                    </div>
-                    <div class="text-xs sm:text-sm text-gray-500">Aguardando confirmação</div>
                 </div>
+                <div class="stat-value transition-all duration-300 text-2xl sm:text-2.5rem" style="color: #FFB800;">
+                    <template x-if="period === 'today'">
+                        <span x-text="stats.today_pending_sales"></span>
+                    </template>
+                    <template x-if="period === 'month'">
+                        <span x-text="stats.month_pending_sales"></span>
+                    </template>
+                    <template x-if="period === 'all'">
+                        <span x-text="stats.pending_sales"></span>
+                    </template>
+                </div>
+                <div class="text-xs sm:text-sm text-gray-500">Aguardando confirmação</div>
             </div>
         </template>
         
@@ -1339,6 +1337,9 @@ function dashboardApp() {
             exclude_buyers: false,
             buttons: []  // Botões de produto
         },
+        
+        // Filtro de Período (compartilhado entre cards)
+        period: 'month',
         
         // Dados
         stats: {
