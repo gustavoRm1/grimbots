@@ -36,19 +36,41 @@
 }
 
 .stat-value {
-    font-size: 2.5rem;
+    font-size: 2rem;
     font-weight: 900;
     line-height: 1;
     margin: 16px 0 8px 0;
     font-variant-numeric: tabular-nums;
 }
 
+@media (min-width: 640px) {
+    .stat-value {
+        font-size: 2.5rem;
+    }
+}
+
+.stat-value.text-2xl {
+    font-size: 1.5rem;
+}
+
+@media (min-width: 640px) {
+    .stat-value.text-2xl {
+        font-size: 2.5rem;
+    }
+}
+
 .stat-label {
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     font-weight: 600;
     color: #9CA3AF;
     text-transform: uppercase;
     letter-spacing: 0.05em;
+}
+
+@media (min-width: 640px) {
+    .stat-label {
+        font-size: 0.875rem;
+    }
 }
 
 /* Bot Card Premium */
@@ -440,36 +462,36 @@
     
     <!-- Stats Grid V2.0 -->
     <div x-data="{ period: 'month' }" class="mb-8">
-        <!-- Filtros de Período -->
-        <div class="flex justify-end gap-2 mb-4">
+        <!-- Filtros de Período (Responsivo) -->
+        <div class="flex flex-wrap justify-center sm:justify-end gap-2 mb-4">
             <button @click="period = 'today'" 
                     :class="period === 'today' ? 'bg-gradient-to-r from-yellow-500 to-yellow-600 text-black font-bold' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'"
-                    class="px-4 py-2 rounded-lg transition-all text-sm font-semibold">
-                <i class="fas fa-calendar-day mr-1"></i>Hoje
+                    class="px-3 sm:px-4 py-2 rounded-lg transition-all text-xs sm:text-sm font-semibold flex-1 sm:flex-initial min-w-[80px]">
+                <i class="fas fa-calendar-day mr-1"></i><span class="hidden sm:inline">Hoje</span><span class="sm:hidden">Hoje</span>
             </button>
             <button @click="period = 'month'" 
                     :class="period === 'month' ? 'bg-gradient-to-r from-yellow-500 to-yellow-600 text-black font-bold' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'"
-                    class="px-4 py-2 rounded-lg transition-all text-sm font-semibold">
-                <i class="fas fa-calendar-alt mr-1"></i>Este Mês
+                    class="px-3 sm:px-4 py-2 rounded-lg transition-all text-xs sm:text-sm font-semibold flex-1 sm:flex-initial min-w-[80px]">
+                <i class="fas fa-calendar-alt mr-1"></i><span class="hidden sm:inline">Este Mês</span><span class="sm:hidden">Mês</span>
             </button>
             <button @click="period = 'all'" 
                     :class="period === 'all' ? 'bg-gradient-to-r from-yellow-500 to-yellow-600 text-black font-bold' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'"
-                    class="px-4 py-2 rounded-lg transition-all text-sm font-semibold">
-                <i class="fas fa-infinity mr-1"></i>Todos
+                    class="px-3 sm:px-4 py-2 rounded-lg transition-all text-xs sm:text-sm font-semibold flex-1 sm:flex-initial min-w-[80px]">
+                <i class="fas fa-infinity mr-1"></i><span>Todos</span>
             </button>
         </div>
         
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
             <!-- Ganhos Totais V2.0 -->
             <div class="stat-card">
-                <div class="flex items-center justify-between mb-2">
-                    <div class="stat-label">💰 Ganhos Totais</div>
-                    <div class="text-xs font-bold uppercase" 
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
+                    <div class="stat-label text-xs sm:text-sm">💰 Ganhos Totais</div>
+                    <div class="text-xs font-bold uppercase whitespace-nowrap" 
                          style="color: #FFB800; background: rgba(255, 184, 0, 0.1); padding: 4px 8px; border-radius: 4px;"
                          x-text="period === 'today' ? 'HOJE' : (period === 'month' ? 'MÊS' : 'TOTAL')">
                     </div>
                 </div>
-                <div class="stat-value transition-all duration-300" style="color: var(--brand-gold-500);">
+                <div class="stat-value transition-all duration-300 text-2xl sm:text-2.5rem break-all" style="color: var(--brand-gold-500);">
                     <template x-if="period === 'today'">
                         <span>R$ {{ "%.2f"|format(stats.today_revenue) }}</span>
                     </template>
@@ -480,10 +502,10 @@
                         <span>R$ {{ "%.2f"|format(stats.total_revenue) }}</span>
                     </template>
                 </div>
-                <div class="flex items-center gap-2 mt-2">
-                    <div class="text-sm text-gray-500">Receita confirmada</div>
+                <div class="flex flex-col sm:flex-row sm:items-center gap-2 mt-2">
+                    <div class="text-xs sm:text-sm text-gray-500">Receita confirmada</div>
                     <template x-if="period !== 'all'">
-                        <div class="text-xs font-bold px-2 py-1 rounded" 
+                        <div class="text-xs font-bold px-2 py-1 rounded whitespace-nowrap" 
                              style="background: rgba(255, 184, 0, 0.1); color: #FFB800;"
                              x-text="period === 'today' ? `vs Total: ${stats.total_revenue > 0 ? ((stats.today_revenue / stats.total_revenue) * 100).toFixed(1) : '0.0'}%` : `vs Total: ${stats.total_revenue > 0 ? ((stats.month_revenue / stats.total_revenue) * 100).toFixed(1) : '0.0'}%`">
                         </div>
@@ -493,14 +515,14 @@
             
             <!-- Vendas V2.0 -->
             <div class="stat-card">
-                <div class="flex items-center justify-between mb-2">
-                    <div class="stat-label">✅ Vendas</div>
-                    <div class="text-xs font-bold uppercase" 
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
+                    <div class="stat-label text-xs sm:text-sm">✅ Vendas</div>
+                    <div class="text-xs font-bold uppercase whitespace-nowrap" 
                          style="color: #10B981; background: rgba(16, 185, 129, 0.1); padding: 4px 8px; border-radius: 4px;"
                          x-text="period === 'today' ? 'HOJE' : (period === 'month' ? 'MÊS' : 'TOTAL')">
                     </div>
                 </div>
-                <div class="stat-value transition-all duration-300" style="color: var(--brand-green-500);">
+                <div class="stat-value transition-all duration-300 text-2xl sm:text-2.5rem" style="color: var(--brand-green-500);">
                     <template x-if="period === 'today'">
                         <span>{{ stats.today_sales }}</span>
                     </template>
@@ -511,10 +533,10 @@
                         <span>{{ stats.total_sales }}</span>
                     </template>
                 </div>
-                <div class="flex items-center gap-2 mt-2">
-                    <div class="text-sm text-gray-500">Pagamentos confirmados</div>
+                <div class="flex flex-col sm:flex-row sm:items-center gap-2 mt-2">
+                    <div class="text-xs sm:text-sm text-gray-500">Pagamentos confirmados</div>
                     <template x-if="period !== 'all'">
-                        <div class="text-xs font-bold px-2 py-1 rounded" 
+                        <div class="text-xs font-bold px-2 py-1 rounded whitespace-nowrap" 
                              style="background: rgba(16, 185, 129, 0.1); color: #10B981;"
                              x-text="period === 'today' ? `vs Total: ${stats.total_sales > 0 ? ((stats.today_sales / stats.total_sales) * 100).toFixed(1) : '0.0'}%` : `vs Total: ${stats.total_sales > 0 ? ((stats.month_sales / stats.total_sales) * 100).toFixed(1) : '0.0'}%`">
                         </div>
