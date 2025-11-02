@@ -7,10 +7,28 @@ Diagnóstico completo: Por que Meta Pixel Purchase não está sendo enviado para
 import os
 import sys
 
+# Verificar se está no venv
+venv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'venv')
+if os.path.exists(venv_path):
+    activate_script = os.path.join(venv_path, 'bin', 'activate_this.py')
+    if os.path.exists(activate_script):
+        exec(open(activate_script).read(), {'__file__': activate_script})
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from app import app, db
-from models import Payment, PoolBot, RedirectPool, Bot
+try:
+    from app import app, db
+    from models import Payment, PoolBot, RedirectPool, Bot
+except ImportError as e:
+    print("=" * 80)
+    print("❌ ERRO: Dependências não instaladas!")
+    print("=" * 80)
+    print(f"Erro: {e}")
+    print("\n💡 SOLUÇÃO:")
+    print("   1. Ative o venv: source venv/bin/activate")
+    print("   2. Instale dependências: pip install -r requirements.txt")
+    print("=" * 80)
+    sys.exit(1)
 
 with app.app_context():
     from datetime import datetime, timedelta
