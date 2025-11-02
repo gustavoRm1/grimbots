@@ -14,6 +14,7 @@ import os
 import logging
 import json
 import time
+import uuid
 from dotenv import load_dotenv
 
 # ============================================================================
@@ -5018,11 +5019,11 @@ def send_meta_pixel_purchase_event(payment):
         from utils.meta_pixel import MetaPixelAPI
         from utils.encryption import decrypt
         
-        # Gerar event_id único para deduplicação
-        event_id = MetaPixelAPI._generate_event_id(
-            event_type='purchase',
-            unique_id=payment.payment_id
-        )
+        # ✅ CORREÇÃO CRÍTICA: Gerar event_id ABSOLUTAMENTE ÚNICO
+        # Combinar payment_id + timestamp em milissegundos + UUID para garantir unicidade total
+        timestamp_ms = int(time.time() * 1000)  # Milissegundos para evitar colisões
+        unique_suffix = uuid.uuid4().hex[:8]  # 8 caracteres aleatórios
+        event_id = f"purchase_{payment.payment_id}_{timestamp_ms}_{unique_suffix}"
         
         # Descriptografar access token
         try:
@@ -5066,7 +5067,9 @@ def send_meta_pixel_purchase_event(payment):
             'event_id': event_id,
             'action_source': 'website',
             'user_data': {
-                'external_id': bot_user.external_id if bot_user else f'payment_{payment.id}',
+                # ✅ CORREÇÃO CRÍTICA: external_id ABSOLUTAMENTE ÚNICO por pagamento
+                # Combinar payment_id + timestamp + UUID para evitar deduplicação da Meta
+                'external_id': bot_user.external_id if bot_user else f'purchase_{payment.payment_id}_{int(time.time())}_{uuid.uuid4().hex[:8]}',
                 'client_ip_address': bot_user.ip_address if bot_user else None,
                 'client_user_agent': bot_user.user_agent if bot_user else None
             },
