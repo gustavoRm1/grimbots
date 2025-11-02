@@ -332,12 +332,27 @@ def reconcile_paradise_payments():
                         db.session.commit()
                         logger.info(f"✅ Paradise: Payment {p.id} atualizado para paid via reconciliação")
                         
+                        # ✅ REFRESH payment após commit para garantir que está atualizado
+                        db.session.refresh(p)
+                        
                         # ✅ ENVIAR META PIXEL PURCHASE EVENT (CORREÇÃO CRÍTICA)
                         try:
                             send_meta_pixel_purchase_event(p)
                             logger.info(f"📊 Meta Pixel Purchase disparado para {p.payment_id} via reconciliador Paradise")
                         except Exception as e:
                             logger.error(f"❌ Erro ao disparar Meta Pixel via reconciliação Paradise: {e}", exc_info=True)
+                            # ✅ LOG DETALHADO para debug
+                            logger.error(f"   Payment ID: {p.payment_id} | Bot ID: {p.bot_id} | Status: {p.status}")
+                            if p.bot:
+                                from models import PoolBot
+                                pool_bot = PoolBot.query.filter_by(bot_id=p.bot_id).first()
+                                if pool_bot:
+                                    pool = pool_bot.pool
+                                    logger.error(f"   Pool: {pool.name} | Tracking: {pool.meta_tracking_enabled} | Purchase Event: {pool.meta_events_purchase}")
+                                else:
+                                    logger.error(f"   ❌ Bot não está associado a nenhum pool!")
+                            else:
+                                logger.error(f"   ❌ Bot não encontrado!")
                         
                         # ✅ ENVIAR ENTREGÁVEL AO CLIENTE (CORREÇÃO CRÍTICA)
                         try:
@@ -4962,7 +4977,8 @@ def send_meta_pixel_purchase_event(payment):
         logger.info(f"🔍 DEBUG Meta Pixel Purchase - Pool Bot encontrado: {pool_bot is not None}")
         
         if not pool_bot:
-            logger.warning(f"⚠️ Bot {payment.bot_id} não está associado a nenhum pool - Meta Pixel ignorado (Payment {payment.id})")
+            logger.error(f"❌ PROBLEMA RAIZ: Bot {payment.bot_id} não está associado a nenhum pool - Meta Pixel Purchase NÃO SERÁ ENVIADO (Payment {payment.id})")
+            logger.error(f"   SOLUÇÃO: Associe o bot a um pool no dashboard ou via API")
             return
         
         pool = pool_bot.pool
@@ -4974,17 +4990,20 @@ def send_meta_pixel_purchase_event(payment):
         logger.info(f"🔍 DEBUG Meta Pixel Purchase - Access Token: {pool.meta_access_token is not None}")
         
         if not pool.meta_tracking_enabled:
-            logger.warning(f"⚠️ Meta tracking desabilitado para pool {pool.id} ({pool.name}) - Purchase ignorado (Payment {payment.id})")
+            logger.error(f"❌ PROBLEMA RAIZ: Meta tracking DESABILITADO para pool {pool.id} ({pool.name}) - Meta Pixel Purchase NÃO SERÁ ENVIADO (Payment {payment.id})")
+            logger.error(f"   SOLUÇÃO: Ative 'Meta Tracking' nas configurações do pool {pool.name}")
             return
         
         if not pool.meta_pixel_id or not pool.meta_access_token:
-            logger.error(f"❌ Pool {pool.id} ({pool.name}) tem tracking ativo mas sem pixel_id ou access_token - Purchase ignorado (Payment {payment.id})")
+            logger.error(f"❌ PROBLEMA RAIZ: Pool {pool.id} ({pool.name}) tem tracking ativo mas SEM pixel_id ou access_token - Meta Pixel Purchase NÃO SERÁ ENVIADO (Payment {payment.id})")
+            logger.error(f"   SOLUÇÃO: Configure Meta Pixel ID e Access Token nas configurações do pool {pool.name}")
             return
         
         # ✅ VERIFICAÇÃO 3: Evento Purchase está habilitado?
         logger.info(f"🔍 DEBUG Meta Pixel Purchase - Evento Purchase habilitado: {pool.meta_events_purchase}")
         if not pool.meta_events_purchase:
-            logger.warning(f"⚠️ Evento Purchase desabilitado para pool {pool.id} ({pool.name}) - Purchase ignorado (Payment {payment.id})")
+            logger.error(f"❌ PROBLEMA RAIZ: Evento Purchase DESABILITADO para pool {pool.id} ({pool.name}) - Meta Pixel Purchase NÃO SERÁ ENVIADO (Payment {payment.id})")
+            logger.error(f"   SOLUÇÃO: Ative 'Purchase Event' nas configurações do pool {pool.name}")
             return
         
         # ✅ VERIFICAÇÃO 4: Já enviou este pagamento? (ANTI-DUPLICAÇÃO)
@@ -5262,11 +5281,6 @@ def payment_webhook(gateway_type):
                         logger.info(f"💰 Receita da plataforma: R$ {commission_amount:.2f} (split automático) - Usuário: {payment.bot.owner.email}")
                     
                     # ============================================================================
-                    # ✅ META PIXEL: ENVIAR PURCHASE EVENT
-                    # ============================================================================
-                    send_meta_pixel_purchase_event(payment)
-                    
-                    # ============================================================================
                     # GAMIFICAÇÃO V2.0 - ATUALIZAR STREAK, RANKING E CONQUISTAS
                     # ============================================================================
                     if GAMIFICATION_V2_ENABLED:
@@ -5306,13 +5320,26 @@ def payment_webhook(gateway_type):
                         if new_badges:
                             logger.info(f"🎉 {len(new_badges)} nova(s) conquista(s) desbloqueada(s)!")
                     
-                # ✅ ENVIAR ENTREGÁVEL SEMPRE QUE STATUS VIRA 'paid' (CRÍTICO!)
-                # Isso garante que mesmo se estatísticas já foram processadas, o entregável é enviado
+                # ✅ ENVIAR ENTREGÁVEL E META PIXEL SEMPRE QUE STATUS VIRA 'paid' (CRÍTICO!)
+                # Isso garante que mesmo se estatísticas já foram processadas, o entregável e Meta Pixel são enviados
                 if deve_enviar_entregavel:
                     logger.info(f"📦 Enviando entregável para payment {payment.payment_id} (status: {payment.status})")
                     resultado = send_payment_delivery(payment, bot_manager)
                     if not resultado:
                         logger.warning(f"⚠️ Falha ao enviar entregável para payment {payment.payment_id}")
+                    
+                    # ============================================================================
+                    # ✅ META PIXEL: ENVIAR PURCHASE EVENT (SEMPRE quando status é 'paid')
+                    # ============================================================================
+                    # ✅ CORREÇÃO CRÍTICA: Sempre enviar Meta Pixel quando status é 'paid',
+                    # independente de se estatísticas foram processadas ou não
+                    # Isso garante que mesmo se reconciliador atualizar antes do webhook,
+                    # o Meta Pixel será enviado via webhook também (idempotente)
+                    try:
+                        send_meta_pixel_purchase_event(payment)
+                        logger.info(f"📊 Meta Pixel Purchase disparado para {payment.payment_id} via webhook {gateway_type}")
+                    except Exception as e:
+                        logger.error(f"❌ Erro ao disparar Meta Pixel via webhook {gateway_type}: {e}", exc_info=True)
                     
                     # ============================================================================
                     # ✅ UPSELLS AUTOMÁTICOS - APÓS COMPRA APROVADA (só se estatísticas foram processadas)
