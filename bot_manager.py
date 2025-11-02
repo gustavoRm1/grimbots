@@ -1135,13 +1135,22 @@ class BotManager:
                                 if tracking_elite.get('timestamp'):
                                     bot_user.click_timestamp = datetime.fromisoformat(tracking_elite['timestamp'])
                                 
-                                # ✅ SALVAR FBCLID COMPLETO DO REDIS como external_id (SEMPRE!)
+                                # ✅ CORREÇÃO CRÍTICA: Priorizar `grim` sobre `fbclid` para matching com campanha
+                                # O `grim` é usado pela Meta para identificar a campanha/anúncio específico
+                                grim_from_redis = tracking_elite.get('grim', '')
                                 fbclid_completo_redis = tracking_elite.get('fbclid')
-                                if fbclid_completo_redis:
-                                    # Sempre atualizar fbclid e external_id (prioridade do Redis)
+                                
+                                if grim_from_redis:
+                                    # ✅ PRIORIDADE MÁXIMA: Usar grim como external_id (matching com campanha)
+                                    bot_user.external_id = grim_from_redis
+                                    logger.info(f"🎯 external_id = grim (campanha): {grim_from_redis}")
+                                    if fbclid_completo_redis:
+                                        bot_user.fbclid = fbclid_completo_redis  # Salvar fbclid também
+                                elif fbclid_completo_redis:
+                                    # Fallback: usar fbclid se não tiver grim
                                     bot_user.fbclid = fbclid_completo_redis
-                                    bot_user.external_id = fbclid_completo_redis  # ✅ external_id = fbclid COMPLETO!
-                                    logger.info(f"🎯 external_id atualizado: {fbclid_completo_redis[:30]}...")
+                                    bot_user.external_id = fbclid_completo_redis
+                                    logger.info(f"🎯 external_id = fbclid (fallback): {fbclid_completo_redis[:30]}...")
                                 
                                 # Enriquecer UTMs com dados do Redis (podem ter sido perdidos no start_param)
                                 if not bot_user.utm_source and tracking_elite.get('utm_source'):

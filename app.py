@@ -3421,6 +3421,8 @@ def public_redirect(slug):
                 'timestamp': datetime.now().isoformat(),
                 'pool_id': pool.id,
                 'slug': slug,
+                # ✅ CORREÇÃO CRÍTICA: Capturar `grim` para matching com campanha
+                'grim': request.args.get('grim', ''),
                 # Capturar TODOS os UTMs
                 'utm_source': request.args.get('utm_source', ''),
                 'utm_campaign': request.args.get('utm_campaign', ''),
@@ -4873,17 +4875,23 @@ def send_meta_pixel_pageview_event(pool, request):
         from utils.encryption import decrypt
         import time
         
-        # 🎯 TRACKING ELITE: Usar fbclid como external_id (NÃO gerar sintético!)
+        # ✅ CORREÇÃO CRÍTICA: Priorizar `grim` como external_id para matching com campanha
+        # O parâmetro `grim` é usado na Meta para identificar a campanha/anúncio
+        grim_param = request.args.get('grim', '')
         fbclid_from_request = request.args.get('fbclid', '')
         
-        if fbclid_from_request:
-            # ✅ USAR FBCLID REAL como external_id
+        if grim_param:
+            # ✅ USAR GRIM COMO external_id (prioridade máxima para matching com campanha)
+            external_id = grim_param
+            logger.info(f"🎯 TRACKING ELITE | Using grim as external_id: {external_id}")
+        elif fbclid_from_request:
+            # ✅ FALLBACK: Usar fbclid se não tiver grim
             external_id = fbclid_from_request
             logger.info(f"🎯 TRACKING ELITE | Using fbclid as external_id: {external_id[:30]}...")
         else:
-            # Fallback: gerar sintético apenas se não tiver fbclid
+            # Fallback: gerar sintético apenas se não tiver grim nem fbclid
             external_id = MetaPixelHelper.generate_external_id()
-            logger.warning(f"⚠️ Sem fbclid, usando external_id sintético: {external_id}")
+            logger.warning(f"⚠️ Sem grim nem fbclid, usando external_id sintético: {external_id}")
         
         event_id = f"pageview_{pool.id}_{int(time.time())}_{external_id[:8]}"
         
