@@ -556,16 +556,30 @@
             <div class="text-sm text-gray-500">Bots ativos agora</div>
         </div>
         
-        <!-- Vendas Pendentes -->
-        {% if stats.pending_sales > 0 %}
-        <div class="stat-card" style="border-color: rgba(255, 184, 0, 0.3);">
-            <div class="stat-label">⏳ Vendas Pendentes</div>
-            <div class="stat-value" style="color: #FFB800;">
-                {{ stats.pending_sales }}
+        <!-- Vendas Pendentes V2.0 (Respeita Filtro de Período) -->
+        <template x-if="(period === 'today' && stats.today_pending_sales > 0) || (period === 'month' && stats.month_pending_sales > 0) || (period === 'all' && stats.pending_sales > 0)">
+            <div class="stat-card" style="border-color: rgba(255, 184, 0, 0.3);">
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
+                    <div class="stat-label text-xs sm:text-sm">⏳ Vendas Pendentes</div>
+                    <div class="text-xs font-bold uppercase whitespace-nowrap" 
+                         style="color: #FFB800; background: rgba(255, 184, 0, 0.1); padding: 4px 8px; border-radius: 4px;"
+                         x-text="period === 'today' ? 'HOJE' : (period === 'month' ? 'MÊS' : 'TOTAL')">
+                    </div>
+                </div>
+                <div class="stat-value transition-all duration-300 text-2xl sm:text-2.5rem" style="color: #FFB800;">
+                    <template x-if="period === 'today'">
+                        <span x-text="stats.today_pending_sales"></span>
+                    </template>
+                    <template x-if="period === 'month'">
+                        <span x-text="stats.month_pending_sales"></span>
+                    </template>
+                    <template x-if="period === 'all'">
+                        <span x-text="stats.pending_sales"></span>
+                    </template>
+                </div>
+                <div class="text-xs sm:text-sm text-gray-500">Aguardando confirmação</div>
             </div>
-            <div class="text-sm text-gray-500">Aguardando confirmação</div>
-        </div>
-        {% endif %}
+        </template>
         
         <!-- Comissão -->
         {% if stats.commission_balance > 0 %}
@@ -1336,7 +1350,10 @@ function dashboardApp() {
             today_sales: {{ stats.today_sales }},
             today_revenue: {{ stats.today_revenue }},
             month_sales: {{ stats.month_sales }},
-            month_revenue: {{ stats.month_revenue }}
+            month_revenue: {{ stats.month_revenue }},
+            // ✅ VERSÃO 2.0: Pendentes por período
+            today_pending_sales: {{ stats.today_pending_sales }},
+            month_pending_sales: {{ stats.month_pending_sales }}
         },
         bots: {{ bots|tojson|safe }},
         payments: {{ recent_payments|tojson|safe }},

@@ -963,6 +963,25 @@ def dashboard():
         month_sales = 0
         month_revenue = 0.0
     
+    # ✅ VERSÃO 2.0: Vendas Pendentes por período
+    total_pending_sales = sum(b.pending_sales for b in bot_stats)
+    
+    if bot_ids:
+        today_pending_sales = db.session.query(func.count(Payment.id)).join(Bot).filter(
+            Bot.user_id == current_user.id,
+            Payment.status == 'pending',
+            Payment.created_at >= today_start
+        ).scalar() or 0
+        
+        month_pending_sales = db.session.query(func.count(Payment.id)).join(Bot).filter(
+            Bot.user_id == current_user.id,
+            Payment.status == 'pending',
+            Payment.created_at >= month_start
+        ).scalar() or 0
+    else:
+        today_pending_sales = 0
+        month_pending_sales = 0
+    
     stats = {
         'total_bots': len(bot_stats),
         'active_bots': sum(1 for b in bot_stats if b.is_active),
@@ -970,7 +989,7 @@ def dashboard():
         'total_users': total_users,
         'total_sales': total_sales,
         'total_revenue': total_revenue,
-        'pending_sales': sum(b.pending_sales for b in bot_stats),
+        'pending_sales': total_pending_sales,
         'can_add_bot': current_user.can_add_bot(),
         'commission_percentage': current_user.commission_percentage,
         'commission_balance': current_user.get_commission_balance(),
@@ -980,7 +999,10 @@ def dashboard():
         'today_sales': today_sales,
         'today_revenue': float(today_revenue),
         'month_sales': month_sales,
-        'month_revenue': float(month_revenue)
+        'month_revenue': float(month_revenue),
+        # ✅ VERSÃO 2.0: Pendentes por período
+        'today_pending_sales': today_pending_sales,
+        'month_pending_sales': month_pending_sales
     }
     
     # ✅ PERFORMANCE: Últimos pagamentos - usar índices se disponíveis
