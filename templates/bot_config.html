@@ -1493,6 +1493,78 @@
                             </div>
                         </div>
 
+                        <!-- ✅ BOTÕES DE PRODUTO (igual ao Remarketing Geral) -->
+                        <div class="form-group p-4 rounded-xl" style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3);">
+                            <div class="flex items-center justify-between mb-3">
+                                <label class="form-label mb-0">
+                                    <i class="fas fa-tag mr-2 text-emerald-400"></i>
+                                    Botões de Produto
+                                </label>
+                                <button type="button" 
+                                        @click="newCampaign.buttons = newCampaign.buttons || []; newCampaign.buttons.push({ text: '', price: 0, description: '' })"
+                                        class="px-3 py-1 text-xs font-bold rounded-lg text-black"
+                                        style="background: linear-gradient(to right, #10B981, #059669);">
+                                    <i class="fas fa-plus mr-1"></i>
+                                    Adicionar Botão
+                                </button>
+                            </div>
+                            
+                            <!-- Lista de botões -->
+                            <template x-if="!newCampaign.buttons || newCampaign.buttons.length === 0">
+                                <div class="text-center py-6 text-gray-500 text-sm">
+                                    <i class="fas fa-hand-pointer text-2xl mb-2"></i>
+                                    <p>Nenhum botão adicionado</p>
+                                    <p class="text-xs mt-1">Clique em "Adicionar Botão" para criar opções de produtos</p>
+                                </div>
+                            </template>
+                            
+                            <div class="space-y-3" x-show="newCampaign.buttons && newCampaign.buttons.length > 0">
+                                <template x-for="(button, index) in newCampaign.buttons" :key="index">
+                                    <div class="p-4 bg-gray-800 rounded-lg border border-gray-700">
+                                        <div class="flex items-center justify-between mb-3">
+                                            <span class="text-xs font-bold text-emerald-400">
+                                                <i class="fas fa-tag mr-1"></i>
+                                                Botão <span x-text="index + 1"></span>
+                                            </span>
+                                            <button type="button" 
+                                                    @click="newCampaign.buttons.splice(index, 1)"
+                                                    class="text-xs text-red-400 hover:text-red-300">
+                                                <i class="fas fa-trash mr-1"></i>
+                                                Remover
+                                            </button>
+                                        </div>
+                                        
+                                        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                            <div class="md:col-span-2">
+                                                <label class="block text-xs text-gray-400 mb-1">Texto do Botão</label>
+                                                <input type="text" 
+                                                       x-model="button.text"
+                                                       class="form-input text-sm"
+                                                       placeholder="Ex: Comprar Produto Premium">
+                                            </div>
+                                            <div>
+                                                <label class="block text-xs text-gray-400 mb-1">Preço (R$)</label>
+                                                <input type="number" 
+                                                       x-model.number="button.price"
+                                                       step="0.01"
+                                                       min="0"
+                                                       class="form-input text-sm font-mono font-bold"
+                                                       placeholder="19.97">
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="mt-3">
+                                            <label class="block text-xs text-gray-400 mb-1">Descrição do Produto</label>
+                                            <input type="text" 
+                                                   x-model="button.description"
+                                                   class="form-input text-sm"
+                                                   placeholder="Acesso completo + Bônus exclusivos">
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+
                         <div class="grid grid-cols-2 gap-4">
                             <div class="form-group">
                                 <label class="form-label">
@@ -2116,7 +2188,8 @@ function remarketingApp() {
             target_audience: 'non_buyers',
             days_since_last_contact: 3,
             exclude_buyers: true,
-            cooldown_hours: 6  // ✅ Fixo: 6 horas (não aparece para usuário)
+            cooldown_hours: 6,  // ✅ Fixo: 6 horas (não aparece para usuário)
+            buttons: []  // ✅ NOVO: Botões de produto (igual ao Remarketing Geral)
         },
         
         async init() {
@@ -2195,7 +2268,8 @@ function remarketingApp() {
                 target_audience: 'non_buyers',
                 days_since_last_contact: 3,
                 exclude_buyers: true,
-                cooldown_hours: 6  // ✅ Fixo: 6 horas
+                cooldown_hours: 6,  // ✅ Fixo: 6 horas
+                buttons: []  // ✅ NOVO: Botões de produto
             };
         },
         
