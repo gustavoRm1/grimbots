@@ -924,6 +924,45 @@ def dashboard():
     total_revenue = sum(float(b.total_revenue) for b in bot_stats)
     running_bots = sum(1 for b in bot_stats if b.is_running)
     
+    # ✅ VERSÃO 2.0: Calcular stats por período (Hoje e Mês)
+    from datetime import datetime, timedelta
+    today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    month_start = datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    
+    # Stats de HOJE
+    if bot_ids:
+        today_sales = db.session.query(func.count(Payment.id)).join(Bot).filter(
+            Bot.user_id == current_user.id,
+            Payment.status == 'paid',
+            Payment.created_at >= today_start
+        ).scalar() or 0
+        
+        today_revenue = db.session.query(func.sum(Payment.amount)).join(Bot).filter(
+            Bot.user_id == current_user.id,
+            Payment.status == 'paid',
+            Payment.created_at >= today_start
+        ).scalar() or 0.0
+    else:
+        today_sales = 0
+        today_revenue = 0.0
+    
+    # Stats do MÊS
+    if bot_ids:
+        month_sales = db.session.query(func.count(Payment.id)).join(Bot).filter(
+            Bot.user_id == current_user.id,
+            Payment.status == 'paid',
+            Payment.created_at >= month_start
+        ).scalar() or 0
+        
+        month_revenue = db.session.query(func.sum(Payment.amount)).join(Bot).filter(
+            Bot.user_id == current_user.id,
+            Payment.status == 'paid',
+            Payment.created_at >= month_start
+        ).scalar() or 0.0
+    else:
+        month_sales = 0
+        month_revenue = 0.0
+    
     stats = {
         'total_bots': len(bot_stats),
         'active_bots': sum(1 for b in bot_stats if b.is_active),
@@ -936,7 +975,12 @@ def dashboard():
         'commission_percentage': current_user.commission_percentage,
         'commission_balance': current_user.get_commission_balance(),
         'total_commission_owed': current_user.total_commission_owed,
-        'total_commission_paid': current_user.total_commission_paid
+        'total_commission_paid': current_user.total_commission_paid,
+        # ✅ VERSÃO 2.0: Stats por período
+        'today_sales': today_sales,
+        'today_revenue': float(today_revenue),
+        'month_sales': month_sales,
+        'month_revenue': float(month_revenue)
     }
     
     # ✅ PERFORMANCE: Últimos pagamentos - usar índices se disponíveis

@@ -438,34 +438,123 @@
         </p>
     </div>
     
-    <!-- Stats Grid -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <!-- Ganhos -->
-        <div class="stat-card">
-            <div class="stat-label">💰 Ganhos Totais</div>
-            <div class="stat-value" style="color: var(--brand-gold-500);">
-                R$ {{ "%.2f"|format(stats.total_revenue) }}
-            </div>
-            <div class="text-sm text-gray-500">Receita confirmada</div>
+    <!-- Stats Grid V2.0 -->
+    <div x-data="{ period: 'month' }" class="mb-8">
+        <!-- Filtros de Período -->
+        <div class="flex justify-end gap-2 mb-4">
+            <button @click="period = 'today'" 
+                    :class="period === 'today' ? 'bg-gradient-to-r from-yellow-500 to-yellow-600 text-black font-bold' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'"
+                    class="px-4 py-2 rounded-lg transition-all text-sm font-semibold">
+                <i class="fas fa-calendar-day mr-1"></i>Hoje
+            </button>
+            <button @click="period = 'month'" 
+                    :class="period === 'month' ? 'bg-gradient-to-r from-yellow-500 to-yellow-600 text-black font-bold' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'"
+                    class="px-4 py-2 rounded-lg transition-all text-sm font-semibold">
+                <i class="fas fa-calendar-alt mr-1"></i>Este Mês
+            </button>
+            <button @click="period = 'all'" 
+                    :class="period === 'all' ? 'bg-gradient-to-r from-yellow-500 to-yellow-600 text-black font-bold' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'"
+                    class="px-4 py-2 rounded-lg transition-all text-sm font-semibold">
+                <i class="fas fa-infinity mr-1"></i>Todos
+            </button>
         </div>
         
-        <!-- Vendas -->
-        <div class="stat-card">
-            <div class="stat-label">✅ Vendas</div>
-            <div class="stat-value" style="color: var(--brand-green-500);">
-                {{ stats.total_sales }}
-                        </div>
-            <div class="text-sm text-gray-500">Pagamentos confirmados</div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Ganhos Totais V2.0 -->
+            <div class="stat-card">
+                <div class="flex items-center justify-between mb-2">
+                    <div class="stat-label">💰 Ganhos Totais</div>
+                    <div class="text-xs font-bold uppercase" 
+                         style="color: #FFB800; background: rgba(255, 184, 0, 0.1); padding: 4px 8px; border-radius: 4px;"
+                         x-text="period === 'today' ? 'HOJE' : (period === 'month' ? 'MÊS' : 'TOTAL')">
                     </div>
+                </div>
+                <div class="stat-value transition-all duration-300" style="color: var(--brand-gold-500);">
+                    <template x-if="period === 'today'">
+                        <span>R$ {{ "%.2f"|format(stats.today_revenue) }}</span>
+                    </template>
+                    <template x-if="period === 'month'">
+                        <span>R$ {{ "%.2f"|format(stats.month_revenue) }}</span>
+                    </template>
+                    <template x-if="period === 'all'">
+                        <span>R$ {{ "%.2f"|format(stats.total_revenue) }}</span>
+                    </template>
+                </div>
+                <div class="flex items-center gap-2 mt-2">
+                    <div class="text-sm text-gray-500">Receita confirmada</div>
+                    <template x-if="period !== 'all'">
+                        <div class="text-xs font-bold px-2 py-1 rounded" 
+                             style="background: rgba(255, 184, 0, 0.1); color: #FFB800;"
+                             x-text="period === 'today' ? `vs Total: ${stats.total_revenue > 0 ? ((stats.today_revenue / stats.total_revenue) * 100).toFixed(1) : '0.0'}%` : `vs Total: ${stats.total_revenue > 0 ? ((stats.month_revenue / stats.total_revenue) * 100).toFixed(1) : '0.0'}%`">
+                        </div>
+                    </template>
+                </div>
+            </div>
+            
+            <!-- Vendas V2.0 -->
+            <div class="stat-card">
+                <div class="flex items-center justify-between mb-2">
+                    <div class="stat-label">✅ Vendas</div>
+                    <div class="text-xs font-bold uppercase" 
+                         style="color: #10B981; background: rgba(16, 185, 129, 0.1); padding: 4px 8px; border-radius: 4px;"
+                         x-text="period === 'today' ? 'HOJE' : (period === 'month' ? 'MÊS' : 'TOTAL')">
+                    </div>
+                </div>
+                <div class="stat-value transition-all duration-300" style="color: var(--brand-green-500);">
+                    <template x-if="period === 'today'">
+                        <span>{{ stats.today_sales }}</span>
+                    </template>
+                    <template x-if="period === 'month'">
+                        <span>{{ stats.month_sales }}</span>
+                    </template>
+                    <template x-if="period === 'all'">
+                        <span>{{ stats.total_sales }}</span>
+                    </template>
+                </div>
+                <div class="flex items-center gap-2 mt-2">
+                    <div class="text-sm text-gray-500">Pagamentos confirmados</div>
+                    <template x-if="period !== 'all'">
+                        <div class="text-xs font-bold px-2 py-1 rounded" 
+                             style="background: rgba(16, 185, 129, 0.1); color: #10B981;"
+                             x-text="period === 'today' ? `vs Total: ${stats.total_sales > 0 ? ((stats.today_sales / stats.total_sales) * 100).toFixed(1) : '0.0'}%` : `vs Total: ${stats.total_sales > 0 ? ((stats.month_sales / stats.total_sales) * 100).toFixed(1) : '0.0'}%`">
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </div>
 
-        <!-- Bots Ativos -->
+    <!-- Bots Ativos (separado) -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <div class="stat-card">
             <div class="stat-label">🤖 Bots Online</div>
             <div class="stat-value" style="color: var(--brand-blue-500);">
                 {{ stats.running_bots }}<span class="text-2xl text-gray-600">/{{ stats.total_bots }}</span>
             </div>
             <div class="text-sm text-gray-500">Bots ativos agora</div>
-    </div>
+        </div>
+        
+        <!-- Vendas Pendentes -->
+        {% if stats.pending_sales > 0 %}
+        <div class="stat-card" style="border-color: rgba(255, 184, 0, 0.3);">
+            <div class="stat-label">⏳ Vendas Pendentes</div>
+            <div class="stat-value" style="color: #FFB800;">
+                {{ stats.pending_sales }}
+            </div>
+            <div class="text-sm text-gray-500">Aguardando confirmação</div>
+        </div>
+        {% endif %}
+        
+        <!-- Comissão -->
+        {% if stats.commission_balance > 0 %}
+        <div class="stat-card" style="border-color: rgba(168, 85, 247, 0.3);">
+            <div class="stat-label">💎 Comissão Disponível</div>
+            <div class="stat-value" style="color: #A855F7;">
+                R$ {{ "%.2f"|format(stats.commission_balance) }}
+            </div>
+            <div class="text-sm text-gray-500">Pronta para saque</div>
+        </div>
+        {% endif %}
     </div>
         
     
@@ -1220,7 +1309,12 @@ function dashboardApp() {
             total_revenue: {{ stats.total_revenue }},
             pending_sales: {{ stats.pending_sales }},
             running_bots: {{ stats.running_bots }},
-            total_bots: {{ stats.total_bots }}
+            total_bots: {{ stats.total_bots }},
+            // ✅ VERSÃO 2.0: Stats por período
+            today_sales: {{ stats.today_sales }},
+            today_revenue: {{ stats.today_revenue }},
+            month_sales: {{ stats.month_sales }},
+            month_revenue: {{ stats.month_revenue }}
         },
         bots: {{ bots|tojson|safe }},
         payments: {{ recent_payments|tojson|safe }},
