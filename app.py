@@ -4502,16 +4502,87 @@ def ranking():
     except Exception as e:
         logger.error(f"⚠️ Erro na auto-verificação de achievements: {e}")
     
-    # Buscar conquistas do usuário
+    # ✅ VERSÃO 2.0: Buscar TODAS as conquistas + progresso
     my_achievements = UserAchievement.query.filter_by(user_id=current_user.id).all()
-    logger.info(f"📊 Ranking - Usuario {current_user.username} tem {len(my_achievements)} conquista(s)")
+    my_achievement_ids = {ua.achievement_id for ua in my_achievements}
+    
+    # Buscar todas as conquistas disponíveis
+    all_achievements = Achievement.query.order_by(Achievement.points.desc()).all()
+    
+    # Calcular progresso e categorizar
+    achievements_data = []
+    categories = {}
+    
+    for achievement in all_achievements:
+        is_unlocked = achievement.id in my_achievement_ids
+        progress = 0.0
+        current_value = 0.0
+        target_value = achievement.requirement_value
+        
+        # Calcular progresso baseado no requirement_type
+        if not is_unlocked:
+            if achievement.requirement_type == 'sales':
+                total_sales = db.session.query(func.count(Payment.id))\
+                    .join(Bot).filter(
+                        Bot.user_id == current_user.id,
+                        Payment.status == 'paid'
+                    ).scalar() or 0
+                current_value = float(total_sales)
+            elif achievement.requirement_type == 'revenue':
+                total_revenue = db.session.query(func.sum(Payment.amount))\
+                    .join(Bot).filter(
+                        Bot.user_id == current_user.id,
+                        Payment.status == 'paid'
+                    ).scalar() or 0.0
+                current_value = float(total_revenue)
+            elif achievement.requirement_type == 'streak':
+                current_value = float(current_user.current_streak or 0)
+            elif achievement.requirement_type == 'conversion_rate':
+                # Calcular taxa de conversão
+                total_users = BotUser.query.join(Bot).filter(Bot.user_id == current_user.id).count()
+                total_sales = db.session.query(func.count(Payment.id))\
+                    .join(Bot).filter(
+                        Bot.user_id == current_user.id,
+                        Payment.status == 'paid'
+                    ).scalar() or 0
+                current_value = (total_sales / total_users * 100) if total_users > 0 else 0.0
+            
+            if target_value > 0:
+                progress = min((current_value / target_value) * 100, 100.0)
+        
+        # Categorizar baseado no requirement_type
+        category_map = {
+            'sales': 'Vendas',
+            'revenue': 'Receita',
+            'streak': 'Consistência',
+            'conversion_rate': 'Conversão',
+            'speed': 'Velocidade'
+        }
+        category = category_map.get(achievement.requirement_type, 'Geral')
+        
+        achievements_data.append({
+            'achievement': achievement,
+            'is_unlocked': is_unlocked,
+            'progress': progress,
+            'current_value': current_value,
+            'target_value': target_value,
+            'category': category
+        })
+        
+        if category not in categories:
+            categories[category] = []
+        categories[category].append(achievements_data[-1])
+    
+    logger.info(f"📊 Ranking - Usuario {current_user.username} tem {len(my_achievements)}/{len(all_achievements)} conquista(s)")
     
     return render_template('ranking.html',
                          ranking=ranking_data,
                          my_position=my_position_number,
                          next_user=next_user,
                          period=period,
-                         my_achievements=my_achievements)
+                         my_achievements=my_achievements,
+                         all_achievements_data=achievements_data,
+                         achievements_by_category=categories)
 
 @app.route('/api/debug-achievements', methods=['GET'])
 @login_required
