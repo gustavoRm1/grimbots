@@ -5098,17 +5098,49 @@ def send_meta_pixel_purchase_event(payment):
                 priority=1  # Alta prioridade
             )
             
-            # Marcar como enviado IMEDIATAMENTE (flag otimista)
-            payment.meta_purchase_sent = True
-            payment.meta_purchase_sent_at = datetime.now()
-            payment.meta_event_id = event_id
-            db.session.commit()  # ✅ CRÍTICO: Persistir no banco!
-            
             logger.info(f"📤 Purchase enfileirado: R$ {payment.amount} | " +
                        f"Pool: {pool.name} | " +
                        f"Event ID: {event_id} | " +
                        f"Task: {task.id} | " +
                        f"Type: {'Downsell' if is_downsell else 'Upsell' if is_upsell else 'Remarketing' if is_remarketing else 'Normal'}")
+            
+            # ✅ CORREÇÃO CRÍTICA: Aguardar resultado do Celery ANTES de marcar como enviado
+            # Isso garante que o evento foi realmente processado e enviado à Meta
+            # Timeout muito curto (1s) para não bloquear o request - se não processar rápido, verifica depois
+            try:
+                # Aguardar resultado com timeout de 1 segundo (timeout muito curto)
+                result = task.get(timeout=1)
+                
+                # Verificar se foi bem-sucedido
+                if result and result.get('events_received', 0) > 0:
+                    # ✅ SUCESSO: Marcar como enviado APÓS confirmação
+                    payment.meta_purchase_sent = True
+                    payment.meta_purchase_sent_at = datetime.now()
+                    payment.meta_event_id = event_id
+                    db.session.commit()
+                    
+                    logger.info(f"✅ Purchase ENVIADO com sucesso para Meta: R$ {payment.amount} | " +
+                               f"Events Received: {result.get('events_received', 0)} | " +
+                               f"Task: {task.id}")
+                else:
+                    # Falhou silenciosamente - não marcar como enviado
+                    logger.error(f"❌ Purchase FALHOU silenciosamente: R$ {payment.amount} | " +
+                               f"Result: {result} | " +
+                               f"Task: {task.id}")
+                    db.session.rollback()
+            except Exception as result_error:
+                # Timeout ou erro ao obter resultado - não marcar como enviado
+                logger.error(f"❌ Erro ao obter resultado do Celery: {result_error} | Task: {task.id}")
+                # Tentar obter estado da task
+                try:
+                    task_state = task.state
+                    logger.error(f"   Task state: {task_state}")
+                    if hasattr(task, 'traceback') and task.traceback:
+                        logger.error(f"   Task traceback: {task.traceback[:500]}")
+                except:
+                    pass
+                db.session.rollback()
+                
         except Exception as celery_error:
             logger.error(f"❌ ERRO CRÍTICO ao enfileirar Purchase no Celery: {celery_error}", exc_info=True)
             logger.error(f"   Payment ID: {payment.payment_id} | Pool: {pool.name} | Pixel: {pool.meta_pixel_id}")
