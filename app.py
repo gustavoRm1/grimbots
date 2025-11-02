@@ -5106,10 +5106,10 @@ def send_meta_pixel_purchase_event(payment):
             
             # ✅ CORREÇÃO CRÍTICA: Aguardar resultado do Celery ANTES de marcar como enviado
             # Isso garante que o evento foi realmente processado e enviado à Meta
-            # Timeout muito curto (1s) para não bloquear o request - se não processar rápido, verifica depois
+            # Timeout de 10 segundos (validação token + envio Meta pode levar alguns segundos)
             try:
-                # Aguardar resultado com timeout de 1 segundo (timeout muito curto)
-                result = task.get(timeout=1)
+                # Aguardar resultado com timeout de 10 segundos
+                result = task.get(timeout=10)
                 
                 # Verificar se foi bem-sucedido
                 if result and result.get('events_received', 0) > 0:
