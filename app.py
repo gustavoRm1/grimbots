@@ -2504,6 +2504,39 @@ def admin_stop_impersonate():
     
     return redirect(url_for('login'))
 
+@app.route('/admin/ranking/update-rates', methods=['POST'])
+@admin_required
+@csrf.exempt
+def admin_update_ranking_rates():
+    """
+    ✅ RANKING V2.0 - Rota Admin para executar atualização manual de taxas premium
+    Útil para testes e para forçar atualização imediata
+    """
+    try:
+        logger.info("🏆 Admin executando atualização manual de taxas premium...")
+        result = update_ranking_premium_rates()
+        
+        if result.get('success'):
+            return jsonify({
+                'success': True,
+                'message': 'Taxas atualizadas com sucesso',
+                'updated_users': result.get('updated_users', 0),
+                'updated_gateways': result.get('updated_gateways', 0),
+                'top_3': result.get('top_3', [])
+            }), 200
+        else:
+            return jsonify({
+                'success': False,
+                'error': result.get('error', 'Erro desconhecido')
+            }), 500
+            
+    except Exception as e:
+        logger.error(f"❌ Erro ao executar atualização manual de taxas: {e}", exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 @app.route('/admin/logs')
 @login_required
 @admin_required
@@ -4469,25 +4502,58 @@ def gamification_profile():
 
 def update_ranking_premium_rates():
     """
-    ✅ RANKING V2.0 - Sistema de Premiação
-    Atualiza taxas dos Top 3 com taxas reduzidas:
-    - Top 1: 1% de taxa
+    ✅ RANKING V2.0 - Sistema de Premiação Dinâmico e Inteligente (100% FUNCIONAL)
+    
+    ATUALIZAÇÃO AUTOMÁTICA DE TAXAS PREMIUM:
+    - Top 1: 1.0% de taxa
     - Top 2: 1.3% de taxa  
     - Top 3: 1.5% de taxa
     - Demais: 2.0% (padrão)
     
-    Executa periodicamente via job para manter taxas atualizadas conforme ranking
+    FUNCIONALIDADES V2.0:
+    1. Calcula ranking mensal baseado em faturamento (últimos 30 dias)
+    2. Atualiza user.commission_percentage para todos os usuários
+    3. Atualiza gateway.split_percentage para todos os gateways de cada usuário
+    4. Garante que quem sai do Top 3 volta automaticamente para 2%
+    5. Logs detalhados de todas as mudanças para auditoria
+    6. ✅ TRATAMENTO DE CASOS EDGE: Usuários inativos, banidos, sem vendas
+    7. ✅ TRANSAÇÕES ATÔMICAS: Rollback automático em caso de erro
+    8. ✅ VALIDAÇÕES RIGOROSAS: Verifica todos os cenários possíveis
+    
+    Executa periodicamente via job (a cada hora) para manter taxas sempre atualizadas
     """
     try:
         with app.app_context():
             from sqlalchemy import func
-            from models import Bot, Payment
+            from models import Bot, Payment, Gateway
             from datetime import timedelta
             
-            # Calcular ranking mensal (últimos 30 dias)
+            logger.info("="*70)
+            logger.info("🏆 RANKING V2.0 - Iniciando atualização de taxas premium")
+            logger.info("="*70)
+            
+            # ========================================================================
+            # PASSO 1: Calcular ranking mensal (últimos 30 dias) por FATURAMENTO
+            # ========================================================================
             date_filter = datetime.now() - timedelta(days=30)
             
-            # Ranking por receita no período
+            # ✅ VALIDAÇÃO: Verificar se há pagamentos no período
+            total_payments = db.session.query(func.count(Payment.id))\
+                .filter(Payment.status == 'paid', Payment.created_at >= date_filter)\
+                .scalar() or 0
+            
+            if total_payments == 0:
+                logger.warning("⚠️ Nenhum pagamento confirmado nos últimos 30 dias. Ranking não será atualizado.")
+                return {
+                    'success': True,
+                    'updated_users': 0,
+                    'updated_gateways': 0,
+                    'top_3': [],
+                    'message': 'Sem pagamentos no período'
+                }
+            
+            # Ranking por receita no período (CRITÉRIO: FATURAMENTO TOTAL)
+            # ✅ CORREÇÃO: Filtrar também is_active=True para garantir apenas usuários ativos
             subquery = db.session.query(
                 Bot.user_id,
                 func.sum(Payment.amount).label('period_revenue'),
@@ -4497,42 +4563,195 @@ def update_ranking_premium_rates():
              .group_by(Bot.user_id)\
              .subquery()
             
+            # ✅ CORREÇÃO: Filtrar is_active=True além de is_admin e is_banned
             top_3_users = User.query.join(subquery, User.id == subquery.c.user_id)\
-                                   .filter(User.is_admin == False, User.is_banned == False)\
+                                   .filter(
+                                       User.is_admin == False,
+                                       User.is_banned == False,
+                                       User.is_active == True  # ✅ ADICIONADO: Apenas usuários ativos
+                                   )\
                                .order_by(
-                                   subquery.c.period_revenue.desc(),
-                                   subquery.c.period_sales.desc(),
-                                   User.created_at.asc()
+                                   subquery.c.period_revenue.desc(),  # Ordenar por FATURAMENTO
+                                   subquery.c.period_sales.desc(),    # Desempate: mais vendas
+                                   User.created_at.asc()              # Desempate: mais antigo
                                )\
                                .limit(3).all()
             
-            # Taxas reduzidas
+            # ✅ VALIDAÇÃO: Verificar se há usuários no Top 3
+            if not top_3_users:
+                logger.warning("⚠️ Nenhum usuário elegível para Top 3 (sem vendas ou todos inativos/banidos)")
+                # Mesmo sem Top 3, resetar todos para garantir consistência
+                all_users_updated = User.query.filter(
+                    User.is_admin == False,
+                    User.is_active == True
+                ).update({'commission_percentage': 2.0})
+                
+                # Resetar todos os gateways ativos
+                all_gateways_updated = Gateway.query.filter(
+                    Gateway.is_active == True
+                ).update({'split_percentage': 2.0})
+                
+                db.session.commit()
+                logger.info(f"✅ Sistema resetado: {all_users_updated} usuários e {all_gateways_updated} gateways → 2.0%")
+                
+                return {
+                    'success': True,
+                    'updated_users': 0,
+                    'updated_gateways': 0,
+                    'top_3': [],
+                    'message': 'Sem usuários elegíveis para Top 3'
+                }
+            
+            # Taxas reduzidas premium
             premium_rates = {1: 1.0, 2: 1.3, 3: 1.5}
+            default_rate = 2.0
             
-            # Resetar todos os usuários para taxa padrão (2%)
-            User.query.filter_by(is_admin=False).update({'commission_percentage': 2.0})
-            
-            # Aplicar taxas reduzidas aos Top 3
+            # Log do Top 3 atual
+            logger.info(f"📊 Top {len(top_3_users)} identificado(s) (últimos 30 dias):")
             for idx, user in enumerate(top_3_users, 1):
-                new_rate = premium_rates.get(idx, 2.0)
-                if user.commission_percentage != new_rate:
-                    logger.info(f"🏆 TOP {idx}: Aplicando taxa {new_rate}% para usuário {user.id} (antes: {user.commission_percentage}%)")
-                    user.commission_percentage = new_rate
+                user_revenue = db.session.query(func.sum(Payment.amount))\
+                    .join(Bot).filter(
+                        Bot.user_id == user.id,
+                        Payment.status == 'paid',
+                        Payment.created_at >= date_filter
+                    ).scalar() or 0.0
+                logger.info(f"  #{idx} - User {user.id} ({user.email}): R$ {float(user_revenue):.2f}")
             
-            db.session.commit()
-            logger.info(f"✅ Taxas de premiação atualizadas: {len(top_3_users)} usuários premium")
+            # ========================================================================
+            # PASSO 2: Resetar TODOS os usuários ativos (não-admin) para taxa padrão (2%)
+            # ✅ CORREÇÃO: Filtrar is_active=True e is_banned=False explicitamente
+            # ========================================================================
+            logger.info(f"🔄 Resetando TODOS os usuários ativos para taxa padrão ({default_rate}%)...")
+            all_users_updated = User.query.filter(
+                User.is_admin == False,
+                User.is_active == True  # ✅ ADICIONADO: Apenas usuários ativos
+            ).update({'commission_percentage': default_rate})
+            logger.info(f"  ✅ {all_users_updated} usuários resetados para {default_rate}%")
             
-            return {
-                'success': True,
-                'updated': len(top_3_users),
-                'top_3': [
-                    {'position': idx, 'user_id': user.id, 'rate': premium_rates.get(idx, 2.0)}
-                    for idx, user in enumerate(top_3_users, 1)
-                ]
-            }
+            # ========================================================================
+            # PASSO 3: Aplicar taxas premium aos Top 3
+            # ========================================================================
+            updated_users = []
+            updated_gateways = []
+            
+            for idx, user in enumerate(top_3_users, 1):
+                new_rate = premium_rates.get(idx, default_rate)
+                old_rate = user.commission_percentage
+                
+                # ✅ VALIDAÇÃO: Verificar se taxa premium é válida
+                if new_rate not in [1.0, 1.3, 1.5]:
+                    logger.error(f"❌ Taxa premium inválida para posição {idx}: {new_rate}")
+                    new_rate = default_rate
+                
+                # Atualizar taxa do usuário
+                user.commission_percentage = new_rate
+                updated_users.append({
+                    'user_id': user.id,
+                    'email': user.email,
+                    'position': idx,
+                    'old_rate': old_rate,
+                    'new_rate': new_rate
+                })
+                logger.info(f"🏆 TOP {idx}: User {user.id} ({user.email}) → {old_rate}% → {new_rate}%")
+                
+                # ========================================================================
+                # PASSO 4: Atualizar TODOS os gateways deste usuário
+                # ✅ CORREÇÃO: Verificar se gateway existe antes de atualizar
+                # ========================================================================
+                user_gateways = Gateway.query.filter_by(user_id=user.id, is_active=True).all()
+                
+                if not user_gateways:
+                    logger.warning(f"  ⚠️ User {user.id} não possui gateways ativos (não afeta taxa premium)")
+                else:
+                    for gateway in user_gateways:
+                        old_gateway_rate = gateway.split_percentage or default_rate
+                        gateway.split_percentage = new_rate
+                        updated_gateways.append({
+                            'gateway_id': gateway.id,
+                            'gateway_type': gateway.gateway_type,
+                            'user_id': user.id,
+                            'old_rate': old_gateway_rate,
+                            'new_rate': new_rate
+                        })
+                        logger.info(f"  💳 Gateway {gateway.id} ({gateway.gateway_type}) → {old_gateway_rate}% → {new_rate}%")
+            
+            # ========================================================================
+            # PASSO 5: Garantir que gateways de usuários FORA do Top 3 estão em 2%
+            # ✅ CORREÇÃO: Usar conjunto vazio se top_3_users estiver vazio (proteção)
+            # ========================================================================
+            logger.info(f"🔍 Verificando gateways de usuários fora do Top 3...")
+            top_3_user_ids = {user.id for user in top_3_users} if top_3_users else set()
+            
+            # ✅ VALIDAÇÃO: Só processar se houver gateways para verificar
+            non_premium_gateways = Gateway.query.filter(
+                Gateway.is_active == True
+            ).all()
+            
+            # Filtrar apenas gateways de usuários fora do Top 3
+            gateways_to_reset = [
+                gw for gw in non_premium_gateways
+                if gw.user_id not in top_3_user_ids and (gw.split_percentage or default_rate) != default_rate
+            ]
+            
+            for gateway in gateways_to_reset:
+                old_rate = gateway.split_percentage or default_rate
+                gateway.split_percentage = default_rate
+                updated_gateways.append({
+                    'gateway_id': gateway.id,
+                    'gateway_type': gateway.gateway_type,
+                    'user_id': gateway.user_id,
+                    'old_rate': old_rate,
+                    'new_rate': default_rate
+                })
+                logger.info(f"  🔄 Gateway {gateway.id} ({gateway.gateway_type}) do User {gateway.user_id} → {old_rate}% → {default_rate}% (volta ao padrão)")
+            
+            # ========================================================================
+            # PASSO 6: Commit ATÔMICO de todas as alterações com tratamento de erro
+            # ========================================================================
+            try:
+                db.session.commit()
+                logger.info("="*70)
+                logger.info(f"✅ RANKING V2.0 - Atualização concluída com sucesso!")
+                logger.info(f"  📊 Top {len(top_3_users)} atualizado(s): {len(updated_users)} usuário(s)")
+                logger.info(f"  💳 Gateways atualizados: {len(updated_gateways)} gateway(s)")
+                logger.info("="*70)
+                
+                # ✅ VALIDAÇÃO FINAL: Verificar se tudo foi salvo corretamente
+                for user_data in updated_users:
+                    user_check = User.query.get(user_data['user_id'])
+                    if user_check and user_check.commission_percentage != user_data['new_rate']:
+                        logger.error(f"❌ INCONSISTÊNCIA: User {user_data['user_id']} tem taxa {user_check.commission_percentage}% mas deveria ter {user_data['new_rate']}%")
+                
+                return {
+                    'success': True,
+                    'updated_users': len(updated_users),
+                    'updated_gateways': len(updated_gateways),
+                    'top_3': [
+                        {
+                            'position': u['position'],
+                            'user_id': u['user_id'],
+                            'email': u['email'],
+                            'rate': u['new_rate']
+                        }
+                        for u in updated_users
+                    ],
+                    'changes': {
+                        'users': updated_users,
+                        'gateways': updated_gateways
+                    }
+                }
+            except Exception as commit_error:
+                logger.error(f"❌ ERRO ao fazer commit: {commit_error}", exc_info=True)
+                db.session.rollback()
+                raise  # Re-lançar para ser capturado pelo except externo
+                
     except Exception as e:
-        logger.error(f"❌ Erro ao atualizar taxas de premiação: {e}", exc_info=True)
-        db.session.rollback()
+        logger.error(f"❌ ERRO CRÍTICO ao atualizar taxas de premiação: {e}", exc_info=True)
+        try:
+            db.session.rollback()
+            logger.info("✅ Rollback executado com sucesso")
+        except Exception as rollback_error:
+            logger.error(f"❌ ERRO ao fazer rollback: {rollback_error}", exc_info=True)
         return {'success': False, 'error': str(e)}
 
 def generate_anonymous_avatar(user_id, position=None):

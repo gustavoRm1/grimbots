@@ -2334,6 +2334,10 @@ Desculpe, não foi possível processar seu pagamento.
                         ).first()
                         
                         if gateway:
+                            # ✅ RANKING V2.0: Usar commission_percentage do USUÁRIO diretamente
+                            # Prioridade: user.commission_percentage > gateway.split_percentage > 2.0 (padrão)
+                            user_commission = bot.owner.commission_percentage or gateway.split_percentage or 2.0
+                            
                             credentials = {
                                 'client_id': gateway.client_id,
                                 'client_secret': gateway.client_secret,
@@ -2342,7 +2346,7 @@ Desculpe, não foi possível processar seu pagamento.
                                 'offer_hash': gateway.offer_hash,
                                 'store_id': gateway.store_id,
                                 'split_user_id': gateway.split_user_id,
-                                'split_percentage': gateway.split_percentage or 2.0
+                                'split_percentage': user_commission
                             }
                             
                             payment_gateway = GatewayFactory.create_gateway(
@@ -3042,6 +3046,11 @@ Seu pagamento ainda não foi confirmado.
                 payment_id = f"BOT{bot_id}_{int(time.time())}_{uuid.uuid4().hex[:8]}"
                 
                 # ✅ PREPARAR CREDENCIAIS ESPECÍFICAS PARA CADA GATEWAY
+                # ✅ RANKING V2.0: Usar commission_percentage do USUÁRIO diretamente
+                # Isso garante que taxas premium do Top 3 sejam aplicadas em tempo real
+                # Prioridade: user.commission_percentage > gateway.split_percentage > 2.0 (padrão)
+                user_commission = bot.owner.commission_percentage or gateway.split_percentage or 2.0
+                
                 credentials = {
                     # SyncPay usa client_id/client_secret
                     'client_id': gateway.client_id,
@@ -3054,9 +3063,13 @@ Seu pagamento ainda não foi confirmado.
                     'store_id': gateway.store_id,
                     # WiinPay
                     'split_user_id': gateway.split_user_id,
-                    # Comum a todos
-                    'split_percentage': gateway.split_percentage or 2.0  # 2% PADRÃO
+                    # ✅ RANKING V2.0: Usar taxa do usuário (pode ser premium)
+                    'split_percentage': user_commission
                 }
+                
+                # Log para auditoria (apenas se for premium)
+                if user_commission < 2.0:
+                    logger.info(f"🏆 TAXA PREMIUM aplicada: {user_commission}% (User {bot.owner.id})")
                 
                 # Gerar PIX via gateway (usando Factory Pattern)
                 logger.info(f"🔧 Criando gateway {gateway.gateway_type} com credenciais...")
