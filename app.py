@@ -4535,13 +4535,14 @@ def update_ranking_premium_rates():
         db.session.rollback()
         return {'success': False, 'error': str(e)}
 
-def generate_anonymous_avatar(user_id):
+def generate_anonymous_avatar(user_id, position=None):
     """
     ✅ RANKING V2.0 - Sistema de Avatares Anonimizados (LGPD)
     Gera avatar baseado em hash do user_id para manter consistência
     sem expor dados pessoais
     
     AGORA: Usa logo do sistema ao invés de emojis
+    TOP 3: Usa logos específicas (logotop1.png, logotop2.png, logotop3.png)
     """
     import hashlib
     
@@ -4549,8 +4550,15 @@ def generate_anonymous_avatar(user_id):
     hash_obj = hashlib.md5(str(user_id).encode())
     hash_hex = hash_obj.hexdigest()
     
-    # ✅ Usar logo do sistema para todos os avatares
-    logo_path = 'img/logo.png'  # Caminho da logo do sistema
+    # ✅ Usar logo específica para top 3, senão logo padrão
+    if position == 1:
+        logo_path = 'img/logotop1.png'
+    elif position == 2:
+        logo_path = 'img/logotop2.png'
+    elif position == 3:
+        logo_path = 'img/logotop3.png'
+    else:
+        logo_path = 'img/logo.png'  # Logo padrão para posições 4+
     
     # Gerar cor baseada no hash (para gradientes únicos)
     color_seed = int(hash_hex[:6], 16)
@@ -4573,7 +4581,7 @@ def generate_anonymous_avatar(user_id):
     gradient = colors[color_index]
     
     return {
-        'logo_path': logo_path,  # Caminho da logo
+        'logo_path': logo_path,  # Caminho da logo (específica para top 3 ou padrão)
         'gradient': gradient,
         'hash': hash_hex[:8]  # Primeiros 8 caracteres para referência
     }
@@ -4662,8 +4670,8 @@ def ranking():
             period_sales = int(user.total_sales or 0)
             period_revenue = float(user.total_revenue or 0.0)
         
-        # ✅ RANKING V2.0: Gerar avatar anonimizado
-        avatar = generate_anonymous_avatar(user.id)
+        # ✅ RANKING V2.0: Gerar avatar anonimizado (com logo específica para top 3)
+        avatar = generate_anonymous_avatar(user.id, position=idx)
         
         # ✅ RANKING V2.0: Verificar se está no Top 3 e tem taxa premium
         is_premium = idx <= 3
