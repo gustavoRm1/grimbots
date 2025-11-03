@@ -4467,20 +4467,133 @@ def gamification_profile():
     return render_template('gamification_profile.html')
 
 
+def update_ranking_premium_rates():
+    """
+    ✅ RANKING V2.0 - Sistema de Premiação
+    Atualiza taxas dos Top 3 com taxas reduzidas:
+    - Top 1: 1% de taxa
+    - Top 2: 1.3% de taxa  
+    - Top 3: 1.5% de taxa
+    - Demais: 2.0% (padrão)
+    
+    Executa periodicamente via job para manter taxas atualizadas conforme ranking
+    """
+    try:
+        with app.app_context():
+            from sqlalchemy import func
+            from models import Bot, Payment
+            from datetime import timedelta
+            
+            # Calcular ranking mensal (últimos 30 dias)
+            date_filter = datetime.now() - timedelta(days=30)
+            
+            # Ranking por receita no período
+            subquery = db.session.query(
+                Bot.user_id,
+                func.sum(Payment.amount).label('period_revenue'),
+                func.count(Payment.id).label('period_sales')
+            ).join(Payment)\
+             .filter(Payment.status == 'paid', Payment.created_at >= date_filter)\
+             .group_by(Bot.user_id)\
+             .subquery()
+            
+            top_3_users = User.query.join(subquery, User.id == subquery.c.user_id)\
+                                   .filter(User.is_admin == False, User.is_banned == False)\
+                               .order_by(
+                                   subquery.c.period_revenue.desc(),
+                                   subquery.c.period_sales.desc(),
+                                   User.created_at.asc()
+                               )\
+                               .limit(3).all()
+            
+            # Taxas reduzidas
+            premium_rates = {1: 1.0, 2: 1.3, 3: 1.5}
+            
+            # Resetar todos os usuários para taxa padrão (2%)
+            User.query.filter_by(is_admin=False).update({'commission_percentage': 2.0})
+            
+            # Aplicar taxas reduzidas aos Top 3
+            for idx, user in enumerate(top_3_users, 1):
+                new_rate = premium_rates.get(idx, 2.0)
+                if user.commission_percentage != new_rate:
+                    logger.info(f"🏆 TOP {idx}: Aplicando taxa {new_rate}% para usuário {user.id} (antes: {user.commission_percentage}%)")
+                    user.commission_percentage = new_rate
+            
+            db.session.commit()
+            logger.info(f"✅ Taxas de premiação atualizadas: {len(top_3_users)} usuários premium")
+            
+            return {
+                'success': True,
+                'updated': len(top_3_users),
+                'top_3': [
+                    {'position': idx, 'user_id': user.id, 'rate': premium_rates.get(idx, 2.0)}
+                    for idx, user in enumerate(top_3_users, 1)
+                ]
+            }
+    except Exception as e:
+        logger.error(f"❌ Erro ao atualizar taxas de premiação: {e}", exc_info=True)
+        db.session.rollback()
+        return {'success': False, 'error': str(e)}
+
+def generate_anonymous_avatar(user_id):
+    """
+    ✅ RANKING V2.0 - Sistema de Avatares Anonimizados (LGPD)
+    Gera avatar baseado em hash do user_id para manter consistência
+    sem expor dados pessoais
+    """
+    import hashlib
+    
+    # Gerar hash do user_id
+    hash_obj = hashlib.md5(str(user_id).encode())
+    hash_hex = hash_obj.hexdigest()
+    
+    # Usar hash para gerar avatar consistente
+    # Selecionar ícone baseado nos últimos 2 dígitos do hash
+    icon_index = int(hash_hex[-2:], 16) % 10  # 0-9
+    
+    # Ícones anonimizados (sem identificação pessoal)
+    icons = ['👤', '🤖', '🚀', '⭐', '💎', '🔥', '⚡', '🎯', '🏆', '💪']
+    icon = icons[icon_index]
+    
+    # Gerar cor baseada no hash (para gradientes únicos)
+    color_seed = int(hash_hex[:6], 16)
+    hue = (color_seed % 360)
+    
+    # Criar gradiente CSS baseado na cor
+    colors = [
+        'linear-gradient(135deg, #FFB800, #F59E0B)',  # Dourado padrão
+        'linear-gradient(135deg, #3B82F6, #2563EB)',  # Azul
+        'linear-gradient(135deg, #10B981, #059669)',  # Verde
+        'linear-gradient(135deg, #8B5CF6, #7C3AED)',  # Roxo
+        'linear-gradient(135deg, #EF4444, #DC2626)',  # Vermelho
+        'linear-gradient(135deg, #F59E0B, #D97706)',  # Laranja
+        'linear-gradient(135deg, #06B6D4, #0891B2)',  # Ciano
+        'linear-gradient(135deg, #EC4899, #DB2777)',  # Rosa
+        'linear-gradient(135deg, #14B8A6, #0D9488)',  # Turquesa
+        'linear-gradient(135deg, #6366F1, #4F46E5)'   # Índigo
+    ]
+    color_index = int(hash_hex[:2], 16) % len(colors)
+    gradient = colors[color_index]
+    
+    return {
+        'icon': icon,
+        'gradient': gradient,
+        'hash': hash_hex[:8]  # Primeiros 8 caracteres para referência
+    }
+
 @app.route('/ranking')
 @login_required
 def ranking():
-    """Hall da Fama - Ranking público (otimizado)"""
+    """
+    ✅ RANKING V2.0 - Hall da Fama Premium
+    Sistema completo de ranking com premiação, avatares anonimizados e LGPD compliant
+    """
     from sqlalchemy import func
     from models import BotUser, UserAchievement, Achievement
     from datetime import timedelta
     
-    # Filtro de período (simplificado)
+    # Filtro de período
     period = request.args.get('period', 'month')  # month (padrão) ou all
-    
-    # ✅ CORREÇÃO CRÍTICA: NÃO recalcular em cada pageview
-    # Usar pontos já calculados (atualizado por job em background ou webhook)
-    # Cache seria ideal, mas por ora usar dados existentes
     
     # Definir período
     date_filter = None
@@ -4491,50 +4604,47 @@ def ranking():
     elif period == 'month':
         date_filter = datetime.now() - timedelta(days=30)
     
-    # ✅ CORREÇÃO: Adicionar desempate no ranking
-    # Calcular ranking baseado no período
+    # ✅ RANKING V2.0: Ordenar por receita do período (faturamento)
     if period == 'all':
-        # Ranking all-time (ordenar por pontos + desempate)
+        # Ranking all-time (ordenar por receita total)
         users_query = User.query.filter_by(is_admin=False, is_banned=False)\
                                .order_by(
-                                   User.ranking_points.desc(),
-                                   User.total_sales.desc(),  # Desempate 1: Mais vendas
-                                   User.created_at.asc()      # Desempate 2: Mais antigo
+                                   User.total_revenue.desc(),  # Faturamento total
+                                   User.total_sales.desc(),    # Desempate: Mais vendas
+                                   User.created_at.asc()       # Desempate: Mais antigo
                                )
     else:
-        # Ranking do mês (período fixo)
-        date_filter = datetime.now() - timedelta(days=30)
+        # Ranking do período (mês/semana/hoje) - por receita no período
+        date_filter = datetime.now() - timedelta(days=30) if period == 'month' else \
+                     (datetime.now() - timedelta(days=7) if period == 'week' else 
+                      datetime.now().replace(hour=0, minute=0, second=0, microsecond=0))
         
-        # Calcular receita no mês
-        if True:
-            # Ranking por receita no período (mês)
-                subquery = db.session.query(
-                    Bot.user_id,
-                func.sum(Payment.amount).label('period_revenue'),
-                    func.count(Payment.id).label('period_sales')
-                ).join(Payment)\
-                 .filter(Payment.status == 'paid', Payment.created_at >= date_filter)\
-                 .group_by(Bot.user_id)\
-                 .subquery()
-                
-                users_query = User.query.join(subquery, User.id == subquery.c.user_id)\
-                                       .filter(User.is_admin == False, User.is_banned == False)\
-                                   .order_by(
-                                       subquery.c.period_revenue.desc(),
-                                       subquery.c.period_sales.desc(),
-                                       User.created_at.asc()
-                                   )
+        subquery = db.session.query(
+            Bot.user_id,
+            func.sum(Payment.amount).label('period_revenue'),
+            func.count(Payment.id).label('period_sales')
+        ).join(Payment)\
+         .filter(Payment.status == 'paid', Payment.created_at >= date_filter)\
+         .group_by(Bot.user_id)\
+         .subquery()
+        
+        users_query = User.query.join(subquery, User.id == subquery.c.user_id)\
+                               .filter(User.is_admin == False, User.is_banned == False)\
+                           .order_by(
+                               subquery.c.period_revenue.desc(),
+                               subquery.c.period_sales.desc(),
+                               User.created_at.asc()
+                           )
     
     # Top 100
     top_users = users_query.limit(100).all()
     
-    # Enriquecer dados
+    # ✅ RANKING V2.0: Enriquecer dados com avatares e premiação
     ranking_data = []
+    premium_rates = {1: 1.0, 2: 1.3, 3: 1.5}
+    
     for idx, user in enumerate(top_users, 1):
-        # Estatísticas do usuário
         bots_count = Bot.query.filter_by(user_id=user.id).count()
-        
-        # Conquistas do usuário
         user_achievements = UserAchievement.query.filter_by(user_id=user.id).all()
         badges = [ua.achievement for ua in user_achievements]
         
@@ -4552,16 +4662,16 @@ def ranking():
                 Payment.created_at >= date_filter
             ).scalar() or 0.0
         else:
-            # All-time
-            period_sales = db.session.query(func.count(Payment.id)).join(Bot).filter(
-                Bot.user_id == user.id,
-                Payment.status == 'paid'
-            ).scalar() or 0
-            
-            period_revenue = db.session.query(func.sum(Payment.amount)).join(Bot).filter(
-                Bot.user_id == user.id,
-                Payment.status == 'paid'
-            ).scalar() or 0.0
+            period_sales = int(user.total_sales or 0)
+            period_revenue = float(user.total_revenue or 0.0)
+        
+        # ✅ RANKING V2.0: Gerar avatar anonimizado
+        avatar = generate_anonymous_avatar(user.id)
+        
+        # ✅ RANKING V2.0: Verificar se está no Top 3 e tem taxa premium
+        is_premium = idx <= 3
+        premium_rate = premium_rates.get(idx, None)
+        has_premium_rate = user.commission_percentage < 2.0
         
         ranking_data.append({
             'position': idx,
@@ -4570,23 +4680,50 @@ def ranking():
             'sales': period_sales,
             'revenue': float(period_revenue),
             'points': user.ranking_points,
-            'badges': badges[:5],  # Top 5 badges
+            'badges': badges[:5],
             'total_badges': len(badges),
-            'streak': user.current_streak
+            'streak': user.current_streak,
+            # ✅ V2.0: Dados de premiação e avatar
+            'avatar': avatar,
+            'is_premium': is_premium,
+            'premium_rate': premium_rate if is_premium else None,
+            'current_rate': user.commission_percentage,
+            'has_premium_rate': has_premium_rate
         })
     
     # Encontrar posição do usuário atual
     my_position = next((item for item in ranking_data if item['user'].id == current_user.id), None)
     if not my_position:
-        # Usuário não está no top 100, calcular posição real
-        my_position_number = users_query.filter(User.ranking_points > current_user.ranking_points).count() + 1
+        # Calcular posição real se não está no top 100
+        if period == 'all':
+            my_position_number = User.query.filter(
+                User.is_admin == False,
+                User.is_banned == False,
+                User.total_revenue > current_user.total_revenue
+            ).count() + 1
+        else:
+            # Calcular receita do usuário atual no período
+            my_period_revenue = db.session.query(func.sum(Payment.amount)).join(Bot).filter(
+                Bot.user_id == current_user.id,
+                Payment.status == 'paid',
+                Payment.created_at >= date_filter
+            ).scalar() or 0.0
+            
+            # Contar usuários com receita maior
+            my_position_number = db.session.query(func.count(User.id))\
+                .join(subquery, User.id == subquery.c.user_id)\
+                .filter(
+                    User.is_admin == False,
+                    User.is_banned == False,
+                    subquery.c.period_revenue > my_period_revenue
+                ).scalar() + 1
     else:
         my_position_number = my_position['position']
     
     # Diferença para próxima posição
     next_user = None
     if my_position_number > 1:
-        next_position_idx = my_position_number - 2  # -1 para índice, -1 para posição anterior
+        next_position_idx = my_position_number - 2
         if next_position_idx < len(ranking_data):
             next_user = ranking_data[next_position_idx]
     
@@ -6275,6 +6412,15 @@ def health_check_all_pools():
             logger.error(f"Erro no health check de pools: {e}")
             db.session.rollback()
 
+
+# ✅ RANKING V2.0 - Job para atualizar taxas premium dos Top 3
+scheduler.add_job(
+    id='update_ranking_premium_rates',
+    func=update_ranking_premium_rates,
+    trigger='interval',
+    hours=1,  # Atualizar a cada hora
+    replace_existing=True
+)
 
 # Agendar health check a cada 15 segundos
 scheduler.add_job(

@@ -296,23 +296,28 @@
     </div>
     {% endif %}
     
-    <!-- Pódio (Top 3) -->
+    <!-- ✅ RANKING V2.0 - Pódio Premium (Top 3) com Premiação -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         {% for item in ranking[:3] %}
         <div class="podium-card {% if loop.index == 1 %}podium-gold order-2 md:order-1{% elif loop.index == 2 %}podium-silver order-1 md:order-2 md:scale-105{% else %}podium-bronze order-3{% endif %}">
-                <!-- Medalha -->
+            <!-- ✅ V2.0: Avatar Anonimizado (LGPD) -->
             <div class="text-center mb-6">
-                <div class="inline-flex w-20 h-20 rounded-full items-center justify-center mb-3"
+                <div class="inline-flex w-24 h-24 rounded-full items-center justify-center mb-3 relative"
+                     style="{{ item.avatar.gradient }}">
+                    <div class="text-5xl">{{ item.avatar.icon }}</div>
+                    <!-- Medalha de posição -->
+                    <div class="absolute -top-2 -right-2 w-8 h-8 rounded-full flex items-center justify-center"
                      style="{% if loop.index == 1 %}background: linear-gradient(135deg, #FFB800, #DAA520);{% elif loop.index == 2 %}background: linear-gradient(135deg, #C0C0C0, #A8A8A8);{% else %}background: linear-gradient(135deg, #CD7F32, #B8732D);{% endif %}">
-                    <i class="{% if loop.index == 1 %}fas fa-crown{% elif loop.index == 2 %}fas fa-award{% else %}fas fa-medal{% endif %} text-4xl"
+                        <i class="{% if loop.index == 1 %}fas fa-crown{% elif loop.index == 2 %}fas fa-award{% else %}fas fa-medal{% endif %} text-sm"
                        style="color: {% if loop.index == 1 %}#000{% elif loop.index == 2 %}#FFFFFF{% else %}#000{% endif %};"></i>
+                    </div>
                     </div>
                 <p class="text-3xl font-black" style="{% if loop.index == 1 %}color: #FFB800;{% elif loop.index == 2 %}color: #C0C0C0;{% else %}color: #CD7F32;{% endif %}">
                         #{{ item.position }}
                     </p>
                 </div>
                 
-                <!-- Usuário (Anonimizado - LGPD) -->
+            <!-- ✅ V2.0: Identificação Anonimizada (LGPD) -->
             <div class="text-center mb-4 pb-4 border-b border-gray-800">
                 <p class="text-lg font-bold text-white">Usuário #{{ item.position }}</p>
                 <p class="text-sm text-gray-500 mt-1">
@@ -322,16 +327,25 @@
                     <span class="text-gray-600">Anonimizado</span>
                     {% endif %}
                 </p>
+            </div>
+            
+            <!-- ✅ V2.0: Badge de Premiação (Taxa Reduzida) -->
+            {% if item.is_premium and item.premium_rate %}
+            <div class="mb-4 p-3 rounded-lg text-center"
+                 style="background: linear-gradient(135deg, rgba(255, 184, 0, 0.2), rgba(255, 184, 0, 0.1)); border: 2px solid rgba(255, 184, 0, 0.4);">
+                <div class="flex items-center justify-center gap-2 mb-1">
+                    <i class="fas fa-percent text-lg" style="color: #FFB800;"></i>
+                    <span class="text-sm font-bold text-gray-300">TAXA PREMIUM</span>
                 </div>
+                <div class="text-2xl font-black" style="color: #FFB800;">{{ item.premium_rate }}%</div>
+                <div class="text-xs text-gray-400 mt-1">Taxa reduzida operando</div>
+            </div>
+            {% endif %}
                 
-                <!-- Stats -->
+            <!-- ✅ V2.0: Stats (Apenas Faturamento - LGPD) -->
             <div class="space-y-3">
                 <div class="flex justify-between items-center p-3 bg-black bg-opacity-30 rounded-lg">
-                    <span class="text-xs font-bold text-gray-400">PONTOS</span>
-                    <span class="text-lg font-black" style="color: #FFB800;">{{ item.points }}</span>
-                    </div>
-                <div class="flex justify-between items-center p-3 bg-black bg-opacity-30 rounded-lg">
-                    <span class="text-xs font-bold text-gray-400">RECEITA</span>
+                    <span class="text-xs font-bold text-gray-400">FATURAMENTO</span>
                     <span class="text-lg font-black text-green-400">R$ {{ "%.2f"|format(item.revenue) }}</span>
                     </div>
                 <div class="flex justify-between items-center p-3 bg-black bg-opacity-30 rounded-lg">
@@ -349,7 +363,7 @@
                     {% endif %}
                 </div>
                 
-                <!-- Badges -->
+            <!-- Badges de Conquistas -->
                 {% if item.badges %}
             <div class="mt-4 pt-4 flex justify-center gap-2 flex-wrap border-t border-gray-800">
                 {% for badge in item.badges[:5] %}
@@ -380,8 +394,7 @@
                     <tr>
                         <th>#</th>
                         <th>Usuário</th>
-                        <th>Pontos</th>
-                        <th>Receita</th>
+                        <th>Faturamento</th>
                         <th>Vendas</th>
                         <th>Streak</th>
                         <th>Conquistas</th>
@@ -396,19 +409,30 @@
                             </span>
                         </td>
                         <td>
-                            <div>
-                                <p class="text-sm font-bold text-white">
-                                    Usuário #{{ item.position }}
-                                    {% if item.user.id == current_user.id %}
-                                    <span class="ml-2 px-2 py-1 text-xs font-bold rounded" style="background: #FFB800; color: #000;">VOCÊ</span>
-                                    {% else %}
-                                    <span class="ml-2 px-2 py-1 text-xs font-bold rounded" style="background: rgba(156, 163, 175, 0.2); color: #9CA3AF;">Anonimizado</span>
-                                    {% endif %}
-                                </p>
-                                <p class="text-xs text-gray-500 mt-0.5">{{ item.bots_count }} bot(s)</p>
+                            <div class="flex items-center gap-3">
+                                <!-- ✅ V2.0: Avatar Anonimizado -->
+                                <div class="w-10 h-10 rounded-full flex items-center justify-center text-xl flex-shrink-0"
+                                     style="{{ item.avatar.gradient }}">
+                                    {{ item.avatar.icon }}
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <p class="text-sm font-bold text-white flex items-center gap-2">
+                                        Usuário #{{ item.position }}
+                                        {% if item.user.id == current_user.id %}
+                                        <span class="px-2 py-1 text-xs font-bold rounded" style="background: #FFB800; color: #000;">VOCÊ</span>
+                                        {% else %}
+                                        <span class="px-2 py-1 text-xs font-bold rounded" style="background: rgba(156, 163, 175, 0.2); color: #9CA3AF;">Anonimizado</span>
+                                        {% endif %}
+                                        {% if item.is_premium and item.premium_rate %}
+                                        <span class="px-2 py-1 text-xs font-bold rounded" style="background: rgba(255, 184, 0, 0.2); color: #FFB800; border: 1px solid rgba(255, 184, 0, 0.4);">
+                                            <i class="fas fa-percent mr-1"></i>{{ item.premium_rate }}%
+                                        </span>
+                                        {% endif %}
+                                    </p>
+                                    <p class="text-xs text-gray-500 mt-0.5">{{ item.bots_count }} bot(s)</p>
+                                </div>
                             </div>
                         </td>
-                        <td class="font-bold" style="color: #FFB800;">{{ item.points }}</td>
                         <td class="font-bold text-green-400">R$ {{ "%.2f"|format(item.revenue) }}</td>
                         <td class="font-bold text-white">{{ item.sales }}</td>
                         <td>
@@ -609,8 +633,8 @@
                 </div>
                 {% endfor %}
             </div>
-        </div>
-        {% endfor %}
+            </div>
+            {% endfor %}
         </div>
         {% else %}
         <div class="text-center py-16 border-2 border-dashed border-gray-700 rounded-xl">
