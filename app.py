@@ -4851,12 +4851,22 @@ def ranking():
     total_revenue_float = float(total_revenue)
     
     # Definir marcos de premiação
+    # ✅ Verificar quais imagens existem antes de incluir
+    import os
+    static_img_path = os.path.join(app.static_folder, 'img')
+    
     revenue_milestones = [
         {'amount': 50000, 'name': 'R$ 50.000', 'image': 'premio_50k.png', 'label': '50K'},
         {'amount': 100000, 'name': 'R$ 100.000', 'image': 'premio_100k.png', 'label': '100K'},
         {'amount': 250000, 'name': 'R$ 250.000', 'image': 'premio_250k.png', 'label': '250K'},
         {'amount': 500000, 'name': 'R$ 500.000', 'image': 'premio_500k.png', 'label': '500K'},
         {'amount': 1000000, 'name': 'R$ 1.000.000', 'image': 'premio_1m.png', 'label': '1M'}
+    ]
+    
+    # Filtrar apenas milestones com imagens existentes
+    revenue_milestones = [
+        milestone for milestone in revenue_milestones
+        if os.path.exists(os.path.join(static_img_path, milestone['image']))
     ]
     
     # Verificar quais premiações foram desbloqueadas
