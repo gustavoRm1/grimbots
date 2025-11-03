@@ -521,11 +521,11 @@
                     
                     <!-- Imagem da Placa -->
                     <div class="p-6 relative z-0">
-                        <div class="text-center mb-4">
+                        <div class="text-center mb-4 flex items-center justify-center" style="height: 220px;">
                             <img src="{{ url_for('static', filename='img/' + award.image) }}" 
                                  alt="Placa {{ award.name }}"
-                                 class="mx-auto w-full max-w-[200px] h-auto {% if not award.is_unlocked %}grayscale opacity-30{% endif %}"
-                                 style="{% if award.is_unlocked %}filter: drop-shadow(0 0 20px rgba(255, 184, 0, 0.6));{% endif %}">
+                                 class="mx-auto {% if not award.is_unlocked %}grayscale opacity-30{% endif %}"
+                                 style="width: 200px; height: 200px; object-fit: contain; {% if award.is_unlocked %}filter: drop-shadow(0 0 20px rgba(255, 184, 0, 0.6));{% endif %}">
                         </div>
                         
                         <!-- Nome da Premiação -->
