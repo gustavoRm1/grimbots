@@ -3740,10 +3740,24 @@ Seu pagamento ainda não foi confirmado.
             if buttons:
                 inline_keyboard = []
                 for button in buttons:
-                    inline_keyboard.append([{
-                        'text': button.get('text'),
-                        'callback_data': button.get('callback_data', 'button_pressed')
-                    }])
+                    button_dict = {'text': button.get('text')}
+                    
+                    # ✅ CORREÇÃO CRÍTICA: Botão com URL usa 'url', botão com callback usa 'callback_data'
+                    # Na API do Telegram, são mutuamente exclusivos - não pode ter ambos!
+                    if button.get('url'):
+                        # Botão de redirecionamento (link externo)
+                        button_dict['url'] = button['url']
+                        logger.debug(f"🔗 Botão de link: {button.get('text')} → {button['url'][:50]}...")
+                    elif button.get('callback_data'):
+                        # Botão de callback (gera PIX, verifica pagamento, etc)
+                        button_dict['callback_data'] = button['callback_data']
+                        logger.debug(f"🔘 Botão de callback: {button.get('text')} → {button['callback_data']}")
+                    else:
+                        # Fallback: se não tiver nenhum, usar callback padrão
+                        button_dict['callback_data'] = 'button_pressed'
+                        logger.warning(f"⚠️ Botão sem 'url' nem 'callback_data': {button.get('text')} - usando fallback")
+                    
+                    inline_keyboard.append([button_dict])
                 reply_markup = {'inline_keyboard': inline_keyboard}
             
             # Enviar mídia + mensagem
