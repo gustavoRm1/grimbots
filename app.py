@@ -5360,6 +5360,8 @@ def send_meta_pixel_purchase_event(payment):
         # Importar Meta Pixel API
         from utils.meta_pixel import MetaPixelAPI
         from utils.encryption import decrypt
+        from models import BotUser
+        from celery_app import send_meta_event
         
         # ✅ CORREÇÃO CRÍTICA: Gerar event_id ABSOLUTAMENTE ÚNICO
         # Combinar payment_id + timestamp em milissegundos + UUID para garantir unicidade total
@@ -5379,9 +5381,6 @@ def send_meta_pixel_purchase_event(payment):
         is_upsell = payment.is_upsell or False
         is_remarketing = payment.is_remarketing or False
         
-        # Buscar BotUser para pegar IP e User-Agent
-        from models import BotUser
-        
         # ✅ FIX: customer_user_id pode vir com ou sem prefixo "user_"
         telegram_user_id = None
         if payment.customer_user_id:
@@ -5400,8 +5399,6 @@ def send_meta_pixel_purchase_event(payment):
         # ============================================================================
         # ✅ ENFILEIRAR EVENTO PURCHASE (ASSÍNCRONO - MVP DIA 2)
         # ============================================================================
-        from celery_app import send_meta_event
-        import time
         
         event_data = {
             'event_name': 'Purchase',
