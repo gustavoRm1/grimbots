@@ -312,10 +312,16 @@
                     </p>
                 </div>
                 
-                <!-- Usuário -->
+                <!-- Usuário (Anonimizado - LGPD) -->
             <div class="text-center mb-4 pb-4 border-b border-gray-800">
-                <p class="text-lg font-bold text-white">@{{ item.user.username }}</p>
-                <p class="text-sm text-gray-500 mt-1">{{ item.user.full_name or '-' }}</p>
+                <p class="text-lg font-bold text-white">Usuário #{{ item.position }}</p>
+                <p class="text-sm text-gray-500 mt-1">
+                    {% if item.user.id == current_user.id %}
+                    <span class="text-yellow-500 font-semibold">Você</span>
+                    {% else %}
+                    <span class="text-gray-600">Anonimizado</span>
+                    {% endif %}
+                </p>
                 </div>
                 
                 <!-- Stats -->
@@ -392,9 +398,11 @@
                         <td>
                             <div>
                                 <p class="text-sm font-bold text-white">
-                                    @{{ item.user.username }}
+                                    Usuário #{{ item.position }}
                                     {% if item.user.id == current_user.id %}
                                     <span class="ml-2 px-2 py-1 text-xs font-bold rounded" style="background: #FFB800; color: #000;">VOCÊ</span>
+                                    {% else %}
+                                    <span class="ml-2 px-2 py-1 text-xs font-bold rounded" style="background: rgba(156, 163, 175, 0.2); color: #9CA3AF;">Anonimizado</span>
                                     {% endif %}
                                 </p>
                                 <p class="text-xs text-gray-500 mt-0.5">{{ item.bots_count }} bot(s)</p>
