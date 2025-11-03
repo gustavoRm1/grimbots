@@ -312,11 +312,14 @@
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         {% for item in ranking[:3] %}
         <div class="podium-card {% if loop.index == 1 %}podium-gold order-2 md:order-1{% elif loop.index == 2 %}podium-silver order-1 md:order-2 md:scale-105{% else %}podium-bronze order-3{% endif %}">
-            <!-- ✅ V2.0: Avatar Anonimizado (LGPD) -->
+            <!-- ✅ V2.0: Avatar Anonimizado (LGPD) - Logo do Sistema -->
             <div class="text-center mb-6">
-                <div class="inline-flex w-24 h-24 rounded-full items-center justify-center mb-3 relative"
+                <div class="inline-flex w-24 h-24 rounded-full items-center justify-center mb-3 relative overflow-hidden"
                      style="{{ item.avatar.gradient }}">
-                    <div class="text-5xl">{{ item.avatar.icon }}</div>
+                    <img src="{{ url_for('static', filename=item.avatar.logo_path) }}" 
+                         alt="Logo Sistema"
+                         class="w-full h-full object-contain p-3"
+                         onerror="this.style.display='none'; this.parentElement.innerHTML='<div class=\\'text-2xl\\'>G</div>';">
                     <!-- Medalha de posição -->
                     <div class="absolute -top-2 -right-2 w-8 h-8 rounded-full flex items-center justify-center"
                      style="{% if loop.index == 1 %}background: linear-gradient(135deg, #FFB800, #DAA520);{% elif loop.index == 2 %}background: linear-gradient(135deg, #C0C0C0, #A8A8A8);{% else %}background: linear-gradient(135deg, #CD7F32, #B8732D);{% endif %}">
@@ -409,10 +412,13 @@
                         </td>
                         <td>
                             <div class="flex items-center gap-3">
-                                <!-- ✅ V2.0: Avatar Anonimizado -->
-                                <div class="w-10 h-10 rounded-full flex items-center justify-center text-xl flex-shrink-0"
+                                <!-- ✅ V2.0: Avatar Anonimizado - Logo do Sistema -->
+                                <div class="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden"
                                      style="{{ item.avatar.gradient }}">
-                                    {{ item.avatar.icon }}
+                                    <img src="{{ url_for('static', filename=item.avatar.logo_path) }}" 
+                                         alt="Logo Sistema"
+                                         class="w-full h-full object-contain p-1.5"
+                                         onerror="this.style.display='none'; this.parentElement.innerHTML='<span class=\\'text-lg\\'>G</span>';">
                                 </div>
                                 <div class="flex-1 min-w-0">
                                     <p class="text-sm font-bold text-white flex items-center gap-2">

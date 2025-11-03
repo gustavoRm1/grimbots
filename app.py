@@ -4540,6 +4540,8 @@ def generate_anonymous_avatar(user_id):
     ✅ RANKING V2.0 - Sistema de Avatares Anonimizados (LGPD)
     Gera avatar baseado em hash do user_id para manter consistência
     sem expor dados pessoais
+    
+    AGORA: Usa logo do sistema ao invés de emojis
     """
     import hashlib
     
@@ -4547,13 +4549,8 @@ def generate_anonymous_avatar(user_id):
     hash_obj = hashlib.md5(str(user_id).encode())
     hash_hex = hash_obj.hexdigest()
     
-    # Usar hash para gerar avatar consistente
-    # Selecionar ícone baseado nos últimos 2 dígitos do hash
-    icon_index = int(hash_hex[-2:], 16) % 10  # 0-9
-    
-    # Ícones anonimizados (sem identificação pessoal)
-    icons = ['👤', '🤖', '🚀', '⭐', '💎', '🔥', '⚡', '🎯', '🏆', '💪']
-    icon = icons[icon_index]
+    # ✅ Usar logo do sistema para todos os avatares
+    logo_path = 'img/logo.png'  # Caminho da logo do sistema
     
     # Gerar cor baseada no hash (para gradientes únicos)
     color_seed = int(hash_hex[:6], 16)
@@ -4576,7 +4573,7 @@ def generate_anonymous_avatar(user_id):
     gradient = colors[color_index]
     
     return {
-        'icon': icon,
+        'logo_path': logo_path,  # Caminho da logo
         'gradient': gradient,
         'hash': hash_hex[:8]  # Primeiros 8 caracteres para referência
     }
