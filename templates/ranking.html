@@ -3,14 +3,6 @@
 
 {% block extra_head %}
 <style>
-/* Animação de brilho para barra de progresso */
-@keyframes shimmer {
-    0% { transform: translateX(-100%); }
-    100% { transform: translateX(100%); }
-}
-.animate-shimmer {
-    animation: shimmer 2s infinite;
-}
 
 /* Remover fundo branco das imagens de placas */
 .revenue-award img {
@@ -343,8 +335,6 @@
                 <p class="text-sm text-gray-500 mt-1">
                     {% if item.user.id == current_user.id %}
                     <span class="text-yellow-500 font-semibold">Você</span>
-                    {% else %}
-                    <span class="text-gray-600">Anonimizado</span>
                     {% endif %}
                 </p>
             </div>
@@ -383,17 +373,6 @@
                     {% endif %}
                 </div>
                 
-            <!-- Badges de Conquistas -->
-                {% if item.badges %}
-            <div class="mt-4 pt-4 flex justify-center gap-2 flex-wrap border-t border-gray-800">
-                {% for badge in item.badges[:5] %}
-                    <span class="text-2xl" title="{{ badge.name }}">{{ badge.icon }}</span>
-                    {% endfor %}
-                    {% if item.total_badges > 5 %}
-                <span class="text-xs font-bold text-gray-500">+{{ item.total_badges - 5 }}</span>
-                {% endif %}
-            </div>
-            {% endif %}
         </div>
         {% endfor %}
     </div>
@@ -440,8 +419,6 @@
                                         Usuário #{{ item.position }}
                                         {% if item.user.id == current_user.id %}
                                         <span class="px-2 py-1 text-xs font-bold rounded" style="background: #FFB800; color: #000;">VOCÊ</span>
-                                        {% else %}
-                                        <span class="px-2 py-1 text-xs font-bold rounded" style="background: rgba(156, 163, 175, 0.2); color: #9CA3AF;">Anonimizado</span>
                                         {% endif %}
                                         {% if item.is_premium and item.premium_rate %}
                                         <span class="px-2 py-1 text-xs font-bold rounded" style="background: rgba(255, 184, 0, 0.2); color: #FFB800; border: 1px solid rgba(255, 184, 0, 0.4);">
@@ -467,11 +444,10 @@
                         </td>
                         <td>
                             <div class="flex items-center gap-1">
-                                {% for badge in item.badges[:5] %}
-                                <span class="text-lg" title="{{ badge.name }}">{{ badge.icon }}</span>
-                                {% endfor %}
-                                {% if item.total_badges > 5 %}
-                                <span class="text-xs font-bold text-gray-500">+{{ item.total_badges - 5 }}</span>
+                                {% if item.total_badges > 0 %}
+                                <span class="text-xs font-bold text-gray-400">{{ item.total_badges }} conquista{{ 's' if item.total_badges > 1 else '' }}</span>
+                                {% else %}
+                                <span class="text-xs text-gray-600">-</span>
                                 {% endif %}
                             </div>
                         </td>
@@ -545,16 +521,16 @@
                             <div class="relative inline-block" style="background: transparent;">
                                 <img src="{{ url_for('static', filename='img/' + award.image) }}?v=7.0&nocache=20251103" 
                                      alt="Placa {{ award.name }}"
-                                     class="mx-auto transition-all duration-300 {% if not award.is_unlocked %}grayscale brightness-[0.4]{% endif %}"
-                                     style="width: 100%; max-width: 160px; height: auto; aspect-ratio: 1; object-fit: contain; background: transparent; {% if award.is_unlocked %}filter: drop-shadow(0 0 20px rgba(255, 184, 0, 0.7));{% else %}filter: drop-shadow(0 0 10px rgba(0, 0, 0, 0.5));{% endif %}"
+                                     class="mx-auto transition-all duration-300 {% if not award.is_unlocked %}grayscale brightness-[0.5]{% endif %}"
+                                     style="width: 100%; max-width: 220px; height: auto; aspect-ratio: 1; object-fit: contain; background: transparent; {% if award.is_unlocked %}filter: drop-shadow(0 0 20px rgba(255, 184, 0, 0.7));{% else %}filter: drop-shadow(0 0 10px rgba(0, 0, 0, 0.5));{% endif %}"
                                      loading="lazy"
                                      onerror="this.onerror=null; this.parentElement.parentElement.parentElement.style.display='none';">
                                 
                                 {% if not award.is_unlocked %}
-                                <!-- Overlay de bloqueio -->
-                                <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                    <div class="w-12 h-12 md:w-14 md:h-14 rounded-full bg-black/50 flex items-center justify-center backdrop-blur-sm border-2 border-gray-700">
-                                        <i class="fas fa-lock text-white text-sm md:text-base"></i>
+                                <!-- Overlay de bloqueio - Cadeado pequeno no canto superior direito -->
+                                <div class="absolute top-2 right-2 pointer-events-none">
+                                    <div class="w-8 h-8 md:w-9 md:h-9 rounded-full bg-black/60 flex items-center justify-center backdrop-blur-sm border border-gray-600 shadow-lg">
+                                        <i class="fas fa-lock text-white text-xs md:text-sm"></i>
                                     </div>
                                 </div>
                                 {% endif %}
@@ -571,10 +547,9 @@
                                     <span class="text-gray-400 font-bold">Progresso</span>
                                     <span class="font-black" style="color: #FFB800;">{{ "%.1f"|format(award.progress) }}%</span>
                                 </div>
-                                <div class="w-full bg-gray-900/90 rounded-full h-3 md:h-3.5 overflow-hidden border border-gray-700/50">
-                                    <div class="h-full transition-all duration-700 rounded-full relative"
-                                         style="background: linear-gradient(90deg, #FFB800, #F59E0B, #FFB800); width: {{ award.progress }}%; box-shadow: 0 0 10px rgba(255, 184, 0, 0.6);">
-                                        <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent animate-shimmer"></div>
+                                <div class="w-full bg-gray-900/90 rounded-full h-2.5 md:h-3 overflow-hidden border border-gray-700/50">
+                                    <div class="h-full transition-all duration-500 rounded-full"
+                                         style="background: #FFB800; width: {{ award.progress }}%;">
                                     </div>
                                 </div>
                             </div>
