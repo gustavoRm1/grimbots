@@ -2402,6 +2402,7 @@ def admin_edit_user(user_id):
 @app.route('/admin/users/<int:user_id>/impersonate', methods=['POST'])
 @login_required
 @admin_required
+@csrf.exempt
 def admin_impersonate(user_id):
     """Logar como outro usuário (impersonate)"""
     try:
