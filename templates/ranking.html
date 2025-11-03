@@ -11,6 +11,18 @@
 .animate-shimmer {
     animation: shimmer 2s infinite;
 }
+
+/* Remover fundo branco das imagens de placas */
+.revenue-award img {
+    background: transparent !important;
+    background-color: transparent !important;
+    mix-blend-mode: normal;
+}
+
+.revenue-award img[src*="premio"] {
+    background: transparent !important;
+    background-color: transparent !important;
+}
 /* Bot Config V2.0 - Design System (IDÊNTICO) */
 
 .config-section {
@@ -508,12 +520,13 @@
         <!-- Grid de Placas - Design Responsivo e Limpo -->
         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 md:gap-6">
             {% for award in revenue_awards %}
-            <div class="relative w-full">
+            <div class="relative w-full revenue-award">
                 <!-- Card Principal -->
                 <div class="relative overflow-hidden rounded-2xl transition-all duration-300 hover:shadow-xl group h-full flex flex-col"
                      style="background: {% if award.is_unlocked %}linear-gradient(180deg, rgba(255, 184, 0, 0.12) 0%, rgba(255, 184, 0, 0.04) 100%);{% else %}linear-gradient(180deg, rgba(31, 41, 55, 0.7) 0%, rgba(17, 24, 39, 0.7) 100%);{% endif %} 
                             border: {% if award.is_unlocked %}3px solid #FFB800{% else %}2px solid rgba(75, 85, 99, 0.3){% endif %}; 
-                            {% if award.is_unlocked %}box-shadow: 0 0 30px rgba(255, 184, 0, 0.3);{% endif %}">
+                            {% if award.is_unlocked %}box-shadow: 0 0 30px rgba(255, 184, 0, 0.3);{% endif %}
+                            background-color: transparent !important;">
                     
                     <!-- Badge de Status -->
                     <div class="absolute top-2 right-2 z-20">
@@ -527,14 +540,15 @@
                     
                     <!-- Conteúdo do Card -->
                     <div class="p-4 md:p-5 relative z-10 flex-1 flex flex-col">
-                        <!-- Imagem da Placa - Responsiva -->
-                        <div class="text-center mb-3 md:mb-4 flex-shrink-0">
-                            <div class="relative inline-block">
-                                <img src="{{ url_for('static', filename='img/' + award.image) }}?v=4.0" 
+                        <!-- Imagem da Placa - Responsiva e Sem Fundo Branco -->
+                        <div class="text-center mb-3 md:mb-4 flex-shrink-0" style="background: transparent;">
+                            <div class="relative inline-block" style="background: transparent;">
+                                <img src="{{ url_for('static', filename='img/' + award.image) }}?v=5.0" 
                                      alt="Placa {{ award.name }}"
                                      class="mx-auto transition-all duration-300 {% if not award.is_unlocked %}grayscale brightness-[0.4]{% endif %}"
-                                     style="width: 100%; max-width: 160px; height: auto; aspect-ratio: 1; object-fit: contain; {% if award.is_unlocked %}filter: drop-shadow(0 0 20px rgba(255, 184, 0, 0.7));{% endif %}"
-                                     loading="lazy">
+                                     style="width: 100%; max-width: 160px; height: auto; aspect-ratio: 1; object-fit: contain; background: transparent; {% if award.is_unlocked %}filter: drop-shadow(0 0 20px rgba(255, 184, 0, 0.7));{% else %}filter: drop-shadow(0 0 10px rgba(0, 0, 0, 0.5));{% endif %}"
+                                     loading="lazy"
+                                     onerror="this.onerror=null; this.style.display='none'; console.warn('Imagem não encontrada: {{ award.image }}');">
                                 
                                 {% if not award.is_unlocked %}
                                 <!-- Overlay de bloqueio -->
