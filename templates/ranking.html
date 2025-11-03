@@ -268,66 +268,30 @@
         </p>
     </div>
     
-    <!-- SUA POSIÇÃO (Destaque) -->
-    {% if my_position %}
-    <div class="config-section" style="border: 2px solid #FFB800; box-shadow: 0 0 20px rgba(255, 184, 0, 0.3);">
-        <div class="config-section-header" style="border-bottom-color: rgba(255, 184, 0, 0.2);">
-            <i class="fas fa-star text-2xl" style="color: #FFB800;"></i>
-            <div>
-                <div class="config-section-title" style="color: #FFB800;">SUA POSIÇÃO</div>
-                <div class="config-section-description">Você está competindo!</div>
-            </div>
-        </div>
-
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div class="stat-box" style="border-color: rgba(255, 184, 0, 0.3);">
-                <div class="stat-value" style="color: #FFB800; font-size: 3rem;">#{{ my_position }}</div>
-                <div class="stat-label">Posição</div>
-                        </div>
-
-            <div class="stat-box">
-                <div class="stat-value" style="color: #FFB800;">{{ current_user.ranking_points }}</div>
-                <div class="stat-label">Pontos</div>
-                    </div>
-
-                    {% if current_user.current_streak > 0 %}
-            <div class="stat-box">
-                <div class="stat-value" style="color: #FFB800;">{{ current_user.current_streak }}</div>
-                <div class="stat-label">🔥 Streak (dias)</div>
-                    </div>
-                    {% endif %}
-
-                {% if next_user %}
-            <div class="stat-box">
-                <div class="stat-value" style="color: #EF4444; font-size: 1.5rem;">{{ next_user.points - current_user.ranking_points }}</div>
-                <div class="stat-label">Pontos faltando</div>
-                <div class="text-xs text-gray-600 mt-1">Para #{{ next_user.position }}</div>
-            </div>
-            {% endif %}
-        </div>
-    </div>
-    {% endif %}
-    
     <!-- ✅ RANKING V2.0 - Pódio Premium (Top 3) com Premiação -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         {% for item in ranking[:3] %}
         <div class="podium-card {% if loop.index == 1 %}podium-gold order-2 md:order-1{% elif loop.index == 2 %}podium-silver order-1 md:order-2 md:scale-105{% else %}podium-bronze order-3{% endif %}">
             <!-- ✅ V2.0: Avatar Anonimizado (LGPD) - Logo do Sistema -->
             <div class="text-center mb-6">
-                <div class="inline-flex w-32 h-32 md:w-36 md:h-36 rounded-full items-center justify-center mb-3 relative overflow-hidden shadow-2xl"
-                     style="{{ item.avatar.gradient }}; box-shadow: 0 0 30px rgba(0, 0, 0, 0.5), inset 0 0 20px rgba(255, 255, 255, 0.1);">
-                    <img src="{{ url_for('static', filename=item.avatar.logo_path) }}" 
-                         alt="Logo Sistema"
-                         class="object-contain"
-                         style="width: 90%; height: 90%; filter: brightness(1.25) contrast(1.15) saturate(1.1) drop-shadow(0 0 12px rgba(255, 255, 255, 0.4));"
-                         onerror="this.style.display='none'; this.parentElement.innerHTML='<div class=\\'text-2xl\\'>G</div>';">
+                <div class="relative inline-block mb-3">
+                    <div class="w-32 h-32 md:w-36 md:h-36 rounded-full relative"
+                         style="{{ item.avatar.gradient }}; box-shadow: 0 0 30px rgba(0, 0, 0, 0.5), inset 0 0 20px rgba(255, 255, 255, 0.1);">
+                        <div class="absolute inset-0 rounded-full overflow-hidden flex items-center justify-center p-4 md:p-5">
+                            <img src="{{ url_for('static', filename=item.avatar.logo_path) }}" 
+                                 alt="Logo Sistema"
+                                 class="max-w-[85%] max-h-[85%] w-auto h-auto object-contain"
+                                 style="filter: brightness(1.25) contrast(1.15) saturate(1.1) drop-shadow(0 0 12px rgba(255, 255, 255, 0.4));"
+                                 onerror="this.style.display='none'; this.parentElement.innerHTML='<div class=\\'text-2xl\\'>G</div>';">
+                        </div>
+                    </div>
                     <!-- Medalha de posição -->
-                    <div class="absolute -top-2 -right-2 w-8 h-8 rounded-full flex items-center justify-center z-10"
+                    <div class="absolute -top-1 -right-1 w-9 h-9 md:w-10 md:h-10 rounded-full flex items-center justify-center z-20 shadow-xl"
                      style="{% if loop.index == 1 %}background: linear-gradient(135deg, #FFB800, #DAA520);{% elif loop.index == 2 %}background: linear-gradient(135deg, #C0C0C0, #A8A8A8);{% else %}background: linear-gradient(135deg, #CD7F32, #B8732D);{% endif %}">
-                        <i class="{% if loop.index == 1 %}fas fa-crown{% elif loop.index == 2 %}fas fa-award{% else %}fas fa-medal{% endif %} text-sm"
+                        <i class="{% if loop.index == 1 %}fas fa-crown{% elif loop.index == 2 %}fas fa-award{% else %}fas fa-medal{% endif %} text-sm md:text-base"
                        style="color: {% if loop.index == 1 %}#000{% elif loop.index == 2 %}#FFFFFF{% else %}#000{% endif %};"></i>
                     </div>
-                    </div>
+                </div>
                 <p class="text-3xl font-black" style="{% if loop.index == 1 %}color: #FFB800;{% elif loop.index == 2 %}color: #C0C0C0;{% else %}color: #CD7F32;{% endif %}">
                         #{{ item.position }}
                     </p>
@@ -400,7 +364,6 @@
                         <th>Faturamento</th>
                         <th>Vendas</th>
                         <th>Streak</th>
-                        <th>Conquistas</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -414,13 +377,15 @@
                         <td>
                             <div class="flex items-center gap-3">
                                 <!-- ✅ V2.0: Avatar Anonimizado - Logo do Sistema -->
-                                <div class="w-12 h-12 md:w-14 md:h-14 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden shadow-lg"
+                                <div class="w-12 h-12 md:w-14 md:h-14 rounded-full flex-shrink-0 relative"
                                      style="{{ item.avatar.gradient }}; box-shadow: 0 0 15px rgba(0, 0, 0, 0.4), inset 0 0 10px rgba(255, 255, 255, 0.1);">
-                                    <img src="{{ url_for('static', filename=item.avatar.logo_path) }}" 
-                                         alt="Logo Sistema"
-                                         class="object-contain"
-                                         style="width: 85%; height: 85%; filter: brightness(1.2) contrast(1.15) saturate(1.05) drop-shadow(0 0 6px rgba(255, 255, 255, 0.25));"
-                                         onerror="this.style.display='none'; this.parentElement.innerHTML='<span class=\\'text-lg\\'>G</span>';">
+                                    <div class="absolute inset-0 rounded-full overflow-hidden flex items-center justify-center p-2">
+                                        <img src="{{ url_for('static', filename=item.avatar.logo_path) }}" 
+                                             alt="Logo Sistema"
+                                             class="max-w-[80%] max-h-[80%] w-auto h-auto object-contain"
+                                             style="filter: brightness(1.2) contrast(1.15) saturate(1.05) drop-shadow(0 0 6px rgba(255, 255, 255, 0.25));"
+                                             onerror="this.style.display='none'; this.parentElement.innerHTML='<span class=\\'text-lg\\'>G</span>';">
+                                    </div>
                                 </div>
                                 <div class="flex-1 min-w-0">
                                     <p class="text-sm font-bold text-white flex items-center gap-2">
@@ -449,15 +414,6 @@
                             {% else %}
                             <span class="text-xs text-gray-600">-</span>
                             {% endif %}
-                        </td>
-                        <td>
-                            <div class="flex items-center gap-1">
-                                {% if item.total_badges > 0 %}
-                                <span class="text-xs font-bold text-gray-400">{{ item.total_badges }} conquista{{ 's' if item.total_badges > 1 else '' }}</span>
-                                {% else %}
-                                <span class="text-xs text-gray-600">-</span>
-                                {% endif %}
-                            </div>
                         </td>
                     </tr>
                     {% endfor %}
