@@ -462,185 +462,123 @@
         </div>
     </div>
     
-    <!-- Minhas Conquistas V2.0 -->
+    <!-- ✅ PREMIAÇÕES DE FATURAMENTO V2.0 - Placas de Faturamento -->
     <div class="config-section">
         <div class="config-section-header">
-            <i class="fas fa-medal text-2xl" style="color: #FFB800;"></i>
+            <i class="fas fa-trophy text-2xl" style="color: #FFB800;"></i>
             <div class="flex-1">
-                <div class="config-section-title">Minhas Conquistas</div>
-                <div class="config-section-description">Badges que você desbloqueou - Versão 2.0</div>
+                <div class="config-section-title">Placas de Faturamento</div>
+                <div class="config-section-description">Premiações baseadas no seu faturamento total - Versão 2.0</div>
             </div>
-            {% if all_achievements_data %}
+            {% if revenue_awards %}
             <div class="text-right">
                 <div class="text-2xl font-black" style="color: #FFB800;">
-                    {{ my_achievements|length }}/{{ all_achievements_data|length }}
+                    {{ unlocked_awards_count }}/{{ total_awards_count }}
                 </div>
-                <div class="text-xs text-gray-400">Desbloqueadas</div>
+                <div class="text-xs text-gray-400">Placas Desbloqueadas</div>
             </div>
             {% endif %}
         </div>
 
-        {% if all_achievements_data and all_achievements_data|length > 0 %}
+        {% if revenue_awards and revenue_awards|length > 0 %}
         <!-- Estatísticas Rápidas -->
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            {% set unlocked_count = my_achievements|length %}
-            {% set total_count = all_achievements_data|length %}
-            {% set locked_count = total_count - unlocked_count %}
-            {% set progress_percent = (unlocked_count / total_count * 100) if total_count > 0 else 0 %}
-            
+        <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
             <div class="stat-box">
-                <div class="stat-value" style="color: #FFB800;">{{ unlocked_count }}</div>
-                <div class="stat-label">Desbloqueadas</div>
+                <div class="stat-value" style="color: #10B981;">R$ {{ "%.2f"|format(total_revenue)|replace('.', ',') }}</div>
+                <div class="stat-label">Faturamento Total</div>
             </div>
             <div class="stat-box">
-                <div class="stat-value" style="color: #9CA3AF;">{{ locked_count }}</div>
-                <div class="stat-label">Bloqueadas</div>
+                <div class="stat-value" style="color: #FFB800;">{{ unlocked_awards_count }}</div>
+                <div class="stat-label">Placas Desbloqueadas</div>
             </div>
             <div class="stat-box">
-                <div class="stat-value" style="color: #10B981;">{{ "%.0f"|format(progress_percent) }}%</div>
-                <div class="stat-label">Progresso Total</div>
-            </div>
-            <div class="stat-box">
-                <div class="stat-value" style="color: #FFB800;">{{ current_user.ranking_points }}</div>
-                <div class="stat-label">Pontos Totais</div>
+                <div class="stat-value" style="color: #9CA3AF;">{{ total_awards_count - unlocked_awards_count }}</div>
+                <div class="stat-label">Próximas Premiações</div>
             </div>
         </div>
 
-        <!-- Filtros e Conquistas por Categoria -->
-        <div x-data="{ selectedCategory: 'all' }">
-        <!-- Filtros por Categoria -->
-        <div class="flex flex-wrap gap-2 mb-6">
-            <button @click="selectedCategory = 'all'" 
-                    :class="selectedCategory === 'all' ? 'bg-gradient-to-r from-yellow-500 to-yellow-600 text-black font-bold' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'"
-                    class="px-4 py-2 rounded-lg transition-all text-sm">
-                <i class="fas fa-th mr-1"></i> Todas
-            </button>
-            {% for category in achievements_by_category.keys() %}
-            <button @click="selectedCategory = '{{ category|lower|replace(' ', '-') }}'" 
-                    :class="selectedCategory === '{{ category|lower|replace(' ', '-') }}' ? 'bg-gradient-to-r from-yellow-500 to-yellow-600 text-black font-bold' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'"
-                    class="px-4 py-2 rounded-lg transition-all text-sm">
-                {{ category }}
-            </button>
-            {% endfor %}
-        </div>
-        {% for category, achievements in achievements_by_category.items() %}
-        <div class="mb-8" x-show="selectedCategory === 'all' || selectedCategory === '{{ category|lower|replace(' ', '-') }}'">
-            <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                <i class="fas fa-folder text-yellow-500"></i>
-                {{ category }}
-                <span class="text-sm font-normal text-gray-400">
-                    ({{ achievements|selectattr('is_unlocked')|list|length }}/{{ achievements|length }})
-                </span>
-            </h3>
-            
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {% for ach_data in achievements %}
-                {% set ach = ach_data.achievement %}
-                {% set rarity_colors = {
-                    'common': {'bg': 'rgba(209, 213, 219, 0.1)', 'border': 'rgba(209, 213, 219, 0.3)', 'text': '#D1D5DB'},
-                    'uncommon': {'bg': 'rgba(52, 211, 153, 0.1)', 'border': 'rgba(52, 211, 153, 0.3)', 'text': '#34D399'},
-                    'rare': {'bg': 'rgba(59, 130, 246, 0.1)', 'border': 'rgba(59, 130, 246, 0.3)', 'text': '#3B82F6'},
-                    'epic': {'bg': 'rgba(168, 85, 247, 0.1)', 'border': 'rgba(168, 85, 247, 0.3)', 'text': '#A855F7'},
-                    'legendary': {'bg': 'rgba(255, 184, 0, 0.15)', 'border': 'rgba(255, 184, 0, 0.4)', 'text': '#FFB800'}
-                } %}
-                {% set rarity_color = rarity_colors.get(ach.rarity or 'common', rarity_colors['common']) %}
-                
-                <div class="achievement-card relative overflow-hidden rounded-xl transition-all duration-300 hover:scale-105 hover:shadow-xl"
-                     style="background: {% if ach_data.is_unlocked %}linear-gradient(135deg, {{ rarity_color.bg }}, rgba(255, 184, 0, 0.05));{% else %}linear-gradient(135deg, rgba(55, 65, 81, 0.5), rgba(31, 41, 55, 0.5));{% endif %} border: 2px solid {% if ach_data.is_unlocked %}{{ rarity_color.border }}{% else %}rgba(75, 85, 99, 0.5){% endif %}; 
-                            {% if ach_data.is_unlocked %}box-shadow: 0 0 20px {{ rarity_color.border }};{% endif %}">
+        <!-- Grid de Placas de Faturamento -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+            {% for award in revenue_awards %}
+            <div class="relative group">
+                <div class="relative overflow-hidden rounded-xl transition-all duration-300 hover:scale-105 hover:shadow-2xl"
+                     style="background: {% if award.is_unlocked %}linear-gradient(135deg, rgba(255, 184, 0, 0.1), rgba(255, 184, 0, 0.05));{% else %}linear-gradient(135deg, rgba(55, 65, 81, 0.5), rgba(31, 41, 55, 0.5));{% endif %} 
+                            border: 3px solid {% if award.is_unlocked %}#FFB800{% else %}rgba(75, 85, 99, 0.5){% endif %}; 
+                            {% if award.is_unlocked %}box-shadow: 0 0 30px rgba(255, 184, 0, 0.5);{% endif %}">
                     
                     <!-- Efeito de brilho para desbloqueadas -->
-                    {% if ach_data.is_unlocked %}
-                    <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-0 hover:opacity-10 transform -skew-x-12 transition-opacity duration-500"></div>
+                    {% if award.is_unlocked %}
+                    <div class="absolute inset-0 bg-gradient-to-r from-transparent via-yellow-400 to-transparent opacity-0 group-hover:opacity-20 transform -skew-x-12 transition-opacity duration-700"></div>
                     {% endif %}
                     
                     <!-- Overlay de bloqueio -->
-                    {% if not ach_data.is_unlocked %}
-                    <div class="absolute inset-0 bg-black bg-opacity-60 flex items-center justify-center z-10">
-                        <i class="fas fa-lock text-4xl text-gray-600"></i>
+                    {% if not award.is_unlocked %}
+                    <div class="absolute inset-0 bg-black bg-opacity-70 flex flex-col items-center justify-center z-10 rounded-xl">
+                        <i class="fas fa-lock text-4xl text-gray-600 mb-3"></i>
+                        <span class="text-xs text-gray-400 font-bold">Bloqueada</span>
                     </div>
                     {% endif %}
                     
-                    <div class="p-5 relative z-0">
-                        <!-- Ícone -->
-                        <div class="text-center mb-3">
-                            <div class="text-5xl {% if not ach_data.is_unlocked %}grayscale opacity-50{% endif %}" 
-                                 style="filter: {% if ach_data.is_unlocked %}drop-shadow(0 0 10px {{ rarity_color.text }});{% endif %}">
-                                {% if ach.icon and ach.icon.startswith('fa-') %}
-                                <i class="{{ ach.icon }}"></i>
-                                {% else %}
-                                {{ ach.icon or '🏆' }}
-                                {% endif %}
-                            </div>
+                    <!-- Imagem da Placa -->
+                    <div class="p-6 relative z-0">
+                        <div class="text-center mb-4">
+                            <img src="{{ url_for('static', filename='img/' + award.image) }}" 
+                                 alt="Placa {{ award.name }}"
+                                 class="mx-auto w-full max-w-[200px] h-auto {% if not award.is_unlocked %}grayscale opacity-30{% endif %}"
+                                 style="{% if award.is_unlocked %}filter: drop-shadow(0 0 20px rgba(255, 184, 0, 0.6));{% endif %}">
                         </div>
                         
-                        <!-- Nome e Descrição -->
+                        <!-- Nome da Premiação -->
                         <div class="text-center mb-3">
-                            <h4 class="font-bold text-base {% if not ach_data.is_unlocked %}text-gray-500{% else %}text-white{% endif %} mb-1">
-                                {{ ach.name }}
+                            <h4 class="font-black text-lg {% if not award.is_unlocked %}text-gray-500{% else %}text-white{% endif %} mb-1">
+                                {{ award.name }}
                             </h4>
-                            <p class="text-xs {% if not ach_data.is_unlocked %}text-gray-600{% else %}text-gray-400{% endif %} line-clamp-2">
-                                {{ ach.description or 'Sem descrição' }}
+                            <p class="text-xs {% if not award.is_unlocked %}text-gray-600{% else %}text-gray-400{% endif %}">
+                                Marco de Faturamento
                             </p>
                         </div>
                         
                         <!-- Progresso (se bloqueada) -->
-                        {% if not ach_data.is_unlocked %}
+                        {% if not award.is_unlocked %}
                         <div class="mb-3">
                             <div class="flex justify-between text-xs mb-1">
                                 <span class="text-gray-500">Progresso</span>
-                                <span class="font-bold text-gray-400">{{ "%.0f"|format(ach_data.progress) }}%</span>
+                                <span class="font-bold text-gray-400">{{ "%.1f"|format(award.progress) }}%</span>
                             </div>
-                            <div class="w-full bg-gray-800 rounded-full h-2 overflow-hidden">
+                            <div class="w-full bg-gray-800 rounded-full h-2.5 overflow-hidden">
                                 <div class="h-full transition-all duration-500 rounded-full" 
-                                     style="background: linear-gradient(90deg, #FFB800, #F59E0B); width: {{ ach_data.progress }}%;"></div>
+                                     style="background: linear-gradient(90deg, #FFB800, #F59E0B); width: {{ award.progress }}%;"></div>
                             </div>
-                            <div class="flex justify-between text-xs mt-1 text-gray-600">
-                                <span>{{ "%.0f"|format(ach_data.current_value) }}</span>
-                                <span>{{ "%.0f"|format(ach_data.target_value) }}</span>
+                            <div class="flex justify-between text-xs mt-2 text-gray-600">
+                                <span>R$ {{ "%.2f"|format(award.current_revenue)|replace('.', ',') }}</span>
+                                <span>R$ {{ "%.2f"|format(award.amount)|replace('.', ',') }}</span>
+                            </div>
+                            <div class="text-center mt-2">
+                                <span class="text-xs font-bold text-yellow-500">
+                                    Faltam R$ {{ "%.2f"|format(award.remaining)|replace('.', ',') }}
+                                </span>
                             </div>
                         </div>
-                        {% endif %}
-                        
-                        <!-- Badge de Pontos -->
-                        <div class="flex items-center justify-center gap-2 mt-3">
-                            <span class="px-3 py-1 rounded-full text-xs font-bold"
-                                  style="{% if ach_data.is_unlocked %}color: #FFB800; background: rgba(255, 184, 0, 0.15);{% else %}color: #6B7280; background: rgba(75, 85, 99, 0.3);{% endif %}">
-                                <i class="fas fa-star mr-1"></i>+{{ ach.points }} pts
-                            </span>
-                            {% if ach.rarity and ach.rarity != 'common' %}
-                            <span class="px-2 py-1 rounded text-xs font-bold uppercase"
-                                  style="color: {{ rarity_color.text }}; background: {{ rarity_color.bg }};">
-                                {{ ach.rarity }}
-                            </span>
-                            {% endif %}
-                        </div>
-                        
-                        <!-- Data de desbloqueio (se desbloqueada) -->
-                        {% if ach_data.is_unlocked %}
-                        {% for ua in my_achievements %}
-                        {% if ua.achievement_id == ach.id %}
-                        <div class="text-center mt-2">
-                            <span class="text-xs text-gray-500">
-                                <i class="fas fa-calendar-check mr-1"></i>
-                                Desbloqueada em {{ ua.unlocked_at.strftime('%d/%m/%Y') if ua.unlocked_at else 'N/A' }}
+                        {% else %}
+                        <!-- Badge de Desbloqueado -->
+                        <div class="text-center mt-3">
+                            <span class="px-4 py-2 rounded-full text-xs font-black uppercase"
+                                  style="color: #000; background: linear-gradient(135deg, #FFB800, #F59E0B); box-shadow: 0 0 15px rgba(255, 184, 0, 0.5);">
+                                <i class="fas fa-check-circle mr-1"></i>
+                                Desbloqueada
                             </span>
                         </div>
-                        {% endif %}
-                        {% endfor %}
                         {% endif %}
                     </div>
                 </div>
-                {% endfor %}
-            </div>
             </div>
             {% endfor %}
         </div>
         {% else %}
         <div class="text-center py-16 border-2 border-dashed border-gray-700 rounded-xl">
-            <i class="fas fa-lock text-5xl text-gray-700 mb-4"></i>
-            <h3 class="text-xl font-bold text-white mb-2">Nenhuma conquista ainda</h3>
-            <p class="text-gray-500 mb-6">Faça sua primeira venda para começar!</p>
+            <i class="fas fa-trophy text-5xl text-gray-700 mb-4"></i>
+            <h3 class="text-xl font-bold text-white mb-2">Nenhuma premiação ainda</h3>
+            <p class="text-gray-500 mb-6">Fature pelo menos R$ 50.000 para desbloquear sua primeira placa!</p>
             <a href="{{ url_for('dashboard') }}" class="btn-action">
                 <i class="fas fa-rocket"></i>
                 Ir para Dashboard

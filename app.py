@@ -4838,6 +4838,47 @@ def ranking():
     
     logger.info(f"📊 Ranking - Usuario {current_user.username} tem {len(my_achievements)}/{len(all_achievements)} conquista(s)")
     
+    # ============================================================================
+    # ✅ PREMIAÇÕES DE FATURAMENTO V2.0 - Placas de Faturamento
+    # ============================================================================
+    # Calcular faturamento total do usuário
+    total_revenue = db.session.query(func.sum(Payment.amount))\
+        .join(Bot).filter(
+            Bot.user_id == current_user.id,
+            Payment.status == 'paid'
+        ).scalar() or 0.0
+    
+    total_revenue_float = float(total_revenue)
+    
+    # Definir marcos de premiação
+    revenue_milestones = [
+        {'amount': 50000, 'name': 'R$ 50.000', 'image': 'premio_50k.png', 'label': '50K'},
+        {'amount': 100000, 'name': 'R$ 100.000', 'image': 'premio_100k.png', 'label': '100K'},
+        {'amount': 250000, 'name': 'R$ 250.000', 'image': 'premio_250k.png', 'label': '250K'},
+        {'amount': 500000, 'name': 'R$ 500.000', 'image': 'premio_500k.png', 'label': '500K'},
+        {'amount': 1000000, 'name': 'R$ 1.000.000', 'image': 'premio_1m.png', 'label': '1M'}
+    ]
+    
+    # Verificar quais premiações foram desbloqueadas
+    revenue_awards = []
+    for milestone in revenue_milestones:
+        is_unlocked = total_revenue_float >= milestone['amount']
+        progress = min((total_revenue_float / milestone['amount']) * 100, 100.0) if milestone['amount'] > 0 else 0.0
+        
+        revenue_awards.append({
+            'amount': milestone['amount'],
+            'name': milestone['name'],
+            'image': milestone['image'],
+            'label': milestone['label'],
+            'is_unlocked': is_unlocked,
+            'progress': progress,
+            'current_revenue': total_revenue_float,
+            'remaining': max(0, milestone['amount'] - total_revenue_float)
+        })
+    
+    unlocked_count = sum(1 for award in revenue_awards if award['is_unlocked'])
+    total_count = len(revenue_awards)
+    
     return render_template('ranking.html',
                          ranking=ranking_data,
                          my_position=my_position_number,
@@ -4845,7 +4886,11 @@ def ranking():
                          period=period,
                          my_achievements=my_achievements,
                          all_achievements_data=achievements_data,
-                         achievements_by_category=categories)
+                         achievements_by_category=categories,
+                         revenue_awards=revenue_awards,
+                         total_revenue=total_revenue_float,
+                         unlocked_awards_count=unlocked_count,
+                         total_awards_count=total_count)
 
 @app.route('/api/debug-achievements', methods=['GET'])
 @login_required
