@@ -3,6 +3,14 @@
 
 {% block extra_head %}
 <style>
+/* Animação de brilho para barra de progresso */
+@keyframes shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+.animate-shimmer {
+    animation: shimmer 2s infinite;
+}
 /* Bot Config V2.0 - Design System (IDÊNTICO) */
 
 .config-section {
@@ -468,21 +476,21 @@
             <i class="fas fa-trophy text-2xl" style="color: #FFB800;"></i>
             <div class="flex-1">
                 <div class="config-section-title">Placas de Faturamento</div>
-                <div class="config-section-description">Premiações baseadas no seu faturamento total - Versão 2.0</div>
+                <div class="config-section-description">Premiações baseadas no seu faturamento total</div>
             </div>
             {% if revenue_awards %}
             <div class="text-right">
                 <div class="text-2xl font-black" style="color: #FFB800;">
                     {{ unlocked_awards_count }}/{{ total_awards_count }}
                 </div>
-                <div class="text-xs text-gray-400">Placas Desbloqueadas</div>
+                <div class="text-xs text-gray-400">Desbloqueadas</div>
             </div>
             {% endif %}
         </div>
 
         {% if revenue_awards and revenue_awards|length > 0 %}
         <!-- Estatísticas Rápidas -->
-        <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
             <div class="stat-box">
                 <div class="stat-value" style="color: #10B981;">R$ {{ "%.2f"|format(total_revenue)|replace('.', ',') }}</div>
                 <div class="stat-label">Faturamento Total</div>
@@ -497,100 +505,111 @@
             </div>
         </div>
 
-        <!-- Grid de Placas de Faturamento -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+        <!-- Grid de Placas - Design Premium -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
             {% for award in revenue_awards %}
-            <div class="relative group">
-                <div class="relative overflow-hidden rounded-xl transition-all duration-300 hover:scale-105 hover:shadow-2xl"
-                     style="background: {% if award.is_unlocked %}linear-gradient(135deg, rgba(255, 184, 0, 0.1), rgba(255, 184, 0, 0.05));{% else %}linear-gradient(135deg, rgba(55, 65, 81, 0.5), rgba(31, 41, 55, 0.5));{% endif %} 
-                            border: 3px solid {% if award.is_unlocked %}#FFB800{% else %}rgba(75, 85, 99, 0.5){% endif %}; 
-                            {% if award.is_unlocked %}box-shadow: 0 0 30px rgba(255, 184, 0, 0.5);{% endif %}">
+            <div class="relative">
+                <!-- Card Principal -->
+                <div class="relative overflow-hidden rounded-2xl transition-all duration-500 hover:scale-[1.02] hover:shadow-2xl group"
+                     style="background: {% if award.is_unlocked %}linear-gradient(180deg, rgba(255, 184, 0, 0.15) 0%, rgba(255, 184, 0, 0.05) 100%);{% else %}linear-gradient(180deg, rgba(31, 41, 55, 0.8) 0%, rgba(17, 24, 39, 0.8) 100%);{% endif %} 
+                            border: {% if award.is_unlocked %}3px solid #FFB800{% else %}2px solid rgba(75, 85, 99, 0.4){% endif %}; 
+                            {% if award.is_unlocked %}box-shadow: 0 0 40px rgba(255, 184, 0, 0.4), inset 0 0 60px rgba(255, 184, 0, 0.1);{% endif %}">
                     
-                    <!-- Efeito de brilho para desbloqueadas -->
+                    <!-- Efeito de brilho animado para desbloqueadas -->
                     {% if award.is_unlocked %}
-                    <div class="absolute inset-0 bg-gradient-to-r from-transparent via-yellow-400 to-transparent opacity-0 group-hover:opacity-20 transform -skew-x-12 transition-opacity duration-700"></div>
+                    <div class="absolute inset-0 bg-gradient-to-r from-transparent via-yellow-300/30 to-transparent opacity-0 group-hover:opacity-100 transform -skew-x-12 transition-opacity duration-1000"></div>
                     {% endif %}
                     
-                    <!-- Imagem da Placa -->
-                    <div class="p-6 relative z-0">
-                        <div class="text-center mb-4 flex items-center justify-center" style="height: 220px;">
-                            <img src="{{ url_for('static', filename='img/' + award.image) }}?v=2.0" 
-                                 alt="Placa {{ award.name }}"
-                                 class="mx-auto {% if not award.is_unlocked %}grayscale opacity-50{% endif %}"
-                                 style="width: 200px; height: 200px; object-fit: contain; {% if award.is_unlocked %}filter: drop-shadow(0 0 20px rgba(255, 184, 0, 0.6));{% endif %}"
-                                 onerror="this.src='{{ url_for('static', filename='img/' + award.image) }}';">
+                    <!-- Badge de Status no Topo -->
+                    <div class="absolute top-3 right-3 z-20">
+                        {% if award.is_unlocked %}
+                        <span class="px-2 py-1 rounded-full text-[10px] font-black uppercase tracking-wider"
+                              style="background: linear-gradient(135deg, #FFB800, #F59E0B); color: #000; box-shadow: 0 0 10px rgba(255, 184, 0, 0.6);">
+                            ✓
+                        </span>
+                        {% else %}
+                        <span class="px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-gray-800/80 text-gray-400 border border-gray-700">
+                            🔒
+                        </span>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Conteúdo do Card -->
+                    <div class="p-5 relative z-10">
+                        <!-- Imagem da Placa - Grande e Destacada -->
+                        <div class="text-center mb-4">
+                            <div class="relative inline-block">
+                                <img src="{{ url_for('static', filename='img/' + award.image) }}?v=3.0" 
+                                     alt="Placa {{ award.name }}"
+                                     class="mx-auto transition-all duration-500 {% if not award.is_unlocked %}grayscale brightness-50{% endif %}"
+                                     style="width: 180px; height: 180px; object-fit: contain; {% if award.is_unlocked %}filter: drop-shadow(0 0 25px rgba(255, 184, 0, 0.8));{% else %}filter: drop-shadow(0 0 10px rgba(0, 0, 0, 0.5));{% endif %}"
+                                     onerror="console.error('Erro ao carregar imagem: {{ award.image }}'); this.style.display='none';">
+                                
+                                {% if not award.is_unlocked %}
+                                <!-- Overlay sutil sobre a imagem bloqueada -->
+                                <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                    <div class="w-16 h-16 rounded-full bg-black/40 flex items-center justify-center backdrop-blur-sm">
+                                        <i class="fas fa-lock text-white text-xl"></i>
+                                    </div>
+                                </div>
+                                {% endif %}
+                            </div>
                         </div>
                         
                         <!-- Nome da Premiação -->
                         <div class="text-center mb-4">
-                            <h4 class="font-black text-lg {% if not award.is_unlocked %}text-gray-400{% else %}text-white{% endif %} mb-1">
+                            <h4 class="font-black text-base {% if not award.is_unlocked %}text-gray-500{% else %}text-white{% endif %} mb-2">
                                 {{ award.name }}
                             </h4>
-                            {% if not award.is_unlocked %}
-                            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold uppercase"
-                                  style="background: rgba(75, 85, 99, 0.3); color: #9CA3AF; border: 1px solid rgba(75, 85, 99, 0.5);">
-                                <i class="fas fa-lock mr-1"></i>
-                                Bloqueada
-                            </span>
-                            {% else %}
-                            <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-black uppercase"
-                                  style="color: #000; background: linear-gradient(135deg, #FFB800, #F59E0B); box-shadow: 0 0 15px rgba(255, 184, 0, 0.5);">
-                                <i class="fas fa-check-circle mr-1"></i>
-                                Desbloqueada
-                            </span>
-                            {% endif %}
                         </div>
                         
-                        <!-- ✅ PROGRESSO ALTAMENTE VISÍVEL (Sempre exibido) -->
+                        <!-- Progresso (Sempre Visível) -->
                         {% if not award.is_unlocked %}
-                        <div class="mb-4 p-4 rounded-lg" style="background: rgba(31, 41, 55, 0.8); border: 2px solid rgba(255, 184, 0, 0.3);">
-                            <!-- Percentual de Progresso Grande e Destacado -->
-                            <div class="text-center mb-3">
-                                <div class="text-4xl font-black mb-1" style="color: #FFB800; text-shadow: 0 0 20px rgba(255, 184, 0, 0.5);">
+                        <!-- Placa Bloqueada - Progresso Destacado -->
+                        <div class="space-y-3">
+                            <!-- Percentual Grande -->
+                            <div class="text-center">
+                                <div class="text-3xl font-black mb-1" style="color: #FFB800; text-shadow: 0 0 15px rgba(255, 184, 0, 0.6);">
                                     {{ "%.1f"|format(award.progress) }}%
                                 </div>
-                                <div class="text-xs font-bold text-gray-400 uppercase tracking-wider">Progresso</div>
                             </div>
                             
-                            <!-- Barra de Progresso Grande e Visível -->
-                            <div class="mb-4">
-                                <div class="w-full bg-gray-900 rounded-full h-4 overflow-hidden border-2 border-gray-700">
-                                    <div class="h-full transition-all duration-500 rounded-full relative overflow-hidden" 
-                                         style="background: linear-gradient(90deg, #FFB800, #F59E0B, #FFB800); width: {{ award.progress }}%; box-shadow: 0 0 15px rgba(255, 184, 0, 0.6);">
-                                        <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-30 animate-pulse"></div>
+                            <!-- Barra de Progresso -->
+                            <div>
+                                <div class="w-full bg-gray-900/80 rounded-full h-3 overflow-hidden border border-gray-700/50">
+                                    <div class="h-full transition-all duration-700 rounded-full relative"
+                                         style="background: linear-gradient(90deg, #FFB800 0%, #F59E0B 50%, #FFB800 100%); width: {{ award.progress }}%; box-shadow: 0 0 12px rgba(255, 184, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.2);">
+                                        <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent animate-shimmer"></div>
                                     </div>
                                 </div>
                             </div>
                             
-                            <!-- Valores Atual e Meta -->
-                            <div class="grid grid-cols-2 gap-3 mb-4">
-                                <div class="text-center p-2 rounded" style="background: rgba(55, 65, 81, 0.5);">
-                                    <div class="text-xs text-gray-400 mb-1">Atual</div>
-                                    <div class="text-sm font-black text-white">R$ {{ "%.2f"|format(award.current_revenue)|replace('.', ',') }}</div>
+                            <!-- Valores Compactos -->
+                            <div class="grid grid-cols-2 gap-2 text-xs">
+                                <div class="text-center p-2 rounded bg-gray-900/50">
+                                    <div class="text-[10px] text-gray-500 mb-1">Atual</div>
+                                    <div class="font-bold text-white text-[11px]">R$ {{ "%.0f"|format(award.current_revenue / 1000)|replace('.', ',') }}k</div>
                                 </div>
-                                <div class="text-center p-2 rounded" style="background: rgba(255, 184, 0, 0.1); border: 1px solid rgba(255, 184, 0, 0.3);">
-                                    <div class="text-xs text-yellow-400 mb-1 font-bold">Meta</div>
-                                    <div class="text-sm font-black" style="color: #FFB800;">R$ {{ "%.2f"|format(award.amount)|replace('.', ',') }}</div>
+                                <div class="text-center p-2 rounded" style="background: rgba(255, 184, 0, 0.15); border: 1px solid rgba(255, 184, 0, 0.3);">
+                                    <div class="text-[10px] text-yellow-400 mb-1 font-bold">Meta</div>
+                                    <div class="font-black text-[11px]" style="color: #FFB800;">R$ {{ "%.0f"|format(award.amount / 1000)|replace('.', ',') }}k</div>
                                 </div>
                             </div>
                             
-                            <!-- ✅ DESTAQUE: QUANTO FALTA (MUITO VISÍVEL) -->
-                            <div class="text-center p-3 rounded-lg" style="background: linear-gradient(135deg, rgba(255, 184, 0, 0.2), rgba(255, 184, 0, 0.1)); border: 2px solid #FFB800; box-shadow: 0 0 20px rgba(255, 184, 0, 0.4);">
-                                <div class="text-xs font-bold text-gray-300 mb-1 uppercase tracking-wider">Faltam</div>
-                                <div class="text-2xl font-black mb-1" style="color: #FFB800; text-shadow: 0 0 15px rgba(255, 184, 0, 0.7);">
-                                    R$ {{ "%.2f"|format(award.remaining)|replace('.', ',') }}
+                            <!-- Destaque: Quanto Falta -->
+                            <div class="text-center p-2.5 rounded-lg" style="background: linear-gradient(135deg, rgba(255, 184, 0, 0.25), rgba(255, 184, 0, 0.15)); border: 2px solid #FFB800; box-shadow: 0 0 15px rgba(255, 184, 0, 0.5);">
+                                <div class="text-[10px] font-bold text-gray-300 mb-1 uppercase tracking-wider">Faltam</div>
+                                <div class="text-xl font-black" style="color: #FFB800; text-shadow: 0 0 12px rgba(255, 184, 0, 0.8);">
+                                    R$ {{ "%.0f"|format(award.remaining / 1000)|replace('.', ',') }}k
                                 </div>
-                                <div class="text-xs text-gray-400">para desbloquear</div>
                             </div>
                         </div>
                         {% else %}
-                        <!-- Estatísticas para Placas Desbloqueadas -->
-                        <div class="mb-3 p-3 rounded-lg" style="background: rgba(255, 184, 0, 0.1); border: 1px solid rgba(255, 184, 0, 0.3);">
-                            <div class="text-center">
-                                <div class="text-xs text-gray-400 mb-1">Faturado</div>
-                                <div class="text-lg font-black" style="color: #FFB800;">
-                                    R$ {{ "%.2f"|format(award.current_revenue)|replace('.', ',') }}
-                                </div>
+                        <!-- Placa Desbloqueada - Simples e Elegante -->
+                        <div class="text-center p-3 rounded-lg" style="background: rgba(255, 184, 0, 0.1); border: 1px solid rgba(255, 184, 0, 0.3);">
+                            <div class="text-xs text-gray-400 mb-1">Faturado</div>
+                            <div class="text-base font-black" style="color: #FFB800;">
+                                R$ {{ "%.0f"|format(award.current_revenue / 1000)|replace('.', ',') }}k
                             </div>
                         </div>
                         {% endif %}
