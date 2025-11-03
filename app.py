@@ -2405,37 +2405,82 @@ def admin_edit_user(user_id):
 def admin_impersonate(user_id):
     """Logar como outro usuário (impersonate)"""
     try:
+        logger.info(f"🔍 Iniciando impersonação: admin={current_user.id} ({current_user.email}) → target={user_id}")
+        
         target_user = User.query.get_or_404(user_id)
+        logger.info(f"✅ Usuário alvo encontrado: {target_user.email} (admin={target_user.is_admin})")
         
         if target_user.is_admin:
+            logger.warning(f"⚠️ Tentativa de impersonar admin bloqueada: {target_user.email}")
             return jsonify({'error': 'Não é possível impersonar outro administrador'}), 403
         
         # ✅ CORREÇÃO: Salvar ID do admin ANTES de fazer logout/login
         admin_id = current_user.id
         admin_email = current_user.email
+        logger.info(f"💾 Admin original salvo: {admin_id} ({admin_email})")
         
         # ✅ CORREÇÃO: Registrar log ANTES de mudar o current_user
-        log_admin_action('impersonate', f'Admin logou como usuário {target_user.email}', target_user_id=user_id)
+        try:
+            log_admin_action('impersonate', f'Admin logou como usuário {target_user.email}', target_user_id=user_id)
+            logger.info(f"✅ Log de auditoria registrado")
+        except Exception as log_error:
+            logger.warning(f"⚠️ Erro ao registrar log (continuando): {log_error}")
+        
+        # ✅ CORREÇÃO CRÍTICA: Configurar sessão como permanente antes de salvar
+        session.permanent = True
         
         # Salvar ID do admin original na sessão
         session['impersonate_admin_id'] = admin_id
         session['impersonate_admin_email'] = admin_email
+        logger.info(f"💾 Dados salvos na sessão: impersonate_admin_id={admin_id}")
+        
+        # ✅ CORREÇÃO: Fazer commit do banco ANTES de mudar o usuário
+        db.session.commit()
+        logger.info(f"✅ Commit do banco realizado")
         
         # Fazer logout do admin e login como usuário
+        logger.info(f"🔄 Fazendo logout do admin...")
         logout_user()
-        login_user(target_user)
+        logger.info(f"✅ Logout concluído")
         
-        # Commit da sessão para garantir que a mudança foi persistida
-        db.session.commit()
+        logger.info(f"🔄 Fazendo login como {target_user.email}...")
+        login_user(target_user, remember=False)
+        logger.info(f"✅ Login concluído")
         
-        flash(f'Você está logado como {target_user.email}. Clique em "Voltar ao Admin" para retornar.', 'warning')
+        # ✅ CORREÇÃO CRÍTICA: Forçar commit da sessão do Flask
+        # O Flask-Login usa a sessão do Flask, então precisamos garantir que está persistida
+        session.permanent = True
         
-        return jsonify({'message': 'Impersonate ativado', 'redirect': '/dashboard'})
+        # Verificar se o login foi bem-sucedido
+        if not current_user.is_authenticated:
+            logger.error(f"❌ Login falhou - usuário não autenticado após login_user()")
+            raise Exception("Falha ao autenticar usuário após impersonação")
+        
+        logger.info(f"✅ Impersonação bem-sucedida! Admin={admin_id} agora é {current_user.id} ({current_user.email})")
+        
+        return jsonify({
+            'message': 'Impersonate ativado', 
+            'redirect': '/dashboard',
+            'target_user': target_user.email
+        })
     
     except Exception as e:
-        logger.error(f"❌ Erro ao impersonar usuário {user_id}: {e}", exc_info=True)
+        logger.error(f"❌ ERRO ao impersonar usuário {user_id}: {e}", exc_info=True)
         db.session.rollback()
-        return jsonify({'error': f'Erro ao impersonar usuário: {str(e)}'}), 500
+        
+        # Tentar limpar sessão em caso de erro
+        try:
+            if 'impersonate_admin_id' in session:
+                del session['impersonate_admin_id']
+            if 'impersonate_admin_email' in session:
+                del session['impersonate_admin_email']
+        except:
+            pass
+        
+        return jsonify({
+            'error': f'Erro ao impersonar usuário: {str(e)}',
+            'details': str(e)
+        }), 500
 
 @app.route('/admin/stop-impersonate')
 @login_required
