@@ -2404,24 +2404,38 @@ def admin_edit_user(user_id):
 @admin_required
 def admin_impersonate(user_id):
     """Logar como outro usuário (impersonate)"""
-    target_user = User.query.get_or_404(user_id)
+    try:
+        target_user = User.query.get_or_404(user_id)
+        
+        if target_user.is_admin:
+            return jsonify({'error': 'Não é possível impersonar outro administrador'}), 403
+        
+        # ✅ CORREÇÃO: Salvar ID do admin ANTES de fazer logout/login
+        admin_id = current_user.id
+        admin_email = current_user.email
+        
+        # ✅ CORREÇÃO: Registrar log ANTES de mudar o current_user
+        log_admin_action('impersonate', f'Admin logou como usuário {target_user.email}', target_user_id=user_id)
+        
+        # Salvar ID do admin original na sessão
+        session['impersonate_admin_id'] = admin_id
+        session['impersonate_admin_email'] = admin_email
+        
+        # Fazer logout do admin e login como usuário
+        logout_user()
+        login_user(target_user)
+        
+        # Commit da sessão para garantir que a mudança foi persistida
+        db.session.commit()
+        
+        flash(f'Você está logado como {target_user.email}. Clique em "Voltar ao Admin" para retornar.', 'warning')
+        
+        return jsonify({'message': 'Impersonate ativado', 'redirect': '/dashboard'})
     
-    if target_user.is_admin:
-        return jsonify({'error': 'Não é possível impersonar outro administrador'}), 403
-    
-    # Salvar ID do admin original na sessão
-    session['impersonate_admin_id'] = current_user.id
-    session['impersonate_admin_email'] = current_user.email
-    
-    # Fazer logout do admin e login como usuário
-    logout_user()
-    login_user(target_user)
-    
-    log_admin_action('impersonate', f'Admin logou como usuário {target_user.email}', target_user_id=user_id)
-    
-    flash(f'Você está logado como {target_user.email}. Clique em "Voltar ao Admin" para retornar.', 'warning')
-    
-    return jsonify({'message': 'Impersonate ativado', 'redirect': '/dashboard'})
+    except Exception as e:
+        logger.error(f"❌ Erro ao impersonar usuário {user_id}: {e}", exc_info=True)
+        db.session.rollback()
+        return jsonify({'error': f'Erro ao impersonar usuário: {str(e)}'}), 500
 
 @app.route('/admin/stop-impersonate')
 @login_required
