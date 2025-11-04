@@ -522,7 +522,13 @@
                             <div class="text-center py-2.5 md:py-3 px-3 rounded-lg" style="background: linear-gradient(135deg, rgba(255, 184, 0, 0.3), rgba(255, 184, 0, 0.2)); border: 2px solid #FFB800; box-shadow: 0 0 15px rgba(255, 184, 0, 0.5);">
                                 <div class="text-[9px] md:text-[10px] font-bold text-gray-200 mb-1 uppercase tracking-wider">Faltam</div>
                                 <div class="text-xl md:text-2xl font-black leading-tight" style="color: #FFB800; text-shadow: 0 0 12px rgba(255, 184, 0, 0.8);">
-                                    R$ {{ "%.0f"|format(award.remaining / 1000)|replace('.', ',') }}k
+                                    {% if award.remaining >= 1000000 %}
+                                        {{ "%.0f"|format(award.remaining / 1000000)|replace('.', ',') }} M
+                                    {% elif award.remaining >= 1000 %}
+                                        R$ {{ "%.0f"|format(award.remaining / 1000)|replace('.', ',') }}k
+                                    {% else %}
+                                        R$ {{ "%.0f"|format(award.remaining)|replace('.', ',') }}
+                                    {% endif %}
                                 </div>
                             </div>
                         </div>
@@ -531,7 +537,13 @@
                         <div class="text-center py-2 md:py-3 px-3 rounded-lg flex-shrink-0" style="background: rgba(255, 184, 0, 0.1); border: 1px solid rgba(255, 184, 0, 0.3);">
                             <div class="text-xs text-gray-400 mb-1">Desbloqueada</div>
                             <div class="text-sm md:text-base font-black" style="color: #FFB800;">
-                                R$ {{ "%.0f"|format(award.current_revenue / 1000)|replace('.', ',') }}k
+                                {% if award.current_revenue >= 1000000 %}
+                                    {{ "%.0f"|format(award.current_revenue / 1000000)|replace('.', ',') }} M
+                                {% elif award.current_revenue >= 1000 %}
+                                    R$ {{ "%.0f"|format(award.current_revenue / 1000)|replace('.', ',') }}k
+                                {% else %}
+                                    R$ {{ "%.0f"|format(award.current_revenue)|replace('.', ',') }}
+                                {% endif %}
                             </div>
                         </div>
                         {% endif %}
