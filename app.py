@@ -5474,27 +5474,61 @@ def get_chat_messages(bot_id, telegram_user_id):
     
     if since_timestamp:
         try:
-            from datetime import datetime
+            from datetime import datetime, timezone, timedelta
+            from models import BRAZIL_TZ_OFFSET
+            
             # ✅ CORREÇÃO: Tratar diferentes formatos de timestamp
             since_timestamp_clean = since_timestamp.replace('Z', '+00:00')
             if '+' not in since_timestamp_clean and since_timestamp_clean.count(':') == 2:
                 # Formato sem timezone, assumir UTC
                 since_timestamp_clean += '+00:00'
-            since_dt = datetime.fromisoformat(since_timestamp_clean)
+            since_dt_utc = datetime.fromisoformat(since_timestamp_clean)
             
-            # ✅ CRÍTICO: Adicionar margem de 3 segundos para evitar perder mensagens no exato momento do timestamp
-            from datetime import timedelta
-            since_dt_with_margin = since_dt - timedelta(seconds=3)
+            # ✅ CRÍTICO: Converter UTC (timezone-aware) para UTC (naive)
+            if since_dt_utc.tzinfo is not None:
+                since_dt_utc = since_dt_utc.astimezone(timezone.utc).replace(tzinfo=None)
+            
+            # ✅ CRÍTICO: Converter UTC para horário do Brasil (naive)
+            # BotMessage.created_at usa get_brazil_time() = datetime.utcnow() + BRAZIL_TZ_OFFSET
+            # Isso significa que created_at está em UTC-3 (naive)
+            # Frontend envia UTC, então: since_dt_brazil = since_dt_utc + BRAZIL_TZ_OFFSET
+            since_dt_brazil = since_dt_utc + BRAZIL_TZ_OFFSET  # BRAZIL_TZ_OFFSET = -3h
+            
+            # ✅ CRÍTICO: Adicionar margem de 20 segundos para garantir que não perca mensagens
+            # (considerando diferença de timezone, latência de rede, processamento e sincronização)
+            since_dt_brazil_with_margin = since_dt_brazil - timedelta(seconds=20)
             
             # Buscar apenas mensagens mais recentes que o timestamp (com margem)
             messages = BotMessage.query.filter(
                 BotMessage.bot_id == bot_id,
                 BotMessage.telegram_user_id == telegram_user_id,
-                BotMessage.created_at > since_dt_with_margin
+                BotMessage.created_at > since_dt_brazil_with_margin
             ).order_by(BotMessage.created_at.asc()).limit(50).all()
             
-            # ✅ DEBUG: Log sempre (para produção também)
-            logger.info(f"🔍 Polling: {len(messages)} novas mensagens desde {since_timestamp} (margem: 3s)")
+            # ✅ FALLBACK: Se não encontrou mensagens, buscar últimas 10 e comparar no Python
+            # (evita problemas de timezone e sincronização)
+            if len(messages) == 0:
+                # Buscar últimas 10 mensagens para garantir que não perdemos nada
+                recent_messages = BotMessage.query.filter_by(
+                    bot_id=bot_id,
+                    telegram_user_id=telegram_user_id
+                ).order_by(BotMessage.created_at.desc()).limit(10).all()
+                
+                # Filtrar mensagens mais recentes que o timestamp (comparação direta no Python)
+                messages = [msg for msg in recent_messages if msg.created_at > since_dt_brazil_with_margin]
+                messages.reverse()  # Ordenar crescente para exibição
+                
+                if len(messages) > 0:
+                    logger.info(f"✅ Polling (fallback): {len(messages)} novas mensagens encontradas via fallback")
+            
+            # ✅ DEBUG: Log detalhado sempre (para produção também)
+            if len(messages) > 0:
+                logger.info(f"✅ Polling: {len(messages)} novas mensagens desde {since_timestamp} | "
+                           f"since_dt_utc: {since_dt_utc} | since_dt_brazil: {since_dt_brazil} | "
+                           f"since_dt_brazil_with_margin: {since_dt_brazil_with_margin}")
+            else:
+                logger.debug(f"🔍 Polling: 0 novas mensagens desde {since_timestamp} | "
+                           f"since_dt_brazil_with_margin: {since_dt_brazil_with_margin}")
         except Exception as e:
             logger.error(f"Erro ao parsear since_timestamp '{since_timestamp}': {e}")
             # Fallback: buscar últimas 50 mensagens
