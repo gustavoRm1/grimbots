@@ -1091,10 +1091,11 @@
                                                 <p class="text-sm font-bold text-white mb-2">
                                                     ✅ Order Bump dos Botões Selecionado
                                                 </p>
-                                                <div class="space-y-1 text-sm text-gray-300" x-show="config.main_buttons[downsell.order_bump.button_index] && config.main_buttons[downsell.order_bump.button_index].order_bumps[downsell.order_bump.bump_index]">
-                                                    <p><strong>Origem:</strong> Botão <span x-text="downsell.order_bump.button_index + 1"></span> - Order Bump <span x-text="downsell.order_bump.bump_index + 1"></span></p>
-                                                    <p><strong>Preço:</strong> R$ <span x-text="(config.main_buttons[downsell.order_bump.button_index].order_bumps[downsell.order_bump.bump_index].price || 0).toFixed(2)"></span></p>
-                                                    <p><strong>Descrição:</strong> <span x-text="config.main_buttons[downsell.order_bump.button_index].order_bumps[downsell.order_bump.bump_index].description || 'Sem descrição'"></span></p>
+                                                <div class="space-y-1 text-sm text-gray-300">
+                                                    <p><strong>Origem:</strong> Botão <span x-text="(downsell.order_bump.button_index || 0) + 1"></span> - Order Bump <span x-text="(downsell.order_bump.bump_index || 0) + 1"></span></p>
+                                                    <p><strong>Preço:</strong> R$ <span x-text="(parseFloat(downsell.order_bump.price) || 0).toFixed(2)"></span></p>
+                                                    <p><strong>Descrição:</strong> <span x-text="downsell.order_bump.description || 'Sem descrição'"></span></p>
+                                                    <p x-show="downsell.order_bump.message" class="mt-2 text-xs text-gray-400 line-clamp-2"><strong>Mensagem:</strong> <span x-text="downsell.order_bump.message"></span></p>
                                                 </div>
                                                 <p class="text-xs text-gray-500 mt-2">
                                                     <i class="fas fa-info-circle mr-1"></i>
@@ -2240,11 +2241,43 @@ function botConfigApp() {
             
             const orderBump = button.order_bumps[bumpIndex];
             
+            // Debug: Log dos dados originais
+            console.log('📦 Order Bump original:', orderBump);
+            console.log('💰 Preço original:', orderBump.price, 'Tipo:', typeof orderBump.price);
+            
+            // Garantir que order_bump existe no downsell
+            if (!downsell.order_bump) {
+                downsell.order_bump = {
+                    enabled: false,
+                    button_index: null,
+                    bump_index: null,
+                    message: '',
+                    price: 0,
+                    description: '',
+                    media_url: '',
+                    media_type: 'video',
+                    accept_text: '',
+                    decline_text: '',
+                    audio_enabled: false,
+                    audio_url: ''
+                };
+            }
+            
             // Copiar dados do order bump dos botões para o downsell
             downsell.order_bump.button_index = buttonIndex;
             downsell.order_bump.bump_index = bumpIndex;
             downsell.order_bump.message = orderBump.message || '';
-            downsell.order_bump.price = parseFloat(orderBump.price) || 0;
+            
+            // ✅ Tratamento robusto do preço
+            let priceValue = 0;
+            if (orderBump.price !== null && orderBump.price !== undefined && orderBump.price !== '') {
+                priceValue = parseFloat(orderBump.price);
+                if (isNaN(priceValue)) {
+                    priceValue = 0;
+                }
+            }
+            downsell.order_bump.price = priceValue;
+            
             downsell.order_bump.description = orderBump.description || '';
             downsell.order_bump.media_url = orderBump.media_url || '';
             downsell.order_bump.media_type = orderBump.media_type || 'photo';
@@ -2257,6 +2290,7 @@ function botConfigApp() {
             downsell.order_bump.enabled = true;
             
             console.log(`✅ Order bump do Botão ${buttonIndex + 1} - OB ${bumpIndex + 1} aplicado ao downsell`);
+            console.log('📊 Dados copiados:', downsell.order_bump);
         },
         
         removeDownsell(index) {
