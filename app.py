@@ -5669,6 +5669,181 @@ def send_chat_message(bot_id, telegram_user_id):
         logger.error(f"❌ Erro ao enviar mensagem: {e}", exc_info=True)
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@app.route('/api/chat/send-media/<int:bot_id>/<telegram_user_id>', methods=['POST'])
+@login_required
+@csrf.exempt
+def send_chat_media(bot_id, telegram_user_id):
+    """✅ CHAT - Envia foto/vídeo para um lead via Telegram"""
+    from models import Bot, BotUser, BotMessage
+    import uuid
+    import os
+    import tempfile
+    
+    # Verificar se bot pertence ao usuário
+    bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
+    
+    # Verificar se bot está rodando
+    if not bot.is_running:
+        return jsonify({'success': False, 'error': 'Bot não está online. Inicie o bot primeiro.'}), 400
+    
+    # Buscar bot_user
+    bot_user = BotUser.query.filter_by(
+        bot_id=bot_id,
+        telegram_user_id=telegram_user_id,
+        archived=False
+    ).first_or_404()
+    
+    # Verificar se arquivo foi enviado
+    if 'file' not in request.files:
+        return jsonify({'success': False, 'error': 'Nenhum arquivo enviado'}), 400
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'success': False, 'error': 'Arquivo vazio'}), 400
+    
+    # Obter mensagem (caption) opcional
+    message_text = request.form.get('message', '').strip()
+    
+    # Determinar tipo de mídia baseado na extensão
+    filename = file.filename.lower()
+    if filename.endswith(('.jpg', '.jpeg', '.png', '.gif', '.webp')):
+        media_type = 'photo'
+    elif filename.endswith(('.mp4', '.avi', '.mov', '.mkv', '.webm')):
+        media_type = 'video'
+    else:
+        media_type = 'document'
+    
+    # Validar tamanho do arquivo (máximo 50MB para vídeo, 10MB para foto)
+    file.seek(0, os.SEEK_END)
+    file_size = file.tell()
+    file.seek(0)
+    
+    max_size = 50 * 1024 * 1024 if media_type == 'video' else 10 * 1024 * 1024
+    if file_size > max_size:
+        return jsonify({
+            'success': False, 
+            'error': f'Arquivo muito grande. Máximo: {max_size // (1024*1024)}MB'
+        }), 400
+    
+    temp_file_path = None
+    try:
+        # Salvar arquivo temporariamente
+        with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename)[1]) as temp_file:
+            file.save(temp_file.name)
+            temp_file_path = temp_file.name
+        
+        # Buscar token do bot
+        with bot_manager._bots_lock:
+            bot_data = bot_manager.active_bots.get(bot_id)
+            if not bot_data:
+                return jsonify({'success': False, 'error': 'Bot não está ativo no sistema'}), 400
+            
+            token = bot_data.get('token')
+            if not token:
+                return jsonify({'success': False, 'error': 'Token do bot não encontrado'}), 400
+        
+        # Enviar arquivo via Telegram API
+        result = bot_manager.send_telegram_file(
+            token=token,
+            chat_id=telegram_user_id,
+            file_path=temp_file_path,
+            message=message_text,
+            media_type=media_type,
+            buttons=None
+        )
+        
+        if result and isinstance(result, dict) and result.get('ok'):
+            # Arquivo enviado com sucesso (já foi salvo no banco pelo send_telegram_file)
+            telegram_msg_id = result.get('result', {}).get('message_id')
+            message_id = str(telegram_msg_id) if telegram_msg_id else str(uuid.uuid4().hex)
+            
+            # Atualizar last_interaction do bot_user
+            bot_user.last_interaction = datetime.now()
+            db.session.commit()
+            
+            logger.info(f"✅ {media_type} enviado para {telegram_user_id} via bot {bot_id}")
+            
+            return jsonify({
+                'success': True,
+                'message_id': message_id,
+                'media_type': media_type,
+                'telegram_message_id': message_id
+            })
+        else:
+            error_msg = result.get('description', 'Falha ao enviar arquivo') if isinstance(result, dict) else 'Falha ao enviar arquivo'
+            logger.error(f"❌ Erro ao enviar {media_type} via Telegram: {error_msg}")
+            return jsonify({'success': False, 'error': error_msg}), 500
+            
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"❌ Erro ao enviar arquivo: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+    finally:
+        # Limpar arquivo temporário
+        if temp_file_path and os.path.exists(temp_file_path):
+            try:
+                os.unlink(temp_file_path)
+            except Exception as e:
+                logger.warning(f"⚠️ Erro ao remover arquivo temporário: {e}")
+
+@app.route('/api/chat/media/<int:bot_id>/<file_id>')
+@login_required
+def get_chat_media(bot_id, file_id):
+    """✅ CHAT - Proxy para exibir mídia do Telegram"""
+    from models import Bot
+    import requests
+    
+    # Verificar se bot pertence ao usuário
+    bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
+    
+    try:
+        # Buscar token do bot
+        with bot_manager._bots_lock:
+            bot_data = bot_manager.active_bots.get(bot_id)
+            if not bot_data:
+                return jsonify({'error': 'Bot não está ativo'}), 400
+            
+            token = bot_data.get('token')
+            if not token:
+                return jsonify({'error': 'Token não encontrado'}), 400
+        
+        # Obter file_path do Telegram usando file_id
+        get_file_url = f"https://api.telegram.org/bot{token}/getFile"
+        response = requests.get(get_file_url, params={'file_id': file_id}, timeout=10)
+        
+        if response.status_code != 200:
+            return jsonify({'error': 'Erro ao obter arquivo'}), 500
+        
+        data = response.json()
+        if not data.get('ok'):
+            return jsonify({'error': 'Arquivo não encontrado'}), 404
+        
+        file_path = data.get('result', {}).get('file_path')
+        if not file_path:
+            return jsonify({'error': 'File path não encontrado'}), 404
+        
+        # Baixar arquivo do Telegram
+        file_url = f"https://api.telegram.org/file/bot{token}/{file_path}"
+        file_response = requests.get(file_url, timeout=30, stream=True)
+        
+        if file_response.status_code != 200:
+            return jsonify({'error': 'Erro ao baixar arquivo'}), 500
+        
+        # Retornar arquivo com headers apropriados
+        from flask import Response
+        return Response(
+            file_response.iter_content(chunk_size=8192),
+            mimetype=file_response.headers.get('Content-Type', 'application/octet-stream'),
+            headers={
+                'Content-Disposition': f'inline; filename="{file_path.split("/")[-1]}"',
+                'Cache-Control': 'public, max-age=3600'
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"❌ Erro ao obter mídia: {e}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/settings')
 @login_required
 def settings():

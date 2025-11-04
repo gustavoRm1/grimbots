@@ -3849,6 +3849,155 @@ Seu pagamento ainda não foi confirmado.
         }
         return mapping.get(status.lower() if status else '', 'pending')
     
+    def send_telegram_file(self, token: str, chat_id: str, file_path: str, 
+                          message: str = '', media_type: str = 'photo',
+                          buttons: Optional[list] = None):
+        """
+        Envia arquivo (foto/vídeo) pelo Telegram usando multipart/form-data
+        
+        Args:
+            token: Token do bot
+            chat_id: ID do chat
+            file_path: Caminho local do arquivo
+            message: Mensagem de texto (caption)
+            media_type: Tipo da mídia ('photo', 'video', 'document')
+            buttons: Lista de botões inline
+        
+        Returns:
+            dict com resultado da API ou False se falhar
+        """
+        try:
+            base_url = f"https://api.telegram.org/bot{token}"
+            
+            # Preparar teclado inline se houver botões
+            reply_markup = None
+            if buttons:
+                inline_keyboard = []
+                for button in buttons:
+                    button_dict = {'text': button.get('text')}
+                    if button.get('url'):
+                        button_dict['url'] = button['url']
+                    elif button.get('callback_data'):
+                        button_dict['callback_data'] = button['callback_data']
+                    else:
+                        button_dict['callback_data'] = 'button_pressed'
+                    inline_keyboard.append([button_dict])
+                reply_markup = {'inline_keyboard': inline_keyboard}
+            
+            # Determinar endpoint e campo da API baseado no tipo
+            if media_type == 'video':
+                endpoint = 'sendVideo'
+                file_field = 'video'
+            elif media_type == 'document':
+                endpoint = 'sendDocument'
+                file_field = 'document'
+            else:  # photo (padrão)
+                endpoint = 'sendPhoto'
+                file_field = 'photo'
+            
+            url = f"{base_url}/{endpoint}"
+            
+            # Preparar dados para multipart/form-data
+            with open(file_path, 'rb') as file:
+                files = {file_field: file}
+                data = {
+                    'chat_id': chat_id,
+                    'caption': message,
+                    'parse_mode': 'HTML'
+                }
+                
+                if reply_markup:
+                    import json
+                    data['reply_markup'] = json.dumps(reply_markup)
+                
+                response = requests.post(url, files=files, data=data, timeout=30)
+            
+            if response.status_code == 200:
+                result_data = response.json()
+                if result_data.get('ok'):
+                    logger.info(f"✅ Arquivo {media_type} enviado para chat {chat_id}")
+                    
+                    # ✅ CHAT: Salvar mensagem enviada pelo bot no banco
+                    try:
+                        from app import app, db
+                        from models import BotUser, BotMessage, Bot
+                        import json as json_lib
+                        import uuid as uuid_lib
+                        
+                        with app.app_context():
+                            # Buscar bot pelo token
+                            bot_id = None
+                            with self._bots_lock:
+                                for bid, bot_info in self.active_bots.items():
+                                    if bot_info.get('token') == token:
+                                        bot_id = bid
+                                        break
+                            
+                            if not bot_id:
+                                bot = Bot.query.filter_by(token=token).first()
+                                if bot:
+                                    bot_id = bot.id
+                            
+                            if bot_id:
+                                # Buscar bot_user
+                                bot_user = BotUser.query.filter_by(
+                                    bot_id=bot_id,
+                                    telegram_user_id=str(chat_id),
+                                    archived=False
+                                ).first()
+                                
+                                if bot_user:
+                                    telegram_msg_id = result_data.get('result', {}).get('message_id')
+                                    message_id = str(telegram_msg_id) if telegram_msg_id else str(uuid_lib.uuid4().hex)
+                                    
+                                    # Obter file_id do Telegram (para reutilização futura)
+                                    file_info = result_data.get('result', {}).get(file_field)
+                                    media_url = None
+                                    if isinstance(file_info, dict):
+                                        file_id = file_info.get('file_id')
+                                        if file_id:
+                                            media_url = file_id  # Salvar file_id do Telegram
+                                    
+                                    bot_message = BotMessage(
+                                        bot_id=bot_id,
+                                        bot_user_id=bot_user.id,
+                                        telegram_user_id=str(chat_id),
+                                        message_id=message_id,
+                                        message_text=message,
+                                        message_type=media_type,
+                                        direction='outgoing',
+                                        media_url=media_url,
+                                        is_read=True,
+                                        raw_data=json_lib.dumps(result_data) if result_data else None
+                                    )
+                                    db.session.add(bot_message)
+                                    db.session.commit()
+                                    logger.debug(f"✅ Arquivo {media_type} enviado salvo no banco")
+                                else:
+                                    logger.debug(f"⚠️ BotUser não encontrado para salvar arquivo enviado")
+                            else:
+                                logger.debug(f"⚠️ Bot não encontrado pelo token para salvar arquivo enviado")
+                    except Exception as e:
+                        logger.error(f"❌ Erro ao salvar arquivo enviado no banco: {e}")
+                    
+                    return result_data
+                else:
+                    logger.error(f"❌ Telegram API retornou erro: {result_data.get('description', 'Erro desconhecido')}")
+                    return False
+            else:
+                logger.error(f"❌ Erro ao enviar arquivo: {response.text}")
+                return False
+                
+        except FileNotFoundError:
+            logger.error(f"❌ Arquivo não encontrado: {file_path}")
+            return False
+        except requests.exceptions.Timeout:
+            logger.error(f"⏱️ Timeout ao enviar arquivo para chat {chat_id}")
+            return False
+        except Exception as e:
+            logger.error(f"❌ Erro ao enviar arquivo Telegram: {e}", exc_info=True)
+            return False
+    
     def send_telegram_message(self, token: str, chat_id: str, message: str, 
                              media_url: Optional[str] = None, 
                              media_type: str = 'video',

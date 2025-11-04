@@ -237,7 +237,38 @@
                             <div class="max-w-[70%]" :class="msg.direction === 'outgoing' ? 'flex flex-col items-end' : ''">
                                 <div class="rounded-2xl px-4 py-3"
                                      :style="msg.direction === 'outgoing' ? 'background: linear-gradient(135deg, var(--brand-blue-500), var(--brand-blue-600)); color: white;' : 'background: var(--bg-tertiary); border: 1px solid var(--border-subtle); color: var(--txt-primary);'">
-                                    <p class="text-sm" x-text="msg.message_text || '[Mídia]'"></p>
+                                    <!-- Mídia (foto/vídeo) -->
+                                    <template x-if="msg.media_url && (msg.message_type === 'photo' || msg.message_type === 'video')">
+                                        <div class="mb-2">
+                                            <template x-if="msg.message_type === 'photo'">
+                                                <img 
+                                                    :src="`/api/chat/media/${selectedBot.id}/${msg.media_url}`" 
+                                                    :alt="msg.message_text || 'Foto'"
+                                                    class="rounded-lg max-w-full max-h-64 object-cover cursor-pointer"
+                                                    @click="window.open(`/api/chat/media/${selectedBot.id}/${msg.media_url}`, '_blank')"
+                                                    onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
+                                                >
+                                                <div style="display: none;" class="text-xs opacity-75">[Foto não disponível]</div>
+                                            </template>
+                                            <template x-if="msg.message_type === 'video'">
+                                                <video 
+                                                    :src="`/api/chat/media/${selectedBot.id}/${msg.media_url}`" 
+                                                    controls
+                                                    class="rounded-lg max-w-full max-h-64"
+                                                    preload="metadata"
+                                                >
+                                                    Seu navegador não suporta vídeo.
+                                                </video>
+                                            </template>
+                                        </div>
+                                    </template>
+                                    <!-- Texto da mensagem -->
+                                    <template x-if="msg.message_text">
+                                        <p class="text-sm" x-text="msg.message_text"></p>
+                                    </template>
+                                    <template x-if="!msg.message_text && !msg.media_url">
+                                        <p class="text-sm opacity-75">[Mídia]</p>
+                                    </template>
                                 </div>
                                 <p class="text-xs mt-1" :class="msg.direction === 'outgoing' ? 'text-right mr-2' : 'ml-2'" style="color: var(--txt-muted);" x-text="formatTime(msg.created_at)"></p>
                             </div>
@@ -253,19 +284,64 @@
 
             <!-- Input Area -->
             <div class="p-4 border-t" style="border-color: var(--border-subtle);">
-                <form @submit.prevent="sendMessage()" class="flex items-center gap-3">
+                <!-- Preview de arquivo selecionado -->
+                <template x-if="selectedFile">
+                    <div class="mb-3 p-3 rounded-lg flex items-center justify-between" style="background: var(--bg-tertiary); border: 1px solid var(--border-subtle);">
+                        <div class="flex items-center gap-3 flex-1">
+                            <template x-if="selectedFile.type.startsWith('image/')">
+                                <img :src="filePreview" class="w-16 h-16 rounded object-cover" alt="Preview">
+                            </template>
+                            <template x-if="selectedFile.type.startsWith('video/')">
+                                <div class="w-16 h-16 rounded flex items-center justify-center" style="background: var(--bg-primary);">
+                                    <i class="fas fa-video text-2xl" style="color: var(--txt-primary);"></i>
+                                </div>
+                            </template>
+                            <div class="flex-1 min-w-0">
+                                <p class="text-sm font-medium truncate" style="color: var(--txt-primary);" x-text="selectedFile.name"></p>
+                                <p class="text-xs" style="color: var(--txt-secondary);" x-text="formatFileSize(selectedFile.size)"></p>
+                            </div>
+                        </div>
+                        <button 
+                            @click="selectedFile = null; filePreview = null; fileInput = null"
+                            class="ml-2 p-2 rounded-lg hover:bg-gray-700 transition-all"
+                            style="color: var(--txt-secondary);"
+                        >
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </template>
+                
+                <form @submit.prevent="selectedFile ? sendMedia() : sendMessage()" class="flex items-center gap-3">
+                    <!-- Botão de anexar arquivo -->
+                    <label 
+                        :class="{'opacity-50 cursor-not-allowed': sendingMessage || !selectedConversation}"
+                        class="p-3 rounded-xl cursor-pointer transition-all hover:opacity-80"
+                        style="background: var(--bg-tertiary); border: 1px solid var(--border-subtle); color: var(--txt-primary);"
+                        title="Enviar foto ou vídeo"
+                    >
+                        <input 
+                            type="file" 
+                            accept="image/*,video/*"
+                            @change="handleFileSelect($event)"
+                            :disabled="sendingMessage || !selectedConversation"
+                            class="hidden"
+                            x-ref="fileInput"
+                        >
+                        <i class="fas fa-paperclip"></i>
+                    </label>
+                    
                     <input 
                         type="text" 
                         x-model="messageInput"
                         :disabled="sendingMessage || !selectedConversation"
-                        placeholder="Digite sua mensagem..."
+                        :placeholder="selectedFile ? 'Adicione uma legenda (opcional)...' : 'Digite sua mensagem...'"
                         class="flex-1 px-4 py-3 rounded-xl text-sm focus:outline-none focus:ring-2 transition-all"
                         style="background: var(--bg-tertiary); border: 1px solid var(--border-subtle); color: var(--txt-primary); focus:ring-color: var(--brand-blue-500);"
                         autocomplete="off"
                     >
                     <button 
                         type="submit"
-                        :disabled="sendingMessage || !selectedConversation || !messageInput.trim()"
+                        :disabled="sendingMessage || !selectedConversation || (!messageInput.trim() && !selectedFile)"
                         class="px-6 py-3 rounded-xl font-semibold text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                         style="background: linear-gradient(135deg, var(--brand-blue-500), var(--brand-blue-600)); color: white;"
                     >
@@ -308,6 +384,9 @@ function chatApp() {
         messageInput: '',
         sendingMessage: false,
         pollingInterval: null,
+        selectedFile: null,
+        filePreview: null,
+        fileInput: null,
 
         init() {
             // Auto-selecionar primeiro bot se houver
@@ -594,6 +673,94 @@ function chatApp() {
 
         formatMoney(value) {
             return new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
+        },
+
+        handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            // Validar tamanho
+            const maxSize = file.type.startsWith('video/') ? 50 * 1024 * 1024 : 10 * 1024 * 1024;
+            if (file.size > maxSize) {
+                alert(`Arquivo muito grande. Máximo: ${maxSize / (1024 * 1024)}MB`);
+                event.target.value = '';
+                return;
+            }
+            
+            this.selectedFile = file;
+            this.fileInput = event.target;
+            
+            // Criar preview para imagens
+            if (file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    this.filePreview = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            } else {
+                this.filePreview = null;
+            }
+        },
+
+        async sendMedia() {
+            if (!this.selectedConversation || !this.selectedFile || this.sendingMessage) return;
+            
+            const caption = this.messageInput.trim() || '';
+            this.sendingMessage = true;
+            
+            try {
+                const formData = new FormData();
+                formData.append('file', this.selectedFile);
+                if (caption) {
+                    formData.append('message', caption);
+                }
+                
+                const response = await fetch(`/api/chat/send-media/${this.selectedBot.id}/${this.selectedConversation.telegram_user_id}`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Limpar formulário
+                    this.selectedFile = null;
+                    this.filePreview = null;
+                    this.messageInput = '';
+                    if (this.fileInput) {
+                        this.fileInput.value = '';
+                        this.fileInput = null;
+                    }
+                    
+                    // Recarregar mensagens para exibir a nova mídia
+                    await this.selectConversation(this.selectedConversation);
+                    
+                    // Scroll para última mensagem
+                    this.scrollToBottom();
+                    
+                    // Verificar novas mensagens após enviar
+                    setTimeout(() => {
+                        if (this.selectedConversation && this.selectedBot) {
+                            this.checkNewMessages();
+                        }
+                    }, 500);
+                } else {
+                    alert('Erro ao enviar arquivo: ' + (data.error || 'Erro desconhecido'));
+                }
+            } catch (error) {
+                console.error('Erro ao enviar arquivo:', error);
+                alert('Erro ao enviar arquivo. Tente novamente.');
+            } finally {
+                this.sendingMessage = false;
+            }
+        },
+
+        formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
         }
     };
 }
