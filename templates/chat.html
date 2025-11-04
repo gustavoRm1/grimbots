@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Chat V2.0 - grimbots{% endblock %}
+{% block title %}Chat - grimbots{% endblock %}
 
 {% block content %}
 <div class="max-w-full mx-auto h-screen flex flex-col" style="background: var(--bg-primary);" x-data="chatApp()" x-init="init()">
@@ -185,7 +185,12 @@
             <!-- Conversation Header -->
             <div class="p-4 border-b flex items-center justify-between" style="border-color: var(--border-subtle);">
                 <div class="flex items-center gap-3">
-                    <button @click="selectedConversation = null" class="md:hidden p-2 rounded-lg hover:bg-gray-800">
+                    <button 
+                        @click="selectedConversation = null" 
+                        class="p-2 rounded-lg transition-all hover:bg-gray-800/50 flex items-center justify-center"
+                        style="background: var(--bg-tertiary); border: 1px solid var(--border-subtle);"
+                        title="Voltar para lista de conversas"
+                    >
                         <i class="fas fa-arrow-left" style="color: var(--txt-primary);"></i>
                     </button>
                     <div class="w-10 h-10 rounded-full flex items-center justify-center" 
