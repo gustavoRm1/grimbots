@@ -983,17 +983,18 @@ def dashboard():
         month_pending_sales = 0
     
     # ✅ VERSÃO 2.0: Usuários por período (BotUser)
+    # NOTA: BotUser usa 'first_interaction' ao invés de 'created_at'
     if bot_ids:
         today_users = db.session.query(func.count(func.distinct(BotUser.telegram_user_id))).filter(
             BotUser.bot_id.in_(bot_ids),
             BotUser.archived == False,
-            BotUser.created_at >= today_start
+            BotUser.first_interaction >= today_start
         ).scalar() or 0
         
         month_users = db.session.query(func.count(func.distinct(BotUser.telegram_user_id))).filter(
             BotUser.bot_id.in_(bot_ids),
             BotUser.archived == False,
-            BotUser.created_at >= month_start
+            BotUser.first_interaction >= month_start
         ).scalar() or 0
     else:
         today_users = 0
