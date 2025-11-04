@@ -5469,20 +5469,31 @@ def get_chat_messages(bot_id, telegram_user_id):
         archived=False
     ).first_or_404()
     
-    # Buscar mensagens
-    messages = BotMessage.query.filter_by(
-        bot_id=bot_id,
-        telegram_user_id=telegram_user_id
-    ).order_by(BotMessage.created_at.asc()).limit(100).all()
+    # ✅ OTIMIZAÇÃO: Buscar apenas mensagens novas se since_id for fornecido
+    since_id = request.args.get('since_id', type=int)
     
-    # Marcar mensagens como lidas
-    BotMessage.query.filter_by(
-        bot_id=bot_id,
-        telegram_user_id=telegram_user_id,
-        direction='incoming',
-        is_read=False
-    ).update({'is_read': True})
-    db.session.commit()
+    if since_id:
+        # Buscar apenas mensagens mais recentes que since_id
+        messages = BotMessage.query.filter(
+            BotMessage.bot_id == bot_id,
+            BotMessage.telegram_user_id == telegram_user_id,
+            BotMessage.id > since_id
+        ).order_by(BotMessage.created_at.asc()).limit(50).all()
+    else:
+        # Buscar todas as mensagens (primeira carga)
+        messages = BotMessage.query.filter_by(
+            bot_id=bot_id,
+            telegram_user_id=telegram_user_id
+        ).order_by(BotMessage.created_at.asc()).limit(100).all()
+        
+        # Marcar mensagens como lidas apenas na primeira carga
+        BotMessage.query.filter_by(
+            bot_id=bot_id,
+            telegram_user_id=telegram_user_id,
+            direction='incoming',
+            is_read=False
+        ).update({'is_read': True})
+        db.session.commit()
     
     messages_data = [msg.to_dict() for msg in messages]
     

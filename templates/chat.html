@@ -307,11 +307,70 @@ function chatApp() {
         loadingMessages: false,
         messageInput: '',
         sendingMessage: false,
+        pollingInterval: null,
 
         init() {
             // Auto-selecionar primeiro bot se houver
             if (this.bots.length > 0) {
                 this.selectBot(this.bots[0]);
+            }
+            
+            // ✅ ATUALIZAÇÃO AUTOMÁTICA: Polling para novas mensagens
+            this.startMessagePolling();
+        },
+        
+        startMessagePolling() {
+            // Limpar intervalo anterior se existir
+            if (this.pollingInterval) {
+                clearInterval(this.pollingInterval);
+            }
+            
+            // Polling a cada 3 segundos quando há conversa selecionada
+            this.pollingInterval = setInterval(() => {
+                if (this.selectedConversation && this.selectedBot && !this.loadingMessages) {
+                    this.checkNewMessages();
+                }
+            }, 3000); // 3 segundos
+        },
+        
+        stopMessagePolling() {
+            if (this.pollingInterval) {
+                clearInterval(this.pollingInterval);
+                this.pollingInterval = null;
+            }
+        },
+        
+        async checkNewMessages() {
+            if (!this.selectedConversation || !this.selectedBot || this.loadingMessages) return;
+            
+            try {
+                // Buscar mensagens mais recentes que a última que temos
+                const lastMessageId = this.messages.length > 0 ? Math.max(...this.messages.map(m => m.id)) : 0;
+                
+                const response = await fetch(`/api/chat/messages/${this.selectedBot.id}/${this.selectedConversation.telegram_user_id}?since_id=${lastMessageId}`);
+                const data = await response.json();
+                
+                if (data.success && data.messages) {
+                    // Filtrar apenas mensagens novas (ID maior que a última)
+                    const newMessages = data.messages.filter(msg => msg.id > lastMessageId);
+                    
+                    if (newMessages.length > 0) {
+                        // Adicionar novas mensagens
+                        this.messages.push(...newMessages);
+                        
+                        // Scroll para última mensagem
+                        this.scrollToBottom();
+                        
+                        // Atualizar contador de não lidas
+                        this.loadConversations();
+                        
+                        // Emitir som de notificação (opcional)
+                        // this.playNotificationSound();
+                    }
+                }
+            } catch (error) {
+                // Silenciosamente falhar - não interromper UX
+                console.debug('Polling de mensagens:', error);
             }
         },
 
@@ -361,6 +420,9 @@ function chatApp() {
                     this.loadConversations();
                     // Scroll para última mensagem
                     this.scrollToBottom();
+                    
+                    // Reiniciar polling para esta conversa
+                    this.startMessagePolling();
                 }
             } catch (error) {
                 console.error('Erro ao carregar mensagens:', error);

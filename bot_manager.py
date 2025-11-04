@@ -726,7 +726,7 @@ class BotManager:
                 
                 logger.info(f"💬 De: {user.get('first_name', 'Usuário')} | Mensagem: '{text}'")
                 
-                # ✅ CHAT: Salvar mensagem recebida no banco
+                # ✅ CHAT: Salvar mensagem recebida no banco (SEMPRE, independente do comando)
                 if text and text.strip():  # Apenas mensagens de texto não vazias
                     try:
                         from app import app, db
@@ -734,33 +734,44 @@ class BotManager:
                         import json
                         
                         with app.app_context():
-                            # Buscar bot_user
+                            # Buscar ou criar bot_user
                             bot_user = BotUser.query.filter_by(
                                 bot_id=bot_id,
                                 telegram_user_id=telegram_user_id,
                                 archived=False
                             ).first()
                             
-                            if bot_user:
-                                # Salvar mensagem recebida
-                                bot_message = BotMessage(
+                            # Se não existe, criar (será atualizado depois no /start se necessário)
+                            if not bot_user:
+                                bot_user = BotUser(
                                     bot_id=bot_id,
-                                    bot_user_id=bot_user.id,
                                     telegram_user_id=telegram_user_id,
-                                    message_id=str(message.get('message_id', '')),
-                                    message_text=text,
-                                    message_type='text',
-                                    direction='incoming',
-                                    is_read=False,  # Será marcada como lida quando visualizada no chat
-                                    raw_data=json.dumps(message)  # Salvar dados completos para debug
+                                    first_name=user.get('first_name', 'Usuário'),
+                                    username=user.get('username', ''),
+                                    archived=False
                                 )
-                                db.session.add(bot_message)
-                                
-                                # Atualizar last_interaction
-                                bot_user.last_interaction = datetime.now()
-                                
-                                db.session.commit()
-                                logger.debug(f"✅ Mensagem recebida salva no banco: {text[:50]}...")
+                                db.session.add(bot_user)
+                                db.session.flush()  # Obter ID sem commit
+                            
+                            # Salvar mensagem recebida (SEMPRE, mesmo que seja /start)
+                            bot_message = BotMessage(
+                                bot_id=bot_id,
+                                bot_user_id=bot_user.id,
+                                telegram_user_id=telegram_user_id,
+                                message_id=str(message.get('message_id', '')),
+                                message_text=text,
+                                message_type='text',
+                                direction='incoming',
+                                is_read=False,  # Será marcada como lida quando visualizada no chat
+                                raw_data=json.dumps(message)  # Salvar dados completos para debug
+                            )
+                            db.session.add(bot_message)
+                            
+                            # Atualizar last_interaction
+                            bot_user.last_interaction = datetime.now()
+                            
+                            db.session.commit()
+                            logger.debug(f"✅ Mensagem recebida salva no banco: {text[:50]}...")
                     except Exception as e:
                         logger.error(f"❌ Erro ao salvar mensagem recebida: {e}")
                         # Não interromper o fluxo se falhar ao salvar
@@ -800,16 +811,21 @@ class BotManager:
     def _handle_text_message(self, bot_id: int, token: str, config: Dict[str, Any], 
                             chat_id: int, message: Dict[str, Any]):
         """
-        Processa mensagens de texto (não comandos) - reinicia funil com proteções
+        Processa mensagens de texto (não comandos)
+        
+        ✅ CORREÇÃO CRÍTICA QI 600+:
+        - Verifica se há conversa ativa (mensagens do bot nos últimos 30 min)
+        - Se houver conversa ativa, NÃO reinicia funil (apenas salva mensagem)
+        - Se NÃO houver conversa ativa, reinicia funil (usuário retornando)
         
         PROTEÇÕES IMPLEMENTADAS:
-        - Rate limiting (máximo 1 mensagem por minuto)
+        - Verificação de conversa ativa (30 minutos)
+        - Rate limiting (máximo 1 mensagem por minuto para reiniciar funil)
         - Não envia Meta Pixel ViewContent (evita duplicação)
-        - Logs diferenciados para análise
         """
         try:
             from app import app, db
-            from models import BotUser, Bot
+            from models import BotUser, Bot, BotMessage
             from datetime import datetime, timedelta
             
             with app.app_context():
@@ -829,24 +845,53 @@ class BotManager:
                     self._handle_start_command(bot_id, token, config, chat_id, message, None)
                     return
                 
-                # ✅ PROTEÇÃO 1: Rate limiting usando cache em memória (máximo 1 mensagem por minuto)
-                user_key = f"{bot_id}_{telegram_user_id}"
                 now = datetime.now()
+                
+                # ✅ VERIFICAÇÃO CRÍTICA: Há conversa ativa?
+                # Verificar se bot enviou mensagens para este usuário nos últimos 30 minutos
+                conversation_window = now - timedelta(minutes=30)
+                recent_bot_messages = BotMessage.query.filter(
+                    BotMessage.bot_id == bot_id,
+                    BotMessage.telegram_user_id == telegram_user_id,
+                    BotMessage.direction == 'outgoing',  # Mensagens ENVIADAS pelo bot
+                    BotMessage.created_at >= conversation_window
+                ).count()
+                
+                has_active_conversation = recent_bot_messages > 0
+                
+                if has_active_conversation:
+                    # ✅ CONVERSA ATIVA: Apenas salvar mensagem, NÃO reiniciar funil
+                    logger.info(f"💬 Mensagem recebida em conversa ativa: '{message.get('text', '')[:50]}...' (bot enviou {recent_bot_messages} msg(s) recentes)")
+                    
+                    # Atualizar última interação
+                    bot_user.last_interaction = now
+                    db.session.commit()
+                    
+                    # Mensagem já foi salva em _process_telegram_update antes desta função ser chamada
+                    # Não fazer mais nada - apenas deixar a mensagem salva
+                    return
+                
+                # ✅ SEM CONVERSA ATIVA: Usuário retornando após muito tempo
+                # Verificar rate limiting para evitar spam de reinicialização
+                user_key = f"{bot_id}_{telegram_user_id}"
                 
                 if user_key in self.rate_limit_cache:
                     last_time = self.rate_limit_cache[user_key]
                     time_diff = (now - last_time).total_seconds()
-                    if time_diff < 60:
-                        logger.info(f"⏱️ Rate limiting: Usuário {first_name} enviou mensagem muito recente ({time_diff:.1f}s atrás)")
+                    if time_diff < 300:  # 5 minutos entre reinicializações
+                        logger.info(f"⏱️ Rate limiting: Usuário {first_name} tentou reiniciar funil muito recente ({time_diff:.1f}s atrás)")
+                        # Apenas atualizar interação, não reiniciar funil
+                        bot_user.last_interaction = now
+                        db.session.commit()
                         return
                 
-                # ✅ PROTEÇÃO 2: Não enviar Meta Pixel (evita duplicação)
-                logger.info(f"💬 Reiniciando funil para usuário existente: {first_name}")
+                # ✅ REINICIAR FUNIL: Usuário retornou após muito tempo sem conversa
+                logger.info(f"💬 Reiniciando funil para usuário retornado: {first_name} (sem conversa ativa há 30+ min)")
                 
                 # Atualizar cache de rate limiting
                 self.rate_limit_cache[user_key] = now
                 
-                # Atualizar última interação no banco (para analytics)
+                # Atualizar última interação no banco
                 bot_user.last_interaction = now
                 db.session.commit()
                 
@@ -3849,6 +3894,63 @@ Seu pagamento ainda não foi confirmado.
                 result_data = response.json()
                 if result_data.get('ok'):
                     logger.info(f"✅ Mensagem enviada para chat {chat_id}")
+                    
+                    # ✅ CHAT: Salvar mensagem enviada pelo bot no banco
+                    try:
+                        from app import app, db
+                        from models import BotUser, BotMessage, Bot
+                        import json
+                        import uuid as uuid_lib
+                        
+                        with app.app_context():
+                            # Buscar bot pelo token para obter bot_id
+                            bot_id = None
+                            with self._bots_lock:
+                                for bid, bot_info in self.active_bots.items():
+                                    if bot_info.get('token') == token:
+                                        bot_id = bid
+                                        break
+                            
+                            # Se não encontrou pelos bots ativos, buscar no banco
+                            if not bot_id:
+                                bot = Bot.query.filter_by(token=token).first()
+                                if bot:
+                                    bot_id = bot.id
+                            
+                            if bot_id:
+                                # Buscar bot_user pelo bot_id e telegram_user_id
+                                bot_user = BotUser.query.filter_by(
+                                    bot_id=bot_id,
+                                    telegram_user_id=str(chat_id),
+                                    archived=False
+                                ).first()
+                                
+                                if bot_user:
+                                    telegram_msg_id = result_data.get('result', {}).get('message_id')
+                                    message_id = str(telegram_msg_id) if telegram_msg_id else str(uuid_lib.uuid4().hex)
+                                    
+                                    bot_message = BotMessage(
+                                        bot_id=bot_id,
+                                        bot_user_id=bot_user.id,
+                                        telegram_user_id=str(chat_id),
+                                        message_id=message_id,
+                                        message_text=message,
+                                        message_type='text' if not media_url else media_type,
+                                        direction='outgoing',
+                                        is_read=True,  # Mensagens do bot já são "lidas"
+                                        raw_data=json.dumps(result_data) if result_data else None
+                                    )
+                                    db.session.add(bot_message)
+                                    db.session.commit()
+                                    logger.debug(f"✅ Mensagem enviada pelo bot salva no banco: {message[:50]}...")
+                                else:
+                                    logger.debug(f"⚠️ BotUser não encontrado para salvar mensagem enviada: bot_id={bot_id}, chat_id={chat_id}")
+                            else:
+                                logger.debug(f"⚠️ Bot não encontrado pelo token para salvar mensagem enviada")
+                    except Exception as e:
+                        logger.error(f"❌ Erro ao salvar mensagem enviada pelo bot: {e}")
+                        # Não interromper o fluxo se falhar ao salvar
+                    
                     # Retornar dados completos se sucesso, senão True para compatibilidade
                     return result_data if result_data.get('result') else True
                 else:
