@@ -5482,9 +5482,9 @@ def get_chat_messages(bot_id, telegram_user_id):
                 since_timestamp_clean += '+00:00'
             since_dt = datetime.fromisoformat(since_timestamp_clean)
             
-            # ✅ CRÍTICO: Adicionar margem de 1 segundo para evitar perder mensagens no exato momento do timestamp
+            # ✅ CRÍTICO: Adicionar margem de 3 segundos para evitar perder mensagens no exato momento do timestamp
             from datetime import timedelta
-            since_dt_with_margin = since_dt - timedelta(seconds=1)
+            since_dt_with_margin = since_dt - timedelta(seconds=3)
             
             # Buscar apenas mensagens mais recentes que o timestamp (com margem)
             messages = BotMessage.query.filter(
@@ -5493,7 +5493,8 @@ def get_chat_messages(bot_id, telegram_user_id):
                 BotMessage.created_at > since_dt_with_margin
             ).order_by(BotMessage.created_at.asc()).limit(50).all()
             
-            logger.debug(f"Polling: {len(messages)} novas mensagens desde {since_timestamp}")
+            # ✅ DEBUG: Log sempre (para produção também)
+            logger.info(f"🔍 Polling: {len(messages)} novas mensagens desde {since_timestamp} (margem: 3s)")
         except Exception as e:
             logger.error(f"Erro ao parsear since_timestamp '{since_timestamp}': {e}")
             # Fallback: buscar últimas 50 mensagens

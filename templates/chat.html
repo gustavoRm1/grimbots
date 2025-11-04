@@ -326,14 +326,27 @@ function chatApp() {
                 this.pollingInterval = null;
             }
             
+            // ✅ DEBUG: Log quando polling é iniciado
+            if (this.selectedConversation) {
+                console.log('🔄 Polling iniciado para conversa:', this.selectedConversation.telegram_user_id);
+            }
+            
             // ✅ CORREÇÃO QI 600+: Polling mais frequente e robusto
-            // Polling a cada 2 segundos quando há conversa selecionada
+            // Polling a cada 1 segundo quando há conversa selecionada (máxima responsividade)
             this.pollingInterval = setInterval(() => {
                 // Verificar se ainda há conversa selecionada antes de fazer polling
                 if (this.selectedConversation && this.selectedBot && !this.loadingMessages && !this.sendingMessage) {
                     this.checkNewMessages();
+                } else {
+                    // ✅ DEBUG: Log quando não executa (apenas em dev)
+                    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+                        if (!this.selectedConversation) console.debug('⏸️ Polling pausado: sem conversa selecionada');
+                        if (!this.selectedBot) console.debug('⏸️ Polling pausado: sem bot selecionado');
+                        if (this.loadingMessages) console.debug('⏸️ Polling pausado: carregando mensagens');
+                        if (this.sendingMessage) console.debug('⏸️ Polling pausado: enviando mensagem');
+                    }
                 }
-            }, 2000); // 2 segundos (mais frequente para melhor UX)
+            }, 1000); // 1 segundo (máxima frequência para melhor UX)
         },
         
         stopMessagePolling() {
@@ -344,7 +357,13 @@ function chatApp() {
         },
         
         async checkNewMessages() {
-            if (!this.selectedConversation || !this.selectedBot || this.loadingMessages) return;
+            if (!this.selectedConversation || !this.selectedBot || this.loadingMessages) {
+                // Debug: verificar por que não está executando
+                if (!this.selectedConversation) console.debug('🔍 Polling: selectedConversation não definido');
+                if (!this.selectedBot) console.debug('🔍 Polling: selectedBot não definido');
+                if (this.loadingMessages) console.debug('🔍 Polling: loadingMessages = true');
+                return;
+            }
             
             try {
                 // ✅ CORREÇÃO QI 600+: Usar timestamp ao invés de ID (mais confiável)
@@ -355,6 +374,8 @@ function chatApp() {
                     // Garantir que o timestamp está no formato correto
                     const timestamp = new Date(lastMessage.created_at);
                     if (!isNaN(timestamp.getTime())) {
+                        // ✅ CRÍTICO: Subtrair 5 segundos para garantir que não perca mensagens (margem maior)
+                        timestamp.setSeconds(timestamp.getSeconds() - 5);
                         sinceTimestamp = timestamp.toISOString();
                     }
                 }
@@ -365,17 +386,27 @@ function chatApp() {
                     url += `?since_timestamp=${encodeURIComponent(sinceTimestamp)}`;
                 }
                 
-                const response = await fetch(url);
+                // ✅ DEBUG: Log da requisição (apenas em dev)
+                if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+                    console.debug(`🔄 Polling: Buscando mensagens desde ${sinceTimestamp || 'início'}`);
+                }
+                
+                const response = await fetch(url, {
+                    cache: 'no-store',  // ✅ CRÍTICO: Evitar cache do navegador
+                    headers: {
+                        'Cache-Control': 'no-cache'
+                    }
+                });
                 
                 if (!response.ok) {
-                    console.error(`Erro HTTP no polling: ${response.status} ${response.statusText}`);
+                    console.error(`❌ Erro HTTP no polling: ${response.status} ${response.statusText}`);
                     return;
                 }
                 
                 const data = await response.json();
                 
                 if (!data.success) {
-                    console.error('Erro na resposta do polling:', data.error || 'Erro desconhecido');
+                    console.error('❌ Erro na resposta do polling:', data.error || 'Erro desconhecido');
                     return;
                 }
                 
@@ -394,10 +425,13 @@ function chatApp() {
                         // Atualizar contador de não lidas
                         this.loadConversations();
                         
-                        // Log para debug (apenas em desenvolvimento)
-                        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-                            console.log(`✅ ${newMessages.length} nova(s) mensagem(ns) recebida(s)`);
-                        }
+                        // ✅ DEBUG: Log sempre (para produção também)
+                        console.log(`✅ Chat: ${newMessages.length} nova(s) mensagem(ns) recebida(s)`);
+                    }
+                } else {
+                    // ✅ DEBUG: Log quando não há mensagens (apenas em dev)
+                    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+                        console.debug(`🔍 Polling: Nenhuma mensagem nova (total: ${this.messages.length})`);
                     }
                 }
             } catch (error) {
