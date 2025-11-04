@@ -2512,6 +2512,9 @@ Desculpe, não foi possível processar seu pagamento.
                                         db.session.commit()
                                         logger.info(f"💾 Pagamento atualizado via consulta ativa")
                                         
+                                        # ✅ CRÍTICO: Recarregar objeto do banco para garantir status atualizado
+                                        db.session.refresh(payment)
+                                        
                                         # ✅ VERIFICAR CONQUISTAS
                                         try:
                                             from app import check_and_unlock_achievements
@@ -2523,6 +2526,8 @@ Desculpe, não foi possível processar seu pagamento.
                                 elif api_status:
                                     logger.info(f"⏳ API retornou status: {api_status.get('status')}")
                 
+                # ✅ CRÍTICO: Recarregar objeto do banco antes de verificar status final
+                db.session.refresh(payment)
                 logger.info(f"📊 Status FINAL do pagamento: {payment.status}")
                 
                 if payment.status == 'paid':
