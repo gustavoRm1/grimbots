@@ -722,8 +722,48 @@ class BotManager:
                 chat_id = message['chat']['id']
                 text = message.get('text', '')
                 user = message.get('from', {})
+                telegram_user_id = str(user.get('id', ''))
                 
                 logger.info(f"💬 De: {user.get('first_name', 'Usuário')} | Mensagem: '{text}'")
+                
+                # ✅ CHAT: Salvar mensagem recebida no banco
+                if text and text.strip():  # Apenas mensagens de texto não vazias
+                    try:
+                        from app import app, db
+                        from models import BotUser, BotMessage
+                        import json
+                        
+                        with app.app_context():
+                            # Buscar bot_user
+                            bot_user = BotUser.query.filter_by(
+                                bot_id=bot_id,
+                                telegram_user_id=telegram_user_id,
+                                archived=False
+                            ).first()
+                            
+                            if bot_user:
+                                # Salvar mensagem recebida
+                                bot_message = BotMessage(
+                                    bot_id=bot_id,
+                                    bot_user_id=bot_user.id,
+                                    telegram_user_id=telegram_user_id,
+                                    message_id=str(message.get('message_id', '')),
+                                    message_text=text,
+                                    message_type='text',
+                                    direction='incoming',
+                                    is_read=False,  # Será marcada como lida quando visualizada no chat
+                                    raw_data=json.dumps(message)  # Salvar dados completos para debug
+                                )
+                                db.session.add(bot_message)
+                                
+                                # Atualizar last_interaction
+                                bot_user.last_interaction = datetime.now()
+                                
+                                db.session.commit()
+                                logger.debug(f"✅ Mensagem recebida salva no banco: {text[:50]}...")
+                    except Exception as e:
+                        logger.error(f"❌ Erro ao salvar mensagem recebida: {e}")
+                        # Não interromper o fluxo se falhar ao salvar
                 
                 # Comando /start (com ou sem parâmetros deep linking)
                 # Exemplos: "/start", "/start acesso", "/start promo123"
@@ -3806,8 +3846,14 @@ Seu pagamento ainda não foi confirmado.
                 response = requests.post(url, json=payload, timeout=3)
             
             if response.status_code == 200:
-                logger.info(f"✅ Mensagem enviada para chat {chat_id}")
-                return True
+                result_data = response.json()
+                if result_data.get('ok'):
+                    logger.info(f"✅ Mensagem enviada para chat {chat_id}")
+                    # Retornar dados completos se sucesso, senão True para compatibilidade
+                    return result_data if result_data.get('result') else True
+                else:
+                    logger.error(f"❌ Telegram API retornou erro: {result_data.get('description', 'Erro desconhecido')}")
+                    return False
             else:
                 logger.error(f"❌ Erro ao enviar mensagem: {response.text}")
                 return False

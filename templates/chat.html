@@ -9,7 +9,7 @@
         <div>
             <h1 class="text-2xl font-bold" style="color: var(--txt-primary);">
                 <i class="fas fa-comments mr-3" style="color: var(--brand-blue-500);"></i>
-                Chat V2.0
+                Chat
             </h1>
             <p class="text-sm mt-1" style="color: var(--txt-secondary);">
                 Gerencie todas as conversas dos seus bots
@@ -207,7 +207,7 @@
             </div>
 
             <!-- Messages Area -->
-            <div class="flex-1 overflow-y-auto p-4 space-y-4" id="messages-container">
+            <div class="flex-1 overflow-y-auto p-4 space-y-4" id="messages-container" x-ref="messagesContainer">
                 <template x-if="loadingMessages">
                     <div class="flex items-center justify-center h-full">
                         <i class="fas fa-spinner fa-spin text-2xl" style="color: var(--txt-secondary);"></i>
@@ -217,6 +217,7 @@
                     <div class="text-center py-12 text-sm" style="color: var(--txt-muted);">
                         <i class="fas fa-comment-slash text-4xl mb-3"></i>
                         <p>Nenhuma mensagem ainda</p>
+                        <p class="text-xs mt-2">Comece a conversar enviando uma mensagem abaixo</p>
                     </div>
                 </template>
                 <template x-if="!loadingMessages && messages.length > 0">
@@ -244,6 +245,35 @@
                     </template>
                 </template>
             </div>
+
+            <!-- Input Area -->
+            <div class="p-4 border-t" style="border-color: var(--border-subtle);">
+                <form @submit.prevent="sendMessage()" class="flex items-center gap-3">
+                    <input 
+                        type="text" 
+                        x-model="messageInput"
+                        :disabled="sendingMessage || !selectedConversation"
+                        placeholder="Digite sua mensagem..."
+                        class="flex-1 px-4 py-3 rounded-xl text-sm focus:outline-none focus:ring-2 transition-all"
+                        style="background: var(--bg-tertiary); border: 1px solid var(--border-subtle); color: var(--txt-primary); focus:ring-color: var(--brand-blue-500);"
+                        autocomplete="off"
+                    >
+                    <button 
+                        type="submit"
+                        :disabled="sendingMessage || !selectedConversation || !messageInput.trim()"
+                        class="px-6 py-3 rounded-xl font-semibold text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        style="background: linear-gradient(135deg, var(--brand-blue-500), var(--brand-blue-600)); color: white;"
+                    >
+                        <template x-if="sendingMessage">
+                            <i class="fas fa-spinner fa-spin"></i>
+                        </template>
+                        <template x-if="!sendingMessage">
+                            <i class="fas fa-paper-plane mr-2"></i>
+                            Enviar
+                        </template>
+                    </button>
+                </form>
+            </div>
         </div>
 
         <!-- Empty State -->
@@ -270,6 +300,8 @@ function chatApp() {
         searchQuery: '',
         loading: false,
         loadingMessages: false,
+        messageInput: '',
+        sendingMessage: false,
 
         init() {
             // Auto-selecionar primeiro bot se houver
@@ -323,18 +355,68 @@ function chatApp() {
                     // Atualizar contador de não lidas
                     this.loadConversations();
                     // Scroll para última mensagem
-                    this.$nextTick(() => {
-                        const container = document.getElementById('messages-container');
-                        if (container) {
-                            container.scrollTop = container.scrollHeight;
-                        }
-                    });
+                    this.scrollToBottom();
                 }
             } catch (error) {
                 console.error('Erro ao carregar mensagens:', error);
             } finally {
                 this.loadingMessages = false;
             }
+        },
+
+        async sendMessage() {
+            if (!this.selectedConversation || !this.messageInput.trim() || this.sendingMessage) return;
+            
+            const messageText = this.messageInput.trim();
+            this.messageInput = '';
+            this.sendingMessage = true;
+            
+            try {
+                const response = await fetch(`/api/chat/send-message/${this.selectedBot.id}/${this.selectedConversation.telegram_user_id}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ message: messageText })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Adicionar mensagem enviada à lista
+                    this.messages.push({
+                        id: data.message_id,
+                        message_text: messageText,
+                        direction: 'outgoing',
+                        created_at: new Date().toISOString(),
+                        is_read: true
+                    });
+                    
+                    // Recarregar conversas para atualizar última mensagem
+                    this.loadConversations();
+                    
+                    // Scroll para última mensagem
+                    this.scrollToBottom();
+                } else {
+                    alert('Erro ao enviar mensagem: ' + (data.error || 'Erro desconhecido'));
+                    this.messageInput = messageText; // Restaurar mensagem
+                }
+            } catch (error) {
+                console.error('Erro ao enviar mensagem:', error);
+                alert('Erro ao enviar mensagem. Tente novamente.');
+                this.messageInput = messageText; // Restaurar mensagem
+            } finally {
+                this.sendingMessage = false;
+            }
+        },
+
+        scrollToBottom() {
+            this.$nextTick(() => {
+                const container = this.$refs.messagesContainer;
+                if (container) {
+                    container.scrollTop = container.scrollHeight;
+                }
+            });
         },
 
         getStatusColor(status) {

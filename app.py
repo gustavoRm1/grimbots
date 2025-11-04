@@ -5264,7 +5264,7 @@ def force_check_achievements():
 @app.route('/chat')
 @login_required
 def chat():
-    """✅ CHAT V2.0 - Página de gerenciamento de conversas dos bots"""
+    """✅ CHAT - Página de gerenciamento de conversas dos bots"""
     from models import Bot, BotUser, Payment, BotMessage
     from sqlalchemy import func
     
@@ -5304,7 +5304,7 @@ def chat():
 @app.route('/api/chat/conversations/<int:bot_id>', methods=['GET'])
 @login_required
 def get_chat_conversations(bot_id):
-    """✅ CHAT V2.0 - Retorna lista de conversas de um bot com filtros"""
+    """✅ CHAT - Retorna lista de conversas de um bot com filtros"""
     from models import Bot, BotUser, Payment, BotMessage
     from sqlalchemy import func
     
@@ -5456,7 +5456,7 @@ def get_chat_conversations(bot_id):
 @app.route('/api/chat/messages/<int:bot_id>/<telegram_user_id>', methods=['GET'])
 @login_required
 def get_chat_messages(bot_id, telegram_user_id):
-    """✅ CHAT V2.0 - Retorna mensagens de uma conversa específica"""
+    """✅ CHAT - Retorna mensagens de uma conversa específica"""
     from models import Bot, BotUser, BotMessage
     
     # Verificar se bot pertence ao usuário
@@ -5492,6 +5492,113 @@ def get_chat_messages(bot_id, telegram_user_id):
         'messages': messages_data,
         'total': len(messages_data)
     })
+
+@app.route('/api/chat/send-message/<int:bot_id>/<telegram_user_id>', methods=['POST'])
+@login_required
+@csrf.exempt
+def send_chat_message(bot_id, telegram_user_id):
+    """✅ CHAT - Envia mensagem para um lead via Telegram"""
+    from models import Bot, BotUser, BotMessage
+    import uuid
+    
+    # Verificar se bot pertence ao usuário
+    bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
+    
+    # Verificar se bot está rodando
+    if not bot.is_running:
+        return jsonify({'success': False, 'error': 'Bot não está online. Inicie o bot primeiro.'}), 400
+    
+    # Buscar bot_user
+    bot_user = BotUser.query.filter_by(
+        bot_id=bot_id,
+        telegram_user_id=telegram_user_id,
+        archived=False
+    ).first_or_404()
+    
+    # Obter mensagem do request
+    data = request.get_json()
+    message_text = data.get('message', '').strip()
+    
+    if not message_text:
+        return jsonify({'success': False, 'error': 'Mensagem não pode estar vazia'}), 400
+    
+    try:
+        # Buscar token do bot
+        with bot_manager._bots_lock:
+            bot_data = bot_manager.active_bots.get(bot_id)
+            if not bot_data:
+                return jsonify({'success': False, 'error': 'Bot não está ativo no sistema'}), 400
+            
+            token = bot_data.get('token')
+            if not token:
+                return jsonify({'success': False, 'error': 'Token do bot não encontrado'}), 400
+        
+        # Enviar mensagem via Telegram API
+        result = bot_manager.send_telegram_message(
+            token=token,
+            chat_id=telegram_user_id,
+            message=message_text,
+            media_url=None,
+            buttons=None
+        )
+        
+        # send_telegram_message pode retornar True, False ou dict com dados completos
+        if result:
+            if isinstance(result, dict) and result.get('ok'):
+                # Resultado completo com dados
+                telegram_msg_id = result.get('result', {}).get('message_id')
+                message_id = str(telegram_msg_id) if telegram_msg_id else str(uuid.uuid4().hex)
+                result_data = result
+            elif result is True:
+                # Retorno True (compatibilidade), precisamos buscar message_id depois
+                # Mas não temos como recuperar, então gerar ID único
+                message_id = str(uuid.uuid4().hex)
+                result_data = {'ok': True, 'result': {'message_id': message_id}}
+            else:
+                result_data = None
+            
+            if result_data and result_data.get('ok'):
+                # Salvar mensagem no banco
+                telegram_msg_id = result_data.get('result', {}).get('message_id')
+                message_id = str(telegram_msg_id) if telegram_msg_id else str(uuid.uuid4().hex)
+                
+                bot_message = BotMessage(
+                    bot_id=bot_id,
+                    bot_user_id=bot_user.id,
+                    telegram_user_id=telegram_user_id,
+                    message_id=message_id,
+                    message_text=message_text,
+                    message_type='text',
+                    direction='outgoing',
+                    is_read=True  # Mensagens enviadas já são "lidas"
+                )
+                db.session.add(bot_message)
+                
+                # Atualizar last_interaction do bot_user
+                bot_user.last_interaction = datetime.now()
+                
+                db.session.commit()
+                
+                logger.info(f"✅ Mensagem enviada para {telegram_user_id} via bot {bot_id}: {message_text[:50]}...")
+                
+                return jsonify({
+                    'success': True,
+                    'message_id': bot_message.id,
+                    'telegram_message_id': message_id
+                })
+            else:
+                error_msg = 'Falha ao enviar mensagem'
+                logger.error(f"❌ Erro ao enviar mensagem via Telegram")
+                return jsonify({'success': False, 'error': error_msg}), 500
+        else:
+            error_msg = 'Falha ao enviar mensagem'
+            logger.error(f"❌ Erro ao enviar mensagem via Telegram")
+            return jsonify({'success': False, 'error': error_msg}), 500
+            
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"❌ Erro ao enviar mensagem: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/settings')
 @login_required
