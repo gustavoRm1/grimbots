@@ -847,21 +847,29 @@ class BotManager:
                 
                 now = datetime.now()
                 
-                # ✅ VERIFICAÇÃO CRÍTICA: Há conversa ativa?
-                # Verificar se bot enviou mensagens para este usuário nos últimos 30 minutos
+                # ✅ VERIFICAÇÃO CRÍTICA QI 600+: Há conversa ativa?
+                # Estratégia robusta: verificar última mensagem do bot + last_interaction
                 conversation_window = now - timedelta(minutes=30)
-                recent_bot_messages = BotMessage.query.filter(
+                
+                # 1. Verificar última mensagem do bot enviada
+                last_bot_message = BotMessage.query.filter(
                     BotMessage.bot_id == bot_id,
                     BotMessage.telegram_user_id == telegram_user_id,
-                    BotMessage.direction == 'outgoing',  # Mensagens ENVIADAS pelo bot
-                    BotMessage.created_at >= conversation_window
-                ).count()
+                    BotMessage.direction == 'outgoing'
+                ).order_by(BotMessage.created_at.desc()).first()
                 
-                has_active_conversation = recent_bot_messages > 0
+                # 2. Verificar se bot_user teve interação recente (fallback se mensagens não salvas ainda)
+                recent_interaction = bot_user.last_interaction and (now - bot_user.last_interaction).total_seconds() < 1800  # 30 minutos
+                
+                # 3. Verificar se última mensagem do bot foi recente (dentro da janela)
+                recent_bot_message = last_bot_message and (now - last_bot_message.created_at).total_seconds() < 1800
+                
+                # ✅ CONVERSA ATIVA: Se bot enviou mensagem recente OU teve interação recente
+                has_active_conversation = recent_bot_message or (recent_interaction and bot_user.welcome_sent)
                 
                 if has_active_conversation:
                     # ✅ CONVERSA ATIVA: Apenas salvar mensagem, NÃO reiniciar funil
-                    logger.info(f"💬 Mensagem recebida em conversa ativa: '{message.get('text', '')[:50]}...' (bot enviou {recent_bot_messages} msg(s) recentes)")
+                    logger.info(f"💬 Mensagem recebida em conversa ativa: '{message.get('text', '')[:50]}...' (última msg bot: {last_bot_message.created_at.strftime('%H:%M:%S') if last_bot_message else 'N/A'}, interação recente: {recent_interaction})")
                     
                     # Atualizar última interação
                     bot_user.last_interaction = now

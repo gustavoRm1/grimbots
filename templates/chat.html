@@ -344,18 +344,26 @@ function chatApp() {
             if (!this.selectedConversation || !this.selectedBot || this.loadingMessages) return;
             
             try {
-                // Buscar mensagens mais recentes que a última que temos
-                const lastMessageId = this.messages.length > 0 ? Math.max(...this.messages.map(m => m.id)) : 0;
+                // ✅ CORREÇÃO QI 600+: Usar timestamp ao invés de ID (mais confiável)
+                const lastMessage = this.messages.length > 0 ? this.messages[this.messages.length - 1] : null;
+                const sinceTimestamp = lastMessage && lastMessage.created_at ? lastMessage.created_at : null;
                 
-                const response = await fetch(`/api/chat/messages/${this.selectedBot.id}/${this.selectedConversation.telegram_user_id}?since_id=${lastMessageId}`);
+                // Construir URL com timestamp
+                let url = `/api/chat/messages/${this.selectedBot.id}/${this.selectedConversation.telegram_user_id}`;
+                if (sinceTimestamp) {
+                    url += `?since_timestamp=${encodeURIComponent(sinceTimestamp)}`;
+                }
+                
+                const response = await fetch(url);
                 const data = await response.json();
                 
-                if (data.success && data.messages) {
-                    // Filtrar apenas mensagens novas (ID maior que a última)
-                    const newMessages = data.messages.filter(msg => msg.id > lastMessageId);
+                if (data.success && data.messages && data.messages.length > 0) {
+                    // Filtrar mensagens duplicadas (comparar por ID para evitar duplicação)
+                    const existingIds = new Set(this.messages.map(m => m.id));
+                    const newMessages = data.messages.filter(msg => !existingIds.has(msg.id));
                     
                     if (newMessages.length > 0) {
-                        // Adicionar novas mensagens
+                        // Adicionar novas mensagens (já vêm ordenadas por created_at asc)
                         this.messages.push(...newMessages);
                         
                         // Scroll para última mensagem
@@ -363,9 +371,6 @@ function chatApp() {
                         
                         // Atualizar contador de não lidas
                         this.loadConversations();
-                        
-                        // Emitir som de notificação (opcional)
-                        // this.playNotificationSound();
                     }
                 }
             } catch (error) {

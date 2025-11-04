@@ -5469,16 +5469,27 @@ def get_chat_messages(bot_id, telegram_user_id):
         archived=False
     ).first_or_404()
     
-    # ✅ OTIMIZAÇÃO: Buscar apenas mensagens novas se since_id for fornecido
-    since_id = request.args.get('since_id', type=int)
+    # ✅ OTIMIZAÇÃO QI 600+: Buscar mensagens novas usando timestamp (mais confiável que ID)
+    since_timestamp = request.args.get('since_timestamp', type=str)
     
-    if since_id:
-        # Buscar apenas mensagens mais recentes que since_id
-        messages = BotMessage.query.filter(
-            BotMessage.bot_id == bot_id,
-            BotMessage.telegram_user_id == telegram_user_id,
-            BotMessage.id > since_id
-        ).order_by(BotMessage.created_at.asc()).limit(50).all()
+    if since_timestamp:
+        try:
+            from datetime import datetime
+            since_dt = datetime.fromisoformat(since_timestamp.replace('Z', '+00:00'))
+            # Buscar apenas mensagens mais recentes que o timestamp
+            messages = BotMessage.query.filter(
+                BotMessage.bot_id == bot_id,
+                BotMessage.telegram_user_id == telegram_user_id,
+                BotMessage.created_at > since_dt
+            ).order_by(BotMessage.created_at.asc()).limit(50).all()
+        except Exception as e:
+            logger.error(f"Erro ao parsear since_timestamp: {e}")
+            # Fallback: buscar últimas 50 mensagens
+            messages = BotMessage.query.filter_by(
+                bot_id=bot_id,
+                telegram_user_id=telegram_user_id
+            ).order_by(BotMessage.created_at.desc()).limit(50).all()
+            messages.reverse()  # Ordenar crescente para exibição
     else:
         # Buscar todas as mensagens (primeira carga)
         messages = BotMessage.query.filter_by(
