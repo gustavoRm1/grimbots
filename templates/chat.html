@@ -323,14 +323,17 @@ function chatApp() {
             // Limpar intervalo anterior se existir
             if (this.pollingInterval) {
                 clearInterval(this.pollingInterval);
+                this.pollingInterval = null;
             }
             
-            // Polling a cada 3 segundos quando há conversa selecionada
+            // ✅ CORREÇÃO QI 600+: Polling mais frequente e robusto
+            // Polling a cada 2 segundos quando há conversa selecionada
             this.pollingInterval = setInterval(() => {
-                if (this.selectedConversation && this.selectedBot && !this.loadingMessages) {
+                // Verificar se ainda há conversa selecionada antes de fazer polling
+                if (this.selectedConversation && this.selectedBot && !this.loadingMessages && !this.sendingMessage) {
                     this.checkNewMessages();
                 }
-            }, 3000); // 3 segundos
+            }, 2000); // 2 segundos (mais frequente para melhor UX)
         },
         
         stopMessagePolling() {
@@ -346,7 +349,15 @@ function chatApp() {
             try {
                 // ✅ CORREÇÃO QI 600+: Usar timestamp ao invés de ID (mais confiável)
                 const lastMessage = this.messages.length > 0 ? this.messages[this.messages.length - 1] : null;
-                const sinceTimestamp = lastMessage && lastMessage.created_at ? lastMessage.created_at : null;
+                let sinceTimestamp = null;
+                
+                if (lastMessage && lastMessage.created_at) {
+                    // Garantir que o timestamp está no formato correto
+                    const timestamp = new Date(lastMessage.created_at);
+                    if (!isNaN(timestamp.getTime())) {
+                        sinceTimestamp = timestamp.toISOString();
+                    }
+                }
                 
                 // Construir URL com timestamp
                 let url = `/api/chat/messages/${this.selectedBot.id}/${this.selectedConversation.telegram_user_id}`;
@@ -355,9 +366,20 @@ function chatApp() {
                 }
                 
                 const response = await fetch(url);
+                
+                if (!response.ok) {
+                    console.error(`Erro HTTP no polling: ${response.status} ${response.statusText}`);
+                    return;
+                }
+                
                 const data = await response.json();
                 
-                if (data.success && data.messages && data.messages.length > 0) {
+                if (!data.success) {
+                    console.error('Erro na resposta do polling:', data.error || 'Erro desconhecido');
+                    return;
+                }
+                
+                if (data.messages && data.messages.length > 0) {
                     // Filtrar mensagens duplicadas (comparar por ID para evitar duplicação)
                     const existingIds = new Set(this.messages.map(m => m.id));
                     const newMessages = data.messages.filter(msg => !existingIds.has(msg.id));
@@ -371,11 +393,16 @@ function chatApp() {
                         
                         // Atualizar contador de não lidas
                         this.loadConversations();
+                        
+                        // Log para debug (apenas em desenvolvimento)
+                        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+                            console.log(`✅ ${newMessages.length} nova(s) mensagem(ns) recebida(s)`);
+                        }
                     }
                 }
             } catch (error) {
-                // Silenciosamente falhar - não interromper UX
-                console.debug('Polling de mensagens:', error);
+                // Log de erro para debug (não interrompe UX)
+                console.error('❌ Erro no polling de mensagens:', error);
             }
         },
 
@@ -415,19 +442,29 @@ function chatApp() {
             this.loadingMessages = true;
             this.messages = [];
             
+            // Parar polling anterior antes de carregar nova conversa
+            this.stopMessagePolling();
+            
             try {
                 const response = await fetch(`/api/chat/messages/${this.selectedBot.id}/${conv.telegram_user_id}`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
                 const data = await response.json();
                 
                 if (data.success) {
-                    this.messages = data.messages;
+                    this.messages = data.messages || [];
                     // Atualizar contador de não lidas
                     this.loadConversations();
                     // Scroll para última mensagem
                     this.scrollToBottom();
                     
-                    // Reiniciar polling para esta conversa
+                    // ✅ CRÍTICO: Reiniciar polling APÓS carregar mensagens
                     this.startMessagePolling();
+                } else {
+                    console.error('Erro ao carregar mensagens:', data.error || 'Erro desconhecido');
                 }
             } catch (error) {
                 console.error('Erro ao carregar mensagens:', error);
@@ -469,6 +506,13 @@ function chatApp() {
                     
                     // Scroll para última mensagem
                     this.scrollToBottom();
+                    
+                    // ✅ CRÍTICO: Verificar novas mensagens após enviar (caso haja resposta imediata)
+                    setTimeout(() => {
+                        if (this.selectedConversation && this.selectedBot) {
+                            this.checkNewMessages();
+                        }
+                    }, 500); // Aguardar 500ms para dar tempo da mensagem ser salva no banco
                 } else {
                     alert('Erro ao enviar mensagem: ' + (data.error || 'Erro desconhecido'));
                     this.messageInput = messageText; // Restaurar mensagem
