@@ -581,6 +581,37 @@
             </div>
         </template>
         
+        <!-- Usuários V2.0 (Respeita Filtro de Período) -->
+        <div class="stat-card" style="border-color: rgba(59, 130, 246, 0.3);">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
+                <div class="stat-label text-xs sm:text-sm">👥 Usuários</div>
+                <div class="text-xs font-bold uppercase whitespace-nowrap" 
+                     style="color: #3B82F6; background: rgba(59, 130, 246, 0.1); padding: 4px 8px; border-radius: 4px;"
+                     x-text="period === 'today' ? 'HOJE' : (period === 'month' ? 'MÊS' : 'TOTAL')">
+                </div>
+            </div>
+            <div class="stat-value transition-all duration-300 text-2xl sm:text-2.5rem" style="color: var(--brand-blue-500);">
+                <template x-if="period === 'today'">
+                    <span x-text="stats.today_users"></span>
+                </template>
+                <template x-if="period === 'month'">
+                    <span x-text="stats.month_users"></span>
+                </template>
+                <template x-if="period === 'all'">
+                    <span>{{ stats.total_users }}</span>
+                </template>
+            </div>
+            <div class="flex flex-col sm:flex-row sm:items-center gap-2 mt-2">
+                <div class="text-xs sm:text-sm text-gray-500">Usuários únicos cadastrados</div>
+                <template x-if="period !== 'all'">
+                    <div class="text-xs font-bold px-2 py-1 rounded whitespace-nowrap" 
+                         style="background: rgba(59, 130, 246, 0.1); color: #3B82F6;"
+                         x-text="period === 'today' ? `vs Total: ${stats.total_users > 0 ? ((stats.today_users / stats.total_users) * 100).toFixed(1) : '0.0'}%` : `vs Total: ${stats.total_users > 0 ? ((stats.month_users / stats.total_users) * 100).toFixed(1) : '0.0'}%`">
+                    </div>
+                </template>
+            </div>
+        </div>
+        
         <!-- Comissão -->
         {% if stats.commission_balance > 0 %}
         <div class="stat-card" style="border-color: rgba(168, 85, 247, 0.3);">
@@ -1356,7 +1387,10 @@ function dashboardApp() {
             month_revenue: {{ stats.month_revenue }},
             // ✅ VERSÃO 2.0: Pendentes por período
             today_pending_sales: {{ stats.today_pending_sales }},
-            month_pending_sales: {{ stats.month_pending_sales }}
+            month_pending_sales: {{ stats.month_pending_sales }},
+            // ✅ VERSÃO 2.0: Usuários por período
+            today_users: {{ stats.today_users }},
+            month_users: {{ stats.month_users }}
         },
         bots: {{ bots|tojson|safe }},
         payments: {{ recent_payments|tojson|safe }},

@@ -982,6 +982,23 @@ def dashboard():
         today_pending_sales = 0
         month_pending_sales = 0
     
+    # ✅ VERSÃO 2.0: Usuários por período (BotUser)
+    if bot_ids:
+        today_users = db.session.query(func.count(func.distinct(BotUser.telegram_user_id))).filter(
+            BotUser.bot_id.in_(bot_ids),
+            BotUser.archived == False,
+            BotUser.created_at >= today_start
+        ).scalar() or 0
+        
+        month_users = db.session.query(func.count(func.distinct(BotUser.telegram_user_id))).filter(
+            BotUser.bot_id.in_(bot_ids),
+            BotUser.archived == False,
+            BotUser.created_at >= month_start
+        ).scalar() or 0
+    else:
+        today_users = 0
+        month_users = 0
+    
     stats = {
         'total_bots': len(bot_stats),
         'active_bots': sum(1 for b in bot_stats if b.is_active),
@@ -1002,7 +1019,10 @@ def dashboard():
         'month_revenue': float(month_revenue),
         # ✅ VERSÃO 2.0: Pendentes por período
         'today_pending_sales': today_pending_sales,
-        'month_pending_sales': month_pending_sales
+        'month_pending_sales': month_pending_sales,
+        # ✅ VERSÃO 2.0: Usuários por período
+        'today_users': today_users,
+        'month_users': month_users
     }
     
     # ✅ PERFORMANCE: Últimos pagamentos - usar índices se disponíveis
