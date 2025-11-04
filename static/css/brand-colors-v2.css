@@ -363,13 +363,27 @@ h3, .heading-tertiary {
     transition: color var(--transition-base);
 }
 
+/* Ícones dentro dos nav-links herdam a cor (cinza por padrão) */
+.nav-link i {
+    color: inherit;
+    transition: color var(--transition-base);
+}
+
 .nav-link:hover {
+    color: var(--brand-gold-500);
+}
+
+.nav-link:hover i {
     color: var(--brand-gold-500);
 }
 
 .nav-link-active {
     color: var(--brand-gold-500);
     border-bottom: 2px solid var(--brand-gold-500);
+}
+
+.nav-link-active i {
+    color: var(--brand-gold-500);
 }
 
 /* ===============================================

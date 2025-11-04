@@ -170,7 +170,7 @@
                             </div>
                         </a>
                         {% if current_user.is_admin and not session.get('impersonate_admin_id') %}
-                        <a href="{{ url_for('admin_dashboard') }}" class="nav-link {% if request.endpoint is not none and 'admin' in request.endpoint %}nav-link-active{% endif %} inline-flex items-center px-1 pt-1 border-b-2 text-sm font-semibold transition-all" style="color: var(--brand-gold-500);">
+                        <a href="{{ url_for('admin_dashboard') }}" class="nav-link {% if request.endpoint is not none and 'admin' in request.endpoint %}nav-link-active{% endif %} inline-flex items-center px-1 pt-1 border-b-2 text-sm font-semibold transition-all">
                             <i class="fas fa-shield-alt mr-2"></i> Painel Admin
                         </a>
                         {% endif %}
@@ -210,27 +210,27 @@
                  class="sm:hidden mt-4 pb-4 border-t border-gray-800"
                  x-transition>
                 <div class="flex flex-col space-y-2 pt-4">
-                    <a href="{{ url_for('dashboard') }}" class="flex items-center px-4 py-3 rounded-lg transition-all {% if request.endpoint == 'dashboard' %}bg-gray-800 text-white{% else %}text-gray-400 hover:text-white hover:bg-gray-800{% endif %}">
+                    <a href="{{ url_for('dashboard') }}" class="flex items-center px-4 py-3 rounded-lg transition-all {% if request.endpoint == 'dashboard' %}bg-gray-800 text-yellow-500{% else %}text-gray-400 hover:text-yellow-500 hover:bg-gray-800{% endif %}">
                         <i class="fas fa-home mr-3"></i> Início
                     </a>
-                    <a href="{{ url_for('ranking') }}" class="flex items-center px-4 py-3 rounded-lg transition-all {% if request.endpoint == 'ranking' %}bg-gray-800 text-white{% else %}text-gray-400 hover:text-white hover:bg-gray-800{% endif %}">
-                        <i class="fas fa-trophy mr-3" style="color: var(--brand-gold-500);"></i> Ranking
+                    <a href="{{ url_for('ranking') }}" class="flex items-center px-4 py-3 rounded-lg transition-all {% if request.endpoint == 'ranking' %}bg-gray-800 text-yellow-500{% else %}text-gray-400 hover:text-yellow-500 hover:bg-gray-800{% endif %}">
+                        <i class="fas fa-trophy mr-3"></i> Ranking
                     </a>
-                    <a href="{{ url_for('chat') }}" class="flex items-center px-4 py-3 rounded-lg transition-all {% if request.endpoint == 'chat' %}bg-gray-800 text-white{% else %}text-gray-400 hover:text-white hover:bg-gray-800{% endif %}">
-                        <i class="fas fa-comments mr-3" style="color: var(--brand-blue-500);"></i> Chat
+                    <a href="{{ url_for('chat') }}" class="flex items-center px-4 py-3 rounded-lg transition-all {% if request.endpoint == 'chat' %}bg-gray-800 text-yellow-500{% else %}text-gray-400 hover:text-yellow-500 hover:bg-gray-800{% endif %}">
+                        <i class="fas fa-comments mr-3"></i> Chat
                     </a>
-                    <a href="{{ url_for('redirect_pools_page') }}" class="flex items-center px-4 py-3 rounded-lg transition-all {% if request.endpoint == 'redirect_pools_page' %}bg-gray-800 text-white{% else %}text-gray-400 hover:text-white hover:bg-gray-800{% endif %}">
+                    <a href="{{ url_for('redirect_pools_page') }}" class="flex items-center px-4 py-3 rounded-lg transition-all {% if request.endpoint == 'redirect_pools_page' %}bg-gray-800 text-yellow-500{% else %}text-gray-400 hover:text-yellow-500 hover:bg-gray-800{% endif %}">
                         <i class="fas fa-share-alt mr-3"></i> 
                         <div class="flex flex-col">
                             <span class="font-semibold">Distribuidor</span>
                             <span class="text-xs opacity-70">Rotacione bots</span>
                         </div>
                     </a>
-                    <a href="{{ url_for('settings') }}" class="flex items-center px-4 py-3 rounded-lg transition-all {% if request.endpoint == 'settings' %}bg-gray-800 text-white{% else %}text-gray-400 hover:text-white hover:bg-gray-800{% endif %}">
+                    <a href="{{ url_for('settings') }}" class="flex items-center px-4 py-3 rounded-lg transition-all {% if request.endpoint == 'settings' %}bg-gray-800 text-yellow-500{% else %}text-gray-400 hover:text-yellow-500 hover:bg-gray-800{% endif %}">
                         <i class="fas fa-cog mr-3"></i> Configurações
                     </a>
                     {% if current_user.is_admin and not session.get('impersonate_admin_id') %}
-                    <a href="{{ url_for('admin_dashboard') }}" class="flex items-center px-4 py-3 rounded-lg transition-all {% if request.endpoint is not none and 'admin' in request.endpoint %}bg-gray-800 text-yellow-500{% else %}text-gray-400 hover:text-white hover:bg-gray-800{% endif %}">
+                    <a href="{{ url_for('admin_dashboard') }}" class="flex items-center px-4 py-3 rounded-lg transition-all {% if request.endpoint is not none and 'admin' in request.endpoint %}bg-gray-800 text-yellow-500{% else %}text-gray-400 hover:text-yellow-500 hover:bg-gray-800{% endif %}">
                         <i class="fas fa-shield-alt mr-3"></i> Painel Admin
                     </a>
                     {% endif %}
