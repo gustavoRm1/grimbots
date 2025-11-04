@@ -905,7 +905,7 @@
                                 </div>
                             </div>
 
-                            <!-- Order Bump para Downsell -->
+                            <!-- Order Bump para Downsell V2.0 -->
                             <div class="order-bump-section">
                                 <div class="flex items-center justify-between mb-4">
                                     <label class="flex items-center gap-2 cursor-pointer">
@@ -926,6 +926,70 @@
                                 </div>
 
                                 <div x-show="downsell.order_bump.enabled" class="space-y-4">
+                                    <!-- ✅ V2.0: Order Bumps dos Botões Principais (Botões Clicáveis) -->
+                                    <div class="form-group" x-show="getAvailableOrderBumps().length > 0">
+                                        <label class="form-label mb-3">
+                                            <i class="fas fa-gift mr-2 text-yellow-500"></i>
+                                            Order Bumps Configurados nos Botões
+                                        </label>
+                                        <p class="text-xs text-gray-500 mb-3">
+                                            Clique em um order bump abaixo para usá-lo neste downsell. Estes são os order bumps que você já configurou na aba "Botões".
+                                        </p>
+                                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                            <template x-for="(orderBumpRef, idx) in getAvailableOrderBumps()" :key="idx">
+                                                <button 
+                                                    type="button"
+                                                    @click="useOrderBumpFromButtons(downsell, orderBumpRef.buttonIndex, orderBumpRef.bumpIndex)"
+                                                    class="p-4 bg-gray-800 border-2 rounded-lg transition-all text-left hover:border-yellow-500 hover:bg-gray-750"
+                                                    :class="{'border-yellow-500 bg-yellow-500 bg-opacity-10': downsell.order_bump.button_index === orderBumpRef.buttonIndex && downsell.order_bump.bump_index === orderBumpRef.bumpIndex, 'border-gray-700': downsell.order_bump.button_index !== orderBumpRef.buttonIndex || downsell.order_bump.bump_index !== orderBumpRef.bumpIndex}"
+                                                >
+                                                    <div class="flex items-start justify-between mb-2">
+                                                        <div class="flex items-center gap-2">
+                                                            <i class="fas fa-gift text-yellow-500"></i>
+                                                            <span class="text-sm font-bold text-white">
+                                                                Botão <span x-text="orderBumpRef.buttonIndex + 1"></span> - OB <span x-text="orderBumpRef.bumpIndex + 1"></span>
+                                                            </span>
+                                                        </div>
+                                                        <span x-show="downsell.order_bump.button_index === orderBumpRef.buttonIndex && downsell.order_bump.bump_index === orderBumpRef.bumpIndex" 
+                                                              class="px-2 py-1 bg-green-500 bg-opacity-25 border border-green-400 rounded text-xs text-green-300">
+                                                            <i class="fas fa-check-circle"></i>
+                                                        </span>
+                                                    </div>
+                                                    <p class="text-xs text-gray-400 mb-1 line-clamp-2" x-text="(orderBumpRef.orderBump.message || 'Sem mensagem').substring(0, 60) + '...'"></p>
+                                                    <div class="flex items-center justify-between mt-2 pt-2 border-t border-gray-700">
+                                                        <div>
+                                                            <span class="text-xs font-bold text-yellow-500" x-show="orderBumpRef.orderBump.price > 0">
+                                                                R$ <span x-text="orderBumpRef.orderBump.price.toFixed(2)"></span>
+                                                            </span>
+                                                            <span class="text-xs text-gray-500" x-show="orderBumpRef.orderBump.price === 0">
+                                                                Sem preço
+                                                            </span>
+                                                        </div>
+                                                        <span class="text-xs text-gray-400 truncate max-w-[60%]" x-text="orderBumpRef.orderBump.description || 'Sem descrição'"></span>
+                                                    </div>
+                                                </button>
+                                            </template>
+                                        </div>
+                                    </div>
+
+                                    <!-- Empty State: Nenhum Order Bump Configurado -->
+                                    <div x-show="getAvailableOrderBumps().length === 0" class="info-box-warning info-box">
+                                        <p class="text-sm text-gray-300">
+                                            <i class="fas fa-info-circle mr-2 text-yellow-500"></i>
+                                            <strong>Nenhum order bump configurado:</strong> Vá na aba "Botões", configure seus botões principais e adicione order bumps lá. 
+                                            Eles aparecerão aqui como botões clicáveis para reutilizar nos downsells.
+                                        </p>
+                                    </div>
+
+                                    <!-- Divider: Configuração Manual -->
+                                    <div class="flex items-center gap-3 my-4">
+                                        <div class="flex-1 border-t border-gray-700"></div>
+                                        <span class="text-xs text-gray-500 font-semibold">OU CONFIGURE MANUALMENTE</span>
+                                        <div class="flex-1 border-t border-gray-700"></div>
+                                    </div>
+
+                                    <!-- Configuração Manual -->
+                                    <div>
                                     <div class="form-group">
                                         <label class="form-label">Mensagem do Order Bump</label>
                                         <textarea x-model="downsell.order_bump.message" 
@@ -1012,6 +1076,31 @@
                                                    class="form-input"
                                                    placeholder="Não, obrigado">
                                             <p class="text-xs text-gray-500 mt-1">Deixe vazio para texto padrão</p>
+                                        </div>
+                                    </div>
+
+                                    </div>
+
+                                    <!-- Preview do Order Bump Selecionado dos Botões -->
+                                    <div x-show="downsell.order_bump.button_index !== null && downsell.order_bump.button_index !== undefined && downsell.order_bump.bump_index !== null && downsell.order_bump.bump_index !== undefined" 
+                                         class="info-box-success info-box" 
+                                         style="background: rgba(16, 185, 129, 0.1); border-left: 4px solid #10B981;">
+                                        <div class="flex items-start gap-3">
+                                            <i class="fas fa-check-circle text-green-400 text-xl mt-1"></i>
+                                            <div class="flex-1">
+                                                <p class="text-sm font-bold text-white mb-2">
+                                                    ✅ Order Bump dos Botões Selecionado
+                                                </p>
+                                                <div class="space-y-1 text-sm text-gray-300" x-show="config.main_buttons[downsell.order_bump.button_index] && config.main_buttons[downsell.order_bump.button_index].order_bumps[downsell.order_bump.bump_index]">
+                                                    <p><strong>Origem:</strong> Botão <span x-text="downsell.order_bump.button_index + 1"></span> - Order Bump <span x-text="downsell.order_bump.bump_index + 1"></span></p>
+                                                    <p><strong>Preço:</strong> R$ <span x-text="(config.main_buttons[downsell.order_bump.button_index].order_bumps[downsell.order_bump.bump_index].price || 0).toFixed(2)"></span></p>
+                                                    <p><strong>Descrição:</strong> <span x-text="config.main_buttons[downsell.order_bump.button_index].order_bumps[downsell.order_bump.bump_index].description || 'Sem descrição'"></span></p>
+                                                </div>
+                                                <p class="text-xs text-gray-500 mt-2">
+                                                    <i class="fas fa-info-circle mr-1"></i>
+                                                    Este order bump está sendo reutilizado dos botões principais. Para alterar, edite na aba "Botões" ou configure manualmente acima.
+                                                </p>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -1949,14 +2038,26 @@ function botConfigApp() {
                             if (!downsell.hasOwnProperty('order_bump')) {
                                 downsell.order_bump = {
                                     enabled: false,
+                                    button_index: null,  // ✅ V2.0: Índice do botão principal
+                                    bump_index: null,    // ✅ V2.0: Índice do order bump no botão
                                     message: '',
                                     price: 0,
                                     description: '',
                                     media_url: '',
                                     media_type: 'video',
                                     accept_text: '',
-                                    decline_text: ''
+                                    decline_text: '',
+                                    audio_enabled: false,
+                                    audio_url: ''
                                 };
+                            } else {
+                                // Garantir que button_index e bump_index existem (compatibilidade)
+                                if (!downsell.order_bump.hasOwnProperty('button_index')) {
+                                    downsell.order_bump.button_index = null;
+                                }
+                                if (!downsell.order_bump.hasOwnProperty('bump_index')) {
+                                    downsell.order_bump.bump_index = null;
+                                }
                             }
                         });
                     }
@@ -2084,15 +2185,78 @@ function botConfigApp() {
                 button_text: '',
                 order_bump: {
                     enabled: false,
+                    button_index: null,  // ✅ V2.0: Índice do botão principal
+                    bump_index: null,    // ✅ V2.0: Índice do order bump no botão
                     message: '',
                     price: 0,
                     description: '',
                     media_url: '',
                     media_type: 'video',
                     accept_text: '',
-                    decline_text: ''
+                    decline_text: '',
+                    audio_enabled: false,
+                    audio_url: ''
                 }
             });
+        },
+        
+        // ✅ V2.0: Extrair Order Bumps dos Botões Principais
+        getAvailableOrderBumps() {
+            const available = [];
+            if (!Array.isArray(this.config.main_buttons)) {
+                return available;
+            }
+            
+            this.config.main_buttons.forEach((button, buttonIndex) => {
+                if (Array.isArray(button.order_bumps)) {
+                    button.order_bumps.forEach((orderBump, bumpIndex) => {
+                        if (orderBump.enabled !== false) {  // Considerar apenas os ativos
+                            available.push({
+                                buttonIndex: buttonIndex,
+                                bumpIndex: bumpIndex,
+                                orderBump: orderBump,
+                                buttonText: button.text || `Botão ${buttonIndex + 1}`
+                            });
+                        }
+                    });
+                }
+            });
+            
+            return available;
+        },
+        
+        // ✅ V2.0: Usar Order Bump dos Botões Principais no Downsell
+        useOrderBumpFromButtons(downsell, buttonIndex, bumpIndex) {
+            if (!this.config.main_buttons || !this.config.main_buttons[buttonIndex]) {
+                alert('Botão não encontrado');
+                return;
+            }
+            
+            const button = this.config.main_buttons[buttonIndex];
+            if (!button.order_bumps || !button.order_bumps[bumpIndex]) {
+                alert('Order bump não encontrado');
+                return;
+            }
+            
+            const orderBump = button.order_bumps[bumpIndex];
+            
+            // Copiar dados do order bump dos botões para o downsell
+            downsell.order_bump.button_index = buttonIndex;
+            downsell.order_bump.bump_index = bumpIndex;
+            downsell.order_bump.message = orderBump.message || '';
+            downsell.order_bump.price = parseFloat(orderBump.price) || 0;
+            downsell.order_bump.description = orderBump.description || '';
+            downsell.order_bump.media_url = orderBump.media_url || '';
+            downsell.order_bump.media_type = orderBump.media_type || 'photo';
+            downsell.order_bump.accept_text = orderBump.accept_text || '';
+            downsell.order_bump.decline_text = orderBump.decline_text || '';
+            downsell.order_bump.audio_enabled = orderBump.audio_enabled || false;
+            downsell.order_bump.audio_url = orderBump.audio_url || '';
+            
+            // Ativar automaticamente
+            downsell.order_bump.enabled = true;
+            
+            console.log(`✅ Order bump do Botão ${buttonIndex + 1} - OB ${bumpIndex + 1} aplicado ao downsell`);
         },
         
         removeDownsell(index) {
