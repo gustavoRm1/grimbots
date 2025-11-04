@@ -732,6 +732,7 @@ class BotManager:
                         from app import app, db
                         from models import BotUser, BotMessage
                         import json
+                        from datetime import datetime, timedelta
                         
                         with app.app_context():
                             # Buscar ou criar bot_user
@@ -753,27 +754,65 @@ class BotManager:
                                 db.session.add(bot_user)
                                 db.session.flush()  # Obter ID sem commit
                             
-                            # Salvar mensagem recebida (SEMPRE, mesmo que seja /start)
-                            bot_message = BotMessage(
+                            # ✅ CRÍTICO: Gerar message_id único se não existir
+                            telegram_msg_id = message.get('message_id')
+                            if not telegram_msg_id:
+                                # Se não tem message_id, gerar um baseado no timestamp + texto
+                                import hashlib
+                                unique_id = f"{telegram_user_id}_{datetime.now().timestamp()}_{text[:20]}"
+                                telegram_msg_id = hashlib.md5(unique_id.encode()).hexdigest()[:16]
+                                logger.warning(f"⚠️ Mensagem sem message_id do Telegram, gerando ID único: {telegram_msg_id}")
+                            
+                            telegram_msg_id_str = str(telegram_msg_id)
+                            
+                            # ✅ CRÍTICO: Verificar se mensagem já foi salva (evitar duplicação)
+                            # Verificar por message_id E por texto + timestamp (fallback)
+                            existing_message = BotMessage.query.filter_by(
                                 bot_id=bot_id,
-                                bot_user_id=bot_user.id,
                                 telegram_user_id=telegram_user_id,
-                                message_id=str(message.get('message_id', '')),
-                                message_text=text,
-                                message_type='text',
-                                direction='incoming',
-                                is_read=False,  # Será marcada como lida quando visualizada no chat
-                                raw_data=json.dumps(message)  # Salvar dados completos para debug
-                            )
-                            db.session.add(bot_message)
+                                message_id=telegram_msg_id_str,
+                                direction='incoming'
+                            ).first()
                             
-                            # Atualizar last_interaction
-                            bot_user.last_interaction = datetime.now()
+                            # Fallback: verificar por texto similar nos últimos 5 segundos
+                            if not existing_message:
+                                recent_window = datetime.now() - timedelta(seconds=5)
+                                similar_message = BotMessage.query.filter(
+                                    BotMessage.bot_id == bot_id,
+                                    BotMessage.telegram_user_id == telegram_user_id,
+                                    BotMessage.message_text == text,
+                                    BotMessage.direction == 'incoming',
+                                    BotMessage.created_at >= recent_window
+                                ).first()
+                                
+                                if similar_message:
+                                    existing_message = similar_message
+                                    logger.debug(f"⚠️ Mensagem similar encontrada nos últimos 5s, pulando duplicação")
                             
-                            db.session.commit()
-                            logger.debug(f"✅ Mensagem recebida salva no banco: {text[:50]}...")
+                            if not existing_message:
+                                # Salvar mensagem recebida (SEMPRE, mesmo que seja /start)
+                                bot_message = BotMessage(
+                                    bot_id=bot_id,
+                                    bot_user_id=bot_user.id,
+                                    telegram_user_id=telegram_user_id,
+                                    message_id=telegram_msg_id_str,
+                                    message_text=text,
+                                    message_type='text',
+                                    direction='incoming',
+                                    is_read=False,  # Será marcada como lida quando visualizada no chat
+                                    raw_data=json.dumps(message)  # Salvar dados completos para debug
+                                )
+                                db.session.add(bot_message)
+                                
+                                # Atualizar last_interaction
+                                bot_user.last_interaction = datetime.now()
+                                
+                                db.session.commit()
+                                logger.info(f"✅ Mensagem recebida salva no banco: '{text[:50]}...' (message_id: {telegram_msg_id_str})")
+                            else:
+                                logger.debug(f"⚠️ Mensagem já existe no banco, pulando: {telegram_msg_id_str}")
                     except Exception as e:
-                        logger.error(f"❌ Erro ao salvar mensagem recebida: {e}")
+                        logger.error(f"❌ Erro ao salvar mensagem recebida: {e}", exc_info=True)
                         # Não interromper o fluxo se falhar ao salvar
                 
                 # Comando /start (com ou sem parâmetros deep linking)
