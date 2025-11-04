@@ -929,6 +929,65 @@ class BotUser(db.Model):
     __table_args__ = (
         db.UniqueConstraint('bot_id', 'telegram_user_id', name='unique_bot_user'),
     )
+    
+    def to_dict(self):
+        """Retorna dados do bot user em formato dict"""
+        return {
+            'id': self.id,
+            'bot_id': self.bot_id,
+            'telegram_user_id': self.telegram_user_id,
+            'first_name': self.first_name,
+            'username': self.username,
+            'archived': self.archived,
+            'first_interaction': self.first_interaction.isoformat() if self.first_interaction else None,
+            'last_interaction': self.last_interaction.isoformat() if self.last_interaction else None
+        }
+
+
+class BotMessage(db.Model):
+    """Mensagens trocadas entre bot e usuário do Telegram"""
+    __tablename__ = 'bot_messages'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    bot_id = db.Column(db.Integer, db.ForeignKey('bots.id'), nullable=False, index=True)
+    bot_user_id = db.Column(db.Integer, db.ForeignKey('bot_users.id'), nullable=False, index=True)
+    telegram_user_id = db.Column(db.String(50), nullable=False, index=True)
+    
+    # Dados da mensagem
+    message_id = db.Column(db.String(100), nullable=False, index=True)  # ID da mensagem no Telegram
+    message_text = db.Column(db.Text, nullable=True)  # Texto da mensagem
+    message_type = db.Column(db.String(20), default='text')  # text, photo, video, document, etc
+    media_url = db.Column(db.String(500), nullable=True)  # URL da mídia (se houver)
+    
+    # Direção da mensagem
+    direction = db.Column(db.String(20), nullable=False, index=True)  # 'incoming' (usuário -> bot) ou 'outgoing' (bot -> usuário)
+    
+    # Metadata
+    is_read = db.Column(db.Boolean, default=False, index=True)  # Se foi lida pelo dono do bot
+    raw_data = db.Column(db.Text, nullable=True)  # Dados brutos do Telegram (JSON)
+    
+    # Datas
+    created_at = db.Column(db.DateTime, default=get_brazil_time, index=True)
+    
+    # Relacionamentos
+    bot = db.relationship('Bot', backref='messages')
+    bot_user = db.relationship('BotUser', backref='messages')
+    
+    def to_dict(self):
+        """Retorna dados da mensagem em formato dict"""
+        return {
+            'id': self.id,
+            'bot_id': self.bot_id,
+            'bot_user_id': self.bot_user_id,
+            'telegram_user_id': self.telegram_user_id,
+            'message_id': self.message_id,
+            'message_text': self.message_text,
+            'message_type': self.message_type,
+            'media_url': self.media_url,
+            'direction': self.direction,
+            'is_read': self.is_read,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
 
 
 class RemarketingCampaign(db.Model):

@@ -157,6 +157,10 @@
                         <a href="{{ url_for('ranking') }}" class="nav-link {% if request.endpoint == 'ranking' %}nav-link-active{% endif %} inline-flex items-center px-1 pt-1 border-b-2 text-sm font-semibold transition-all" title="Veja sua posição entre os vendedores">
                             <i class="fas fa-trophy mr-2" style="color: var(--brand-gold-500);"></i> Ranking
                         </a>
+                        <!-- Chat -->
+                        <a href="{{ url_for('chat') }}" class="nav-link {% if request.endpoint == 'chat' %}nav-link-active{% endif %} inline-flex items-center px-1 pt-1 border-b-2 text-sm font-semibold transition-all" title="Central de mensagens e suporte">
+                            <i class="fas fa-comments mr-2" style="color: var(--brand-blue-500);"></i> Chat
+                        </a>
                         <!-- Distribuidor -->
                         <a href="{{ url_for('redirect_pools_page') }}" class="nav-link {% if request.endpoint == 'redirect_pools_page' %}nav-link-active{% endif %} inline-flex items-center px-1 pt-1 border-b-2 text-sm font-semibold group transition-all" title="Distribua clientes entre vários bots automaticamente">
                             <i class="fas fa-share-alt mr-2 group-hover:scale-110 transition-transform"></i> 
@@ -211,6 +215,9 @@
                     </a>
                     <a href="{{ url_for('ranking') }}" class="flex items-center px-4 py-3 rounded-lg transition-all {% if request.endpoint == 'ranking' %}bg-gray-800 text-white{% else %}text-gray-400 hover:text-white hover:bg-gray-800{% endif %}">
                         <i class="fas fa-trophy mr-3" style="color: var(--brand-gold-500);"></i> Ranking
+                    </a>
+                    <a href="{{ url_for('chat') }}" class="flex items-center px-4 py-3 rounded-lg transition-all {% if request.endpoint == 'chat' %}bg-gray-800 text-white{% else %}text-gray-400 hover:text-white hover:bg-gray-800{% endif %}">
+                        <i class="fas fa-comments mr-3" style="color: var(--brand-blue-500);"></i> Chat
                     </a>
                     <a href="{{ url_for('redirect_pools_page') }}" class="flex items-center px-4 py-3 rounded-lg transition-all {% if request.endpoint == 'redirect_pools_page' %}bg-gray-800 text-white{% else %}text-gray-400 hover:text-white hover:bg-gray-800{% endif %}">
                         <i class="fas fa-share-alt mr-3"></i> 

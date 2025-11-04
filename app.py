@@ -5261,6 +5261,238 @@ def force_check_achievements():
         logger.error(f"❌ Erro ao forçar verificação: {e}", exc_info=True)
         return jsonify({'error': str(e)}), 500
 
+@app.route('/chat')
+@login_required
+def chat():
+    """✅ CHAT V2.0 - Página de gerenciamento de conversas dos bots"""
+    from models import Bot, BotUser, Payment, BotMessage
+    from sqlalchemy import func
+    
+    # Buscar bots online do usuário
+    bots_online = Bot.query.filter_by(
+        user_id=current_user.id,
+        is_running=True,
+        is_active=True
+    ).order_by(Bot.name).all()
+    
+    # Preparar dados dos bots
+    bots_data = []
+    for bot in bots_online:
+        # Contar conversas não lidas (mensagens não lidas)
+        unread_count = db.session.query(func.count(BotMessage.id)).filter(
+            BotMessage.bot_id == bot.id,
+            BotMessage.direction == 'incoming',
+            BotMessage.is_read == False
+        ).scalar() or 0
+        
+        # Contar total de conversas (usuários únicos)
+        total_conversations = db.session.query(func.count(func.distinct(BotUser.telegram_user_id))).filter(
+            BotUser.bot_id == bot.id,
+            BotUser.archived == False
+        ).scalar() or 0
+        
+        bots_data.append({
+            'id': bot.id,
+            'name': bot.name,
+            'username': bot.username,
+            'unread_count': unread_count,
+            'total_conversations': total_conversations
+        })
+    
+    return render_template('chat.html', bots=bots_data)
+
+@app.route('/api/chat/conversations/<int:bot_id>', methods=['GET'])
+@login_required
+def get_chat_conversations(bot_id):
+    """✅ CHAT V2.0 - Retorna lista de conversas de um bot com filtros"""
+    from models import Bot, BotUser, Payment, BotMessage
+    from sqlalchemy import func
+    
+    # Verificar se bot pertence ao usuário
+    bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
+    
+    # Parâmetros de filtro
+    filter_type = request.args.get('filter', 'all')  # all, paid, pix_generated, only_entered
+    search_query = request.args.get('search', '').strip()
+    
+    # Query base: BotUsers do bot
+    query = BotUser.query.filter_by(
+        bot_id=bot_id,
+        archived=False
+    )
+    
+    # Aplicar filtro de busca
+    if search_query:
+        query = query.filter(
+            db.or_(
+                BotUser.first_name.ilike(f'%{search_query}%'),
+                BotUser.username.ilike(f'%{search_query}%'),
+                BotUser.telegram_user_id.ilike(f'%{search_query}%')
+            )
+        )
+    
+    # Aplicar filtro de tipo
+    if filter_type == 'paid':
+        # Usuários que pagaram (status = 'paid')
+        paid_user_ids = db.session.query(Payment.customer_user_id).filter(
+            Payment.bot_id == bot_id,
+            Payment.status == 'paid'
+        ).distinct().all()
+        # Normalizar IDs (remover prefixo "user_" se houver)
+        paid_ids_list = []
+        for row in paid_user_ids:
+            if row[0]:
+                user_id = str(row[0]).replace('user_', '') if str(row[0]).startswith('user_') else str(row[0])
+                paid_ids_list.append(user_id)
+        if paid_ids_list:
+            query = query.filter(BotUser.telegram_user_id.in_(paid_ids_list))
+        else:
+            # Se não há pagamentos, retornar query vazia
+            query = query.filter(BotUser.id == -1)  # Query que nunca retorna resultados
+    elif filter_type == 'pix_generated':
+        # Usuários que geraram PIX (têm pagamento criado, mesmo que pending)
+        pix_user_ids = db.session.query(Payment.customer_user_id).filter(
+            Payment.bot_id == bot_id
+        ).distinct().all()
+        # Normalizar IDs
+        pix_ids_list = []
+        for row in pix_user_ids:
+            if row[0]:
+                user_id = str(row[0]).replace('user_', '') if str(row[0]).startswith('user_') else str(row[0])
+                pix_ids_list.append(user_id)
+        if pix_ids_list:
+            query = query.filter(BotUser.telegram_user_id.in_(pix_ids_list))
+        else:
+            query = query.filter(BotUser.id == -1)
+    elif filter_type == 'only_entered':
+        # Usuários que só entraram (sem pagamentos)
+        all_payment_user_ids = db.session.query(Payment.customer_user_id).filter(
+            Payment.bot_id == bot_id
+        ).distinct().all()
+        # Normalizar IDs
+        payment_ids_list = []
+        for row in all_payment_user_ids:
+            if row[0]:
+                user_id = str(row[0]).replace('user_', '') if str(row[0]).startswith('user_') else str(row[0])
+                payment_ids_list.append(user_id)
+        if payment_ids_list:
+            query = query.filter(~BotUser.telegram_user_id.in_(payment_ids_list))
+        # Se não há pagamentos, todos os usuários são "only_entered"
+    
+    # Buscar conversas
+    bot_users = query.order_by(BotUser.last_interaction.desc()).limit(100).all()
+    
+    # Enriquecer dados
+    conversations = []
+    for bot_user in bot_users:
+        # Buscar última mensagem
+        last_message = BotMessage.query.filter_by(
+            bot_id=bot_id,
+            telegram_user_id=bot_user.telegram_user_id
+        ).order_by(BotMessage.created_at.desc()).first()
+        
+        # Contar mensagens não lidas
+        unread_count = BotMessage.query.filter_by(
+            bot_id=bot_id,
+            telegram_user_id=bot_user.telegram_user_id,
+            direction='incoming',
+            is_read=False
+        ).count()
+        
+        # Verificar status do cliente (normalizar customer_user_id)
+        # Payment pode ter customer_user_id com ou sem prefixo "user_"
+        telegram_id_str = str(bot_user.telegram_user_id)
+        has_paid = Payment.query.filter(
+            Payment.bot_id == bot_id,
+            Payment.status == 'paid',
+            db.or_(
+                Payment.customer_user_id == telegram_id_str,
+                Payment.customer_user_id == f'user_{telegram_id_str}'
+            )
+        ).first() is not None
+        
+        has_pix = Payment.query.filter(
+            Payment.bot_id == bot_id,
+            db.or_(
+                Payment.customer_user_id == telegram_id_str,
+                Payment.customer_user_id == f'user_{telegram_id_str}'
+            )
+        ).first() is not None
+        
+        # Calcular total gasto
+        total_spent = db.session.query(func.sum(Payment.amount)).filter(
+            Payment.bot_id == bot_id,
+            Payment.status == 'paid',
+            db.or_(
+                Payment.customer_user_id == telegram_id_str,
+                Payment.customer_user_id == f'user_{telegram_id_str}'
+            )
+        ).scalar() or 0.0
+        
+        conversations.append({
+            'bot_user_id': bot_user.id,
+            'telegram_user_id': bot_user.telegram_user_id,
+            'first_name': bot_user.first_name or 'Sem nome',
+            'username': bot_user.username,
+            'last_interaction': bot_user.last_interaction.isoformat() if bot_user.last_interaction else None,
+            'last_message': {
+                'text': last_message.message_text[:50] + '...' if last_message and last_message.message_text and len(last_message.message_text) > 50 else (last_message.message_text if last_message else None),
+                'created_at': last_message.created_at.isoformat() if last_message else None,
+                'direction': last_message.direction if last_message else None
+            } if last_message else None,
+            'unread_count': unread_count,
+            'has_paid': has_paid,
+            'has_pix': has_pix,
+            'total_spent': float(total_spent),
+            'status': 'paid' if has_paid else 'pix_generated' if has_pix else 'only_entered'
+        })
+    
+    return jsonify({
+        'success': True,
+        'conversations': conversations,
+        'total': len(conversations)
+    })
+
+@app.route('/api/chat/messages/<int:bot_id>/<telegram_user_id>', methods=['GET'])
+@login_required
+def get_chat_messages(bot_id, telegram_user_id):
+    """✅ CHAT V2.0 - Retorna mensagens de uma conversa específica"""
+    from models import Bot, BotUser, BotMessage
+    
+    # Verificar se bot pertence ao usuário
+    bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
+    
+    # Buscar bot_user
+    bot_user = BotUser.query.filter_by(
+        bot_id=bot_id,
+        telegram_user_id=telegram_user_id,
+        archived=False
+    ).first_or_404()
+    
+    # Buscar mensagens
+    messages = BotMessage.query.filter_by(
+        bot_id=bot_id,
+        telegram_user_id=telegram_user_id
+    ).order_by(BotMessage.created_at.asc()).limit(100).all()
+    
+    # Marcar mensagens como lidas
+    BotMessage.query.filter_by(
+        bot_id=bot_id,
+        telegram_user_id=telegram_user_id,
+        direction='incoming',
+        is_read=False
+    ).update({'is_read': True})
+    db.session.commit()
+    
+    messages_data = [msg.to_dict() for msg in messages]
+    
+    return jsonify({
+        'success': True,
+        'bot_user': bot_user.to_dict(),
+        'messages': messages_data,
+        'total': len(messages_data)
+    })
+
 @app.route('/settings')
 @login_required
 def settings():

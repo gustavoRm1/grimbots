@@ -1,0 +1,370 @@
+{% extends "base.html" %}
+
+{% block title %}Chat V2.0 - grimbots{% endblock %}
+
+{% block content %}
+<div class="max-w-full mx-auto h-screen flex flex-col" style="background: var(--bg-primary);" x-data="chatApp()" x-init="init()">
+    <!-- Header -->
+    <div class="px-6 py-4 border-b flex items-center justify-between" style="border-color: var(--border-subtle); background: var(--bg-secondary);">
+        <div>
+            <h1 class="text-2xl font-bold" style="color: var(--txt-primary);">
+                <i class="fas fa-comments mr-3" style="color: var(--brand-blue-500);"></i>
+                Chat V2.0
+            </h1>
+            <p class="text-sm mt-1" style="color: var(--txt-secondary);">
+                Gerencie todas as conversas dos seus bots
+            </p>
+        </div>
+        <div class="flex items-center gap-4">
+            <div class="text-sm" style="color: var(--txt-secondary);">
+                <span x-text="selectedBot ? selectedBot.name : 'Nenhum bot selecionado'"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Container -->
+    <div class="flex-1 flex overflow-hidden">
+        <!-- Sidebar: Bots -->
+        <div class="w-64 border-r overflow-y-auto" style="border-color: var(--border-subtle); background: var(--bg-secondary);" x-show="!selectedConversation">
+            <div class="p-4">
+                <h2 class="text-sm font-semibold mb-3 uppercase" style="color: var(--txt-secondary);">Bots Online</h2>
+                <div class="space-y-2">
+                    <template x-for="bot in bots" :key="bot.id">
+                        <div 
+                            @click="selectBot(bot)"
+                            class="p-3 rounded-lg cursor-pointer transition-all"
+                            :class="selectedBot && selectedBot.id === bot.id ? 'bg-blue-500/20 border-2 border-blue-500' : 'hover:bg-gray-800/50 border border-transparent'"
+                            style="background: var(--bg-tertiary);"
+                        >
+                            <div class="flex items-center justify-between">
+                                <div class="flex-1 min-w-0">
+                                    <p class="font-semibold text-sm truncate" style="color: var(--txt-primary);" x-text="bot.name"></p>
+                                    <p class="text-xs truncate" style="color: var(--txt-secondary);" x-text="'@' + (bot.username || 'sem_username')"></p>
+                                </div>
+                                <div class="flex items-center gap-2 ml-2">
+                                    <template x-if="bot.unread_count > 0">
+                                        <span class="px-2 py-1 text-xs font-bold rounded-full bg-red-500 text-white" x-text="bot.unread_count"></span>
+                                    </template>
+                                    <span class="w-2 h-2 rounded-full bg-green-500"></span>
+                                </div>
+                            </div>
+                            <div class="mt-2 text-xs" style="color: var(--txt-muted);">
+                                <span x-text="bot.total_conversations + ' conversas'"></span>
+                            </div>
+                        </div>
+                    </template>
+                    <template x-if="bots.length === 0">
+                        <div class="text-center py-8 text-sm" style="color: var(--txt-muted);">
+                            <i class="fas fa-robot text-3xl mb-2"></i>
+                            <p>Nenhum bot online</p>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+
+        <!-- Middle: Conversations List -->
+        <div class="flex-1 flex flex-col border-r overflow-hidden" style="border-color: var(--border-subtle); background: var(--bg-secondary);" x-show="selectedBot && !selectedConversation">
+            <!-- Filters and Search -->
+            <div class="p-4 border-b" style="border-color: var(--border-subtle);">
+                <!-- Search -->
+                <div class="mb-4">
+                    <input 
+                        type="text" 
+                        x-model="searchQuery"
+                        @input.debounce.300ms="loadConversations()"
+                        placeholder="Buscar por nome ou username..."
+                        class="w-full px-4 py-2 rounded-lg text-sm focus:outline-none focus:ring-2 transition-all"
+                        style="background: var(--bg-tertiary); border: 1px solid var(--border-subtle); color: var(--txt-primary); focus:ring-color: var(--brand-blue-500);"
+                    >
+                </div>
+                
+                <!-- Filter Tabs -->
+                <div class="flex gap-2 overflow-x-auto">
+                    <button 
+                        @click="filterType = 'all'; loadConversations()"
+                        class="px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap transition-all"
+                        :class="filterType === 'all' ? 'bg-blue-500 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'"
+                    >
+                        Todos
+                    </button>
+                    <button 
+                        @click="filterType = 'paid'; loadConversations()"
+                        class="px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap transition-all"
+                        :class="filterType === 'paid' ? 'bg-green-500 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'"
+                    >
+                        <i class="fas fa-check-circle mr-1"></i> Pagou
+                    </button>
+                    <button 
+                        @click="filterType = 'pix_generated'; loadConversations()"
+                        class="px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap transition-all"
+                        :class="filterType === 'pix_generated' ? 'bg-yellow-500 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'"
+                    >
+                        <i class="fas fa-qrcode mr-1"></i> Gerou PIX
+                    </button>
+                    <button 
+                        @click="filterType = 'only_entered'; loadConversations()"
+                        class="px-4 py-2 rounded-lg text-sm font-semibold whitespace-nowrap transition-all"
+                        :class="filterType === 'only_entered' ? 'bg-gray-500 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'"
+                    >
+                        <i class="fas fa-user mr-1"></i> Só Entrou
+                    </button>
+                </div>
+            </div>
+
+            <!-- Conversations List -->
+            <div class="flex-1 overflow-y-auto">
+                <template x-if="loading">
+                    <div class="flex items-center justify-center h-full">
+                        <i class="fas fa-spinner fa-spin text-2xl" style="color: var(--txt-secondary);"></i>
+                    </div>
+                </template>
+                <template x-if="!loading && conversations.length === 0">
+                    <div class="text-center py-12 text-sm" style="color: var(--txt-muted);">
+                        <i class="fas fa-comments text-4xl mb-3"></i>
+                        <p>Nenhuma conversa encontrada</p>
+                    </div>
+                </template>
+                <template x-if="!loading && conversations.length > 0">
+                    <div class="divide-y" style="border-color: var(--border-subtle);">
+                        <template x-for="conv in conversations" :key="conv.telegram_user_id">
+                            <div 
+                                @click="selectConversation(conv)"
+                                class="p-4 cursor-pointer hover:bg-gray-800/50 transition-all"
+                            >
+                                <div class="flex items-start gap-3">
+                                    <!-- Avatar -->
+                                    <div class="w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0" 
+                                         :style="`background: ${getStatusColor(conv.status)};`">
+                                        <i class="fas fa-user text-white"></i>
+                                    </div>
+                                    
+                                    <!-- Info -->
+                                    <div class="flex-1 min-w-0">
+                                        <div class="flex items-center justify-between mb-1">
+                                            <p class="font-semibold text-sm truncate" style="color: var(--txt-primary);" x-text="conv.first_name"></p>
+                                            <span class="text-xs ml-2 whitespace-nowrap" style="color: var(--txt-muted);" x-text="formatTime(conv.last_interaction)"></span>
+                                        </div>
+                                        
+                                        <div class="flex items-center gap-2 mb-1">
+                                            <p class="text-sm truncate flex-1" style="color: var(--txt-secondary);" x-text="conv.last_message ? conv.last_message.text : 'Sem mensagens'"></p>
+                                            <template x-if="conv.unread_count > 0">
+                                                <span class="px-2 py-0.5 text-xs font-bold rounded-full bg-blue-500 text-white" x-text="conv.unread_count"></span>
+                                            </template>
+                                        </div>
+                                        
+                                        <!-- Status Badges -->
+                                        <div class="flex items-center gap-2 mt-1">
+                                            <template x-if="conv.has_paid">
+                                                <span class="px-2 py-0.5 text-xs font-semibold rounded bg-green-500/20 text-green-400">
+                                                    <i class="fas fa-check-circle mr-1"></i> Pagou
+                                                </span>
+                                            </template>
+                                            <template x-if="conv.has_pix && !conv.has_paid">
+                                                <span class="px-2 py-0.5 text-xs font-semibold rounded bg-yellow-500/20 text-yellow-400">
+                                                    <i class="fas fa-qrcode mr-1"></i> PIX Gerado
+                                                </span>
+                                            </template>
+                                            <template x-if="conv.total_spent > 0">
+                                                <span class="px-2 py-0.5 text-xs font-semibold rounded" style="background: rgba(59, 130, 246, 0.2); color: #60A5FA;">
+                                                    <i class="fas fa-dollar-sign mr-1"></i> R$ <span x-text="formatMoney(conv.total_spent)"></span>
+                                                </span>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <!-- Right: Messages -->
+        <div class="flex-1 flex flex-col overflow-hidden" style="background: var(--bg-secondary);" x-show="selectedConversation">
+            <!-- Conversation Header -->
+            <div class="p-4 border-b flex items-center justify-between" style="border-color: var(--border-subtle);">
+                <div class="flex items-center gap-3">
+                    <button @click="selectedConversation = null" class="md:hidden p-2 rounded-lg hover:bg-gray-800">
+                        <i class="fas fa-arrow-left" style="color: var(--txt-primary);"></i>
+                    </button>
+                    <div class="w-10 h-10 rounded-full flex items-center justify-center" 
+                         :style="`background: ${getStatusColor(selectedConversation?.status || 'only_entered')};`">
+                        <i class="fas fa-user text-white"></i>
+                    </div>
+                    <div>
+                        <p class="font-semibold" style="color: var(--txt-primary);" x-text="selectedConversation?.first_name || 'Sem nome'"></p>
+                        <p class="text-xs" style="color: var(--txt-secondary);" x-text="'@' + (selectedConversation?.username || 'sem_username')"></p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <template x-if="selectedConversation?.has_paid">
+                        <span class="px-2 py-1 text-xs font-semibold rounded bg-green-500/20 text-green-400">
+                            <i class="fas fa-check-circle mr-1"></i> Cliente Pago
+                        </span>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Messages Area -->
+            <div class="flex-1 overflow-y-auto p-4 space-y-4" id="messages-container">
+                <template x-if="loadingMessages">
+                    <div class="flex items-center justify-center h-full">
+                        <i class="fas fa-spinner fa-spin text-2xl" style="color: var(--txt-secondary);"></i>
+                    </div>
+                </template>
+                <template x-if="!loadingMessages && messages.length === 0">
+                    <div class="text-center py-12 text-sm" style="color: var(--txt-muted);">
+                        <i class="fas fa-comment-slash text-4xl mb-3"></i>
+                        <p>Nenhuma mensagem ainda</p>
+                    </div>
+                </template>
+                <template x-if="!loadingMessages && messages.length > 0">
+                    <template x-for="msg in messages" :key="msg.id">
+                        <div class="flex items-start gap-3" :class="msg.direction === 'outgoing' ? 'justify-end' : ''">
+                            <template x-if="msg.direction === 'incoming'">
+                                <div class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0" 
+                                     :style="`background: ${getStatusColor(selectedConversation?.status || 'only_entered')};`">
+                                    <i class="fas fa-user text-white text-xs"></i>
+                                </div>
+                            </template>
+                            <div class="max-w-[70%]" :class="msg.direction === 'outgoing' ? 'flex flex-col items-end' : ''">
+                                <div class="rounded-2xl px-4 py-3"
+                                     :style="msg.direction === 'outgoing' ? 'background: linear-gradient(135deg, var(--brand-blue-500), var(--brand-blue-600)); color: white;' : 'background: var(--bg-tertiary); border: 1px solid var(--border-subtle); color: var(--txt-primary);'">
+                                    <p class="text-sm" x-text="msg.message_text || '[Mídia]'"></p>
+                                </div>
+                                <p class="text-xs mt-1" :class="msg.direction === 'outgoing' ? 'text-right mr-2' : 'ml-2'" style="color: var(--txt-muted);" x-text="formatTime(msg.created_at)"></p>
+                            </div>
+                            <template x-if="msg.direction === 'outgoing'">
+                                <div class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0" style="background: linear-gradient(135deg, var(--brand-blue-500), var(--brand-blue-600));">
+                                    <i class="fas fa-robot text-white text-xs"></i>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+                </template>
+            </div>
+        </div>
+
+        <!-- Empty State -->
+        <div x-show="!selectedBot" class="flex-1 flex items-center justify-center">
+            <div class="text-center">
+                <i class="fas fa-robot text-6xl mb-4" style="color: var(--txt-muted);"></i>
+                <p class="text-lg font-semibold mb-2" style="color: var(--txt-primary);">Selecione um bot para começar</p>
+                <p class="text-sm" style="color: var(--txt-secondary);">Escolha um bot online para ver suas conversas</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% block extra_scripts %}
+<script>
+function chatApp() {
+    return {
+        bots: {{ bots | tojson }},
+        selectedBot: null,
+        selectedConversation: null,
+        conversations: [],
+        messages: [],
+        filterType: 'all',
+        searchQuery: '',
+        loading: false,
+        loadingMessages: false,
+
+        init() {
+            // Auto-selecionar primeiro bot se houver
+            if (this.bots.length > 0) {
+                this.selectBot(this.bots[0]);
+            }
+        },
+
+        selectBot(bot) {
+            this.selectedBot = bot;
+            this.selectedConversation = null;
+            this.conversations = [];
+            this.messages = [];
+            this.loadConversations();
+        },
+
+        async loadConversations() {
+            if (!this.selectedBot) return;
+            
+            this.loading = true;
+            try {
+                const params = new URLSearchParams({
+                    filter: this.filterType,
+                    search: this.searchQuery
+                });
+                
+                const response = await fetch(`/api/chat/conversations/${this.selectedBot.id}?${params}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    this.conversations = data.conversations;
+                }
+            } catch (error) {
+                console.error('Erro ao carregar conversas:', error);
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async selectConversation(conv) {
+            this.selectedConversation = conv;
+            this.loadingMessages = true;
+            this.messages = [];
+            
+            try {
+                const response = await fetch(`/api/chat/messages/${this.selectedBot.id}/${conv.telegram_user_id}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    this.messages = data.messages;
+                    // Atualizar contador de não lidas
+                    this.loadConversations();
+                    // Scroll para última mensagem
+                    this.$nextTick(() => {
+                        const container = document.getElementById('messages-container');
+                        if (container) {
+                            container.scrollTop = container.scrollHeight;
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('Erro ao carregar mensagens:', error);
+            } finally {
+                this.loadingMessages = false;
+            }
+        },
+
+        getStatusColor(status) {
+            const colors = {
+                'paid': 'linear-gradient(135deg, #10B981, #059669)',
+                'pix_generated': 'linear-gradient(135deg, #F59E0B, #D97706)',
+                'only_entered': 'linear-gradient(135deg, #6B7280, #4B5563)'
+            };
+            return colors[status] || colors['only_entered'];
+        },
+
+        formatTime(isoString) {
+            if (!isoString) return '';
+            const date = new Date(isoString);
+            const now = new Date();
+            const diff = now - date;
+            
+            if (diff < 60000) return 'Agora';
+            if (diff < 3600000) return Math.floor(diff / 60000) + 'm';
+            if (diff < 86400000) return Math.floor(diff / 3600000) + 'h';
+            if (diff < 604800000) return Math.floor(diff / 86400000) + 'd';
+            
+            return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+        },
+
+        formatMoney(value) {
+            return new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
+        }
+    };
+}
+</script>
+{% endblock %}
+{% endblock %}
