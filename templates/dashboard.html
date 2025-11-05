@@ -1141,7 +1141,7 @@
                                    x-model="generalRemarketing.media_url" 
                                    class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-yellow-500"
                                    placeholder="https://t.me/canal/123">
-                            <p class="text-xs text-gray-500 mt-2">Link do Telegram (vídeo, foto ou áudio)</p>
+                            <p class="text-xs text-gray-500 mt-2">Link do Telegram (vídeo ou foto)</p>
                         </div>
                         <div>
                             <label class="block text-sm font-bold text-white mb-2">
@@ -1299,10 +1299,10 @@
                     </div>
 
                     <!-- ✅ V2.0: Agendamento de Envio -->
-                    <div class="mb-6 p-4 rounded-xl" style="background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.3);">
+                    <div class="mb-6 p-4 rounded-xl" style="background: rgba(168, 85, 247, 0.08); border: 1px solid rgba(168, 85, 247, 0.3);">
                         <div class="flex items-center mb-4">
-                            <div class="flex items-center justify-center h-10 w-10 rounded-lg bg-blue-500 bg-opacity-20 border border-blue-500 border-opacity-30">
-                                <i class="fas fa-clock text-blue-400 text-lg" style="filter: brightness(1.2);"></i>
+                            <div class="flex items-center justify-center h-10 w-10 rounded-lg bg-purple-500 bg-opacity-20 border border-purple-500 border-opacity-30">
+                                <i class="fas fa-clock text-purple-400 text-lg" style="filter: brightness(1.2);"></i>
                             </div>
                             <h3 class="ml-3 text-base font-bold text-white">Agendamento de Envio</h3>
                         </div>
@@ -1313,24 +1313,24 @@
                                 <label class="block text-sm font-medium text-gray-300 mb-3">Quando enviar:</label>
                                 <div class="grid grid-cols-2 gap-3">
                                     <label class="flex items-center px-4 py-3.5 bg-gray-800 border-2 rounded-xl cursor-pointer transition-all hover:border-opacity-40"
-                                           :style="generalRemarketing.send_mode === 'immediate' ? 'border-color: #3B82F6; background: rgba(59, 130, 246, 0.1);' : 'border-color: rgba(75, 85, 99, 0.5); hover:bg-gray-750'">
+                                           :style="generalRemarketing.send_mode === 'immediate' ? 'border-color: #A855F7; background: rgba(168, 85, 247, 0.1);' : 'border-color: rgba(75, 85, 99, 0.5); hover:bg-gray-750'">
                                         <input type="radio" x-model="generalRemarketing.send_mode" value="immediate"
-                                               class="form-radio text-blue-400 h-4 w-4" style="accent-color: #3B82F6;">
+                                               class="form-radio text-purple-400 h-4 w-4" style="accent-color: #A855F7;">
                                         <div class="ml-3 flex-1">
                                             <div class="flex items-center">
-                                                <i class="fas fa-bolt text-blue-400 mr-2"></i>
+                                                <i class="fas fa-bolt text-purple-400 mr-2"></i>
                                                 <span class="text-sm font-semibold text-white">Enviar Imediato</span>
                                             </div>
                                             <p class="text-xs text-gray-400 mt-1">Enviar assim que a campanha for criada</p>
                                         </div>
                                     </label>
                                     <label class="flex items-center px-4 py-3.5 bg-gray-800 border-2 rounded-xl cursor-pointer transition-all hover:border-opacity-40"
-                                           :style="generalRemarketing.send_mode === 'scheduled' ? 'border-color: #3B82F6; background: rgba(59, 130, 246, 0.1);' : 'border-color: rgba(75, 85, 99, 0.5); hover:bg-gray-750'">
+                                           :style="generalRemarketing.send_mode === 'scheduled' ? 'border-color: #A855F7; background: rgba(168, 85, 247, 0.1);' : 'border-color: rgba(75, 85, 99, 0.5); hover:bg-gray-750'">
                                         <input type="radio" x-model="generalRemarketing.send_mode" value="scheduled"
-                                               class="form-radio text-blue-400 h-4 w-4" style="accent-color: #3B82F6;">
+                                               class="form-radio text-purple-400 h-4 w-4" style="accent-color: #A855F7;">
                                         <div class="ml-3 flex-1">
                                             <div class="flex items-center">
-                                                <i class="fas fa-calendar-alt text-blue-400 mr-2"></i>
+                                                <i class="fas fa-calendar-alt text-purple-400 mr-2"></i>
                                                 <span class="text-sm font-semibold text-white">Agendar</span>
                                             </div>
                                             <p class="text-xs text-gray-400 mt-1">Escolher data e hora específica</p>
@@ -1344,31 +1344,31 @@
                                 <div class="grid grid-cols-2 gap-3">
                                     <div>
                                         <label class="block text-xs font-semibold text-gray-400 mb-2 flex items-center">
-                                            <i class="fas fa-calendar text-blue-400 mr-1.5 text-xs"></i>
+                                            <i class="fas fa-calendar text-purple-400 mr-1.5 text-xs"></i>
                                             Data
                                         </label>
                                         <input type="date" x-model="generalRemarketing.scheduled_date" 
                                                :min="new Date().toISOString().split('T')[0]"
-                                               class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400 focus:ring-opacity-20 transition-all">
+                                               class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-400 focus:ring-opacity-20 transition-all">
                                     </div>
                                     <div>
                                         <label class="block text-xs font-semibold text-gray-400 mb-2 flex items-center">
-                                            <i class="fas fa-clock text-blue-400 mr-1.5 text-xs"></i>
+                                            <i class="fas fa-clock text-purple-400 mr-1.5 text-xs"></i>
                                             Hora
                                         </label>
                                         <input type="time" x-model="generalRemarketing.scheduled_time" 
-                                               class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400 focus:ring-opacity-20 transition-all">
+                                               class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-400 focus:ring-opacity-20 transition-all">
                                     </div>
                                 </div>
                                 
                                 <!-- Preview da Data/Hora -->
                                 <div x-show="generalRemarketing.scheduled_date && generalRemarketing.scheduled_time" 
-                                     class="p-3 bg-blue-500 bg-opacity-10 border border-blue-500 border-opacity-20 rounded-lg">
+                                     class="p-3 bg-purple-500 bg-opacity-10 border border-purple-500 border-opacity-20 rounded-lg">
                                     <div class="flex items-center gap-2">
-                                        <i class="fas fa-info-circle text-blue-400"></i>
+                                        <i class="fas fa-info-circle text-purple-400"></i>
                                         <span class="text-sm text-white">
                                             <strong>Campanha agendada para:</strong>
-                                            <span class="ml-2 font-bold text-blue-400" x-text="formatGeneralRemarketingScheduledDateTime()"></span>
+                                            <span class="ml-2 font-bold text-purple-400" x-text="formatGeneralRemarketingScheduledDateTime()"></span>
                                         </span>
                                     </div>
                                 </div>
