@@ -6313,32 +6313,81 @@ def send_meta_pixel_purchase_event(payment):
         # ✅ ENFILEIRAR EVENTO PURCHASE (ASSÍNCRONO - MVP DIA 2)
         # ============================================================================
         
+        # ✅ CORREÇÃO CRÍTICA: Usar _build_user_data para hash correto dos dados
+        from utils.meta_pixel import MetaPixelAPI
+        
+        # Determinar external_id (prioridade: bot_user.external_id > payment_id)
+        external_id_value = None
+        if bot_user and bot_user.external_id:
+            external_id_value = bot_user.external_id
+        else:
+            # Fallback: usar customer_user_id do payment
+            external_id_value = payment.customer_user_id
+        
+        # Construir user_data usando função correta (faz hash SHA256)
+        user_data = MetaPixelAPI._build_user_data(
+            customer_user_id=telegram_user_id if telegram_user_id else None,
+            external_id=external_id_value,
+            email=None,  # TODO: Adicionar email se disponível no payment/bot_user
+            phone=None,  # TODO: Adicionar phone se disponível no payment/bot_user
+            client_ip=bot_user.ip_address if bot_user else None,
+            client_user_agent=bot_user.user_agent if bot_user else None,
+            fbp=None,  # TODO: Adicionar fbp se disponível (cookie do Meta)
+            fbc=None   # TODO: Adicionar fbc se disponível (cookie do Meta)
+        )
+        
+        # ✅ CRÍTICO: Garantir que external_id existe (obrigatório para Conversions API)
+        if not user_data.get('external_id'):
+            # Se não há external_id, criar um baseado no payment_id
+            fallback_external_id = f'purchase_{payment.payment_id}_{int(time.time())}'
+            user_data['external_id'] = [MetaPixelAPI._hash_data(fallback_external_id)]
+            logger.warning(f"⚠️ External ID não encontrado, usando fallback: {fallback_external_id}")
+        
+        # Construir custom_data
+        custom_data = {
+            'currency': 'BRL',
+            'value': float(payment.amount),
+            'content_type': 'product',
+            'num_items': 1
+        }
+        
+        # Adicionar content_id se disponível
+        if pool.id:
+            custom_data['content_ids'] = [str(pool.id)]
+        
+        # Adicionar content_name
+        if payment.product_name:
+            custom_data['content_name'] = payment.product_name
+        elif payment.bot.name:
+            custom_data['content_name'] = payment.bot.name
+        
+        # Categorização da venda
+        if is_downsell:
+            custom_data['content_category'] = 'downsell'
+        elif is_upsell:
+            custom_data['content_category'] = 'upsell'
+        elif is_remarketing:
+            custom_data['content_category'] = 'remarketing'
+        else:
+            custom_data['content_category'] = 'initial'
+        
+        # UTM e campaign tracking
+        if payment.utm_source:
+            custom_data['utm_source'] = payment.utm_source
+        if payment.utm_campaign:
+            custom_data['utm_campaign'] = payment.utm_campaign
+        if payment.campaign_code:
+            custom_data['campaign_code'] = payment.campaign_code
+        
+        # Construir event_data completo
         event_data = {
             'event_name': 'Purchase',
             'event_time': int(time.time()),
             'event_id': event_id,
-            'action_source': 'website',
-            'user_data': {
-                # ✅ CORREÇÃO CRÍTICA: external_id ABSOLUTAMENTE ÚNICO por pagamento
-                # Combinar payment_id + timestamp + UUID para evitar deduplicação da Meta
-                'external_id': bot_user.external_id if bot_user else f'purchase_{payment.payment_id}_{int(time.time())}_{uuid.uuid4().hex[:8]}',
-                'client_ip_address': bot_user.ip_address if bot_user else None,
-                'client_user_agent': bot_user.user_agent if bot_user else None
-            },
-            'custom_data': {
-                'currency': 'BRL',
-                'value': float(payment.amount),
-                'content_id': str(pool.id),
-                'content_name': payment.product_name or payment.bot.name,
-                'content_type': 'product',
-                'payment_id': payment.payment_id,
-                'is_downsell': is_downsell,
-                'is_upsell': is_upsell,
-                'is_remarketing': is_remarketing,
-                'utm_source': payment.utm_source,
-                'utm_campaign': payment.utm_campaign,
-                'campaign_code': payment.campaign_code
-            }
+            'action_source': 'website',  # ✅ Correto para server-side events
+            'event_source_url': f'https://t.me/{payment.bot.username}',  # ✅ OBRIGATÓRIO para melhor matching
+            'user_data': user_data,
+            'custom_data': custom_data
         }
         
         # ✅ ENFILEIRAR COM PRIORIDADE ALTA (Purchase é crítico!)
