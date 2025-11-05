@@ -1334,11 +1334,54 @@ class BotManager:
                         logger.error(f"Erro ao enviar ViewContent para Meta Pixel: {e}")
                         # Não impedir o funcionamento do bot se Meta falhar
                 else:
-                    # Usuário já existe
+                    # Usuário já existe - ATUALIZAR tracking data se vier no start_param
                     bot_user.last_interaction = datetime.now()
                     
+                    # ✅ CRÍTICO: Atualizar external_id se vier no start_param (pode ter mudado de campanha)
+                    if external_id_from_start and not bot_user.external_id:
+                        bot_user.external_id = external_id_from_start
+                        logger.info(f"✅ external_id atualizado do start_param: {external_id_from_start}")
+                    
+                    # ✅ CRÍTICO: Atualizar UTMs se vierem no start_param
+                    if utm_data_from_start.get('utm_source') and not bot_user.utm_source:
+                        bot_user.utm_source = utm_data_from_start['utm_source']
+                    if utm_data_from_start.get('utm_campaign') and not bot_user.utm_campaign:
+                        bot_user.utm_campaign = utm_data_from_start['utm_campaign']
+                    if utm_data_from_start.get('campaign_code') and not bot_user.campaign_code:
+                        bot_user.campaign_code = utm_data_from_start['campaign_code']
+                    if utm_data_from_start.get('fbclid') and not bot_user.fbclid:
+                        bot_user.fbclid = utm_data_from_start['fbclid']
+                    
+                    # ✅ CRÍTICO: Buscar grim do Redis se não tiver external_id ainda
+                    if not bot_user.external_id and utm_data_from_start.get('fbclid'):
+                        try:
+                            import redis
+                            r = redis.Redis(host='localhost', port=6379, decode_responses=True)
+                            
+                            # Tentar buscar tracking_elite pelo fbclid
+                            fbclid_value = utm_data_from_start['fbclid']
+                            tracking_key = f"tracking_elite:{fbclid_value}"
+                            tracking_data = r.hgetall(tracking_key)
+                            
+                            if tracking_data and tracking_data.get('grim'):
+                                bot_user.external_id = tracking_data.get('grim')
+                                logger.info(f"✅ external_id recuperado do Redis (usuário existente): {bot_user.external_id}")
+                            
+                            # Se não encontrou, tentar buscar por hash
+                            if not bot_user.external_id and len(fbclid_value) <= 12:
+                                fbclid_completo = r.get(f'tracking_hash:{fbclid_value}')
+                                if fbclid_completo:
+                                    tracking_key = f"tracking_elite:{fbclid_completo}"
+                                    tracking_data = r.hgetall(tracking_key)
+                                    if tracking_data and tracking_data.get('grim'):
+                                        bot_user.external_id = tracking_data.get('grim')
+                                        bot_user.fbclid = fbclid_completo
+                                        logger.info(f"✅ external_id recuperado do Redis (via hash): {bot_user.external_id}")
+                        except Exception as redis_error:
+                            logger.warning(f"⚠️ Erro ao buscar Redis para usuário existente: {redis_error}")
+                    
                     # ✅ CORREÇÃO: Sempre enviar boas-vindas quando /start for digitado
-                    logger.info(f"👤 Usuário retornou: {first_name} (@{username}) - Enviando boas-vindas novamente")
+                    logger.info(f"👤 Usuário retornou: {first_name} (@{username}) - external_id={bot_user.external_id or 'N/A'}")
                     should_send_welcome = True
                     
                     db.session.commit()
