@@ -277,115 +277,98 @@
                         </div>
                     </div>
 
-                    <!-- Mídia -->
-                    <div class="space-y-3">
-                        <label class="block text-sm font-semibold text-textSecondary flex items-center">
-                            <i class="fas fa-image text-accent500 mr-2"></i>
-                            Mídia
-                            <span class="text-textSecondary ml-2 text-xs font-normal">(Opcional)</span>
-                        </label>
-                        <div class="flex gap-3">
-                            <label class="flex items-center px-4 py-2.5 bg-bg900 border border-white border-opacity-10 rounded-lg cursor-pointer hover:border-opacity-20 transition-all"
-                                   :class="{'border-accent500 border-opacity-40 bg-accent500 bg-opacity-8': newCampaign.media_type === ''}">
-                                <input type="radio" x-model="newCampaign.media_type" value=""
-                                       class="form-radio text-accent500 h-4 w-4">
-                                <span class="ml-2 text-sm text-textPrimary">Sem mídia</span>
+                    <!-- Mídia (Opcional) -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                        <div>
+                            <label class="block text-sm font-bold text-textPrimary mb-2">
+                                <i class="fas fa-link mr-2 text-accent500"></i>
+                                URL da Mídia (opcional)
                             </label>
-                            <label class="flex items-center px-4 py-2.5 bg-bg900 border border-white border-opacity-10 rounded-lg cursor-pointer hover:border-opacity-20 transition-all"
-                                   :class="{'border-accent500 border-opacity-40 bg-accent500 bg-opacity-8': newCampaign.media_type === 'photo'}">
-                                <input type="radio" x-model="newCampaign.media_type" value="photo"
-                                       class="form-radio text-accent500 h-4 w-4">
-                                <i class="fas fa-camera text-accent500 ml-2 mr-1"></i>
-                                <span class="ml-1 text-sm text-textPrimary">Foto</span>
+                            <input type="url" 
+                                   x-model="newCampaign.media_url" 
+                                   class="w-full px-4 py-3 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary placeholder-textSecondary focus:outline-none focus:ring-2 focus:ring-accent500"
+                                   placeholder="https://t.me/canal/123">
+                            <p class="text-xs text-textSecondary mt-2">Link do Telegram (vídeo ou foto)</p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold text-textPrimary mb-2">
+                                <i class="fas fa-image mr-2 text-accent500"></i>
+                                Tipo de Mídia Principal
                             </label>
-                            <label class="flex items-center px-4 py-2.5 bg-bg900 border border-white border-opacity-10 rounded-lg cursor-pointer hover:border-opacity-20 transition-all"
-                                   :class="{'border-accent500 border-opacity-40 bg-accent500 bg-opacity-8': newCampaign.media_type === 'video'}">
-                                <input type="radio" x-model="newCampaign.media_type" value="video"
-                                       class="form-radio text-accent500 h-4 w-4">
-                                <i class="fas fa-video text-accent500 ml-2 mr-1"></i>
-                                <span class="ml-1 text-sm text-textPrimary">Vídeo</span>
-                            </label>
-                        </div>
-                        
-                        <!-- Áudio Adicional -->
-                        <div class="mt-4 p-4 rounded-lg" style="background: var(--border-subtle); border: 1px solid var(--border-accent);">
-                            <label class="flex items-center gap-2 cursor-pointer mb-2">
-                                <input type="checkbox" 
-                                       x-model="newCampaign.audio_enabled"
-                                       class="w-4 h-4 bg-bg900 border-white border-opacity-10 rounded focus:ring-accent500"
-                                       style="accent-color: var(--brand-gold-500);">
-                                <i class="fas fa-microphone text-accent500"></i>
-                                <span class="text-sm font-bold text-textPrimary">Adicionar Áudio Complementar</span>
-                            </label>
-                            <div x-show="newCampaign.audio_enabled" x-cloak class="relative group mt-2">
-                                <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                                    <i class="fas fa-link text-textSecondary group-hover:text-textPrimary transition-colors"></i>
-                                </div>
-                                <input type="url" x-model="newCampaign.audio_url"
-                                       class="w-full pl-12 pr-4 py-3 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary placeholder-textSecondary focus:border-accent500 focus:ring-2 focus:ring-accent500 focus:ring-opacity-20 transition-all"
-                                       placeholder="https://t.me/canal/audio">
-                                <p class="text-xs text-textSecondary mt-1">Áudio enviado após a mídia principal</p>
-                            </div>
-                        </div>
-                        <div x-show="newCampaign.media_type" class="relative group">
-                            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                                <i class="fas fa-link text-textSecondary group-hover:text-textPrimary transition-colors"></i>
-                            </div>
-                            <input type="url" x-model="newCampaign.media_url"
-                                   placeholder="https://t.me/seucanal/123"
-                                   class="w-full pl-11 pr-4 py-3 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary placeholder-textSecondary focus:outline-none focus:border-accent500 focus:ring-2 focus:ring-accent500 focus:ring-opacity-20 hover:border-opacity-15 transition-all">
-                        </div>
-                    </div>
-
-                    <!-- Segmentação -->
-                    <div class="rounded-2xl p-6" style="background: var(--border-subtle); border: 1px solid var(--border-accent);">
-                        <div class="flex items-center mb-5">
-                            <div class="flex items-center justify-center h-10 w-10 rounded-lg bg-accent500 bg-opacity-20 border border-accent500 border-opacity-30">
-                                <i class="fas fa-bullseye text-accent500 text-lg" style="filter: brightness(1.2);"></i>
-                            </div>
-                            <h3 class="ml-3 text-base font-bold text-textPrimary">Segmentação de Público</h3>
-                        </div>
-                        
-                        <div class="space-y-4">
-                            <!-- Tipo de Público -->
-                            <div>
-                                <label class="block text-sm font-medium text-textSecondary mb-2">Enviar para:</label>
-                                <select x-model="newCampaign.target_audience" @change="updateEligibleCount()"
-                                        class="w-full px-4 py-3 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary focus:outline-none focus:border-accent500">
-                                    <option value="non_buyers">Leads que NÃO compraram</option>
-                                    <option value="abandoned_cart">Carrinhos Abandonados (PIX não pago)</option>
-                                    <option value="inactive">Inativos (sem contato há 7+ dias)</option>
-                                    <option value="all">Todos os leads</option>
-                                </select>
-                            </div>
-
-                            <!-- Dias sem contato -->
-                            <div>
-                                <label class="block text-sm font-medium text-textSecondary mb-2">Último contato:</label>
-                                <select x-model="newCampaign.days_since_last_contact" @change="updateEligibleCount()"
-                                        class="w-full px-4 py-3 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary focus:outline-none focus:border-accent500">
-                                    <option value="0">Qualquer período</option>
-                                    <option value="1">Mais de 1 dia</option>
-                                    <option value="3" selected>Mais de 3 dias</option>
-                                    <option value="7">Mais de 7 dias</option>
-                                    <option value="15">Mais de 15 dias</option>
-                                    <option value="30">Mais de 30 dias</option>
-                                </select>
-                            </div>
-
-                            <!-- Excluir compradores -->
-                            <div class="flex items-center">
-                                <input type="checkbox" x-model="newCampaign.exclude_buyers" @change="updateEligibleCount()"
-                                       id="exclude_buyers"
-                                       class="h-4 w-4 rounded border-white border-opacity-20 bg-bg900 text-accent500 focus:ring-accent500">
-                                <label for="exclude_buyers" class="ml-2 text-sm text-textPrimary">
-                                    <i class="fas fa-check-circle text-success-500 mr-1"></i>
-                                    Excluir quem já comprou
-                                    <span class="text-success-500 text-xs ml-1">(recomendado)</span>
+                            <div class="grid grid-cols-2 gap-3 mt-2">
+                                <label class="flex items-center gap-2 px-4 py-3 bg-bg900 border rounded-lg cursor-pointer transition-colors"
+                                       :class="newCampaign.media_type === 'video' ? 'border-accent500' : 'border-white border-opacity-10'"
+                                       :style="newCampaign.media_type === 'video' ? 'background: var(--border-subtle);' : ''">
+                                    <input type="radio" x-model="newCampaign.media_type" value="video" style="accent-color: var(--brand-gold-500);">
+                                    <i class="fas fa-video text-accent500"></i>
+                                    <span class="text-sm text-textPrimary">Vídeo</span>
+                                </label>
+                                <label class="flex items-center gap-2 px-4 py-3 bg-bg900 border rounded-lg cursor-pointer transition-colors"
+                                       :class="newCampaign.media_type === 'photo' ? 'border-accent500' : 'border-white border-opacity-10'"
+                                       :style="newCampaign.media_type === 'photo' ? 'background: var(--border-subtle);' : ''">
+                                    <input type="radio" x-model="newCampaign.media_type" value="photo" style="accent-color: var(--brand-gold-500);">
+                                    <i class="fas fa-camera text-accent500"></i>
+                                    <span class="text-sm text-textPrimary">Foto</span>
                                 </label>
                             </div>
                         </div>
+                    </div>
 
+                    <!-- Áudio Adicional -->
+                    <div class="mb-6 p-4 rounded-xl" style="background: var(--border-subtle); border: 1px solid var(--border-accent);">
+                        <label class="flex items-center gap-3 cursor-pointer mb-3">
+                            <input type="checkbox" 
+                                   x-model="newCampaign.audio_enabled"
+                                   class="w-5 h-5 bg-bg900 border-white border-opacity-10 rounded focus:ring-accent500"
+                                   style="accent-color: var(--brand-gold-500);">
+                            <div class="flex items-center gap-2">
+                                <i class="fas fa-microphone text-accent500 text-lg"></i>
+                                <span class="text-sm font-bold text-textPrimary">Adicionar Áudio Complementar (opcional)</span>
+                            </div>
+                        </label>
+                        <div x-show="newCampaign.audio_enabled" x-cloak>
+                            <input type="url" 
+                                   x-model="newCampaign.audio_url" 
+                                   class="w-full px-4 py-3 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary placeholder-textSecondary focus:outline-none focus:ring-2 focus:ring-accent500"
+                                   placeholder="https://t.me/canal/audio">
+                            <p class="text-xs text-textSecondary mt-2">O áudio será enviado após a mídia principal</p>
+                        </div>
+                    </div>
+
+                    <!-- Segmentação de Público -->
+                    <div class="mb-6 p-4 rounded-xl" style="background: var(--border-subtle); border: 1px solid var(--border-accent);">
+                        <label class="block text-sm font-bold text-textPrimary mb-3">
+                            <i class="fas fa-filter mr-2 text-accent500"></i>
+                            Segmentação de Público
+                        </label>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs text-textSecondary mb-2">Dias desde último contato</label>
+                                <input type="number" 
+                                       x-model.number="newCampaign.days_since_last_contact" 
+                                       min="0"
+                                       @change="updateEligibleCount()"
+                                       class="w-full px-4 py-2 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary focus:outline-none focus:ring-2 focus:ring-accent500"
+                                       placeholder="7">
+                                <div class="mt-2 p-2 rounded-lg bg-bg900 border border-white border-opacity-5">
+                                    <p class="text-xs text-textSecondary">
+                                        <i class="fas fa-info-circle mr-1 text-accent500"></i>
+                                        <span x-text="newCampaign.days_since_last_contact == 0 ? 'Todos os usuários (sem filtro de inatividade)' : 'Apenas usuários inativos há ' + newCampaign.days_since_last_contact + ' dia(s)'"></span>
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="flex items-center">
+                                <label class="flex items-center gap-3 cursor-pointer">
+                                    <input type="checkbox" 
+                                           x-model="newCampaign.exclude_buyers"
+                                           @change="updateEligibleCount()"
+                                           class="w-4 h-4 bg-bg900 border-white border-opacity-10 rounded focus:ring-accent500"
+                                           style="accent-color: var(--brand-gold-500);">
+                                    <span class="text-sm text-textPrimary">Excluir quem já comprou</span>
+                                </label>
+                            </div>
+                        </div>
+                        
                         <!-- Contador de Leads Elegíveis -->
                         <div class="mt-4 p-4 bg-bg900 rounded-lg border border-accent500 border-opacity-20">
                             <div class="flex justify-between items-center">
@@ -702,15 +685,17 @@ function remarketingApp() {
             name: '',
             message: '',
             media_url: '',
-            media_type: '',
+            media_type: 'video',  // ✅ Padrão igual Remarketing Geral
             buttons: [],
-            target_audience: 'non_buyers',
-            days_since_last_contact: 3,
-            exclude_buyers: true,
+            target_audience: 'non_buyers',  // Mantido para compatibilidade, mas calculado automaticamente
+            days_since_last_contact: 7,  // ✅ Padrão igual Remarketing Geral
+            exclude_buyers: false,  // ✅ Padrão igual Remarketing Geral
             cooldown_hours: 24,
             send_mode: 'immediate',  // ✅ V2.0: 'immediate' ou 'scheduled'
             scheduled_date: '',      // ✅ V2.0: Data no formato YYYY-MM-DD
-            scheduled_time: ''        // ✅ V2.0: Hora no formato HH:MM
+            scheduled_time: '',       // ✅ V2.0: Hora no formato HH:MM
+            audio_enabled: false,  // ✅ V2.0
+            audio_url: ''  // ✅ V2.0
         },
         
         init() {
@@ -748,12 +733,15 @@ function remarketingApp() {
         async updateEligibleCount() {
             this.loadingCount = true;
             try {
+                // ✅ Calcular target_audience automaticamente baseado em exclude_buyers (igual Remarketing Geral)
+                const target_audience = this.newCampaign.exclude_buyers ? 'non_buyers' : 'all';
+                
                 const response = await fetch(`/api/bots/{{ bot.id }}/remarketing/eligible-leads`, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
-                        target_audience: this.newCampaign.target_audience,
-                        days_since_last_contact: parseInt(this.newCampaign.days_since_last_contact),
+                        target_audience: target_audience,
+                        days_since_last_contact: parseInt(this.newCampaign.days_since_last_contact) || 0,
                         exclude_buyers: this.newCampaign.exclude_buyers
                     })
                 });
@@ -801,6 +789,9 @@ function remarketingApp() {
             try {
                 // ✅ V2.0: Preparar dados para envio (incluir scheduled_at se agendado)
                 const campaignData = {...this.newCampaign};
+                
+                // ✅ Calcular target_audience automaticamente baseado em exclude_buyers (igual Remarketing Geral)
+                campaignData.target_audience = this.newCampaign.exclude_buyers ? 'non_buyers' : 'all';
                 
                 if (sendMode === 'scheduled') {
                     // Combinar data e hora em ISO string
@@ -896,15 +887,17 @@ function remarketingApp() {
                 name: '',
                 message: '',
                 media_url: '',
-                media_type: '',
+                media_type: 'video',  // ✅ Padrão igual Remarketing Geral
                 buttons: [],
-                target_audience: 'non_buyers',
-                days_since_last_contact: 3,
-                exclude_buyers: true,
+                target_audience: 'non_buyers',  // Mantido para compatibilidade, mas calculado automaticamente
+                days_since_last_contact: 7,  // ✅ Padrão igual Remarketing Geral
+                exclude_buyers: false,  // ✅ Padrão igual Remarketing Geral
                 cooldown_hours: 24,
                 send_mode: 'immediate',  // ✅ V2.0
                 scheduled_date: '',      // ✅ V2.0
-                scheduled_time: ''        // ✅ V2.0
+                scheduled_time: '',        // ✅ V2.0
+                audio_enabled: false,  // ✅ V2.0
+                audio_url: ''  // ✅ V2.0
             };
             this.eligibleCount = 0;
         },
