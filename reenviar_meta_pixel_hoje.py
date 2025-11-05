@@ -100,50 +100,130 @@ with app.app_context():
         print(f"  🔍 DEBUG: customer_user_id={payment.customer_user_id}, bot_id={payment.bot_id}")
         
         try:
-            # ✅ CRÍTICO: Buscar e salvar parâmetros do bot_user ANTES de reenviar
-            from models import BotUser
-            
-            # Tentar encontrar bot_user para buscar grim/external_id
-            # ✅ CRÍTICO: BotUser.telegram_user_id é String, não int!
-            telegram_user_id_str = None
-            if payment.customer_user_id:
-                print(f"  🔍 DEBUG: customer_user_id existe: '{payment.customer_user_id}'")
-                if payment.customer_user_id.startswith('user_'):
-                    telegram_user_id_str = payment.customer_user_id.replace('user_', '')
-                    print(f"  🔍 DEBUG: Extraído telegram_user_id (com prefixo): {telegram_user_id_str}")
-                elif payment.customer_user_id.isdigit():
-                    telegram_user_id_str = payment.customer_user_id
-                    print(f"  🔍 DEBUG: Extraído telegram_user_id (direto): {telegram_user_id_str}")
-                else:
-                    # Pode ser que já esteja como string direto
-                    telegram_user_id_str = str(payment.customer_user_id)
-                    print(f"  🔍 DEBUG: Usando customer_user_id como string: {telegram_user_id_str}")
-            else:
-                print(f"  ⚠️ DEBUG: customer_user_id é None ou vazio")
-            
-            print(f"  🔍 Buscando bot_user: bot_id={payment.bot_id}, telegram_user_id={telegram_user_id_str}")
+            # ✅ FUNÇÃO DEFINITIVA: Buscar BotUser por TODAS as formas possíveis
+            from models import BotUser, BotMessage
+            from datetime import timedelta
             
             bot_user = None
-            if telegram_user_id_str:
-                # ✅ CRÍTICO: Buscar como STRING (não int)
-                bot_user = BotUser.query.filter_by(
-                    bot_id=payment.bot_id,
-                    telegram_user_id=telegram_user_id_str
-                ).first()
-                
-                if bot_user:
-                    print(f"  ✅ BotUser encontrado! external_id={bot_user.external_id or 'N/A'}, campaign_code={bot_user.campaign_code or 'N/A'}")
+            
+            # ============================================================
+            # MÉTODO 1: Por customer_user_id (quando existe)
+            # ============================================================
+            if payment.customer_user_id:
+                telegram_user_id_str = None
+                if payment.customer_user_id.startswith('user_'):
+                    telegram_user_id_str = payment.customer_user_id.replace('user_', '')
+                elif payment.customer_user_id.isdigit():
+                    telegram_user_id_str = payment.customer_user_id
                 else:
-                    print(f"  ⚠️ BotUser NÃO encontrado para telegram_user_id={telegram_user_id_str} (bot_id={payment.bot_id})")
-                    # Tentar buscar sem filtro de bot_id (pode estar em outro bot)
-                    bot_user_any_bot = BotUser.query.filter_by(
+                    telegram_user_id_str = str(payment.customer_user_id)
+                
+                if telegram_user_id_str:
+                    bot_user = BotUser.query.filter_by(
+                        bot_id=payment.bot_id,
                         telegram_user_id=telegram_user_id_str
                     ).first()
-                    if bot_user_any_bot:
-                        print(f"  ✅ BotUser encontrado em outro bot! external_id={bot_user_any_bot.external_id or 'N/A'}")
-                        bot_user = bot_user_any_bot
-                    else:
-                        print(f"  ⚠️ BotUser NÃO encontrado em nenhum bot para telegram_user_id={telegram_user_id_str}")
+                    
+                    if bot_user:
+                        print(f"  ✅ [MÉTODO 1] BotUser encontrado por customer_user_id: external_id={bot_user.external_id or 'N/A'}")
+            
+            # ============================================================
+            # MÉTODO 2: Por fbclid (se payment tem fbclid)
+            # ============================================================
+            if not bot_user and payment.fbclid:
+                bot_user = BotUser.query.filter_by(
+                    bot_id=payment.bot_id,
+                    fbclid=payment.fbclid
+                ).order_by(BotUser.last_interaction.desc()).first()
+                
+                if bot_user:
+                    print(f"  ✅ [MÉTODO 2] BotUser encontrado por fbclid: external_id={bot_user.external_id or 'N/A'}")
+            
+            # ============================================================
+            # MÉTODO 3: Por customer_name + customer_username
+            # ============================================================
+            if not bot_user and payment.customer_name and payment.customer_username:
+                bot_user = BotUser.query.filter_by(
+                    bot_id=payment.bot_id,
+                    first_name=payment.customer_name,
+                    username=payment.customer_username
+                ).order_by(BotUser.last_interaction.desc()).first()
+                
+                if bot_user:
+                    print(f"  ✅ [MÉTODO 3] BotUser encontrado por nome+username: external_id={bot_user.external_id or 'N/A'}")
+            
+            # ============================================================
+            # MÉTODO 4: Por customer_name apenas (pode ter múltiplos)
+            # ============================================================
+            if not bot_user and payment.customer_name:
+                # Buscar pelo nome e pegar o mais recente que interagiu no mesmo período
+                payment_time = payment.created_at
+                time_window_start = payment_time - timedelta(minutes=30)
+                time_window_end = payment_time + timedelta(minutes=30)
+                
+                bot_user = BotUser.query.filter(
+                    BotUser.bot_id == payment.bot_id,
+                    BotUser.first_name == payment.customer_name,
+                    BotUser.last_interaction >= time_window_start,
+                    BotUser.last_interaction <= time_window_end
+                ).order_by(BotUser.last_interaction.desc()).first()
+                
+                if bot_user:
+                    print(f"  ✅ [MÉTODO 4] BotUser encontrado por nome (período): external_id={bot_user.external_id or 'N/A'}")
+            
+            # ============================================================
+            # MÉTODO 5: Por BotMessage relacionado (mensagens que mencionam o payment_id)
+            # ============================================================
+            if not bot_user:
+                # Buscar mensagens que contêm o payment_id no texto ou callback_data
+                payment_time = payment.created_at
+                time_window_start = payment_time - timedelta(minutes=10)
+                time_window_end = payment_time + timedelta(minutes=10)
+                
+                messages = BotMessage.query.filter(
+                    BotMessage.bot_id == payment.bot_id,
+                    BotMessage.created_at >= time_window_start,
+                    BotMessage.created_at <= time_window_end,
+                    BotMessage.message_text.contains(payment.payment_id)
+                ).order_by(BotMessage.created_at.desc()).limit(1).all()
+                
+                if messages:
+                    msg = messages[0]
+                    bot_user = BotUser.query.filter_by(
+                        bot_id=payment.bot_id,
+                        telegram_user_id=msg.telegram_user_id
+                    ).first()
+                    
+                    if bot_user:
+                        print(f"  ✅ [MÉTODO 5] BotUser encontrado por BotMessage: external_id={bot_user.external_id or 'N/A'}")
+            
+            # ============================================================
+            # MÉTODO 6: Últimos BotUser que interagiram com o bot no período
+            # ============================================================
+            if not bot_user:
+                # Buscar últimos BotUser que interagiram no mesmo período (último recurso)
+                payment_time = payment.created_at
+                time_window_start = payment_time - timedelta(minutes=60)
+                time_window_end = payment_time + timedelta(minutes=10)
+                
+                # Buscar o BotUser mais recente que interagiu no período
+                bot_user = BotUser.query.filter(
+                    BotUser.bot_id == payment.bot_id,
+                    BotUser.last_interaction >= time_window_start,
+                    BotUser.last_interaction <= time_window_end
+                ).order_by(BotUser.last_interaction.desc()).first()
+                
+                if bot_user:
+                    print(f"  ⚠️ [MÉTODO 6] BotUser encontrado por último recurso (pode não ser o correto): external_id={bot_user.external_id or 'N/A'}")
+            
+            # ============================================================
+            # RESULTADO FINAL
+            # ============================================================
+            if not bot_user:
+                print(f"  ❌ BotUser NÃO encontrado por nenhum método!")
+                print(f"     payment_id={payment.payment_id}, bot_id={payment.bot_id}")
+                print(f"     customer_name={payment.customer_name}, customer_username={payment.customer_username}")
+                print(f"     customer_user_id={payment.customer_user_id}, fbclid={payment.fbclid or 'N/A'}")
             
             # ✅ CORREÇÃO CRÍTICA: Se não tem campaign_code, buscar do bot_user
             if not payment.campaign_code and bot_user:
