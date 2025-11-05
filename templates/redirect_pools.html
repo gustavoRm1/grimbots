@@ -922,17 +922,18 @@ function poolsApp() {
                 const data = await response.json();
                 
                 if (response.ok) {
+                    // ✅ CORREÇÃO: Tratar null/undefined corretamente (não usar || '' que mascara null)
                     this.metaPixelConfig = {
-                        meta_tracking_enabled: data.meta_tracking_enabled || false,
-                        meta_pixel_id: data.meta_pixel_id || '',
-                        meta_access_token: data.meta_access_token || '',
-                        meta_test_event_code: data.meta_test_event_code || '',
+                        meta_tracking_enabled: data.meta_tracking_enabled === true,
+                        meta_pixel_id: (data.meta_pixel_id && data.meta_pixel_id !== null) ? data.meta_pixel_id : '',
+                        meta_access_token: (data.meta_access_token && data.meta_access_token !== null) ? data.meta_access_token : '',
+                        meta_test_event_code: (data.meta_test_event_code && data.meta_test_event_code !== null) ? data.meta_test_event_code : '',
                         meta_events_pageview: data.meta_events_pageview !== false,
                         meta_events_viewcontent: data.meta_events_viewcontent !== false,
                         meta_events_purchase: data.meta_events_purchase !== false,
-                        meta_cloaker_enabled: data.meta_cloaker_enabled || false,
+                        meta_cloaker_enabled: data.meta_cloaker_enabled === true,
                         meta_cloaker_param_name: 'grim',  // Sempre fixo como "grim" (ignorar valor do servidor)
-                        meta_cloaker_param_value: data.meta_cloaker_param_value || ''
+                        meta_cloaker_param_value: (data.meta_cloaker_param_value && data.meta_cloaker_param_value !== null) ? data.meta_cloaker_param_value : ''
                     };
                     this.showMetaPixelModal = true;
                 } else {
@@ -973,11 +974,25 @@ function poolsApp() {
         async saveMetaPixelConfig() {
             this.loading = true;
             try {
+                // ✅ CORREÇÃO: Se tracking está desabilitado, limpar campos antes de enviar
+                if (!this.metaPixelConfig.meta_tracking_enabled) {
+                    this.metaPixelConfig.meta_pixel_id = '';
+                    this.metaPixelConfig.meta_access_token = '';
+                }
+                
                 // ✅ GARANTIR: Sempre enviar "grim" como nome do parâmetro (nunca pode ser alterado)
                 const configToSend = {
                     ...this.metaPixelConfig,
                     meta_cloaker_param_name: 'grim'  // Forçar sempre "grim"
                 };
+                
+                // ✅ CORREÇÃO: Enviar strings vazias como "" (backend vai tratar como NULL)
+                if (configToSend.meta_pixel_id === '') {
+                    configToSend.meta_pixel_id = '';
+                }
+                if (configToSend.meta_access_token === '') {
+                    configToSend.meta_access_token = '';
+                }
                 
                 const response = await fetch(`/api/redirect-pools/${this.selectedPool.id}/meta-pixel`, {
                     method: 'PUT',
