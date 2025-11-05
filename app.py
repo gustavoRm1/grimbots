@@ -6221,6 +6221,9 @@ def send_meta_pixel_pageview_event(pool, request):
         cookies = MetaPixelHelper.extract_cookies(request)
         
         # ✅ CAPTURAR DADOS PARA RETORNAR
+        # ✅ CRÍTICO: Priorizar grim sobre utm_params.get('code') para matching com campanha Meta
+        campaign_code_value = grim_param if grim_param else utm_params.get('code')
+        
         utm_data = {
             'utm_source': utm_params.get('utm_source'),
             'utm_campaign': utm_params.get('utm_campaign'),
@@ -6228,26 +6231,41 @@ def send_meta_pixel_pageview_event(pool, request):
             'utm_medium': utm_params.get('utm_medium'),
             'utm_term': utm_params.get('utm_term'),
             'fbclid': utm_params.get('fbclid'),
-            'campaign_code': utm_params.get('code')
+            'campaign_code': campaign_code_value  # ✅ grim tem prioridade máxima
         }
         
         # ============================================================================
         # ✅ ENFILEIRAR EVENTO (ASSÍNCRONO - NÃO BLOQUEIA!)
         # ============================================================================
         from celery_app import send_meta_event
+        from utils.meta_pixel import MetaPixelAPI
+        
+        # ✅ CRÍTICO: Usar _build_user_data para hash correto do external_id
+        # Isso garante matching entre PageView e Purchase (ambos usam SHA256 hash)
+        user_data = MetaPixelAPI._build_user_data(
+            customer_user_id=None,  # Não temos telegram_user_id no PageView
+            external_id=external_id,  # ✅ grim será hashado aqui
+            email=None,
+            phone=None,
+            client_ip=request.remote_addr,
+            client_user_agent=request.headers.get('User-Agent', ''),
+            fbp=cookies.get('_fbp'),
+            fbc=cookies.get('_fbc')
+        )
+        
+        # ✅ CRÍTICO: Garantir que external_id existe (obrigatório para Conversions API)
+        if not user_data.get('external_id'):
+            # Se não há external_id, criar um baseado no grim ou fbclid
+            fallback_external_id = external_id if external_id else MetaPixelHelper.generate_external_id()
+            user_data['external_id'] = [MetaPixelAPI._hash_data(fallback_external_id)]
+            logger.warning(f"⚠️ External ID não encontrado no PageView, usando fallback: {fallback_external_id}")
         
         event_data = {
             'event_name': 'PageView',
             'event_time': int(time.time()),
             'event_id': event_id,
             'action_source': 'website',
-            'user_data': {
-                'external_id': external_id,
-                'client_ip_address': request.remote_addr,
-                'client_user_agent': request.headers.get('User-Agent', ''),
-                'fbp': cookies.get('_fbp'),
-                'fbc': cookies.get('_fbc')
-            },
+            'user_data': user_data,  # ✅ Agora com external_id hashado corretamente
             'custom_data': {
                 'pool_id': pool.id,
                 'pool_name': pool.name,
@@ -6257,7 +6275,7 @@ def send_meta_pixel_pageview_event(pool, request):
                 'utm_medium': utm_data['utm_medium'],
                 'utm_term': utm_data['utm_term'],
                 'fbclid': utm_data['fbclid'],
-                'campaign_code': utm_data['campaign_code']
+                'campaign_code': utm_data['campaign_code']  # ✅ grim tem prioridade máxima
             }
         }
         
@@ -6445,6 +6463,13 @@ def send_meta_pixel_purchase_event(payment):
             custom_data['utm_campaign'] = payment.utm_campaign
         if payment.campaign_code:
             custom_data['campaign_code'] = payment.campaign_code
+        
+        # ✅ LOG CRÍTICO: Parâmetros enviados para Meta (para debug)
+        logger.info(f"🎯 Meta Pixel Purchase - Parâmetros: " +
+                   f"external_id={external_id_value} | " +
+                   f"campaign_code={payment.campaign_code} | " +
+                   f"utm_source={payment.utm_source} | " +
+                   f"utm_campaign={payment.utm_campaign}")
         
         # Construir event_data completo
         event_data = {

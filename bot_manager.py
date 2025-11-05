@@ -3285,7 +3285,16 @@ Seu pagamento ainda não foi confirmado.
                         device_type=getattr(bot_user, 'device_type', None) if bot_user else None,
                         os_type=getattr(bot_user, 'os_type', None) if bot_user else None,
                         browser=getattr(bot_user, 'browser', None) if bot_user else None,
-                        device_model=getattr(bot_user, 'device_model', None) if bot_user else None
+                        device_model=getattr(bot_user, 'device_model', None) if bot_user else None,
+                        # ✅ CRÍTICO: UTM TRACKING E CAMPAIGN CODE (grim) - Copiar de bot_user para matching com campanha Meta
+                        utm_source=getattr(bot_user, 'utm_source', None) if bot_user else None,
+                        utm_campaign=getattr(bot_user, 'utm_campaign', None) if bot_user else None,
+                        utm_content=getattr(bot_user, 'utm_content', None) if bot_user else None,
+                        utm_medium=getattr(bot_user, 'utm_medium', None) if bot_user else None,
+                        utm_term=getattr(bot_user, 'utm_term', None) if bot_user else None,
+                        fbclid=getattr(bot_user, 'fbclid', None) if bot_user else None,
+                        # ✅ PRIORIDADE: Usar external_id (grim) como campaign_code para matching com campanha Meta
+                        campaign_code=getattr(bot_user, 'external_id', None) or getattr(bot_user, 'campaign_code', None) if bot_user else None
                     )
                     db.session.add(payment)
                     
