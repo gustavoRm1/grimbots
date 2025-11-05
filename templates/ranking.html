@@ -319,10 +319,6 @@
                     <span class="text-xs font-bold text-gray-400">FATURAMENTO</span>
                     <span class="text-lg font-black text-green-400">R$ {{ "%.2f"|format(item.revenue) }}</span>
                     </div>
-                <div class="flex justify-between items-center p-3 bg-black bg-opacity-30 rounded-lg">
-                    <span class="text-xs font-bold text-gray-400">VENDAS</span>
-                    <span class="text-lg font-black text-white">{{ item.sales }}</span>
-                    </div>
                     {% if item.streak > 0 %}
                 <div class="flex justify-between items-center p-3 bg-black bg-opacity-30 rounded-lg">
                     <span class="text-xs font-bold text-gray-400">STREAK</span>
@@ -355,7 +351,6 @@
                         <th>#</th>
                         <th>Usuário</th>
                         <th>Faturamento</th>
-                        <th>Vendas</th>
                         <th>Streak</th>
                     </tr>
                 </thead>
@@ -397,7 +392,6 @@
                             </div>
                         </td>
                         <td class="font-bold text-green-400">R$ {{ "%.2f"|format(item.revenue) }}</td>
-                        <td class="font-bold text-white">{{ item.sales }}</td>
                         <td>
                             {% if item.streak > 0 %}
                             <span class="badge-status" style="background: rgba(255, 184, 0, 0.15); color: #FFB800; border: 1px solid rgba(255, 184, 0, 0.3);">
