@@ -99,6 +99,47 @@ with app.app_context():
         print(f"  📤 Meta já enviado: {payment.meta_purchase_sent}")
         
         try:
+            # ✅ CRÍTICO: Buscar e salvar parâmetros do bot_user ANTES de reenviar
+            from models import BotUser
+            
+            # Tentar encontrar bot_user para buscar grim/external_id
+            telegram_user_id = None
+            if payment.customer_user_id:
+                if payment.customer_user_id.startswith('user_'):
+                    telegram_user_id = int(payment.customer_user_id.replace('user_', ''))
+                elif payment.customer_user_id.isdigit():
+                    telegram_user_id = int(payment.customer_user_id)
+            
+            bot_user = None
+            if telegram_user_id:
+                bot_user = BotUser.query.filter_by(
+                    bot_id=payment.bot_id,
+                    telegram_user_id=telegram_user_id
+                ).first()
+            
+            # ✅ CORREÇÃO CRÍTICA: Se não tem campaign_code, buscar do bot_user
+            if not payment.campaign_code and bot_user:
+                if bot_user.external_id:  # grim está salvo aqui
+                    payment.campaign_code = bot_user.external_id
+                    print(f"  ✅ campaign_code atualizado do bot_user: {bot_user.external_id}")
+                elif bot_user.campaign_code:
+                    payment.campaign_code = bot_user.campaign_code
+                    print(f"  ✅ campaign_code atualizado do bot_user: {bot_user.campaign_code}")
+            
+            # ✅ CORREÇÃO: Se não tem UTMs, buscar do bot_user
+            if not payment.utm_source and bot_user and bot_user.utm_source:
+                payment.utm_source = bot_user.utm_source
+            if not payment.utm_campaign and bot_user and bot_user.utm_campaign:
+                payment.utm_campaign = bot_user.utm_campaign
+            if not payment.utm_content and bot_user and bot_user.utm_content:
+                payment.utm_content = bot_user.utm_content
+            if not payment.utm_medium and bot_user and bot_user.utm_medium:
+                payment.utm_medium = bot_user.utm_medium
+            if not payment.utm_term and bot_user and bot_user.utm_term:
+                payment.utm_term = bot_user.utm_term
+            if not payment.fbclid and bot_user and bot_user.fbclid:
+                payment.fbclid = bot_user.fbclid
+            
             # ✅ CRÍTICO: Resetar flag para permitir reenvio
             # Isso permite que send_meta_pixel_purchase_event processe novamente
             old_meta_sent = payment.meta_purchase_sent
@@ -108,10 +149,11 @@ with app.app_context():
             payment.meta_purchase_sent_at = None
             payment.meta_event_id = None
             
-            # Commit imediato para garantir que flag foi resetada
+            # Commit imediato para salvar parâmetros E resetar flag
             db.session.commit()
             
             print(f"  🔄 Flag resetada (era: {old_meta_sent}, event_id: {old_event_id})")
+            print(f"  📊 Parâmetros finais: campaign_code={payment.campaign_code or 'N/A'}, utm_source={payment.utm_source or 'N/A'}")
             
             # Reenviar evento
             print(f"  📤 Reenviando Meta Pixel Purchase...")
