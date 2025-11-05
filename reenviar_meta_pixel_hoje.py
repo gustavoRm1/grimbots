@@ -97,39 +97,53 @@ with app.app_context():
         print(f"  📊 utm_source: {payment.utm_source or 'N/A'}")
         print(f"  📊 utm_campaign: {payment.utm_campaign or 'N/A'}")
         print(f"  📤 Meta já enviado: {payment.meta_purchase_sent}")
+        print(f"  🔍 DEBUG: customer_user_id={payment.customer_user_id}, bot_id={payment.bot_id}")
         
         try:
             # ✅ CRÍTICO: Buscar e salvar parâmetros do bot_user ANTES de reenviar
             from models import BotUser
             
             # Tentar encontrar bot_user para buscar grim/external_id
-            telegram_user_id = None
+            # ✅ CRÍTICO: BotUser.telegram_user_id é String, não int!
+            telegram_user_id_str = None
             if payment.customer_user_id:
+                print(f"  🔍 DEBUG: customer_user_id existe: '{payment.customer_user_id}'")
                 if payment.customer_user_id.startswith('user_'):
-                    telegram_user_id = int(payment.customer_user_id.replace('user_', ''))
+                    telegram_user_id_str = payment.customer_user_id.replace('user_', '')
+                    print(f"  🔍 DEBUG: Extraído telegram_user_id (com prefixo): {telegram_user_id_str}")
                 elif payment.customer_user_id.isdigit():
-                    telegram_user_id = int(payment.customer_user_id)
+                    telegram_user_id_str = payment.customer_user_id
+                    print(f"  🔍 DEBUG: Extraído telegram_user_id (direto): {telegram_user_id_str}")
+                else:
+                    # Pode ser que já esteja como string direto
+                    telegram_user_id_str = str(payment.customer_user_id)
+                    print(f"  🔍 DEBUG: Usando customer_user_id como string: {telegram_user_id_str}")
+            else:
+                print(f"  ⚠️ DEBUG: customer_user_id é None ou vazio")
             
-            print(f"  🔍 Buscando bot_user: bot_id={payment.bot_id}, telegram_user_id={telegram_user_id}")
+            print(f"  🔍 Buscando bot_user: bot_id={payment.bot_id}, telegram_user_id={telegram_user_id_str}")
             
             bot_user = None
-            if telegram_user_id:
+            if telegram_user_id_str:
+                # ✅ CRÍTICO: Buscar como STRING (não int)
                 bot_user = BotUser.query.filter_by(
                     bot_id=payment.bot_id,
-                    telegram_user_id=telegram_user_id
+                    telegram_user_id=telegram_user_id_str
                 ).first()
                 
                 if bot_user:
                     print(f"  ✅ BotUser encontrado! external_id={bot_user.external_id or 'N/A'}, campaign_code={bot_user.campaign_code or 'N/A'}")
                 else:
-                    print(f"  ⚠️ BotUser NÃO encontrado para telegram_user_id={telegram_user_id}")
+                    print(f"  ⚠️ BotUser NÃO encontrado para telegram_user_id={telegram_user_id_str} (bot_id={payment.bot_id})")
                     # Tentar buscar sem filtro de bot_id (pode estar em outro bot)
                     bot_user_any_bot = BotUser.query.filter_by(
-                        telegram_user_id=telegram_user_id
+                        telegram_user_id=telegram_user_id_str
                     ).first()
                     if bot_user_any_bot:
                         print(f"  ✅ BotUser encontrado em outro bot! external_id={bot_user_any_bot.external_id or 'N/A'}")
                         bot_user = bot_user_any_bot
+                    else:
+                        print(f"  ⚠️ BotUser NÃO encontrado em nenhum bot para telegram_user_id={telegram_user_id_str}")
             
             # ✅ CORREÇÃO CRÍTICA: Se não tem campaign_code, buscar do bot_user
             if not payment.campaign_code and bot_user:
