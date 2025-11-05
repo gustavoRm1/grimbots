@@ -3654,6 +3654,22 @@ def public_redirect(slug):
     # Mesmo sem fbclid, salvar usando grim ou session_id como chave
     grim_param = request.args.get('grim', '')
     import json
+    
+    # ✅ PASSO 1: CAPTURAR _fbp e _fbc DOS COOKIES (CRÍTICO PARA MATCHING!)
+    fbp_cookie = request.cookies.get('_fbp', '')
+    fbc_cookie = request.cookies.get('_fbc', '')
+    
+    # ✅ GERAR _fbc MANUALMENTE se não existir mas tiver fbclid
+    # Formato: fb.{version}.{timestamp}.{fbclid}
+    if not fbc_cookie and fbclid:
+        try:
+            import time
+            # Formato: fb.1.{timestamp}.{fbclid}
+            fbc_cookie = f"fb.1.{int(time.time())}.{fbclid}"
+            logger.info(f"🔑 _fbc gerado manualmente: {fbc_cookie[:50]}...")
+        except Exception as e:
+            logger.warning(f"⚠️ Erro ao gerar _fbc: {e}")
+    
     try:
         r = redis.Redis(host='localhost', port=6379, decode_responses=True)
         tracking_data = {
@@ -3665,6 +3681,9 @@ def public_redirect(slug):
             'slug': slug,
             # ✅ CORREÇÃO CRÍTICA: Capturar `grim` para matching com campanha
             'grim': grim_param,
+            # ✅ CRÍTICO: Cookies do Meta (OBRIGATÓRIO para matching 7-9/10)
+            'fbp': fbp_cookie,  # Facebook Pixel Browser ID
+            'fbc': fbc_cookie,  # Facebook Click ID (gerado se não existir)
             # Capturar TODOS os UTMs
             'utm_source': request.args.get('utm_source', ''),
             'utm_campaign': request.args.get('utm_campaign', ''),
@@ -3684,17 +3703,17 @@ def public_redirect(slug):
         if fbclid:
             tracking_data['fbclid'] = fbclid
             r.setex(f'tracking:{fbclid}', 180, json.dumps(tracking_data))
-            logger.info(f"🎯 TRACKING ELITE | fbclid={fbclid[:20]}... | IP={user_ip} | Session={session_id[:8]}...")
+            logger.info(f"🎯 TRACKING ELITE | fbclid={fbclid[:20]}... | IP={user_ip} | Session={session_id[:8]}... | fbp={'✅' if fbp_cookie else '❌'} | fbc={'✅' if fbc_cookie else '❌'}")
         
         # ✅ CRÍTICO: Se tem grim mas não tem fbclid, salvar também usando grim como chave
         if grim_param and not fbclid:
             r.setex(f'tracking_grim:{grim_param}', 180, json.dumps(tracking_data))
-            logger.info(f"🎯 TRACKING ELITE | grim={grim_param} | IP={user_ip} | Session={session_id[:8]}...")
+            logger.info(f"🎯 TRACKING ELITE | grim={grim_param} | IP={user_ip} | Session={session_id[:8]}... | fbp={'✅' if fbp_cookie else '❌'} | fbc={'✅' if fbc_cookie else '❌'}")
         
         # ✅ Se não tem nem fbclid nem grim, usar session_id como chave (fallback)
         if not fbclid and not grim_param:
             r.setex(f'tracking_session:{session_id}', 180, json.dumps(tracking_data))
-            logger.info(f"🎯 TRACKING ELITE | session={session_id[:8]}... | IP={user_ip}")
+            logger.info(f"🎯 TRACKING ELITE | session={session_id[:8]}... | IP={user_ip} | fbp={'✅' if fbp_cookie else '❌'} | fbc={'✅' if fbc_cookie else '❌'}")
     except Exception as e:
         logger.error(f"⚠️ Erro ao salvar tracking no Redis: {e}")
         # Não quebrar o redirect se Redis falhar
@@ -6243,9 +6262,44 @@ def send_meta_pixel_pageview_event(pool, request):
             logger.error(f"Erro ao descriptografar access_token do pool {pool.id}: {e}")
             return None, {}
         
-        # Extrair UTM parameters e cookies
+        # Extrair UTM parameters
         utm_params = MetaPixelHelper.extract_utm_params(request)
-        cookies = MetaPixelHelper.extract_cookies(request)
+        
+        # ✅ PASSO 2: RECUPERAR _fbp e _fbc DO REDIS (ou cookies como fallback)
+        # Prioridade: Redis > Cookies do request
+        fbp_value = None
+        fbc_value = None
+        
+        try:
+            import redis
+            r = redis.Redis(host='localhost', port=6379, decode_responses=True)
+            
+            # Tentar recuperar do Redis usando fbclid
+            if external_id and external_id.startswith('PAZ'):  # É fbclid
+                tracking_key = f'tracking:{external_id}'
+                tracking_json = r.get(tracking_key)
+                if tracking_json:
+                    tracking_data_redis = json.loads(tracking_json)
+                    fbp_value = tracking_data_redis.get('fbp', '')
+                    fbc_value = tracking_data_redis.get('fbc', '')
+                    logger.info(f"🔑 _fbp e _fbc recuperados do Redis via fbclid")
+        except Exception as e:
+            logger.warning(f"⚠️ Erro ao recuperar fbp/fbc do Redis: {e}")
+        
+        # Fallback: tentar pegar dos cookies do request
+        if not fbp_value:
+            fbp_value = request.cookies.get('_fbp', '')
+        if not fbc_value:
+            fbc_value = request.cookies.get('_fbc', '')
+        
+        # ✅ GERAR _fbc se não existir mas tiver fbclid
+        if not fbc_value and external_id and external_id.startswith('PAZ'):
+            try:
+                import time
+                fbc_value = f"fb.1.{int(time.time())}.{external_id}"
+                logger.info(f"🔑 _fbc gerado manualmente no PageView: {fbc_value[:50]}...")
+            except Exception as e:
+                logger.warning(f"⚠️ Erro ao gerar _fbc no PageView: {e}")
         
         # ✅ CAPTURAR DADOS PARA RETORNAR
         # ✅ CRÍTICO: Priorizar grim sobre utm_params.get('code') para matching com campanha Meta
@@ -6268,16 +6322,17 @@ def send_meta_pixel_pageview_event(pool, request):
         from utils.meta_pixel import MetaPixelAPI
         
         # ✅ CRÍTICO: Usar _build_user_data para hash correto do external_id
+        # ✅ CRÍTICO: Incluir _fbp e _fbc para matching 7-9/10
         # Isso garante matching entre PageView e Purchase (ambos usam SHA256 hash)
         user_data = MetaPixelAPI._build_user_data(
             customer_user_id=None,  # Não temos telegram_user_id no PageView
-            external_id=external_id,  # ✅ grim será hashado aqui
+            external_id=external_id,  # ✅ fbclid será hashado aqui
             email=None,
             phone=None,
             client_ip=request.remote_addr,
             client_user_agent=request.headers.get('User-Agent', ''),
-            fbp=cookies.get('_fbp'),
-            fbc=cookies.get('_fbc')
+            fbp=fbp_value,  # ✅ CRÍTICO: _fbp do Redis ou cookie
+            fbc=fbc_value  # ✅ CRÍTICO: _fbc do Redis, cookie ou gerado
         )
         
         # ✅ CRÍTICO: Garantir que external_id existe (obrigatório para Conversions API)
@@ -6287,12 +6342,35 @@ def send_meta_pixel_pageview_event(pool, request):
             user_data['external_id'] = [MetaPixelAPI._hash_data(fallback_external_id)]
             logger.warning(f"⚠️ External ID não encontrado no PageView, usando fallback: {fallback_external_id}")
         
+        # ✅ LOG CRÍTICO: Mostrar dados enviados para matching (quantidade de atributos)
+        external_ids = user_data.get('external_id', [])
+        attributes_count = sum([
+            1 if external_ids else 0,
+            1 if user_data.get('em') else 0,
+            1 if user_data.get('ph') else 0,
+            1 if user_data.get('client_ip_address') else 0,
+            1 if user_data.get('client_user_agent') else 0,
+            1 if user_data.get('fbp') else 0,
+            1 if user_data.get('fbc') else 0
+        ])
+        
+        logger.info(f"🔍 Meta PageView - User Data: {attributes_count}/7 atributos | " +
+                   f"external_id={'✅' if external_ids else '❌'} [{external_ids[0][:16] if external_ids else 'N/A'}...] | " +
+                   f"fbp={'✅' if user_data.get('fbp') else '❌'} | " +
+                   f"fbc={'✅' if user_data.get('fbc') else '❌'} | " +
+                   f"ip={'✅' if user_data.get('client_ip_address') else '❌'} | " +
+                   f"ua={'✅' if user_data.get('client_user_agent') else '❌'}")
+        
+        # ✅ CRÍTICO: event_source_url deve apontar para URL do redirecionador
+        event_source_url = request.url if request.url else f'https://{request.host}/go/{pool.slug}'
+        
         event_data = {
             'event_name': 'PageView',
             'event_time': int(time.time()),
             'event_id': event_id,
             'action_source': 'website',
-            'user_data': user_data,  # ✅ Agora com external_id hashado corretamente
+            'event_source_url': event_source_url,  # ✅ URL do redirecionador (consistente)
+            'user_data': user_data,  # ✅ Agora com external_id hashado corretamente + fbp + fbc
             'custom_data': {
                 'pool_id': pool.id,
                 'pool_name': pool.name,
@@ -6466,18 +6544,61 @@ def send_meta_pixel_purchase_event(payment):
             external_id_value = payment.customer_user_id
             logger.warning(f"⚠️ Meta Purchase - Usando customer_user_id como external_id (fallback): {external_id_value}")
         
+        # ✅ PASSO 3: RECUPERAR _fbp e _fbc DO REDIS (MESMOS DADOS DO PAGEVIEW!)
+        # Prioridade: Redis (usando fbclid) > bot_user > None
+        fbp_value = None
+        fbc_value = None
+        ip_value = bot_user.ip_address if bot_user and bot_user.ip_address else None
+        user_agent_value = bot_user.user_agent if bot_user and bot_user.user_agent else None
+        
+        # ✅ CRÍTICO: Buscar no Redis usando fbclid (mesmos dados do PageView)
+        if external_id_value:
+            try:
+                import redis
+                r = redis.Redis(host='localhost', port=6379, decode_responses=True)
+                
+                # Tentar buscar usando fbclid completo
+                tracking_key = f'tracking:{external_id_value}'
+                tracking_json = r.get(tracking_key)
+                
+                if tracking_json:
+                    tracking_data_redis = json.loads(tracking_json)
+                    fbp_value = tracking_data_redis.get('fbp', '')
+                    fbc_value = tracking_data_redis.get('fbc', '')
+                    
+                    # ✅ CRÍTICO: Usar MESMOS IP e User Agent do PageView (se disponíveis)
+                    if not ip_value and tracking_data_redis.get('ip'):
+                        ip_value = tracking_data_redis.get('ip')
+                    if not user_agent_value and tracking_data_redis.get('user_agent'):
+                        user_agent_value = tracking_data_redis.get('user_agent')
+                    
+                    logger.info(f"🔑 Purchase - Dados recuperados do Redis: fbp={'✅' if fbp_value else '❌'} | fbc={'✅' if fbc_value else '❌'} | IP={'✅' if ip_value else '❌'} | UA={'✅' if user_agent_value else '❌'}")
+                else:
+                    logger.warning(f"⚠️ Purchase - Tracking data não encontrado no Redis para fbclid: {external_id_value[:30]}...")
+            except Exception as e:
+                logger.warning(f"⚠️ Erro ao recuperar fbp/fbc do Redis no Purchase: {e}")
+        
+        # ✅ GERAR _fbc se não existir mas tiver fbclid
+        if not fbc_value and external_id_value and external_id_value.startswith('PAZ'):
+            try:
+                import time
+                fbc_value = f"fb.1.{int(time.time())}.{external_id_value}"
+                logger.info(f"🔑 _fbc gerado manualmente no Purchase: {fbc_value[:50]}...")
+            except Exception as e:
+                logger.warning(f"⚠️ Erro ao gerar _fbc no Purchase: {e}")
+        
         # Construir user_data usando função correta (faz hash SHA256)
         # ✅ CRÍTICO: external_id (fbclid) DEVE ser o primeiro/principal para matching com PageView
-        # O customer_user_id (telegram_user_id) pode ser adicionado, mas fbclid é prioritário
+        # ✅ CRÍTICO: Usar MESMOS dados do PageView (fbp, fbc, IP, User Agent)
         user_data = MetaPixelAPI._build_user_data(
             customer_user_id=None,  # ✅ NÃO adicionar telegram_user_id aqui - pode confundir matching
             external_id=external_id_value,  # ✅ fbclid é o external_id principal (matching com PageView)
             email=bot_user.email if bot_user and bot_user.email else None,
             phone=bot_user.phone if bot_user and bot_user.phone else None,
-            client_ip=bot_user.ip_address if bot_user and bot_user.ip_address else None,
-            client_user_agent=bot_user.user_agent if bot_user and bot_user.user_agent else None,
-            fbp=None,  # TODO: Adicionar fbp se disponível (cookie do Meta)
-            fbc=None   # TODO: Adicionar fbc se disponível (cookie do Meta)
+            client_ip=ip_value,  # ✅ MESMO IP do PageView
+            client_user_agent=user_agent_value,  # ✅ MESMO User Agent do PageView
+            fbp=fbp_value,  # ✅ MESMO _fbp do PageView (do Redis)
+            fbc=fbc_value  # ✅ MESMO _fbc do PageView (do Redis ou gerado)
         )
         
         # ✅ CRÍTICO: Se ainda não tem external_id, adicionar telegram_user_id como fallback
@@ -6491,13 +6612,26 @@ def send_meta_pixel_purchase_event(payment):
             user_data['external_id'] = [MetaPixelAPI._hash_data(fallback_external_id)]
             logger.warning(f"⚠️ External ID não encontrado, usando fallback: {fallback_external_id}")
         
-        # ✅ LOG CRÍTICO: Mostrar dados enviados para matching
+        # ✅ LOG CRÍTICO: Mostrar dados enviados para matching (quantidade de atributos)
         external_ids = user_data.get('external_id', [])
-        logger.info(f"🔍 Meta Purchase - User Data: external_id={len(external_ids)} item(s) [{external_ids[0][:16] if external_ids else 'N/A'}...], " +
-                   f"email={bool(user_data.get('em'))}, " +
-                   f"phone={bool(user_data.get('ph'))}, " +
-                   f"ip={bool(user_data.get('client_ip_address'))}, " +
-                   f"user_agent={bool(user_data.get('client_user_agent'))}")
+        attributes_count = sum([
+            1 if external_ids else 0,
+            1 if user_data.get('em') else 0,
+            1 if user_data.get('ph') else 0,
+            1 if user_data.get('client_ip_address') else 0,
+            1 if user_data.get('client_user_agent') else 0,
+            1 if user_data.get('fbp') else 0,
+            1 if user_data.get('fbc') else 0
+        ])
+        
+        logger.info(f"🔍 Meta Purchase - User Data: {attributes_count}/7 atributos | " +
+                   f"external_id={'✅' if external_ids else '❌'} [{external_ids[0][:16] if external_ids else 'N/A'}...] | " +
+                   f"fbp={'✅' if user_data.get('fbp') else '❌'} | " +
+                   f"fbc={'✅' if user_data.get('fbc') else '❌'} | " +
+                   f"email={'✅' if user_data.get('em') else '❌'} | " +
+                   f"phone={'✅' if user_data.get('ph') else '❌'} | " +
+                   f"ip={'✅' if user_data.get('client_ip_address') else '❌'} | " +
+                   f"ua={'✅' if user_data.get('client_user_agent') else '❌'}")
         
         # Construir custom_data
         custom_data = {

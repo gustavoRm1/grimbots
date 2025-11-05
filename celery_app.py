@@ -170,8 +170,15 @@ def send_meta_event(self, pixel_id, access_token, event_data, test_code=None):
     try:
         start = time.time()
         
-        # ✅ LOG CRÍTICO: Mostrar payload completo antes de enviar (para debug)
-        logger.debug(f"📤 Meta Event Payload: {json.dumps(payload, indent=2, ensure_ascii=False)}")
+        # ✅ LOG CRÍTICO: Mostrar payload completo ANTES de enviar (AUDITORIA)
+        # Formatar para fácil leitura
+        payload_formatted = json.dumps(payload, indent=2, ensure_ascii=False)
+        logger.info(f"📤 META PAYLOAD COMPLETO ({event_data.get('event_name')}):\n{payload_formatted}")
+        
+        # ✅ LOG CRÍTICO: Mostrar user_data separadamente para análise
+        user_data = event_data.get('user_data', {})
+        user_data_formatted = json.dumps(user_data, indent=2, ensure_ascii=False)
+        logger.info(f"👤 USER_DATA ({event_data.get('event_name')}):\n{user_data_formatted}")
         
         response = requests.post(url, json=payload, timeout=10)
         
@@ -186,8 +193,9 @@ def send_meta_event(self, pixel_id, access_token, event_data, test_code=None):
                        f"Latency: {latency}ms | " +
                        f"EventsReceived: {result.get('events_received', 0)}")
             
-            # ✅ LOG CRÍTICO: Mostrar resposta completa (para debug)
-            logger.debug(f"📥 Meta Event Response: {json.dumps(result, indent=2, ensure_ascii=False)}")
+            # ✅ LOG CRÍTICO: Mostrar resposta completa (AUDITORIA)
+            response_formatted = json.dumps(result, indent=2, ensure_ascii=False)
+            logger.info(f"📥 META RESPONSE ({event_data.get('event_name')}):\n{response_formatted}")
             
             return result
         
