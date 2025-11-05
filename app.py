@@ -3571,7 +3571,7 @@ def public_redirect(slug):
     - ✅ META PIXEL: PageView tracking
     """
     from datetime import datetime
-    import time
+    # time já está importado no topo do arquivo
     
     start_time = time.time()
     
@@ -3663,7 +3663,7 @@ def public_redirect(slug):
     # Formato: fb.{version}.{timestamp}.{fbclid}
     if not fbc_cookie and fbclid:
         try:
-            import time
+            # time já está importado no topo do arquivo
             # Formato: fb.1.{timestamp}.{fbclid}
             fbc_cookie = f"fb.1.{int(time.time())}.{fbclid}"
             logger.info(f"🔑 _fbc gerado manualmente: {fbc_cookie[:50]}...")
@@ -6232,7 +6232,7 @@ def send_meta_pixel_pageview_event(pool, request):
         # Importar helpers
         from utils.meta_pixel import MetaPixelHelper
         from utils.encryption import decrypt
-        import time
+        # time já está importado no topo do arquivo
         
         # ✅ CORREÇÃO CRÍTICA: fbclid É o external_id para matching no Meta!
         # O fbclid identifica o clique/anúncio específico e é usado para fazer matching entre PageView e Purchase
@@ -6295,7 +6295,7 @@ def send_meta_pixel_pageview_event(pool, request):
         # ✅ GERAR _fbc se não existir mas tiver fbclid
         if not fbc_value and external_id and external_id.startswith('PAZ'):
             try:
-                import time
+                # time já está importado no topo do arquivo
                 fbc_value = f"fb.1.{int(time.time())}.{external_id}"
                 logger.info(f"🔑 _fbc gerado manualmente no PageView: {fbc_value[:50]}...")
             except Exception as e:
@@ -6581,7 +6581,7 @@ def send_meta_pixel_purchase_event(payment):
         # ✅ GERAR _fbc se não existir mas tiver fbclid
         if not fbc_value and external_id_value and external_id_value.startswith('PAZ'):
             try:
-                import time
+                # time já está importado no topo do arquivo
                 fbc_value = f"fb.1.{int(time.time())}.{external_id_value}"
                 logger.info(f"🔑 _fbc gerado manualmente no Purchase: {fbc_value[:50]}...")
             except Exception as e:
@@ -6608,6 +6608,7 @@ def send_meta_pixel_purchase_event(payment):
             logger.warning(f"⚠️ External ID (fbclid) não encontrado, usando telegram_user_id como fallback: {telegram_user_id}")
         elif not user_data.get('external_id'):
             # Último recurso: criar um baseado no payment_id
+            # time já está importado no topo do arquivo
             fallback_external_id = f'purchase_{payment.payment_id}_{int(time.time())}'
             user_data['external_id'] = [MetaPixelAPI._hash_data(fallback_external_id)]
             logger.warning(f"⚠️ External ID não encontrado, usando fallback: {fallback_external_id}")

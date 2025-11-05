@@ -60,28 +60,57 @@ with app.app_context():
     print(f"  ✅ Já enviadas: {sent_count}")
     print(f"  ❌ Não enviadas: {not_sent_count}")
     
+    # ✅ FILTRAR: Só reenviar vendas que realmente precisam
+    # 1. Não foram enviadas OU
+    # 2. Foram enviadas mas não têm fbclid/campaign_code (precisam correção)
+    payments_to_resend = []
+    for p in payments_today:
+        needs_resend = False
+        
+        # Não foi enviada
+        if not p.meta_purchase_sent:
+            needs_resend = True
+        # Foi enviada mas não tem dados críticos (precisa correção)
+        elif not p.fbclid or not p.campaign_code:
+            needs_resend = True
+        
+        if needs_resend:
+            payments_to_resend.append(p)
+    
+    print(f"\n📊 VENDAS QUE PRECISAM SER REENVIADAS: {len(payments_to_resend)}")
+    print(f"   - Não enviadas: {sum(1 for p in payments_to_resend if not p.meta_purchase_sent)}")
+    print(f"   - Enviadas sem dados: {sum(1 for p in payments_to_resend if p.meta_purchase_sent and (not p.fbclid or not p.campaign_code))}")
+    
+    if not payments_to_resend:
+        print("\n✅ Todas as vendas já foram enviadas corretamente!")
+        print("   Não há necessidade de reenvio.")
+        exit(0)
+    
     # Mostrar preview
-    print("\n📋 PREVIEW (primeiras 10 vendas):")
-    for i, p in enumerate(payments_today[:10], 1):
+    print("\n📋 PREVIEW (primeiras 10 vendas que serão reenviadas):")
+    for i, p in enumerate(payments_to_resend[:10], 1):
+        reason = "Não enviada" if not p.meta_purchase_sent else "Sem dados críticos"
         print(f"  {i}. {p.payment_id} | R$ {p.amount:.2f} | "
               f"fbclid={'✅' if p.fbclid else '❌'} | "
               f"campaign_code={p.campaign_code or 'N/A'} | "
-              f"meta_sent={p.meta_purchase_sent}")
+              f"Razão: {reason}")
     
-    if len(payments_today) > 10:
-        print(f"  ... e mais {len(payments_today) - 10} vendas")
+    if len(payments_to_resend) > 10:
+        print(f"  ... e mais {len(payments_to_resend) - 10} vendas")
     
     # Confirmar
     print("\n" + "=" * 80)
-    print(f"⚠️ ATENÇÃO: Este script vai reenviar TODAS as {len(payments_today)} vendas de hoje.")
-    print(f"   Os eventos serão enviados com:")
+    print(f"⚠️ ATENÇÃO: Este script vai reenviar {len(payments_to_resend)} vendas de hoje.")
+    print(f"   (De {len(payments_today)} vendas totais, {len(payments_today) - len(payments_to_resend)} já estão corretas)")
+    print(f"\n   Os eventos serão enviados com:")
     print(f"   ✅ external_id (fbclid hashado)")
     print(f"   ✅ fbp e fbc (do Redis)")
     print(f"   ✅ IP e User Agent (mesmos do PageView)")
     print(f"   ✅ campaign_code (grim)")
     print(f"   ✅ UTMs")
+    print("\n   ⚠️  NOTA: Vendas já enviadas com dados corretos NÃO serão reenviadas")
     print("=" * 80)
-    response = input(f"\n⚠️ Deseja reenviar {len(payments_today)} eventos Purchase? (s/N): ")
+    response = input(f"\n⚠️ Deseja reenviar {len(payments_to_resend)} eventos Purchase? (s/N): ")
     
     if response.lower() != 's':
         print("\n❌ Operação cancelada pelo usuário.")
@@ -108,8 +137,8 @@ with app.app_context():
         print(f"⚠️ Redis não disponível: {e}")
         print("   Alguns dados (fbp, fbc, IP, UA) podem não estar disponíveis")
     
-    for i, payment in enumerate(payments_today, 1):
-        print(f"\n[{i}/{len(payments_today)}] Payment {payment.payment_id}")
+    for i, payment in enumerate(payments_to_resend, 1):
+        print(f"\n[{i}/{len(payments_to_resend)}] Payment {payment.payment_id}")
         print(f"  💰 R$ {payment.amount:.2f}")
         print(f"  📅 Criado: {payment.created_at.strftime('%d/%m/%Y %H:%M:%S')}")
         print(f"  🎯 campaign_code: {payment.campaign_code or 'N/A'}")
@@ -168,9 +197,12 @@ with app.app_context():
     print("\n" + "=" * 80)
     print("📊 RESUMO FINAL")
     print("=" * 80)
-    print(f"  ✅ Sucesso: {success_count}/{len(payments_today)}")
-    print(f"  ⚠️  Ignorados: {skipped_count}/{len(payments_today)}")
-    print(f"  ❌ Erros: {error_count}/{len(payments_today)}")
+    print(f"  📊 Total de vendas hoje: {len(payments_today)}")
+    print(f"  🔄 Vendas reenviadas: {len(payments_to_resend)}")
+    print(f"  ✅ Sucesso: {success_count}/{len(payments_to_resend)}")
+    print(f"  ⚠️  Ignorados: {skipped_count}/{len(payments_to_resend)}")
+    print(f"  ❌ Erros: {error_count}/{len(payments_to_resend)}")
+    print(f"  ✅ Já estavam corretas: {len(payments_today) - len(payments_to_resend)}")
     print("=" * 80)
     
     print("\n💡 PRÓXIMOS PASSOS:")
