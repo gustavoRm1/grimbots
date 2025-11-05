@@ -3650,42 +3650,54 @@ def public_redirect(slug):
     fbclid = request.args.get('fbclid', '')
     session_id = str(uuid.uuid4())
     
-    # Salvar em Redis (TTL 180s = 3 min)
-    if fbclid:
-        try:
-            r = redis.Redis(host='localhost', port=6379, decode_responses=True)
-            tracking_data = {
-                'ip': user_ip,
-                'user_agent': user_agent,
-                'fbclid': fbclid,
-                'session_id': session_id,
-                'timestamp': datetime.now().isoformat(),
-                'pool_id': pool.id,
-                'slug': slug,
-                # ✅ CORREÇÃO CRÍTICA: Capturar `grim` para matching com campanha
-                'grim': request.args.get('grim', ''),
-                # Capturar TODOS os UTMs
-                'utm_source': request.args.get('utm_source', ''),
-                'utm_campaign': request.args.get('utm_campaign', ''),
-                'utm_medium': request.args.get('utm_medium', ''),
-                'utm_content': request.args.get('utm_content', ''),
-                'utm_term': request.args.get('utm_term', ''),
-                'utm_id': request.args.get('utm_id', ''),
-                # ✅ NOVO: Dados adicionais para analytics (QI 502)
-                'referer': request.headers.get('Referer', ''),
-                'accept_language': request.headers.get('Accept-Language', ''),
-                'adset_id': request.args.get('adset_id', ''),
-                'ad_id': request.args.get('ad_id', ''),
-                'campaign_id': request.args.get('campaign_id', '')
-            }
-            
-            # Salvar com TTL de 180 segundos
-            import json
+    # ✅ CRÍTICO: Salvar tracking no Redis SEMPRE (TTL 180s = 3 min)
+    # Mesmo sem fbclid, salvar usando grim ou session_id como chave
+    grim_param = request.args.get('grim', '')
+    import json
+    try:
+        r = redis.Redis(host='localhost', port=6379, decode_responses=True)
+        tracking_data = {
+            'ip': user_ip,
+            'user_agent': user_agent,
+            'session_id': session_id,
+            'timestamp': datetime.now().isoformat(),
+            'pool_id': pool.id,
+            'slug': slug,
+            # ✅ CORREÇÃO CRÍTICA: Capturar `grim` para matching com campanha
+            'grim': grim_param,
+            # Capturar TODOS os UTMs
+            'utm_source': request.args.get('utm_source', ''),
+            'utm_campaign': request.args.get('utm_campaign', ''),
+            'utm_medium': request.args.get('utm_medium', ''),
+            'utm_content': request.args.get('utm_content', ''),
+            'utm_term': request.args.get('utm_term', ''),
+            'utm_id': request.args.get('utm_id', ''),
+            # ✅ NOVO: Dados adicionais para analytics (QI 502)
+            'referer': request.headers.get('Referer', ''),
+            'accept_language': request.headers.get('Accept-Language', ''),
+            'adset_id': request.args.get('adset_id', ''),
+            'ad_id': request.args.get('ad_id', ''),
+            'campaign_id': request.args.get('campaign_id', '')
+        }
+        
+        # Se tem fbclid, adicionar e usar como chave principal
+        if fbclid:
+            tracking_data['fbclid'] = fbclid
             r.setex(f'tracking:{fbclid}', 180, json.dumps(tracking_data))
             logger.info(f"🎯 TRACKING ELITE | fbclid={fbclid[:20]}... | IP={user_ip} | Session={session_id[:8]}...")
-        except Exception as e:
-            logger.error(f"⚠️ Erro ao salvar tracking no Redis: {e}")
-            # Não quebrar o redirect se Redis falhar
+        
+        # ✅ CRÍTICO: Se tem grim mas não tem fbclid, salvar também usando grim como chave
+        if grim_param and not fbclid:
+            r.setex(f'tracking_grim:{grim_param}', 180, json.dumps(tracking_data))
+            logger.info(f"🎯 TRACKING ELITE | grim={grim_param} | IP={user_ip} | Session={session_id[:8]}...")
+        
+        # ✅ Se não tem nem fbclid nem grim, usar session_id como chave (fallback)
+        if not fbclid and not grim_param:
+            r.setex(f'tracking_session:{session_id}', 180, json.dumps(tracking_data))
+            logger.info(f"🎯 TRACKING ELITE | session={session_id[:8]}... | IP={user_ip}")
+    except Exception as e:
+        logger.error(f"⚠️ Erro ao salvar tracking no Redis: {e}")
+        # Não quebrar o redirect se Redis falhar
     
     # ============================================================================
     # ✅ META PIXEL: PAGEVIEW TRACKING + UTM CAPTURE (NÍVEL DE POOL)
@@ -3721,12 +3733,14 @@ def public_redirect(slug):
     
     # Construir payload de tracking (MÍNIMO - só pool e hash!)
     # UTMs já estão no Redis, não precisa repetir no start_param
+    grim_param = request.args.get('grim', '')
+    fbclid_param = request.args.get('fbclid', '')
+    
     tracking_data = {
         'p': pool.id,  # pool_id
     }
     
-    # 🎯 TRACKING ELITE: Usar HASH do fbclid (fbclid completo é muito longo!)
-    fbclid_param = request.args.get('fbclid', '')
+    # 🎯 TRACKING ELITE: Priorizar fbclid, fallback para grim
     if fbclid_param:
         # Gerar hash curto do fbclid (12 chars)
         import hashlib
@@ -3740,6 +3754,18 @@ def public_redirect(slug):
             logger.info(f"🔑 HASH: {fbclid_hash} → fbclid completo (salvo)")
         except Exception as e:
             logger.error(f"Erro ao salvar hash no Redis: {e}")
+    elif grim_param:
+        # ✅ CRÍTICO: Se não tem fbclid mas tem grim, incluir grim no tracking
+        # Limitar tamanho do grim para caber no Telegram deep link (64 chars)
+        if len(grim_param) <= 20:  # Grim curto, pode incluir
+            tracking_data['g'] = grim_param  # 'g' = grim
+            logger.info(f"🔑 GRIM: {grim_param} incluído no tracking param")
+        else:
+            # Grim muito longo, usar hash
+            import hashlib
+            grim_hash = hashlib.sha256(grim_param.encode()).hexdigest()[:12]
+            tracking_data['g'] = grim_hash
+            logger.info(f"🔑 GRIM HASH: {grim_hash} → grim completo (salvo no Redis)")
     
     # ✅ NÃO incluir UTMs no start_param - economiza espaço e já estão no Redis!
     
