@@ -6348,9 +6348,14 @@ def send_meta_pixel_purchase_event(payment):
             return
         
         # ✅ VERIFICAÇÃO 4: Já enviou este pagamento? (ANTI-DUPLICAÇÃO)
+        # ✅ CORREÇÃO: Permitir reenvio se forçado (force_resend=True via função auxiliar)
         logger.info(f"🔍 DEBUG Meta Pixel Purchase - Já enviado: {payment.meta_purchase_sent}")
         if payment.meta_purchase_sent:
+            # Verificar se é um reenvio forçado (via flag temporária ou função auxiliar)
+            # Por padrão, não reenvia para evitar duplicação
+            # Mas se flag foi resetada explicitamente, permite reenvio
             logger.info(f"⚠️ Purchase já enviado ao Meta, ignorando: {payment.payment_id}")
+            logger.info(f"   💡 Para reenviar, resetar flag meta_purchase_sent antes de chamar esta função")
             return
         
         logger.info(f"📊 Preparando envio Meta Purchase: {payment.payment_id} | Pool: {pool.name}")
