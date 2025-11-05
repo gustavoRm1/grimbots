@@ -1151,7 +1151,9 @@ class BotManager:
                                     utm_data_from_start['fbclid'] = fbclid_hash
                             
                             logger.info(f"🔗 Tracking decodificado (V3): pool_id={pool_id_from_start}, " +
-                                       f"external_id={external_id_from_start}, utm_source={utm_data_from_start.get('utm_source')}")
+                                       f"external_id={external_id_from_start}, " +
+                                       f"fbclid={'✅' if utm_data_from_start.get('fbclid') else '❌'}, " +
+                                       f"utm_source={utm_data_from_start.get('utm_source')}")
                         
                         except Exception as e:
                             logger.error(f"Erro ao decodificar tracking V3: {e}")
@@ -1358,33 +1360,89 @@ class BotManager:
                     if utm_data_from_start.get('fbclid') and not bot_user.fbclid:
                         bot_user.fbclid = utm_data_from_start['fbclid']
                     
-                    # ✅ CRÍTICO: Buscar grim do Redis se não tiver external_id ainda
-                    if not bot_user.external_id and utm_data_from_start.get('fbclid'):
+                    # ✅ CRÍTICO QI 600+: Buscar fbclid e grim do Redis (mesma lógica de usuários novos)
+                    fbclid_from_start = utm_data_from_start.get('fbclid')
+                    if fbclid_from_start:
                         try:
                             import redis
+                            import json
                             r = redis.Redis(host='localhost', port=6379, decode_responses=True)
                             
-                            # Tentar buscar tracking_elite pelo fbclid
-                            fbclid_value = utm_data_from_start['fbclid']
-                            tracking_key = f"tracking_elite:{fbclid_value}"
-                            tracking_data = r.hgetall(tracking_key)
+                            # fbclid pode ser hash ou completo, tentar ambos
+                            fbclid_value = fbclid_from_start
+                            tracking_key = f"tracking:{fbclid_value}"
+                            tracking_json = r.get(tracking_key)
                             
-                            if tracking_data and tracking_data.get('grim'):
-                                bot_user.external_id = tracking_data.get('grim')
-                                logger.info(f"✅ external_id recuperado do Redis (usuário existente): {bot_user.external_id}")
-                            
-                            # Se não encontrou, tentar buscar por hash
-                            if not bot_user.external_id and len(fbclid_value) <= 12:
+                            # Se não encontrou, pode ser que fbclid seja um hash, buscar o completo
+                            if not tracking_json and len(fbclid_value) <= 12:
+                                # É um hash, buscar fbclid completo
                                 fbclid_completo = r.get(f'tracking_hash:{fbclid_value}')
                                 if fbclid_completo:
-                                    tracking_key = f"tracking_elite:{fbclid_completo}"
-                                    tracking_data = r.hgetall(tracking_key)
-                                    if tracking_data and tracking_data.get('grim'):
-                                        bot_user.external_id = tracking_data.get('grim')
-                                        bot_user.fbclid = fbclid_completo
-                                        logger.info(f"✅ external_id recuperado do Redis (via hash): {bot_user.external_id}")
+                                    tracking_key = f"tracking:{fbclid_completo}"
+                                    tracking_json = r.get(tracking_key)
+                                    logger.info(f"🔑 Usado hash {fbclid_value} para encontrar tracking completo")
+                            
+                            if tracking_json:
+                                tracking_elite = json.loads(tracking_json)
+                                
+                                # ✅ CORREÇÃO CRÍTICA QI 600+: fbclid como external_id (matching Meta)
+                                # grim como campaign_code (atribuição de campanha)
+                                grim_from_redis = tracking_elite.get('grim', '')
+                                fbclid_completo_redis = tracking_elite.get('fbclid')
+                                
+                                if fbclid_completo_redis:
+                                    # ✅ PRIORIDADE MÁXIMA: fbclid como external_id (matching Meta)
+                                    fbclid_updated = False
+                                    external_id_updated = False
+                                    
+                                    if not bot_user.fbclid:
+                                        bot_user.fbclid = fbclid_completo_redis
+                                        fbclid_updated = True
+                                    if not bot_user.external_id:
+                                        bot_user.external_id = fbclid_completo_redis
+                                        external_id_updated = True
+                                    
+                                    logger.info(f"🎯 external_id = fbclid (matching Meta): {fbclid_completo_redis[:30]}... | " +
+                                               f"fbclid={'✅ ATUALIZADO' if fbclid_updated else '✅ JÁ EXISTIA'} | " +
+                                               f"external_id={'✅ ATUALIZADO' if external_id_updated else '✅ JÁ EXISTIA'}")
+                                    
+                                    # Salvar grim como campaign_code (atribuição de campanha)
+                                    if grim_from_redis and not bot_user.campaign_code:
+                                        bot_user.campaign_code = grim_from_redis
+                                        logger.info(f"🎯 campaign_code = grim (campanha): {grim_from_redis} ✅ ATUALIZADO")
+                                    elif grim_from_redis:
+                                        logger.info(f"🎯 campaign_code já existe: {bot_user.campaign_code} (não sobrescrever com grim: {grim_from_redis})")
+                                elif grim_from_redis:
+                                    # Fallback: se só tiver grim (sem fbclid), usar grim como external_id
+                                    if not bot_user.external_id:
+                                        bot_user.external_id = grim_from_redis
+                                    if not bot_user.campaign_code:
+                                        bot_user.campaign_code = grim_from_redis
+                                    logger.warning(f"⚠️ Sem fbclid, usando grim como external_id: {grim_from_redis}")
+                                
+                                # Enriquecer UTMs com dados do Redis (podem ter sido perdidos no start_param)
+                                if not bot_user.utm_source and tracking_elite.get('utm_source'):
+                                    bot_user.utm_source = tracking_elite['utm_source']
+                                if not bot_user.utm_campaign and tracking_elite.get('utm_campaign'):
+                                    bot_user.utm_campaign = tracking_elite['utm_campaign']
+                                if not bot_user.utm_medium:
+                                    bot_user.utm_medium = tracking_elite.get('utm_medium')
+                                if not bot_user.utm_content:
+                                    bot_user.utm_content = tracking_elite.get('utm_content')
+                                if not bot_user.utm_term:
+                                    bot_user.utm_term = tracking_elite.get('utm_term')
+                                
+                                logger.info(f"🎯 TRACKING ELITE | Dados atualizados para usuário existente | " +
+                                           f"fbclid={'✅' if bot_user.fbclid else '❌'} | " +
+                                           f"campaign_code={'✅' if bot_user.campaign_code else '❌'}")
+                                
+                                # Deletar do Redis após usar (não deixar lixo)
+                                r.delete(tracking_key)
+                            else:
+                                logger.warning(f"⚠️ TRACKING ELITE | fbclid={fbclid_value[:20]}... não encontrado no Redis (expirou?)")
                         except Exception as redis_error:
-                            logger.warning(f"⚠️ Erro ao buscar Redis para usuário existente: {redis_error}")
+                            logger.error(f"❌ TRACKING ELITE | Erro ao buscar Redis para usuário existente: {redis_error}")
+                            # Não quebrar o fluxo se Redis falhar
                     
                     # ✅ CORREÇÃO: Sempre enviar boas-vindas quando /start for digitado
                     logger.info(f"👤 Usuário retornou: {first_name} (@{username}) - external_id={bot_user.external_id or 'N/A'}")
