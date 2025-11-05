@@ -1859,11 +1859,34 @@ def get_remarketing_campaigns(bot_id):
 @login_required
 @csrf.exempt
 def create_remarketing_campaign(bot_id):
-    """Cria nova campanha de remarketing"""
+    """✅ V2.0: Cria nova campanha de remarketing com suporte a agendamento"""
     bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
     
     data = request.json
     from models import RemarketingCampaign
+    from datetime import datetime
+    
+    # ✅ V2.0: Processar scheduled_at se fornecido
+    scheduled_at = None
+    status = 'draft'  # Padrão: rascunho
+    
+    if data.get('scheduled_at'):
+        try:
+            # Converter string ISO para datetime
+            scheduled_at_str = data.get('scheduled_at')
+            scheduled_at = datetime.fromisoformat(scheduled_at_str.replace('Z', '+00:00'))
+            
+            # Validar se data está no futuro
+            now = datetime.now()
+            if scheduled_at <= now:
+                return jsonify({'error': 'A data e hora devem ser no futuro'}), 400
+            
+            # Se agendado, status será 'scheduled'
+            status = 'scheduled'
+            logger.info(f"📅 Campanha agendada para: {scheduled_at}")
+        except Exception as e:
+            logger.error(f"❌ Erro ao processar scheduled_at: {e}")
+            return jsonify({'error': f'Data/hora inválida: {str(e)}'}), 400
     
     campaign = RemarketingCampaign(
         bot_id=bot_id,
@@ -1877,13 +1900,18 @@ def create_remarketing_campaign(bot_id):
         target_audience=data.get('target_audience', 'non_buyers'),
         days_since_last_contact=data.get('days_since_last_contact', 3),
         exclude_buyers=data.get('exclude_buyers', True),
-        cooldown_hours=data.get('cooldown_hours', 24)
+        cooldown_hours=data.get('cooldown_hours', 24),
+        scheduled_at=scheduled_at,  # ✅ V2.0
+        status=status  # ✅ V2.0: 'draft' ou 'scheduled'
     )
     
     db.session.add(campaign)
     db.session.commit()
     
-    logger.info(f"📢 Campanha de remarketing criada: {campaign.name} (Bot {bot.name})")
+    if status == 'scheduled':
+        logger.info(f"📅 Campanha de remarketing agendada: {campaign.name} para {scheduled_at} (Bot {bot.name})")
+    else:
+        logger.info(f"📢 Campanha de remarketing criada: {campaign.name} (Bot {bot.name})")
     
     return jsonify(campaign.to_dict()), 201
 
@@ -7395,6 +7423,67 @@ scheduler.add_job(
     seconds=15,
     replace_existing=True
 )
+
+# ✅ V2.0: Verificar e executar campanhas de remarketing agendadas
+def check_scheduled_remarketing_campaigns():
+    """
+    Verifica campanhas agendadas e inicia envio quando chegar a hora
+    Executado a cada 1 minuto via APScheduler
+    """
+    from models import RemarketingCampaign
+    from datetime import datetime
+    
+    try:
+        now = datetime.now()
+        
+        # Buscar campanhas agendadas que já passaram da hora
+        scheduled_campaigns = RemarketingCampaign.query.filter(
+            RemarketingCampaign.status == 'scheduled',
+            RemarketingCampaign.scheduled_at.isnot(None),
+            RemarketingCampaign.scheduled_at <= now
+        ).all()
+        
+        if scheduled_campaigns:
+            logger.info(f"📅 Encontradas {len(scheduled_campaigns)} campanha(s) agendada(s) para executar")
+        
+        for campaign in scheduled_campaigns:
+            try:
+                # Buscar bot e token
+                bot = Bot.query.get(campaign.bot_id)
+                if not bot or not bot.token:
+                    logger.error(f"❌ Bot {campaign.bot_id} não encontrado ou sem token para campanha {campaign.id}")
+                    campaign.status = 'failed'
+                    db.session.commit()
+                    continue
+                
+                logger.info(f"📤 Iniciando envio de campanha agendada: {campaign.name} (ID: {campaign.id})")
+                
+                # Iniciar envio em background
+                bot_manager.send_remarketing_campaign(campaign_id=campaign.id, bot_token=bot.token)
+                
+                logger.info(f"✅ Campanha agendada {campaign.id} iniciada com sucesso")
+                
+            except Exception as e:
+                logger.error(f"❌ Erro ao executar campanha agendada {campaign.id}: {e}", exc_info=True)
+                campaign.status = 'failed'
+                db.session.commit()
+    
+    except Exception as e:
+        logger.error(f"❌ Erro ao verificar campanhas agendadas: {e}", exc_info=True)
+
+# Agendar verificação de campanhas agendadas a cada 1 minuto
+try:
+    scheduler.add_job(
+        id='check_scheduled_remarketing',
+        func=check_scheduled_remarketing_campaigns,
+        trigger='interval',
+        minutes=1,  # Verificar a cada 1 minuto
+        replace_existing=True,
+        max_instances=1
+    )
+    logger.info("✅ Job de verificação de campanhas agendadas configurado (1 minuto)")
+except Exception as e:
+    logger.warning(f"⚠️ Não foi possível agendar verificação de campanhas: {e}")
 
 
 if __name__ == '__main__':

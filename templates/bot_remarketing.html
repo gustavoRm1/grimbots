@@ -88,7 +88,8 @@
                                       :class="{
                                           'bg-green-500 bg-opacity-40 text-green-300 border border-green-500': campaign.status === 'completed',
                                           'bg-yellow-500 bg-opacity-20 text-yellow-400 border border-yellow-500': campaign.status === 'sending',
-                                          'bg-blue-500 bg-opacity-20 text-blue-400 border border-blue-500': campaign.status === 'draft'
+                                          'bg-blue-500 bg-opacity-20 text-blue-400 border border-blue-500': campaign.status === 'draft',
+                                          'bg-purple-500 bg-opacity-20 text-purple-400 border border-purple-500': campaign.status === 'scheduled'
                                       }">
                                     <span x-text="getStatusLabel(campaign.status)"></span>
                                 </span>
@@ -128,6 +129,19 @@
                                 </div>
                             </template>
                             
+                            <!-- ✅ V2.0: Info de Agendamento -->
+                            <template x-if="campaign.status === 'scheduled' && campaign.scheduled_at">
+                                <div class="mb-4 p-3 bg-purple-500 bg-opacity-10 border border-purple-500 border-opacity-20 rounded-lg">
+                                    <div class="flex items-center gap-2">
+                                        <i class="fas fa-calendar-check text-purple-400"></i>
+                                        <span class="text-sm text-textPrimary">
+                                            <strong>Agendada para:</strong>
+                                            <span class="ml-2 font-bold text-purple-400" x-text="formatCampaignScheduledDate(campaign.scheduled_at)"></span>
+                                        </span>
+                                    </div>
+                                </div>
+                            </template>
+                            
                             <!-- Ações -->
                             <div class="flex gap-2">
                                 <template x-if="campaign.status === 'draft'">
@@ -135,6 +149,14 @@
                                             class="flex-1 inline-flex justify-center items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all">
                                         <i class="fas fa-paper-plane mr-2"></i>
                                         Enviar Agora
+                                    </button>
+                                </template>
+                                
+                                <template x-if="campaign.status === 'scheduled'">
+                                    <button @click="sendCampaign(campaign.id)"
+                                            class="flex-1 inline-flex justify-center items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-all">
+                                        <i class="fas fa-play mr-2"></i>
+                                        Executar Agora
                                     </button>
                                 </template>
                                 
@@ -381,6 +403,85 @@
                         </div>
                     </div>
 
+                    <!-- ✅ V2.0: Agendamento de Envio -->
+                    <div class="border-2 border-info-500 border-opacity-25 rounded-2xl p-6 bg-info-500 bg-opacity-8"
+                         style="box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);">
+                        <div class="flex items-center mb-5">
+                            <div class="flex items-center justify-center h-10 w-10 rounded-lg bg-info-500 bg-opacity-20 border border-info-500 border-opacity-30">
+                                <i class="fas fa-clock text-info-500 text-lg" style="filter: brightness(1.2);"></i>
+                            </div>
+                            <h3 class="ml-3 text-base font-bold text-textPrimary">Agendamento de Envio</h3>
+                        </div>
+                        
+                        <div class="space-y-4">
+                            <!-- Opção: Imediato ou Agendar -->
+                            <div>
+                                <label class="block text-sm font-medium text-textSecondary mb-3">Quando enviar:</label>
+                                <div class="grid grid-cols-2 gap-3">
+                                    <label class="flex items-center px-4 py-3.5 bg-bg900 border-2 rounded-xl cursor-pointer transition-all hover:border-opacity-40"
+                                           :class="{'border-info-500 border-opacity-40 bg-info-500 bg-opacity-8': newCampaign.send_mode === 'immediate', 'border-white border-opacity-10 hover:bg-bg800': newCampaign.send_mode !== 'immediate'}">
+                                        <input type="radio" x-model="newCampaign.send_mode" value="immediate"
+                                               class="form-radio text-info-500 h-4 w-4">
+                                        <div class="ml-3 flex-1">
+                                            <div class="flex items-center">
+                                                <i class="fas fa-bolt text-info-500 mr-2"></i>
+                                                <span class="text-sm font-semibold text-textPrimary">Enviar Imediato</span>
+                                            </div>
+                                            <p class="text-xs text-textSecondary mt-1">Enviar assim que a campanha for criada</p>
+                                        </div>
+                                    </label>
+                                    <label class="flex items-center px-4 py-3.5 bg-bg900 border-2 rounded-xl cursor-pointer transition-all hover:border-opacity-40"
+                                           :class="{'border-info-500 border-opacity-40 bg-info-500 bg-opacity-8': newCampaign.send_mode === 'scheduled', 'border-white border-opacity-10 hover:bg-bg800': newCampaign.send_mode !== 'scheduled'}">
+                                        <input type="radio" x-model="newCampaign.send_mode" value="scheduled"
+                                               class="form-radio text-info-500 h-4 w-4">
+                                        <div class="ml-3 flex-1">
+                                            <div class="flex items-center">
+                                                <i class="fas fa-calendar-alt text-info-500 mr-2"></i>
+                                                <span class="text-sm font-semibold text-textPrimary">Agendar</span>
+                                            </div>
+                                            <p class="text-xs text-textSecondary mt-1">Escolher data e hora específica</p>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Campos de Data e Hora (se agendado) -->
+                            <div x-show="newCampaign.send_mode === 'scheduled'" x-cloak class="space-y-3">
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="block text-xs font-semibold text-textSecondary mb-2 flex items-center">
+                                            <i class="fas fa-calendar text-info-500 mr-1.5 text-xs"></i>
+                                            Data
+                                        </label>
+                                        <input type="date" x-model="newCampaign.scheduled_date" 
+                                               :min="new Date().toISOString().split('T')[0]"
+                                               class="w-full px-4 py-3 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary focus:outline-none focus:border-info-500 focus:ring-2 focus:ring-info-500 focus:ring-opacity-20 transition-all">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-semibold text-textSecondary mb-2 flex items-center">
+                                            <i class="fas fa-clock text-info-500 mr-1.5 text-xs"></i>
+                                            Hora
+                                        </label>
+                                        <input type="time" x-model="newCampaign.scheduled_time" 
+                                               class="w-full px-4 py-3 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary focus:outline-none focus:border-info-500 focus:ring-2 focus:ring-info-500 focus:ring-opacity-20 transition-all">
+                                    </div>
+                                </div>
+                                
+                                <!-- Preview da Data/Hora -->
+                                <div x-show="newCampaign.scheduled_date && newCampaign.scheduled_time" 
+                                     class="p-3 bg-info-500 bg-opacity-10 border border-info-500 border-opacity-20 rounded-lg">
+                                    <div class="flex items-center gap-2">
+                                        <i class="fas fa-info-circle text-info-500"></i>
+                                        <span class="text-sm text-textPrimary">
+                                            <strong>Campanha agendada para:</strong>
+                                            <span class="ml-2 font-bold text-info-400" x-text="formatScheduledDateTime()"></span>
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Botões de Compra (Opcional) -->
                     <div class="space-y-4">
                         <div class="flex items-center justify-between">
@@ -493,18 +594,22 @@
                             Cancelar
                         </button>
                         
-                        <!-- Criar e Enviar -->
+                        <!-- Criar e Enviar/Agendar -->
                         <button type="submit" :disabled="loading || eligibleCount === 0"
                                 :class="{'opacity-50 cursor-not-allowed': loading || eligibleCount === 0}"
                                 class="col-span-3 inline-flex justify-center items-center py-3.5 px-6 border border-transparent rounded-xl text-sm font-bold text-black bg-gradient-to-r from-accent500 to-accent600 hover:from-accent400 hover:to-accent500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-surface600 focus:ring-accent500 transition-all transform hover:-translate-y-0.5 active:translate-y-0 disabled:transform-none"
                                 style="box-shadow: 0 8px 24px rgba(255, 186, 8, 0.3);">
-                            <span x-show="!loading" class="flex items-center">
+                            <span x-show="!loading && newCampaign.send_mode === 'immediate'" class="flex items-center">
                                 <i class="fas fa-paper-plane mr-2"></i>
                                 Criar e Enviar Campanha
                             </span>
+                            <span x-show="!loading && newCampaign.send_mode === 'scheduled'" class="flex items-center">
+                                <i class="fas fa-calendar-check mr-2"></i>
+                                Criar e Agendar Campanha
+                            </span>
                             <span x-show="loading" class="flex items-center">
                                 <i class="fas fa-spinner fa-spin mr-2"></i>
-                                Criando e Enviando...
+                                <span x-text="newCampaign.send_mode === 'immediate' ? 'Criando e Enviando...' : 'Criando e Agendando...'"></span>
                             </span>
                         </button>
                     </div>
@@ -604,7 +709,10 @@ function remarketingApp() {
             target_audience: 'non_buyers',
             days_since_last_contact: 3,
             exclude_buyers: true,
-            cooldown_hours: 24
+            cooldown_hours: 24,
+            send_mode: 'immediate',  // ✅ V2.0: 'immediate' ou 'scheduled'
+            scheduled_date: '',      // ✅ V2.0: Data no formato YYYY-MM-DD
+            scheduled_time: ''        // ✅ V2.0: Hora no formato HH:MM
         },
         
         init() {
@@ -672,12 +780,49 @@ function remarketingApp() {
                 return;
             }
             
+            // ✅ V2.0: Validação de agendamento
+            if (this.newCampaign.send_mode === 'scheduled') {
+                if (!this.newCampaign.scheduled_date || !this.newCampaign.scheduled_time) {
+                    alert('Preencha data e hora para agendar a campanha');
+                    return;
+                }
+                
+                // Validar se data/hora não é no passado
+                const scheduledDateTime = new Date(`${this.newCampaign.scheduled_date}T${this.newCampaign.scheduled_time}`);
+                const now = new Date();
+                if (scheduledDateTime <= now) {
+                    alert('A data e hora devem ser no futuro');
+                    return;
+                }
+            }
+            
+            // ✅ V2.0: Salvar modo de envio antes de modificar dados
+            const sendMode = this.newCampaign.send_mode;
+            
             this.loading = true;
             try {
+                // ✅ V2.0: Preparar dados para envio (incluir scheduled_at se agendado)
+                const campaignData = {...this.newCampaign};
+                
+                if (sendMode === 'scheduled') {
+                    // Combinar data e hora em ISO string
+                    campaignData.scheduled_at = `${this.newCampaign.scheduled_date}T${this.newCampaign.scheduled_time}:00`;
+                    // Remover campos auxiliares antes de enviar
+                    delete campaignData.send_mode;
+                    delete campaignData.scheduled_date;
+                    delete campaignData.scheduled_time;
+                } else {
+                    // Envio imediato: não enviar scheduled_at
+                    campaignData.scheduled_at = null;
+                    delete campaignData.send_mode;
+                    delete campaignData.scheduled_date;
+                    delete campaignData.scheduled_time;
+                }
+                
                 const response = await fetch(`/api/bots/{{ bot.id }}/remarketing/campaigns`, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify(this.newCampaign)
+                    body: JSON.stringify(campaignData)
                 });
                 
                 const campaign = await response.json();
@@ -686,8 +831,13 @@ function remarketingApp() {
                     // Adicionar na lista
                     this.campaigns.unshift(campaign);
                     
-                    // Enviar imediatamente
-                    await this.sendCampaign(campaign.id);
+                    // ✅ V2.0: Enviar imediatamente apenas se não for agendado
+                    if (sendMode === 'immediate') {
+                        await this.sendCampaign(campaign.id);
+                        this.showNotification('📤 Campanha criada e enviando...');
+                    } else {
+                        this.showNotification('📅 Campanha agendada com sucesso!');
+                    }
                     
                     // Fechar modal
                     this.showCreateModal = false;
@@ -753,14 +903,36 @@ function remarketingApp() {
                 target_audience: 'non_buyers',
                 days_since_last_contact: 3,
                 exclude_buyers: true,
-                cooldown_hours: 24
+                cooldown_hours: 24,
+                send_mode: 'immediate',  // ✅ V2.0
+                scheduled_date: '',      // ✅ V2.0
+                scheduled_time: ''        // ✅ V2.0
             };
             this.eligibleCount = 0;
+        },
+        
+        // ✅ V2.0: Formatar data/hora agendada para preview
+        formatScheduledDateTime() {
+            if (!this.newCampaign.scheduled_date || !this.newCampaign.scheduled_time) {
+                return '';
+            }
+            
+            const date = new Date(`${this.newCampaign.scheduled_date}T${this.newCampaign.scheduled_time}`);
+            const options = {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                timeZone: 'America/Sao_Paulo'
+            };
+            return date.toLocaleString('pt-BR', options);
         },
         
         getStatusLabel(status) {
             const labels = {
                 'draft': 'Rascunho',
+                'scheduled': 'Agendada',  // ✅ V2.0
                 'sending': 'Enviando...',
                 'completed': 'Concluída',
                 'paused': 'Pausada',
@@ -781,6 +953,24 @@ function remarketingApp() {
             if (!dateStr) return '-';
             const date = new Date(dateStr);
             return date.toLocaleString('pt-BR');
+        },
+        
+        // ✅ V2.0: Formatar data/hora agendada de campanha
+        formatCampaignScheduledDate(dateStr) {
+            if (!dateStr) return '-';
+            try {
+                const date = new Date(dateStr);
+                return date.toLocaleString('pt-BR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    timeZone: 'America/Sao_Paulo'
+                });
+            } catch (e) {
+                return dateStr;
+            }
         },
         
         showNotification(message) {
