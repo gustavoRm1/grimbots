@@ -4584,9 +4584,12 @@ def update_ranking_premium_rates():
             logger.info("="*70)
             
             # ========================================================================
-            # PASSO 1: Calcular ranking mensal (últimos 30 dias) por FATURAMENTO
+            # PASSO 1: Calcular ranking mensal (mês atual) por FATURAMENTO
             # ========================================================================
-            date_filter = datetime.now() - timedelta(days=30)
+            # ✅ CORREÇÃO CRÍTICA: Mês atual (do primeiro dia do mês até agora)
+            # Não usar timedelta(days=30) que é janela deslizante
+            now = datetime.now()
+            date_filter = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
             
             # ✅ VALIDAÇÃO: Verificar se há pagamentos no período
             total_payments = db.session.query(func.count(Payment.id))\
@@ -4594,7 +4597,7 @@ def update_ranking_premium_rates():
                 .scalar() or 0
             
             if total_payments == 0:
-                logger.warning("⚠️ Nenhum pagamento confirmado nos últimos 30 dias. Ranking não será atualizado.")
+                logger.warning("⚠️ Nenhum pagamento confirmado no mês atual. Ranking não será atualizado.")
                 return {
                     'success': True,
                     'updated_users': 0,
@@ -4870,14 +4873,18 @@ def ranking():
     # Filtro de período
     period = request.args.get('period', 'month')  # month (padrão) ou all
     
-    # Definir período
+    # ✅ CORREÇÃO: Definir período corretamente
     date_filter = None
     if period == 'today':
         date_filter = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     elif period == 'week':
+        # Últimos 7 dias
         date_filter = datetime.now() - timedelta(days=7)
     elif period == 'month':
-        date_filter = datetime.now() - timedelta(days=30)
+        # ✅ CORREÇÃO CRÍTICA: Mês atual (do primeiro dia do mês até agora)
+        # Não usar timedelta(days=30) que é janela deslizante
+        now = datetime.now()
+        date_filter = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     
     # ✅ RANKING V2.0: Ordenar por receita do período (faturamento)
     if period == 'all':
@@ -4890,9 +4897,8 @@ def ranking():
                                )
     else:
         # Ranking do período (mês/semana/hoje) - por receita no período
-        date_filter = datetime.now() - timedelta(days=30) if period == 'month' else \
-                     (datetime.now() - timedelta(days=7) if period == 'week' else 
-                      datetime.now().replace(hour=0, minute=0, second=0, microsecond=0))
+        # ✅ CORREÇÃO: Usar o mesmo date_filter já calculado acima (não recalcular)
+        # date_filter já está definido corretamente acima
         
         subquery = db.session.query(
             Bot.user_id,
