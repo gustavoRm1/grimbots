@@ -251,37 +251,150 @@ with app.app_context():
                 payment.fbclid = bot_user.fbclid
             
             # ============================================================
-            # MÉTODO 7: Buscar do Redis (última tentativa)
+            # MÉTODO 7: Buscar do Redis (BUSCA AMPLA E INTELIGENTE)
             # ============================================================
             if not payment.campaign_code:
-                print(f"  ⚠️ campaign_code ainda vazio. Tentando buscar do Redis...")
+                print(f"  ⚠️ campaign_code ainda vazio. Tentando buscar do Redis (busca ampla)...")
                 try:
                     import redis
                     redis_client = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
                     
-                    # Tentar buscar por fbclid
-                    if payment.fbclid:
-                        # Tentar hash curto primeiro
-                        fbclid_hash_short = payment.fbclid[:16] if len(payment.fbclid) > 16 else payment.fbclid
-                        redis_key = f"tracking_elite:{fbclid_hash_short}"
-                        tracking_data = redis_client.hgetall(redis_key)
-                        if tracking_data and tracking_data.get('grim'):
-                            payment.campaign_code = tracking_data.get('grim')
-                            print(f"  ✅ [MÉTODO 7] campaign_code encontrado no Redis (via fbclid_hash): {payment.campaign_code}")
+                    grim_found = None
                     
-                    # Se ainda não encontrou, tentar buscar por qualquer chave que contenha o fbclid
-                    if not payment.campaign_code and payment.fbclid:
-                        # Buscar todas as chaves que começam com "tracking_elite:"
-                        try:
-                            for key in redis_client.scan_iter(match="tracking_elite:*"):
+                    # ESTRATÉGIA 1: Buscar por fbclid (se tiver)
+                    if payment.fbclid:
+                        # Tentar diferentes formatos de chave
+                        possible_keys = [
+                            f"tracking:{payment.fbclid}",
+                            f"tracking_elite:{payment.fbclid}",
+                            f"tracking_elite:{payment.fbclid[:16]}",
+                            f"tracking_elite:{payment.fbclid[:12]}",
+                        ]
+                        
+                        for key in possible_keys:
+                            try:
+                                # Tentar como hash primeiro
                                 data = redis_client.hgetall(key)
-                                if data.get('fbclid') == payment.fbclid or payment.fbclid in data.get('fbclid', ''):
-                                    if data.get('grim'):
-                                        payment.campaign_code = data.get('grim')
-                                        print(f"  ✅ [MÉTODO 7] campaign_code encontrado no Redis (busca ampla): {payment.campaign_code}")
-                                        break
+                                if data and data.get('grim'):
+                                    grim_found = data.get('grim')
+                                    print(f"  ✅ [MÉTODO 7.1] campaign_code encontrado no Redis (key={key}): {grim_found}")
+                                    break
+                                
+                                # Tentar como string JSON
+                                json_data = redis_client.get(key)
+                                if json_data:
+                                    import json
+                                    try:
+                                        parsed = json.loads(json_data)
+                                        if parsed.get('grim'):
+                                            grim_found = parsed.get('grim')
+                                            print(f"  ✅ [MÉTODO 7.1] campaign_code encontrado no Redis (JSON, key={key}): {grim_found}")
+                                            break
+                                    except:
+                                        pass
+                            except Exception as key_error:
+                                continue
+                    
+                    # ESTRATÉGIA 2: Buscar por hash do fbclid (se fbclid parece ser um hash)
+                    if not grim_found and payment.fbclid and len(payment.fbclid) <= 12:
+                        try:
+                            fbclid_completo = redis_client.get(f'tracking_hash:{payment.fbclid}')
+                            if fbclid_completo:
+                                # Buscar usando fbclid completo
+                                key = f"tracking:{fbclid_completo}"
+                                data = redis_client.hgetall(key)
+                                if data and data.get('grim'):
+                                    grim_found = data.get('grim')
+                                    print(f"  ✅ [MÉTODO 7.2] campaign_code encontrado via hash lookup: {grim_found}")
+                        except:
+                            pass
+                    
+                    # ESTRATÉGIA 3: Buscar por timestamp do payment (período de 1 hora antes e depois)
+                    if not grim_found:
+                        try:
+                            payment_time = payment.created_at
+                            # Buscar todas as chaves de tracking criadas no período
+                            # Redis não suporta busca por timestamp diretamente, mas podemos escanear
+                            # e verificar se o timestamp está próximo
+                            print(f"  🔍 [MÉTODO 7.3] Escaneando Redis por período do pagamento...")
+                            
+                            # Escanear todas as chaves de tracking
+                            scanned = 0
+                            for key in redis_client.scan_iter(match="tracking:*"):
+                                scanned += 1
+                                if scanned > 1000:  # Limitar para não travar
+                                    break
+                                
+                                try:
+                                    # Tentar como hash
+                                    data = redis_client.hgetall(key)
+                                    if data and data.get('grim'):
+                                        # Verificar se tem timestamp próximo
+                                        if data.get('timestamp'):
+                                            try:
+                                                import json
+                                                from datetime import datetime
+                                                key_timestamp = datetime.fromisoformat(data['timestamp'])
+                                                time_diff = abs((payment_time - key_timestamp).total_seconds())
+                                                if time_diff < 3600:  # Dentro de 1 hora
+                                                    grim_found = data.get('grim')
+                                                    print(f"  ✅ [MÉTODO 7.3] campaign_code encontrado por timestamp (diff={int(time_diff)}s): {grim_found}")
+                                                    break
+                                            except:
+                                                pass
+                                    
+                                    # Se não encontrou como hash, tentar como JSON
+                                    if not grim_found:
+                                        json_data = redis_client.get(key)
+                                        if json_data:
+                                            import json
+                                            try:
+                                                parsed = json.loads(json_data)
+                                                if parsed.get('grim'):
+                                                    grim_found = parsed.get('grim')
+                                                    print(f"  ✅ [MÉTODO 7.3] campaign_code encontrado (JSON, key={key}): {grim_found}")
+                                                    break
+                                            except:
+                                                pass
+                                except:
+                                    continue
+                            
+                            if scanned >= 1000:
+                                print(f"  ⚠️ Limite de 1000 chaves atingido no escaneamento")
                         except Exception as scan_error:
-                            print(f"  ⚠️ Erro ao escanear Redis: {scan_error}")
+                            print(f"  ⚠️ Erro ao escanear Redis por período: {scan_error}")
+                    
+                    # ESTRATÉGIA 4: Buscar por bot_id e período (última tentativa)
+                    if not grim_found:
+                        try:
+                            print(f"  🔍 [MÉTODO 7.4] Buscando por bot_id={payment.bot_id} no período...")
+                            
+                            # Buscar todos os BotUser do bot que têm external_id no período
+                            payment_time = payment.created_at
+                            time_window_start = payment_time - timedelta(hours=2)
+                            time_window_end = payment_time + timedelta(hours=1)
+                            
+                            bot_users_with_grim = BotUser.query.filter(
+                                BotUser.bot_id == payment.bot_id,
+                                BotUser.external_id.isnot(None),
+                                BotUser.external_id != '',
+                                BotUser.last_interaction >= time_window_start,
+                                BotUser.last_interaction <= time_window_end
+                            ).order_by(BotUser.last_interaction.desc()).limit(5).all()
+                            
+                            if bot_users_with_grim:
+                                # Pegar o grim mais recente do período
+                                grim_found = bot_users_with_grim[0].external_id
+                                print(f"  ✅ [MÉTODO 7.4] campaign_code encontrado via BotUser do período: {grim_found}")
+                        except Exception as bot_user_error:
+                            print(f"  ⚠️ Erro ao buscar BotUser do período: {bot_user_error}")
+                    
+                    # Salvar se encontrou
+                    if grim_found:
+                        payment.campaign_code = grim_found
+                        print(f"  ✅ campaign_code FINAL: {payment.campaign_code}")
+                    else:
+                        print(f"  ❌ campaign_code NÃO encontrado após todos os métodos")
                             
                 except Exception as redis_error:
                     print(f"  ⚠️ Erro ao buscar Redis: {redis_error}")
