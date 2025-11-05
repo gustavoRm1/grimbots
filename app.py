@@ -6467,10 +6467,11 @@ def send_meta_pixel_purchase_event(payment):
             logger.warning(f"⚠️ Meta Purchase - Usando customer_user_id como external_id (fallback): {external_id_value}")
         
         # Construir user_data usando função correta (faz hash SHA256)
-        # ✅ CRÍTICO: Incluir TODOS os dados disponíveis para melhor matching
+        # ✅ CRÍTICO: external_id (fbclid) DEVE ser o primeiro/principal para matching com PageView
+        # O customer_user_id (telegram_user_id) pode ser adicionado, mas fbclid é prioritário
         user_data = MetaPixelAPI._build_user_data(
-            customer_user_id=str(telegram_user_id) if telegram_user_id else None,
-            external_id=external_id_value,
+            customer_user_id=None,  # ✅ NÃO adicionar telegram_user_id aqui - pode confundir matching
+            external_id=external_id_value,  # ✅ fbclid é o external_id principal (matching com PageView)
             email=bot_user.email if bot_user and bot_user.email else None,
             phone=bot_user.phone if bot_user and bot_user.phone else None,
             client_ip=bot_user.ip_address if bot_user and bot_user.ip_address else None,
@@ -6479,20 +6480,24 @@ def send_meta_pixel_purchase_event(payment):
             fbc=None   # TODO: Adicionar fbc se disponível (cookie do Meta)
         )
         
+        # ✅ CRÍTICO: Se ainda não tem external_id, adicionar telegram_user_id como fallback
+        # MAS: fbclid deve ser sempre o primeiro (se existir)
+        if not user_data.get('external_id') and telegram_user_id:
+            user_data['external_id'] = [MetaPixelAPI._hash_data(str(telegram_user_id))]
+            logger.warning(f"⚠️ External ID (fbclid) não encontrado, usando telegram_user_id como fallback: {telegram_user_id}")
+        elif not user_data.get('external_id'):
+            # Último recurso: criar um baseado no payment_id
+            fallback_external_id = f'purchase_{payment.payment_id}_{int(time.time())}'
+            user_data['external_id'] = [MetaPixelAPI._hash_data(fallback_external_id)]
+            logger.warning(f"⚠️ External ID não encontrado, usando fallback: {fallback_external_id}")
+        
         # ✅ LOG CRÍTICO: Mostrar dados enviados para matching
-        logger.info(f"🔍 Meta Purchase - User Data: external_id={len(user_data.get('external_id', []))} items, " +
-                   f"customer_user_id={bool(user_data.get('external_id'))}, " +
+        external_ids = user_data.get('external_id', [])
+        logger.info(f"🔍 Meta Purchase - User Data: external_id={len(external_ids)} item(s) [{external_ids[0][:16] if external_ids else 'N/A'}...], " +
                    f"email={bool(user_data.get('em'))}, " +
                    f"phone={bool(user_data.get('ph'))}, " +
                    f"ip={bool(user_data.get('client_ip_address'))}, " +
                    f"user_agent={bool(user_data.get('client_user_agent'))}")
-        
-        # ✅ CRÍTICO: Garantir que external_id existe (obrigatório para Conversions API)
-        if not user_data.get('external_id'):
-            # Se não há external_id, criar um baseado no payment_id
-            fallback_external_id = f'purchase_{payment.payment_id}_{int(time.time())}'
-            user_data['external_id'] = [MetaPixelAPI._hash_data(fallback_external_id)]
-            logger.warning(f"⚠️ External ID não encontrado, usando fallback: {fallback_external_id}")
         
         # Construir custom_data
         custom_data = {
@@ -6531,8 +6536,10 @@ def send_meta_pixel_purchase_event(payment):
             custom_data['campaign_code'] = payment.campaign_code
         
         # ✅ LOG CRÍTICO: Parâmetros enviados para Meta (para debug)
+        external_id_hash = user_data.get('external_id', ['N/A'])[0] if user_data.get('external_id') else 'N/A'
         logger.info(f"🎯 Meta Pixel Purchase - Parâmetros: " +
-                   f"external_id={external_id_value[:50] if external_id_value else 'N/A'}... | " +
+                   f"external_id_hash={external_id_hash[:32] if external_id_hash != 'N/A' else 'N/A'}... | " +
+                   f"external_id_raw={external_id_value[:30] if external_id_value else 'N/A'}... | " +
                    f"campaign_code={payment.campaign_code} | " +
                    f"utm_source={payment.utm_source} | " +
                    f"utm_campaign={payment.utm_campaign}")
