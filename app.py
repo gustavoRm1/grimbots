@@ -6189,21 +6189,22 @@ def send_meta_pixel_pageview_event(pool, request):
         from utils.encryption import decrypt
         import time
         
-        # ✅ CORREÇÃO CRÍTICA: Priorizar `grim` como external_id para matching com campanha
-        # O parâmetro `grim` é usado na Meta para identificar a campanha/anúncio
+        # ✅ CORREÇÃO CRÍTICA: fbclid É o external_id para matching no Meta!
+        # O fbclid identifica o clique/anúncio específico e é usado para fazer matching entre PageView e Purchase
+        # O grim é apenas um código customizado que vai em campaign_code
         grim_param = request.args.get('grim', '')
         fbclid_from_request = request.args.get('fbclid', '')
         
-        if grim_param:
-            # ✅ USAR GRIM COMO external_id (prioridade máxima para matching com campanha)
-            external_id = grim_param
-            logger.info(f"🎯 TRACKING ELITE | Using grim as external_id: {external_id}")
-        elif fbclid_from_request:
-            # ✅ FALLBACK: Usar fbclid se não tiver grim
+        # ✅ PRIORIDADE: fbclid como external_id (obrigatório para matching)
+        if fbclid_from_request:
             external_id = fbclid_from_request
             logger.info(f"🎯 TRACKING ELITE | Using fbclid as external_id: {external_id[:30]}...")
+        elif grim_param:
+            # Fallback: usar grim se não tiver fbclid (não ideal, mas melhor que nada)
+            external_id = grim_param
+            logger.warning(f"⚠️ Sem fbclid, usando grim como external_id: {external_id}")
         else:
-            # Fallback: gerar sintético apenas se não tiver grim nem fbclid
+            # Último recurso: gerar sintético
             external_id = MetaPixelHelper.generate_external_id()
             logger.warning(f"⚠️ Sem grim nem fbclid, usando external_id sintético: {external_id}")
         
@@ -6406,13 +6407,38 @@ def send_meta_pixel_purchase_event(payment):
         # ✅ CORREÇÃO CRÍTICA: Usar _build_user_data para hash correto dos dados
         from utils.meta_pixel import MetaPixelAPI
         
-        # Determinar external_id (prioridade: bot_user.external_id > payment_id)
+        # ✅ CRÍTICO: external_id deve ser fbclid para matching com PageView no Meta!
+        # Prioridade: payment.fbclid > bot_user.fbclid > bot_user.external_id (se for fbclid) > payment.customer_user_id
         external_id_value = None
-        if bot_user and bot_user.external_id:
-            external_id_value = bot_user.external_id
+        
+        # PRIORIDADE 1: fbclid do payment (mais confiável)
+        if payment.fbclid:
+            external_id_value = payment.fbclid
+            logger.info(f"🎯 Meta Purchase - Using payment.fbclid as external_id: {external_id_value[:30]}...")
+        # PRIORIDADE 2: fbclid do bot_user
+        elif bot_user and bot_user.fbclid:
+            external_id_value = bot_user.fbclid
+            logger.info(f"🎯 Meta Purchase - Using bot_user.fbclid as external_id: {external_id_value[:30]}...")
+        # PRIORIDADE 3: bot_user.external_id (se for fbclid, não grim)
+        elif bot_user and bot_user.external_id:
+            # Verificar se é fbclid (longo) ou grim (curto)
+            is_fbclid = len(bot_user.external_id) > 50 or 'PAZ' in bot_user.external_id
+            if is_fbclid:
+                external_id_value = bot_user.external_id
+                logger.info(f"🎯 Meta Purchase - Using bot_user.external_id (fbclid) as external_id: {external_id_value[:30]}...")
+            else:
+                # É grim, não usar como external_id - buscar fbclid do bot_user
+                if bot_user.fbclid:
+                    external_id_value = bot_user.fbclid
+                    logger.info(f"🎯 Meta Purchase - bot_user.external_id é grim, usando bot_user.fbclid: {external_id_value[:30]}...")
+                else:
+                    # Fallback: usar grim mesmo (não ideal, mas melhor que nada)
+                    external_id_value = bot_user.external_id
+                    logger.warning(f"⚠️ Meta Purchase - Usando grim como external_id (fbclid não encontrado): {external_id_value}")
+        # PRIORIDADE 4: customer_user_id como último recurso
         else:
-            # Fallback: usar customer_user_id do payment
             external_id_value = payment.customer_user_id
+            logger.warning(f"⚠️ Meta Purchase - Usando customer_user_id como external_id (fallback): {external_id_value}")
         
         # Construir user_data usando função correta (faz hash SHA256)
         user_data = MetaPixelAPI._build_user_data(

@@ -225,14 +225,48 @@ with app.app_context():
                 print(f"     customer_name={payment.customer_name}, customer_username={payment.customer_username}")
                 print(f"     customer_user_id={payment.customer_user_id}, fbclid={payment.fbclid or 'N/A'}")
             
-            # ✅ CORREÇÃO CRÍTICA: Se não tem campaign_code, buscar do bot_user
+            # ✅ CORREÇÃO CRÍTICA: campaign_code deve ser grim (não fbclid)
+            # fbclid vai em payment.fbclid e será usado como external_id
             if not payment.campaign_code and bot_user:
-                if bot_user.external_id:  # grim está salvo aqui
-                    payment.campaign_code = bot_user.external_id
-                    print(f"  ✅ campaign_code atualizado do bot_user.external_id: {bot_user.external_id}")
-                elif bot_user.campaign_code:
+                # Prioridade 1: bot_user.campaign_code (já é grim)
+                if bot_user.campaign_code:
                     payment.campaign_code = bot_user.campaign_code
                     print(f"  ✅ campaign_code atualizado do bot_user.campaign_code: {bot_user.campaign_code}")
+                # Prioridade 2: bot_user.external_id (se for grim, não fbclid)
+                elif bot_user.external_id:
+                    # Verificar se é grim (curto) ou fbclid (longo)
+                    is_fbclid = len(bot_user.external_id) > 50 or 'PAZ' in bot_user.external_id or '-' in bot_user.external_id or '_' in bot_user.external_id
+                    if not is_fbclid:
+                        # É grim, usar como campaign_code
+                        payment.campaign_code = bot_user.external_id
+                        print(f"  ✅ campaign_code atualizado do bot_user.external_id (grim): {bot_user.external_id}")
+                    else:
+                        # É fbclid, não usar como campaign_code - buscar grim no Redis
+                        print(f"  ⚠️ bot_user.external_id é fbclid, buscando grim no Redis...")
+                        try:
+                            import redis
+                            r = redis.Redis(host='localhost', port=6379, decode_responses=True)
+                            # Buscar grim usando fbclid
+                            tracking_key = f"tracking:{bot_user.external_id}"
+                            tracking_data = r.hgetall(tracking_key)
+                            if tracking_data and tracking_data.get('grim'):
+                                payment.campaign_code = tracking_data.get('grim')
+                                print(f"  ✅ campaign_code encontrado no Redis (via fbclid): {payment.campaign_code}")
+                        except:
+                            pass
+            
+            # ✅ CORREÇÃO CRÍTICA: fbclid deve ser salvo no payment para usar como external_id
+            if not payment.fbclid and bot_user:
+                # Prioridade 1: bot_user.fbclid (direto)
+                if bot_user.fbclid:
+                    payment.fbclid = bot_user.fbclid
+                    print(f"  ✅ fbclid atualizado do bot_user.fbclid: {bot_user.fbclid[:30]}...")
+                # Prioridade 2: bot_user.external_id (se for fbclid)
+                elif bot_user.external_id:
+                    is_fbclid = len(bot_user.external_id) > 50 or 'PAZ' in bot_user.external_id or '-' in bot_user.external_id or '_' in bot_user.external_id
+                    if is_fbclid:
+                        payment.fbclid = bot_user.external_id
+                        print(f"  ✅ fbclid atualizado do bot_user.external_id (fbclid): {bot_user.external_id[:30]}...")
             
             # ✅ CORREÇÃO: Se não tem UTMs, buscar do bot_user
             if not payment.utm_source and bot_user and bot_user.utm_source:
@@ -247,8 +281,6 @@ with app.app_context():
                 payment.utm_medium = bot_user.utm_medium
             if not payment.utm_term and bot_user and bot_user.utm_term:
                 payment.utm_term = bot_user.utm_term
-            if not payment.fbclid and bot_user and bot_user.fbclid:
-                payment.fbclid = bot_user.fbclid
             
             # ============================================================
             # MÉTODO 7: Buscar do Redis (BUSCA AMPLA E INTELIGENTE)
@@ -374,7 +406,7 @@ with app.app_context():
                             time_window_start = payment_time - timedelta(hours=2)
                             time_window_end = payment_time + timedelta(hours=1)
                             
-                            bot_users_with_grim = BotUser.query.filter(
+                            bot_users_with_external_id = BotUser.query.filter(
                                 BotUser.bot_id == payment.bot_id,
                                 BotUser.external_id.isnot(None),
                                 BotUser.external_id != '',
@@ -382,19 +414,148 @@ with app.app_context():
                                 BotUser.last_interaction <= time_window_end
                             ).order_by(BotUser.last_interaction.desc()).limit(5).all()
                             
-                            if bot_users_with_grim:
-                                # Pegar o grim mais recente do período
-                                grim_found = bot_users_with_grim[0].external_id
-                                print(f"  ✅ [MÉTODO 7.4] campaign_code encontrado via BotUser do período: {grim_found}")
+                            if bot_users_with_external_id:
+                                # ✅ ESTRATÉGIA: Buscar o BotUser que tem grim (não fbclid) como external_id
+                                grim_candidates = []
+                                fbclid_candidates = []
+                                
+                                for bu in bot_users_with_external_id:
+                                    ext_id = bu.external_id
+                                    # Verificar se é grim (curto, alfanumérico) ou fbclid (longo)
+                                    is_fbclid = len(ext_id) > 50 or 'PAZ' in ext_id or 'fbclid' in ext_id.lower() or '-' in ext_id or '_' in ext_id
+                                    
+                                    if is_fbclid:
+                                        fbclid_candidates.append((bu, ext_id))
+                                    else:
+                                        grim_candidates.append((bu, ext_id))
+                                
+                                # Prioridade 1: Usar grim direto se encontrado (para campaign_code)
+                                if grim_candidates:
+                                    grim_found = grim_candidates[0][1]
+                                    print(f"  ✅ [MÉTODO 7.4] grim encontrado via BotUser (direto): {grim_found}")
+                                    
+                                    # ✅ CRÍTICO: Também buscar fbclid deste BotUser para external_id
+                                    if not payment.fbclid and fbclid_candidates:
+                                        payment.fbclid = fbclid_candidates[0][1]
+                                        print(f"  ✅ fbclid também atualizado do BotUser: {payment.fbclid[:30]}...")
+                                    elif not payment.fbclid and grim_candidates[0][0].fbclid:
+                                        payment.fbclid = grim_candidates[0][0].fbclid
+                                        print(f"  ✅ fbclid atualizado do BotUser.fbclid: {payment.fbclid[:30]}...")
+                                elif fbclid_candidates:
+                                    # Prioridade 2: Se só tem fbclid, salvar como fbclid E buscar grim no Redis
+                                    fbclid_found = fbclid_candidates[0][1]
+                                    
+                                    # ✅ CRÍTICO: Salvar fbclid no payment (para external_id)
+                                    if not payment.fbclid:
+                                        payment.fbclid = fbclid_found
+                                        print(f"  ✅ fbclid salvo no payment: {fbclid_found[:30]}...")
+                                    
+                                    # Buscar grim no Redis para campaign_code
+                                    print(f"  🔍 fbclid encontrado, buscando grim no Redis para campaign_code...")
+                                    
+                                    try:
+                                        # Tentar diferentes formatos de chave
+                                        possible_keys = [
+                                            f"tracking:{fbclid_found}",
+                                            f"tracking_elite:{fbclid_found}",
+                                            f"tracking:{fbclid_found[:16]}",
+                                            f"tracking_elite:{fbclid_found[:16]}",
+                                        ]
+                                        
+                                        for key in possible_keys:
+                                            try:
+                                                data = redis_client.hgetall(key)
+                                                if data and data.get('grim'):
+                                                    grim_found = data.get('grim')
+                                                    print(f"  ✅ [MÉTODO 7.4.1] grim encontrado no Redis (via fbclid): {grim_found}")
+                                                    break
+                                                
+                                                json_data = redis_client.get(key)
+                                                if json_data:
+                                                    import json
+                                                    try:
+                                                        parsed = json.loads(json_data)
+                                                        if parsed.get('grim'):
+                                                            grim_found = parsed.get('grim')
+                                                            print(f"  ✅ [MÉTODO 7.4.1] grim encontrado no Redis (JSON): {grim_found}")
+                                                            break
+                                                    except:
+                                                        pass
+                                            except:
+                                                continue
+                                        
+                                        # Se não encontrou grim, tentar buscar em outros BotUsers do período
+                                        if not grim_found:
+                                            print(f"  🔍 grim não encontrado no Redis, buscando em outros BotUsers do período...")
+                                            # Buscar todos os BotUsers do bot no período (mesmo sem external_id)
+                                            all_bot_users = BotUser.query.filter(
+                                                BotUser.bot_id == payment.bot_id,
+                                                BotUser.last_interaction >= time_window_start,
+                                                BotUser.last_interaction <= time_window_end
+                                            ).order_by(BotUser.last_interaction.desc()).limit(20).all()
+                                            
+                                            for bu in all_bot_users:
+                                                if bu.campaign_code and len(bu.campaign_code) <= 50 and 'PAZ' not in bu.campaign_code:
+                                                    grim_found = bu.campaign_code
+                                                    print(f"  ✅ [MÉTODO 7.4.2] grim encontrado via campaign_code de outro BotUser: {grim_found}")
+                                                    break
+                                        
+                                        # ✅ IMPORTANTE: Não usar fbclid como campaign_code! Se não encontrou grim, deixar vazio
+                                        if not grim_found:
+                                            print(f"  ⚠️ grim não encontrado - campaign_code ficará vazio (fbclid será usado como external_id)")
+                                    except Exception as redis_error:
+                                        print(f"  ⚠️ Erro ao buscar grim no Redis: {redis_error}")
                         except Exception as bot_user_error:
                             print(f"  ⚠️ Erro ao buscar BotUser do período: {bot_user_error}")
                     
-                    # Salvar se encontrou
-                    if grim_found:
+                    # ✅ VALIDAÇÃO FINAL: Se encontrou um fbclid como campaign_code, mover para fbclid e buscar grim
+                    if grim_found and (len(grim_found) > 50 or 'PAZ' in grim_found):
+                        print(f"  ⚠️ campaign_code parece ser fbclid, movendo para payment.fbclid e buscando grim real...")
+                        
+                        # Mover para fbclid
+                        if not payment.fbclid:
+                            payment.fbclid = grim_found
+                            print(f"  ✅ fbclid atualizado: {payment.fbclid[:30]}...")
+                        
+                        # Buscar grim real no Redis
+                        try:
+                            possible_keys = [
+                                f"tracking:{grim_found}",
+                                f"tracking_elite:{grim_found}",
+                                f"tracking:{grim_found[:16]}",
+                                f"tracking_elite:{grim_found[:16]}",
+                            ]
+                            
+                            for key in possible_keys:
+                                try:
+                                    data = redis_client.hgetall(key)
+                                    if data and data.get('grim'):
+                                        real_grim = data.get('grim')
+                                        if real_grim != grim_found:  # Se for diferente, usar o grim
+                                            grim_found = real_grim
+                                            print(f"  ✅ grim REAL encontrado no Redis: {grim_found}")
+                                            break
+                                except:
+                                    continue
+                        except:
+                            pass
+                    
+                    # ✅ SALVAR: grim como campaign_code, fbclid já foi salvo acima
+                    if grim_found and not (len(grim_found) > 50 or 'PAZ' in grim_found):
                         payment.campaign_code = grim_found
-                        print(f"  ✅ campaign_code FINAL: {payment.campaign_code}")
+                        print(f"  ✅ campaign_code FINAL (grim): {payment.campaign_code}")
+                    elif grim_found:
+                        # É fbclid, não salvar como campaign_code
+                        print(f"  ⚠️ grim_found é fbclid, não salvar como campaign_code")
                     else:
-                        print(f"  ❌ campaign_code NÃO encontrado após todos os métodos")
+                        print(f"  ⚠️ campaign_code (grim) NÃO encontrado após todos os métodos")
+                    
+                    # ✅ RESUMO FINAL
+                    print(f"  📊 RESUMO FINAL:")
+                    print(f"     - fbclid: {payment.fbclid[:30] if payment.fbclid else 'N/A'}...")
+                    print(f"     - campaign_code (grim): {payment.campaign_code or 'N/A'}")
+                    print(f"     - utm_source: {payment.utm_source or 'N/A'}")
+                    print(f"     - utm_campaign: {payment.utm_campaign or 'N/A'}")
                             
                 except Exception as redis_error:
                     print(f"  ⚠️ Erro ao buscar Redis: {redis_error}")
