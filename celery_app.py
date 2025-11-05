@@ -134,6 +134,7 @@ def send_meta_event(self, pixel_id, access_token, event_data, test_code=None):
     import requests
     import time
     import logging
+    import json
     
     logger = logging.getLogger(__name__)
     
@@ -169,6 +170,9 @@ def send_meta_event(self, pixel_id, access_token, event_data, test_code=None):
     try:
         start = time.time()
         
+        # ✅ LOG CRÍTICO: Mostrar payload completo antes de enviar (para debug)
+        logger.debug(f"📤 Meta Event Payload: {json.dumps(payload, indent=2, ensure_ascii=False)}")
+        
         response = requests.post(url, json=payload, timeout=10)
         
         latency = int((time.time() - start) * 1000)
@@ -181,6 +185,10 @@ def send_meta_event(self, pixel_id, access_token, event_data, test_code=None):
                        f"Pixel: {pixel_id} | " +
                        f"Latency: {latency}ms | " +
                        f"EventsReceived: {result.get('events_received', 0)}")
+            
+            # ✅ LOG CRÍTICO: Mostrar resposta completa (para debug)
+            logger.debug(f"📥 Meta Event Response: {json.dumps(result, indent=2, ensure_ascii=False)}")
+            
             return result
         
         elif response.status_code >= 500:

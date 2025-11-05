@@ -6441,16 +6441,25 @@ def send_meta_pixel_purchase_event(payment):
             logger.warning(f"⚠️ Meta Purchase - Usando customer_user_id como external_id (fallback): {external_id_value}")
         
         # Construir user_data usando função correta (faz hash SHA256)
+        # ✅ CRÍTICO: Incluir TODOS os dados disponíveis para melhor matching
         user_data = MetaPixelAPI._build_user_data(
-            customer_user_id=telegram_user_id if telegram_user_id else None,
+            customer_user_id=str(telegram_user_id) if telegram_user_id else None,
             external_id=external_id_value,
-            email=None,  # TODO: Adicionar email se disponível no payment/bot_user
-            phone=None,  # TODO: Adicionar phone se disponível no payment/bot_user
-            client_ip=bot_user.ip_address if bot_user else None,
-            client_user_agent=bot_user.user_agent if bot_user else None,
+            email=bot_user.email if bot_user and bot_user.email else None,
+            phone=bot_user.phone if bot_user and bot_user.phone else None,
+            client_ip=bot_user.ip_address if bot_user and bot_user.ip_address else None,
+            client_user_agent=bot_user.user_agent if bot_user and bot_user.user_agent else None,
             fbp=None,  # TODO: Adicionar fbp se disponível (cookie do Meta)
             fbc=None   # TODO: Adicionar fbc se disponível (cookie do Meta)
         )
+        
+        # ✅ LOG CRÍTICO: Mostrar dados enviados para matching
+        logger.info(f"🔍 Meta Purchase - User Data: external_id={len(user_data.get('external_id', []))} items, " +
+                   f"customer_user_id={bool(user_data.get('external_id'))}, " +
+                   f"email={bool(user_data.get('em'))}, " +
+                   f"phone={bool(user_data.get('ph'))}, " +
+                   f"ip={bool(user_data.get('client_ip_address'))}, " +
+                   f"user_agent={bool(user_data.get('client_user_agent'))}")
         
         # ✅ CRÍTICO: Garantir que external_id existe (obrigatório para Conversions API)
         if not user_data.get('external_id'):
@@ -6497,10 +6506,13 @@ def send_meta_pixel_purchase_event(payment):
         
         # ✅ LOG CRÍTICO: Parâmetros enviados para Meta (para debug)
         logger.info(f"🎯 Meta Pixel Purchase - Parâmetros: " +
-                   f"external_id={external_id_value} | " +
+                   f"external_id={external_id_value[:50] if external_id_value else 'N/A'}... | " +
                    f"campaign_code={payment.campaign_code} | " +
                    f"utm_source={payment.utm_source} | " +
                    f"utm_campaign={payment.utm_campaign}")
+        
+        # ✅ LOG CRÍTICO: Mostrar custom_data completo
+        logger.info(f"📊 Meta Purchase - Custom Data: {json.dumps(custom_data, ensure_ascii=False)}")
         
         # Construir event_data completo
         event_data = {
