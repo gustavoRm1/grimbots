@@ -1298,6 +1298,84 @@
                         </div>
                     </div>
 
+                    <!-- ✅ V2.0: Agendamento de Envio -->
+                    <div class="mb-6 p-4 rounded-xl" style="background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.3);">
+                        <div class="flex items-center mb-4">
+                            <div class="flex items-center justify-center h-10 w-10 rounded-lg bg-blue-500 bg-opacity-20 border border-blue-500 border-opacity-30">
+                                <i class="fas fa-clock text-blue-400 text-lg" style="filter: brightness(1.2);"></i>
+                            </div>
+                            <h3 class="ml-3 text-base font-bold text-white">Agendamento de Envio</h3>
+                        </div>
+                        
+                        <div class="space-y-4">
+                            <!-- Opção: Imediato ou Agendar -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-300 mb-3">Quando enviar:</label>
+                                <div class="grid grid-cols-2 gap-3">
+                                    <label class="flex items-center px-4 py-3.5 bg-gray-800 border-2 rounded-xl cursor-pointer transition-all hover:border-opacity-40"
+                                           :style="generalRemarketing.send_mode === 'immediate' ? 'border-color: #3B82F6; background: rgba(59, 130, 246, 0.1);' : 'border-color: rgba(75, 85, 99, 0.5); hover:bg-gray-750'">
+                                        <input type="radio" x-model="generalRemarketing.send_mode" value="immediate"
+                                               class="form-radio text-blue-400 h-4 w-4" style="accent-color: #3B82F6;">
+                                        <div class="ml-3 flex-1">
+                                            <div class="flex items-center">
+                                                <i class="fas fa-bolt text-blue-400 mr-2"></i>
+                                                <span class="text-sm font-semibold text-white">Enviar Imediato</span>
+                                            </div>
+                                            <p class="text-xs text-gray-400 mt-1">Enviar assim que a campanha for criada</p>
+                                        </div>
+                                    </label>
+                                    <label class="flex items-center px-4 py-3.5 bg-gray-800 border-2 rounded-xl cursor-pointer transition-all hover:border-opacity-40"
+                                           :style="generalRemarketing.send_mode === 'scheduled' ? 'border-color: #3B82F6; background: rgba(59, 130, 246, 0.1);' : 'border-color: rgba(75, 85, 99, 0.5); hover:bg-gray-750'">
+                                        <input type="radio" x-model="generalRemarketing.send_mode" value="scheduled"
+                                               class="form-radio text-blue-400 h-4 w-4" style="accent-color: #3B82F6;">
+                                        <div class="ml-3 flex-1">
+                                            <div class="flex items-center">
+                                                <i class="fas fa-calendar-alt text-blue-400 mr-2"></i>
+                                                <span class="text-sm font-semibold text-white">Agendar</span>
+                                            </div>
+                                            <p class="text-xs text-gray-400 mt-1">Escolher data e hora específica</p>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <!-- Campos de Data e Hora (se agendado) -->
+                            <div x-show="generalRemarketing.send_mode === 'scheduled'" x-cloak class="space-y-3">
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="block text-xs font-semibold text-gray-400 mb-2 flex items-center">
+                                            <i class="fas fa-calendar text-blue-400 mr-1.5 text-xs"></i>
+                                            Data
+                                        </label>
+                                        <input type="date" x-model="generalRemarketing.scheduled_date" 
+                                               :min="new Date().toISOString().split('T')[0]"
+                                               class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400 focus:ring-opacity-20 transition-all">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-semibold text-gray-400 mb-2 flex items-center">
+                                            <i class="fas fa-clock text-blue-400 mr-1.5 text-xs"></i>
+                                            Hora
+                                        </label>
+                                        <input type="time" x-model="generalRemarketing.scheduled_time" 
+                                               class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400 focus:ring-opacity-20 transition-all">
+                                    </div>
+                                </div>
+                                
+                                <!-- Preview da Data/Hora -->
+                                <div x-show="generalRemarketing.scheduled_date && generalRemarketing.scheduled_time" 
+                                     class="p-3 bg-blue-500 bg-opacity-10 border border-blue-500 border-opacity-20 rounded-lg">
+                                    <div class="flex items-center gap-2">
+                                        <i class="fas fa-info-circle text-blue-400"></i>
+                                        <span class="text-sm text-white">
+                                            <strong>Campanha agendada para:</strong>
+                                            <span class="ml-2 font-bold text-blue-400" x-text="formatGeneralRemarketingScheduledDateTime()"></span>
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Warning -->
                     <div class="mb-6 p-4 rounded-lg" style="background: rgba(255, 184, 0, 0.08); border: 1px solid rgba(255, 184, 0, 0.3);">
                         <div class="flex items-start gap-3">
@@ -1324,8 +1402,8 @@
                                 :class="generalRemarketing.selectedBots.length === 0 || !generalRemarketing.message ? 'opacity-50 cursor-not-allowed' : ''"
                                 class="flex-1 px-6 py-3 text-black font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
                                 style="background: linear-gradient(to right, #FFB800, #FFA000);">
-                            <i class="fas fa-paper-plane"></i>
-                            <span x-text="loading ? 'Enviando...' : 'Enviar Remarketing'"></span>
+                            <i class="fas" :class="generalRemarketing.send_mode === 'scheduled' ? 'fa-calendar-check' : 'fa-paper-plane'"></i>
+                            <span x-text="loading ? (generalRemarketing.send_mode === 'scheduled' ? 'Agendando...' : 'Enviando...') : (generalRemarketing.send_mode === 'scheduled' ? 'Agendar Remarketing' : 'Enviar Remarketing')"></span>
                         </button>
                     </div>
                 </form>
@@ -1366,7 +1444,10 @@ function dashboardApp() {
             audio_url: '',
             days_since_last_contact: 7,  // Número, não string
             exclude_buyers: false,
-            buttons: []  // Botões de produto
+            buttons: [],  // Botões de produto
+            send_mode: 'immediate',  // ✅ V2.0: 'immediate' ou 'scheduled'
+            scheduled_date: '',      // ✅ V2.0: Data no formato YYYY-MM-DD
+            scheduled_time: ''       // ✅ V2.0: Hora no formato HH:MM
         },
         
         // Filtro de Período (compartilhado entre cards)
@@ -2322,9 +2403,31 @@ function dashboardApp() {
                 return;
             }
             
-            const confirmMsg = `🚀 Enviar remarketing para ${this.generalRemarketing.selectedBots.length} bot(s)?\n\n` +
-                              `Usuários afetados: Todos que atendam aos critérios de segmentação\n\n` +
-                              `Confirmar envio?`;
+            // ✅ V2.0: Validação de agendamento
+            if (this.generalRemarketing.send_mode === 'scheduled') {
+                if (!this.generalRemarketing.scheduled_date || !this.generalRemarketing.scheduled_time) {
+                    alert('Preencha data e hora para agendar a campanha');
+                    return;
+                }
+                
+                // Validar se data/hora não é no passado
+                const scheduledDateTime = new Date(`${this.generalRemarketing.scheduled_date}T${this.generalRemarketing.scheduled_time}`);
+                const now = new Date();
+                if (scheduledDateTime <= now) {
+                    alert('A data e hora devem ser no futuro');
+                    return;
+                }
+            }
+            
+            const sendMode = this.generalRemarketing.send_mode;
+            const confirmMsg = sendMode === 'scheduled' 
+                ? `📅 Agendar remarketing para ${this.generalRemarketing.selectedBots.length} bot(s)?\n\n` +
+                  `Data/Hora: ${this.formatGeneralRemarketingScheduledDateTime()}\n\n` +
+                  `Usuários afetados: Todos que atendam aos critérios de segmentação\n\n` +
+                  `Confirmar agendamento?`
+                : `🚀 Enviar remarketing para ${this.generalRemarketing.selectedBots.length} bot(s)?\n\n` +
+                  `Usuários afetados: Todos que atendam aos critérios de segmentação\n\n` +
+                  `Confirmar envio?`;
             
             if (!confirm(confirmMsg)) {
                 return;
@@ -2335,6 +2438,26 @@ function dashboardApp() {
             try {
                 console.log('📡 Enviando remarketing geral...');
                 
+                // ✅ V2.0: Preparar dados para envio (incluir scheduled_at se agendado)
+                const requestData = {
+                    bot_ids: this.generalRemarketing.selectedBots,
+                    message: this.generalRemarketing.message,
+                    media_url: this.generalRemarketing.media_url || null,
+                    media_type: this.generalRemarketing.media_type,
+                    audio_enabled: this.generalRemarketing.audio_enabled || false,
+                    audio_url: this.generalRemarketing.audio_url || '',
+                    buttons: this.generalRemarketing.buttons,
+                    days_since_last_contact: parseInt(this.generalRemarketing.days_since_last_contact) || 0,
+                    exclude_buyers: this.generalRemarketing.exclude_buyers
+                };
+                
+                if (sendMode === 'scheduled') {
+                    // Combinar data e hora em ISO string
+                    requestData.scheduled_at = `${this.generalRemarketing.scheduled_date}T${this.generalRemarketing.scheduled_time}:00`;
+                } else {
+                    requestData.scheduled_at = null;
+                }
+                
                 const csrfToken = this.getCsrfToken();
                 const headers = { 'Content-Type': 'application/json' };
                 if (csrfToken) headers['X-CSRF-Token'] = csrfToken;
@@ -2343,15 +2466,7 @@ function dashboardApp() {
                     method: 'POST',
                     headers: headers,
                     credentials: 'same-origin',
-                    body: JSON.stringify({
-                        bot_ids: this.generalRemarketing.selectedBots,
-                        message: this.generalRemarketing.message,
-                        media_url: this.generalRemarketing.media_url || null,
-                        media_type: this.generalRemarketing.media_type,
-                        buttons: this.generalRemarketing.buttons,
-                        days_since_last_contact: parseInt(this.generalRemarketing.days_since_last_contact) || 0,
-                        exclude_buyers: this.generalRemarketing.exclude_buyers
-                    })
+                    body: JSON.stringify(requestData)
                 });
                 
                 console.log(`📊 Response status: ${response.status}`);
@@ -2359,6 +2474,7 @@ function dashboardApp() {
                 if (!response.ok) {
                     const text = await response.text();
                     console.error('❌ Erro ao enviar remarketing:', text);
+                    alert('Erro ao enviar remarketing: ' + text);
                     return;
                 }
                 
@@ -2371,19 +2487,53 @@ function dashboardApp() {
                     message: '',
                     media_url: '',
                     media_type: 'video',
+                    audio_enabled: false,
+                    audio_url: '',
                     buttons: [],
                     days_since_last_contact: 7,
-                    exclude_buyers: false
+                    exclude_buyers: false,
+                    send_mode: 'immediate',  // ✅ V2.0
+                    scheduled_date: '',      // ✅ V2.0
+                    scheduled_time: ''      // ✅ V2.0
                 };
                 
                 this.showGeneralRemarketingModal = false;
+                
+                // Mensagem de sucesso
+                if (sendMode === 'scheduled') {
+                    alert('📅 Campanha agendada com sucesso!');
+                } else {
+                    alert('✅ Remarketing enviado com sucesso!');
+                }
                 
                 // Recarregar página para atualizar estatísticas
                 location.reload();
             } catch (error) {
                 console.error('❌ Erro ao enviar remarketing:', error);
+                alert('Erro ao enviar remarketing: ' + error.message);
             } finally {
                 this.loading = false;
+            }
+        },
+        
+        // ✅ V2.0: Formatar data/hora agendada para preview (Remarketing Geral)
+        formatGeneralRemarketingScheduledDateTime() {
+            if (!this.generalRemarketing.scheduled_date || !this.generalRemarketing.scheduled_time) {
+                return '';
+            }
+            
+            try {
+                const date = new Date(`${this.generalRemarketing.scheduled_date}T${this.generalRemarketing.scheduled_time}`);
+                return date.toLocaleString('pt-BR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    timeZone: 'America/Sao_Paulo'
+                });
+            } catch (e) {
+                return `${this.generalRemarketing.scheduled_date} ${this.generalRemarketing.scheduled_time}`;
             }
         },
         

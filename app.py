@@ -2000,6 +2000,28 @@ def general_remarketing():
         # Converter botões para JSON
         buttons_json = json.dumps(buttons) if buttons else None
         
+        # ✅ V2.0: Processar scheduled_at se fornecido
+        scheduled_at = None
+        status = 'draft'  # Padrão: rascunho (será enviado imediatamente)
+        
+        if data.get('scheduled_at'):
+            try:
+                # Converter string ISO para datetime
+                scheduled_at_str = data.get('scheduled_at')
+                scheduled_at = datetime.fromisoformat(scheduled_at_str.replace('Z', '+00:00'))
+                
+                # Validar se data está no futuro
+                now = datetime.now()
+                if scheduled_at <= now:
+                    return jsonify({'error': 'A data e hora devem ser no futuro'}), 400
+                
+                # Se agendado, status será 'scheduled'
+                status = 'scheduled'
+                logger.info(f"📅 Remarketing geral agendado para: {scheduled_at}")
+            except Exception as e:
+                logger.error(f"❌ Erro ao processar scheduled_at: {e}")
+                return jsonify({'error': f'Data/hora inválida: {str(e)}'}), 400
+        
         # Contador de usuários impactados
         total_users = 0
         bots_affected = 0
@@ -2031,31 +2053,42 @@ def general_remarketing():
                     days_since_last_contact=days_since_last_contact,
                     exclude_buyers=exclude_buyers,
                     cooldown_hours=6,  # Fixo em 6 horas
-                    status='active'
+                    scheduled_at=scheduled_at,  # ✅ V2.0
+                    status=status  # ✅ V2.0: 'draft' ou 'scheduled'
                 )
                 
                 db.session.add(campaign)
                 db.session.commit()
                 
-                # Enviar campanha via bot_manager
-                try:
-                    bot_manager.send_remarketing_campaign(
-                        campaign_id=campaign.id,
-                        bot_token=bot.token
-                    )
-                    
+                # ✅ V2.0: Enviar campanha apenas se não estiver agendada
+                if status != 'scheduled':
+                    try:
+                        bot_manager.send_remarketing_campaign(
+                            campaign_id=campaign.id,
+                            bot_token=bot.token
+                        )
+                        
+                        total_users += eligible_count
+                        bots_affected += 1
+                        
+                        logger.info(f"✅ Remarketing geral enviado para bot {bot.name} ({eligible_count} usuários)")
+                    except Exception as e:
+                        logger.error(f"❌ Erro ao enviar remarketing para bot {bot.id}: {e}")
+                else:
+                    # Campanha agendada - não enviar agora, será processada pelo scheduler
                     total_users += eligible_count
                     bots_affected += 1
-                    
-                    logger.info(f"✅ Remarketing geral enviado para bot {bot.name} ({eligible_count} usuários)")
-                except Exception as e:
-                    logger.error(f"❌ Erro ao enviar remarketing para bot {bot.id}: {e}")
+                    logger.info(f"📅 Remarketing geral agendado para bot {bot.name} ({eligible_count} usuários) - será enviado em {scheduled_at}")
+        
+        response_message = f'Remarketing agendado para {bots_affected} bot(s) com sucesso!' if status == 'scheduled' else f'Remarketing enviado para {bots_affected} bot(s) com sucesso!'
         
         return jsonify({
             'success': True,
             'total_users': total_users,
             'bots_affected': bots_affected,
-            'message': f'Remarketing enviado para {bots_affected} bot(s) com sucesso!'
+            'message': response_message,
+            'scheduled': status == 'scheduled',
+            'scheduled_at': scheduled_at.isoformat() if scheduled_at else None
         })
         
     except Exception as e:
@@ -7430,43 +7463,44 @@ def check_scheduled_remarketing_campaigns():
     Verifica campanhas agendadas e inicia envio quando chegar a hora
     Executado a cada 1 minuto via APScheduler
     """
-    from models import RemarketingCampaign
-    from datetime import datetime
-    
     try:
-        now = datetime.now()
-        
-        # Buscar campanhas agendadas que já passaram da hora
-        scheduled_campaigns = RemarketingCampaign.query.filter(
-            RemarketingCampaign.status == 'scheduled',
-            RemarketingCampaign.scheduled_at.isnot(None),
-            RemarketingCampaign.scheduled_at <= now
-        ).all()
-        
-        if scheduled_campaigns:
-            logger.info(f"📅 Encontradas {len(scheduled_campaigns)} campanha(s) agendada(s) para executar")
-        
-        for campaign in scheduled_campaigns:
-            try:
-                # Buscar bot e token
-                bot = Bot.query.get(campaign.bot_id)
-                if not bot or not bot.token:
-                    logger.error(f"❌ Bot {campaign.bot_id} não encontrado ou sem token para campanha {campaign.id}")
+        with app.app_context():
+            from models import RemarketingCampaign, Bot
+            from datetime import datetime
+            
+            now = datetime.now()
+            
+            # Buscar campanhas agendadas que já passaram da hora
+            scheduled_campaigns = RemarketingCampaign.query.filter(
+                RemarketingCampaign.status == 'scheduled',
+                RemarketingCampaign.scheduled_at.isnot(None),
+                RemarketingCampaign.scheduled_at <= now
+            ).all()
+            
+            if scheduled_campaigns:
+                logger.info(f"📅 Encontradas {len(scheduled_campaigns)} campanha(s) agendada(s) para executar")
+            
+            for campaign in scheduled_campaigns:
+                try:
+                    # Buscar bot e token
+                    bot = Bot.query.get(campaign.bot_id)
+                    if not bot or not bot.token:
+                        logger.error(f"❌ Bot {campaign.bot_id} não encontrado ou sem token para campanha {campaign.id}")
+                        campaign.status = 'failed'
+                        db.session.commit()
+                        continue
+                    
+                    logger.info(f"📤 Iniciando envio de campanha agendada: {campaign.name} (ID: {campaign.id})")
+                    
+                    # Iniciar envio em background
+                    bot_manager.send_remarketing_campaign(campaign_id=campaign.id, bot_token=bot.token)
+                    
+                    logger.info(f"✅ Campanha agendada {campaign.id} iniciada com sucesso")
+                    
+                except Exception as e:
+                    logger.error(f"❌ Erro ao executar campanha agendada {campaign.id}: {e}", exc_info=True)
                     campaign.status = 'failed'
                     db.session.commit()
-                    continue
-                
-                logger.info(f"📤 Iniciando envio de campanha agendada: {campaign.name} (ID: {campaign.id})")
-                
-                # Iniciar envio em background
-                bot_manager.send_remarketing_campaign(campaign_id=campaign.id, bot_token=bot.token)
-                
-                logger.info(f"✅ Campanha agendada {campaign.id} iniciada com sucesso")
-                
-            except Exception as e:
-                logger.error(f"❌ Erro ao executar campanha agendada {campaign.id}: {e}", exc_info=True)
-                campaign.status = 'failed'
-                db.session.commit()
     
     except Exception as e:
         logger.error(f"❌ Erro ao verificar campanhas agendadas: {e}", exc_info=True)
