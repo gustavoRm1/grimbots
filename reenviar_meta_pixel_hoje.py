@@ -250,19 +250,39 @@ with app.app_context():
             if not payment.fbclid and bot_user and bot_user.fbclid:
                 payment.fbclid = bot_user.fbclid
             
-            # Se ainda não tem campaign_code, tentar buscar do Redis (pode ter sido perdido)
+            # ============================================================
+            # MÉTODO 7: Buscar do Redis (última tentativa)
+            # ============================================================
             if not payment.campaign_code:
-                print(f"  ⚠️ campaign_code ainda vazio após buscar bot_user. Tentando buscar do Redis...")
+                print(f"  ⚠️ campaign_code ainda vazio. Tentando buscar do Redis...")
                 try:
                     import redis
                     redis_client = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
-                    # Tentar buscar por fbclid ou external_id
+                    
+                    # Tentar buscar por fbclid
                     if payment.fbclid:
-                        redis_key = f"tracking_elite:{payment.fbclid}"
+                        # Tentar hash curto primeiro
+                        fbclid_hash_short = payment.fbclid[:16] if len(payment.fbclid) > 16 else payment.fbclid
+                        redis_key = f"tracking_elite:{fbclid_hash_short}"
                         tracking_data = redis_client.hgetall(redis_key)
                         if tracking_data and tracking_data.get('grim'):
                             payment.campaign_code = tracking_data.get('grim')
-                            print(f"  ✅ campaign_code encontrado no Redis (via fbclid): {payment.campaign_code}")
+                            print(f"  ✅ [MÉTODO 7] campaign_code encontrado no Redis (via fbclid_hash): {payment.campaign_code}")
+                    
+                    # Se ainda não encontrou, tentar buscar por qualquer chave que contenha o fbclid
+                    if not payment.campaign_code and payment.fbclid:
+                        # Buscar todas as chaves que começam com "tracking_elite:"
+                        try:
+                            for key in redis_client.scan_iter(match="tracking_elite:*"):
+                                data = redis_client.hgetall(key)
+                                if data.get('fbclid') == payment.fbclid or payment.fbclid in data.get('fbclid', ''):
+                                    if data.get('grim'):
+                                        payment.campaign_code = data.get('grim')
+                                        print(f"  ✅ [MÉTODO 7] campaign_code encontrado no Redis (busca ampla): {payment.campaign_code}")
+                                        break
+                        except Exception as scan_error:
+                            print(f"  ⚠️ Erro ao escanear Redis: {scan_error}")
+                            
                 except Exception as redis_error:
                     print(f"  ⚠️ Erro ao buscar Redis: {redis_error}")
             
