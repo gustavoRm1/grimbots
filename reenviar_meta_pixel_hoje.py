@@ -110,27 +110,43 @@ with app.app_context():
                 elif payment.customer_user_id.isdigit():
                     telegram_user_id = int(payment.customer_user_id)
             
+            print(f"  🔍 Buscando bot_user: bot_id={payment.bot_id}, telegram_user_id={telegram_user_id}")
+            
             bot_user = None
             if telegram_user_id:
                 bot_user = BotUser.query.filter_by(
                     bot_id=payment.bot_id,
                     telegram_user_id=telegram_user_id
                 ).first()
+                
+                if bot_user:
+                    print(f"  ✅ BotUser encontrado! external_id={bot_user.external_id or 'N/A'}, campaign_code={bot_user.campaign_code or 'N/A'}")
+                else:
+                    print(f"  ⚠️ BotUser NÃO encontrado para telegram_user_id={telegram_user_id}")
+                    # Tentar buscar sem filtro de bot_id (pode estar em outro bot)
+                    bot_user_any_bot = BotUser.query.filter_by(
+                        telegram_user_id=telegram_user_id
+                    ).first()
+                    if bot_user_any_bot:
+                        print(f"  ✅ BotUser encontrado em outro bot! external_id={bot_user_any_bot.external_id or 'N/A'}")
+                        bot_user = bot_user_any_bot
             
             # ✅ CORREÇÃO CRÍTICA: Se não tem campaign_code, buscar do bot_user
             if not payment.campaign_code and bot_user:
                 if bot_user.external_id:  # grim está salvo aqui
                     payment.campaign_code = bot_user.external_id
-                    print(f"  ✅ campaign_code atualizado do bot_user: {bot_user.external_id}")
+                    print(f"  ✅ campaign_code atualizado do bot_user.external_id: {bot_user.external_id}")
                 elif bot_user.campaign_code:
                     payment.campaign_code = bot_user.campaign_code
-                    print(f"  ✅ campaign_code atualizado do bot_user: {bot_user.campaign_code}")
+                    print(f"  ✅ campaign_code atualizado do bot_user.campaign_code: {bot_user.campaign_code}")
             
             # ✅ CORREÇÃO: Se não tem UTMs, buscar do bot_user
             if not payment.utm_source and bot_user and bot_user.utm_source:
                 payment.utm_source = bot_user.utm_source
+                print(f"  ✅ utm_source atualizado: {bot_user.utm_source}")
             if not payment.utm_campaign and bot_user and bot_user.utm_campaign:
                 payment.utm_campaign = bot_user.utm_campaign
+                print(f"  ✅ utm_campaign atualizado: {bot_user.utm_campaign}")
             if not payment.utm_content and bot_user and bot_user.utm_content:
                 payment.utm_content = bot_user.utm_content
             if not payment.utm_medium and bot_user and bot_user.utm_medium:
@@ -139,6 +155,22 @@ with app.app_context():
                 payment.utm_term = bot_user.utm_term
             if not payment.fbclid and bot_user and bot_user.fbclid:
                 payment.fbclid = bot_user.fbclid
+            
+            # Se ainda não tem campaign_code, tentar buscar do Redis (pode ter sido perdido)
+            if not payment.campaign_code:
+                print(f"  ⚠️ campaign_code ainda vazio após buscar bot_user. Tentando buscar do Redis...")
+                try:
+                    import redis
+                    redis_client = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
+                    # Tentar buscar por fbclid ou external_id
+                    if payment.fbclid:
+                        redis_key = f"tracking_elite:{payment.fbclid}"
+                        tracking_data = redis_client.hgetall(redis_key)
+                        if tracking_data and tracking_data.get('grim'):
+                            payment.campaign_code = tracking_data.get('grim')
+                            print(f"  ✅ campaign_code encontrado no Redis (via fbclid): {payment.campaign_code}")
+                except Exception as redis_error:
+                    print(f"  ⚠️ Erro ao buscar Redis: {redis_error}")
             
             # ✅ CRÍTICO: Resetar flag para permitir reenvio
             # Isso permite que send_meta_pixel_purchase_event processe novamente
