@@ -1267,22 +1267,28 @@ class BotManager:
                                 if tracking_elite.get('timestamp'):
                                     bot_user.click_timestamp = datetime.fromisoformat(tracking_elite['timestamp'])
                                 
-                                # ✅ CORREÇÃO CRÍTICA: Priorizar `grim` sobre `fbclid` para matching com campanha
-                                # O `grim` é usado pela Meta para identificar a campanha/anúncio específico
+                                # ✅ CORREÇÃO CRÍTICA QI 600+: fbclid como external_id (matching Meta)
+                                # grim como campaign_code (atribuição de campanha)
+                                # O Meta Pixel usa fbclid hashado para matching entre PageView e Purchase
                                 grim_from_redis = tracking_elite.get('grim', '')
                                 fbclid_completo_redis = tracking_elite.get('fbclid')
                                 
-                                if grim_from_redis:
-                                    # ✅ PRIORIDADE MÁXIMA: Usar grim como external_id (matching com campanha)
-                                    bot_user.external_id = grim_from_redis
-                                    logger.info(f"🎯 external_id = grim (campanha): {grim_from_redis}")
-                                    if fbclid_completo_redis:
-                                        bot_user.fbclid = fbclid_completo_redis  # Salvar fbclid também
-                                elif fbclid_completo_redis:
-                                    # Fallback: usar fbclid se não tiver grim
+                                if fbclid_completo_redis:
+                                    # ✅ PRIORIDADE MÁXIMA: fbclid como external_id (matching Meta)
                                     bot_user.fbclid = fbclid_completo_redis
-                                    bot_user.external_id = fbclid_completo_redis
-                                    logger.info(f"🎯 external_id = fbclid (fallback): {fbclid_completo_redis[:30]}...")
+                                    bot_user.external_id = fbclid_completo_redis  # Para matching com Meta
+                                    logger.info(f"🎯 external_id = fbclid (matching Meta): {fbclid_completo_redis[:30]}...")
+                                    
+                                    # Salvar grim como campaign_code (atribuição de campanha)
+                                    if grim_from_redis:
+                                        bot_user.campaign_code = grim_from_redis
+                                        logger.info(f"🎯 campaign_code = grim (campanha): {grim_from_redis}")
+                                elif grim_from_redis:
+                                    # Fallback: se só tiver grim (sem fbclid), usar grim como external_id
+                                    # Mas isso reduz matching quality - melhor quando tem fbclid
+                                    bot_user.external_id = grim_from_redis
+                                    bot_user.campaign_code = grim_from_redis
+                                    logger.warning(f"⚠️ Sem fbclid, usando grim como external_id: {grim_from_redis}")
                                 
                                 # Enriquecer UTMs com dados do Redis (podem ter sido perdidos no start_param)
                                 if not bot_user.utm_source and tracking_elite.get('utm_source'):
@@ -3335,9 +3341,11 @@ Seu pagamento ainda não foi confirmado.
                         utm_content=getattr(bot_user, 'utm_content', None) if bot_user else None,
                         utm_medium=getattr(bot_user, 'utm_medium', None) if bot_user else None,
                         utm_term=getattr(bot_user, 'utm_term', None) if bot_user else None,
+                        # ✅ CRÍTICO QI 600+: fbclid para external_id (matching Meta Pixel)
                         fbclid=getattr(bot_user, 'fbclid', None) if bot_user else None,
-                        # ✅ PRIORIDADE: Usar external_id (grim) como campaign_code para matching com campanha Meta
-                        campaign_code=getattr(bot_user, 'external_id', None) or getattr(bot_user, 'campaign_code', None) if bot_user else None
+                        # ✅ CRÍTICO QI 600+: campaign_code (grim) para atribuição de campanha
+                        # Usar campaign_code do bot_user (grim), não external_id (que agora é fbclid)
+                        campaign_code=getattr(bot_user, 'campaign_code', None) if bot_user else None
                     )
                     db.session.add(payment)
                     
