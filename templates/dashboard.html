@@ -1061,53 +1061,51 @@
      style="background: rgba(0, 0, 0, 0.95); backdrop-filter: blur(8px);">
     <div class="flex items-center justify-center min-h-screen p-4">
         <div @click.away="showGeneralRemarketingModal = false" 
-             class="relative bg-gray-900 rounded-2xl shadow-2xl max-w-4xl w-full"
-             style="border: 2px solid rgba(255, 184, 0, 0.5);">
+             class="relative bg-bg900 rounded-2xl shadow-2xl max-w-4xl w-full"
+             style="border: 2px solid var(--border-accent);">
             
             <!-- Header -->
-            <div class="px-8 py-6 border-b border-gray-800" style="background: rgba(255, 184, 0, 0.05);">
-                <h3 class="text-2xl font-bold flex items-center gap-3" style="color: #FFB800;">
+            <div class="px-8 py-6 border-b border-white border-opacity-5" style="background: var(--border-subtle);">
+                <h3 class="text-2xl font-bold flex items-center gap-3 text-accent500">
                     <i class="fas fa-broadcast-tower"></i>
                     Remarketing Geral
                 </h3>
-                <p class="text-sm text-gray-400 mt-1">Envie uma campanha para múltiplos bots simultaneamente</p>
+                <p class="text-sm text-textSecondary mt-1">Envie uma campanha para múltiplos bots simultaneamente</p>
             </div>
             
             <!-- Body -->
             <div class="px-8 py-6 max-h-[70vh] overflow-y-auto">
                 <form @submit.prevent="sendGeneralRemarketing()">
                     <!-- Seleção de Bots -->
-                    <div class="mb-6 p-4 rounded-xl" style="background: rgba(255, 184, 0, 0.08); border: 1px solid rgba(255, 184, 0, 0.3);">
-                        <label class="block text-sm font-bold text-white mb-3">
-                            <i class="fas fa-robot mr-2" style="color: #FFB800;"></i>
+                    <div class="mb-6 p-4 rounded-xl" style="background: var(--border-subtle); border: 1px solid var(--border-accent);">
+                        <label class="block text-sm font-bold text-textPrimary mb-3">
+                            <i class="fas fa-robot mr-2 text-accent500"></i>
                             Selecione os Bots
                         </label>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <template x-for="bot in bots" :key="bot.id">
-                                <label class="flex items-center gap-3 p-3 bg-gray-800 rounded-lg cursor-pointer hover:bg-gray-750 transition-colors border border-transparent"
-                                       style="transition: all 0.2s ease;"
-                                       :style="generalRemarketing.selectedBots.includes(bot.id) ? 'border-color: #FFB800; background: rgba(255, 184, 0, 0.1);' : 'border-color: transparent;'"
-                                       @mouseenter="$el.style.borderColor = '#FFB800'"
-                                       @mouseleave="$el.style.borderColor = generalRemarketing.selectedBots.includes(bot.id) ? '#FFB800' : 'transparent'">
+                                <label class="flex items-center gap-3 p-3 bg-bg900 rounded-lg cursor-pointer hover:bg-surface-800 transition-colors border"
+                                       :class="generalRemarketing.selectedBots.includes(bot.id) ? 'border-accent500' : 'border-transparent'"
+                                       :style="generalRemarketing.selectedBots.includes(bot.id) ? 'background: var(--border-subtle); border-color: var(--brand-gold-500);' : ''">
                                     <input type="checkbox" 
                                            :value="bot.id" 
                                            x-model="generalRemarketing.selectedBots"
-                                           class="w-4 h-4 bg-gray-700 border-gray-600 rounded focus:ring-yellow-500"
-                                           style="accent-color: #FFB800;">
+                                           class="w-4 h-4 bg-bg900 border-white border-opacity-10 rounded focus:ring-accent500"
+                                           style="accent-color: var(--brand-gold-500);">
                                     <div class="flex items-center gap-2 flex-1">
-                                        <i class="fas fa-robot" style="color: #FFB800;"></i>
+                                        <i class="fas fa-robot text-accent500"></i>
                                         <div>
-                                            <div class="text-sm font-bold text-white" x-text="bot.name"></div>
-                                            <div class="text-xs text-gray-500">@<span x-text="bot.username"></span></div>
+                                            <div class="text-sm font-bold text-textPrimary" x-text="bot.name"></div>
+                                            <div class="text-xs text-textSecondary">@<span x-text="bot.username"></span></div>
                                         </div>
                                     </div>
                                 </label>
                             </template>
                         </div>
-                        <div class="mt-3 p-3 bg-gray-800 rounded-lg">
-                            <p class="text-xs text-gray-400">
-                                <i class="fas fa-info-circle mr-1" style="color: #FFB800;"></i>
-                                <span class="font-bold" style="color: #FFB800;" x-text="generalRemarketing.selectedBots.length"></span> 
+                        <div class="mt-3 p-3 bg-bg900 rounded-lg border border-white border-opacity-5">
+                            <p class="text-xs text-textSecondary">
+                                <i class="fas fa-info-circle mr-1 text-accent500"></i>
+                                <span class="font-bold text-accent500" x-text="generalRemarketing.selectedBots.length"></span> 
                                 bot(s) selecionado(s)
                             </p>
                         </div>
@@ -1115,17 +1113,16 @@
 
                     <!-- Mensagem -->
                     <div class="mb-6">
-                        <label class="block text-sm font-bold text-white mb-2">
-                            <i class="fas fa-comment-alt mr-2" style="color: #FFB800;"></i>
+                        <label class="block text-sm font-bold text-textPrimary mb-2">
+                            <i class="fas fa-comment-alt mr-2 text-accent500"></i>
                             Mensagem do Remarketing
                         </label>
                         <textarea x-model="generalRemarketing.message" 
                                   rows="6"
-                                  class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2"
-                                  style="focus:ring-color: #FFB800;"
+                                  class="w-full px-4 py-3 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary placeholder-textSecondary focus:outline-none focus:ring-2 focus:ring-accent500"
                                   placeholder="Digite a mensagem que será enviada para os usuários...&#10;&#10;Exemplo:&#10;🔥 OFERTA ESPECIAL!&#10;Não perca essa oportunidade única..."></textarea>
-                        <p class="text-xs text-gray-500 mt-2">
-                            <i class="fas fa-lightbulb mr-1" style="color: #FFB800;"></i>
+                        <p class="text-xs text-textSecondary mt-2">
+                            <i class="fas fa-lightbulb mr-1 text-accent500"></i>
                             Use emojis e seja persuasivo para aumentar a conversão
                         </p>
                     </div>
@@ -1133,74 +1130,72 @@
                     <!-- Mídia (Opcional) -->
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                         <div>
-                            <label class="block text-sm font-bold text-white mb-2">
-                                <i class="fas fa-link mr-2" style="color: #FFB800;"></i>
+                            <label class="block text-sm font-bold text-textPrimary mb-2">
+                                <i class="fas fa-link mr-2 text-accent500"></i>
                                 URL da Mídia (opcional)
                             </label>
                             <input type="url" 
                                    x-model="generalRemarketing.media_url" 
-                                   class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                                   class="w-full px-4 py-3 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary placeholder-textSecondary focus:outline-none focus:ring-2 focus:ring-accent500"
                                    placeholder="https://t.me/canal/123">
-                            <p class="text-xs text-gray-500 mt-2">Link do Telegram (vídeo ou foto)</p>
+                            <p class="text-xs text-textSecondary mt-2">Link do Telegram (vídeo ou foto)</p>
                         </div>
                         <div>
-                            <label class="block text-sm font-bold text-white mb-2">
-                                <i class="fas fa-image mr-2" style="color: #FFB800;"></i>
+                            <label class="block text-sm font-bold text-textPrimary mb-2">
+                                <i class="fas fa-image mr-2 text-accent500"></i>
                                 Tipo de Mídia Principal
                             </label>
                             <div class="grid grid-cols-2 gap-3 mt-2">
-                                <label class="flex items-center gap-2 px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer transition-colors"
-                                       :style="generalRemarketing.media_type === 'video' ? 'border-color: #FFB800; background: rgba(255, 184, 0, 0.1);' : ''"
-                                       @mouseenter="if(generalRemarketing.media_type !== 'video') $el.style.borderColor = '#FFB800'"
-                                       @mouseleave="if(generalRemarketing.media_type !== 'video') $el.style.borderColor = '#374151'">
-                                    <input type="radio" x-model="generalRemarketing.media_type" value="video" style="accent-color: #FFB800;">
-                                    <i class="fas fa-video" style="color: #FFB800;"></i>
-                                    <span class="text-sm text-white">Vídeo</span>
+                                <label class="flex items-center gap-2 px-4 py-3 bg-bg900 border rounded-lg cursor-pointer transition-colors"
+                                       :class="generalRemarketing.media_type === 'video' ? 'border-accent500' : 'border-white border-opacity-10'"
+                                       :style="generalRemarketing.media_type === 'video' ? 'background: var(--border-subtle);' : ''">
+                                    <input type="radio" x-model="generalRemarketing.media_type" value="video" style="accent-color: var(--brand-gold-500);">
+                                    <i class="fas fa-video text-accent500"></i>
+                                    <span class="text-sm text-textPrimary">Vídeo</span>
                                 </label>
-                                <label class="flex items-center gap-2 px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer transition-colors"
-                                       :style="generalRemarketing.media_type === 'photo' ? 'border-color: #FFB800; background: rgba(255, 184, 0, 0.1);' : ''"
-                                       @mouseenter="if(generalRemarketing.media_type !== 'photo') $el.style.borderColor = '#FFB800'"
-                                       @mouseleave="if(generalRemarketing.media_type !== 'photo') $el.style.borderColor = '#374151'">
-                                    <input type="radio" x-model="generalRemarketing.media_type" value="photo" style="accent-color: #FFB800;">
-                                    <i class="fas fa-camera" style="color: #FFB800;"></i>
-                                    <span class="text-sm text-white">Foto</span>
+                                <label class="flex items-center gap-2 px-4 py-3 bg-bg900 border rounded-lg cursor-pointer transition-colors"
+                                       :class="generalRemarketing.media_type === 'photo' ? 'border-accent500' : 'border-white border-opacity-10'"
+                                       :style="generalRemarketing.media_type === 'photo' ? 'background: var(--border-subtle);' : ''">
+                                    <input type="radio" x-model="generalRemarketing.media_type" value="photo" style="accent-color: var(--brand-gold-500);">
+                                    <i class="fas fa-camera text-accent500"></i>
+                                    <span class="text-sm text-textPrimary">Foto</span>
                                 </label>
                             </div>
                         </div>
                     </div>
 
                     <!-- Áudio Adicional -->
-                    <div class="mb-6 p-4 rounded-xl" style="background: rgba(168, 85, 247, 0.08); border: 1px solid rgba(168, 85, 247, 0.3);">
+                    <div class="mb-6 p-4 rounded-xl" style="background: var(--border-subtle); border: 1px solid var(--border-accent);">
                         <label class="flex items-center gap-3 cursor-pointer mb-3">
                             <input type="checkbox" 
                                    x-model="generalRemarketing.audio_enabled"
-                                   class="w-5 h-5 bg-gray-700 border-gray-600 rounded focus:ring-purple-500"
-                                   style="accent-color: #A855F7;">
+                                   class="w-5 h-5 bg-bg900 border-white border-opacity-10 rounded focus:ring-accent500"
+                                   style="accent-color: var(--brand-gold-500);">
                             <div class="flex items-center gap-2">
-                                <i class="fas fa-microphone text-purple-500 text-lg"></i>
-                                <span class="text-sm font-bold text-white">Adicionar Áudio Complementar (opcional)</span>
+                                <i class="fas fa-microphone text-accent500 text-lg"></i>
+                                <span class="text-sm font-bold text-textPrimary">Adicionar Áudio Complementar (opcional)</span>
                             </div>
                         </label>
                         <div x-show="generalRemarketing.audio_enabled" x-cloak>
                             <input type="url" 
                                    x-model="generalRemarketing.audio_url" 
-                                   class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                   class="w-full px-4 py-3 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary placeholder-textSecondary focus:outline-none focus:ring-2 focus:ring-accent500"
                                    placeholder="https://t.me/canal/audio">
-                            <p class="text-xs text-gray-500 mt-2">O áudio será enviado após a mídia principal</p>
+                            <p class="text-xs text-textSecondary mt-2">O áudio será enviado após a mídia principal</p>
                         </div>
                     </div>
 
                     <!-- Botões de Produto -->
-                    <div class="mb-6 p-4 rounded-xl" style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3);">
+                    <div class="mb-6 p-4 rounded-xl" style="background: var(--border-subtle); border: 1px solid var(--border-accent);">
                         <div class="flex items-center justify-between mb-3">
-                            <label class="block text-sm font-bold text-white">
-                                <i class="fas fa-tag mr-2 text-emerald-400"></i>
+                            <label class="block text-sm font-bold text-textPrimary">
+                                <i class="fas fa-tag mr-2 text-accent500"></i>
                                 Botões de Produto
                             </label>
                             <button type="button" 
                                     @click="generalRemarketing.buttons.push({ text: '', price: 0, description: '' })"
                                     class="px-3 py-1 text-xs font-bold rounded-lg text-black"
-                                    style="background: linear-gradient(to right, #10B981, #059669);">
+                                    style="background: linear-gradient(to right, var(--brand-gold-500), var(--brand-gold-700));">
                                 <i class="fas fa-plus mr-1"></i>
                                 Adicionar Botão
                             </button>
@@ -1208,8 +1203,8 @@
                         
                         <!-- Lista de botões -->
                         <template x-if="generalRemarketing.buttons.length === 0">
-                            <div class="text-center py-6 text-gray-500 text-sm">
-                                <i class="fas fa-hand-pointer text-2xl mb-2"></i>
+                            <div class="text-center py-6 text-textSecondary text-sm">
+                                <i class="fas fa-hand-pointer text-2xl mb-2 text-accent500"></i>
                                 <p>Nenhum botão adicionado</p>
                                 <p class="text-xs mt-1">Clique em "Adicionar Botão" para criar opções de produtos</p>
                             </div>
@@ -1217,9 +1212,9 @@
                         
                         <div class="space-y-3">
                             <template x-for="(button, index) in generalRemarketing.buttons" :key="index">
-                                <div class="p-4 bg-gray-800 rounded-lg border border-gray-700">
+                                <div class="p-4 bg-bg900 rounded-lg border border-white border-opacity-10">
                                     <div class="flex items-center justify-between mb-3">
-                                        <span class="text-xs font-bold text-emerald-400">
+                                        <span class="text-xs font-bold text-accent500">
                                             <i class="fas fa-tag mr-1"></i>
                                             Botão <span x-text="index + 1"></span>
                                         </span>
@@ -1233,28 +1228,28 @@
                                     
                                     <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                                         <div class="md:col-span-2">
-                                            <label class="block text-xs text-gray-400 mb-1">Texto do Botão</label>
+                                            <label class="block text-xs text-textSecondary mb-1">Texto do Botão</label>
                                             <input type="text" 
                                                    x-model="button.text"
-                                                   class="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                                   class="w-full px-3 py-2 bg-surface-800 border border-white border-opacity-10 rounded-lg text-textPrimary text-sm focus:outline-none focus:ring-2 focus:ring-accent500"
                                                    placeholder="Ex: Comprar Produto Premium">
                                         </div>
                                         <div>
-                                            <label class="block text-xs text-gray-400 mb-1">Preço (R$)</label>
+                                            <label class="block text-xs text-textSecondary mb-1">Preço (R$)</label>
                                             <input type="number" 
                                                    x-model.number="button.price"
                                                    step="0.01"
                                                    min="0"
-                                                   class="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white text-sm font-mono font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                                   class="w-full px-3 py-2 bg-surface-800 border border-white border-opacity-10 rounded-lg text-textPrimary text-sm font-mono font-bold focus:outline-none focus:ring-2 focus:ring-accent500"
                                                    placeholder="19.97">
                                         </div>
                                     </div>
                                     
                                     <div class="mt-3">
-                                        <label class="block text-xs text-gray-400 mb-1">Descrição do Produto</label>
+                                        <label class="block text-xs text-textSecondary mb-1">Descrição do Produto</label>
                                         <input type="text" 
                                                x-model="button.description"
-                                               class="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                               class="w-full px-3 py-2 bg-surface-800 border border-white border-opacity-10 rounded-lg text-textPrimary text-sm focus:outline-none focus:ring-2 focus:ring-accent500"
                                                placeholder="Acesso completo + Bônus exclusivos">
                                     </div>
                                 </div>
@@ -1263,26 +1258,23 @@
                     </div>
                     
                     <!-- Filtros de Segmentação -->
-                    <div class="mb-6 p-4 rounded-xl" style="background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.3);">
-                        <label class="block text-sm font-bold text-white mb-3">
-                            <i class="fas fa-filter mr-2 text-blue-400"></i>
+                    <div class="mb-6 p-4 rounded-xl" style="background: var(--border-subtle); border: 1px solid var(--border-accent);">
+                        <label class="block text-sm font-bold text-textPrimary mb-3">
+                            <i class="fas fa-filter mr-2 text-accent500"></i>
                             Segmentação de Público
                         </label>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                                <label class="block text-xs text-gray-400 mb-2">Dias desde último contato</label>
+                                <label class="block text-xs text-textSecondary mb-2">Dias desde último contato</label>
                                 <input type="number" 
                                        x-model.number="generalRemarketing.days_since_last_contact" 
                                        min="0"
-                                       class="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                                       class="w-full px-4 py-2 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary focus:outline-none focus:ring-2 focus:ring-accent500"
                                        placeholder="7">
-                                <div class="mt-2 p-2 rounded-lg" 
-                                     :style="generalRemarketing.days_since_last_contact == 0 ? 'background: rgba(255, 184, 0, 0.1); border: 1px solid rgba(255, 184, 0, 0.3);' : 'background: rgba(59, 130, 246, 0.05);'">
-                                    <p class="text-xs" 
-                                       :style="generalRemarketing.days_since_last_contact == 0 ? 'color: #FFB800; font-weight: bold;' : 'color: #9CA3AF;'">
-                                        <i class="fas mr-1" 
-                                           :class="generalRemarketing.days_since_last_contact == 0 ? 'fa-bolt' : 'fa-info-circle'"></i>
-                                        <span x-text="generalRemarketing.days_since_last_contact == 0 ? '⚡ ENVIO IMEDIATO para todos os usuários!' : 'Apenas usuários inativos há ' + generalRemarketing.days_since_last_contact + ' dia(s)'"></span>
+                                <div class="mt-2 p-2 rounded-lg bg-bg900 border border-white border-opacity-5">
+                                    <p class="text-xs text-textSecondary">
+                                        <i class="fas fa-info-circle mr-1 text-accent500"></i>
+                                        <span x-text="generalRemarketing.days_since_last_contact == 0 ? 'Todos os usuários (sem filtro de inatividade)' : 'Apenas usuários inativos há ' + generalRemarketing.days_since_last_contact + ' dia(s)'"></span>
                                     </p>
                                 </div>
                             </div>
@@ -1290,50 +1282,52 @@
                                 <label class="flex items-center gap-3 cursor-pointer">
                                     <input type="checkbox" 
                                            x-model="generalRemarketing.exclude_buyers"
-                                           class="w-4 h-4 bg-gray-700 border-gray-600 rounded focus:ring-yellow-500"
-                                           style="accent-color: #FFB800;">
-                                    <span class="text-sm text-white">Excluir quem já comprou</span>
+                                           class="w-4 h-4 bg-bg900 border-white border-opacity-10 rounded focus:ring-accent500"
+                                           style="accent-color: var(--brand-gold-500);">
+                                    <span class="text-sm text-textPrimary">Excluir quem já comprou</span>
                                 </label>
                             </div>
                         </div>
                     </div>
 
                     <!-- ✅ V2.0: Agendamento de Envio -->
-                    <div class="mb-6 p-4 rounded-xl" style="background: rgba(168, 85, 247, 0.08); border: 1px solid rgba(168, 85, 247, 0.3);">
+                    <div class="mb-6 p-4 rounded-xl" style="background: var(--border-subtle); border: 1px solid var(--border-accent);">
                         <div class="flex items-center mb-4">
-                            <div class="flex items-center justify-center h-10 w-10 rounded-lg bg-purple-500 bg-opacity-20 border border-purple-500 border-opacity-30">
-                                <i class="fas fa-clock text-purple-400 text-lg" style="filter: brightness(1.2);"></i>
+                            <div class="flex items-center justify-center h-10 w-10 rounded-lg border border-accent500 border-opacity-30" style="background: var(--border-subtle);">
+                                <i class="fas fa-clock text-accent500 text-lg" style="filter: brightness(1.2);"></i>
                             </div>
-                            <h3 class="ml-3 text-base font-bold text-white">Agendamento de Envio</h3>
+                            <h3 class="ml-3 text-base font-bold text-textPrimary">Agendamento de Envio</h3>
                         </div>
                         
                         <div class="space-y-4">
                             <!-- Opção: Imediato ou Agendar -->
                             <div>
-                                <label class="block text-sm font-medium text-gray-300 mb-3">Quando enviar:</label>
+                                <label class="block text-sm font-medium text-textSecondary mb-3">Quando enviar:</label>
                                 <div class="grid grid-cols-2 gap-3">
-                                    <label class="flex items-center px-4 py-3.5 bg-gray-800 border-2 rounded-xl cursor-pointer transition-all hover:border-opacity-40"
-                                           :style="generalRemarketing.send_mode === 'immediate' ? 'border-color: #A855F7; background: rgba(168, 85, 247, 0.1);' : 'border-color: rgba(75, 85, 99, 0.5); hover:bg-gray-750'">
+                                    <label class="flex items-center px-4 py-3.5 bg-bg900 border-2 rounded-xl cursor-pointer transition-all"
+                                           :class="generalRemarketing.send_mode === 'immediate' ? 'border-accent500' : 'border-white border-opacity-10'"
+                                           :style="generalRemarketing.send_mode === 'immediate' ? 'background: var(--border-subtle);' : ''">
                                         <input type="radio" x-model="generalRemarketing.send_mode" value="immediate"
-                                               class="form-radio text-purple-400 h-4 w-4" style="accent-color: #A855F7;">
+                                               class="form-radio h-4 w-4" style="accent-color: var(--brand-gold-500);">
                                         <div class="ml-3 flex-1">
                                             <div class="flex items-center">
-                                                <i class="fas fa-bolt text-purple-400 mr-2"></i>
-                                                <span class="text-sm font-semibold text-white">Enviar Imediato</span>
+                                                <i class="fas fa-bolt text-accent500 mr-2"></i>
+                                                <span class="text-sm font-semibold text-textPrimary">Enviar Imediato</span>
                                             </div>
-                                            <p class="text-xs text-gray-400 mt-1">Enviar assim que a campanha for criada</p>
+                                            <p class="text-xs text-textSecondary mt-1">Enviar assim que a campanha for criada</p>
                                         </div>
                                     </label>
-                                    <label class="flex items-center px-4 py-3.5 bg-gray-800 border-2 rounded-xl cursor-pointer transition-all hover:border-opacity-40"
-                                           :style="generalRemarketing.send_mode === 'scheduled' ? 'border-color: #A855F7; background: rgba(168, 85, 247, 0.1);' : 'border-color: rgba(75, 85, 99, 0.5); hover:bg-gray-750'">
+                                    <label class="flex items-center px-4 py-3.5 bg-bg900 border-2 rounded-xl cursor-pointer transition-all"
+                                           :class="generalRemarketing.send_mode === 'scheduled' ? 'border-accent500' : 'border-white border-opacity-10'"
+                                           :style="generalRemarketing.send_mode === 'scheduled' ? 'background: var(--border-subtle);' : ''">
                                         <input type="radio" x-model="generalRemarketing.send_mode" value="scheduled"
-                                               class="form-radio text-purple-400 h-4 w-4" style="accent-color: #A855F7;">
+                                               class="form-radio h-4 w-4" style="accent-color: var(--brand-gold-500);">
                                         <div class="ml-3 flex-1">
                                             <div class="flex items-center">
-                                                <i class="fas fa-calendar-alt text-purple-400 mr-2"></i>
-                                                <span class="text-sm font-semibold text-white">Agendar</span>
+                                                <i class="fas fa-calendar-alt text-accent500 mr-2"></i>
+                                                <span class="text-sm font-semibold text-textPrimary">Agendar</span>
                                             </div>
-                                            <p class="text-xs text-gray-400 mt-1">Escolher data e hora específica</p>
+                                            <p class="text-xs text-textSecondary mt-1">Escolher data e hora específica</p>
                                         </div>
                                     </label>
                                 </div>
@@ -1343,32 +1337,32 @@
                             <div x-show="generalRemarketing.send_mode === 'scheduled'" x-cloak class="space-y-3">
                                 <div class="grid grid-cols-2 gap-3">
                                     <div>
-                                        <label class="block text-xs font-semibold text-gray-400 mb-2 flex items-center">
-                                            <i class="fas fa-calendar text-purple-400 mr-1.5 text-xs"></i>
+                                        <label class="block text-xs font-semibold text-textSecondary mb-2 flex items-center">
+                                            <i class="fas fa-calendar text-accent500 mr-1.5 text-xs"></i>
                                             Data
                                         </label>
                                         <input type="date" x-model="generalRemarketing.scheduled_date" 
                                                :min="new Date().toISOString().split('T')[0]"
-                                               class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-400 focus:ring-opacity-20 transition-all">
+                                               class="w-full px-4 py-3 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary focus:outline-none focus:border-accent500 focus:ring-2 focus:ring-accent500 transition-all">
                                     </div>
                                     <div>
-                                        <label class="block text-xs font-semibold text-gray-400 mb-2 flex items-center">
-                                            <i class="fas fa-clock text-purple-400 mr-1.5 text-xs"></i>
+                                        <label class="block text-xs font-semibold text-textSecondary mb-2 flex items-center">
+                                            <i class="fas fa-clock text-accent500 mr-1.5 text-xs"></i>
                                             Hora
                                         </label>
                                         <input type="time" x-model="generalRemarketing.scheduled_time" 
-                                               class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-400 focus:ring-opacity-20 transition-all">
+                                               class="w-full px-4 py-3 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary focus:outline-none focus:border-accent500 focus:ring-2 focus:ring-accent500 transition-all">
                                     </div>
                                 </div>
                                 
                                 <!-- Preview da Data/Hora -->
                                 <div x-show="generalRemarketing.scheduled_date && generalRemarketing.scheduled_time" 
-                                     class="p-3 bg-purple-500 bg-opacity-10 border border-purple-500 border-opacity-20 rounded-lg">
+                                     class="p-3 bg-bg900 border border-accent500 border-opacity-20 rounded-lg">
                                     <div class="flex items-center gap-2">
-                                        <i class="fas fa-info-circle text-purple-400"></i>
-                                        <span class="text-sm text-white">
+                                        <i class="fas fa-info-circle text-accent500"></i>
+                                        <span class="text-sm text-textPrimary">
                                             <strong>Campanha agendada para:</strong>
-                                            <span class="ml-2 font-bold text-purple-400" x-text="formatGeneralRemarketingScheduledDateTime()"></span>
+                                            <span class="ml-2 font-bold text-accent500" x-text="formatGeneralRemarketingScheduledDateTime()"></span>
                                         </span>
                                     </div>
                                 </div>
@@ -1377,13 +1371,13 @@
                     </div>
 
                     <!-- Warning -->
-                    <div class="mb-6 p-4 rounded-lg" style="background: rgba(255, 184, 0, 0.08); border: 1px solid rgba(255, 184, 0, 0.3);">
+                    <div class="mb-6 p-4 rounded-lg" style="background: var(--border-subtle); border: 1px solid var(--border-accent);">
                         <div class="flex items-start gap-3">
-                            <i class="fas fa-exclamation-triangle text-xl" style="color: #FFB800;"></i>
+                            <i class="fas fa-exclamation-triangle text-xl text-accent500"></i>
                             <div>
-                                <p class="text-sm text-white font-bold mb-1">Atenção</p>
-                                <p class="text-xs text-gray-300">
-                                    Esta campanha será enviada para <strong style="color: #FFB800;">TODOS</strong> os usuários dos bots selecionados que atendam aos critérios de segmentação. 
+                                <p class="text-sm text-textPrimary font-bold mb-1">Atenção</p>
+                                <p class="text-xs text-textSecondary">
+                                    Esta campanha será enviada para <strong class="text-accent500">TODOS</strong> os usuários dos bots selecionados que atendam aos critérios de segmentação. 
                                     Certifique-se de que a mensagem está correta antes de enviar.
                                 </p>
                             </div>
@@ -1394,14 +1388,14 @@
                     <div class="flex gap-3">
                         <button type="button" 
                                 @click="showGeneralRemarketingModal = false"
-                                class="flex-1 px-6 py-3 bg-gray-800 border border-gray-700 rounded-lg text-gray-300 font-semibold hover:bg-gray-750 transition-colors">
+                                class="flex-1 px-6 py-3 bg-bg900 border border-white border-opacity-10 rounded-lg text-textSecondary font-semibold hover:bg-surface-800 transition-colors">
                             Cancelar
                         </button>
                         <button type="submit"
                                 :disabled="generalRemarketing.selectedBots.length === 0 || !generalRemarketing.message || loading"
                                 :class="generalRemarketing.selectedBots.length === 0 || !generalRemarketing.message ? 'opacity-50 cursor-not-allowed' : ''"
                                 class="flex-1 px-6 py-3 text-black font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
-                                style="background: linear-gradient(to right, #FFB800, #FFA000);">
+                                style="background: linear-gradient(to right, var(--brand-gold-500), var(--brand-gold-700));">
                             <i class="fas" :class="generalRemarketing.send_mode === 'scheduled' ? 'fa-calendar-check' : 'fa-paper-plane'"></i>
                             <span x-text="loading ? (generalRemarketing.send_mode === 'scheduled' ? 'Agendando...' : 'Enviando...') : (generalRemarketing.send_mode === 'scheduled' ? 'Agendar Remarketing' : 'Enviar Remarketing')"></span>
                         </button>
