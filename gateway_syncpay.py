@@ -113,55 +113,154 @@ class SyncPayGateway(PaymentGateway):
                 logger.error(f"❌ [{self.get_gateway_name()}] Falha ao obter Bearer Token")
                 return None
             
-            # 2. Preparar dados do cliente
+            # 2. Preparar dados do cliente (formato EXATO da documentação SyncPay)
             if not customer_data:
-                customer_data = {
-                    "name": description,
-                    "cpf": "00000000000",
-                    "email": "cliente@bot.com",
-                    "phone": "11999999999"
-                }
+                customer_data = {}
             
-            # 3. Configurar split
+            # ✅ VALIDAÇÃO CRÍTICA: Formato EXATO conforme documentação SyncPay
+            # name: string (obrigatório)
+            client_name = customer_data.get('name') or (description[:100] if description else "Cliente") or "Cliente"
+            
+            # cpf: string, EXATAMENTE 11 dígitos (padrão: /^\d{11}$/)
+            client_cpf = customer_data.get('cpf') or customer_data.get('document', '')
+            # Remover caracteres não numéricos e garantir 11 dígitos
+            client_cpf = ''.join(filter(str.isdigit, str(client_cpf)))
+            if len(client_cpf) != 11:
+                # Gerar CPF válido baseado no customer_user_id ou usar padrão
+                if customer_data.get('document'):
+                    # Usar últimos 11 dígitos do document
+                    doc_str = ''.join(filter(str.isdigit, str(customer_data.get('document', ''))))
+                    client_cpf = doc_str[-11:] if len(doc_str) >= 11 else doc_str.zfill(11)
+                else:
+                    # CPF padrão válido (formato: 00000000000)
+                    client_cpf = "00000000000"
+            
+            # email: string <email> (obrigatório)
+            client_email = customer_data.get('email') or "cliente@bot.com"
+            if '@' not in client_email:
+                client_email = f"user{payment_id}@bot.com"
+            
+            # phone: string, 10-11 dígitos (padrão: /^\d{10,11}$/)
+            client_phone = customer_data.get('phone') or ''
+            # Remover caracteres não numéricos
+            client_phone = ''.join(filter(str.isdigit, str(client_phone)))
+            if len(client_phone) < 10 or len(client_phone) > 11:
+                # Gerar phone válido baseado no customer_user_id ou usar padrão
+                if customer_data.get('phone') or customer_data.get('document'):
+                    phone_source = str(customer_data.get('phone') or customer_data.get('document', ''))
+                    phone_digits = ''.join(filter(str.isdigit, phone_source))
+                    if len(phone_digits) >= 10:
+                        client_phone = phone_digits[-11:] if len(phone_digits) >= 11 else phone_digits[-10:]
+                    else:
+                        client_phone = "11999999999"
+                else:
+                    client_phone = "11999999999"
+            
+            # ✅ Construir objeto client no formato EXATO da documentação
+            client_data = {
+                "name": client_name,
+                "cpf": client_cpf,
+                "email": client_email,
+                "phone": client_phone
+            }
+            
+            logger.debug(f"🔍 [{self.get_gateway_name()}] Client data formatado: {client_data}")
+            
+            # 3. Configurar split (formato EXATO da documentação SyncPay)
+            # split: array [object], >= 1 items, <= 3 items
+            # percentage: integer, >= 1, <= 100 (Porcentagem do amount)
+            # user_id: string <uuid> (Client ID Público das chaves em API Keys)
             split_config = []
             if self.split_user_id:
+                # ✅ Validar que split_percentage é integer entre 1 e 100
+                split_percentage_int = int(self.split_percentage)
+                if split_percentage_int < 1 or split_percentage_int > 100:
+                    logger.error(f"❌ [{self.get_gateway_name()}] Split percentage inválido: {split_percentage_int} (deve ser entre 1 e 100)")
+                    return None
+                
                 split_config.append({
-                    "percentage": self.split_percentage,
-                    "user_id": self.split_user_id
+                    "percentage": split_percentage_int,  # ✅ integer (não float!)
+                    "user_id": self.split_user_id  # ✅ string <uuid>
                 })
-                logger.info(f"💰 [{self.get_gateway_name()}] Split configurado: {self.split_percentage}% para {self.split_user_id[:8]}...")
+                logger.info(f"💰 [{self.get_gateway_name()}] Split configurado: {split_percentage_int}% para {self.split_user_id[:8]}...")
             else:
                 logger.warning(f"⚠️ [{self.get_gateway_name()}] PLATFORM_SPLIT_USER_ID não configurado. Split desabilitado.")
             
-            # 4. Criar payload
+            # 4. Criar payload (formato EXATO da documentação SyncPay)
             cashin_url = f"{self.base_url}/api/partner/v1/cash-in"
             
+            # ✅ HEADERS OBRIGATÓRIOS conforme documentação
             headers = {
+                'Accept': 'application/json',  # ✅ OBRIGATÓRIO pela documentação
                 'Authorization': f'Bearer {bearer_token}',
                 'Content-Type': 'application/json'
             }
             
+            # ✅ Construir payload base (formato EXATO da documentação)
             payload = {
-                "amount": float(amount),
-                "description": description,
-                "webhook_url": self.get_webhook_url(),
-                "client": customer_data,
-                "split": split_config
+                "amount": float(amount),  # ✅ number <double>, >= 0
+                "description": description or None,  # ✅ string | null (opcional)
+                "webhook_url": self.get_webhook_url(),  # ✅ string <uri> (opcional)
+                "client": client_data  # ✅ object (opcional, mas recomendado)
             }
+            
+            # ✅ Remover campos None do payload (API pode rejeitar)
+            payload = {k: v for k, v in payload.items() if v is not None}
+            
+            # ✅ Adicionar split apenas se configurado (não enviar array vazio)
+            if split_config:
+                payload["split"] = split_config
+            
+            # ✅ Validação crítica: verificar se webhook_url está configurado
+            if not payload.get("webhook_url"):
+                logger.error(f"❌ [{self.get_gateway_name()}] WEBHOOK_URL não configurado!")
+                return None
             
             logger.info(f"📤 [{self.get_gateway_name()}] Criando Cash-In (R$ {amount:.2f})...")
             
             # 5. Fazer requisição
+            logger.debug(f"🔍 [{self.get_gateway_name()}] Payload enviado: {payload}")
             response = requests.post(cashin_url, json=payload, headers=headers, timeout=15)
             
             # 6. Processar resposta
+            logger.info(f"📥 [{self.get_gateway_name()}] Status: {response.status_code}")
+            logger.debug(f"🔍 [{self.get_gateway_name()}] Headers: {dict(response.headers)}")
+            logger.debug(f"🔍 [{self.get_gateway_name()}] Resposta completa: {response.text}")
+            
             if response.status_code == 200:
-                data = response.json()
+                try:
+                    data = response.json()
+                except ValueError as e:
+                    logger.error(f"❌ [{self.get_gateway_name()}] Erro ao parsear JSON: {e}")
+                    logger.error(f"Resposta raw: {response.text}")
+                    return None
+                
+                # ✅ FORMATO DA RESPOSTA conforme documentação SyncPay:
+                # {
+                #     "message": "Cashin request successfully submitted",
+                #     "pix_code": "00020126820014br.gov.bcb.pix...",
+                #     "identifier": "3df0319d-ecf7-455a-84c4-070aee2779c1"
+                # }
+                # ✅ NÃO está em wrapper 'data', está direto no root!
+                
+                # ✅ Extrair campos conforme documentação
                 pix_code = data.get('pix_code')
                 identifier = data.get('identifier')
+                message = data.get('message', '')
+                
+                # ✅ Log detalhado da resposta
+                logger.info(f"🔍 [{self.get_gateway_name()}] Resposta parseada: {data}")
+                logger.info(f"🔍 [{self.get_gateway_name()}] Message: {message}")
+                logger.info(f"🔍 [{self.get_gateway_name()}] pix_code encontrado: {bool(pix_code)}")
+                logger.info(f"🔍 [{self.get_gateway_name()}] identifier encontrado: {bool(identifier)}")
                 
                 if not pix_code:
                     logger.error(f"❌ [{self.get_gateway_name()}] Resposta não contém pix_code: {data}")
+                    logger.error(f"❌ [{self.get_gateway_name()}] Chaves disponíveis: {list(data.keys()) if isinstance(data, dict) else 'N/A'}")
+                    return None
+                
+                if not identifier:
+                    logger.error(f"❌ [{self.get_gateway_name()}] Resposta não contém identifier: {data}")
                     return None
                 
                 logger.info(f"✅ [{self.get_gateway_name()}] PIX gerado com sucesso!")
@@ -180,7 +279,11 @@ class SyncPayGateway(PaymentGateway):
                 }
             else:
                 logger.error(f"❌ [{self.get_gateway_name()}] Erro: Status {response.status_code}")
-                logger.error(f"Resposta: {response.text}")
+                try:
+                    error_data = response.json()
+                    logger.error(f"❌ [{self.get_gateway_name()}] Erro JSON: {error_data}")
+                except:
+                    logger.error(f"❌ [{self.get_gateway_name()}] Resposta texto: {response.text}")
                 return None
                 
         except Exception as e:

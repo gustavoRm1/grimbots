@@ -454,12 +454,16 @@
                                         <img src="{{ url_for('static', filename='img/wiinpay.ico') }}" alt="WiinPay" class="w-12 h-12 object-contain">
                                     </template>
                                     <template x-if="gateway.gateway_type === 'atomopay'">
-                                        <img src="{{ url_for('static', filename='img/atomopay.png') }}" alt="Átomo Pay" class="w-12 h-12 object-contain">
+                                        <img src="{{ url_for('static', filename='img/atomopay.png') }}?v=2" 
+                                             alt="Átomo Pay" 
+                                             class="w-12 h-12 object-contain"
+                                             onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'48\' height=\'48\'%3E%3Crect width=\'48\' height=\'48\' fill=\'%23FFB800\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' text-anchor=\'middle\' dy=\'.3em\' fill=\'white\' font-size=\'12\' font-weight=\'bold\'%3EAP%3C/text%3E%3C/svg%3E';">
                                     </template>
                                     <template x-if="gateway.gateway_type === 'syncpay'">
-                                        <div class="w-12 h-12 rounded-lg flex items-center justify-center bg-gradient-to-br from-blue-500 to-blue-600">
-                                            <span class="text-white font-bold text-xs">SP</span>
-                                        </div>
+                                        <img src="{{ url_for('static', filename='img/syncpay.png') }}?v=1" 
+                                             alt="SyncPay" 
+                                             class="w-12 h-12 object-contain"
+                                             onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'48\' height=\'48\'%3E%3Crect width=\'48\' height=\'48\' fill=\'%233B82F6\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' text-anchor=\'middle\' dy=\'.3em\' fill=\'white\' font-size=\'12\' font-weight=\'bold\'%3ESP%3C/text%3E%3C/svg%3E';">
                                     </template>
                                 </div>
                                 <div class="flex-1">
@@ -853,9 +857,10 @@
                         <div class="flex items-center gap-3 flex-1">
                             <div class="w-12 h-12 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0" 
                                  style="background: linear-gradient(135deg, rgba(255, 184, 0, 0.1), rgba(255, 184, 0, 0.05));">
-                                <img src="{{ url_for('static', filename='img/atomopay.png') }}" 
+                                <img src="{{ url_for('static', filename='img/atomopay.png') }}?v=2" 
                                      alt="Átomo Pay" 
-                                     class="w-12 h-12 object-contain">
+                                     class="w-12 h-12 object-contain"
+                                     onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'48\' height=\'48\'%3E%3Crect width=\'48\' height=\'48\' fill=\'%23FFB800\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' text-anchor=\'middle\' dy=\'.3em\' fill=\'white\' font-size=\'12\' font-weight=\'bold\'%3EAP%3C/text%3E%3C/svg%3E';">
                             </div>
                             <div>
                                 <h3 class="text-sm font-bold text-white">Átomo Pay</h3>
@@ -916,9 +921,10 @@
                         <div class="flex items-center gap-3 flex-1">
                             <div class="w-12 h-12 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0" 
                                  style="background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(59, 130, 246, 0.05));">
-                                <div class="w-12 h-12 rounded-lg flex items-center justify-center bg-gradient-to-br from-blue-500 to-blue-600">
-                                    <span class="text-white font-bold text-xs">SP</span>
-                                </div>
+                                <img src="{{ url_for('static', filename='img/syncpay.png') }}?v=1" 
+                                     alt="SyncPay" 
+                                     class="w-12 h-12 object-contain"
+                                     onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'48\' height=\'48\'%3E%3Crect width=\'48\' height=\'48\' fill=\'%233B82F6\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' text-anchor=\'middle\' dy=\'.3em\' fill=\'white\' font-size=\'12\' font-weight=\'bold\'%3ESP%3C/text%3E%3C/svg%3E';">
                             </div>
                             <div>
                                 <h3 class="text-sm font-bold text-white">SyncPay</h3>
