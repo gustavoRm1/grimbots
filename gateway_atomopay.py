@@ -460,14 +460,49 @@ class AtomPayGateway(PaymentGateway):
             logger.info(f"   amount: {payload.get('amount')} centavos")
             logger.info(f"   payment_method: {payload.get('payment_method')}")
             logger.info(f"   installments: {payload.get('installments')}")
-            logger.info(f"   offer_hash: {payload.get('offer_hash', 'N/A')[:8]}...")
-            logger.info(f"   product_hash (no cart): {payload.get('cart', [{}])[0].get('product_hash', 'N/A')[:8] if payload.get('cart') else 'N/A'}...")
+            logger.info(f"   offer_hash (no payload): {payload.get('offer_hash', 'N/A')[:8]}...")
+            
+            # ✅ LOG COMPLETO DO CART (verificar se product_hash e offer_hash estão presentes)
+            if payload.get('cart') and len(payload['cart']) > 0:
+                cart_item = payload['cart'][0]
+                logger.info(f"   📦 Cart item completo:")
+                logger.info(f"      title: {cart_item.get('title', 'N/A')}")
+                logger.info(f"      price: {cart_item.get('price', 'N/A')}")
+                logger.info(f"      quantity: {cart_item.get('quantity', 'N/A')}")
+                logger.info(f"      operation_type: {cart_item.get('operation_type', 'N/A')}")
+                logger.info(f"      tangible: {cart_item.get('tangible', 'N/A')}")
+                logger.info(f"      product_hash: {cart_item.get('product_hash', '❌ NÃO ENCONTRADO')[:8]}...")
+                logger.info(f"      offer_hash: {cart_item.get('offer_hash', '❌ NÃO ENCONTRADO')[:8]}...")
+                
+                # ✅ VALIDAÇÃO CRÍTICA: Se product_hash ou offer_hash não estão no cart, ERRO FATAL
+                if not cart_item.get('product_hash'):
+                    logger.error(f"❌ [{self.get_gateway_name()}] ERRO CRÍTICO: product_hash NÃO está no cart!")
+                    return None
+                if not cart_item.get('offer_hash'):
+                    logger.error(f"❌ [{self.get_gateway_name()}] ERRO CRÍTICO: offer_hash NÃO está no cart!")
+                    return None
             logger.info(f"   customer.name: {payload.get('customer', {}).get('name', 'N/A')}")
             logger.info(f"   customer.email: {payload.get('customer', {}).get('email', 'N/A')}")
             logger.info(f"   customer.phone_number: {payload.get('customer', {}).get('phone_number', 'N/A')}")
             logger.info(f"   customer.document: {payload.get('customer', {}).get('document', 'N/A')[:3]}***")
             logger.info(f"   reference: {payload.get('reference', 'N/A')}")
-            logger.debug(f"📦 Payload completo (JSON): {payload}")
+            
+            # ✅ LOG COMPLETO DO PAYLOAD JSON (antes de enviar)
+            import json
+            payload_json = json.dumps(payload, indent=2, ensure_ascii=False)
+            logger.info(f"📋 [{self.get_gateway_name()}] Payload JSON completo (antes de enviar):")
+            logger.info(f"{payload_json[:2000]}...")  # Primeiros 2000 caracteres
+            
+            # ✅ VALIDAÇÃO FINAL: Verificar se cart tem product_hash e offer_hash
+            if payload.get('cart') and len(payload['cart']) > 0:
+                cart_item = payload['cart'][0]
+                if not cart_item.get('product_hash'):
+                    logger.error(f"❌ [{self.get_gateway_name()}] ERRO FATAL: product_hash ausente no cart antes de enviar!")
+                    return None
+                if not cart_item.get('offer_hash'):
+                    logger.error(f"❌ [{self.get_gateway_name()}] ERRO FATAL: offer_hash ausente no cart antes de enviar!")
+                    return None
+                logger.info(f"✅ [{self.get_gateway_name()}] Validação final: cart contém product_hash e offer_hash")
             
             # ✅ FAZER REQUISIÇÃO
             response = self._make_request('POST', '/transactions', payload=payload)
