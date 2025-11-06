@@ -1999,7 +1999,9 @@ class BotManager:
                     # Exibir próximo order bump ou finalizar (usar bot_id correto)
                     self._show_next_order_bump(bot_id, token, chat_id, user_key)
                 else:
-                    logger.error(f"❌ Sessão de order bump não encontrada: {user_key}")
+                    # ✅ PROTEÇÃO: Sessão já foi finalizada (usuário clicou em botão antigo)
+                    # Callback já foi respondido acima, apenas logar como warning
+                    logger.warning(f"⚠️ Sessão de order bump não encontrada (já finalizada): {user_key} | Callback já processado")
             
             # ✅ NOVO: Múltiplos Order Bumps - Recusar
             elif callback_data.startswith('multi_bump_no_'):
@@ -2054,7 +2056,9 @@ class BotManager:
                     # Exibir próximo order bump ou finalizar (usar bot_id correto)
                     self._show_next_order_bump(bot_id, token, chat_id, user_key)
                 else:
-                    logger.error(f"❌ Sessão de order bump não encontrada: {user_key}")
+                    # ✅ PROTEÇÃO: Sessão já foi finalizada (usuário clicou em botão antigo)
+                    # Callback já foi respondido acima, apenas logar como warning
+                    logger.warning(f"⚠️ Sessão de order bump não encontrada (já finalizada): {user_key} | Callback já processado")
             
             # ✅ NOVO: Order Bump Downsell - Aceitar
             elif callback_data.startswith('downsell_bump_yes_'):
