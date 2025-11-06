@@ -18,7 +18,9 @@ logger = logging.getLogger(__name__)
 try:
     redis_conn = Redis.from_url(
         os.environ.get('REDIS_URL', 'redis://localhost:6379/0'),
-        decode_responses=True
+        decode_responses=True,
+        encoding='utf-8',
+        encoding_errors='ignore'
     )
     # ✅ QI 200: 3 FILAS SEPARADAS
     task_queue = Queue('tasks', connection=redis_conn)  # Telegram (urgente)
