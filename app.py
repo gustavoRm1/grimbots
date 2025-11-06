@@ -473,19 +473,37 @@ def reconcile_pushynpay_payments():
     except Exception as e:
         logger.error(f"❌ Reconciliador PushynPay: erro: {e}", exc_info=True)
 
-# ✅ Registrar job com INTERVALO MAIOR (5 minutos) e BATCH LIMITADO
+# ✅ QI 200: Reconciliadores movidos para fila async (gateway_queue)
+# Agendar job que enfileira reconciliação (não executa diretamente)
+def enqueue_reconcile_paradise():
+    """Enfileira reconciliação Paradise na fila gateway"""
+    try:
+        from tasks_async import gateway_queue
+        if gateway_queue:
+            gateway_queue.enqueue(reconcile_paradise_payments)
+    except Exception as e:
+        logger.warning(f"Erro ao enfileirar reconciliação Paradise: {e}")
+
+def enqueue_reconcile_pushynpay():
+    """Enfileira reconciliação PushynPay na fila gateway"""
+    try:
+        from tasks_async import gateway_queue
+        if gateway_queue:
+            gateway_queue.enqueue(reconcile_pushynpay_payments)
+    except Exception as e:
+        logger.warning(f"Erro ao enfileirar reconciliação PushynPay: {e}")
+
 try:
-    scheduler.add_job(id='reconcile_paradise', func=reconcile_paradise_payments,
+    scheduler.add_job(id='reconcile_paradise', func=enqueue_reconcile_paradise,
                       trigger='interval', seconds=300, replace_existing=True, max_instances=1)
-    logger.info("✅ Job de reconciliação Paradise agendado (5min, batch=5)")
+    logger.info("✅ Job de reconciliação Paradise agendado (5min, fila async)")
 except Exception as _e:
     logger.warning(f"⚠️ Não foi possível agendar reconciliador Paradise: {_e}")
 
-# ✅ Registrar job PushynPay com INTERVALO MAIOR (5 minutos) e BATCH LIMITADO
 try:
-    scheduler.add_job(id='reconcile_pushynpay', func=reconcile_pushynpay_payments,
+    scheduler.add_job(id='reconcile_pushynpay', func=enqueue_reconcile_pushynpay,
                       trigger='interval', seconds=300, replace_existing=True, max_instances=1)
-    logger.info("✅ Job de reconciliação PushynPay agendado (5min, batch=5)")
+    logger.info("✅ Job de reconciliação PushynPay agendado (5min, fila async)")
 except Exception as _e:
     logger.warning(f"⚠️ Não foi possível agendar reconciliador PushynPay: {_e}")
 
@@ -7256,11 +7274,11 @@ def payment_webhook(gateway_type):
     # ✅ QI 200: Log mínimo (reduzir 80% dos logs)
     logger.info(f"🔔 Webhook {gateway_type} recebido")
     
-    # ✅ QI 200: Enfileirar processamento pesado
+    # ✅ QI 200: Enfileirar processamento pesado na fila WEBHOOK
     try:
-        from tasks_async import task_queue, process_webhook_async
-        if task_queue:
-            task_queue.enqueue(
+        from tasks_async import webhook_queue, process_webhook_async
+        if webhook_queue:
+            webhook_queue.enqueue(
                 process_webhook_async,
                 gateway_type=gateway_type,
                 data=data

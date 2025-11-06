@@ -1,6 +1,9 @@
 """
 Tasks Assíncronas QI 200 - Redis Queue (RQ)
-Mover processos pesados para background e deixar rotas síncronas instantâneas
+3 FILAS SEPARADAS para máxima performance:
+1. tasks - Telegram (urgente)
+2. gateway - Gateway/PIX/Reconciliadores
+3. webhook - Webhooks de pagamento
 """
 
 import os
@@ -17,13 +20,17 @@ try:
         os.environ.get('REDIS_URL', 'redis://localhost:6379/0'),
         decode_responses=True
     )
-    # Criar fila de tasks
-    task_queue = Queue('tasks', connection=redis_conn)
-    logger.info("✅ Fila RQ inicializada")
+    # ✅ QI 200: 3 FILAS SEPARADAS
+    task_queue = Queue('tasks', connection=redis_conn)  # Telegram (urgente)
+    gateway_queue = Queue('gateway', connection=redis_conn)  # Gateway/PIX/Reconciliadores
+    webhook_queue = Queue('webhook', connection=redis_conn)  # Webhooks
+    logger.info("✅ 3 Filas RQ inicializadas: tasks, gateway, webhook")
 except Exception as e:
     logger.error(f"❌ Erro ao conectar Redis para RQ: {e}")
     redis_conn = None
     task_queue = None
+    gateway_queue = None
+    webhook_queue = None
 
 
 def process_start_async(
@@ -481,6 +488,22 @@ def process_webhook_async(gateway_type: str, data: Dict[str, Any]):
         return {'status': 'error', 'error': str(e)}
 
 
+def reconcile_paradise_payments_async():
+    """Reconciliador Paradise em fila async"""
+    try:
+        from app import reconcile_paradise_payments
+        reconcile_paradise_payments()
+    except Exception as e:
+        logger.error(f"❌ Erro em reconcile_paradise_payments_async: {e}", exc_info=True)
+
+def reconcile_pushynpay_payments_async():
+    """Reconciliador PushynPay em fila async"""
+    try:
+        from app import reconcile_pushynpay_payments
+        reconcile_pushynpay_payments()
+    except Exception as e:
+        logger.error(f"❌ Erro em reconcile_pushynpay_payments_async: {e}", exc_info=True)
+
 def generate_pix_async(
     bot_id: int,
     token: str,
@@ -490,7 +513,7 @@ def generate_pix_async(
     config: Dict[str, Any]
 ):
     """
-    Gera PIX de forma assíncrona
+    Gera PIX de forma assíncrona (FILA GATEWAY)
     
     Executa:
     - Validação de produto

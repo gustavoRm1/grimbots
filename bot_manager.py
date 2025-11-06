@@ -4217,37 +4217,127 @@ Seu pagamento ainda não foi confirmado.
                     inline_keyboard.append([button_dict])
                 reply_markup = {'inline_keyboard': inline_keyboard}
             
-            # Enviar mídia + mensagem
+            # ✅ QI 200: Enviar mídia + mensagem com validações
             if media_url:
-                if media_type == 'video':
-                    url = f"{base_url}/sendVideo"
-                    payload = {
-                        'chat_id': chat_id,
-                        'video': media_url,
-                        'caption': message,
-                        'parse_mode': 'HTML'
-                    }
+                # ✅ QI 200: Validar tipo de mídia e limitar caption (max 900 chars)
+                caption_text = message[:900] if len(message) > 900 else message
+                
+                # ✅ QI 200: Validar extensão de arquivo para photos
+                if media_type == 'photo':
+                    # Telegram só aceita JPG, JPEG, PNG para photos
+                    valid_extensions = ('.jpg', '.jpeg', '.png')
+                    if not media_url.lower().endswith(valid_extensions):
+                        # Se não for formato válido, enviar só texto
+                        logger.warning(f"⚠️ Formato de imagem inválido: {media_url[-10:]} - enviando só texto")
+                        url = f"{base_url}/sendMessage"
+                        payload = {
+                            'chat_id': chat_id,
+                            'text': message,
+                            'parse_mode': 'HTML'
+                        }
+                        if reply_markup:
+                            payload['reply_markup'] = reply_markup
+                        response = requests.post(url, json=payload, timeout=3)
+                    else:
+                        # ✅ QI 200: Se caption > 900, enviar mídia sem caption e mensagem separada
+                        if len(message) > 900:
+                            # Enviar mídia sem caption
+                            url = f"{base_url}/sendPhoto"
+                            payload = {
+                                'chat_id': chat_id,
+                                'photo': media_url,
+                                'parse_mode': 'HTML'
+                            }
+                            if reply_markup:
+                                payload['reply_markup'] = reply_markup
+                            response = requests.post(url, json=payload, timeout=3)
+                            
+                            # Enviar mensagem completa separadamente
+                            if response.status_code == 200:
+                                url_msg = f"{base_url}/sendMessage"
+                                payload_msg = {
+                                    'chat_id': chat_id,
+                                    'text': message,
+                                    'parse_mode': 'HTML'
+                                }
+                                requests.post(url_msg, json=payload_msg, timeout=3)
+                        else:
+                            url = f"{base_url}/sendPhoto"
+                            payload = {
+                                'chat_id': chat_id,
+                                'photo': media_url,
+                                'caption': caption_text,
+                                'parse_mode': 'HTML'
+                            }
+                            if reply_markup:
+                                payload['reply_markup'] = reply_markup
+                            response = requests.post(url, json=payload, timeout=3)
+                elif media_type == 'video':
+                    # ✅ QI 200: Se caption > 900, enviar vídeo sem caption e mensagem separada
+                    if len(message) > 900:
+                        url = f"{base_url}/sendVideo"
+                        payload = {
+                            'chat_id': chat_id,
+                            'video': media_url,
+                            'parse_mode': 'HTML'
+                        }
+                        if reply_markup:
+                            payload['reply_markup'] = reply_markup
+                        response = requests.post(url, json=payload, timeout=3)
+                        
+                        # Enviar mensagem completa separadamente
+                        if response.status_code == 200:
+                            url_msg = f"{base_url}/sendMessage"
+                            payload_msg = {
+                                'chat_id': chat_id,
+                                'text': message,
+                                'parse_mode': 'HTML'
+                            }
+                            requests.post(url_msg, json=payload_msg, timeout=3)
+                    else:
+                        url = f"{base_url}/sendVideo"
+                        payload = {
+                            'chat_id': chat_id,
+                            'video': media_url,
+                            'caption': caption_text,
+                            'parse_mode': 'HTML'
+                        }
+                        if reply_markup:
+                            payload['reply_markup'] = reply_markup
+                        response = requests.post(url, json=payload, timeout=3)
                 elif media_type == 'audio':
-                    url = f"{base_url}/sendAudio"
-                    payload = {
-                        'chat_id': chat_id,
-                        'audio': media_url,
-                        'caption': message,
-                        'parse_mode': 'HTML'
-                    }
-                else:  # photo
-                    url = f"{base_url}/sendPhoto"
-                    payload = {
-                        'chat_id': chat_id,
-                        'photo': media_url,
-                        'caption': message,
-                        'parse_mode': 'HTML'
-                    }
-                
-                if reply_markup:
-                    payload['reply_markup'] = reply_markup
-                
-                response = requests.post(url, json=payload, timeout=3)
+                    # ✅ QI 200: Se caption > 900, enviar áudio sem caption e mensagem separada
+                    if len(message) > 900:
+                        url = f"{base_url}/sendAudio"
+                        payload = {
+                            'chat_id': chat_id,
+                            'audio': media_url,
+                            'parse_mode': 'HTML'
+                        }
+                        if reply_markup:
+                            payload['reply_markup'] = reply_markup
+                        response = requests.post(url, json=payload, timeout=3)
+                        
+                        # Enviar mensagem completa separadamente
+                        if response.status_code == 200:
+                            url_msg = f"{base_url}/sendMessage"
+                            payload_msg = {
+                                'chat_id': chat_id,
+                                'text': message,
+                                'parse_mode': 'HTML'
+                            }
+                            requests.post(url_msg, json=payload_msg, timeout=3)
+                    else:
+                        url = f"{base_url}/sendAudio"
+                        payload = {
+                            'chat_id': chat_id,
+                            'audio': media_url,
+                            'caption': caption_text,
+                            'parse_mode': 'HTML'
+                        }
+                        if reply_markup:
+                            payload['reply_markup'] = reply_markup
+                        response = requests.post(url, json=payload, timeout=3)
             else:
                 # Enviar apenas mensagem
                 url = f"{base_url}/sendMessage"
