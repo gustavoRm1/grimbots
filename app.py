@@ -3713,6 +3713,16 @@ def public_redirect(slug):
     fbp_cookie = request.cookies.get('_fbp', '')
     fbc_cookie = request.cookies.get('_fbc', '')
     
+    # ✅ GERAR _fbp MANUALMENTE se não existir (Facebook IAB pode não enviar)
+    # Formato: fb.{version}.{timestamp}.{random}
+    if not fbp_cookie:
+        try:
+            from utils.tracking_service import TrackingService
+            fbp_cookie = TrackingService.generate_fbp()
+            logger.info(f"🔑 _fbp gerado manualmente: {fbp_cookie[:30]}...")
+        except Exception as e:
+            logger.warning(f"⚠️ Erro ao gerar _fbp: {e}")
+    
     # ✅ GERAR _fbc MANUALMENTE se não existir mas tiver fbclid
     # Formato: fb.{version}.{timestamp}.{fbclid}
     if not fbc_cookie and fbclid:
@@ -6348,6 +6358,11 @@ def send_meta_pixel_pageview_event(pool, request):
         # ✅ PRIORIDADE 1: Cookies do browser (MÁXIMA PRIORIDADE - Meta confia mais)
         fbp_value = request.cookies.get('_fbp', '')
         fbc_value = request.cookies.get('_fbc', '')
+        
+        # ✅ GERAR _fbp se não existir (Facebook IAB pode não enviar)
+        if not fbp_value:
+            fbp_value = TrackingService.generate_fbp()
+            logger.info(f"🔑 PageView - _fbp gerado automaticamente: {fbp_value[:30]}...")
         
         if fbp_value:
             logger.info(f"🔑 PageView - fbp recuperado dos cookies do browser: {fbp_value[:20]}...")

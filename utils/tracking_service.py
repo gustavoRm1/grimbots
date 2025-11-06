@@ -40,6 +40,19 @@ class TrackingService:
     TTL_DAYS = 30  # ✅ 30 dias de persistência (não 7)
     
     @staticmethod
+    def generate_fbp() -> str:
+        """
+        Gera _fbp quando não disponível no cookie
+        
+        Formato: fb.{version}.{timestamp}.{random}
+        Exemplo: fb.1.1762413994.1234567890
+        """
+        import random
+        timestamp = int(datetime.now().timestamp())
+        random_part = random.randint(1000000000, 9999999999)
+        return f"fb.1.{timestamp}.{random_part}"
+    
+    @staticmethod
     def generate_fbc(fbclid: str) -> str:
         """
         Gera _fbc corretamente: fb.1.{timestamp}.{fbclid}
