@@ -1,0 +1,17 @@
+[Unit]
+Description=RQ Worker - Webhook (Pagamentos)
+After=network.target redis.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/grimbots
+Environment="PYTHONPATH=/root/grimbots"
+Environment="REDIS_URL=redis://localhost:6379/0"
+ExecStart=/root/grimbots/venv/bin/python start_rq_worker.py webhook
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+
