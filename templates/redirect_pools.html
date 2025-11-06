@@ -753,9 +753,10 @@ function poolsApp() {
             meta_events_viewcontent: true,
             meta_events_purchase: true,
             meta_cloaker_enabled: false,
-                        meta_cloaker_param_name: 'grim',  // Sempre fixo como "grim"
-                        meta_cloaker_param_value: ''
+            meta_cloaker_param_name: 'grim',  // Sempre fixo como "grim"
+            meta_cloaker_param_value: ''
         },
+        originalMetaAccessToken: null,  // ✅ CRÍTICO: Salvar token original para detectar alterações
 
         async init() {
             await this.loadPools();
@@ -923,10 +924,11 @@ function poolsApp() {
                 
                 if (response.ok) {
                     // ✅ CORREÇÃO: Tratar null/undefined corretamente (não usar || '' que mascara null)
+                    const accessToken = (data.meta_access_token && data.meta_access_token !== null) ? data.meta_access_token : '';
                     this.metaPixelConfig = {
                         meta_tracking_enabled: data.meta_tracking_enabled === true,
                         meta_pixel_id: (data.meta_pixel_id && data.meta_pixel_id !== null) ? data.meta_pixel_id : '',
-                        meta_access_token: (data.meta_access_token && data.meta_access_token !== null) ? data.meta_access_token : '',
+                        meta_access_token: accessToken,
                         meta_test_event_code: (data.meta_test_event_code && data.meta_test_event_code !== null) ? data.meta_test_event_code : '',
                         meta_events_pageview: data.meta_events_pageview !== false,
                         meta_events_viewcontent: data.meta_events_viewcontent !== false,
@@ -935,6 +937,8 @@ function poolsApp() {
                         meta_cloaker_param_name: 'grim',  // Sempre fixo como "grim" (ignorar valor do servidor)
                         meta_cloaker_param_value: (data.meta_cloaker_param_value && data.meta_cloaker_param_value !== null) ? data.meta_cloaker_param_value : ''
                     };
+                    // ✅ CRÍTICO: Salvar token original para detectar se foi alterado
+                    this.originalMetaAccessToken = accessToken;
                     this.showMetaPixelModal = true;
                 } else {
                     alert('Erro ao carregar configuração Meta Pixel');
@@ -980,9 +984,19 @@ function poolsApp() {
                     this.metaPixelConfig.meta_access_token = '';
                 }
                 
+                // ✅ CRÍTICO: Detectar se access_token foi alterado
+                // Se não foi alterado, enviar "..." para que backend mantenha o existente
+                let accessTokenToSend = this.metaPixelConfig.meta_access_token;
+                if (this.originalMetaAccessToken && 
+                    this.metaPixelConfig.meta_access_token === this.originalMetaAccessToken) {
+                    // Token não foi alterado, enviar marcador
+                    accessTokenToSend = '...' + this.originalMetaAccessToken.substring(0, 10);
+                }
+                
                 // ✅ GARANTIR: Sempre enviar "grim" como nome do parâmetro (nunca pode ser alterado)
                 const configToSend = {
                     ...this.metaPixelConfig,
+                    meta_access_token: accessTokenToSend,  // ✅ Usar token tratado
                     meta_cloaker_param_name: 'grim'  // Forçar sempre "grim"
                 };
                 

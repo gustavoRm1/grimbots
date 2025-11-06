@@ -4274,13 +4274,14 @@ def get_pool_meta_pixel_config(pool_id):
     
     from utils.encryption import decrypt
     
-    # ✅ CORREÇÃO: Só descriptografar token se tracking estiver habilitado E token existir
+    # ✅ CRÍTICO: Retornar token COMPLETO para comparação no frontend
+    # O frontend precisa do token completo para detectar se foi alterado
     access_token_display = None
     if pool.meta_tracking_enabled and pool.meta_access_token:
         try:
             access_token_decrypted = decrypt(pool.meta_access_token)
-            # Mostrar apenas primeiros e últimos caracteres
-            access_token_display = access_token_decrypted[:10] + '...' + access_token_decrypted[-4:]
+            # ✅ RETORNAR TOKEN COMPLETO (não mascarado) para que frontend possa comparar
+            access_token_display = access_token_decrypted
         except Exception as e:
             logger.warning(f"⚠️ Erro ao descriptografar access_token do pool {pool_id}: {e}")
             access_token_display = None
@@ -4290,7 +4291,7 @@ def get_pool_meta_pixel_config(pool_id):
         'pool_id': pool.id,
         'pool_name': pool.name,
         'meta_pixel_id': pool.meta_pixel_id if pool.meta_pixel_id else None,
-        'meta_access_token': access_token_display,  # Já é None se não existir
+        'meta_access_token': access_token_display,  # ✅ Token completo para comparação
         'meta_tracking_enabled': pool.meta_tracking_enabled,
         'meta_test_event_code': pool.meta_test_event_code if pool.meta_test_event_code else None,
         'meta_events_pageview': pool.meta_events_pageview,
@@ -4349,34 +4350,47 @@ def update_pool_meta_pixel_config(pool_id):
         
         # Validar Access Token
         access_token = data.get('meta_access_token', '').strip()
+        logger.info(f"🔍 [Meta Pixel Save] User: {current_user.email} | Pool: {pool.name} | Token recebido: {'SIM' if access_token else 'NÃO'} | Tamanho: {len(access_token) if access_token else 0}")
+        
         if access_token:
             # Se começar com "..." significa que não foi alterado (campo mascarado do frontend)
             if access_token.startswith('...'):
-                # Token não foi alterado, manter o existente
+                # Token não foi alterado, manter o existente (não atualizar)
+                logger.info(f"✅ [Meta Pixel Save] Token não foi alterado (marcador '...' detectado) - mantendo existente")
                 access_token = None
             else:
+                logger.info(f"🔄 [Meta Pixel Save] Token foi alterado - validando e testando conexão...")
                 if not MetaPixelHelper.is_valid_access_token(access_token):
+                    logger.error(f"❌ [Meta Pixel Save] Access Token inválido (mínimo 50 caracteres, recebido: {len(access_token)})")
                     return jsonify({'error': 'Access Token inválido (mínimo 50 caracteres)'}), 400
                 
                 # Testar conexão antes de salvar (precisa de pixel_id válido também)
                 if not pixel_id:
+                    logger.error(f"❌ [Meta Pixel Save] Pixel ID obrigatório quando Access Token é fornecido")
                     return jsonify({'error': 'Pixel ID é obrigatório quando Access Token é fornecido'}), 400
                 
+                logger.info(f"🧪 [Meta Pixel Save] Testando conexão com Pixel {pixel_id[:10]}...")
                 test_result = MetaPixelAPI.test_connection(pixel_id, access_token)
                 if not test_result['success']:
+                    logger.error(f"❌ [Meta Pixel Save] Falha ao conectar: {test_result.get('error', 'Erro desconhecido')}")
                     return jsonify({'error': f'Falha ao conectar: {test_result["error"]}'}), 400
                 
+                logger.info(f"✅ [Meta Pixel Save] Conexão testada com sucesso - criptografando token...")
                 # Criptografar antes de salvar
                 pool.meta_access_token = encrypt(access_token)
         else:
             # ✅ CORREÇÃO: String vazia = limpar campo
+            logger.info(f"🧹 [Meta Pixel Save] Token vazio - limpando campo")
             pool.meta_access_token = None
         
-        # ✅ CORREÇÃO: Atualizar pixel_id (pode ser None para limpar)
-            pool.meta_pixel_id = pixel_id
+        # ✅ CRÍTICO: Atualizar pixel_id SEMPRE (independente do access_token)
+        # Isso garante que mesmo quando o token não é alterado, o pixel_id é salvo
+        pool.meta_pixel_id = pixel_id
+        logger.info(f"💾 [Meta Pixel Save] Pixel ID salvo: {pixel_id[:10] if pixel_id else 'None'}...")
         
         if 'meta_tracking_enabled' in data:
             pool.meta_tracking_enabled = bool(data['meta_tracking_enabled'])
+            logger.info(f"💾 [Meta Pixel Save] Tracking enabled: {pool.meta_tracking_enabled}")
         
         if 'meta_test_event_code' in data:
             pool.meta_test_event_code = data['meta_test_event_code'].strip() or None
@@ -4406,9 +4420,19 @@ def update_pool_meta_pixel_config(pool_id):
                     cloaker_value = None
             pool.meta_cloaker_param_value = cloaker_value
         
-        db.session.commit()
-        
-        logger.info(f"Meta Pixel configurado para pool {pool.name} por {current_user.email}")
+        try:
+            db.session.commit()
+            logger.info(f"✅ [Meta Pixel Save] CONFIGURAÇÃO SALVA COM SUCESSO!")
+            logger.info(f"   User: {current_user.email}")
+            logger.info(f"   Pool: {pool.name} (ID: {pool.id})")
+            logger.info(f"   Pixel ID: {pool.meta_pixel_id[:10] if pool.meta_pixel_id else 'None'}...")
+            logger.info(f"   Access Token: {'✅ Presente' if pool.meta_access_token else '❌ Ausente'}")
+            logger.info(f"   Tracking Enabled: {pool.meta_tracking_enabled}")
+            logger.info(f"   Events - PageView: {pool.meta_events_pageview}, ViewContent: {pool.meta_events_viewcontent}, Purchase: {pool.meta_events_purchase}")
+        except Exception as commit_error:
+            db.session.rollback()
+            logger.error(f"❌ [Meta Pixel Save] ERRO AO COMMITAR: {commit_error}", exc_info=True)
+            raise
         
         return jsonify({
             'message': 'Meta Pixel configurado com sucesso!',
