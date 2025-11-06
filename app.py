@@ -3746,12 +3746,21 @@ def public_redirect(slug):
     import json
     
     # ✅ PASSO 1: CAPTURAR _fbp e _fbc DOS COOKIES (CRÍTICO PARA MATCHING!)
-    # ✅ CRÍTICO QI 300: NÃO gerar FBP no servidor - deixar o browser gerar via JS
-    # FBP deve ser SEMPRE gerado pelo browser para garantir consistência
+    # ✅ CORREÇÃO CRÍTICA QI 300: Para funil server-side, FBP DEVE ser gerado no servidor
+    # Meta aceita e recomenda FBP server-side para CAPI (Conversions API)
+    # Isso garante matching perfeito PageView ↔ Purchase (7/7 atributos sempre)
+    from utils.tracking_service import TrackingService
+    
     fbp_cookie = request.cookies.get('_fbp', '')
     fbc_cookie = request.cookies.get('_fbc', '')
     
-    # ✅ GERAR _fbc APENAS se não existir mas tiver fbclid (FBC pode ser gerado do fbclid)
+    # ✅ GERAR FBP NO SERVIDOR se não existir (CRÍTICO para funil server-side)
+    # Isso garante que PageView e Purchase usem o MESMO FBP desde o primeiro acesso
+    if not fbp_cookie and not is_crawler_request:
+        fbp_cookie = TrackingService.generate_fbp()
+        logger.info(f"🔑 _fbp gerado no servidor (funil server-side): {fbp_cookie[:30]}...")
+    
+    # ✅ GERAR _fbc se não existir mas tiver fbclid (FBC pode ser gerado do fbclid)
     # Formato: fb.1.{timestamp}.{fbclid}
     if not fbc_cookie and fbclid and not is_crawler_request:
         try:
@@ -3765,7 +3774,6 @@ def public_redirect(slug):
     # ✅ SOLUÇÃO SÊNIOR QI 300: Tracking Universal Persistente (30 dias)
     # Usar TrackingService para garantir consistência total e recuperação robusta
     # ✅ CRÍTICO: NÃO salvar tracking para crawlers (poluem Redis com dados incompletos)
-    from utils.tracking_service import TrackingService
     
     # ✅ SALVAR TRACKING APENAS SE NÃO FOR CRAWLER
     if not is_crawler_request:
@@ -3780,10 +3788,9 @@ def public_redirect(slug):
                 'utm_id': request.args.get('utm_id', '')
             }
             
-            # ✅ CRÍTICO QI 300: NÃO gerar FBP no servidor
-            # FBP deve ser SEMPRE gerado pelo browser (via Meta Pixel JS)
-            # Se não existir no cookie, NÃO gerar aqui - deixar o browser fazer
-            fbp_final = fbp_cookie  # Apenas usar o que veio do cookie
+            # ✅ CORREÇÃO CRÍTICA: FBP já foi gerado acima se não existia
+            # Agora garantimos que SEMPRE temos FBP (do cookie ou gerado no servidor)
+            fbp_final = fbp_cookie  # Já foi gerado acima se necessário
             
             # ✅ Gerar fbc se existir fbclid (FBC pode ser gerado do fbclid)
             fbc_final = fbc_cookie
@@ -3791,35 +3798,36 @@ def public_redirect(slug):
                 fbc_final = f"fb.1.{int(time.time())}.{fbclid}"
                 logger.info(f"🔑 _fbc gerado no redirect: {fbc_final[:50]}...")
             
-            # ✅ VALIDAÇÃO CRÍTICA: Só salvar se tiver fbp OU fbc (dados válidos)
-            # Se não tiver nenhum dos dois, não salvar (evita dados incompletos)
-            if fbp_final or fbc_final:
+            # ✅ VALIDAÇÃO CRÍTICA: Com a correção acima, fbp_final SEMPRE existe (gerado no servidor se necessário)
+            # Sempre salvar tracking (fbp sempre existe, fbc pode existir se tiver fbclid)
+            if fbp_final:
                 # ✅ Salvamento correto (com fbclid ou com grim)
                 if fbclid:
                     TrackingService.save_tracking_data(
                         fbclid=fbclid,
-                        fbp=fbp_final,  # Pode ser vazio se não veio do cookie
+                        fbp=fbp_final,  # ✅ SEMPRE existe (gerado no servidor se necessário)
                         fbc=fbc_final,  # Sempre gerado se tiver fbclid
                         ip_address=user_ip,
                         user_agent=user_agent,
                         grim=grim_param,
                         utms=utms
                     )
-                    logger.info(f"🎯 TRACKING SALVO (30d) | fbclid:{fbclid[:20]}... | fbp={'✅' if fbp_final else '⏳(browser)'} | fbc={'✅' if fbc_final else '❌'}")
+                    logger.info(f"🎯 TRACKING SALVO (30d) | fbclid:{fbclid[:20]}... | fbp=✅ | fbc={'✅' if fbc_final else '❌'}")
                 elif grim_param:
                     # ✅ Se NÃO tiver fbclid mas tiver grim → salvar mesmo assim!
                     TrackingService.save_tracking_data(
                         fbclid=None,
-                        fbp=fbp_final,  # Pode ser vazio se não veio do cookie
+                        fbp=fbp_final,  # ✅ SEMPRE existe (gerado no servidor se necessário)
                         fbc=fbc_final,  # Pode ser vazio se não tiver fbclid
                         ip_address=user_ip,
                         user_agent=user_agent,
                         grim=grim_param,
                         utms=utms
                     )
-                    logger.info(f"🎯 TRACKING SALVO (30d) | grim:{grim_param} | fbp={'✅' if fbp_final else '⏳(browser)'} | fbc={'✅' if fbc_final else '❌'}")
+                    logger.info(f"🎯 TRACKING SALVO (30d) | grim:{grim_param} | fbp=✅ | fbc={'✅' if fbc_final else '❌'}")
             else:
-                logger.warning(f"⚠️ Tracking NÃO salvo: sem fbp e sem fbc (aguardando browser gerar)")
+                # ✅ Isso NÃO deveria acontecer (fbp sempre é gerado), mas mantido como fallback de segurança
+                logger.error(f"❌ ERRO CRÍTICO: Tracking NÃO salvo - fbp ausente (deveria ter sido gerado no servidor!)")
         
         except Exception as e:
             logger.error(f"⚠️ Erro ao salvar tracking no Redis: {e}")
@@ -3923,7 +3931,39 @@ def public_redirect(slug):
         tracking_param = f"p{pool.id}"
     
     redirect_url = f"https://t.me/{pool_bot.bot.username}?start={tracking_param}"
-    return redirect(redirect_url, code=302)
+    
+    # ✅ CRÍTICO: Injetar cookies _fbp e _fbc no redirect response
+    # Isso sincroniza o FBP gerado no servidor com o browser
+    # Meta Pixel JS usará o mesmo FBP, garantindo matching perfeito
+    response = redirect(redirect_url, code=302)
+    
+    # ✅ Injetar _fbp se foi gerado no servidor (não estava no cookie original)
+    if fbp_cookie and not request.cookies.get('_fbp'):
+        # Cookie válido por 90 dias (padrão Meta)
+        response.set_cookie(
+            '_fbp',
+            fbp_cookie,
+            max_age=90 * 24 * 60 * 60,  # 90 dias
+            httponly=False,  # Meta Pixel JS precisa acessar
+            secure=True,  # HTTPS only
+            samesite='Lax'  # Permite cross-site para Meta Pixel
+        )
+        logger.info(f"✅ Cookie _fbp injetado no redirect: {fbp_cookie[:30]}...")
+    
+    # ✅ Injetar _fbc se foi gerado no servidor (não estava no cookie original)
+    if fbc_cookie and not request.cookies.get('_fbc'):
+        # Cookie válido por 90 dias (padrão Meta)
+        response.set_cookie(
+            '_fbc',
+            fbc_cookie,
+            max_age=90 * 24 * 60 * 60,  # 90 dias
+            httponly=False,  # Meta Pixel JS precisa acessar
+            secure=True,  # HTTPS only
+            samesite='Lax'  # Permite cross-site para Meta Pixel
+        )
+        logger.info(f"✅ Cookie _fbc injetado no redirect: {fbc_cookie[:30]}...")
+    
+    return response
 
 
 @app.route('/redirect-pools')
@@ -6418,21 +6458,21 @@ def send_meta_pixel_pageview_event(pool, request):
         fbc_value = None
         
         # ✅ PRIORIDADE 1: Cookies do browser (MÁXIMA PRIORIDADE - Meta confia mais)
-        # ✅ CRÍTICO QI 300: FBP deve ser SEMPRE do browser (não gerar no servidor)
+        # ✅ CORREÇÃO CRÍTICA: FBP pode vir do cookie (se browser já gerou) ou do Redis (gerado no redirect)
         fbp_value = request.cookies.get('_fbp', '')
         fbc_value = request.cookies.get('_fbc', '')
         
-        # ✅ NÃO GERAR FBP NO SERVIDOR - deixar o browser gerar via Meta Pixel JS
-        # Se não existir no cookie, aguardar o browser gerar no PageView
         if fbp_value:
             logger.info(f"🔑 PageView - fbp recuperado dos cookies do browser: {fbp_value[:20]}...")
         else:
-            logger.info(f"⏳ PageView - fbp não encontrado nos cookies (browser gerará via Meta Pixel JS)")
+            logger.info(f"⏳ PageView - fbp não encontrado nos cookies, buscando no Redis (gerado no redirect)...")
         
         if fbc_value:
             logger.info(f"🔑 PageView - fbc recuperado dos cookies do browser: {fbc_value[:20]}...")
         
-        # ✅ PRIORIDADE 2: Redis (fallback se cookies não disponíveis)
+        # ✅ PRIORIDADE 2: Redis (FBP/FBC gerados no redirect - CRÍTICO para funil server-side)
+        # Para funil server-side, FBP é gerado no redirect e salvo no Redis
+        # PageView DEVE recuperar do Redis para garantir matching perfeito com Purchase
         if not fbp_value or not fbc_value:
             try:
                 tracking_data = TrackingService.recover_tracking_data(
@@ -6445,7 +6485,7 @@ def send_meta_pixel_pageview_event(pool, request):
                     if not fbp_value and tracking_data.get('fbp'):
                         fbp_value = tracking_data.get('fbp') or ''
                         if fbp_value:
-                            logger.info(f"🔑 PageView - fbp recuperado do Redis: {fbp_value[:20]}...")
+                            logger.info(f"🔑 PageView - fbp recuperado do Redis (gerado no redirect): {fbp_value[:20]}...")
                     if not fbc_value and tracking_data.get('fbc'):
                         fbc_value = tracking_data.get('fbc') or ''
                         if fbc_value:
@@ -6455,7 +6495,26 @@ def send_meta_pixel_pageview_event(pool, request):
                 import traceback
                 traceback.print_exc()
         
-        # ✅ PRIORIDADE 3: Gerar _fbc se não existir mas tiver fbclid
+        # ✅ PRIORIDADE 3: Se ainda não tem FBP, gerar agora (fallback de segurança)
+        # Isso garante que SEMPRE teremos FBP no PageView (7/7 atributos)
+        def is_crawler(ua: str) -> bool:
+            """Detecta se o User-Agent é um crawler/bot"""
+            if not ua:
+                return False
+            ua_lower = ua.lower()
+            crawler_patterns = [
+                'facebookexternalhit', 'facebot', 'telegrambot', 'whatsapp',
+                'python-requests', 'curl', 'wget', 'bot', 'crawler', 'spider',
+                'scraper', 'googlebot', 'bingbot', 'slurp', 'duckduckbot',
+                'baiduspider', 'yandexbot', 'sogou', 'exabot', 'ia_archiver'
+            ]
+            return any(pattern in ua_lower for pattern in crawler_patterns)
+        
+        if not fbp_value and not is_crawler(request.headers.get('User-Agent', '')):
+            fbp_value = TrackingService.generate_fbp()
+            logger.info(f"🔑 PageView - fbp gerado no servidor (fallback): {fbp_value[:20]}...")
+        
+        # ✅ PRIORIDADE 4: Gerar _fbc se não existir mas tiver fbclid
         if not fbc_value and external_id and external_id.startswith('PAZ'):
             fbc_value = TrackingService.generate_fbc(external_id)
             if fbc_value:
@@ -6549,11 +6608,17 @@ def send_meta_pixel_pageview_event(pool, request):
             1 if user_data.get('fbc') else 0
         ])
         
-        # ✅ LOG MELHORADO: Indicar quando fbp está ausente (browser ainda não gerou)
-        fbp_status = '✅' if user_data.get('fbp') else '⏳(browser)'
+        # ✅ LOG CRÍTICO: Verificar se temos 7/7 atributos (objetivo para funil server-side)
+        fbp_status = '✅' if user_data.get('fbp') else '❌'
         if not user_data.get('fbp'):
-            logger.info(f"⏳ PageView - fbp ausente (browser ainda não gerou via Meta Pixel JS - normal no primeiro acesso)")
-            logger.info(f"   Purchase terá fbp quando browser gerar (será salvo no Redis automaticamente)")
+            logger.error(f"❌ PageView - fbp AUSENTE (CRÍTICO para funil server-side!)")
+            logger.error(f"   Isso quebra matching PageView ↔ Purchase e gera eventos órfãos")
+        
+        # ✅ VALIDAÇÃO: Garantir que temos pelo menos 5/7 atributos (mínimo aceitável)
+        if attributes_count < 5:
+            logger.warning(f"⚠️ PageView com apenas {attributes_count}/7 atributos - Match Quality pode ser baixa")
+        elif attributes_count == 7:
+            logger.info(f"✅ PageView com 7/7 atributos - Match Quality MÁXIMA garantida!")
         
         logger.info(f"🔍 Meta PageView - User Data: {attributes_count}/7 atributos | " +
                    f"external_id={'✅' if external_ids else '❌'} [{external_ids[0][:16] if external_ids else 'N/A'}...] | " +
