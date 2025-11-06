@@ -94,6 +94,10 @@ class AtomPayGateway(PaymentGateway):
             }
             
             logger.debug(f"🌐 [{self.get_gateway_name()}] {method} {endpoint}")
+            if payload:
+                logger.debug(f"📦 [{self.get_gateway_name()}] Payload: {payload}")
+            if request_params:
+                logger.debug(f"🔑 [{self.get_gateway_name()}] Params: api_token={'***' if request_params.get('api_token') else 'N/A'}")
             
             if method.upper() == 'GET':
                 response = requests.get(url, params=request_params, headers=headers, timeout=15)
@@ -105,16 +109,34 @@ class AtomPayGateway(PaymentGateway):
                 logger.error(f"❌ [{self.get_gateway_name()}] Método HTTP não suportado: {method}")
                 return None
             
+            # ✅ LOG DETALHADO: Status code e resposta
+            logger.info(f"📊 [{self.get_gateway_name()}] Resposta: Status {response.status_code}")
+            if response.status_code >= 400:
+                logger.error(f"❌ [{self.get_gateway_name()}] Erro HTTP {response.status_code}")
+                try:
+                    error_data = response.json()
+                    logger.error(f"📋 [{self.get_gateway_name()}] Resposta JSON: {error_data}")
+                except:
+                    logger.error(f"📋 [{self.get_gateway_name()}] Resposta texto: {response.text[:500]}")
+            
             return response
             
         except requests.exceptions.Timeout:
-            logger.error(f"❌ [{self.get_gateway_name()}] Timeout na requisição: {endpoint}")
+            logger.error(f"❌ [{self.get_gateway_name()}] Timeout na requisição: {endpoint} (15s)")
+            return None
+        except requests.exceptions.ConnectionError as e:
+            logger.error(f"❌ [{self.get_gateway_name()}] Erro de conexão: {e}")
             return None
         except requests.exceptions.RequestException as e:
             logger.error(f"❌ [{self.get_gateway_name()}] Erro na requisição: {e}")
+            if hasattr(e, 'response') and e.response is not None:
+                logger.error(f"📋 [{self.get_gateway_name()}] Status: {e.response.status_code}")
+                logger.error(f"📋 [{self.get_gateway_name()}] Resposta: {e.response.text[:500]}")
             return None
         except Exception as e:
             logger.error(f"❌ [{self.get_gateway_name()}] Erro inesperado: {e}")
+            import traceback
+            logger.error(f"📋 [{self.get_gateway_name()}] Traceback: {traceback.format_exc()}")
             return None
     
     def generate_pix(
@@ -247,7 +269,8 @@ class AtomPayGateway(PaymentGateway):
             response = self._make_request('POST', '/transactions', payload=payload)
             
             if not response:
-                logger.error(f"❌ [{self.get_gateway_name()}] Falha na requisição")
+                logger.error(f"❌ [{self.get_gateway_name()}] Falha na requisição (response é None)")
+                logger.error(f"   Verifique logs anteriores para detalhes do erro (timeout, conexão, etc.)")
                 return None
             
             # Processar resposta
@@ -326,7 +349,21 @@ class AtomPayGateway(PaymentGateway):
                 }
             else:
                 logger.error(f"❌ [{self.get_gateway_name()}] Erro ao gerar PIX: Status {response.status_code}")
-                logger.error(f"Resposta: {response.text}")
+                try:
+                    error_data = response.json()
+                    logger.error(f"📋 [{self.get_gateway_name()}] Resposta JSON: {error_data}")
+                    
+                    # Tentar extrair mensagem de erro específica
+                    error_message = (
+                        error_data.get('message') or
+                        error_data.get('error') or
+                        error_data.get('error_message') or
+                        error_data.get('errors')
+                    )
+                    if error_message:
+                        logger.error(f"📋 [{self.get_gateway_name()}] Mensagem de erro: {error_message}")
+                except:
+                    logger.error(f"📋 [{self.get_gateway_name()}] Resposta texto: {response.text[:1000]}")
                 return None
                 
         except Exception as e:
