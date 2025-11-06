@@ -626,6 +626,9 @@ class Gateway(db.Model):
     # Campos específicos WiinPay (criptografado)
     _split_user_id = db.Column('split_user_id', db.String(1000))  # Criptografado
     
+    # ✅ Campos específicos Átomo Pay (não criptografado - apenas identificador)
+    producer_hash = db.Column(db.String(100), nullable=True, index=True)  # Hash do producer (identifica conta do usuário)
+    
     # Split configuration (padrão 2%)
     split_percentage = db.Column(db.Float, default=2.0)  # 2% PADRÃO
     

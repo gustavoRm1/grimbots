@@ -3747,10 +3747,21 @@ Seu pagamento ainda não foi confirmado.
                     # ✅ CRÍTICO: Extrair reference para matching no webhook
                     reference = pix_result.get('reference')
                     
+                    # ✅ CRÍTICO: Extrair producer_hash para identificar conta do usuário (multi-tenant)
+                    # Salvar no Gateway para que webhook possa identificar qual usuário enviou
+                    producer_hash = pix_result.get('producer_hash')
+                    if producer_hash and gateway.gateway_type == 'atomopay':
+                        # ✅ Salvar producer_hash no Gateway (se ainda não tiver)
+                        if not gateway.producer_hash:
+                            gateway.producer_hash = producer_hash
+                            db.session.commit()
+                            logger.info(f"💾 Producer Hash salvo no Gateway: {producer_hash[:12]}...")
+                    
                     logger.info(f"💾 Salvando Payment com dados do gateway:")
                     logger.info(f"   payment_id: {payment_id}")
                     logger.info(f"   gateway_transaction_id: {gateway_transaction_id}")
                     logger.info(f"   gateway_hash: {gateway_hash}")
+                    logger.info(f"   producer_hash: {producer_hash}")  # ✅ Para identificar conta do usuário
                     logger.info(f"   reference: {reference}")
                     
                     # Salvar pagamento no banco (incluindo código PIX para reenvio + analytics)

@@ -7232,6 +7232,23 @@ def payment_webhook(gateway_type):
     logger.info(f"📋 Headers: {dict(request.headers)}")
     
     try:
+        # ✅ CRÍTICO QI 200: Identificar Gateway/Usuário via producer_hash (multi-tenant)
+        # Permite que múltiplos usuários usem a mesma URL de webhook
+        gateway = None
+        if gateway_type == 'atomopay':
+            producer_data = data.get('producer', {})
+            producer_hash = producer_data.get('hash') if isinstance(producer_data, dict) else None
+            if producer_hash:
+                # ✅ Buscar Gateway pelo producer_hash para identificar o usuário
+                gateway = Gateway.query.filter_by(
+                    gateway_type='atomopay',
+                    producer_hash=producer_hash
+                ).first()
+                if gateway:
+                    logger.info(f"🔑 Gateway identificado via producer_hash: {producer_hash[:12]}... (User ID: {gateway.user_id})")
+                else:
+                    logger.warning(f"⚠️ Gateway não encontrado para producer_hash: {producer_hash[:12]}... (usuário precisa fazer pelo menos 1 transação)")
+        
         # Processar webhook do gateway
         result = bot_manager.process_payment_webhook(gateway_type, data)
         
@@ -7244,9 +7261,22 @@ def payment_webhook(gateway_type):
             # ✅ Buscar pagamento por múltiplas chaves (conforme análise QI 600)
             payment = None
             
+            # ✅ PRIORIDADE 0 (QI 200): Filtrar por gateway se identificado via producer_hash
+            # Isso garante que webhooks de múltiplos usuários não se misturem
+            payment_query = Payment.query
+            if gateway:
+                # ✅ Filtrar apenas Payments do gateway correto (evita conflitos entre usuários)
+                payment_query = payment_query.filter_by(gateway_type='atomopay')
+                # ✅ Filtrar por bot_id do usuário correto (via relacionamento Bot -> User)
+                from models import Bot
+                user_bot_ids = [b.id for b in Bot.query.filter_by(user_id=gateway.user_id).all()]
+                if user_bot_ids:
+                    payment_query = payment_query.filter(Payment.bot_id.in_(user_bot_ids))
+                    logger.info(f"🔍 Filtrando Payments do usuário {gateway.user_id} ({len(user_bot_ids)} bots)")
+            
             # ✅ PRIORIDADE 1: gateway_transaction_id (campo 'id' da resposta)
             if gateway_transaction_id:
-                payment = Payment.query.filter_by(gateway_transaction_id=str(gateway_transaction_id)).first()
+                payment = payment_query.filter_by(gateway_transaction_id=str(gateway_transaction_id)).first()
                 if payment:
                     logger.info(f"✅ Payment encontrado por gateway_transaction_id: {gateway_transaction_id}")
             
@@ -7254,13 +7284,13 @@ def payment_webhook(gateway_type):
             if not payment:
                 gateway_hash = result.get('gateway_hash') or data.get('hash')
                 if gateway_hash:
-                    payment = Payment.query.filter_by(gateway_transaction_hash=str(gateway_hash)).first()
+                    payment = payment_query.filter_by(gateway_transaction_hash=str(gateway_hash)).first()
                     if payment:
                         logger.info(f"✅ Payment encontrado por gateway_transaction_hash: {gateway_hash}")
             
             # ✅ PRIORIDADE 3: payment_id como fallback
             if not payment and gateway_transaction_id:
-                payment = Payment.query.filter_by(payment_id=str(gateway_transaction_id)).first()
+                payment = payment_query.filter_by(payment_id=str(gateway_transaction_id)).first()
                 if payment:
                     logger.info(f"✅ Payment encontrado por payment_id (fallback): {gateway_transaction_id}")
             
@@ -7280,13 +7310,13 @@ def payment_webhook(gateway_type):
                     if len(ref_parts) >= 3 and ref_parts[0].startswith('BOT'):
                         # Construir payment_id esperado: BOT{id}_{timestamp}_{hash}
                         extracted_payment_id = f"{ref_parts[0]}_{ref_parts[1]}_{ref_parts[2]}"
-                        payment = Payment.query.filter_by(payment_id=extracted_payment_id).first()
+                        payment = payment_query.filter_by(payment_id=extracted_payment_id).first()
                         if payment:
                             logger.info(f"✅ Payment encontrado por external_reference (extraído: {extracted_payment_id})")
                     
                     # Se não encontrou pelo payment_id extraído, tentar busca direta
                     if not payment:
-                        payment = Payment.query.filter_by(payment_id=external_ref).first()
+                        payment = payment_query.filter_by(payment_id=external_ref).first()
                     
                     if not payment:
                         logger.info(f"🔍 external_reference completo não encontrado, tentando busca parcial...")
@@ -7296,7 +7326,7 @@ def payment_webhook(gateway_type):
                         # Tentar pelos primeiros 8 caracteres (hash parcial comum)
                         if len(external_ref) >= 8:
                             hash_prefix = external_ref[:8]
-                            payments = Payment.query.filter(
+                            payments = payment_query.filter(
                                 Payment.payment_id.like(f"%{hash_prefix}%")
                             ).all()
                             if payments:
@@ -7310,7 +7340,7 @@ def payment_webhook(gateway_type):
                                     logger.info(f"⚠️ Payment encontrado por external_reference (hash parcial, gateway diferente): {payment.payment_id}")
                         # Se ainda não encontrou, tentar busca completa no payment_id
                         if not payment:
-                            payments = Payment.query.filter(
+                            payments = payment_query.filter(
                                 Payment.payment_id.like(f"%{external_ref}%")
                             ).all()
                             if payments:
@@ -7334,12 +7364,21 @@ def payment_webhook(gateway_type):
                 logger.error(f"   🔍 Tentando buscar por outros critérios...")
                 
                 # ✅ BUSCA ALTERNATIVA: Buscar por gateway_type e status pending recente
+                # ✅ CRÍTICO QI 200: Filtrar por gateway se identificado via producer_hash
                 from datetime import timedelta
-                recent_payments = Payment.query.filter(
+                recent_query = Payment.query.filter(
                     Payment.gateway_type == gateway_type,
                     Payment.status == 'pending',
                     Payment.created_at >= get_brazil_time() - timedelta(hours=24)
-                ).order_by(Payment.created_at.desc()).limit(10).all()
+                )
+                # ✅ Filtrar por usuário se gateway foi identificado
+                if gateway:
+                    from models import Bot
+                    user_bot_ids = [b.id for b in Bot.query.filter_by(user_id=gateway.user_id).all()]
+                    if user_bot_ids:
+                        recent_query = recent_query.filter(Payment.bot_id.in_(user_bot_ids))
+                
+                recent_payments = recent_query.order_by(Payment.created_at.desc()).limit(10).all()
                 
                 if recent_payments:
                     logger.error(f"   📋 Últimos 10 pagamentos pending de {gateway_type}:")

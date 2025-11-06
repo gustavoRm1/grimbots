@@ -597,10 +597,16 @@ class AtomPayGateway(PaymentGateway):
             gateway_hash = data.get('hash')  # Hash da transação (para webhook matching)
             transaction_hash_str = str(gateway_hash) if gateway_hash else transaction_id_str
             
+            # ✅ CRÍTICO: Extrair producer.hash para identificar conta do usuário (multi-tenant)
+            # Cada conta do Átomo Pay tem um producer.hash único
+            producer_data = data.get('producer', {})
+            producer_hash = producer_data.get('hash') if isinstance(producer_data, dict) else None
+            
             # ✅ LOG CRÍTICO: Dados extraídos para salvar no Payment
             logger.info(f"💾 [{self.get_gateway_name()}] Dados extraídos para salvar no Payment:")
             logger.info(f"   gateway_transaction_id (id): {transaction_id_str}")
             logger.info(f"   gateway_hash (hash): {gateway_hash}")
+            logger.info(f"   producer_hash: {producer_hash}")  # ✅ Para identificar conta do usuário
             logger.info(f"   reference: {payload.get('reference', 'N/A')}")
             
             # ✅ LOG: Verificar estrutura do objeto pix
@@ -674,12 +680,17 @@ class AtomPayGateway(PaymentGateway):
                     logger.error(f"   ================================================")
                     # ✅ CRÍTICO: Retornar dados da transação mesmo quando recusada
                     # Isso permite que o payment seja criado e o webhook possa encontrá-lo
+                    # ✅ CRÍTICO: Extrair producer_hash para identificar conta do usuário
+                    producer_data = data.get('producer', {})
+                    producer_hash = producer_data.get('hash') if isinstance(producer_data, dict) else None
+                    
                     return {
                         'pix_code': None,  # Não tem PIX porque foi recusado
                         'qr_code_url': None,
                         'transaction_id': transaction_id_str,  # ✅ Usar id (webhook busca por este)
                         'transaction_hash': transaction_hash_str,  # Hash para consulta de status (fallback)
                         'gateway_hash': gateway_hash,  # ✅ CRÍTICO: Hash da transação (para webhook matching)
+                        'producer_hash': producer_hash,  # ✅ CRÍTICO: Hash do producer (identifica conta do usuário)
                         'payment_id': payment_id,
                         'reference': payload.get('reference'),  # ✅ CRÍTICO: Reference para matching
                         'status': 'refused',  # ✅ Status da transação
@@ -713,12 +724,17 @@ class AtomPayGateway(PaymentGateway):
             
             # ✅ RETORNO PADRONIZADO (como Paradise)
             # ✅ CRÍTICO: Incluir gateway_hash separado para webhook matching
+            # ✅ CRÍTICO: Incluir producer_hash para identificar conta do usuário (multi-tenant)
+            producer_data = data.get('producer', {})
+            producer_hash = producer_data.get('hash') if isinstance(producer_data, dict) else None
+            
             return {
                 'pix_code': pix_code,
                 'qr_code_url': qr_code_url or qr_code_base64 or '',
                 'transaction_id': transaction_id_str,  # ✅ Usar id (webhook busca por este)
                 'transaction_hash': transaction_hash_str,  # Hash para consulta de status (fallback)
                 'gateway_hash': gateway_hash,  # ✅ CRÍTICO: Hash da transação (para webhook matching)
+                'producer_hash': producer_hash,  # ✅ CRÍTICO: Hash do producer (identifica conta do usuário)
                 'payment_id': payment_id,
                 'reference': payload.get('reference')  # ✅ CRÍTICO: Reference para matching
             }
@@ -794,13 +810,21 @@ class AtomPayGateway(PaymentGateway):
             # Átomo Pay envia 'reference' no webhook (não 'external_reference')
             external_reference = data.get('reference') or data.get('external_reference') or data.get('reference_id')
             
+            # ✅ CRÍTICO: Extrair producer.hash para identificar conta do usuário (multi-tenant)
+            # Cada conta do Átomo Pay tem um producer.hash único - permite múltiplos usuários na mesma URL
+            producer_data = data.get('producer', {})
+            producer_hash = producer_data.get('hash') if isinstance(producer_data, dict) else None
+            
             logger.info(f"✅ [{self.get_gateway_name()}] Webhook processado: Hash={transaction_hash_str[:20] if len(transaction_hash_str) > 20 else transaction_hash_str}... | Status={status_raw}→{status} | R$ {amount:.2f}")
             if external_reference:
                 logger.info(f"   Reference: {external_reference}")
+            if producer_hash:
+                logger.info(f"   Producer Hash: {producer_hash} (identifica conta do usuário)")
             
             return {
                 'gateway_transaction_id': transaction_id_str,  # ✅ Usar id (webhook busca por este)
                 'gateway_hash': transaction_hash_str,  # ✅ CRÍTICO: Hash da transação (para webhook matching)
+                'producer_hash': producer_hash,  # ✅ CRÍTICO: Hash do producer (identifica conta do usuário)
                 'status': status,
                 'amount': amount,
                 'external_reference': external_reference  # ✅ CRÍTICO: Para matching do payment
