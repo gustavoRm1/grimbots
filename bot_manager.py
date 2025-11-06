@@ -3192,9 +3192,14 @@ Seu pagamento ainda não foi confirmado.
             customer_username: Username do Telegram
             customer_user_id: ID do usuário no Telegram
             
-        Returns:
-            Dados do PIX gerado (pix_code, qr_code_url, payment_id)
+        ✅ VALIDAÇÃO CRÍTICA: customer_user_id não pode ser vazio (destrói tracking Meta Pixel)
         """
+        # ✅ VALIDAÇÃO CRÍTICA: customer_user_id obrigatório para tracking
+        if not customer_user_id or customer_user_id.strip() == "":
+            logger.error(f"❌ ERRO CRÍTICO: customer_user_id vazio ao gerar PIX! Bot: {bot_id}, Valor: R$ {amount:.2f}")
+            logger.error(f"   Isso quebra tracking Meta Pixel - Purchase não será atribuído à campanha!")
+            logger.error(f"   customer_name: {customer_name}, customer_username: {customer_username}")
+            return None
         try:
             # Importar models dentro da função para evitar circular import
             from models import Bot, Gateway, Payment, db
