@@ -6645,11 +6645,12 @@ def send_meta_pixel_purchase_event(payment):
         # Construir user_data usando função correta (faz hash SHA256)
         # ✅ CRÍTICO: external_id (fbclid) DEVE ser o primeiro/principal para matching com PageView
         # ✅ CRÍTICO: Usar MESMOS dados do PageView (fbp, fbc, IP, User Agent)
+        # ✅ CORREÇÃO: BotUser não tem email/phone - usar None (Meta aceita sem esses campos)
         user_data = MetaPixelAPI._build_user_data(
             customer_user_id=None,  # ✅ NÃO adicionar telegram_user_id aqui - pode confundir matching
             external_id=external_id_value,  # ✅ fbclid é o external_id principal (matching com PageView)
-            email=bot_user.email if bot_user and bot_user.email else None,
-            phone=bot_user.phone if bot_user and bot_user.phone else None,
+            email=None,  # ✅ BotUser não tem email - Meta aceita sem email se tiver external_id, fbp, fbc, IP, UA
+            phone=None,  # ✅ BotUser não tem phone - Meta aceita sem phone se tiver external_id, fbp, fbc, IP, UA
             client_ip=ip_value,  # ✅ MESMO IP do PageView
             client_user_agent=user_agent_value,  # ✅ MESMO User Agent do PageView
             fbp=fbp_value,  # ✅ MESMO _fbp do PageView (do Redis)
