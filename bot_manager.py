@@ -889,10 +889,11 @@ class BotManager:
                     # Isso evita race conditions entre diferentes contextos de sessão
                     self._handle_start_command(bot_id, token, config, chat_id, message, start_param)
                 
-                # ✅ SOLUÇÃO HÍBRIDA: Mensagens de texto também reiniciam o funil
-                # Mas com proteções para evitar spam e problemas de tracking
+                # ✅ SOLUÇÃO HÍBRIDA: Mensagens de texto podem reiniciar o funil
+                # Mas APENAS se não houver conversa ativa (proteção contra spam)
+                # NOTA: /start SEMPRE reinicia (regra absoluta acima)
                 elif text and text.strip():  # Mensagem de texto não vazia
-                    logger.info(f"💬 MENSAGEM DE TEXTO: '{text}' - Reiniciando funil...")
+                    logger.info(f"💬 MENSAGEM DE TEXTO: '{text}' - Verificando se deve reiniciar funil...")
                     self._handle_text_message(bot_id, token, config, chat_id, message)
             
             # Processar callback (botões)
@@ -1116,10 +1117,65 @@ class BotManager:
         except Exception as e:
             logger.error(f"❌ Erro ao enviar mensagem de boas-vindas: {e}")
     
+    def _reset_user_funnel(self, bot_id: int, chat_id: int, telegram_user_id: str):
+        """
+        ✅ QI 200: RESET ABSOLUTO DO FUNIL
+        
+        Limpa TODOS os estados e sessões do funil:
+        - Sessões de order bump
+        - Cache de rate limiting
+        - Qualquer estado relacionado ao funil
+        
+        Esta função é chamada SEMPRE que /start é recebido,
+        independente de conversa ativa ou histórico.
+        """
+        try:
+            # Limpar sessões de order bump
+            user_key_orderbump = f"orderbump_{chat_id}"
+            if user_key_orderbump in self.order_bump_sessions:
+                del self.order_bump_sessions[user_key_orderbump]
+                logger.info(f"🧹 Sessão de order bump limpa: {user_key_orderbump}")
+            
+            # Limpar cache de rate limiting
+            user_key_rate = f"{bot_id}_{telegram_user_id}"
+            if user_key_rate in self.rate_limit_cache:
+                del self.rate_limit_cache[user_key_rate]
+                logger.info(f"🧹 Rate limit cache limpo: {user_key_rate}")
+            
+            # Limpar estado do bot_user no banco (resetar welcome_sent para permitir novo welcome)
+            from app import app, db
+            from models import BotUser
+            
+            with app.app_context():
+                bot_user = BotUser.query.filter_by(
+                    bot_id=bot_id,
+                    telegram_user_id=telegram_user_id,
+                    archived=False
+                ).first()
+                
+                if bot_user:
+                    # Resetar welcome_sent para permitir novo welcome
+                    bot_user.welcome_sent = False
+                    bot_user.welcome_sent_at = None
+                    db.session.commit()
+                    logger.info(f"🧹 Estado do funil resetado no banco para usuário {telegram_user_id}")
+            
+            logger.info(f"✅ Funil completamente resetado para bot_id={bot_id}, chat_id={chat_id}")
+            
+        except Exception as e:
+            logger.error(f"❌ Erro ao resetar funil: {e}")
+            # Não interromper o fluxo se falhar
+    
     def _handle_start_command(self, bot_id: int, token: str, config: Dict[str, Any], 
                              chat_id: int, message: Dict[str, Any], start_param: str = None):
         """
         Processa comando /start - FAST RESPONSE MODE (QI 200)
+        
+        ✅ REGRA ABSOLUTA QI 200: /start SEMPRE reinicia o funil
+        - Ignora conversa ativa
+        - Ignora histórico
+        - Ignora steps anteriores
+        - Zera tudo e começa do zero
         
         ✅ OTIMIZAÇÃO QI 200: Resposta <50ms
         - Envia mensagem IMEDIATAMENTE
@@ -1134,6 +1190,16 @@ class BotManager:
             start_param: Parâmetro do deep link (ex: "acesso", "promo123", None se não houver)
         """
         try:
+            # ✅ QI 200: PRIORIDADE MÁXIMA - Resetar funil ANTES de qualquer verificação
+            user_from = message.get('from', {})
+            telegram_user_id = str(user_from.get('id', ''))
+            first_name = user_from.get('first_name', 'Usuário')
+            
+            logger.info(f"⭐ COMANDO /START recebido - Reiniciando funil FORÇADAMENTE (regra absoluta)")
+            
+            # ✅ RESET ABSOLUTO: Limpar todas as sessões e estados
+            self._reset_user_funnel(bot_id, chat_id, telegram_user_id)
+            
             # ✅ QI 200: FAST RESPONSE MODE - Buscar apenas config mínima (1 query rápida)
             from app import app, db
             from models import Bot
@@ -1145,11 +1211,6 @@ class BotManager:
                     config = bot.config.to_dict()
                 else:
                     config = config or {}
-                
-                # ✅ QI 200: FAST RESPONSE MODE - Enfileirar processamento pesado
-                user_from = message.get('from', {})
-                telegram_user_id = str(user_from.get('id', ''))
-                first_name = user_from.get('first_name', 'Usuário')
                 
                 # Enfileirar processamento pesado (tracking, Redis, device parsing, etc)
                 try:
@@ -1167,16 +1228,9 @@ class BotManager:
                 except Exception as e:
                     logger.warning(f"Erro ao enfileirar task async: {e}")
                 
-                # ✅ QI 200: Verificação rápida se deve enviar welcome (apenas 1 query)
-                from models import BotUser
-                bot_user = BotUser.query.filter_by(
-                    bot_id=bot_id,
-                    telegram_user_id=telegram_user_id,
-                    archived=False
-                ).first()
-                
-                # ✅ QI 200: Determinar se deve enviar welcome (rápido)
-                should_send_welcome = (not bot_user or not bot_user.welcome_sent)
+                # ✅ QI 200: Após reset, SEMPRE enviar welcome (bot_user foi resetado)
+                # Não precisa verificar welcome_sent porque acabamos de resetar
+                should_send_welcome = True
             
             # ============================================================================
             # ✅ QI 200: ENVIAR MENSAGEM IMEDIATAMENTE (<50ms)
@@ -1285,7 +1339,8 @@ class BotManager:
                 else:
                     logger.error(f"❌ Falha ao enviar mensagem")
             else:
-                logger.info(f"⏭️ Mensagem de boas-vindas já foi enviada antes, pulando...")
+                # Não deve chegar aqui após reset, mas manter para segurança
+                logger.warning(f"⚠️ should_send_welcome=False após reset - isso não deveria acontecer")
             
             # Emitir evento via WebSocket
             self.socketio.emit('bot_interaction', {
