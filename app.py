@@ -4610,22 +4610,38 @@ def create_gateway():
                 'api_key': gateway.api_key,
                 'api_token': gateway.api_key,  # Átomo Pay usa api_token (mesmo valor)
                 'product_hash': gateway.product_hash,  # Paradise / Átomo Pay
-                'offer_hash': gateway.offer_hash,      # Paradise / Átomo Pay
+                'offer_hash': gateway.offer_hash,      # Paradise (Átomo Pay não usa mais)
                 'store_id': gateway.store_id,          # Paradise
                 'organization_id': gateway.organization_id,  # HooPay
                 'split_user_id': gateway.split_user_id  # WiinPay
             }
             
+            # ✅ ÁTOMO PAY: Verificar se tem api_token (obrigatório)
+            if gateway_type == 'atomopay':
+                if not credentials.get('api_token'):
+                    logger.error(f"❌ [Átomo Pay] api_token não configurado - não será verificado")
+                    gateway.is_verified = False
+                    gateway.last_error = 'API Token não configurado'
+                    db.session.commit()
+                    return jsonify(gateway.to_dict())
+                else:
+                    logger.info(f"🔍 [Átomo Pay] Verificando credenciais...")
+                    logger.info(f"   api_token: {'SIM' if credentials.get('api_token') else 'NÃO'} ({len(credentials.get('api_token', ''))} chars)")
+                    logger.info(f"   product_hash: {'SIM' if credentials.get('product_hash') else 'NÃO'} ({len(credentials.get('product_hash', ''))} chars)")
+            
             is_valid = bot_manager.verify_gateway(gateway_type, credentials)
+            
+            logger.info(f"📊 [Gateway {gateway_type}] Resultado da verificação: {'VÁLIDO' if is_valid else 'INVÁLIDO'}")
             
             if is_valid:
                 gateway.is_verified = True
                 gateway.verified_at = get_brazil_time()
                 gateway.last_error = None
-                logger.info(f"Gateway {gateway_type} verificado para {current_user.email}")
+                logger.info(f"✅ Gateway {gateway_type} verificado para {current_user.email}")
             else:
                 gateway.is_verified = False
                 gateway.last_error = 'Credenciais inválidas'
+                logger.warning(f"⚠️ Gateway {gateway_type} NÃO verificado - credenciais inválidas")
         except Exception as e:
             gateway.is_verified = False
             gateway.last_error = str(e)

@@ -772,45 +772,64 @@ class AtomPayGateway(PaymentGateway):
     
     def verify_credentials(self) -> bool:
         """
-        Verifica credenciais usando GET /transactions (conforme documentação)
+        Verifica credenciais usando GET /products (conforme documentação)
         Status 200 = credenciais válidas
         Status 401 = token inválido
+        
+        NOTA: Usamos /products em vez de /transactions porque é mais simples e não requer product_hash
         """
         try:
             if not self.api_token or len(self.api_token) < 10:
-                logger.error(f"❌ [{self.get_gateway_name()}] Token inválido")
+                logger.error(f"❌ [{self.get_gateway_name()}] Token inválido (mínimo 10 caracteres)")
                 return False
             
-            # ✅ Listar transações (endpoint conforme documentação)
-            # GET /transactions?api_token=...&page=1&per_page=1
-            response = self._make_request('GET', '/transactions', params={'page': 1, 'per_page': 1})
+            # ✅ Listar produtos (endpoint mais simples para verificação)
+            # GET /products?api_token=...&page=1&per_page=1
+            # Isso não requer product_hash e valida apenas o token
+            logger.info(f"🔍 [{self.get_gateway_name()}] Verificando credenciais via GET /products...")
+            response = self._make_request('GET', '/products', params={'page': 1, 'per_page': 1})
             
             if not response:
-                logger.error(f"❌ [{self.get_gateway_name()}] Falha na requisição de verificação")
+                logger.error(f"❌ [{self.get_gateway_name()}] Falha na requisição de verificação (sem resposta)")
                 return False
             
+            logger.info(f"📊 [{self.get_gateway_name()}] Status da verificação: {response.status_code}")
+            
             if response.status_code == 200:
-                # ✅ Validar estrutura da resposta (success: true, data: [...])
+                # ✅ Validar estrutura da resposta
                 try:
                     response_data = response.json()
-                    if response_data.get('success', False) and 'data' in response_data:
-                        logger.info(f"✅ [{self.get_gateway_name()}] Credenciais válidas")
+                    # A resposta pode vir como {success: true, data: [...]} ou diretamente como lista
+                    if isinstance(response_data, dict):
+                        if response_data.get('success', False) and 'data' in response_data:
+                            logger.info(f"✅ [{self.get_gateway_name()}] Credenciais válidas (formato wrapper)")
+                            return True
+                        elif 'data' in response_data:
+                            logger.info(f"✅ [{self.get_gateway_name()}] Credenciais válidas (formato data)")
+                            return True
+                    elif isinstance(response_data, list):
+                        logger.info(f"✅ [{self.get_gateway_name()}] Credenciais válidas (formato lista)")
                         return True
                     else:
-                        logger.warning(f"⚠️ [{self.get_gateway_name()}] Resposta inesperada: {response_data}")
-                        return False
-                except:
-                    logger.warning(f"⚠️ [{self.get_gateway_name()}] Resposta não é JSON válido")
-                    return False
+                        # Se retornou 200, mesmo que formato inesperado, token é válido
+                        logger.info(f"✅ [{self.get_gateway_name()}] Credenciais válidas (status 200)")
+                        return True
+                except Exception as e:
+                    logger.warning(f"⚠️ [{self.get_gateway_name()}] Erro ao parsear resposta, mas status 200: {e}")
+                    # Status 200 geralmente significa token válido
+                    return True
             elif response.status_code == 401:
-                logger.error(f"❌ [{self.get_gateway_name()}] Credenciais inválidas (401)")
+                logger.error(f"❌ [{self.get_gateway_name()}] Credenciais inválidas (401 Unauthorized)")
                 return False
             else:
                 logger.warning(f"⚠️ [{self.get_gateway_name()}] Status inesperado: {response.status_code}")
+                logger.warning(f"   Resposta: {response.text[:200]}")
                 return False
                 
         except Exception as e:
             logger.error(f"❌ [{self.get_gateway_name()}] Erro ao verificar credenciais: {e}")
+            import traceback
+            traceback.print_exc()
             return False
     
     def get_payment_status(self, transaction_id: str) -> Optional[Dict[str, Any]]:
