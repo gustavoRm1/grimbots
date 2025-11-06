@@ -197,19 +197,36 @@ class AtomPayGateway(PaymentGateway):
                 'document': customer_document
             }
             
-            # ✅ Preparar payload conforme documentação oficial
+            # ✅ Preparar payload conforme resposta da API (422 indicou campos obrigatórios)
             payload = {
                 'amount': amount_cents,
                 'payment_method': 'pix',
                 'customer': customer,
                 'postback_url': self.get_webhook_url(),
-                'transaction_origin': 'api'
-                # ✅ Removido expire_in_days (não existe na API conforme documentação)
+                'transaction_origin': 'api',
+                'installments': 1  # ✅ OBRIGATÓRIO: PIX sempre 1 parcela
             }
             
-            # ✅ Adicionar cart (obrigatório conforme documentação)
-            # Se tiver product_hash, usar; senão criar cart básico
-            if self.product_hash:
+            # ✅ CORREÇÃO CRÍTICA: API exige offer_hash (obrigatório conforme erro 422)
+            # Prioridade 1: offer_hash (obrigatório)
+            if self.offer_hash:
+                payload['offer_hash'] = self.offer_hash
+                logger.info(f"✅ [{self.get_gateway_name()}] Usando offer_hash: {self.offer_hash[:8]}...")
+                
+                # ✅ Se tiver product_hash também, adicionar cart (pode ser útil)
+                if self.product_hash:
+                    payload['cart'] = [{
+                        'product_hash': self.product_hash,
+                        'title': description[:100] if description else 'Produto',
+                        'price': amount_cents,
+                        'quantity': 1,
+                        'operation_type': 1,
+                        'tangible': False
+                    }]
+                    logger.info(f"✅ [{self.get_gateway_name()}] Adicionado cart com product_hash: {self.product_hash[:8]}...")
+            
+            # ✅ Se não tiver offer_hash, tentar usar apenas cart (pode funcionar ou não)
+            elif self.product_hash:
                 payload['cart'] = [{
                     'product_hash': self.product_hash,
                     'title': description[:100] if description else 'Produto',
@@ -218,17 +235,14 @@ class AtomPayGateway(PaymentGateway):
                     'operation_type': 1,
                     'tangible': False
                 }]
-                logger.info(f"✅ [{self.get_gateway_name()}] Usando cart com product_hash: {self.product_hash[:8]}...")
+                logger.warning(f"⚠️ [{self.get_gateway_name()}] Usando cart SEM offer_hash (API pode rejeitar)")
+                logger.warning(f"   Configure 'Offer Hash' no gateway para melhor compatibilidade")
             else:
-                # ✅ Cart sem product_hash (API aceita)
-                payload['cart'] = [{
-                    'title': description[:100] if description else 'Produto',
-                    'price': amount_cents,
-                    'quantity': 1,
-                    'operation_type': 1,
-                    'tangible': False
-                }]
-                logger.info(f"✅ [{self.get_gateway_name()}] Usando cart sem product_hash")
+                # ❌ ERRO: API exige offer_hash (obrigatório)
+                logger.error(f"❌ [{self.get_gateway_name()}] API exige offer_hash configurado!")
+                logger.error(f"   Erro 422: 'O hash da oferta é obrigatório'")
+                logger.error(f"   Configure 'Offer Hash' no gateway antes de usar")
+                return None
             
             # ✅ Tracking APENAS se tiver dados válidos (não enviar campos vazios)
             tracking_data = {
