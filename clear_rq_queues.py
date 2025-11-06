@@ -57,6 +57,15 @@ def clear_rq_queues():
             if key not in keys_to_delete:
                 keys_to_delete.append(key)
         
+        # ✅ QI 1000: Deletar também jobs individuais (rq:job:*)
+        job_keys = redis_conn.keys('rq:job:*')
+        print(f"📋 Jobs individuais encontradas: {len(job_keys)}")
+        for key in job_keys:
+            if isinstance(key, bytes):
+                key = key.decode('utf-8')
+            if key not in keys_to_delete:
+                keys_to_delete.append(key)
+        
         # Confirmar antes de deletar
         print("\n" + "="*70)
         print("⚠️  ATENÇÃO: Este script vai apagar TODAS as jobs do RQ")
@@ -72,28 +81,60 @@ def clear_rq_queues():
             print("❌ Operação cancelada")
             return
         
-        # Deletar todas as chaves
+        # Deletar todas as chaves usando pipeline (mais rápido)
+        print("\n🗑️  Deletando chaves...")
         deleted = 0
+        
+        # Converter todas as chaves para bytes
+        keys_bytes = []
         for key in keys_to_delete:
             try:
                 if isinstance(key, str):
-                    key_bytes = key.encode('utf-8')
+                    keys_bytes.append(key.encode('utf-8'))
                 else:
-                    key_bytes = key
-                
-                result = redis_conn.delete(key_bytes)
-                if result:
-                    deleted += 1
-                    print(f"✅ Deletado: {key}")
+                    keys_bytes.append(key)
             except Exception as e:
-                print(f"⚠️ Erro ao deletar {key}: {e}")
+                print(f"⚠️ Erro ao converter {key} para bytes: {e}")
+        
+        # Deletar usando pipeline
+        try:
+            if keys_bytes:
+                pipeline = redis_conn.pipeline()
+                for key_bytes in keys_bytes:
+                    pipeline.delete(key_bytes)
+                results = pipeline.execute()
+                deleted = sum(1 for r in results if r)
+                print(f"✅ Pipeline executado: {deleted} chaves deletadas")
+            else:
+                print("⚠️ Nenhuma chave para deletar")
+        except Exception as e:
+            print(f"⚠️ Erro no pipeline, deletando individualmente: {e}")
+            # Fallback: deletar individualmente
+            deleted = 0
+            for key_bytes in keys_bytes:
+                try:
+                    result = redis_conn.delete(key_bytes)
+                    if result:
+                        deleted += 1
+                except Exception as e2:
+                    key_str = key_bytes.decode('utf-8') if isinstance(key_bytes, bytes) else str(key_bytes)
+                    print(f"⚠️ Erro ao deletar {key_str}: {e2}")
         
         print("\n" + "="*70)
         print(f"✅ Limpeza concluída: {deleted} chaves deletadas")
         print("="*70)
+        # Verificar se ainda há chaves RQ
+        remaining_keys = redis_conn.keys('rq:*')
+        if remaining_keys:
+            print(f"\n⚠️  ATENÇÃO: Ainda há {len(remaining_keys)} chaves RQ no Redis")
+            print("   Isso pode indicar que algumas chaves não foram deletadas")
+            print("   Execute manualmente: redis-cli DEL $(redis-cli KEYS 'rq:*')")
+        else:
+            print("\n✅ Todas as chaves RQ foram removidas com sucesso!")
+        
         print("\n📝 Próximos passos:")
-        print("1. Reinicie o Redis: systemctl restart redis")
-        print("2. Pare todos os workers: pkill -f start_rq_worker.py")
+        print("1. Pare todos os workers: pkill -f start_rq_worker.py")
+        print("2. Reinicie o Redis: systemctl restart redis")
         print("3. Reinicie os workers:")
         print("   python start_rq_worker.py tasks &")
         print("   python start_rq_worker.py gateway &")
