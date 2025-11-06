@@ -7139,15 +7139,38 @@ def payment_webhook(gateway_type):
                             # externalreference pode ser o payment_id completo ou parcial
                             payment = Payment.query.filter_by(payment_id=external_ref).first()
                             if not payment:
+                                logger.info(f"🔍 external_reference completo não encontrado, tentando busca parcial...")
                                 # Tentar buscar por parte do payment_id (caso external_ref seja hash parcial)
                                 # Exemplo: external_ref = "0f57f18b674274be53ad32ff456c1f"
                                 # payment_id pode ser "BOT37_1762421295_0f57f18b"
-                                payments = Payment.query.filter(
-                                    Payment.payment_id.like(f"%{external_ref}%")
-                                ).all()
-                                if payments:
-                                    payment = payments[0]  # Usar o primeiro encontrado
-                                    logger.info(f"🔍 Payment encontrado por external_reference parcial: {payment.payment_id}")
+                                # Tentar pelos primeiros 8 caracteres (hash parcial comum)
+                                if len(external_ref) >= 8:
+                                    hash_prefix = external_ref[:8]
+                                    payments = Payment.query.filter(
+                                        Payment.payment_id.like(f"%{hash_prefix}%")
+                                    ).all()
+                                    if payments:
+                                        # ✅ Priorizar payment do mesmo gateway e mais recente
+                                        matching_payments = [p for p in payments if p.gateway_type == gateway_type]
+                                        if matching_payments:
+                                            payment = matching_payments[0]
+                                            logger.info(f"✅ Payment encontrado por external_reference (hash parcial {hash_prefix}): {payment.payment_id}")
+                                        else:
+                                            payment = payments[0]  # Fallback
+                                            logger.info(f"⚠️ Payment encontrado por external_reference (hash parcial, gateway diferente): {payment.payment_id}")
+                                # Se ainda não encontrou, tentar busca completa no payment_id
+                                if not payment:
+                                    payments = Payment.query.filter(
+                                        Payment.payment_id.like(f"%{external_ref}%")
+                                    ).all()
+                                    if payments:
+                                        matching_payments = [p for p in payments if p.gateway_type == gateway_type]
+                                        if matching_payments:
+                                            payment = matching_payments[0]
+                                            logger.info(f"✅ Payment encontrado por external_reference (busca completa): {payment.payment_id}")
+                                        else:
+                                            payment = payments[0]
+                                            logger.info(f"⚠️ Payment encontrado por external_reference (busca completa, gateway diferente): {payment.payment_id}")
             
             if payment:
                 logger.info(f"💰 Pagamento encontrado: {payment.payment_id} | Status atual: {payment.status}")
@@ -7172,8 +7195,26 @@ def payment_webhook(gateway_type):
                     logger.error(f"   📋 Últimos 10 pagamentos pending de {gateway_type}:")
                     for p in recent_payments:
                         logger.error(f"      - {p.payment_id} | gateway_transaction_id: {p.gateway_transaction_id} | Amount: R$ {p.amount:.2f} | Created: {p.created_at}")
+                    
+                    # ✅ ÚLTIMA TENTATIVA: Buscar por amount exato (se houver apenas 1 match)
+                    webhook_amount = result.get('amount')
+                    if webhook_amount:
+                        matching_amount = [p for p in recent_payments if abs(p.amount - float(webhook_amount)) < 0.01]
+                        if len(matching_amount) == 1:
+                            payment = matching_amount[0]
+                            logger.info(f"✅ Payment encontrado por amount exato: {payment.payment_id} | Amount: R$ {payment.amount:.2f}")
+                        elif len(matching_amount) > 1:
+                            logger.warning(f"⚠️ Múltiplos pagamentos com mesmo amount: {len(matching_amount)} encontrados")
+                            # Usar o mais recente
+                            payment = matching_amount[0]
+                            logger.info(f"✅ Payment encontrado por amount (mais recente): {payment.payment_id}")
                 
-                logger.error(f"   ================================================")
+                if not payment:
+                    logger.error(f"   ================================================")
+                    logger.error(f"   ❌ CRÍTICO: Payment NÃO encontrado após todas as tentativas!")
+                    logger.error(f"   A venda foi feita mas não será processada automaticamente.")
+                    logger.error(f"   Ação necessária: Processar manualmente ou verificar logs.")
+                    logger.error(f"   ================================================")
             
             if payment:
                 # ✅ VERIFICA STATUS ANTIGO ANTES DE QUALQUER ATUALIZAÇÃO

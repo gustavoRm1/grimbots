@@ -201,11 +201,14 @@ class SyncPayGateway(PaymentGateway):
                 "amount": float(amount),  # ✅ number <double>, >= 0
                 "description": description or None,  # ✅ string | null (opcional)
                 "webhook_url": self.get_webhook_url(),  # ✅ string <uri> (opcional)
-                "client": client_data  # ✅ object (opcional, mas recomendado)
+                "client": client_data,  # ✅ object (opcional, mas recomendado)
+                "external_reference": payment_id  # ✅ CRÍTICO: Enviar payment_id como external_reference para matching no webhook
             }
             
             # ✅ Remover campos None do payload (API pode rejeitar)
             payload = {k: v for k, v in payload.items() if v is not None}
+            
+            logger.info(f"🔍 [{self.get_gateway_name()}] external_reference enviado: {payment_id}")
             
             # ✅ Adicionar split apenas se configurado (não enviar array vazio)
             if split_config:
