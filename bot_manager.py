@@ -1241,6 +1241,8 @@ class BotManager:
         """
         ✅ QI 500: Envia step do funil SEQUENCIALMENTE (garante ordem)
         
+        ✅ QI 10000: ANTI-DUPLICAÇÃO - Lock por chat+hash(texto) antes de enviar
+        
         Envia na ordem:
         1. Texto (se houver)
         2. Mídia (se houver)
@@ -1261,8 +1263,35 @@ class BotManager:
             bool: True se todos os envios foram bem-sucedidos
         """
         import time
+        import hashlib
+        
+        # ============================================================================
+        # ✅ QI 10000: ANTI-DUPLICAÇÃO - Lock por chat+hash(texto) antes de enviar
+        # ============================================================================
+        try:
+            import redis
+            redis_conn_send = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
+            # Gerar hash do conteúdo (texto + mídia se houver)
+            content_hash = hashlib.md5(
+                f"{text or ''}{media_url or ''}{str(buttons or [])}".encode('utf-8')
+            ).hexdigest()[:8]
+            send_lock_key = f"lock:send:{chat_id}:{content_hash}"
+            
+            # Tentar adquirir lock (expira em 5 segundos)
+            lock_acquired = redis_conn_send.set(send_lock_key, "1", ex=5, nx=True)
+            if not lock_acquired:
+                logger.warning(f"⛔ Mensagem já está sendo enviada: chat_id={chat_id}, hash={content_hash} - BLOQUEANDO DUPLICAÇÃO")
+                return False  # Sair sem enviar (duplicação detectada)
+            else:
+                logger.debug(f"🔒 Lock de envio adquirido: {send_lock_key}")
+        except Exception as e:
+            logger.warning(f"⚠️ Erro ao verificar lock de envio: {e} - continuando")
+            # Fail-open: se Redis falhar, continuar (melhor que bloquear tudo)
         
         try:
+            # ✅ QI 10000: Log para rastrear envios
+            logger.info(f"📤 Enviando mensagem do funil: chat_id={chat_id}, texto_len={len(text) if text else 0}, tem_midia={bool(media_url)}")
+            
             base_url = f"https://api.telegram.org/bot{token}"
             all_success = True
             
