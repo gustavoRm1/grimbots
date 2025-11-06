@@ -3704,28 +3704,56 @@ def public_redirect(slug):
     fbclid = request.args.get('fbclid', '')
     session_id = str(uuid.uuid4())
     
+    # ✅ CRÍTICO QI 300: Detectar crawlers e NÃO salvar tracking
+    # Crawlers não têm cookies, não geram FBP/FBC válidos, e poluem o Redis
+    def is_crawler(ua: str) -> bool:
+        """Detecta se o User-Agent é um crawler/bot"""
+        if not ua:
+            return False
+        ua_lower = ua.lower()
+        crawler_patterns = [
+            'facebookexternalhit',
+            'facebot',
+            'telegrambot',
+            'whatsapp',
+            'python-requests',
+            'curl',
+            'wget',
+            'bot',
+            'crawler',
+            'spider',
+            'scraper',
+            'googlebot',
+            'bingbot',
+            'slurp',
+            'duckduckbot',
+            'baiduspider',
+            'yandexbot',
+            'sogou',
+            'exabot',
+            'facebot',
+            'ia_archiver'
+        ]
+        return any(pattern in ua_lower for pattern in crawler_patterns)
+    
+    is_crawler_request = is_crawler(user_agent)
+    if is_crawler_request:
+        logger.info(f"🤖 CRAWLER DETECTADO: {user_agent[:50]}... | Tracking NÃO será salvo")
+    
     # ✅ CRÍTICO: Salvar tracking no Redis SEMPRE (TTL 180s = 3 min)
     # Mesmo sem fbclid, salvar usando grim ou session_id como chave
     grim_param = request.args.get('grim', '')
     import json
     
     # ✅ PASSO 1: CAPTURAR _fbp e _fbc DOS COOKIES (CRÍTICO PARA MATCHING!)
+    # ✅ CRÍTICO QI 300: NÃO gerar FBP no servidor - deixar o browser gerar via JS
+    # FBP deve ser SEMPRE gerado pelo browser para garantir consistência
     fbp_cookie = request.cookies.get('_fbp', '')
     fbc_cookie = request.cookies.get('_fbc', '')
     
-    # ✅ GERAR _fbp MANUALMENTE se não existir (Facebook IAB pode não enviar)
-    # Formato: fb.{version}.{timestamp}.{random}
-    if not fbp_cookie:
-        try:
-            from utils.tracking_service import TrackingService
-            fbp_cookie = TrackingService.generate_fbp()
-            logger.info(f"🔑 _fbp gerado manualmente: {fbp_cookie[:30]}...")
-        except Exception as e:
-            logger.warning(f"⚠️ Erro ao gerar _fbp: {e}")
-    
-    # ✅ GERAR _fbc MANUALMENTE se não existir mas tiver fbclid
-    # Formato: fb.{version}.{timestamp}.{fbclid}
-    if not fbc_cookie and fbclid:
+    # ✅ GERAR _fbc APENAS se não existir mas tiver fbclid (FBC pode ser gerado do fbclid)
+    # Formato: fb.1.{timestamp}.{fbclid}
+    if not fbc_cookie and fbclid and not is_crawler_request:
         try:
             # time já está importado no topo do arquivo
             # Formato: fb.1.{timestamp}.{fbclid}
@@ -3736,61 +3764,70 @@ def public_redirect(slug):
     
     # ✅ SOLUÇÃO SÊNIOR QI 300: Tracking Universal Persistente (30 dias)
     # Usar TrackingService para garantir consistência total e recuperação robusta
+    # ✅ CRÍTICO: NÃO salvar tracking para crawlers (poluem Redis com dados incompletos)
     from utils.tracking_service import TrackingService
     
-    try:
-        # ✅ Preparar UTMs para salvar
-        utms = {
-            'utm_source': request.args.get('utm_source', ''),
-            'utm_campaign': request.args.get('utm_campaign', ''),
-            'utm_medium': request.args.get('utm_medium', ''),
-            'utm_content': request.args.get('utm_content', ''),
-            'utm_term': request.args.get('utm_term', ''),
-            'utm_id': request.args.get('utm_id', '')
-        }
+    # ✅ SALVAR TRACKING APENAS SE NÃO FOR CRAWLER
+    if not is_crawler_request:
+        try:
+            # ✅ Preparar UTMs para salvar
+            utms = {
+                'utm_source': request.args.get('utm_source', ''),
+                'utm_campaign': request.args.get('utm_campaign', ''),
+                'utm_medium': request.args.get('utm_medium', ''),
+                'utm_content': request.args.get('utm_content', ''),
+                'utm_term': request.args.get('utm_term', ''),
+                'utm_id': request.args.get('utm_id', '')
+            }
+            
+            # ✅ CRÍTICO QI 300: NÃO gerar FBP no servidor
+            # FBP deve ser SEMPRE gerado pelo browser (via Meta Pixel JS)
+            # Se não existir no cookie, NÃO gerar aqui - deixar o browser fazer
+            fbp_final = fbp_cookie  # Apenas usar o que veio do cookie
+            
+            # ✅ Gerar fbc se existir fbclid (FBC pode ser gerado do fbclid)
+            fbc_final = fbc_cookie
+            if fbclid and not fbc_final:
+                fbc_final = f"fb.1.{int(time.time())}.{fbclid}"
+                logger.info(f"🔑 _fbc gerado no redirect: {fbc_final[:50]}...")
+            
+            # ✅ VALIDAÇÃO CRÍTICA: Só salvar se tiver fbp OU fbc (dados válidos)
+            # Se não tiver nenhum dos dois, não salvar (evita dados incompletos)
+            if fbp_final or fbc_final:
+                # ✅ Salvamento correto (com fbclid ou com grim)
+                if fbclid:
+                    TrackingService.save_tracking_data(
+                        fbclid=fbclid,
+                        fbp=fbp_final,  # Pode ser vazio se não veio do cookie
+                        fbc=fbc_final,  # Sempre gerado se tiver fbclid
+                        ip_address=user_ip,
+                        user_agent=user_agent,
+                        grim=grim_param,
+                        utms=utms
+                    )
+                    logger.info(f"🎯 TRACKING SALVO (30d) | fbclid:{fbclid[:20]}... | fbp={'✅' if fbp_final else '⏳(browser)'} | fbc={'✅' if fbc_final else '❌'}")
+                elif grim_param:
+                    # ✅ Se NÃO tiver fbclid mas tiver grim → salvar mesmo assim!
+                    TrackingService.save_tracking_data(
+                        fbclid=None,
+                        fbp=fbp_final,  # Pode ser vazio se não veio do cookie
+                        fbc=fbc_final,  # Pode ser vazio se não tiver fbclid
+                        ip_address=user_ip,
+                        user_agent=user_agent,
+                        grim=grim_param,
+                        utms=utms
+                    )
+                    logger.info(f"🎯 TRACKING SALVO (30d) | grim:{grim_param} | fbp={'✅' if fbp_final else '⏳(browser)'} | fbc={'✅' if fbc_final else '❌'}")
+            else:
+                logger.warning(f"⚠️ Tracking NÃO salvo: sem fbp e sem fbc (aguardando browser gerar)")
         
-        # ✅ CRÍTICO: Sempre gerar fbp ANTES de salvar (independente da origem)
-        fbp_final = fbp_cookie
-        if not fbp_final:
-            fbp_final = TrackingService.generate_fbp()
-            logger.info(f"🔑 _fbp gerado no redirect (antes de salvar): {fbp_final[:30]}...")
-        
-        # ✅ Gerar fbc se existir fbclid
-        fbc_final = fbc_cookie
-        if fbclid and not fbc_final:
-            fbc_final = f"fb.1.{int(time.time())}.{fbclid}"
-            logger.info(f"🔑 _fbc gerado no redirect: {fbc_final[:50]}...")
-        
-        # ✅ Salvamento correto (com fbclid ou com grim)
-        if fbclid:
-            TrackingService.save_tracking_data(
-                fbclid=fbclid,
-                fbp=fbp_final,
-                fbc=fbc_final,
-                ip_address=user_ip,
-                user_agent=user_agent,
-                grim=grim_param,
-                utms=utms
-            )
-            logger.info(f"🎯 TRACKING SALVO (30d) | fbclid:{fbclid[:20]}... | fbp=✅ | fbc={'✅' if fbc_final else '❌'}")
-        elif grim_param:
-            # ✅ Se NÃO tiver fbclid mas tiver grim → salvar mesmo assim!
-            TrackingService.save_tracking_data(
-                fbclid=None,
-                fbp=fbp_final,
-                fbc=fbc_final,
-                ip_address=user_ip,
-                user_agent=user_agent,
-                grim=grim_param,
-                utms=utms
-            )
-            logger.info(f"🎯 TRACKING SALVO (30d) | grim:{grim_param} | fbp=✅ | fbc={'✅' if fbc_final else '❌'}")
-        
-    except Exception as e:
-        logger.error(f"⚠️ Erro ao salvar tracking no Redis: {e}")
-        import traceback
-        traceback.print_exc()
-        # Não quebrar o redirect se Redis falhar
+        except Exception as e:
+            logger.error(f"⚠️ Erro ao salvar tracking no Redis: {e}")
+            import traceback
+            traceback.print_exc()
+            # Não quebrar o redirect se Redis falhar
+    else:
+        logger.info(f"🤖 Crawler detectado - Tracking NÃO salvo (evita poluição do Redis)")
     
     # ============================================================================
     # ✅ META PIXEL: PAGEVIEW TRACKING + UTM CAPTURE (NÍVEL DE POOL)
@@ -6305,6 +6342,25 @@ def send_meta_pixel_pageview_event(pool, request):
         tuple: (external_id, utm_data) para vincular eventos posteriores
     """
     try:
+        # ✅ VERIFICAÇÃO 0: É crawler? (NÃO enviar PageView para crawlers)
+        user_agent = request.headers.get('User-Agent', '')
+        def is_crawler(ua: str) -> bool:
+            """Detecta se o User-Agent é um crawler/bot"""
+            if not ua:
+                return False
+            ua_lower = ua.lower()
+            crawler_patterns = [
+                'facebookexternalhit', 'facebot', 'telegrambot', 'whatsapp',
+                'python-requests', 'curl', 'wget', 'bot', 'crawler', 'spider',
+                'scraper', 'googlebot', 'bingbot', 'slurp', 'duckduckbot',
+                'baiduspider', 'yandexbot', 'sogou', 'exabot', 'ia_archiver'
+            ]
+            return any(pattern in ua_lower for pattern in crawler_patterns)
+        
+        if is_crawler(user_agent):
+            logger.info(f"🤖 CRAWLER DETECTADO no PageView: {user_agent[:50]}... | PageView NÃO será enviado")
+            return None, {}
+        
         # ✅ VERIFICAÇÃO 1: Pool tem Meta Pixel configurado?
         if not pool.meta_tracking_enabled:
             return None, {}
@@ -6362,16 +6418,17 @@ def send_meta_pixel_pageview_event(pool, request):
         fbc_value = None
         
         # ✅ PRIORIDADE 1: Cookies do browser (MÁXIMA PRIORIDADE - Meta confia mais)
+        # ✅ CRÍTICO QI 300: FBP deve ser SEMPRE do browser (não gerar no servidor)
         fbp_value = request.cookies.get('_fbp', '')
         fbc_value = request.cookies.get('_fbc', '')
         
-        # ✅ GERAR _fbp se não existir (Facebook IAB pode não enviar)
-        if not fbp_value:
-            fbp_value = TrackingService.generate_fbp()
-            logger.info(f"🔑 PageView - _fbp gerado automaticamente: {fbp_value[:30]}...")
-        
+        # ✅ NÃO GERAR FBP NO SERVIDOR - deixar o browser gerar via Meta Pixel JS
+        # Se não existir no cookie, aguardar o browser gerar no PageView
         if fbp_value:
             logger.info(f"🔑 PageView - fbp recuperado dos cookies do browser: {fbp_value[:20]}...")
+        else:
+            logger.info(f"⏳ PageView - fbp não encontrado nos cookies (browser gerará via Meta Pixel JS)")
+        
         if fbc_value:
             logger.info(f"🔑 PageView - fbc recuperado dos cookies do browser: {fbc_value[:20]}...")
         
@@ -6384,19 +6441,25 @@ def send_meta_pixel_pageview_event(pool, request):
                 )
                 
                 if tracking_data:
+                    # ✅ CORREÇÃO: Verificar se tracking_data.get() retorna None antes de usar
                     if not fbp_value and tracking_data.get('fbp'):
-                        fbp_value = tracking_data.get('fbp')
-                        logger.info(f"🔑 PageView - fbp recuperado do Redis: {fbp_value[:20]}...")
+                        fbp_value = tracking_data.get('fbp') or ''
+                        if fbp_value:
+                            logger.info(f"🔑 PageView - fbp recuperado do Redis: {fbp_value[:20]}...")
                     if not fbc_value and tracking_data.get('fbc'):
-                        fbc_value = tracking_data.get('fbc')
-                        logger.info(f"🔑 PageView - fbc recuperado do Redis: {fbc_value[:20]}...")
+                        fbc_value = tracking_data.get('fbc') or ''
+                        if fbc_value:
+                            logger.info(f"🔑 PageView - fbc recuperado do Redis: {fbc_value[:20]}...")
             except Exception as e:
                 logger.warning(f"⚠️ Erro ao recuperar fbp/fbc do Redis: {e}")
+                import traceback
+                traceback.print_exc()
         
         # ✅ PRIORIDADE 3: Gerar _fbc se não existir mas tiver fbclid
         if not fbc_value and external_id and external_id.startswith('PAZ'):
             fbc_value = TrackingService.generate_fbc(external_id)
-            logger.info(f"🔑 PageView - _fbc gerado automaticamente: {fbc_value[:50]}...")
+            if fbc_value:
+                logger.info(f"🔑 PageView - _fbc gerado automaticamente: {fbc_value[:50]}...")
         
         # ✅ CRÍTICO: Garantir que fbp/fbc sejam salvos no Redis para Purchase
         if external_id and external_id.startswith('PAZ'):

@@ -132,14 +132,15 @@ class TrackingService:
             logger.warning("⚠️ Redis não disponível - tracking não salvo")
             return False
         
-        # ✅ CRÍTICO: Sempre gerar fbp quando não existir
-        if not fbp:
-            fbp = TrackingService.generate_fbp()
-            logger.debug("🔑 _fbp gerado automaticamente no save_tracking_data()")
+        # ✅ CRÍTICO QI 300: NÃO gerar FBP no servidor
+        # FBP deve ser SEMPRE gerado pelo browser (via Meta Pixel JS)
+        # Se não fornecido, deixar vazio (browser gerará)
+        # Não gerar aqui para evitar inconsistência
         
-        # Gerar fbc se não fornecido mas tiver fbclid
+        # ✅ CRÍTICO: Sempre gerar fbc se não fornecido mas tiver fbclid
         if not fbc and fbclid:
             fbc = TrackingService.generate_fbc(fbclid)
+            logger.debug(f"🔑 _fbc gerado automaticamente no save_tracking_data() (fbclid presente)")
         
         # ✅ Bloqueios corrigidos (agora salva por grim mesmo sem fbclid)
         if not fbclid and not grim:
@@ -285,7 +286,14 @@ class TrackingService:
                 logger.warning(f"⚠️ Erro na busca por padrão: {e}")
         
         if tracking_data:
-            logger.info(f"📊 Tracking recuperado: fbclid={tracking_data.get('fbclid', 'N/A')[:20]}... | fbp={'✅' if tracking_data.get('fbp') else '❌'} | fbc={'✅' if tracking_data.get('fbc') else '❌'} | strategy={strategy_used}")
+            # ✅ CORREÇÃO CRÍTICA: Garantir que fbp e fbc existam (evitar 'NoneType' object is not subscriptable)
+            # Se fbp ou fbc forem None, definir como string vazia
+            if tracking_data.get('fbp') is None:
+                tracking_data['fbp'] = ''
+            if tracking_data.get('fbc') is None:
+                tracking_data['fbc'] = ''
+            
+            logger.info(f"📊 Tracking recuperado: fbclid={tracking_data.get('fbclid', 'N/A')[:20] if tracking_data.get('fbclid') else 'N/A'}... | fbp={'✅' if tracking_data.get('fbp') else '❌'} | fbc={'✅' if tracking_data.get('fbc') else '❌'} | strategy={strategy_used}")
         
         return tracking_data
 
