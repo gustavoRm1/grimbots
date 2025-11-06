@@ -1911,7 +1911,7 @@ def create_remarketing_campaign(bot_id):
     if status == 'scheduled':
         logger.info(f"📅 Campanha de remarketing agendada: {campaign.name} para {scheduled_at} (Bot {bot.name})")
     else:
-    logger.info(f"📢 Campanha de remarketing criada: {campaign.name} (Bot {bot.name})")
+        logger.info(f"📢 Campanha de remarketing criada: {campaign.name} (Bot {bot.name})")
     
     return jsonify(campaign.to_dict()), 201
 
@@ -2062,18 +2062,18 @@ def general_remarketing():
                 
                 # ✅ V2.0: Enviar campanha apenas se não estiver agendada
                 if status != 'scheduled':
-                try:
-                    bot_manager.send_remarketing_campaign(
-                        campaign_id=campaign.id,
-                        bot_token=bot.token
-                    )
-                    
-                    total_users += eligible_count
-                    bots_affected += 1
-                    
-                    logger.info(f"✅ Remarketing geral enviado para bot {bot.name} ({eligible_count} usuários)")
-                except Exception as e:
-                    logger.error(f"❌ Erro ao enviar remarketing para bot {bot.id}: {e}")
+                    try:
+                        bot_manager.send_remarketing_campaign(
+                            campaign_id=campaign.id,
+                            bot_token=bot.token
+                        )
+                        
+                        total_users += eligible_count
+                        bots_affected += 1
+                        
+                        logger.info(f"✅ Remarketing geral enviado para bot {bot.name} ({eligible_count} usuários)")
+                    except Exception as e:
+                        logger.error(f"❌ Erro ao enviar remarketing para bot {bot.id}: {e}")
                 else:
                     # Campanha agendada - não enviar agora, será processada pelo scheduler
                     total_users += eligible_count
@@ -3670,35 +3670,36 @@ def public_redirect(slug):
         except Exception as e:
             logger.warning(f"⚠️ Erro ao gerar _fbc: {e}")
     
-        try:
-            r = redis.Redis(host='localhost', port=6379, decode_responses=True)
-            tracking_data = {
-                'ip': user_ip,
-                'user_agent': user_agent,
-                'session_id': session_id,
+    # ✅ CRÍTICO: Salvar tracking no Redis SEMPRE (não apenas quando fbc é gerado)
+    try:
+        r = redis.Redis(host='localhost', port=6379, decode_responses=True)
+        tracking_data = {
+            'ip': user_ip,
+            'user_agent': user_agent,
+            'session_id': session_id,
             'timestamp': get_brazil_time().isoformat(),
-                'pool_id': pool.id,
-                'slug': slug,
+            'pool_id': pool.id,
+            'slug': slug,
             # ✅ CORREÇÃO CRÍTICA: Capturar `grim` para matching com campanha
             'grim': grim_param,
             # ✅ CRÍTICO: Cookies do Meta (OBRIGATÓRIO para matching 7-9/10)
             'fbp': fbp_cookie,  # Facebook Pixel Browser ID
             'fbc': fbc_cookie,  # Facebook Click ID (gerado se não existir)
-                # Capturar TODOS os UTMs
-                'utm_source': request.args.get('utm_source', ''),
-                'utm_campaign': request.args.get('utm_campaign', ''),
-                'utm_medium': request.args.get('utm_medium', ''),
-                'utm_content': request.args.get('utm_content', ''),
-                'utm_term': request.args.get('utm_term', ''),
-                'utm_id': request.args.get('utm_id', ''),
-                # ✅ NOVO: Dados adicionais para analytics (QI 502)
-                'referer': request.headers.get('Referer', ''),
-                'accept_language': request.headers.get('Accept-Language', ''),
-                'adset_id': request.args.get('adset_id', ''),
-                'ad_id': request.args.get('ad_id', ''),
-                'campaign_id': request.args.get('campaign_id', '')
-            }
-            
+            # Capturar TODOS os UTMs
+            'utm_source': request.args.get('utm_source', ''),
+            'utm_campaign': request.args.get('utm_campaign', ''),
+            'utm_medium': request.args.get('utm_medium', ''),
+            'utm_content': request.args.get('utm_content', ''),
+            'utm_term': request.args.get('utm_term', ''),
+            'utm_id': request.args.get('utm_id', ''),
+            # ✅ NOVO: Dados adicionais para analytics (QI 502)
+            'referer': request.headers.get('Referer', ''),
+            'accept_language': request.headers.get('Accept-Language', ''),
+            'adset_id': request.args.get('adset_id', ''),
+            'ad_id': request.args.get('ad_id', ''),
+            'campaign_id': request.args.get('campaign_id', '')
+        }
+        
         # Se tem fbclid, adicionar e usar como chave principal
         if fbclid:
             tracking_data['fbclid'] = fbclid
@@ -3714,9 +3715,9 @@ def public_redirect(slug):
         if not fbclid and not grim_param:
             r.setex(f'tracking_session:{session_id}', 180, json.dumps(tracking_data))
             logger.info(f"🎯 TRACKING ELITE | session={session_id[:8]}... | IP={user_ip} | fbp={'✅' if fbp_cookie else '❌'} | fbc={'✅' if fbc_cookie else '❌'}")
-        except Exception as e:
-            logger.error(f"⚠️ Erro ao salvar tracking no Redis: {e}")
-            # Não quebrar o redirect se Redis falhar
+    except Exception as e:
+        logger.error(f"⚠️ Erro ao salvar tracking no Redis: {e}")
+        # Não quebrar o redirect se Redis falhar
     
     # ============================================================================
     # ✅ META PIXEL: PAGEVIEW TRACKING + UTM CAPTURE (NÍVEL DE POOL)
