@@ -80,41 +80,67 @@ class MetaPixelAPI:
         Constrói user_data para o evento
         
         Meta usa esses dados para matching com client-side events
+        
+        ✅ VALIDAÇÕES DE SEGURANÇA:
+        - Ignora valores None ou strings vazias
+        - Valida email antes de hash
+        - Limpa phone antes de hash
+        - Garante que external_id é sempre array quando presente
         """
         user_data = {}
         
-        # External ID (obrigatório para Conversions API)
-        if customer_user_id:
-            user_data['external_id'] = [MetaPixelAPI._hash_data(customer_user_id)]
+        # ✅ External ID (obrigatório para Conversions API)
+        # Prioridade: external_id > customer_user_id (fbclid é mais confiável)
+        external_ids = []
         
-        if external_id:
-            user_data['external_id'] = user_data.get('external_id', [])
-            user_data['external_id'].append(MetaPixelAPI._hash_data(external_id))
+        # Adicionar customer_user_id se válido
+        if customer_user_id and isinstance(customer_user_id, str) and customer_user_id.strip():
+            external_ids.append(MetaPixelAPI._hash_data(customer_user_id.strip()))
         
-        # Email (hashed)
-        if email:
-            user_data['em'] = [MetaPixelAPI._hash_data(email.lower().strip())]
+        # Adicionar external_id se válido (prioridade - geralmente é fbclid)
+        if external_id and isinstance(external_id, str) and external_id.strip():
+            external_ids.append(MetaPixelAPI._hash_data(external_id.strip()))
         
-        # Telefone (hashed)
-        if phone:
+        # Só adicionar se tiver pelo menos um external_id válido
+        if external_ids:
+            user_data['external_id'] = external_ids
+        
+        # ✅ Email (hashed) - validar antes de processar
+        if email and isinstance(email, str) and email.strip():
+            email_clean = email.lower().strip()
+            # Validação básica de email (deve ter @ e pelo menos 3 caracteres)
+            if '@' in email_clean and len(email_clean) >= 3:
+                user_data['em'] = [MetaPixelAPI._hash_data(email_clean)]
+        
+        # ✅ Telefone (hashed) - limpar e validar antes de processar
+        if phone and isinstance(phone, str):
             # Remove caracteres não numéricos
             phone_clean = ''.join(filter(str.isdigit, phone))
-            if phone_clean:
+            # Validação: telefone deve ter pelo menos 10 dígitos (formato mínimo)
+            if phone_clean and len(phone_clean) >= 10:
                 user_data['ph'] = [MetaPixelAPI._hash_data(phone_clean)]
         
-        # Dados técnicos
-        if client_ip:
-            user_data['client_ip_address'] = client_ip
+        # ✅ Dados técnicos (IP e User Agent) - validar formato básico
+        if client_ip and isinstance(client_ip, str) and client_ip.strip():
+            # Validação básica: IP deve ter pelo menos 7 caracteres (ex: 1.1.1.1)
+            if len(client_ip.strip()) >= 7:
+                user_data['client_ip_address'] = client_ip.strip()
         
-        if client_user_agent:
-            user_data['client_user_agent'] = client_user_agent
+        if client_user_agent and isinstance(client_user_agent, str) and client_user_agent.strip():
+            # User Agent deve ter pelo menos 10 caracteres (formato mínimo)
+            if len(client_user_agent.strip()) >= 10:
+                user_data['client_user_agent'] = client_user_agent.strip()
         
-        # Cookies do Meta (para matching)
-        if fbp:
-            user_data['fbp'] = fbp
+        # ✅ Cookies do Meta (para matching) - validar formato básico
+        if fbp and isinstance(fbp, str) and fbp.strip():
+            # _fbp geralmente começa com "fb.1." ou "fb.2."
+            if len(fbp.strip()) >= 10:
+                user_data['fbp'] = fbp.strip()
         
-        if fbc:
-            user_data['fbc'] = fbc
+        if fbc and isinstance(fbc, str) and fbc.strip():
+            # _fbc geralmente começa com "fb.1."
+            if len(fbc.strip()) >= 10:
+                user_data['fbc'] = fbc.strip()
         
         return user_data
     
