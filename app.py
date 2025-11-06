@@ -4856,8 +4856,9 @@ def update_gateway(gateway_id):
         elif gateway_type == 'atomopay':
             if data.get('api_token') or data.get('api_key'):
                 gateway.api_key = data.get('api_token') or data.get('api_key')
-            if data.get('offer_hash'):
-                gateway.offer_hash = data['offer_hash']
+            # ✅ REMOVIDO: offer_hash não é mais necessário (ofertas são criadas dinamicamente)
+            # if data.get('offer_hash'):
+            #     gateway.offer_hash = data['offer_hash']
             if data.get('product_hash'):
                 gateway.product_hash = data['product_hash']
         

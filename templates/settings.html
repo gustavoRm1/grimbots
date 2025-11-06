@@ -611,23 +611,20 @@
                                         </div>
                                     </div>
                                     <div>
-                                        <label class="text-xs font-bold text-gray-400 block mb-1">Offer Hash (Recomendado)</label>
-                                        <input type="text" 
-                                               x-model="editGateway.offer_hash" 
-                                               class="form-input"
-                                               placeholder="hash-da-oferta">
-                                    </div>
-                                    <div>
-                                        <label class="text-xs font-bold text-gray-400 block mb-1">Product Hash (Alternativa)</label>
+                                        <label class="text-xs font-bold text-gray-400 block mb-1">Product Hash <span class="text-red-400">*</span></label>
                                         <input type="text" 
                                                x-model="editGateway.product_hash" 
                                                class="form-input"
-                                               placeholder="hash-do-produto">
+                                               placeholder="hash-do-produto"
+                                               required>
+                                        <p class="text-xs text-gray-500 mt-1">
+                                            Ofertas serão criadas dinamicamente para cada valor de transação
+                                        </p>
                                     </div>
                                     <div class="info-box-warning info-box p-2">
                                         <p class="text-xs text-gray-300">
                                             <i class="fas fa-info-circle mr-1"></i>
-                                            Configure offer_hash OU product_hash para melhor compatibilidade
+                                            Ofertas são criadas automaticamente para evitar conflitos de valor (order bumps, downsells, etc.)
                                         </p>
                                     </div>
                                     <button type="submit" :disabled="loading" class="btn-action btn-action-primary w-full">
@@ -887,23 +884,20 @@
                             </div>
                         </div>
                         <div>
-                            <label class="text-xs font-bold text-gray-400 block mb-1">Offer Hash (Recomendado)</label>
-                            <input type="text" 
-                                   x-model="gateways.atomopay.offer_hash" 
-                                   class="form-input"
-                                   placeholder="hash-da-oferta">
-                        </div>
-                        <div>
-                            <label class="text-xs font-bold text-gray-400 block mb-1">Product Hash (Alternativa)</label>
+                            <label class="text-xs font-bold text-gray-400 block mb-1">Product Hash <span class="text-red-400">*</span></label>
                             <input type="text" 
                                    x-model="gateways.atomopay.product_hash" 
                                    class="form-input"
-                                   placeholder="hash-do-produto">
+                                   placeholder="hash-do-produto"
+                                   required>
+                            <p class="text-xs text-gray-500 mt-1">
+                                Ofertas serão criadas dinamicamente para cada valor de transação
+                            </p>
                         </div>
                         <div class="info-box-warning info-box p-2">
                             <p class="text-xs text-gray-300">
                                 <i class="fas fa-info-circle mr-1"></i>
-                                Configure offer_hash OU product_hash para melhor compatibilidade
+                                Ofertas são criadas automaticamente para evitar conflitos de valor (order bumps, downsells, etc.)
                             </p>
                         </div>
                         <button type="submit" 

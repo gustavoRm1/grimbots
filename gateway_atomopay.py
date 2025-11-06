@@ -52,21 +52,17 @@ class AtomPayGateway(PaymentGateway):
         self.api_token = api_token.strip()
         self.base_url = "https://api.atomopay.com.br/api/public/v1"
         
-        # ✅ offer_hash é OBRIGATÓRIO na Átomo Pay (diferente do Paradise)
-        self.offer_hash = offer_hash.strip() if offer_hash else None
+        # ✅ REMOVIDO: offer_hash não é mais necessário (ofertas são criadas dinamicamente)
+        self.offer_hash = None  # Não usado mais - ofertas são criadas dinamicamente
         self.product_hash = product_hash.strip() if product_hash else None
         self.split_percentage = 2.0
         
         logger.info(f"✅ [{self.get_gateway_name()}] Gateway inicializado")
         logger.info(f"   api_token: {self.api_token[:10]}... ({len(self.api_token)} chars)")
-        if self.offer_hash:
-            logger.info(f"   offer_hash: {self.offer_hash[:8]}... (obrigatório - será enviado)")
-        else:
-            logger.warning(f"⚠️ offer_hash não configurado (será obrigatório na geração de PIX)")
         if self.product_hash:
-            logger.info(f"   product_hash: {self.product_hash[:8]}... (obrigatório no cart - será enviado)")
+            logger.info(f"   product_hash: {self.product_hash[:8]}... (obrigatório - ofertas serão criadas dinamicamente)")
         else:
-            logger.warning(f"⚠️ product_hash não configurado (será obrigatório no cart)")
+            logger.warning(f"⚠️ product_hash não configurado (obrigatório para criar ofertas dinamicamente)")
     
     def get_gateway_name(self) -> str:
         return "Átomo Pay"
@@ -354,14 +350,90 @@ class AtomPayGateway(PaymentGateway):
             # ✅ CRÍTICO: Átomo Pay REQUER offer_hash (diferente do Paradise)
             # Paradise: offer_hash NÃO deve ser enviado (causa duplicação)
             # Átomo Pay: offer_hash DEVE ser enviado (é obrigatório)
-            if not self.offer_hash:
-                logger.error(f"❌ [{self.get_gateway_name()}] offer_hash é OBRIGATÓRIO na API Átomo Pay!")
-                logger.error(f"   Configure 'Offer Hash' no gateway antes de usar")
+            # 
+            # SOLUÇÃO: Sempre criar oferta dinamicamente para evitar conflitos de valor
+            # Isso permite valores diferentes (order bumps, downsells, etc.) sem configuração manual
+            if not self.product_hash:
+                logger.error(f"❌ [{self.get_gateway_name()}] product_hash é OBRIGATÓRIO para criar ofertas dinamicamente!")
+                logger.error(f"   Configure 'Product Hash' no gateway antes de usar")
+                return None
+            
+            # ✅ SEMPRE CRIAR OFERTA DINAMICAMENTE (evita conflitos de valor)
+            # Isso garante que cada transação tenha uma oferta com o valor correto
+            offer_hash_to_use = None
+            
+            # ✅ CRIAR OFERTA DINAMICAMENTE baseada no valor da transação
+            if self.product_hash:
+                try:
+                    # ✅ Consultar produto para obter lista de ofertas existentes
+                    product_url = f"{self.base_url}/products/{self.product_hash}"
+                    product_params = {'api_token': self.api_token}
+                    
+                    product_response = requests.get(product_url, params=product_params, timeout=10)
+                    if product_response.status_code == 200:
+                        product_data = product_response.json()
+                        # Verificar se resposta tem wrapper ou é direta
+                        if isinstance(product_data, dict) and 'data' in product_data:
+                            product_info = product_data.get('data', {})
+                        else:
+                            product_info = product_data
+                        
+                        # ✅ Buscar ofertas no produto (conforme webhook, ofertas vêm em 'offers')
+                        offers_list = product_info.get('offers', [])
+                        
+                        # Buscar oferta com valor exato
+                        matching_offer = None
+                        for offer in offers_list:
+                            if isinstance(offer, dict) and offer.get('price') == amount_cents:
+                                matching_offer = offer
+                                break
+                        
+                        if matching_offer:
+                            # ✅ Oferta com valor correto já existe, reutilizar
+                            offer_hash_to_use = matching_offer.get('hash')
+                            logger.info(f"✅ [{self.get_gateway_name()}] Oferta existente encontrada para valor R$ {amount:.2f}: {offer_hash_to_use[:8]}...")
+                        else:
+                            # ❌ Oferta não existe, criar dinamicamente
+                            logger.info(f"🔄 [{self.get_gateway_name()}] Criando oferta dinâmica para valor R$ {amount:.2f}...")
+                            create_offer_url = f"{self.base_url}/products/{self.product_hash}/offers"
+                            create_offer_data = {
+                                'title': f'Oferta R$ {amount:.2f}',
+                                'amount': amount_cents
+                            }
+                            create_response = requests.post(create_offer_url, params=product_params, json=create_offer_data, timeout=10)
+                            
+                            if create_response.status_code == 201:
+                                new_offer = create_response.json()
+                                # Verificar se resposta tem wrapper
+                                if isinstance(new_offer, dict) and 'data' in new_offer:
+                                    new_offer = new_offer.get('data', {})
+                                
+                                offer_hash_to_use = new_offer.get('hash')
+                                if offer_hash_to_use:
+                                    logger.info(f"✅ [{self.get_gateway_name()}] Oferta criada dinamicamente: {offer_hash_to_use[:8]}...")
+                                else:
+                                    logger.error(f"❌ [{self.get_gateway_name()}] Oferta criada mas hash não encontrado na resposta")
+                                    return None
+                            else:
+                                logger.error(f"❌ [{self.get_gateway_name()}] Falha ao criar oferta dinâmica (status {create_response.status_code}): {create_response.text[:200]}")
+                                return None
+                    else:
+                        logger.error(f"❌ [{self.get_gateway_name()}] Falha ao consultar produto (status {product_response.status_code}): {product_response.text[:200]}")
+                        return None
+                except Exception as e:
+                    logger.error(f"❌ [{self.get_gateway_name()}] Erro ao criar oferta dinâmica: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    return None
+            
+            # ✅ VALIDAR: offer_hash deve ter sido criado
+            if not offer_hash_to_use:
+                logger.error(f"❌ [{self.get_gateway_name()}] Falha ao obter offer_hash (oferta não foi criada/encontrada)")
                 return None
             
             # ✅ Enviar offer_hash (obrigatório)
-            payload['offer_hash'] = self.offer_hash
-            logger.info(f"✅ [{self.get_gateway_name()}] offer_hash enviado: {self.offer_hash[:8]}...")
+            payload['offer_hash'] = offer_hash_to_use
+            logger.info(f"✅ [{self.get_gateway_name()}] offer_hash enviado: {offer_hash_to_use[:8]}...")
             
             # ✅ LOG DETALHADO DO PAYLOAD (para debug de recusas)
             logger.info(f"📦 [{self.get_gateway_name()}] Payload completo:")
@@ -496,17 +568,21 @@ class AtomPayGateway(PaymentGateway):
             logger.info(f"   id: {data.get('id', 'N/A')}")
             
             # ✅ EXTRAIR DADOS (priorizar campos mais importantes) - conforme documentação
-            transaction_hash = (
-                data.get('hash') or         # 1ª prioridade (conforme documentação)
-                data.get('id') or           # 2ª prioridade
-                data.get('transaction_hash') or
-                data.get('transaction_id')  # 3ª prioridade (ID numérico)
+            # ✅ CRÍTICO: Extrair transaction_id (prioridade: id > hash > transaction_id)
+            # O webhook busca pelo 'id', então devemos usar 'id' como gateway_transaction_id
+            transaction_id = (
+                data.get('id') or           # 1ª prioridade (webhook busca por este)
+                data.get('hash') or         # 2ª prioridade (fallback)
+                data.get('transaction_id') or
+                data.get('transaction_hash')
             )
             
             # ✅ CRÍTICO: Converter para string SEMPRE (id pode ser int, hash é string)
-            transaction_hash_str = str(transaction_hash) if transaction_hash else None
+            transaction_id_str = str(transaction_id) if transaction_id else None
             
-            transaction_id = data.get('transaction_id') or transaction_hash_str
+            # ✅ Hash para consulta de status (usar hash se disponível, senão id)
+            transaction_hash = data.get('hash') or transaction_id_str
+            transaction_hash_str = str(transaction_hash) if transaction_hash else None
             
             # ✅ LOG: Verificar estrutura do objeto pix
             pix_data = data.get('pix', {})
@@ -566,8 +642,8 @@ class AtomPayGateway(PaymentGateway):
                     return {
                         'pix_code': None,  # Não tem PIX porque foi recusado
                         'qr_code_url': None,
-                        'transaction_id': transaction_id_str if transaction_id_str else transaction_hash_str,
-                        'transaction_hash': transaction_hash_str,  # Hash principal para consulta
+                        'transaction_id': transaction_id_str,  # ✅ Usar id (webhook busca por este)
+                        'transaction_hash': transaction_hash_str,  # Hash para consulta de status
                         'payment_id': payment_id,
                         'status': 'refused',  # ✅ Status da transação
                         'error': 'Transação recusada pelo gateway'
@@ -594,16 +670,16 @@ class AtomPayGateway(PaymentGateway):
                     return None
             
             logger.info(f"✅ [{self.get_gateway_name()}] PIX gerado com sucesso!")
+            logger.info(f"   Transaction ID: {transaction_id_str} (webhook busca por este)")
             logger.info(f"   Transaction Hash: {transaction_hash_str[:20] if transaction_hash_str and len(transaction_hash_str) > 20 else transaction_hash_str}...")
-            logger.info(f"   Transaction ID: {transaction_id}")
             logger.info(f"   PIX Code: {pix_code[:50]}...")
             
             # ✅ RETORNO PADRONIZADO (como Paradise)
             return {
                 'pix_code': pix_code,
                 'qr_code_url': qr_code_url or qr_code_base64 or '',
-                'transaction_id': transaction_id,
-                'transaction_hash': transaction_hash_str,  # ✅ Hash principal para consulta (string)
+                'transaction_id': transaction_id_str,  # ✅ Usar id (webhook busca por este)
+                'transaction_hash': transaction_hash_str,  # Hash para consulta de status
                 'payment_id': payment_id
             }
                 
@@ -623,19 +699,24 @@ class AtomPayGateway(PaymentGateway):
             logger.info(f"📥 [{self.get_gateway_name()}] Processando webhook...")
             logger.debug(f"Dados: {data}")
             
-            # ✅ Extrair transaction_hash (prioridade: id > hash > transaction_id) - como Paradise
-            transaction_hash = (
-                data.get('id') or
-                data.get('hash') or
-                data.get('transaction_hash') or
-                data.get('transaction_id')
+            # ✅ CRÍTICO: Extrair transaction_id (prioridade: id > hash > transaction_id)
+            # O webhook busca pelo 'id', então devemos usar 'id' como gateway_transaction_id
+            transaction_id = (
+                data.get('id') or           # 1ª prioridade (webhook busca por este)
+                data.get('hash') or         # 2ª prioridade (fallback)
+                data.get('transaction_id') or
+                data.get('transaction_hash')
             )
             
-            if not transaction_hash:
+            if not transaction_id:
                 logger.error(f"❌ [{self.get_gateway_name()}] Webhook sem identificador")
                 return None
             
             # ✅ CRÍTICO: Converter para string SEMPRE (id pode ser int, hash é string)
+            transaction_id_str = str(transaction_id)
+            
+            # ✅ Hash para consulta de status (usar hash se disponível, senão id)
+            transaction_hash = data.get('hash') or transaction_id_str
             transaction_hash_str = str(transaction_hash)
             
             # ✅ Extrair status (priorizar payment_status, depois status)
@@ -677,7 +758,7 @@ class AtomPayGateway(PaymentGateway):
                 logger.info(f"   Reference: {external_reference}")
             
             return {
-                'gateway_transaction_id': transaction_hash_str,  # ✅ Usar string convertida
+                'gateway_transaction_id': transaction_id_str,  # ✅ Usar id (webhook busca por este)
                 'status': status,
                 'amount': amount,
                 'external_reference': external_reference  # ✅ CRÍTICO: Para matching do payment
