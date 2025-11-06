@@ -109,9 +109,10 @@ def _send_token_alert(pixel_id: str, message: str):
     logger = logging.getLogger(__name__)
     
     # ✅ LOG CRÍTICO PARA ALERTA
+    from models import get_brazil_time
     logger.critical(f"ALERT | Token Invalid | Pixel: {pixel_id} | " +
                    f"Message: {message} | " +
-                   f"Timestamp: {datetime.now().isoformat()}")
+                   f"Timestamp: {get_brazil_time().isoformat()}")
     
     # ✅ FUTURO: Integrar com sistema de alertas (Slack, Discord, etc)
     # Por enquanto, apenas log crítico que pode ser monitorado

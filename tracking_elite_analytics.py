@@ -36,7 +36,8 @@ def analyze_tracking_elite():
     
     with app.app_context():
         # Período de análise: últimas 24h
-        since = datetime.now() - timedelta(hours=24)
+        from models import get_brazil_time
+        since = get_brazil_time() - timedelta(hours=24)
         
         # Total de usuários no período
         total_users = BotUser.query.filter(

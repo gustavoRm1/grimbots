@@ -408,7 +408,8 @@ def save_event_success(event: MetaEvent):
     redis_client.expire(key, 3600)  # Expira em 1h
     
     # Incrementar contador
-    counter_key = f'meta_events:count:{event.pixel_id}:{datetime.now().strftime("%Y%m%d%H")}'
+    from models import get_brazil_time
+    counter_key = f'meta_events:count:{event.pixel_id}:{get_brazil_time().strftime("%Y%m%d%H")}'
     redis_client.incr(counter_key)
     redis_client.expire(counter_key, 86400)  # Expira em 24h
 

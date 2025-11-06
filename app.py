@@ -6,7 +6,7 @@ Sistema de gerenciamento de bots do Telegram com painel web
 from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, abort, session
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from flask_socketio import SocketIO, emit, join_room, leave_room
-from models import db, User, Bot, BotConfig, Gateway, Payment, AuditLog, Achievement, UserAchievement, BotUser, RedirectPool, PoolBot, RemarketingCampaign, RemarketingBlacklist, PushSubscription, NotificationSettings
+from models import db, User, Bot, BotConfig, Gateway, Payment, AuditLog, Achievement, UserAchievement, BotUser, RedirectPool, PoolBot, RemarketingCampaign, RemarketingBlacklist, PushSubscription, NotificationSettings, get_brazil_time
 from bot_manager import BotManager
 from datetime import datetime, timedelta
 from functools import wraps
@@ -320,7 +320,7 @@ def reconcile_paradise_payments():
                     if result and result.get('status') == 'paid':
                         # Atualizar pagamento e estatísticas
                         p.status = 'paid'
-                        p.paid_at = datetime.now()
+                        p.paid_at = get_brazil_time()
                         if p.bot:
                             p.bot.total_sales += 1
                             p.bot.total_revenue += p.amount
@@ -428,7 +428,7 @@ def reconcile_pushynpay_payments():
                     if result and result.get('status') == 'paid':
                         # Atualizar pagamento e estatísticas
                         p.status = 'paid'
-                        p.paid_at = datetime.now()
+                        p.paid_at = get_brazil_time()
                         if p.bot:
                             p.bot.total_sales += 1
                             p.bot.total_revenue += p.amount
@@ -559,7 +559,7 @@ def sync_bots_status():
                 if not actual_is_running:
                     bots_to_update.append(bot.id)
                     bot.is_running = False
-                    bot.last_stopped = datetime.now()
+                    bot.last_stopped = get_brazil_time()
 
                     reason = status_telegram.get('reason', 'unknown')
                     logger.info(f"🔴 Bot {bot.id} ({bot.name}) marcado como offline (memória: {is_running_in_memory}, telegram: {is_running_telegram}, motivo: {reason})")
@@ -799,7 +799,7 @@ def login():
                 return render_template('login.html')
             
             login_user(user, remember=data.get('remember') == 'on')
-            user.last_login = datetime.now()
+            user.last_login = get_brazil_time()
             user.last_ip = get_user_ip()
             db.session.commit()
             
@@ -926,8 +926,8 @@ def dashboard():
     
     # ✅ VERSÃO 2.0: Calcular stats por período (Hoje e Mês)
     from datetime import datetime, timedelta
-    today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-    month_start = datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    today_start = get_brazil_time().replace(hour=0, minute=0, second=0, microsecond=0)
+    month_start = get_brazil_time().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     
     # Stats de HOJE
     if bot_ids:
@@ -1031,7 +1031,7 @@ def dashboard():
     if bot_ids:
         recent_payments = db.session.query(Payment).filter(
             Payment.bot_id.in_(bot_ids)
-        ).order_by(Payment.id.desc()).limit(20).all()
+    ).order_by(Payment.id.desc()).limit(20).all()
     else:
         recent_payments = []
     
@@ -1143,7 +1143,7 @@ def api_sales_chart():
     if period not in (7, 30, 90):
         period = 7
     
-    start_date = datetime.now() - timedelta(days=period)
+    start_date = get_brazil_time() - timedelta(days=period)
     
     # Query para vendas por dia
     sales_by_day = db.session.query(
@@ -1161,7 +1161,7 @@ def api_sales_chart():
     # Preencher dias sem vendas (do mais antigo ao mais recente)
     result = []
     for i in range(period):
-        date = (datetime.now() - timedelta(days=(period - 1 - i))).date()
+        date = (get_brazil_time() - timedelta(days=(period - 1 - i))).date()
         day_data = next((s for s in sales_by_day if str(s.date) == str(date)), None)
         result.append({
             'date': date.strftime('%d/%m'),
@@ -1208,7 +1208,7 @@ def api_dashboard_analytics():
     avg_ticket = (total_revenue / total_purchases) if total_purchases > 0 else 0
     
     # 2.1. VENDAS HOJE
-    today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start = get_brazil_time().replace(hour=0, minute=0, second=0, microsecond=0)
     today_sales = Payment.query.filter(
         Payment.bot_id.in_(user_bot_ids),
         Payment.status == 'paid',
@@ -1450,7 +1450,7 @@ def update_bot_token(bot_id):
             
             # Força atualização no banco
             bot.is_running = False
-            bot.last_stopped = datetime.now()
+            bot.last_stopped = get_brazil_time()
             db.session.commit()
             logger.info(f"✅ Bot {bot_id} parado e cache limpo")
         
@@ -1478,7 +1478,7 @@ def update_bot_token(bot_id):
             BotUser.query.filter_by(bot_id=bot_id, archived=False).update({
                 'archived': True,
                 'archived_reason': 'token_changed',
-                'archived_at': datetime.now()
+                'archived_at': get_brazil_time()
             })
             logger.info(f"📦 {archived_count} usuários do token antigo arquivados")
         
@@ -1680,7 +1680,7 @@ def start_bot(bot_id):
     try:
         bot_manager.start_bot(bot.id, bot.token, bot.config.to_dict())
         bot.is_running = True
-        bot.last_started = datetime.now()
+        bot.last_started = get_brazil_time()
         db.session.commit()
         
         logger.info(f"Bot iniciado: {bot.name} por {current_user.email}")
@@ -1755,7 +1755,7 @@ def verify_bots_status():
                 bot.is_running = actual_is_running
                 
                 if not actual_is_running:
-                    bot.last_stopped = datetime.now()
+                    bot.last_stopped = get_brazil_time()
                     # Se estava em memória mas não responde, remover
                     if is_in_memory and not is_running_telegram:
                         try:
@@ -1788,7 +1788,7 @@ def stop_bot(bot_id):
     try:
         bot_manager.stop_bot(bot.id)
         bot.is_running = False
-        bot.last_stopped = datetime.now()
+        bot.last_stopped = get_brazil_time()
         db.session.commit()
         
         logger.info(f"Bot parado: {bot.name} por {current_user.email}")
@@ -1877,7 +1877,7 @@ def create_remarketing_campaign(bot_id):
             scheduled_at = datetime.fromisoformat(scheduled_at_str.replace('Z', '+00:00'))
             
             # Validar se data está no futuro
-            now = datetime.now()
+            now = get_brazil_time()
             if scheduled_at <= now:
                 return jsonify({'error': 'A data e hora devem ser no futuro'}), 400
             
@@ -1911,7 +1911,7 @@ def create_remarketing_campaign(bot_id):
     if status == 'scheduled':
         logger.info(f"📅 Campanha de remarketing agendada: {campaign.name} para {scheduled_at} (Bot {bot.name})")
     else:
-        logger.info(f"📢 Campanha de remarketing criada: {campaign.name} (Bot {bot.name})")
+    logger.info(f"📢 Campanha de remarketing criada: {campaign.name} (Bot {bot.name})")
     
     return jsonify(campaign.to_dict()), 201
 
@@ -2011,7 +2011,7 @@ def general_remarketing():
                 scheduled_at = datetime.fromisoformat(scheduled_at_str.replace('Z', '+00:00'))
                 
                 # Validar se data está no futuro
-                now = datetime.now()
+                now = get_brazil_time()
                 if scheduled_at <= now:
                     return jsonify({'error': 'A data e hora devem ser no futuro'}), 400
                 
@@ -2042,7 +2042,7 @@ def general_remarketing():
                 
                 campaign = RemarketingCampaign(
                     bot_id=bot.id,
-                    name=f"Remarketing Geral - {datetime.now().strftime('%d/%m/%Y %H:%M')}",
+                    name=f"Remarketing Geral - {get_brazil_time().strftime('%d/%m/%Y %H:%M')}",
                     message=message,
                     media_url=media_url,
                     media_type=media_type,
@@ -2062,18 +2062,18 @@ def general_remarketing():
                 
                 # ✅ V2.0: Enviar campanha apenas se não estiver agendada
                 if status != 'scheduled':
-                    try:
-                        bot_manager.send_remarketing_campaign(
-                            campaign_id=campaign.id,
-                            bot_token=bot.token
-                        )
-                        
-                        total_users += eligible_count
-                        bots_affected += 1
-                        
-                        logger.info(f"✅ Remarketing geral enviado para bot {bot.name} ({eligible_count} usuários)")
-                    except Exception as e:
-                        logger.error(f"❌ Erro ao enviar remarketing para bot {bot.id}: {e}")
+                try:
+                    bot_manager.send_remarketing_campaign(
+                        campaign_id=campaign.id,
+                        bot_token=bot.token
+                    )
+                    
+                    total_users += eligible_count
+                    bots_affected += 1
+                    
+                    logger.info(f"✅ Remarketing geral enviado para bot {bot.name} ({eligible_count} usuários)")
+                except Exception as e:
+                    logger.error(f"❌ Erro ao enviar remarketing para bot {bot.id}: {e}")
                 else:
                     # Campanha agendada - não enviar agora, será processada pelo scheduler
                     total_users += eligible_count
@@ -2216,11 +2216,11 @@ def admin_dashboard():
     
     platform_revenue_month = db.session.query(func.sum(Commission.commission_amount)).filter(
         Commission.status == 'paid',
-        Commission.created_at >= datetime.now() - timedelta(days=30)
+        Commission.created_at >= get_brazil_time() - timedelta(days=30)
     ).scalar() or 0.0
     
     # Novos usuários (últimos 30 dias)
-    thirty_days_ago = datetime.now() - timedelta(days=30)
+    thirty_days_ago = get_brazil_time() - timedelta(days=30)
     new_users = User.query.filter(User.created_at >= thirty_days_ago).count()
     
     # Top 10 usuários por receita
@@ -2402,7 +2402,7 @@ def admin_ban_user(user_id):
     # Banir usuário
     user.is_banned = True
     user.ban_reason = reason
-    user.banned_at = datetime.now()
+    user.banned_at = get_brazil_time()
     
     # Parar todos os bots do usuário
     for bot in user.bots:
@@ -2490,13 +2490,13 @@ def admin_impersonate(user_id):
     try:
         logger.info(f"🔍 Iniciando impersonação: admin={current_user.id} ({current_user.email}) → target={user_id}")
         
-        target_user = User.query.get_or_404(user_id)
+    target_user = User.query.get_or_404(user_id)
         logger.info(f"✅ Usuário alvo encontrado: {target_user.email} (admin={target_user.is_admin})")
-        
-        if target_user.is_admin:
+    
+    if target_user.is_admin:
             logger.warning(f"⚠️ Tentativa de impersonar admin bloqueada: {target_user.email}")
-            return jsonify({'error': 'Não é possível impersonar outro administrador'}), 403
-        
+        return jsonify({'error': 'Não é possível impersonar outro administrador'}), 403
+    
         # ✅ CORREÇÃO: Salvar ID do admin ANTES de fazer logout/login
         admin_id = current_user.id
         admin_email = current_user.email
@@ -2511,8 +2511,8 @@ def admin_impersonate(user_id):
         
         # ✅ CORREÇÃO CRÍTICA: Configurar sessão como permanente antes de salvar
         session.permanent = True
-        
-        # Salvar ID do admin original na sessão
+    
+    # Salvar ID do admin original na sessão
         session['impersonate_admin_id'] = admin_id
         session['impersonate_admin_email'] = admin_email
         logger.info(f"💾 Dados salvos na sessão: impersonate_admin_id={admin_id}")
@@ -2520,10 +2520,10 @@ def admin_impersonate(user_id):
         # ✅ CORREÇÃO: Fazer commit do banco ANTES de mudar o usuário
         db.session.commit()
         logger.info(f"✅ Commit do banco realizado")
-        
-        # Fazer logout do admin e login como usuário
+    
+    # Fazer logout do admin e login como usuário
         logger.info(f"🔄 Fazendo logout do admin...")
-        logout_user()
+    logout_user()
         logger.info(f"✅ Logout concluído")
         
         logger.info(f"🔄 Fazendo login como {target_user.email}...")
@@ -2672,7 +2672,7 @@ def admin_revenue():
     ).scalar() or 0.0
     
     # Receita por período
-    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    today = get_brazil_time().replace(hour=0, minute=0, second=0, microsecond=0)
     revenue_today = db.session.query(func.sum(Commission.commission_amount)).filter(
         Commission.status == 'paid',
         Commission.created_at >= today
@@ -2737,7 +2737,7 @@ def admin_analytics():
     from datetime import timedelta
     
     # Gráfico 1: Novos usuários (últimos 12 meses)
-    twelve_months_ago = datetime.now() - timedelta(days=365)
+    twelve_months_ago = get_brazil_time() - timedelta(days=365)
     new_users_by_month = db.session.query(
         func.strftime('%Y-%m', User.created_at).label('month'),
         func.count(User.id).label('count')
@@ -2760,7 +2760,7 @@ def admin_analytics():
      .all()
     
     # Gráfico 3: Vendas totais (últimos 30 dias)
-    thirty_days_ago = datetime.now() - timedelta(days=30)
+    thirty_days_ago = get_brazil_time() - timedelta(days=30)
     sales_by_day = db.session.query(
         func.date(Payment.created_at).label('date'),
         func.count(Payment.id).label('sales')
@@ -2864,7 +2864,7 @@ def get_bot_analytics_v2(bot_id):
     # ============================================================================
     # 💰 CARD 1: LUCRO/PREJUÍZO HOJE (APENAS PARA BOTS EM POOLS)
     # ============================================================================
-    today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start = get_brazil_time().replace(hour=0, minute=0, second=0, microsecond=0)
     
     # Vendas de hoje
     today_payments = Payment.query.filter(
@@ -3093,7 +3093,7 @@ def get_bot_stats(bot_id):
     avg_ticket = (total_revenue / total_sales) if total_sales > 0 else 0
     
     # 2. VENDAS POR PRODUTO (últimos 30 dias)
-    thirty_days_ago = datetime.now() - timedelta(days=30)
+    thirty_days_ago = get_brazil_time() - timedelta(days=30)
     sales_by_product = db.session.query(
         Payment.product_name,
         func.count(Payment.id).label('total_sales'),
@@ -3138,7 +3138,7 @@ def get_bot_stats(bot_id):
     downsell_rate = (downsell_paid / downsell_sent * 100) if downsell_sent > 0 else 0
     
     # 5. VENDAS POR DIA (últimos 7 dias)
-    seven_days_ago = datetime.now() - timedelta(days=7)
+    seven_days_ago = get_brazil_time() - timedelta(days=7)
     sales_by_day = db.session.query(
         func.date(Payment.created_at).label('date'),
         func.count(Payment.id).label('sales'),
@@ -3154,7 +3154,7 @@ def get_bot_stats(bot_id):
     # Preencher dias sem vendas
     daily_stats = []
     for i in range(7):
-        date = (datetime.now() - timedelta(days=6-i)).date()
+        date = (get_brazil_time() - timedelta(days=6-i)).date()
         day_data = next((s for s in sales_by_day if str(s.date) == str(date)), None)
         daily_stats.append({
             'date': date.strftime('%d/%m'),
@@ -3312,7 +3312,7 @@ def api_remarketing_timeline(bot_id):
     from datetime import datetime, timedelta
     
     # Últimos 7 dias
-    seven_days_ago = datetime.now() - timedelta(days=7)
+    seven_days_ago = get_brazil_time() - timedelta(days=7)
     
     # Agrupar por data
     timeline_data = db.session.query(
@@ -3328,7 +3328,7 @@ def api_remarketing_timeline(bot_id):
     # Preencher dias sem dados
     result = []
     for i in range(7):
-        date = (datetime.now() - timedelta(days=6-i)).date()
+        date = (get_brazil_time() - timedelta(days=6-i)).date()
         day_data = next((t for t in timeline_data if str(t.date) == str(date)), None)
         result.append({
             'date': date.strftime('%d/%m'),
@@ -3670,35 +3670,35 @@ def public_redirect(slug):
         except Exception as e:
             logger.warning(f"⚠️ Erro ao gerar _fbc: {e}")
     
-    try:
-        r = redis.Redis(host='localhost', port=6379, decode_responses=True)
-        tracking_data = {
-            'ip': user_ip,
-            'user_agent': user_agent,
-            'session_id': session_id,
-            'timestamp': datetime.now().isoformat(),
-            'pool_id': pool.id,
-            'slug': slug,
+        try:
+            r = redis.Redis(host='localhost', port=6379, decode_responses=True)
+            tracking_data = {
+                'ip': user_ip,
+                'user_agent': user_agent,
+                'session_id': session_id,
+            'timestamp': get_brazil_time().isoformat(),
+                'pool_id': pool.id,
+                'slug': slug,
             # ✅ CORREÇÃO CRÍTICA: Capturar `grim` para matching com campanha
             'grim': grim_param,
             # ✅ CRÍTICO: Cookies do Meta (OBRIGATÓRIO para matching 7-9/10)
             'fbp': fbp_cookie,  # Facebook Pixel Browser ID
             'fbc': fbc_cookie,  # Facebook Click ID (gerado se não existir)
-            # Capturar TODOS os UTMs
-            'utm_source': request.args.get('utm_source', ''),
-            'utm_campaign': request.args.get('utm_campaign', ''),
-            'utm_medium': request.args.get('utm_medium', ''),
-            'utm_content': request.args.get('utm_content', ''),
-            'utm_term': request.args.get('utm_term', ''),
-            'utm_id': request.args.get('utm_id', ''),
-            # ✅ NOVO: Dados adicionais para analytics (QI 502)
-            'referer': request.headers.get('Referer', ''),
-            'accept_language': request.headers.get('Accept-Language', ''),
-            'adset_id': request.args.get('adset_id', ''),
-            'ad_id': request.args.get('ad_id', ''),
-            'campaign_id': request.args.get('campaign_id', '')
-        }
-        
+                # Capturar TODOS os UTMs
+                'utm_source': request.args.get('utm_source', ''),
+                'utm_campaign': request.args.get('utm_campaign', ''),
+                'utm_medium': request.args.get('utm_medium', ''),
+                'utm_content': request.args.get('utm_content', ''),
+                'utm_term': request.args.get('utm_term', ''),
+                'utm_id': request.args.get('utm_id', ''),
+                # ✅ NOVO: Dados adicionais para analytics (QI 502)
+                'referer': request.headers.get('Referer', ''),
+                'accept_language': request.headers.get('Accept-Language', ''),
+                'adset_id': request.args.get('adset_id', ''),
+                'ad_id': request.args.get('ad_id', ''),
+                'campaign_id': request.args.get('campaign_id', '')
+            }
+            
         # Se tem fbclid, adicionar e usar como chave principal
         if fbclid:
             tracking_data['fbclid'] = fbclid
@@ -3714,9 +3714,9 @@ def public_redirect(slug):
         if not fbclid and not grim_param:
             r.setex(f'tracking_session:{session_id}', 180, json.dumps(tracking_data))
             logger.info(f"🎯 TRACKING ELITE | session={session_id[:8]}... | IP={user_ip} | fbp={'✅' if fbp_cookie else '❌'} | fbc={'✅' if fbc_cookie else '❌'}")
-    except Exception as e:
-        logger.error(f"⚠️ Erro ao salvar tracking no Redis: {e}")
-        # Não quebrar o redirect se Redis falhar
+        except Exception as e:
+            logger.error(f"⚠️ Erro ao salvar tracking no Redis: {e}")
+            # Não quebrar o redirect se Redis falhar
     
     # ============================================================================
     # ✅ META PIXEL: PAGEVIEW TRACKING + UTM CAPTURE (NÍVEL DE POOL)
@@ -4152,7 +4152,7 @@ def update_pool_meta_pixel_config(pool_id):
         pixel_id = data.get('meta_pixel_id', '').strip()
         if pixel_id:
             if not MetaPixelHelper.is_valid_pixel_id(pixel_id):
-                return jsonify({'error': 'Pixel ID inválido (deve ter 15-16 dígitos numéricos)'}), 400
+            return jsonify({'error': 'Pixel ID inválido (deve ter 15-16 dígitos numéricos)'}), 400
         else:
             # ✅ CORREÇÃO: String vazia = limpar campo
             pixel_id = None
@@ -4183,7 +4183,7 @@ def update_pool_meta_pixel_config(pool_id):
             pool.meta_access_token = None
         
         # ✅ CORREÇÃO: Atualizar pixel_id (pode ser None para limpar)
-        pool.meta_pixel_id = pixel_id
+            pool.meta_pixel_id = pixel_id
         
         if 'meta_tracking_enabled' in data:
             pool.meta_tracking_enabled = bool(data['meta_tracking_enabled'])
@@ -4372,7 +4372,7 @@ def create_gateway():
             
             if is_valid:
                 gateway.is_verified = True
-                gateway.verified_at = datetime.now()
+                gateway.verified_at = get_brazil_time()
                 gateway.last_error = None
                 logger.info(f"Gateway {gateway_type} verificado para {current_user.email}")
             else:
@@ -4694,7 +4694,7 @@ def update_ranking_premium_rates():
             # ========================================================================
             # ✅ CORREÇÃO CRÍTICA: Mês atual (do primeiro dia do mês até agora)
             # Não usar timedelta(days=30) que é janela deslizante
-            now = datetime.now()
+            now = get_brazil_time()
             date_filter = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
             
             # ✅ VALIDAÇÃO: Verificar se há pagamentos no período
@@ -4982,14 +4982,14 @@ def ranking():
     # ✅ CORREÇÃO: Definir período corretamente
     date_filter = None
     if period == 'today':
-        date_filter = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        date_filter = get_brazil_time().replace(hour=0, minute=0, second=0, microsecond=0)
     elif period == 'week':
         # Últimos 7 dias
-        date_filter = datetime.now() - timedelta(days=7)
+        date_filter = get_brazil_time() - timedelta(days=7)
     elif period == 'month':
         # ✅ CORREÇÃO CRÍTICA: Mês atual (do primeiro dia do mês até agora)
         # Não usar timedelta(days=30) que é janela deslizante
-        now = datetime.now()
+        now = get_brazil_time()
         date_filter = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     
     # ✅ RANKING V2.0: Ordenar por receita do período (faturamento)
@@ -5006,22 +5006,22 @@ def ranking():
         # ✅ CORREÇÃO: Usar o mesmo date_filter já calculado acima (não recalcular)
         # date_filter já está definido corretamente acima
         
-        subquery = db.session.query(
-            Bot.user_id,
-            func.sum(Payment.amount).label('period_revenue'),
-            func.count(Payment.id).label('period_sales')
-        ).join(Payment)\
-         .filter(Payment.status == 'paid', Payment.created_at >= date_filter)\
-         .group_by(Bot.user_id)\
-         .subquery()
-        
-        users_query = User.query.join(subquery, User.id == subquery.c.user_id)\
-                               .filter(User.is_admin == False, User.is_banned == False)\
-                           .order_by(
-                               subquery.c.period_revenue.desc(),
-                               subquery.c.period_sales.desc(),
-                               User.created_at.asc()
-                           )
+                subquery = db.session.query(
+                    Bot.user_id,
+                func.sum(Payment.amount).label('period_revenue'),
+                    func.count(Payment.id).label('period_sales')
+                ).join(Payment)\
+                 .filter(Payment.status == 'paid', Payment.created_at >= date_filter)\
+                 .group_by(Bot.user_id)\
+                 .subquery()
+                
+                users_query = User.query.join(subquery, User.id == subquery.c.user_id)\
+                                       .filter(User.is_admin == False, User.is_banned == False)\
+                                   .order_by(
+                                       subquery.c.period_revenue.desc(),
+                                       subquery.c.period_sales.desc(),
+                                       User.created_at.asc()
+                                   )
     
     # Top 100
     top_users = users_query.limit(100).all()
@@ -5786,7 +5786,7 @@ def send_chat_message(bot_id, telegram_user_id):
                 db.session.add(bot_message)
                 
                 # Atualizar last_interaction do bot_user
-                bot_user.last_interaction = datetime.now()
+                bot_user.last_interaction = get_brazil_time()
                 
                 db.session.commit()
                 
@@ -5900,7 +5900,7 @@ def send_chat_media(bot_id, telegram_user_id):
             message_id = str(telegram_msg_id) if telegram_msg_id else str(uuid.uuid4().hex)
             
             # Atualizar last_interaction do bot_user
-            bot_user.last_interaction = datetime.now()
+            bot_user.last_interaction = get_brazil_time()
             db.session.commit()
             
             logger.info(f"✅ {media_type} enviado para {telegram_user_id} via bot {bot_id}")
@@ -6695,21 +6695,21 @@ def send_meta_pixel_purchase_event(payment):
         
         # ✅ ENFILEIRAR COM PRIORIDADE ALTA (Purchase é crítico!)
         try:
-            task = send_meta_event.apply_async(
-                args=[
-                    pool.meta_pixel_id,
-                    access_token,
-                    event_data,
-                    pool.meta_test_event_code
-                ],
-                priority=1  # Alta prioridade
-            )
-            
-            logger.info(f"📤 Purchase enfileirado: R$ {payment.amount} | " +
-                       f"Pool: {pool.name} | " +
-                       f"Event ID: {event_id} | " +
-                       f"Task: {task.id} | " +
-                       f"Type: {'Downsell' if is_downsell else 'Upsell' if is_upsell else 'Remarketing' if is_remarketing else 'Normal'}")
+        task = send_meta_event.apply_async(
+            args=[
+                pool.meta_pixel_id,
+                access_token,
+                event_data,
+                pool.meta_test_event_code
+            ],
+            priority=1  # Alta prioridade
+        )
+        
+        logger.info(f"📤 Purchase enfileirado: R$ {payment.amount} | " +
+                   f"Pool: {pool.name} | " +
+                   f"Event ID: {event_id} | " +
+                   f"Task: {task.id} | " +
+                   f"Type: {'Downsell' if is_downsell else 'Upsell' if is_upsell else 'Remarketing' if is_remarketing else 'Normal'}")
             
             # ✅ CORREÇÃO CRÍTICA: Aguardar resultado do Celery ANTES de marcar como enviado
             # Isso garante que o evento foi realmente processado e enviado à Meta
@@ -6722,7 +6722,7 @@ def send_meta_pixel_purchase_event(payment):
                 if result and result.get('events_received', 0) > 0:
                     # ✅ SUCESSO: Marcar como enviado APÓS confirmação
                     payment.meta_purchase_sent = True
-                    payment.meta_purchase_sent_at = datetime.now()
+                    payment.meta_purchase_sent_at = get_brazil_time()
                     payment.meta_event_id = event_id
                     db.session.commit()
                     
@@ -6876,7 +6876,7 @@ def payment_webhook(gateway_type):
                 if deve_processar_estatisticas:
                     logger.info(f"✅ Processando pagamento confirmado (era pending): {payment.payment_id}")
                     
-                    payment.paid_at = datetime.now()
+                    payment.paid_at = get_brazil_time()
                     payment.bot.total_sales += 1
                     payment.bot.total_revenue += payment.amount
                     payment.bot.owner.total_sales += 1
@@ -6910,7 +6910,7 @@ def payment_webhook(gateway_type):
                             commission_amount=commission_amount,
                             commission_rate=payment.bot.owner.commission_percentage,
                             status='paid',  # Split payment cai automaticamente
-                            paid_at=datetime.now()  # Pago no mesmo momento da venda
+                            paid_at=get_brazil_time()  # Pago no mesmo momento da venda
                         )
                         db.session.add(commission)
                         
@@ -6977,7 +6977,7 @@ def payment_webhook(gateway_type):
                     try:
                         send_meta_pixel_purchase_event(payment)
                         logger.info(f"📊 Meta Pixel Purchase disparado para {payment.payment_id} via webhook {gateway_type}")
-                    except Exception as e:
+                        except Exception as e:
                         logger.error(f"❌ Erro ao disparar Meta Pixel via webhook {gateway_type}: {e}", exc_info=True)
                     
                     # ============================================================================
@@ -7111,7 +7111,7 @@ def subscribe_push():
             existing.user_agent = data.get('user_agent', request.headers.get('User-Agent', ''))
             existing.device_info = data.get('device_info', 'unknown')
             existing.is_active = True
-            existing.updated_at = datetime.now()
+            existing.updated_at = get_brazil_time()
             logger.info(f"✅ Subscription atualizada para user {current_user.id}")
         else:
             # Criar nova
@@ -7258,7 +7258,7 @@ def send_push_notification(user_id, title, body, data=None, color='green'):
                     vapid_claims=vapid_claims,
                     ttl=86400  # 24 horas - tempo de vida do push
                 )
-                subscription.last_used_at = datetime.now()
+                subscription.last_used_at = get_brazil_time()
                 sent_count += 1
                 logger.info(f"✅ Push enviado com sucesso para subscription {subscription.id}")
             except WebPushException as e:
@@ -7363,7 +7363,7 @@ def update_notification_settings():
         if 'notify_pending_sales' in data:
             settings.notify_pending_sales = bool(data['notify_pending_sales'])
         
-        settings.updated_at = datetime.now()
+        settings.updated_at = get_brazil_time()
         db.session.commit()
         
         logger.info(f"✅ Configurações de notificações atualizadas para user {current_user.id}")
@@ -7499,7 +7499,7 @@ def simulate_payment(payment_id):
         
         if result:
             payment.status = 'paid'
-            payment.paid_at = datetime.now()
+            payment.paid_at = get_brazil_time()
             payment.bot.total_sales += 1
             payment.bot.total_revenue += payment.amount
             
@@ -7528,7 +7528,7 @@ def simulate_payment(payment_id):
                     commission_amount=commission_amount,
                     commission_rate=payment.bot.owner.commission_percentage,
                     status='paid',  # Split payment cai automaticamente
-                    paid_at=datetime.now()  # Pago no mesmo momento
+                    paid_at=get_brazil_time()  # Pago no mesmo momento
                 )
                 db.session.add(commission)
                 # Split payment - receita já caiu automaticamente via SyncPay
@@ -7610,7 +7610,7 @@ def health_check_all_pools():
                     try:
                         # Verificar circuit breaker
                         if pool_bot.circuit_breaker_until:
-                            if pool_bot.circuit_breaker_until > datetime.now():
+                            if pool_bot.circuit_breaker_until > get_brazil_time():
                                 continue  # Ainda bloqueado
                             else:
                                 pool_bot.circuit_breaker_until = None  # Liberado
@@ -7628,18 +7628,18 @@ def health_check_all_pools():
                         pool_bot.status = 'online'
                         pool_bot.consecutive_failures = 0
                         pool_bot.last_error = None
-                        pool_bot.last_health_check = datetime.now()
+                        pool_bot.last_health_check = get_brazil_time()
                         
                     except Exception as e:
                         # Bot falhou
                         pool_bot.consecutive_failures += 1
                         pool_bot.last_error = str(e)
-                        pool_bot.last_health_check = datetime.now()
+                        pool_bot.last_health_check = get_brazil_time()
                         
                         if pool_bot.consecutive_failures >= 3:
                             # 3 falhas = offline + circuit breaker
                             pool_bot.status = 'offline'
-                            pool_bot.circuit_breaker_until = datetime.now() + timedelta(minutes=2)
+                            pool_bot.circuit_breaker_until = get_brazil_time() + timedelta(minutes=2)
                             
                             logger.error(f"Bot @{pool_bot.bot.username} no pool {pool.name} OFFLINE (3 falhas)")
                             
@@ -7704,7 +7704,7 @@ def check_scheduled_remarketing_campaigns():
             from models import RemarketingCampaign, Bot
             from datetime import datetime
             
-            now = datetime.now()
+            now = get_brazil_time()
             
             # Buscar campanhas agendadas que já passaram da hora
             scheduled_campaigns = RemarketingCampaign.query.filter(

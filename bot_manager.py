@@ -142,7 +142,8 @@ def send_meta_pixel_viewcontent_event(bot, bot_user, message, pool_id=None):
         
         # Marcar como enviado IMEDIATAMENTE (flag otimista)
         bot_user.meta_viewcontent_sent = True
-        bot_user.meta_viewcontent_sent_at = datetime.now()
+        from models import get_brazil_time
+        bot_user.meta_viewcontent_sent_at = get_brazil_time()
         
         # Commit da flag
         from app import db
@@ -195,7 +196,8 @@ class BotManager:
         def cleanup_cache():
             while True:
                 time.sleep(300)  # 5 minutos
-                now = datetime.now()
+                from models import get_brazil_time
+                now = get_brazil_time()
                 expired_keys = []
                 for user_key, timestamp in self.rate_limit_cache.items():
                     if (now - timestamp).total_seconds() > 300:  # 5 minutos
@@ -298,7 +300,7 @@ class BotManager:
                 self.active_bots[bot_id] = {
                     'token': token,
                     'config': config,
-                    'started_at': datetime.now(),
+                    'started_at': get_brazil_time(),
                     'status': 'running'
                 }
         
@@ -390,7 +392,7 @@ class BotManager:
                 # Heartbeat (mantém conexões em tempo real e sinaliza vivacidade)
                 self.socketio.emit('bot_heartbeat', {
                     'bot_id': bot_id,
-                    'timestamp': datetime.now().isoformat(),
+                    'timestamp': get_brazil_time().isoformat(),
                     'status': 'online'
                 }, room=f'bot_{bot_id}')
 
@@ -759,7 +761,8 @@ class BotManager:
                             if not telegram_msg_id:
                                 # Se não tem message_id, gerar um baseado no timestamp + texto
                                 import hashlib
-                                unique_id = f"{telegram_user_id}_{datetime.now().timestamp()}_{text[:20]}"
+                                from models import get_brazil_time
+                                unique_id = f"{telegram_user_id}_{get_brazil_time().timestamp()}_{text[:20]}"
                                 telegram_msg_id = hashlib.md5(unique_id.encode()).hexdigest()[:16]
                                 logger.warning(f"⚠️ Mensagem sem message_id do Telegram, gerando ID único: {telegram_msg_id}")
                             
@@ -776,7 +779,8 @@ class BotManager:
                             
                             # Fallback: verificar por texto similar nos últimos 5 segundos
                             if not existing_message:
-                                recent_window = datetime.now() - timedelta(seconds=5)
+                                from models import get_brazil_time
+                                recent_window = get_brazil_time() - timedelta(seconds=5)
                                 similar_message = BotMessage.query.filter(
                                     BotMessage.bot_id == bot_id,
                                     BotMessage.telegram_user_id == telegram_user_id,
@@ -805,7 +809,8 @@ class BotManager:
                                 db.session.add(bot_message)
                                 
                                 # Atualizar last_interaction
-                                bot_user.last_interaction = datetime.now()
+                                from models import get_brazil_time
+                                bot_user.last_interaction = get_brazil_time()
                                 
                                 db.session.commit()
                                 logger.info(f"✅ Mensagem recebida salva no banco: '{text[:50]}...' (message_id: {telegram_msg_id_str})")
@@ -884,7 +889,8 @@ class BotManager:
                     self._handle_start_command(bot_id, token, config, chat_id, message, None)
                     return
                 
-                now = datetime.now()
+                from models import get_brazil_time
+                now = get_brazil_time()
                 
                 # ✅ VERIFICAÇÃO CRÍTICA QI 600+: Há conversa ativa?
                 # Estratégia robusta: verificar última mensagem do bot + last_interaction
@@ -1036,7 +1042,8 @@ class BotManager:
                     # Marcar como enviado (sem afetar Meta Pixel)
                     if bot_user:
                         bot_user.welcome_sent = True
-                        bot_user.welcome_sent_at = datetime.now()
+                        from models import get_brazil_time
+                        bot_user.welcome_sent_at = get_brazil_time()
                         db.session.commit()
                     
                     # Enviar áudio se habilitado
@@ -1343,7 +1350,8 @@ class BotManager:
                         # Não impedir o funcionamento do bot se Meta falhar
                 else:
                     # Usuário já existe - ATUALIZAR tracking data se vier no start_param
-                    bot_user.last_interaction = datetime.now()
+                    from models import get_brazil_time
+                    bot_user.last_interaction = get_brazil_time()
                     
                     # ✅ CRÍTICO: Atualizar external_id se vier no start_param (pode ter mudado de campanha)
                     if external_id_from_start and not bot_user.external_id:
@@ -1531,7 +1539,8 @@ class BotManager:
                             ).first()
                             if bot_user_update:
                                 bot_user_update.welcome_sent = True
-                                bot_user_update.welcome_sent_at = datetime.now()
+                                from models import get_brazil_time
+                                bot_user_update.welcome_sent_at = get_brazil_time()
                                 db.session.commit()
                                 logger.info(f"✅ Marcado como welcome_sent=True")
                         except Exception as e:
@@ -2601,7 +2610,8 @@ Desculpe, não foi possível processar seu pagamento.
                                     if payment.status == 'pending':
                                         logger.info(f"✅ API confirmou pagamento! Atualizando status...")
                                         payment.status = 'paid'
-                                        payment.paid_at = datetime.now()
+                                        from models import get_brazil_time
+                                        payment.paid_at = get_brazil_time()
                                         payment.bot.total_sales += 1
                                         payment.bot.total_revenue += payment.amount
                                         payment.bot.owner.total_sales += 1
@@ -3256,7 +3266,8 @@ Seu pagamento ainda não foi confirmado.
                 # ✅ REGRA DE NEGÓCIO: Reutilizar APENAS se foi gerado há <= 5 minutos E o valor bater exatamente
                 if pending_same_product:
                     try:
-                        age_seconds = (datetime.now() - pending_same_product.created_at).total_seconds() if pending_same_product.created_at else 999999
+                        from models import get_brazil_time
+                        age_seconds = (get_brazil_time() - pending_same_product.created_at).total_seconds() if pending_same_product.created_at else 999999
                     except Exception:
                         age_seconds = 999999
                     amount_matches = abs(float(pending_same_product.amount) - float(amount)) < 0.01
@@ -3290,7 +3301,8 @@ Seu pagamento ainda não foi confirmado.
                 ).order_by(Payment.id.desc()).first()
                 
                 if last_pix and last_pix.status == 'pending':
-                    time_since = (datetime.now() - last_pix.created_at).total_seconds()
+                    from models import get_brazil_time
+                    time_since = (get_brazil_time() - last_pix.created_at).total_seconds()
                     if time_since < 120:  # 2 minutos
                         wait_time = 120 - int(time_since)
                         wait_minutes = wait_time // 60
@@ -4364,7 +4376,7 @@ Seu pagamento ainda não foi confirmado.
             'is_running': True,
             'status': bot_info['status'],
             'started_at': bot_info['started_at'].isoformat(),
-            'uptime': (datetime.now() - bot_info['started_at']).total_seconds()
+            'uptime': (get_brazil_time() - bot_info['started_at']).total_seconds()
         }
     
     def schedule_downsells(self, bot_id: int, payment_id: str, chat_id: int, downsells: list, original_price: float = 0, original_button_index: int = -1):
@@ -4400,8 +4412,9 @@ Seu pagamento ainda não foi confirmado.
                 job_id = f"downsell_{bot_id}_{payment_id}_{i}"
                 
                 # Calcular data/hora de execução
-                run_time = datetime.now() + timedelta(minutes=delay_minutes)
-                logger.info(f"🔍 DEBUG Agendamento - Hora atual: {datetime.now()}")
+                from models import get_brazil_time
+                run_time = get_brazil_time() + timedelta(minutes=delay_minutes)
+                logger.info(f"🔍 DEBUG Agendamento - Hora atual: {get_brazil_time()}")
                 logger.info(f"🔍 DEBUG Agendamento - Hora execução: {run_time}")
                 
                 # Agendar downsell com preço original para cálculo percentual
@@ -4688,7 +4701,8 @@ Seu pagamento ainda não foi confirmado.
         
         with app.app_context():
             # Data limite de último contato
-            contact_limit = datetime.now() - timedelta(days=days_since_last_contact)
+            from models import get_brazil_time
+            contact_limit = get_brazil_time() - timedelta(days=days_since_last_contact)
             
             # Query base: usuários do bot (apenas ativos, não arquivados)
             query = BotUser.query.filter_by(bot_id=bot_id, archived=False)
@@ -4730,7 +4744,8 @@ Seu pagamento ainda não foi confirmado.
             
             elif target_audience == 'inactive':
                 # Inativos há 7+ dias
-                inactive_limit = datetime.now() - timedelta(days=7)
+                from models import get_brazil_time
+                inactive_limit = get_brazil_time() - timedelta(days=7)
                 query = query.filter(BotUser.last_interaction <= inactive_limit)
             
             return query.count()
@@ -4756,13 +4771,15 @@ Seu pagamento ainda não foi confirmado.
                 
                 # Atualizar status
                 campaign.status = 'sending'
-                campaign.started_at = datetime.now()
+                from models import get_brazil_time
+                campaign.started_at = get_brazil_time()
                 db.session.commit()
                 
                 logger.info(f"📢 Iniciando envio de remarketing: {campaign.name}")
                 
                 # Buscar leads elegíveis (apenas usuários ativos, não arquivados)
-                contact_limit = datetime.now() - timedelta(days=campaign.days_since_last_contact)
+                from models import get_brazil_time
+                contact_limit = get_brazil_time() - timedelta(days=campaign.days_since_last_contact)
                 
                 query = BotUser.query.filter_by(bot_id=campaign.bot_id, archived=False)
                 
@@ -4799,7 +4816,8 @@ Seu pagamento ainda não foi confirmado.
                         query = query.filter(BotUser.telegram_user_id.in_(abandoned_ids))
                 
                 elif campaign.target_audience == 'inactive':
-                    inactive_limit = datetime.now() - timedelta(days=7)
+                    from models import get_brazil_time
+                inactive_limit = get_brazil_time() - timedelta(days=7)
                     query = query.filter(BotUser.last_interaction <= inactive_limit)
                 
                 leads = query.all()
@@ -4910,7 +4928,8 @@ Seu pagamento ainda não foi confirmado.
                 
                 # Finalizar campanha
                 campaign.status = 'completed'
-                campaign.completed_at = datetime.now()
+                from models import get_brazil_time
+                campaign.completed_at = get_brazil_time()
                 db.session.commit()
                 
                 logger.info(f"✅ Campanha concluída: {campaign.total_sent}/{campaign.total_targets} enviados")
