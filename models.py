@@ -774,7 +774,7 @@ class Gateway(db.Model):
     
     def to_dict(self):
         """Retorna dados do gateway em formato dict"""
-        return {
+        result = {
             'id': self.id,
             'gateway_type': self.gateway_type,
             'is_active': self.is_active,
@@ -784,6 +784,26 @@ class Gateway(db.Model):
             'success_rate': (self.successful_transactions / self.total_transactions * 100) if self.total_transactions > 0 else 0,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
+        
+        # ✅ Adicionar credenciais para edição (descriptografadas)
+        # Isso permite que o frontend preencha os formulários de edição
+        if self.gateway_type == 'syncpay':
+            result['client_id'] = self.client_id
+            result['client_secret'] = self.client_secret
+        elif self.gateway_type in ['pushynpay', 'paradise', 'wiinpay']:
+            result['api_key'] = self.api_key
+            if self.gateway_type == 'paradise':
+                result['product_hash'] = self.product_hash
+                result['offer_hash'] = self.offer_hash
+            elif self.gateway_type == 'wiinpay':
+                result['split_user_id'] = self.split_user_id
+        elif self.gateway_type == 'atomopay':
+            result['api_token'] = self.api_key  # Átomo Pay usa api_token (mesmo valor de api_key)
+            result['product_hash'] = self.product_hash
+            # ✅ REMOVIDO: offer_hash não é mais necessário (ofertas são criadas dinamicamente)
+            # result['offer_hash'] = self.offer_hash
+        
+        return result
 
 
 class Payment(db.Model):

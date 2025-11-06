@@ -494,7 +494,7 @@
                         </div>
 
                         <!-- Botão Editar Credenciais -->
-                        <button @click="editMode = !editMode" 
+                        <button @click="editMode = !editMode; if (editMode) { editGateway = { ...gateway }; }" 
                                 class="w-full py-2 px-4 rounded-lg text-sm font-bold transition-all mb-3"
                                 style="background: rgba(255, 184, 0, 0.1); color: #FFB800; border: 1px solid rgba(255, 184, 0, 0.3);">
                             <i class="fas mr-2" :class="editMode ? 'fa-times' : 'fa-edit'"></i>
@@ -1117,7 +1117,7 @@ function settingsApp() {
             pushynpay: { api_key: '' },
             paradise: { api_key: '', offer_hash: '', product_hash: '' },
             wiinpay: { api_key: '', split_user_id: '' },
-            atomopay: { api_token: '', offer_hash: '', product_hash: '' }
+            atomopay: { api_token: '', product_hash: '' }
         },
         editGateway: {},
         gatewaysList: [],
@@ -1250,7 +1250,7 @@ function settingsApp() {
                     } else if (type === 'wiinpay') {
                         this.gateways[type] = { api_key: '', split_user_id: '' };
                     } else if (type === 'atomopay') {
-                        this.gateways[type] = { api_token: '', offer_hash: '', product_hash: '' };
+                        this.gateways[type] = { api_token: '', product_hash: '' };
                     } else {
                         this.gateways[type] = { api_key: '' };
                     }

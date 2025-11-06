@@ -4562,9 +4562,27 @@ def create_gateway():
         
         elif gateway_type == 'atomopay':
             # ✅ ÁTOMO PAY
-            gateway.api_key = data.get('api_token') or data.get('api_key')  # Aceita ambos
-            gateway.offer_hash = data.get('offer_hash')
-            gateway.product_hash = data.get('product_hash')
+            api_token_value = data.get('api_token') or data.get('api_key')
+            product_hash_value = data.get('product_hash')
+            
+            logger.info(f"📦 [Átomo Pay] Dados recebidos:")
+            logger.info(f"   api_token: {'SIM' if api_token_value else 'NÃO'} ({len(api_token_value) if api_token_value else 0} chars)")
+            logger.info(f"   product_hash: {'SIM' if product_hash_value else 'NÃO'} ({len(product_hash_value) if product_hash_value else 0} chars)")
+            
+            if api_token_value:
+                gateway.api_key = api_token_value  # Aceita ambos (criptografia automática via setter)
+                logger.info(f"✅ [Átomo Pay] api_key salvo (criptografado)")
+            else:
+                logger.warning(f"⚠️ [Átomo Pay] api_token não fornecido")
+            
+            # ✅ REMOVIDO: offer_hash não é mais necessário (ofertas são criadas dinamicamente)
+            # gateway.offer_hash = data.get('offer_hash')
+            
+            if product_hash_value:
+                gateway.product_hash = product_hash_value  # Criptografia automática via setter
+                logger.info(f"✅ [Átomo Pay] product_hash salvo (criptografado)")
+            else:
+                logger.warning(f"⚠️ [Átomo Pay] product_hash não fornecido")
         
         # ✅ Split percentage (comum a todos)
         gateway.split_percentage = float(data.get('split_percentage', 2.0))  # 2% PADRÃO
@@ -4615,6 +4633,16 @@ def create_gateway():
         
         db.session.commit()
         logger.info(f"✅ Gateway {gateway_type} salvo com sucesso!")
+        
+        # ✅ LOG DE CONFIRMAÇÃO (após commit)
+        if gateway_type == 'atomopay':
+            # Recarregar do banco para confirmar
+            db.session.refresh(gateway)
+            logger.info(f"📋 [Átomo Pay] Confirmação após commit:")
+            logger.info(f"   api_key no banco: {'SIM' if gateway._api_key else 'NÃO'}")
+            logger.info(f"   product_hash no banco: {'SIM' if gateway._product_hash else 'NÃO'}")
+            logger.info(f"   is_active: {gateway.is_active}")
+            logger.info(f"   is_verified: {gateway.is_verified}")
         
         # 🔄 RECARREGAR CONFIGURAÇÃO DOS BOTS ATIVOS DO USUÁRIO
         _reload_user_bots_config(current_user.id)
