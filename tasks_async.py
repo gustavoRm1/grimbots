@@ -1,0 +1,617 @@
+"""
+Tasks Assíncronas QI 200 - Redis Queue (RQ)
+Mover processos pesados para background e deixar rotas síncronas instantâneas
+"""
+
+import os
+import logging
+from rq import Queue
+from redis import Redis
+from typing import Dict, Any, Optional
+
+logger = logging.getLogger(__name__)
+
+# Conectar ao Redis
+try:
+    redis_conn = Redis.from_url(
+        os.environ.get('REDIS_URL', 'redis://localhost:6379/0'),
+        decode_responses=True
+    )
+    # Criar fila de tasks
+    task_queue = Queue('tasks', connection=redis_conn)
+    logger.info("✅ Fila RQ inicializada")
+except Exception as e:
+    logger.error(f"❌ Erro ao conectar Redis para RQ: {e}")
+    redis_conn = None
+    task_queue = None
+
+
+def process_start_async(
+    bot_id: int,
+    token: str,
+    config: Dict[str, Any],
+    chat_id: int,
+    message: Dict[str, Any],
+    start_param: Optional[str] = None
+):
+    """
+    Processa comando /start de forma assíncrona (tarefas pesadas)
+    
+    Executa:
+    - Busca Redis para tracking
+    - Decodificação de tracking
+    - Parse de device/geolocalização
+    - Salvar tracking no Redis
+    - Salvar BotUser no banco
+    - Enviar Meta Pixel ViewContent
+    - Salvar welcome_sent no banco
+    """
+    try:
+        from app import app, db
+        from models import BotUser, Bot, get_brazil_time
+        from bot_manager import send_meta_pixel_viewcontent_event
+        import base64
+        import json
+        import redis
+        
+        with app.app_context():
+            # Recarregar config do banco
+            bot = db.session.get(Bot, bot_id)
+            if bot and bot.config:
+                config = bot.config.to_dict()
+            
+            user_from = message.get('from', {})
+            telegram_user_id = str(user_from.get('id', ''))
+            first_name = user_from.get('first_name', 'Usuário')
+            username = user_from.get('username', '')
+            
+            # Extrair tracking do start_param
+            pool_id_from_start = None
+            external_id_from_start = None
+            utm_data_from_start = {}
+            
+            if start_param:
+                if start_param.startswith('t'):
+                    try:
+                        tracking_encoded = start_param[1:]
+                        missing_padding = len(tracking_encoded) % 4
+                        if missing_padding:
+                            tracking_encoded += '=' * (4 - missing_padding)
+                        
+                        tracking_json = base64.urlsafe_b64decode(tracking_encoded).decode()
+                        tracking_data = json.loads(tracking_json)
+                        
+                        pool_id_from_start = tracking_data.get('p')
+                        external_id_from_start = tracking_data.get('e')
+                        
+                        if tracking_data.get('s'):
+                            utm_data_from_start['utm_source'] = tracking_data['s']
+                        if tracking_data.get('c'):
+                            utm_data_from_start['utm_campaign'] = tracking_data['c']
+                        if tracking_data.get('cc'):
+                            utm_data_from_start['campaign_code'] = tracking_data['cc']
+                        if tracking_data.get('f'):
+                            fbclid_hash = tracking_data['f']
+                            try:
+                                r = redis.Redis(host='localhost', port=6379, decode_responses=True)
+                                fbclid_completo = r.get(f'tracking_hash:{fbclid_hash}')
+                                if fbclid_completo:
+                                    utm_data_from_start['fbclid'] = fbclid_completo
+                                else:
+                                    utm_data_from_start['fbclid'] = fbclid_hash
+                            except:
+                                utm_data_from_start['fbclid'] = fbclid_hash
+                    except Exception as e:
+                        logger.warning(f"Erro ao decodificar tracking V3: {e}")
+                elif start_param.startswith('p') and start_param[1:].isdigit():
+                    pool_id_from_start = int(start_param[1:])
+                elif start_param.startswith('pool_'):
+                    parts = start_param.split('_')
+                    if len(parts) >= 2:
+                        pool_id_from_start = int(parts[1])
+                    if len(parts) >= 4:
+                        external_id_from_start = '_'.join(parts[2:])
+            
+            # Buscar ou criar BotUser
+            bot_user = BotUser.query.filter_by(
+                bot_id=bot_id,
+                telegram_user_id=telegram_user_id,
+                archived=False
+            ).first()
+            
+            if not bot_user:
+                bot_user = BotUser.query.filter_by(
+                    bot_id=bot_id,
+                    telegram_user_id=telegram_user_id
+                ).first()
+                
+                if bot_user and bot_user.archived:
+                    bot_user.archived = False
+                    bot_user.archived_reason = None
+                    bot_user.archived_at = None
+            
+            is_new_user = False
+            if not bot_user:
+                bot_user = BotUser(
+                    bot_id=bot_id,
+                    telegram_user_id=telegram_user_id,
+                    first_name=first_name,
+                    username=username,
+                    welcome_sent=False,
+                    external_id=external_id_from_start,
+                    utm_source=utm_data_from_start.get('utm_source'),
+                    utm_campaign=utm_data_from_start.get('utm_campaign'),
+                    campaign_code=utm_data_from_start.get('campaign_code'),
+                    fbclid=utm_data_from_start.get('fbclid')
+                )
+                is_new_user = True
+                
+                # Tracking Elite - buscar do Redis
+                if utm_data_from_start.get('fbclid'):
+                    try:
+                        r = redis.Redis(host='localhost', port=6379, decode_responses=True)
+                        fbclid_value = utm_data_from_start['fbclid']
+                        tracking_key = f"tracking:{fbclid_value}"
+                        tracking_json = r.get(tracking_key)
+                        
+                        if not tracking_json and len(fbclid_value) <= 12:
+                            fbclid_completo = r.get(f'tracking_hash:{fbclid_value}')
+                            if fbclid_completo:
+                                tracking_key = f"tracking:{fbclid_completo}"
+                                tracking_json = r.get(tracking_key)
+                        
+                        if tracking_json:
+                            tracking_elite = json.loads(tracking_json)
+                            
+                            bot_user.ip_address = tracking_elite.get('ip')
+                            bot_user.user_agent = tracking_elite.get('user_agent')
+                            
+                            # Parse device e geolocalização
+                            try:
+                                from utils.device_parser import parse_user_agent, parse_ip_to_location
+                                
+                                device_info = parse_user_agent(bot_user.user_agent)
+                                if hasattr(bot_user, 'device_type'):
+                                    bot_user.device_type = device_info.get('device_type')
+                                if hasattr(bot_user, 'os_type'):
+                                    bot_user.os_type = device_info.get('os_type')
+                                if hasattr(bot_user, 'browser'):
+                                    bot_user.browser = device_info.get('browser')
+                                if hasattr(bot_user, 'device_model'):
+                                    bot_user.device_model = device_info.get('device_model')
+                                
+                                if bot_user.ip_address:
+                                    location_info = parse_ip_to_location(bot_user.ip_address)
+                                    if hasattr(bot_user, 'customer_city'):
+                                        bot_user.customer_city = location_info.get('city', 'Unknown')
+                                    if hasattr(bot_user, 'customer_state'):
+                                        bot_user.customer_state = location_info.get('state', 'Unknown')
+                                    if hasattr(bot_user, 'customer_country'):
+                                        bot_user.customer_country = location_info.get('country', 'BR')
+                            except Exception as e:
+                                logger.warning(f"Erro ao parsear device/geolocalização: {e}")
+                            
+                            bot_user.tracking_session_id = tracking_elite.get('session_id')
+                            
+                            if tracking_elite.get('timestamp'):
+                                from datetime import datetime
+                                bot_user.click_timestamp = datetime.fromisoformat(tracking_elite['timestamp'])
+                            
+                            grim_from_redis = tracking_elite.get('grim', '')
+                            fbclid_completo_redis = tracking_elite.get('fbclid')
+                            
+                            if fbclid_completo_redis:
+                                bot_user.fbclid = fbclid_completo_redis
+                                bot_user.external_id = fbclid_completo_redis
+                                if grim_from_redis:
+                                    bot_user.campaign_code = grim_from_redis
+                            elif grim_from_redis:
+                                bot_user.external_id = grim_from_redis
+                                bot_user.campaign_code = grim_from_redis
+                            
+                            # Enriquecer UTMs
+                            if not bot_user.utm_source and tracking_elite.get('utm_source'):
+                                bot_user.utm_source = tracking_elite['utm_source']
+                            if not bot_user.utm_campaign and tracking_elite.get('utm_campaign'):
+                                bot_user.utm_campaign = tracking_elite['utm_campaign']
+                            if not bot_user.utm_medium:
+                                bot_user.utm_medium = tracking_elite.get('utm_medium')
+                            if not bot_user.utm_content:
+                                bot_user.utm_content = tracking_elite.get('utm_content')
+                            if not bot_user.utm_term:
+                                bot_user.utm_term = tracking_elite.get('utm_term')
+                            
+                            # Salvar tracking:chat:{chat_id} via TrackingService
+                            try:
+                                from utils.tracking_service import TrackingService
+                                TrackingService.save_tracking_data(
+                                    fbclid=fbclid_completo_redis or '',
+                                    fbp=tracking_elite.get('fbp', ''),
+                                    fbc=tracking_elite.get('fbc', ''),
+                                    ip_address=tracking_elite.get('ip', ''),
+                                    user_agent=tracking_elite.get('user_agent', ''),
+                                    grim=grim_from_redis or '',
+                                    telegram_user_id=str(chat_id),
+                                    utms={
+                                        'utm_source': tracking_elite.get('utm_source', ''),
+                                        'utm_campaign': tracking_elite.get('utm_campaign', ''),
+                                        'utm_medium': tracking_elite.get('utm_medium', ''),
+                                        'utm_content': tracking_elite.get('utm_content', ''),
+                                        'utm_term': tracking_elite.get('utm_term', '')
+                                    }
+                                )
+                            except Exception as e:
+                                logger.warning(f"Erro ao salvar tracking:chat:{chat_id}: {e}")
+                    except Exception as e:
+                        logger.error(f"Erro ao buscar tracking elite: {e}")
+                
+                try:
+                    db.session.add(bot_user)
+                    db.session.flush()
+                except Exception as e:
+                    db.session.rollback()
+                    bot_user = BotUser.query.filter_by(
+                        bot_id=bot_id,
+                        telegram_user_id=telegram_user_id,
+                        archived=False
+                    ).first()
+                    if not bot_user:
+                        raise
+                
+                if bot:
+                    bot.total_users = BotUser.query.filter_by(bot_id=bot_id, archived=False).count()
+                
+                db.session.commit()
+                logger.info(f"✅ BotUser criado/atualizado: {first_name}")
+            else:
+                bot_user.last_interaction = get_brazil_time()
+                
+                if external_id_from_start and not bot_user.external_id:
+                    bot_user.external_id = external_id_from_start
+                if utm_data_from_start.get('utm_source') and not bot_user.utm_source:
+                    bot_user.utm_source = utm_data_from_start['utm_source']
+                if utm_data_from_start.get('utm_campaign') and not bot_user.utm_campaign:
+                    bot_user.utm_campaign = utm_data_from_start['utm_campaign']
+                if utm_data_from_start.get('campaign_code') and not bot_user.campaign_code:
+                    bot_user.campaign_code = utm_data_from_start['campaign_code']
+                if utm_data_from_start.get('fbclid') and not bot_user.fbclid:
+                    bot_user.fbclid = utm_data_from_start['fbclid']
+                
+                db.session.commit()
+            
+            # Enviar Meta Pixel ViewContent (apenas para novos usuários)
+            if is_new_user:
+                try:
+                    send_meta_pixel_viewcontent_event(bot, bot_user, message, pool_id_from_start)
+                except Exception as e:
+                    logger.warning(f"Erro ao enviar ViewContent: {e}")
+            
+            # Marcar welcome_sent (será feito pelo handler síncrono após enviar mensagem)
+            # Não fazer aqui para evitar race condition
+            
+    except Exception as e:
+        logger.error(f"❌ Erro em process_start_async: {e}", exc_info=True)
+
+
+def process_webhook_async(gateway_type: str, data: Dict[str, Any]):
+    """
+    Processa webhook de pagamento de forma assíncrona
+    
+    Executa:
+    - Processar webhook via adapter
+    - Buscar payment
+    - Atualizar status
+    - Processar estatísticas
+    - Enviar entregável
+    - Enviar Meta Pixel Purchase
+    """
+    try:
+        from app import app, db
+        from models import Payment, Gateway, Bot, get_brazil_time, Commission
+        from gateway_factory import GatewayFactory
+        from bot_manager import send_payment_delivery
+        
+        with app.app_context():
+            # Criar gateway com adapter
+            dummy_credentials = {}
+            if gateway_type == 'syncpay':
+                dummy_credentials = {'client_id': 'dummy', 'client_secret': 'dummy'}
+            elif gateway_type == 'pushynpay':
+                dummy_credentials = {'api_key': 'dummy'}
+            elif gateway_type == 'paradise':
+                dummy_credentials = {'api_key': 'dummy', 'product_hash': 'dummy'}
+            elif gateway_type == 'wiinpay':
+                dummy_credentials = {'api_key': 'dummy'}
+            elif gateway_type == 'atomopay':
+                dummy_credentials = {'api_token': 'dummy'}
+            
+            gateway_instance = GatewayFactory.create_gateway(gateway_type, dummy_credentials, use_adapter=True)
+            
+            gateway = None
+            result = None
+            
+            if gateway_instance:
+                producer_hash = None
+                if hasattr(gateway_instance, 'extract_producer_hash'):
+                    producer_hash = gateway_instance.extract_producer_hash(data)
+                    if producer_hash:
+                        gateway = Gateway.query.filter_by(
+                            gateway_type=gateway_type,
+                            producer_hash=producer_hash
+                        ).first()
+                
+                result = gateway_instance.process_webhook(data)
+            else:
+                from bot_manager import bot_manager
+                result = bot_manager.process_payment_webhook(gateway_type, data)
+            
+            if result:
+                gateway_transaction_id = result.get('gateway_transaction_id')
+                status = result.get('status')
+                
+                # Buscar payment
+                payment_query = Payment.query
+                if gateway:
+                    payment_query = payment_query.filter_by(gateway_type=gateway_type)
+                    user_bot_ids = [b.id for b in Bot.query.filter_by(user_id=gateway.user_id).all()]
+                    if user_bot_ids:
+                        payment_query = payment_query.filter(Payment.bot_id.in_(user_bot_ids))
+                
+                payment = None
+                if gateway_transaction_id:
+                    payment = payment_query.filter_by(gateway_transaction_id=str(gateway_transaction_id)).first()
+                
+                if not payment:
+                    gateway_hash = result.get('gateway_hash') or data.get('hash')
+                    if gateway_hash:
+                        payment = payment_query.filter_by(gateway_transaction_hash=str(gateway_hash)).first()
+                
+                if not payment and gateway_transaction_id:
+                    payment = payment_query.filter_by(payment_id=str(gateway_transaction_id)).first()
+                
+                if payment:
+                    was_pending = payment.status == 'pending'
+                    status_antigo = payment.status
+                    
+                    if payment.status == 'paid' and status == 'paid':
+                        # Webhook duplicado - tentar reenviar entregável
+                        try:
+                            send_payment_delivery(payment, bot_manager)
+                        except:
+                            pass
+                        return {'status': 'already_processed'}
+                    
+                    if payment.status != 'paid':
+                        payment.status = status
+                    
+                    deve_processar_estatisticas = (status == 'paid' and was_pending)
+                    deve_enviar_entregavel = (status == 'paid')
+                    
+                    if deve_processar_estatisticas:
+                        payment.paid_at = get_brazil_time()
+                        payment.bot.total_sales += 1
+                        payment.bot.total_revenue += payment.amount
+                        payment.bot.owner.total_sales += 1
+                        payment.bot.owner.total_revenue += payment.amount
+                        
+                        if payment.gateway_type:
+                            gateway_obj = Gateway.query.filter_by(
+                                user_id=payment.bot.user_id,
+                                gateway_type=payment.gateway_type
+                            ).first()
+                            if gateway_obj:
+                                gateway_obj.total_transactions += 1
+                                gateway_obj.successful_transactions += 1
+                        
+                        # Registrar comissão
+                        existing_commission = Commission.query.filter_by(payment_id=payment.id).first()
+                        if not existing_commission:
+                            commission_amount = payment.bot.owner.add_commission(payment.amount)
+                            commission = Commission(
+                                user_id=payment.bot.owner.id,
+                                payment_id=payment.id,
+                                bot_id=payment.bot.id,
+                                sale_amount=payment.amount,
+                                commission_amount=commission_amount,
+                                commission_rate=payment.bot.owner.commission_percentage,
+                                status='paid',
+                                paid_at=get_brazil_time()
+                            )
+                            db.session.add(commission)
+                            payment.bot.owner.total_commission_paid += commission_amount
+                        
+                        # Gamificação V2.0
+                        try:
+                            from app import GAMIFICATION_V2_ENABLED
+                            if GAMIFICATION_V2_ENABLED:
+                                payment.bot.owner.update_streak(payment.created_at)
+                                from ranking_engine_v2 import RankingEngine
+                                from achievement_checker_v2 import AchievementChecker
+                                
+                                ranking_engine = RankingEngine()
+                                ranking_engine.recalculate_user_ranking(payment.bot.owner.id)
+                                
+                                achievement_checker = AchievementChecker()
+                                achievement_checker.check_sale_achievements(payment.bot.owner.id, payment.amount)
+                        except Exception as e:
+                            logger.warning(f"Erro em gamificação: {e}")
+                        
+                        # Meta Pixel Purchase
+                        try:
+                            from utils.meta_pixel import MetaPixelAPI
+                            from models import RedirectPool, PoolBot
+                            
+                            pool_bot = PoolBot.query.filter_by(bot_id=payment.bot_id).first()
+                            if pool_bot:
+                                pool = RedirectPool.query.get(pool_bot.pool_id)
+                                if pool and pool.meta_tracking_enabled:
+                                    bot_user = payment.bot.bot_users.filter_by(
+                                        telegram_user_id=str(payment.customer_user_id)
+                                    ).first()
+                                    
+                                    if bot_user:
+                                        MetaPixelAPI.send_purchase_event(
+                                            pool=pool,
+                                            bot_user=bot_user,
+                                            payment=payment
+                                        )
+                        except Exception as e:
+                            logger.warning(f"Erro ao enviar Meta Pixel Purchase: {e}")
+                    
+                    if deve_enviar_entregavel:
+                        try:
+                            # Importar bot_manager e send_payment_delivery do app
+                            from app import bot_manager, send_payment_delivery
+                            send_payment_delivery(payment, bot_manager)
+                        except Exception as e:
+                            logger.error(f"Erro ao enviar entregável: {e}")
+                    
+                    db.session.commit()
+                    logger.info(f"✅ Webhook processado: {payment.payment_id} -> {status}")
+                    return {'status': 'success', 'payment_id': payment.payment_id}
+                else:
+                    logger.warning(f"⚠️ Payment não encontrado para webhook: {gateway_transaction_id}")
+                    return {'status': 'payment_not_found'}
+            else:
+                logger.warning(f"⚠️ Webhook não processado: result=None")
+                return {'status': 'not_processed'}
+                
+    except Exception as e:
+        logger.error(f"❌ Erro em process_webhook_async: {e}", exc_info=True)
+        return {'status': 'error', 'error': str(e)}
+
+
+def generate_pix_async(
+    bot_id: int,
+    token: str,
+    chat_id: int,
+    user_info: Dict[str, Any],
+    button_index: int,
+    config: Dict[str, Any]
+):
+    """
+    Gera PIX de forma assíncrona
+    
+    Executa:
+    - Validação de produto
+    - Criação de offer
+    - Criação de payment
+    - Geração de PIX via gateway
+    - Envio de mensagem com QR Code
+    """
+    try:
+        from app import app, db
+        from models import Bot, BotConfig, Payment, Gateway
+        from gateway_factory import GatewayFactory
+        from bot_manager import BotManager
+        import uuid
+        import time
+        
+        with app.app_context():
+            bot = db.session.get(Bot, bot_id)
+            if not bot:
+                logger.error(f"Bot {bot_id} não encontrado")
+                return
+            
+            # Recarregar config
+            if bot.config:
+                config = bot.config.to_dict()
+            
+            main_buttons = config.get('main_buttons', [])
+            if button_index >= len(main_buttons):
+                logger.error(f"Índice de botão inválido: {button_index}")
+                return
+            
+            button = main_buttons[button_index]
+            price = float(button.get('price', 0))
+            product_name = button.get('text', 'Produto')
+            
+            # Buscar gateway
+            gateway = Gateway.query.filter_by(
+                user_id=bot.user_id,
+                gateway_type=config.get('gateway_type', 'syncpay')
+            ).first()
+            
+            if not gateway:
+                logger.error(f"Gateway não encontrado para bot {bot_id}")
+                return
+            
+            # Criar payment
+            payment_id = f"BOT{bot_id}_{int(time.time())}_{uuid.uuid4().hex[:8]}"
+            
+            payment = Payment(
+                bot_id=bot_id,
+                payment_id=payment_id,
+                customer_user_id=str(chat_id),
+                customer_name=user_info.get('first_name', 'Cliente'),
+                product_name=product_name,
+                amount=price,
+                gateway_type=gateway.gateway_type,
+                status='pending'
+            )
+            
+            db.session.add(payment)
+            db.session.commit()
+            
+            # Criar gateway instance
+            credentials = gateway.get_decrypted_credentials()
+            gateway_instance = GatewayFactory.create_gateway(
+                gateway.gateway_type,
+                credentials,
+                use_adapter=True
+            )
+            
+            if not gateway_instance:
+                logger.error(f"Erro ao criar gateway instance")
+                return
+            
+            # Gerar PIX
+            pix_result = gateway_instance.create_payment(
+                amount=price,
+                customer={
+                    'name': user_info.get('first_name', 'Cliente'),
+                    'email': f"user_{chat_id}@telegram.local",
+                    'phone': '11999999999',
+                    'document': '00000000000'
+                },
+                description=product_name,
+                external_reference=payment_id
+            )
+            
+            if pix_result and pix_result.get('pix_qr_code'):
+                payment.gateway_transaction_id = pix_result.get('transaction_id', '')
+                payment.gateway_transaction_hash = pix_result.get('hash', '')
+                db.session.commit()
+                
+                # Enviar mensagem com QR Code
+                bot_manager = BotManager(None, None)
+                message = f"💰 PIX Gerado!\n\nValor: R$ {price:.2f}\n\nEscaneie o QR Code ou copie o código PIX:"
+                qr_code = pix_result['pix_qr_code']
+                
+                bot_manager.send_telegram_message(
+                    token=token,
+                    chat_id=str(chat_id),
+                    message=message,
+                    buttons=[{
+                        'text': '✅ Verificar Pagamento',
+                        'callback_data': f'verify_{payment.id}'
+                    }]
+                )
+                
+                # Enviar QR Code como imagem
+                if pix_result.get('pix_qr_code_image'):
+                    bot_manager.send_telegram_message(
+                        token=token,
+                        chat_id=str(chat_id),
+                        message="",
+                        media_url=pix_result['pix_qr_code_image'],
+                        media_type='photo'
+                    )
+                
+                logger.info(f"✅ PIX gerado: {payment_id}")
+            else:
+                logger.error(f"Erro ao gerar PIX: {pix_result}")
+                
+    except Exception as e:
+        logger.error(f"❌ Erro em generate_pix_async: {e}", exc_info=True)
+

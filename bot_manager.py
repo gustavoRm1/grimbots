@@ -1119,7 +1119,11 @@ class BotManager:
     def _handle_start_command(self, bot_id: int, token: str, config: Dict[str, Any], 
                              chat_id: int, message: Dict[str, Any], start_param: str = None):
         """
-        Processa comando /start (com ou sem parâmetros de deep linking)
+        Processa comando /start - FAST RESPONSE MODE (QI 200)
+        
+        ✅ OTIMIZAÇÃO QI 200: Resposta <50ms
+        - Envia mensagem IMEDIATAMENTE
+        - Processa tarefas pesadas em background via RQ
         
         Args:
             bot_id: ID do bot
@@ -1130,483 +1134,53 @@ class BotManager:
             start_param: Parâmetro do deep link (ex: "acesso", "promo123", None se não houver)
         """
         try:
-            # ✅ CORREÇÃO CRÍTICA: Buscar config atualizada do BANCO (não da memória)
+            # ✅ QI 200: FAST RESPONSE MODE - Buscar apenas config mínima (1 query rápida)
             from app import app, db
-            from models import BotUser, Bot
-            from datetime import datetime  # Import explícito no escopo da função
+            from models import Bot
             
+            # Buscar config do banco (rápido - apenas 1 query)
             with app.app_context():
                 bot = db.session.get(Bot, bot_id)
                 if bot and bot.config:
-                    config = bot.config.to_dict()  # Usar config do banco
-                    logger.info(f"🔄 Config recarregada do banco para /start")
+                    config = bot.config.to_dict()
                 else:
-                    logger.warning(f"⚠️ Bot {bot_id} sem config no banco, usando padrão")
-                    config = config or {}  # Fallback para config da memória
+                    config = config or {}
                 
-                # Aproveitando o app_context, registrar/atualizar usuário
+                # ✅ QI 200: FAST RESPONSE MODE - Enfileirar processamento pesado
                 user_from = message.get('from', {})
                 telegram_user_id = str(user_from.get('id', ''))
                 first_name = user_from.get('first_name', 'Usuário')
-                username = user_from.get('username', '')
                 
-                # ✅ CORREÇÃO CRÍTICA: get_or_create pattern com tratamento de race condition
-                # Buscar primeiro com filtro archived=False (usuários ativos)
+                # Enfileirar processamento pesado (tracking, Redis, device parsing, etc)
+                try:
+                    from tasks_async import task_queue, process_start_async
+                    if task_queue:
+                        task_queue.enqueue(
+                            process_start_async,
+                            bot_id=bot_id,
+                            token=token,
+                            config=config,
+                            chat_id=chat_id,
+                            message=message,
+                            start_param=start_param
+                        )
+                except Exception as e:
+                    logger.warning(f"Erro ao enfileirar task async: {e}")
+                
+                # ✅ QI 200: Verificação rápida se deve enviar welcome (apenas 1 query)
+                from models import BotUser
                 bot_user = BotUser.query.filter_by(
                     bot_id=bot_id,
                     telegram_user_id=telegram_user_id,
                     archived=False
                 ).first()
                 
-                # ✅ SE NÃO ENCONTROU COM archived=False, buscar sem filtro (pode estar arquivado)
-                if not bot_user:
-                    bot_user = BotUser.query.filter_by(
-                        bot_id=bot_id,
-                        telegram_user_id=telegram_user_id
-                    ).first()
-                    
-                    # Se encontrou arquivado, re-ativar
-                    if bot_user and bot_user.archived:
-                        logger.info(f"🔄 Usuário arquivado detectado - re-ativando: {first_name}")
-                        bot_user.archived = False
-                        bot_user.archived_reason = None
-                        bot_user.archived_at = None
-                
-                # ============================================================================
-                # ✅ EXTRAIR TRACKING DATA DO START PARAM (QI 540 - FIX CRÍTICO)
-                # ============================================================================
-                # Formato V3: t{base64_json} → decodifica para {p: pool_id, e: external_id, s: utm_source, c: utm_campaign, ...}
-                # ============================================================================
-                pool_id_from_start = None
-                external_id_from_start = None
-                utm_data_from_start = {}
-                
-                if start_param:
-                    # Formato V3 com tracking completo: t{base64}
-                    if start_param.startswith('t'):
-                        try:
-                            import base64
-                            import json
-                            
-                            # Decodificar base64
-                            tracking_encoded = start_param[1:]  # Remove 't' inicial
-                            
-                            # Adicionar padding se necessário
-                            missing_padding = len(tracking_encoded) % 4
-                            if missing_padding:
-                                tracking_encoded += '=' * (4 - missing_padding)
-                            
-                            tracking_json = base64.urlsafe_b64decode(tracking_encoded).decode()
-                            tracking_data = json.loads(tracking_json)
-                            
-                            # Extrair dados
-                            pool_id_from_start = tracking_data.get('p')
-                            external_id_from_start = tracking_data.get('e')
-                            
-                            # Extrair UTMs
-                            if tracking_data.get('s'):
-                                utm_data_from_start['utm_source'] = tracking_data['s']
-                            if tracking_data.get('c'):
-                                utm_data_from_start['utm_campaign'] = tracking_data['c']
-                            if tracking_data.get('cc'):
-                                utm_data_from_start['campaign_code'] = tracking_data['cc']
-                            if tracking_data.get('f'):
-                                # 🎯 TRACKING ELITE: 'f' é um HASH, buscar fbclid completo no Redis
-                                fbclid_hash = tracking_data['f']
-                                try:
-                                    import redis
-                                    r = redis.Redis(host='localhost', port=6379, decode_responses=True)
-                                    fbclid_completo = r.get(f'tracking_hash:{fbclid_hash}')
-                                    if fbclid_completo:
-                                        utm_data_from_start['fbclid'] = fbclid_completo
-                                        logger.info(f"🔑 HASH {fbclid_hash} → fbclid completo recuperado")
-                                    else:
-                                        # Fallback: usar hash como fbclid
-                                        utm_data_from_start['fbclid'] = fbclid_hash
-                                        logger.warning(f"⚠️ fbclid completo não encontrado, usando hash")
-                                except:
-                                    utm_data_from_start['fbclid'] = fbclid_hash
-                            
-                            logger.info(f"🔗 Tracking decodificado (V3): pool_id={pool_id_from_start}, " +
-                                       f"external_id={external_id_from_start}, " +
-                                       f"fbclid={'✅' if utm_data_from_start.get('fbclid') else '❌'}, " +
-                                       f"utm_source={utm_data_from_start.get('utm_source')}")
-                        
-                        except Exception as e:
-                            logger.error(f"Erro ao decodificar tracking V3: {e}")
-                    
-                    # Formato fallback simples: p{pool_id}
-                    elif start_param.startswith('p') and start_param[1:].isdigit():
-                        try:
-                            pool_id_from_start = int(start_param[1:])
-                            logger.info(f"🔗 Tracking fallback: pool_id={pool_id_from_start}")
-                        except Exception as e:
-                            logger.error(f"Erro ao extrair pool_id do fallback: {e}")
-                    
-                    # Formato legado: pool_{pool_id}_{external_id}
-                    elif start_param.startswith('pool_'):
-                        try:
-                            parts = start_param.split('_')
-                            if len(parts) >= 2:
-                                pool_id_from_start = int(parts[1])
-                            if len(parts) >= 4:
-                                external_id_from_start = '_'.join(parts[2:])
-                            logger.info(f"🔗 Tracking legado: pool_id={pool_id_from_start}, external_id={external_id_from_start}")
-                        except Exception as e:
-                            logger.error(f"Erro ao extrair tracking legado: {e}")
-                
-                # ============================================================================
-                # ✅ LÓGICA INTELIGENTE DE RECUPERAÇÃO AUTOMÁTICA
-                # ============================================================================
-                should_send_welcome = False  # Flag para controlar envio
-                is_new_user = False
-                
-                # ✅ CORREÇÃO CRÍTICA: Se ainda não existe, criar com tratamento de race condition
-                if not bot_user:
-                    # Novo usuário - criar registro
-                    bot_user = BotUser(
-                        bot_id=bot_id,
-                        telegram_user_id=telegram_user_id,
-                        first_name=first_name,
-                        username=username,
-                        welcome_sent=False,  # Ainda não enviou
-                        external_id=external_id_from_start,  # ✅ Salvar external_id
-                        # ✅ SALVAR UTMs DO TRACKING (QI 540 - FIX CRÍTICO)
-                        utm_source=utm_data_from_start.get('utm_source'),
-                        utm_campaign=utm_data_from_start.get('utm_campaign'),
-                        campaign_code=utm_data_from_start.get('campaign_code'),
-                        fbclid=utm_data_from_start.get('fbclid')
-                    )
-                    
-                    # ============================================================================
-                    # 🎯 TRACKING ELITE: BUSCAR DADOS DO REDIS E ASSOCIAR
-                    # ============================================================================
-                    if utm_data_from_start.get('fbclid'):
-                        try:
-                            import redis
-                            r = redis.Redis(host='localhost', port=6379, decode_responses=True)
-                            
-                            # fbclid pode ser hash ou completo, tentar ambos
-                            fbclid_value = utm_data_from_start['fbclid']
-                            tracking_key = f"tracking:{fbclid_value}"
-                            tracking_json = r.get(tracking_key)
-                            
-                            # Se não encontrou, pode ser que fbclid seja um hash, buscar o completo
-                            if not tracking_json and len(fbclid_value) <= 12:
-                                # É um hash, buscar fbclid completo
-                                fbclid_completo = r.get(f'tracking_hash:{fbclid_value}')
-                                if fbclid_completo:
-                                    tracking_key = f"tracking:{fbclid_completo}"
-                                    tracking_json = r.get(tracking_key)
-                                    logger.info(f"🔑 Usado hash {fbclid_value} para encontrar tracking completo")
-                            
-                            if tracking_json:
-                                tracking_elite = json.loads(tracking_json)
-                                
-                                # Associar dados capturados no redirect
-                                bot_user.ip_address = tracking_elite.get('ip')
-                                bot_user.user_agent = tracking_elite.get('user_agent')
-                                
-                                # ✅ NOVO: PARSER DE DEVICE INFO E GEOLOCALIZAÇÃO
-                                try:
-                                    from utils.device_parser import parse_user_agent, parse_ip_to_location
-                                    
-                                    # Parse device (mobile/desktop, iOS/Android, etc)
-                                    device_info = parse_user_agent(bot_user.user_agent)
-                                    
-                                    # Salvar device info com getattr seguro
-                                    if hasattr(bot_user, 'device_type'):
-                                        bot_user.device_type = device_info.get('device_type')
-                                    if hasattr(bot_user, 'os_type'):
-                                        bot_user.os_type = device_info.get('os_type')
-                                    if hasattr(bot_user, 'browser'):
-                                        bot_user.browser = device_info.get('browser')
-                                    if hasattr(bot_user, 'device_model'):
-                                        bot_user.device_model = device_info.get('device_model')
-                                    
-                                    logger.info(f"📱 Device parseado: {device_info}")
-                                    
-                                    # Parse geolocalização pelo IP
-                                    if bot_user.ip_address:
-                                        location_info = parse_ip_to_location(bot_user.ip_address)
-                                        
-                                        if hasattr(bot_user, 'customer_city'):
-                                            bot_user.customer_city = location_info.get('city', 'Unknown')
-                                        if hasattr(bot_user, 'customer_state'):
-                                            bot_user.customer_state = location_info.get('state', 'Unknown')
-                                        if hasattr(bot_user, 'customer_country'):
-                                            bot_user.customer_country = location_info.get('country', 'BR')
-                                        
-                                        logger.info(f"🌍 Geolocalização parseada: {location_info}")
-                                    
-                                except Exception as e:
-                                    logger.warning(f"⚠️ Erro ao parsear device/geolocalização: {e}")
-                                bot_user.tracking_session_id = tracking_elite.get('session_id')
-                                
-                                # Parse timestamp
-                                if tracking_elite.get('timestamp'):
-                                    bot_user.click_timestamp = datetime.fromisoformat(tracking_elite['timestamp'])
-                                
-                                # ✅ CORREÇÃO CRÍTICA QI 600+: fbclid como external_id (matching Meta)
-                                # grim como campaign_code (atribuição de campanha)
-                                # O Meta Pixel usa fbclid hashado para matching entre PageView e Purchase
-                                grim_from_redis = tracking_elite.get('grim', '')
-                                fbclid_completo_redis = tracking_elite.get('fbclid')
-                                
-                                if fbclid_completo_redis:
-                                    # ✅ PRIORIDADE MÁXIMA: fbclid como external_id (matching Meta)
-                                    bot_user.fbclid = fbclid_completo_redis
-                                    bot_user.external_id = fbclid_completo_redis  # Para matching com Meta
-                                    logger.info(f"🎯 external_id = fbclid (matching Meta): {fbclid_completo_redis[:30]}...")
-                                    
-                                    # Salvar grim como campaign_code (atribuição de campanha)
-                                    if grim_from_redis:
-                                        bot_user.campaign_code = grim_from_redis
-                                        logger.info(f"🎯 campaign_code = grim (campanha): {grim_from_redis}")
-                                elif grim_from_redis:
-                                    # Fallback: se só tiver grim (sem fbclid), usar grim como external_id
-                                    # Mas isso reduz matching quality - melhor quando tem fbclid
-                                    bot_user.external_id = grim_from_redis
-                                    bot_user.campaign_code = grim_from_redis
-                                    logger.warning(f"⚠️ Sem fbclid, usando grim como external_id: {grim_from_redis}")
-                                
-                                # Enriquecer UTMs com dados do Redis (podem ter sido perdidos no start_param)
-                                if not bot_user.utm_source and tracking_elite.get('utm_source'):
-                                    bot_user.utm_source = tracking_elite['utm_source']
-                                if not bot_user.utm_campaign and tracking_elite.get('utm_campaign'):
-                                    bot_user.utm_campaign = tracking_elite['utm_campaign']
-                                if not bot_user.utm_medium:
-                                    bot_user.utm_medium = tracking_elite.get('utm_medium')
-                                if not bot_user.utm_content:
-                                    bot_user.utm_content = tracking_elite.get('utm_content')
-                                if not bot_user.utm_term:
-                                    bot_user.utm_term = tracking_elite.get('utm_term')
-                                
-                                logger.info(f"🎯 TRACKING ELITE | Dados associados | " +
-                                           f"IP={bot_user.ip_address} | " +
-                                           f"Session={bot_user.tracking_session_id[:8] if bot_user.tracking_session_id else 'N/A'}...")
-                                
-                                # ✅ SOLUÇÃO SÊNIOR QI 300: Usar TrackingService para salvar tracking:chat:{chat_id}
-                                # TTL de 30 dias (não 7) para garantir persistência
-                                try:
-                                    from utils.tracking_service import TrackingService
-                                    TrackingService.save_tracking_data(
-                                        fbclid=fbclid_completo_redis or '',
-                                        fbp=tracking_elite.get('fbp', ''),
-                                        fbc=tracking_elite.get('fbc', ''),
-                                        ip_address=tracking_elite.get('ip', ''),
-                                        user_agent=tracking_elite.get('user_agent', ''),
-                                        grim=grim_from_redis or '',
-                                        telegram_user_id=str(chat_id),
-                                        utms={
-                                            'utm_source': tracking_elite.get('utm_source', ''),
-                                            'utm_campaign': tracking_elite.get('utm_campaign', ''),
-                                            'utm_medium': tracking_elite.get('utm_medium', ''),
-                                            'utm_content': tracking_elite.get('utm_content', ''),
-                                            'utm_term': tracking_elite.get('utm_term', '')
-                                        }
-                                    )
-                                    logger.info(f"🔑 tracking:chat:{chat_id} salvo (TTL=30d) via TrackingService")
-                                except Exception as chat_tracking_error:
-                                    logger.warning(f"⚠️ Erro ao salvar tracking:chat:{chat_id}: {chat_tracking_error}")
-                                
-                                # ✅ NÃO DELETAR do Redis após usar - manter disponível por 7 dias para Purchase
-                                # r.delete(tracking_key)  # REMOVIDO - manter para Purchase
-                            else:
-                                logger.warning(f"⚠️ TRACKING ELITE | fbclid={utm_data_from_start['fbclid'][:20]}... não encontrado no Redis (expirou?)")
-                        except Exception as e:
-                            logger.error(f"❌ TRACKING ELITE | Erro ao buscar Redis: {e}")
-                            # Não quebrar o fluxo se Redis falhar
-                    
-                    logger.info(f"👤 Novo usuário criado: {first_name} | " +
-                               f"external_id={external_id_from_start} | " +
-                               f"utm_source={utm_data_from_start.get('utm_source')} | " +
-                               f"utm_campaign={utm_data_from_start.get('utm_campaign')}")
-                    
-                    # ✅ CORREÇÃO CRÍTICA: Adicionar com tratamento de race condition
-                    # Se outro processo criar entre a busca e o add, capturar IntegrityError
-                    try:
-                        db.session.add(bot_user)
-                        db.session.flush()  # Tentar flush para detectar duplicação imediatamente
-                    except Exception as e:
-                        # ✅ RACE CONDITION DETECTADA: Outro processo criou o registro entre a busca e o add
-                        # Rollback e buscar novamente
-                        db.session.rollback()
-                        logger.warning(f"⚠️ Race condition detectada ao criar BotUser, buscando novamente: {e}")
-                        
-                        # Buscar o registro que foi criado pelo outro processo
-                        bot_user = BotUser.query.filter_by(
-                            bot_id=bot_id,
-                            telegram_user_id=telegram_user_id,
-                            archived=False
-                        ).first()
-                        
-                        if not bot_user:
-                            # Se ainda não encontrou, buscar sem filtro archived
-                            bot_user = BotUser.query.filter_by(
-                                bot_id=bot_id,
-                                telegram_user_id=telegram_user_id
-                            ).first()
-                        
-                        if not bot_user:
-                            # Se ainda não encontrou, erro crítico
-                            logger.error(f"❌ ERRO CRÍTICO: Não foi possível criar nem buscar BotUser após race condition")
-                            raise
-                    
-                    # Atualizar contador do bot (bot já foi carregado acima)
-                    # ✅ Contar apenas usuários ativos (não arquivados)
-                    if bot:
-                        bot.total_users = BotUser.query.filter_by(bot_id=bot_id, archived=False).count()
-                    
-                    db.session.commit()
-                    logger.info(f"👤 Novo usuário registrado: {first_name} (@{username})")
-                    should_send_welcome = True
-                    is_new_user = True
-                    
-                    # ============================================================================
-                    # ✅ META PIXEL: VIEWCONTENT TRACKING (NOVO USUÁRIO)
-                    # ============================================================================
-                    try:
-                        send_meta_pixel_viewcontent_event(bot, bot_user, message, pool_id_from_start)
-                    except Exception as e:
-                        logger.error(f"Erro ao enviar ViewContent para Meta Pixel: {e}")
-                        # Não impedir o funcionamento do bot se Meta falhar
-                else:
-                    # Usuário já existe - ATUALIZAR tracking data se vier no start_param
-                    from models import get_brazil_time
-                    bot_user.last_interaction = get_brazil_time()
-                    
-                    # ✅ CRÍTICO: Atualizar external_id se vier no start_param (pode ter mudado de campanha)
-                    if external_id_from_start and not bot_user.external_id:
-                        bot_user.external_id = external_id_from_start
-                        logger.info(f"✅ external_id atualizado do start_param: {external_id_from_start}")
-                    
-                    # ✅ CRÍTICO: Atualizar UTMs se vierem no start_param
-                    if utm_data_from_start.get('utm_source') and not bot_user.utm_source:
-                        bot_user.utm_source = utm_data_from_start['utm_source']
-                    if utm_data_from_start.get('utm_campaign') and not bot_user.utm_campaign:
-                        bot_user.utm_campaign = utm_data_from_start['utm_campaign']
-                    if utm_data_from_start.get('campaign_code') and not bot_user.campaign_code:
-                        bot_user.campaign_code = utm_data_from_start['campaign_code']
-                    if utm_data_from_start.get('fbclid') and not bot_user.fbclid:
-                        bot_user.fbclid = utm_data_from_start['fbclid']
-                    
-                    # ✅ CRÍTICO QI 600+: Buscar fbclid e grim do Redis (mesma lógica de usuários novos)
-                    fbclid_from_start = utm_data_from_start.get('fbclid')
-                    if fbclid_from_start:
-                        try:
-                            import redis
-                            import json
-                            r = redis.Redis(host='localhost', port=6379, decode_responses=True)
-                            
-                            # fbclid pode ser hash ou completo, tentar ambos
-                            fbclid_value = fbclid_from_start
-                            tracking_key = f"tracking:{fbclid_value}"
-                            tracking_json = r.get(tracking_key)
-                            
-                            # Se não encontrou, pode ser que fbclid seja um hash, buscar o completo
-                            if not tracking_json and len(fbclid_value) <= 12:
-                                # É um hash, buscar fbclid completo
-                                fbclid_completo = r.get(f'tracking_hash:{fbclid_value}')
-                                if fbclid_completo:
-                                    tracking_key = f"tracking:{fbclid_completo}"
-                                    tracking_json = r.get(tracking_key)
-                                    logger.info(f"🔑 Usado hash {fbclid_value} para encontrar tracking completo")
-                            
-                            if tracking_json:
-                                tracking_elite = json.loads(tracking_json)
-                                
-                                # ✅ CORREÇÃO CRÍTICA QI 600+: fbclid como external_id (matching Meta)
-                                # grim como campaign_code (atribuição de campanha)
-                                grim_from_redis = tracking_elite.get('grim', '')
-                                fbclid_completo_redis = tracking_elite.get('fbclid')
-                                
-                                if fbclid_completo_redis:
-                                    # ✅ PRIORIDADE MÁXIMA: fbclid como external_id (matching Meta)
-                                    fbclid_updated = False
-                                    external_id_updated = False
-                                    
-                                    if not bot_user.fbclid:
-                                        bot_user.fbclid = fbclid_completo_redis
-                                        fbclid_updated = True
-                                    if not bot_user.external_id:
-                                        bot_user.external_id = fbclid_completo_redis
-                                        external_id_updated = True
-                                    
-                                    logger.info(f"🎯 external_id = fbclid (matching Meta): {fbclid_completo_redis[:30]}... | " +
-                                               f"fbclid={'✅ ATUALIZADO' if fbclid_updated else '✅ JÁ EXISTIA'} | " +
-                                               f"external_id={'✅ ATUALIZADO' if external_id_updated else '✅ JÁ EXISTIA'}")
-                                    
-                                    # Salvar grim como campaign_code (atribuição de campanha)
-                                    if grim_from_redis and not bot_user.campaign_code:
-                                        bot_user.campaign_code = grim_from_redis
-                                        logger.info(f"🎯 campaign_code = grim (campanha): {grim_from_redis} ✅ ATUALIZADO")
-                                    elif grim_from_redis:
-                                        logger.info(f"🎯 campaign_code já existe: {bot_user.campaign_code} (não sobrescrever com grim: {grim_from_redis})")
-                                elif grim_from_redis:
-                                    # Fallback: se só tiver grim (sem fbclid), usar grim como external_id
-                                    if not bot_user.external_id:
-                                        bot_user.external_id = grim_from_redis
-                                    if not bot_user.campaign_code:
-                                        bot_user.campaign_code = grim_from_redis
-                                    logger.warning(f"⚠️ Sem fbclid, usando grim como external_id: {grim_from_redis}")
-                                
-                                # Enriquecer UTMs com dados do Redis (podem ter sido perdidos no start_param)
-                                if not bot_user.utm_source and tracking_elite.get('utm_source'):
-                                    bot_user.utm_source = tracking_elite['utm_source']
-                                if not bot_user.utm_campaign and tracking_elite.get('utm_campaign'):
-                                    bot_user.utm_campaign = tracking_elite['utm_campaign']
-                                if not bot_user.utm_medium:
-                                    bot_user.utm_medium = tracking_elite.get('utm_medium')
-                                if not bot_user.utm_content:
-                                    bot_user.utm_content = tracking_elite.get('utm_content')
-                                if not bot_user.utm_term:
-                                    bot_user.utm_term = tracking_elite.get('utm_term')
-                                
-                                logger.info(f"🎯 TRACKING ELITE | Dados atualizados para usuário existente | " +
-                                           f"fbclid={'✅' if bot_user.fbclid else '❌'} | " +
-                                           f"campaign_code={'✅' if bot_user.campaign_code else '❌'}")
-                                
-                                # ✅ SOLUÇÃO SÊNIOR QI 300: Usar TrackingService para salvar tracking:chat:{chat_id}
-                                # TTL de 30 dias (não 7) para garantir persistência
-                                try:
-                                    from utils.tracking_service import TrackingService
-                                    TrackingService.save_tracking_data(
-                                        fbclid=fbclid_completo_redis or '',
-                                        fbp=tracking_elite.get('fbp', ''),
-                                        fbc=tracking_elite.get('fbc', ''),
-                                        ip_address=tracking_elite.get('ip', ''),
-                                        user_agent=tracking_elite.get('user_agent', ''),
-                                        grim=grim_from_redis or '',
-                                        telegram_user_id=str(chat_id),
-                                        utms={
-                                            'utm_source': tracking_elite.get('utm_source', ''),
-                                            'utm_campaign': tracking_elite.get('utm_campaign', ''),
-                                            'utm_medium': tracking_elite.get('utm_medium', ''),
-                                            'utm_content': tracking_elite.get('utm_content', ''),
-                                            'utm_term': tracking_elite.get('utm_term', '')
-                                        }
-                                    )
-                                    logger.info(f"🔑 tracking:chat:{chat_id} salvo (TTL=30d) via TrackingService (usuário existente)")
-                                except Exception as chat_tracking_error:
-                                    logger.warning(f"⚠️ Erro ao salvar tracking:chat:{chat_id}: {chat_tracking_error}")
-                                
-                                # ✅ NÃO DELETAR do Redis após usar - manter disponível por 7 dias para Purchase
-                                # r.delete(tracking_key)  # REMOVIDO - manter para Purchase
-                            else:
-                                logger.warning(f"⚠️ TRACKING ELITE | fbclid={fbclid_value[:20]}... não encontrado no Redis (expirou?)")
-                        except Exception as redis_error:
-                            logger.error(f"❌ TRACKING ELITE | Erro ao buscar Redis para usuário existente: {redis_error}")
-                            # Não quebrar o fluxo se Redis falhar
-                    
-                    # ✅ CORREÇÃO: Sempre enviar boas-vindas quando /start for digitado
-                    logger.info(f"👤 Usuário retornou: {first_name} (@{username}) - external_id={bot_user.external_id or 'N/A'}")
-                    should_send_welcome = True
-                    
-                    db.session.commit()
+                # ✅ QI 200: Determinar se deve enviar welcome (rápido)
+                should_send_welcome = (not bot_user or not bot_user.welcome_sent)
             
             # ============================================================================
-            # ✅ ENVIAR MENSAGEM DE BOAS-VINDAS (apenas se necessário)
+            # ✅ QI 200: ENVIAR MENSAGEM IMEDIATAMENTE (<50ms)
+            # Processamento pesado foi enfileirado para background
             # ============================================================================
             if should_send_welcome:
                 welcome_message = config.get('welcome_message', 'Olá! Bem-vindo!')

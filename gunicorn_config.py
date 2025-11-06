@@ -12,10 +12,12 @@ bind = "127.0.0.1:5000"
 backlog = 2048
 
 # ========================================
-# WORKER PROCESSES
+# WORKER PROCESSES - QI 200 OTIMIZADO
 # ========================================
-# Fórmula: (2 x CPU cores) + 1
-workers = multiprocessing.cpu_count() * 2 + 1
+# ✅ QI 200: Múltiplos workers para alta concorrência
+# Mínimo 3 workers, máximo baseado em CPU
+cpu_count = multiprocessing.cpu_count()
+workers = max(3, min(cpu_count * 2 + 1, 8))  # Entre 3 e 8 workers
 
 # ✅ IMPORTANTE: eventlet para Socket.IO
 worker_class = "eventlet"

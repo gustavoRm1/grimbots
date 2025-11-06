@@ -7247,13 +7247,32 @@ def get_bot_webhook_info(bot_id):
 @limiter.limit("500 per minute")  # ✅ PROTEÇÃO: Webhooks de pagamento
 @csrf.exempt  # ✅ Webhooks externos não enviam CSRF token
 def payment_webhook(gateway_type):
-    """Webhook para confirmação de pagamento"""
+    """
+    Webhook para confirmação de pagamento - QI 200 FAST MODE
+    ✅ Retorna 200 IMEDIATAMENTE e processa em background
+    """
     data = request.json
-    logger.info(f"🔔 WEBHOOK RECEBIDO de {gateway_type}")
-    logger.info(f"📦 Dados do webhook: {data}")
-    logger.info(f"🌐 IP do remetente: {request.remote_addr}")
-    logger.info(f"📋 Headers: {dict(request.headers)}")
     
+    # ✅ QI 200: Log mínimo (reduzir 80% dos logs)
+    logger.info(f"🔔 Webhook {gateway_type} recebido")
+    
+    # ✅ QI 200: Enfileirar processamento pesado
+    try:
+        from tasks_async import task_queue, process_webhook_async
+        if task_queue:
+            task_queue.enqueue(
+                process_webhook_async,
+                gateway_type=gateway_type,
+                data=data
+            )
+            # Retornar 200 imediatamente (webhook não bloqueia mais)
+            return jsonify({'status': 'queued'}), 200
+    except Exception as e:
+        logger.error(f"Erro ao enfileirar webhook: {e}")
+        # Fallback: processar síncrono se RQ falhar
+        pass
+    
+    # ✅ FALLBACK: Processar síncrono se RQ não disponível
     try:
         # ✅ QI 500: PROCESSAR WEBHOOK VIA GATEWAY ADAPTER
         # Criar gateway com adapter para normalização e extração de producer_hash
@@ -7284,17 +7303,11 @@ def payment_webhook(gateway_type):
             if hasattr(gateway_instance, 'extract_producer_hash'):
                 producer_hash = gateway_instance.extract_producer_hash(data)
                 if producer_hash:
-                    logger.info(f"🔍 Producer hash extraído via adapter: {producer_hash[:12]}...")
-                    
                     # Buscar Gateway pelo producer_hash para identificar o usuário
                     gateway = Gateway.query.filter_by(
                         gateway_type=gateway_type,
                         producer_hash=producer_hash
                     ).first()
-                    if gateway:
-                        logger.info(f"🔑 Gateway identificado via producer_hash: {producer_hash[:12]}... (User ID: {gateway.user_id})")
-                    else:
-                        logger.warning(f"⚠️ Gateway não encontrado para producer_hash: {producer_hash[:12]}...")
             
             # ✅ Processar webhook via adapter (normalizado)
             result = gateway_instance.process_webhook(data)
@@ -7307,7 +7320,7 @@ def payment_webhook(gateway_type):
             gateway_transaction_id = result.get('gateway_transaction_id')
             status = result.get('status')
             
-            logger.info(f"✅ Webhook processado: transaction_id={gateway_transaction_id}, status={status}")
+            # Log removido (QI 200)
             
             # ✅ Buscar pagamento por múltiplas chaves (conforme análise QI 600)
             payment = None
