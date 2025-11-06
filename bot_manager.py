@@ -297,6 +297,7 @@ class BotManager:
             
             # ✅ CORREÇÃO: Armazenar bot ativo com LOCK
             with self._bots_lock:
+                from models import get_brazil_time
                 self.active_bots[bot_id] = {
                     'token': token,
                     'config': config,
@@ -390,6 +391,7 @@ class BotManager:
 
             try:
                 # Heartbeat (mantém conexões em tempo real e sinaliza vivacidade)
+                from models import get_brazil_time
                 self.socketio.emit('bot_heartbeat', {
                     'bot_id': bot_id,
                     'timestamp': get_brazil_time().isoformat(),
@@ -4372,6 +4374,7 @@ Seu pagamento ainda não foi confirmado.
                 }
         
         # Bot está em active_bots e (se verificado) responde no Telegram
+        from models import get_brazil_time
         return {
             'is_running': True,
             'status': bot_info['status'],
