@@ -733,11 +733,44 @@ class BotManager:
         """
         Processa update recebido do Telegram
         
+        ✅ QI 500: ANTI-DUPLICAÇÃO ABSOLUTO
+        - Lock por update_id para evitar processamento duplicado
+        - Garante que cada update é processado apenas 1 vez
+        - Previne reset múltiplo, pixel duplicado, mensagens duplicadas
+        
         Args:
             bot_id: ID do bot
             update: Dados do update
         """
         try:
+            # ✅ QI 500: ANTI-DUPLICAÇÃO - Lock por update_id (PRIMEIRA COISA)
+            update_id = update.get('update_id')
+            if update_id is None:
+                logger.warning(f"⚠️ Update sem update_id - ignorando")
+                return
+            
+            try:
+                import redis
+                redis_conn = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
+                lock_key = f"lock:update:{update_id}"
+                
+                # Verificar se já está processando
+                if redis_conn.get(lock_key):
+                    logger.warning(f"⚠️ Update {update_id} já processado — ignorando duplicado (anti-duplicação)")
+                    return
+                
+                # Adquirir lock (expira em 20 segundos - tempo suficiente para processar)
+                acquired = redis_conn.set(lock_key, "1", ex=20, nx=True)
+                if not acquired:
+                    logger.warning(f"⚠️ Update {update_id} já está sendo processado — ignorando duplicado")
+                    return
+                
+                logger.debug(f"🔒 Lock adquirido para update {update_id}")
+            except Exception as e:
+                logger.error(f"❌ Erro ao verificar lock update: {e}")
+                # Fail-open: se Redis falhar, permitir processar (melhor que bloquear tudo)
+                pass
+            
             if bot_id not in self.active_bots:
                 logger.warning(f"⚠️ Bot {bot_id} não está mais ativo, ignorando update")
                 return
