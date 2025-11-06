@@ -16,14 +16,25 @@ import sys
 # Adicionar diretório atual ao path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from rq import Worker, Queue, Connection
-from redis import Redis
+try:
+    from rq import Worker, Queue, Connection
+    from redis import Redis
+except ImportError as e:
+    print(f"❌ ERRO: Módulo não encontrado: {e}")
+    print("Instale com: pip install rq redis")
+    sys.exit(1)
 
 # Conectar ao Redis
-redis_conn = Redis.from_url(
-    os.environ.get('REDIS_URL', 'redis://localhost:6379/0'),
-    decode_responses=True
-)
+try:
+    redis_url = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
+    redis_conn = Redis.from_url(redis_url, decode_responses=True)
+    # Testar conexão
+    redis_conn.ping()
+except Exception as e:
+    print(f"❌ ERRO: Não foi possível conectar ao Redis: {e}")
+    print(f"Redis URL: {redis_url}")
+    print("Verifique se Redis está rodando: redis-cli ping")
+    sys.exit(1)
 
 # Determinar qual fila processar
 queue_name = sys.argv[1] if len(sys.argv) > 1 else None
@@ -43,13 +54,22 @@ else:
     print(f" Queues: tasks, gateway, webhook")
 
 if __name__ == '__main__':
-    print("="*70)
-    print(" RQ Worker QI 200 - Iniciando")
-    print("="*70)
-    print(f" Redis: {os.environ.get('REDIS_URL', 'redis://localhost:6379/0')}")
-    print("="*70)
-    
-    with Connection(redis_conn):
-        worker = Worker(queues)
-        worker.work()
+    try:
+        print("="*70)
+        print(" RQ Worker QI 200 - Iniciando")
+        print("="*70)
+        print(f" Redis: {os.environ.get('REDIS_URL', 'redis://localhost:6379/0')}")
+        print("="*70)
+        
+        with Connection(redis_conn):
+            worker = Worker(queues)
+            worker.work()
+    except KeyboardInterrupt:
+        print("\n⚠️ Worker interrompido pelo usuário")
+        sys.exit(0)
+    except Exception as e:
+        print(f"❌ ERRO CRÍTICO: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
 
