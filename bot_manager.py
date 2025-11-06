@@ -10,6 +10,7 @@ import logging
 import json
 from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta
+from redis_manager import get_redis_connection
 import hashlib
 import hmac
 
@@ -432,7 +433,7 @@ class BotManager:
                 # Registrar heartbeat compartilhado (Redis) para ambientes multi-worker
                 try:
                     import redis, time as _t
-                    r = redis.Redis(host='localhost', port=6379, decode_responses=True)
+                    r = get_redis_connection()
                     r.setex(f'bot_heartbeat:{bot_id}', 180, int(_t.time()))
                 except Exception:
                     # Não interromper o monitor se Redis indisponível
@@ -751,7 +752,7 @@ class BotManager:
             
             try:
                 import redis
-                redis_conn = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
+                redis_conn = get_redis_connection()
                 lock_key = f"lock:update:{update_id}"
                 
                 # Verificar se já está processando
@@ -859,7 +860,7 @@ class BotManager:
                             lock_acquired = False
                             try:
                                 import redis
-                                redis_conn_msg = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
+                                redis_conn_msg = get_redis_connection()
                                 # Lock específico para esta mensagem (chat_id + hash do texto)
                                 import hashlib
                                 text_hash = hashlib.md5(text.encode('utf-8')).hexdigest()[:8]
@@ -951,7 +952,7 @@ class BotManager:
                     start_lock_acquired = False
                     try:
                         import redis
-                        redis_conn_start = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
+                        redis_conn_start = get_redis_connection()
                         start_lock_key = f"lock:start_process:{bot_id}:{chat_id}"
                         
                         # Tentar adquirir lock (expira em 10 segundos - tempo suficiente para processar /start)
@@ -1215,7 +1216,7 @@ class BotManager:
         """
         try:
             import redis
-            redis_conn = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
+            redis_conn = get_redis_connection()
             lock_key = f"lock:start:{chat_id}"
             
             # Tentar adquirir lock (expira em 3 segundos)
@@ -1283,7 +1284,7 @@ class BotManager:
         
         try:
             import redis
-            redis_conn_send = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
+            redis_conn_send = get_redis_connection()
             
             # Tentar adquirir lock (expira em 15 segundos - tempo suficiente para mídia + texto completo)
             lock_acquired = redis_conn_send.set(media_text_lock_key, "1", ex=15, nx=True)
@@ -1399,7 +1400,7 @@ class BotManager:
                         
                         try:
                             import redis
-                            redis_conn_text = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
+                            redis_conn_text = get_redis_connection()
                             # Lock específico para texto completo (expira em 10s)
                             text_lock_acquired = redis_conn_text.set(text_complete_lock_key, "1", ex=10, nx=True)
                             if not text_lock_acquired:
@@ -1683,7 +1684,7 @@ class BotManager:
             try:
                 import redis
                 import time as _time
-                redis_conn = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
+                redis_conn = get_redis_connection()
                 last_start_key = f"last_start:{chat_id}"
                 last_start = redis_conn.get(last_start_key)
                 now = int(_time.time())
@@ -3171,7 +3172,7 @@ Seu pagamento ainda não foi confirmado.
             session_tracking = None
             try:
                 import redis
-                r = redis.Redis(host='localhost', port=6379, decode_responses=True)
+                r = get_redis_connection()
                 
                 # Tentar recuperar tracking por chat_id (fallback robusto)
                 chat_tracking_key = f'tracking:chat:{chat_id}'

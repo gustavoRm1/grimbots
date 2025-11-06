@@ -16,6 +16,7 @@ import json
 import time
 import uuid
 from dotenv import load_dotenv
+from redis_manager import get_redis_connection, redis_health_check
 
 # ============================================================================
 # CARREGAR VARIÁVEIS DE AMBIENTE (.env)
@@ -552,7 +553,7 @@ def sync_bots_status():
                 has_recent_heartbeat = False
                 try:
                     import redis
-                    r = redis.Redis(host='localhost', port=6379, decode_responses=True)
+                    r = get_redis_connection()
                     if r.get(f'bot_heartbeat:{bot.id}'):
                         has_recent_heartbeat = True
                 except Exception:
@@ -8399,6 +8400,102 @@ try:
     logger.info("✅ Job de verificação de campanhas agendadas configurado (1 minuto)")
 except Exception as e:
     logger.warning(f"⚠️ Não foi possível agendar verificação de campanhas: {e}")
+
+
+# ==================== HEALTH CHECK ENDPOINT ====================
+
+@app.route('/health', methods=['GET'])
+@limiter.exempt  # Sem rate limit (load balancer precisa verificar frequentemente)
+def health_check():
+    """
+    Health check endpoint para load balancer e monitoramento
+    
+    ✅ QI 500: Verifica saúde de todos os componentes críticos
+    
+    Returns:
+        200 OK - Sistema saudável
+        503 Service Unavailable - Sistema com problemas
+    """
+    checks = {
+        'status': 'healthy',
+        'timestamp': datetime.utcnow().isoformat(),
+        'version': '2.1.0-QI500',
+        'checks': {}
+    }
+    
+    # Check 1: Banco de dados
+    try:
+        db.session.execute('SELECT 1')
+        checks['checks']['database'] = 'ok'
+    except Exception as e:
+        checks['checks']['database'] = f'error: {str(e)}'
+        checks['status'] = 'unhealthy'
+        logger.error(f"❌ Health check - Database failed: {e}")
+    
+    # Check 2: Redis
+    try:
+        redis_status = redis_health_check()
+        checks['checks']['redis'] = redis_status
+        if redis_status.get('status') != 'healthy':
+            checks['status'] = 'unhealthy'
+    except Exception as e:
+        checks['checks']['redis'] = f'error: {str(e)}'
+        checks['status'] = 'unhealthy'
+        logger.error(f"❌ Health check - Redis failed: {e}")
+    
+    # Check 3: RQ Workers
+    try:
+        from rq import Queue
+        redis_conn = get_redis_connection(decode_responses=False)
+        
+        queues = {
+            'tasks': Queue('tasks', connection=redis_conn),
+            'gateway': Queue('gateway', connection=redis_conn),
+            'webhook': Queue('webhook', connection=redis_conn)
+        }
+        
+        workers_count = {
+            name: len(queue.workers)
+            for name, queue in queues.items()
+        }
+        
+        queue_sizes = {
+            name: len(queue)
+            for name, queue in queues.items()
+        }
+        
+        checks['checks']['rq_workers'] = {
+            'workers': workers_count,
+            'queue_sizes': queue_sizes,
+            'total_workers': sum(workers_count.values())
+        }
+        
+        # Alertar se alguma fila sem workers
+        if any(count == 0 for count in workers_count.values()):
+            checks['status'] = 'degraded'
+            checks['checks']['rq_workers']['warning'] = 'Some queues have no workers'
+            logger.warning(f"⚠️ Health check - Some RQ queues without workers: {workers_count}")
+        
+        # Alertar se filas muito grandes (backlog)
+        if any(size > 1000 for size in queue_sizes.values()):
+            checks['status'] = 'degraded'
+            checks['checks']['rq_workers']['warning'] = 'High queue backlog detected'
+            logger.warning(f"⚠️ Health check - High queue backlog: {queue_sizes}")
+            
+    except Exception as e:
+        checks['checks']['rq_workers'] = f'error: {str(e)}'
+        checks['status'] = 'unhealthy'
+        logger.error(f"❌ Health check - RQ Workers failed: {e}")
+    
+    # Status code baseado no status geral
+    if checks['status'] == 'healthy':
+        status_code = 200
+    elif checks['status'] == 'degraded':
+        status_code = 200  # 200 mas com aviso no JSON
+    else:
+        status_code = 503  # Service Unavailable
+    
+    return jsonify(checks), status_code
 
 
 if __name__ == '__main__':

@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 """
-Script para iniciar worker RQ (Redis Queue) - QI 200
+Script para iniciar worker RQ (Redis Queue) - QI 500
 Suporta 3 filas separadas: tasks, gateway, webhook
+✅ Usa connection pool para maior performance
 
 Uso:
   python start_rq_worker.py tasks      # Worker Telegram (urgente)
@@ -19,6 +20,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try:
     from rq import Worker, Queue
     from redis import Redis
+    from redis_manager import get_redis_connection
 except ImportError as e:
     print(f"❌ ERRO: Módulo não encontrado: {e}")
     print("Instale com: pip install rq redis")
@@ -27,11 +29,11 @@ except ImportError as e:
 # Conectar ao Redis
 try:
     redis_url = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
-    # ✅ QI 1000: decode_responses=False para RQ (RQ precisa de bytes para zlib.decompress)
-    # RQ serializa jobs como bytes comprimidos, não strings
-    redis_conn = Redis.from_url(redis_url, decode_responses=False)
+    # ✅ QI 500: Usar connection pool (decode_responses=False para RQ - bytes)
+    redis_conn = get_redis_connection(decode_responses=False)
     # Testar conexão
     redis_conn.ping()
+    print(f"✅ Redis connection pool inicializado")
 except Exception as e:
     print(f"❌ ERRO: Não foi possível conectar ao Redis: {e}")
     print(f"Redis URL: {redis_url}")
@@ -58,7 +60,7 @@ else:
 if __name__ == '__main__':
     try:
         print("="*70)
-        print(" RQ Worker QI 200 - Iniciando")
+        print(" RQ Worker QI 500 - Iniciando (Connection Pool)")
         print("="*70)
         print(f" Redis: {os.environ.get('REDIS_URL', 'redis://localhost:6379/0')}")
         print("="*70)

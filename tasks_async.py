@@ -11,22 +11,21 @@ import logging
 from rq import Queue
 from redis import Redis
 from typing import Dict, Any, Optional
+from redis_manager import get_redis_connection
 
 logger = logging.getLogger(__name__)
 
 # Conectar ao Redis
 try:
-    # ✅ QI 1000: decode_responses=False para RQ (RQ precisa de bytes para zlib.decompress)
+    # ✅ QI 500: Usar connection pool para RQ (decode_responses=False para bytes)
     # RQ serializa jobs como bytes comprimidos, não strings
-    redis_conn = Redis.from_url(
-        os.environ.get('REDIS_URL', 'redis://localhost:6379/0'),
-        decode_responses=False
-    )
+    redis_conn = get_redis_connection(decode_responses=False)
+    
     # ✅ QI 200: 3 FILAS SEPARADAS
     task_queue = Queue('tasks', connection=redis_conn)  # Telegram (urgente)
     gateway_queue = Queue('gateway', connection=redis_conn)  # Gateway/PIX/Reconciliadores
     webhook_queue = Queue('webhook', connection=redis_conn)  # Webhooks
-    logger.info("✅ 3 Filas RQ inicializadas: tasks, gateway, webhook")
+    logger.info("✅ 3 Filas RQ inicializadas com connection pool: tasks, gateway, webhook")
 except Exception as e:
     logger.error(f"❌ Erro ao conectar Redis para RQ: {e}")
     redis_conn = None
@@ -102,7 +101,7 @@ def process_start_async(
                         if tracking_data.get('f'):
                             fbclid_hash = tracking_data['f']
                             try:
-                                r = redis.Redis(host='localhost', port=6379, decode_responses=True)
+                                r = get_redis_connection()
                                 fbclid_completo = r.get(f'tracking_hash:{fbclid_hash}')
                                 if fbclid_completo:
                                     utm_data_from_start['fbclid'] = fbclid_completo

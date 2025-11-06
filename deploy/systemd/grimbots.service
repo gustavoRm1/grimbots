@@ -1,0 +1,54 @@
+[Unit]
+Description=Grimbots Gunicorn Application Server
+After=network.target postgresql.service redis.service
+Wants=postgresql.service redis.service
+Documentation=https://github.com/your-repo/grimbots
+
+[Service]
+Type=notify
+User=grimbots
+Group=grimbots
+WorkingDirectory=/opt/grimbots
+
+# Environment
+Environment="PATH=/opt/grimbots/venv/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="PYTHONPATH=/opt/grimbots"
+Environment="DATABASE_URL=postgresql://grimbots:YOUR_PASSWORD@localhost:5432/grimbots"
+Environment="REDIS_URL=redis://localhost:6379/0"
+Environment="SECRET_KEY=YOUR_SECRET_KEY"
+Environment="FLASK_ENV=production"
+
+# Gunicorn command
+ExecStart=/opt/grimbots/venv/bin/gunicorn \
+    -c /opt/grimbots/gunicorn_config.py \
+    wsgi:app
+
+# Reload (graceful restart)
+ExecReload=/bin/kill -s HUP $MAINPID
+
+# Kill mode
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+# Restart policy
+Restart=always
+RestartSec=10
+StartLimitInterval=0
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=grimbots
+
+# Security (opcional - ajustar conforme necessário)
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
+
