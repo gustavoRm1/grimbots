@@ -21,7 +21,7 @@ Autor: QI 600 + QI 602
 """
 
 from app import app, db, send_meta_pixel_purchase_event
-from models import Payment
+from models import Payment, get_brazil_time
 from datetime import datetime
 import logging
 import json
@@ -34,17 +34,19 @@ with app.app_context():
     print("🔄 REENVIAR META PIXEL - VENDAS DE HOJE (V2 - COM fbp/fbc)")
     print("=" * 80)
     
-    # Buscar vendas de HOJE (00:00 até agora)
-    today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-    now = datetime.now()
+    # ✅ CRÍTICO: Usar horário do Brasil (UTC-3), não UTC da VPS
+    # Buscar vendas de HOJE (00:00 até agora) no horário do Brasil
+    now_brazil = get_brazil_time()
+    today_start = now_brazil.replace(hour=0, minute=0, second=0, microsecond=0)
     
-    print(f"\n📅 Período: {today_start.strftime('%d/%m/%Y %H:%M')} até {now.strftime('%d/%m/%Y %H:%M')}")
+    print(f"\n📅 Período: {today_start.strftime('%d/%m/%Y %H:%M')} até {now_brazil.strftime('%d/%m/%Y %H:%M')} (Horário do Brasil - UTC-3)")
     
     # Buscar TODAS as vendas pagas de hoje
+    # ✅ Payment.created_at já está em horário do Brasil (usando get_brazil_time())
     payments_today = Payment.query.filter(
         Payment.status == 'paid',
         Payment.created_at >= today_start,
-        Payment.created_at <= now
+        Payment.created_at <= now_brazil
     ).order_by(Payment.created_at.desc()).all()
     
     print(f"\n📊 TOTAL DE VENDAS DE HOJE: {len(payments_today)}")
