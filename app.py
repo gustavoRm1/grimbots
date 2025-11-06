@@ -7232,12 +7232,75 @@ def payment_webhook(gateway_type):
     logger.info(f"📋 Headers: {dict(request.headers)}")
     
     try:
-        # ✅ CRÍTICO QI 200: Identificar Gateway/Usuário via producer_hash (multi-tenant)
+        # ✅ PATCH 1 QI 200: Identificar Gateway/Usuário via producer_hash (multi-tenant)
         # Permite que múltiplos usuários usem a mesma URL de webhook
+        # ✅ EXTRAÇÃO ROBUSTA: Suporta múltiplos formatos de webhook
         gateway = None
         if gateway_type == 'atomopay':
-            producer_data = data.get('producer', {})
-            producer_hash = producer_data.get('hash') if isinstance(producer_data, dict) else None
+            def extract_producer_hash(webhook_data):
+                """Extrai producer_hash de múltiplas fontes (diferentes formatos de webhook)"""
+                # Formato 1: producer.hash direto (webhook de /transactions)
+                if 'producer' in webhook_data and isinstance(webhook_data['producer'], dict):
+                    h = webhook_data['producer'].get('hash')
+                    if h:
+                        logger.info(f"🔍 Producer hash encontrado (formato 1 - producer.hash): {h[:12]}...")
+                        return h
+                
+                # Formato 2: offer.producer.hash (webhook de /webhook integrador)
+                if 'offer' in webhook_data and isinstance(webhook_data['offer'], dict):
+                    offer_producer = webhook_data['offer'].get('producer', {})
+                    if isinstance(offer_producer, dict):
+                        h = offer_producer.get('hash')
+                        if h:
+                            logger.info(f"🔍 Producer hash encontrado (formato 2 - offer.producer.hash): {h[:12]}...")
+                            return h
+                
+                # Formato 3: product_hash → buscar gateway → producer_hash
+                if 'items' in webhook_data and webhook_data['items']:
+                    prod_hash = webhook_data['items'][0].get('product_hash')
+                    if prod_hash:
+                        g = Gateway.query.filter_by(
+                            gateway_type='atomopay',
+                            product_hash=prod_hash
+                        ).first()
+                        if g and g.producer_hash:
+                            logger.info(f"🔍 Producer hash encontrado (formato 3 - product_hash → gateway): {g.producer_hash[:12]}...")
+                            return g.producer_hash
+                
+                # Formato 4: transaction.token → buscar payment → gateway → producer_hash
+                if 'transaction' in webhook_data and isinstance(webhook_data['transaction'], dict):
+                    token = webhook_data['transaction'].get('token')
+                    if token:
+                        # Buscar payment pelo token (se tiver campo webhook_token)
+                        # Fallback: buscar por gateway_transaction_id se token for o ID
+                        from models import Payment
+                        payment = Payment.query.filter_by(
+                            gateway_transaction_id=str(token)
+                        ).first()
+                        if payment and payment.gateway and payment.gateway.producer_hash:
+                            logger.info(f"🔍 Producer hash encontrado (formato 4 - transaction.token → payment): {payment.gateway.producer_hash[:12]}...")
+                            return payment.gateway.producer_hash
+                
+                # Formato 5: customer.document → buscar payment recente → gateway → producer_hash
+                if 'customer' in webhook_data and isinstance(webhook_data['customer'], dict):
+                    customer_doc = webhook_data['customer'].get('document')
+                    if customer_doc:
+                        from models import Payment
+                        from datetime import timedelta
+                        # Buscar payment recente (últimas 24h) com mesmo documento
+                        recent_payment = Payment.query.filter(
+                            Payment.customer_document == customer_doc,
+                            Payment.gateway_type == 'atomopay',
+                            Payment.created_at >= get_brazil_time() - timedelta(hours=24)
+                        ).order_by(Payment.created_at.desc()).first()
+                        if recent_payment and recent_payment.gateway and recent_payment.gateway.producer_hash:
+                            logger.info(f"🔍 Producer hash encontrado (formato 5 - customer.document → payment): {recent_payment.gateway.producer_hash[:12]}...")
+                            return recent_payment.gateway.producer_hash
+                
+                logger.warning(f"⚠️ Producer hash não encontrado em nenhum formato conhecido")
+                return None
+            
+            producer_hash = extract_producer_hash(data)
             if producer_hash:
                 # ✅ Buscar Gateway pelo producer_hash para identificar o usuário
                 gateway = Gateway.query.filter_by(
@@ -7248,6 +7311,8 @@ def payment_webhook(gateway_type):
                     logger.info(f"🔑 Gateway identificado via producer_hash: {producer_hash[:12]}... (User ID: {gateway.user_id})")
                 else:
                     logger.warning(f"⚠️ Gateway não encontrado para producer_hash: {producer_hash[:12]}... (usuário precisa fazer pelo menos 1 transação)")
+            else:
+                logger.warning(f"⚠️ Producer hash não extraído do webhook - gateway não identificado")
         
         # Processar webhook do gateway
         result = bot_manager.process_payment_webhook(gateway_type, data)

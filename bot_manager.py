@@ -3675,6 +3675,11 @@ Seu pagamento ainda não foi confirmado.
                 if user_commission < 2.0:
                     logger.info(f"🏆 TAXA PREMIUM aplicada: {user_commission}% (User {bot.owner.id})")
                 
+                # ✅ PATCH 2 QI 200: Garantir que product_hash existe antes de usar
+                # Se gateway não tem product_hash, será criado dinamicamente no generate_pix
+                # Mas precisamos garantir que será salvo no banco após criação
+                original_product_hash = gateway.product_hash
+                
                 # Gerar PIX via gateway (usando Factory Pattern)
                 logger.info(f"🔧 Criando gateway {gateway.gateway_type} com credenciais...")
                 
@@ -3747,6 +3752,14 @@ Seu pagamento ainda não foi confirmado.
                     # ✅ CRÍTICO: Extrair reference para matching no webhook
                     reference = pix_result.get('reference')
                     
+                    # ✅ PATCH 2 QI 200: Salvar product_hash se foi criado dinamicamente
+                    if gateway.gateway_type == 'atomopay' and payment_gateway:
+                        # Verificar se product_hash foi criado dinamicamente
+                        current_product_hash = getattr(payment_gateway, 'product_hash', None)
+                        if current_product_hash and current_product_hash != original_product_hash:
+                            gateway.product_hash = current_product_hash
+                            logger.info(f"💾 Product Hash criado dinamicamente e salvo no Gateway: {current_product_hash[:12]}...")
+                    
                     # ✅ CRÍTICO: Extrair producer_hash para identificar conta do usuário (multi-tenant)
                     # Salvar no Gateway para que webhook possa identificar qual usuário enviou
                     producer_hash = pix_result.get('producer_hash')
@@ -3754,8 +3767,12 @@ Seu pagamento ainda não foi confirmado.
                         # ✅ Salvar producer_hash no Gateway (se ainda não tiver)
                         if not gateway.producer_hash:
                             gateway.producer_hash = producer_hash
-                            db.session.commit()
                             logger.info(f"💾 Producer Hash salvo no Gateway: {producer_hash[:12]}...")
+                    
+                    # ✅ PATCH 2 & 3 QI 200: Commit de todas as alterações do Gateway
+                    if gateway.gateway_type == 'atomopay':
+                        db.session.commit()
+                        logger.info(f"💾 Gateway atualizado (product_hash, producer_hash)")
                     
                     logger.info(f"💾 Salvando Payment com dados do gateway:")
                     logger.info(f"   payment_id: {payment_id}")

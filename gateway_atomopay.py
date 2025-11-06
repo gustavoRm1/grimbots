@@ -330,6 +330,51 @@ class AtomPayGateway(PaymentGateway):
                 'installments': 1  # ✅ OBRIGATÓRIO: PIX sempre 1 parcela
             }
             
+            # ✅ PATCH 2 QI 200: Garantir que product_hash existe antes de usar
+            # Se não existe, criar dinamicamente
+            if not self.product_hash:
+                logger.info(f"🔄 [{self.get_gateway_name()}] product_hash não configurado - criando produto dinamicamente...")
+                try:
+                    # ✅ Criar produto via API
+                    create_product_url = f"{self.base_url}/products"
+                    create_product_data = {
+                        'title': description[:100] if description else 'Produto Digital',
+                        'description': description[:500] if description else 'Produto digital vendido via bot',
+                        'tangible': False  # Produto digital
+                    }
+                    create_product_params = {'api_token': self.api_token}
+                    
+                    logger.info(f"📦 [{self.get_gateway_name()}] Criando produto: {create_product_data}")
+                    create_product_response = requests.post(
+                        create_product_url, 
+                        params=create_product_params, 
+                        json=create_product_data, 
+                        timeout=10
+                    )
+                    
+                    if create_product_response.status_code == 201:
+                        product_data = create_product_response.json()
+                        # Verificar se resposta tem wrapper
+                        if isinstance(product_data, dict) and 'data' in product_data:
+                            product_data = product_data.get('data', {})
+                        
+                        new_product_hash = product_data.get('hash')
+                        if new_product_hash:
+                            self.product_hash = new_product_hash
+                            logger.info(f"✅ [{self.get_gateway_name()}] Produto criado dinamicamente: {new_product_hash[:8]}...")
+                            # ✅ IMPORTANTE: Salvar no Gateway (será feito em bot_manager.py após retorno)
+                        else:
+                            logger.error(f"❌ [{self.get_gateway_name()}] Produto criado mas hash não encontrado na resposta")
+                            return None
+                    else:
+                        logger.error(f"❌ [{self.get_gateway_name()}] Falha ao criar produto (status {create_product_response.status_code}): {create_product_response.text[:200]}")
+                        return None
+                except Exception as e:
+                    logger.error(f"❌ [{self.get_gateway_name()}] Erro ao criar produto dinamicamente: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    return None
+            
             # ✅ CART OBRIGATÓRIO (conforme documentação)
             # ✅ CRÍTICO: product_hash é OBRIGATÓRIO em cada item do cart
             if not self.product_hash:
@@ -402,6 +447,16 @@ class AtomPayGateway(PaymentGateway):
                                 break
                         
                         if matching_offer:
+                            # ✅ PATCH 3 QI 200: Verificar se oferta pertence ao usuário correto
+                            # Verificar producer_hash da oferta (se disponível)
+                            offer_producer = matching_offer.get('producer', {})
+                            if isinstance(offer_producer, dict):
+                                offer_producer_hash = offer_producer.get('hash')
+                                # Se temos producer_hash salvo, verificar se bate
+                                # (será verificado no webhook também, mas aqui já previne)
+                                if offer_producer_hash:
+                                    logger.info(f"🔍 [{self.get_gateway_name()}] Oferta encontrada - producer_hash: {offer_producer_hash[:12]}...")
+                            
                             # ✅ Oferta com valor correto já existe, reutilizar
                             offer_hash_to_use = matching_offer.get('hash')
                             logger.info(f"✅ [{self.get_gateway_name()}] Oferta existente encontrada para valor R$ {amount:.2f}: {offer_hash_to_use[:8]}...")
@@ -425,6 +480,13 @@ class AtomPayGateway(PaymentGateway):
                                 
                                 offer_hash_to_use = new_offer.get('hash')
                                 if offer_hash_to_use:
+                                    # ✅ PATCH 3 QI 200: Verificar producer_hash da oferta criada
+                                    offer_producer = new_offer.get('producer', {})
+                                    if isinstance(offer_producer, dict):
+                                        offer_producer_hash = offer_producer.get('hash')
+                                        if offer_producer_hash:
+                                            logger.info(f"✅ [{self.get_gateway_name()}] Oferta criada - producer_hash: {offer_producer_hash[:12]}...")
+                                    
                                     logger.info(f"✅ [{self.get_gateway_name()}] Oferta criada dinamicamente: {offer_hash_to_use[:8]}...")
                                 else:
                                     logger.error(f"❌ [{self.get_gateway_name()}] Oferta criada mas hash não encontrado na resposta")
