@@ -62,6 +62,10 @@ class AtomPayGateway(PaymentGateway):
             logger.info(f"   offer_hash: {self.offer_hash[:8]}... (obrigatório - será enviado)")
         else:
             logger.warning(f"⚠️ offer_hash não configurado (será obrigatório na geração de PIX)")
+        if self.product_hash:
+            logger.info(f"   product_hash: {self.product_hash[:8]}... (obrigatório no cart - será enviado)")
+        else:
+            logger.warning(f"⚠️ product_hash não configurado (será obrigatório no cart)")
     
     def get_gateway_name(self) -> str:
         return "Átomo Pay"
@@ -317,13 +321,22 @@ class AtomPayGateway(PaymentGateway):
             }
             
             # ✅ CART OBRIGATÓRIO (conforme documentação)
+            # ✅ CRÍTICO: product_hash é OBRIGATÓRIO em cada item do cart
+            if not self.product_hash:
+                logger.error(f"❌ [{self.get_gateway_name()}] product_hash é OBRIGATÓRIO no cart da API Átomo Pay!")
+                logger.error(f"   Configure 'Product Hash' no gateway antes de usar")
+                return None
+            
             payload['cart'] = [{
                 'title': description[:100] if description else 'Produto',
                 'price': amount_cents,
                 'quantity': 1,
                 'operation_type': 1,
-                'tangible': False
+                'tangible': False,
+                'product_hash': self.product_hash  # ✅ OBRIGATÓRIO: product_hash em cada item do cart
             }]
+            
+            logger.info(f"✅ [{self.get_gateway_name()}] product_hash incluído no cart: {self.product_hash[:8]}...")
             
             # ✅ TRACKING APENAS SE TIVER DADOS VÁLIDOS
             tracking_data = {
@@ -358,9 +371,10 @@ class AtomPayGateway(PaymentGateway):
                 logger.error(f"❌ [{self.get_gateway_name()}] Falha na requisição")
                 return None
             
-            # ✅ VALIDAÇÕES DE RESPOSTA (como Paradise)
-            if response.status_code != 200:
-                logger.error(f"❌ [{self.get_gateway_name()}] Status code não é 200: {response.status_code}")
+            # ✅ VALIDAÇÕES DE RESPOSTA (conforme documentação Átomo Pay)
+            # Status code 201 = Transação criada com sucesso (não 200!)
+            if response.status_code != 201:
+                logger.error(f"❌ [{self.get_gateway_name()}] Status code não é 201: {response.status_code}")
                 return None
             
             # Verificar se resposta contém erro
@@ -370,46 +384,66 @@ class AtomPayGateway(PaymentGateway):
                 return None
             
             try:
-                data = response.json()
+                response_data = response.json()
             except:
                 logger.error(f"❌ [{self.get_gateway_name()}] Resposta não é JSON válido: {response.text[:500]}")
                 return None
             
-            # ✅ Validar status
-            status = data.get('status', '').lower()
-            if status != 'success':
-                logger.error(f"❌ [{self.get_gateway_name()}] Status não é 'success': {status}")
+            # ✅ Validar success no root (conforme documentação)
+            if not response_data.get('success', False):
+                logger.error(f"❌ [{self.get_gateway_name()}] Resposta não tem success=true: {response_data}")
                 return None
             
-            # ✅ EXTRAIR DADOS (priorizar campos mais importantes) - como Paradise
+            # ✅ CRÍTICO: Dados vêm dentro de 'data' (conforme documentação)
+            data = response_data.get('data', {})
+            if not data:
+                logger.error(f"❌ [{self.get_gateway_name()}] Resposta não contém 'data': {response_data}")
+                return None
+            
+            # ✅ EXTRAIR DADOS (priorizar campos mais importantes) - conforme documentação
             transaction_hash = (
-                data.get('id') or           # 1ª prioridade (aparece no painel)
-                data.get('hash') or         # 2ª prioridade
+                data.get('hash') or         # 1ª prioridade (conforme documentação)
+                data.get('id') or           # 2ª prioridade
                 data.get('transaction_hash') or
                 data.get('transaction_id')  # 3ª prioridade (ID numérico)
             )
             
             transaction_id = data.get('transaction_id') or transaction_hash
             
+            # ✅ PIX_CODE: Conforme documentação, vem como 'pix_code' (código copia-e-cola)
+            # qr_code é a imagem base64, NÃO o código PIX
             pix_code = (
-                data.get('qr_code') or
-                data.get('pix_code') or
+                data.get('pix_code') or     # 1ª prioridade (código PIX copia-e-cola)
                 data.get('pix_copy_paste') or
                 data.get('copy_paste')
             )
             
-            qr_code_url = data.get('qr_code_url') or data.get('qr_code_image_url')
-            qr_code_base64 = data.get('qr_code_base64')
+            # ✅ QR_CODE: Imagem base64 (data:image/png;base64,...) ou URL
+            qr_code_raw = data.get('qr_code', '')
+            if qr_code_raw and qr_code_raw.startswith('data:image'):
+                # É base64 com prefixo, extrair apenas a parte base64
+                qr_code_base64 = qr_code_raw.split(',', 1)[1] if ',' in qr_code_raw else qr_code_raw
+                qr_code_url = None
+            elif qr_code_raw and qr_code_raw.startswith('http'):
+                # É URL
+                qr_code_url = qr_code_raw
+                qr_code_base64 = None
+            else:
+                # Tentar URL alternativa
+                qr_code_url = data.get('qr_code_url') or data.get('qr_code_image_url')
+                qr_code_base64 = qr_code_raw if qr_code_raw else None
             
             # ✅ VALIDAÇÕES OBRIGATÓRIAS
             if not transaction_hash:
-                logger.error(f"❌ [{self.get_gateway_name()}] Resposta sem transaction_hash/id")
-                logger.error(f"Campos disponíveis: {list(data.keys())}")
+                logger.error(f"❌ [{self.get_gateway_name()}] Resposta sem hash/transaction_hash/id")
+                logger.error(f"Campos disponíveis em 'data': {list(data.keys())}")
+                logger.error(f"Resposta completa: {response_data}")
                 return None
             
             if not pix_code:
-                logger.error(f"❌ [{self.get_gateway_name()}] Resposta sem qr_code/pix_code")
-                logger.error(f"Campos disponíveis: {list(data.keys())}")
+                logger.error(f"❌ [{self.get_gateway_name()}] Resposta sem pix_code/qr_code")
+                logger.error(f"Campos disponíveis em 'data': {list(data.keys())}")
+                logger.error(f"Resposta completa: {response_data}")
                 return None
             
             logger.info(f"✅ [{self.get_gateway_name()}] PIX gerado com sucesso!")
@@ -500,26 +534,42 @@ class AtomPayGateway(PaymentGateway):
     
     def verify_credentials(self) -> bool:
         """
-        Verifica credenciais usando GET /transactions
+        Verifica credenciais usando GET /transactions (conforme documentação)
+        Status 200 = credenciais válidas
+        Status 401 = token inválido
         """
         try:
             if not self.api_token or len(self.api_token) < 10:
                 logger.error(f"❌ [{self.get_gateway_name()}] Token inválido")
                 return False
             
-            # Tentar listar transações (endpoint que existe conforme documentação)
-            response = self._make_request('GET', '/transactions')
+            # ✅ Listar transações (endpoint conforme documentação)
+            # GET /transactions?api_token=...&page=1&per_page=1
+            response = self._make_request('GET', '/transactions', params={'page': 1, 'per_page': 1})
             
-            if response and response.status_code == 200:
-                logger.info(f"✅ [{self.get_gateway_name()}] Credenciais válidas")
-                return True
-            elif response and response.status_code == 401:
+            if not response:
+                logger.error(f"❌ [{self.get_gateway_name()}] Falha na requisição de verificação")
+                return False
+            
+            if response.status_code == 200:
+                # ✅ Validar estrutura da resposta (success: true, data: [...])
+                try:
+                    response_data = response.json()
+                    if response_data.get('success', False) and 'data' in response_data:
+                        logger.info(f"✅ [{self.get_gateway_name()}] Credenciais válidas")
+                        return True
+                    else:
+                        logger.warning(f"⚠️ [{self.get_gateway_name()}] Resposta inesperada: {response_data}")
+                        return False
+                except:
+                    logger.warning(f"⚠️ [{self.get_gateway_name()}] Resposta não é JSON válido")
+                    return False
+            elif response.status_code == 401:
                 logger.error(f"❌ [{self.get_gateway_name()}] Credenciais inválidas (401)")
                 return False
             else:
-                # Se não conseguir validar, assumir válido se token tem formato correto
-                logger.warning(f"⚠️ [{self.get_gateway_name()}] Não foi possível validar. Assumindo válido.")
-                return len(self.api_token) >= 20
+                logger.warning(f"⚠️ [{self.get_gateway_name()}] Status inesperado: {response.status_code}")
+                return False
                 
         except Exception as e:
             logger.error(f"❌ [{self.get_gateway_name()}] Erro ao verificar credenciais: {e}")
@@ -527,32 +577,69 @@ class AtomPayGateway(PaymentGateway):
     
     def get_payment_status(self, transaction_id: str) -> Optional[Dict[str, Any]]:
         """
-        Consulta status via GET /transactions/{hash}
+        Consulta status via GET /transactions/{hash} (conforme documentação)
+        Endpoint específico para consultar detalhes completos de uma transação
         """
         try:
             if not transaction_id:
                 logger.error(f"❌ [{self.get_gateway_name()}] transaction_hash não fornecido")
                 return None
             
-            logger.info(f"🔍 [{self.get_gateway_name()}] Consultando: {transaction_id[:20]}...")
+            logger.info(f"🔍 [{self.get_gateway_name()}] Consultando transação: {transaction_id[:20]}...")
             
+            # ✅ Endpoint específico conforme documentação: GET /transactions/{hash}
             response = self._make_request('GET', f'/transactions/{transaction_id}')
             
             if not response:
+                logger.error(f"❌ [{self.get_gateway_name()}] Falha na requisição")
                 return None
             
             if response.status_code == 200:
-                data = response.json()
-                return self.process_webhook(data)
+                # ✅ Resposta bem-sucedida (conforme documentação)
+                try:
+                    response_data = response.json()
+                    
+                    if not response_data.get('success', False):
+                        logger.error(f"❌ [{self.get_gateway_name()}] Resposta não tem success=true: {response_data}")
+                        return None
+                    
+                    # ✅ Dados vêm dentro de 'data' (conforme documentação)
+                    data = response_data.get('data', {})
+                    if not data:
+                        logger.error(f"❌ [{self.get_gateway_name()}] Resposta não contém 'data': {response_data}")
+                        return None
+                    
+                    logger.info(f"✅ [{self.get_gateway_name()}] Transação encontrada: {data.get('hash', transaction_id)[:20]}...")
+                    logger.info(f"   Status: {data.get('status', 'N/A')} | Valor: R$ {data.get('amount', 0) / 100:.2f}")
+                    
+                    # Processar transação (mesma estrutura do webhook)
+                    return self.process_webhook(data)
+                    
+                except Exception as e:
+                    logger.error(f"❌ [{self.get_gateway_name()}] Erro ao processar resposta: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    return None
+                    
             elif response.status_code == 404:
-                logger.warning(f"⚠️ [{self.get_gateway_name()}] Transação não encontrada")
+                logger.warning(f"⚠️ [{self.get_gateway_name()}] Transação não encontrada (404): {transaction_id[:20]}...")
+                return None
+            elif response.status_code == 401:
+                logger.error(f"❌ [{self.get_gateway_name()}] Token inválido (401)")
                 return None
             else:
-                logger.error(f"❌ [{self.get_gateway_name()}] Erro: Status {response.status_code}")
+                logger.error(f"❌ [{self.get_gateway_name()}] Erro HTTP {response.status_code}")
+                try:
+                    error_data = response.json()
+                    logger.error(f"📋 [{self.get_gateway_name()}] Erro: {error_data}")
+                except:
+                    logger.error(f"📋 [{self.get_gateway_name()}] Resposta: {response.text[:500]}")
                 return None
                 
         except Exception as e:
             logger.error(f"❌ [{self.get_gateway_name()}] Erro ao consultar status: {e}")
+            import traceback
+            traceback.print_exc()
             return None
 
     def validate_amount(self, amount: float) -> bool:
