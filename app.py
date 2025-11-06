@@ -1973,6 +1973,30 @@ def general_remarketing():
         if not message:
             return jsonify({'error': 'Mensagem é obrigatória'}), 400
         
+        # ✅ CORREÇÃO: Decodificar Unicode escape sequences (ex: \ud835\udeXX)
+        try:
+            # Verificar se a mensagem contém escape sequences Unicode
+            if '\\u' in message or '\\U' in message:
+                # Decodificar escape sequences Unicode
+                # Usar codecs.decode para processar \uXXXX e \UXXXXXXXX
+                import codecs
+                # Primeiro, tentar decodificar como raw string (r'...')
+                try:
+                    # Se a mensagem contém escape sequences, decodificar
+                    message = message.encode('utf-8').decode('unicode_escape')
+                    logger.info(f"✅ Mensagem decodificada: {len(message)} caracteres")
+                except (UnicodeDecodeError, UnicodeEncodeError):
+                    # Se falhar, tentar usando codecs
+                    try:
+                        message = codecs.decode(message, 'unicode_escape')
+                        logger.info(f"✅ Mensagem decodificada via codecs: {len(message)} caracteres")
+                    except Exception:
+                        # Se ainda falhar, manter original
+                        logger.warning(f"⚠️ Não foi possível decodificar Unicode, mantendo original")
+        except Exception as e:
+            logger.warning(f"⚠️ Erro ao decodificar Unicode: {e}, usando mensagem original")
+            # Manter mensagem original se decodificação falhar
+        
         # Verificar se todos os bots pertencem ao usuário
         bots = Bot.query.filter(
             Bot.id.in_(bot_ids),
@@ -2026,7 +2050,14 @@ def general_remarketing():
         total_users = 0
         bots_affected = 0
         
-        # Criar campanha para cada bot
+        # ✅ CORREÇÃO: Criar campanhas em batch para evitar database locked
+        from models import RemarketingCampaign
+        from sqlalchemy.exc import OperationalError
+        import time as time_module
+        
+        campaigns_to_create = []
+        
+        # Preparar todas as campanhas primeiro
         for bot in bots:
             # Contar usuários elegíveis
             eligible_count = bot_manager.count_eligible_leads(
@@ -2037,9 +2068,6 @@ def general_remarketing():
             )
             
             if eligible_count > 0:
-                # Criar campanha no banco
-                from models import RemarketingCampaign
-                
                 campaign = RemarketingCampaign(
                     bot_id=bot.id,
                     name=f"Remarketing Geral - {get_brazil_time().strftime('%d/%m/%Y %H:%M')}",
@@ -2056,29 +2084,55 @@ def general_remarketing():
                     scheduled_at=scheduled_at,  # ✅ V2.0
                     status=status  # ✅ V2.0: 'draft' ou 'scheduled'
                 )
-                
-                db.session.add(campaign)
-                db.session.commit()
-                
-                # ✅ V2.0: Enviar campanha apenas se não estiver agendada
-                if status != 'scheduled':
-                    try:
-                        bot_manager.send_remarketing_campaign(
-                            campaign_id=campaign.id,
-                            bot_token=bot.token
-                        )
-                        
+                campaigns_to_create.append((campaign, bot, eligible_count))
+        
+        # ✅ CORREÇÃO: Salvar todas as campanhas com retry logic para database locked
+        for campaign, bot, eligible_count in campaigns_to_create:
+            max_retries = 3
+            retry_delay = 0.5  # 500ms
+            
+            for attempt in range(max_retries):
+                try:
+                    db.session.add(campaign)
+                    db.session.commit()
+                    logger.info(f"✅ Campanha criada para bot {bot.id} (@{bot.username})")
+                    
+                    # ✅ V2.0: Enviar campanha apenas se não estiver agendada
+                    if status != 'scheduled':
+                        try:
+                            bot_manager.send_remarketing_campaign(
+                                campaign_id=campaign.id,
+                                bot_token=bot.token
+                            )
+                            
+                            total_users += eligible_count
+                            bots_affected += 1
+                            
+                            logger.info(f"✅ Remarketing geral enviado para bot {bot.name} ({eligible_count} usuários)")
+                        except Exception as e:
+                            logger.error(f"❌ Erro ao enviar remarketing para bot {bot.id}: {e}")
+                    else:
+                        # Campanha agendada - não enviar agora, será processada pelo scheduler
                         total_users += eligible_count
                         bots_affected += 1
-                        
-                        logger.info(f"✅ Remarketing geral enviado para bot {bot.name} ({eligible_count} usuários)")
-                    except Exception as e:
-                        logger.error(f"❌ Erro ao enviar remarketing para bot {bot.id}: {e}")
-                else:
-                    # Campanha agendada - não enviar agora, será processada pelo scheduler
-                    total_users += eligible_count
-                    bots_affected += 1
-                    logger.info(f"📅 Remarketing geral agendado para bot {bot.name} ({eligible_count} usuários) - será enviado em {scheduled_at}")
+                        logger.info(f"📅 Remarketing geral agendado para bot {bot.name} ({eligible_count} usuários) - será enviado em {scheduled_at}")
+                    
+                    break  # Sucesso, sair do loop de retry
+                except OperationalError as e:
+                    if 'database is locked' in str(e).lower() and attempt < max_retries - 1:
+                        logger.warning(f"⚠️ Database locked ao criar campanha para bot {bot.id}, tentativa {attempt + 1}/{max_retries}")
+                        db.session.rollback()
+                        time_module.sleep(retry_delay * (attempt + 1))  # Backoff exponencial
+                        continue
+                    else:
+                        # Última tentativa ou erro diferente
+                        logger.error(f"❌ Erro ao criar campanha para bot {bot.id}: {e}")
+                        db.session.rollback()
+                        raise
+                except Exception as e:
+                    logger.error(f"❌ Erro inesperado ao criar campanha para bot {bot.id}: {e}")
+                    db.session.rollback()
+                    raise
         
         response_message = f'Remarketing agendado para {bots_affected} bot(s) com sucesso!' if status == 'scheduled' else f'Remarketing enviado para {bots_affected} bot(s) com sucesso!'
         
