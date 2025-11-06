@@ -2915,14 +2915,28 @@ Seu pagamento ainda não foi confirmado.
             
             logger.info(f"🎁 Finalizando sessão - Preço original: R$ {original_price:.2f}, Bumps aceitos: {len(accepted_bumps)}, Valor total: R$ {final_price:.2f}")
             
+            # ✅ CRÍTICO: Buscar BotUser para obter nome e username (necessário para tracking Meta Pixel)
+            from app import app, db
+            from models import BotUser
+            customer_name = ""
+            customer_username = ""
+            with app.app_context():
+                bot_user = BotUser.query.filter_by(
+                    bot_id=bot_id,
+                    telegram_user_id=str(chat_id)
+                ).first()
+                if bot_user:
+                    customer_name = bot_user.first_name or ""
+                    customer_username = bot_user.username or ""
+            
             # Gerar PIX final
             pix_data = self._generate_pix_payment(
                 bot_id=bot_id,
                 amount=final_price,
                 description=f"{original_description} + {len(accepted_bumps)} bônus" if accepted_bumps else original_description,
-                customer_name="",  # Será preenchido pelo sistema
-                customer_username="",
-                customer_user_id="",
+                customer_name=customer_name,
+                customer_username=customer_username,
+                customer_user_id=str(chat_id),  # ✅ CRÍTICO: Usar chat_id para encontrar BotUser e tracking
                 order_bump_shown=True,
                 order_bump_accepted=len(accepted_bumps) > 0,
                 order_bump_value=total_bump_value
