@@ -16,6 +16,7 @@ import requests
 import logging
 import hashlib
 import time
+import json
 from typing import Dict, Any, Optional
 from datetime import datetime
 from gateway_interface import PaymentGateway
@@ -362,7 +363,19 @@ class AtomPayGateway(PaymentGateway):
             payload['offer_hash'] = self.offer_hash
             logger.info(f"✅ [{self.get_gateway_name()}] offer_hash enviado: {self.offer_hash[:8]}...")
             
-            logger.debug(f"📦 Payload final: {payload}")
+            # ✅ LOG DETALHADO DO PAYLOAD (para debug de recusas)
+            logger.info(f"📦 [{self.get_gateway_name()}] Payload completo:")
+            logger.info(f"   amount: {payload.get('amount')} centavos")
+            logger.info(f"   payment_method: {payload.get('payment_method')}")
+            logger.info(f"   installments: {payload.get('installments')}")
+            logger.info(f"   offer_hash: {payload.get('offer_hash', 'N/A')[:8]}...")
+            logger.info(f"   product_hash (no cart): {payload.get('cart', [{}])[0].get('product_hash', 'N/A')[:8] if payload.get('cart') else 'N/A'}...")
+            logger.info(f"   customer.name: {payload.get('customer', {}).get('name', 'N/A')}")
+            logger.info(f"   customer.email: {payload.get('customer', {}).get('email', 'N/A')}")
+            logger.info(f"   customer.phone_number: {payload.get('customer', {}).get('phone_number', 'N/A')}")
+            logger.info(f"   customer.document: {payload.get('customer', {}).get('document', 'N/A')[:3]}***")
+            logger.info(f"   reference: {payload.get('reference', 'N/A')}")
+            logger.debug(f"📦 Payload completo (JSON): {payload}")
             
             # ✅ FAZER REQUISIÇÃO
             response = self._make_request('POST', '/transactions', payload=payload)
@@ -375,6 +388,28 @@ class AtomPayGateway(PaymentGateway):
             # Status code 201 = Transação criada com sucesso (não 200!)
             if response.status_code != 201:
                 logger.error(f"❌ [{self.get_gateway_name()}] Status code não é 201: {response.status_code}")
+                logger.error(f"   Resposta: {response.text[:1000]}")
+                
+                # ✅ DIAGNÓSTICO ESPECÍFICO POR STATUS CODE
+                if response.status_code == 400:
+                    logger.error(f"🔍 [{self.get_gateway_name()}] ===== DIAGNÓSTICO 400 BAD REQUEST =====")
+                    logger.error(f"   Possíveis causas:")
+                    logger.error(f"   1. product_hash inválido ou não existe")
+                    logger.error(f"   2. offer_hash inválido ou não existe")
+                    logger.error(f"   3. Dados do cliente inválidos (CPF, telefone, email)")
+                    logger.error(f"   4. Valor inválido (muito baixo ou muito alto)")
+                    logger.error(f"   5. Campos obrigatórios faltando")
+                    logger.error(f"   ================================================")
+                elif response.status_code == 401:
+                    logger.error(f"🔍 [{self.get_gateway_name()}] ===== DIAGNÓSTICO 401 UNAUTHORIZED =====")
+                    logger.error(f"   Token de API inválido ou sem permissões")
+                    logger.error(f"   ================================================")
+                elif response.status_code == 422:
+                    logger.error(f"🔍 [{self.get_gateway_name()}] ===== DIAGNÓSTICO 422 UNPROCESSABLE ENTITY =====")
+                    logger.error(f"   Dados válidos mas não processáveis")
+                    logger.error(f"   Verificar: product_hash, offer_hash, installments")
+                    logger.error(f"   ================================================")
+                
                 return None
             
             # Verificar se resposta contém erro
@@ -408,16 +443,57 @@ class AtomPayGateway(PaymentGateway):
             # ✅ CRÍTICO: Verificar payment_status (pode ser 'refused', 'pending', 'paid', etc.)
             payment_status = data.get('payment_status', '').lower()
             if payment_status == 'refused':
-                logger.error(f"❌ [{self.get_gateway_name()}] Transação RECUSADA pelo gateway")
-                logger.error(f"   Hash: {data.get('hash', 'N/A')} | Status: {payment_status}")
+                logger.error(f"❌ [{self.get_gateway_name()}] ===== TRANSAÇÃO RECUSADA PELO GATEWAY =====")
+                logger.error(f"   Hash: {data.get('hash', 'N/A')}")
+                logger.error(f"   Status: {payment_status}")
+                logger.error(f"   ID: {data.get('id', 'N/A')}")
+                logger.error(f"")
+                logger.error(f"   🔍 POSSÍVEIS CAUSAS (baseado na documentação Átomo Pay):")
+                logger.error(f"")
+                logger.error(f"   1. ❌ product_hash inválido ou não existe")
+                logger.error(f"      → product_hash usado: {self.product_hash[:12] if self.product_hash else 'NÃO CONFIGURADO'}...")
+                logger.error(f"      → SOLUÇÃO:")
+                logger.error(f"         a) Acesse https://atomopay.com.br e crie um produto")
+                logger.error(f"         b) Ou use API: POST /products (veja documentação)")
+                logger.error(f"         c) Copie o 'hash' retornado e configure no gateway")
+                logger.error(f"         d) Verificar produtos: GET /products?api_token=SEU_TOKEN")
+                logger.error(f"")
+                logger.error(f"   2. ❌ offer_hash inválido ou não existe")
+                logger.error(f"      → offer_hash usado: {self.offer_hash[:12] if self.offer_hash else 'NÃO CONFIGURADO'}...")
+                logger.error(f"      → SOLUÇÃO:")
+                logger.error(f"         a) Crie uma oferta para o produto: POST /products/{self.product_hash[:12] if self.product_hash else 'HASH'}/offers")
+                logger.error(f"         b) Copie o 'hash' da oferta retornado")
+                logger.error(f"         c) Configure no gateway como 'Offer Hash'")
+                logger.error(f"")
+                logger.error(f"   3. ❌ Dados do cliente inválidos")
+                logger.error(f"      → CPF: {customer.get('document', 'N/A')[:3]}*** (deve ter 11 dígitos)")
+                logger.error(f"      → Telefone: {customer.get('phone_number', 'N/A')} (deve ter 10-11 dígitos)")
+                logger.error(f"      → Email: {customer.get('email', 'N/A')} (deve ser válido)")
+                logger.error(f"")
+                logger.error(f"   4. ❌ Valor inválido ou fora dos limites")
+                logger.error(f"      → Valor enviado: {amount_cents} centavos (R$ {amount:.2f})")
+                logger.error(f"      → Verificar se está dentro dos limites do gateway")
+                logger.error(f"")
+                logger.error(f"   5. ❌ Campos obrigatórios faltando")
+                logger.error(f"      → installments: {payload.get('installments', 'N/A')} (deve ser 1 para PIX)")
+                logger.error(f"      → payment_method: {payload.get('payment_method', 'N/A')} (deve ser 'pix')")
+                logger.error(f"      → cart: {'✅' if payload.get('cart') else '❌'} (deve ter pelo menos 1 item)")
+                logger.error(f"")
+                logger.error(f"   📋 Resposta completa da API:")
+                logger.error(f"   {json.dumps(response_data, indent=2, ensure_ascii=False)[:1000]}")
+                logger.error(f"")
+                logger.error(f"   📋 Payload enviado:")
+                logger.error(f"   {json.dumps({k: v for k, v in payload.items() if k != 'customer'}, indent=2, ensure_ascii=False)[:500]}")
+                logger.error(f"   ================================================")
                 return None
             
-            # ✅ Verificar se PIX está disponível (pode estar None se recusado)
-            pix_data = data.get('pix', {})
-            if not pix_data or (pix_data.get('pix_url') is None and pix_data.get('pix_qr_code') is None and pix_data.get('pix_base64') is None):
-                logger.warning(f"⚠️ [{self.get_gateway_name()}] PIX não disponível na resposta (pode estar pendente)")
-                logger.warning(f"   Hash: {data.get('hash', 'N/A')} | Status: {payment_status}")
-                # Não retornar None ainda - pode ser que o PIX seja gerado depois via webhook
+            # ✅ LOG DETALHADO: Estrutura completa da resposta para debug
+            logger.info(f"🔍 [{self.get_gateway_name()}] Estrutura da resposta:")
+            logger.info(f"   Keys disponíveis: {list(data.keys())}")
+            logger.info(f"   payment_status: {data.get('payment_status', 'N/A')}")
+            logger.info(f"   status: {data.get('status', 'N/A')}")
+            logger.info(f"   hash: {data.get('hash', 'N/A')}")
+            logger.info(f"   id: {data.get('id', 'N/A')}")
             
             # ✅ EXTRAIR DADOS (priorizar campos mais importantes) - conforme documentação
             transaction_hash = (
@@ -429,11 +505,18 @@ class AtomPayGateway(PaymentGateway):
             
             transaction_id = data.get('transaction_id') or transaction_hash
             
+            # ✅ LOG: Verificar estrutura do objeto pix
+            pix_data = data.get('pix', {})
+            logger.info(f"🔍 [{self.get_gateway_name()}] Objeto 'pix': {pix_data}")
+            if pix_data:
+                logger.info(f"   pix keys: {list(pix_data.keys())}")
+                logger.info(f"   pix_url: {pix_data.get('pix_url', 'N/A')}")
+                logger.info(f"   pix_qr_code: {pix_data.get('pix_qr_code', 'N/A')[:50] if pix_data.get('pix_qr_code') else 'N/A'}...")
+                logger.info(f"   pix_base64: {pix_data.get('pix_base64', 'N/A')[:50] if pix_data.get('pix_base64') else 'N/A'}...")
+            
             # ✅ PIX_CODE: Extrair do objeto 'pix' ou do root
             # A resposta real tem: pix: {pix_url, pix_qr_code, pix_base64}
-            pix_data = data.get('pix', {})
-            
-            # ✅ PIX_CODE: Código copia-e-cola (pix_qr_code ou pix_base64 podem conter)
+            # Conforme documentação, pode vir como 'pix_code' no root ou 'pix_qr_code' no objeto pix
             pix_code = (
                 data.get('pix_code') or           # 1ª prioridade (se existir no root)
                 pix_data.get('pix_qr_code') or    # 2ª prioridade (código PIX no objeto pix)
@@ -441,6 +524,8 @@ class AtomPayGateway(PaymentGateway):
                 data.get('pix_copy_paste') or
                 data.get('copy_paste')
             )
+            
+            logger.info(f"🔍 [{self.get_gateway_name()}] pix_code extraído: {pix_code[:50] if pix_code else 'N/A'}...")
             
             # ✅ QR_CODE: URL ou base64 da imagem
             qr_code_url = pix_data.get('pix_url')
@@ -470,18 +555,28 @@ class AtomPayGateway(PaymentGateway):
             # ✅ VALIDAÇÃO: Se não tem pix_code, verificar payment_status
             if not pix_code:
                 if payment_status == 'refused':
-                    logger.error(f"❌ [{self.get_gateway_name()}] Transação RECUSADA - PIX não será gerado")
+                    logger.error(f"❌ [{self.get_gateway_name()}] Transação RECUSADA pelo gateway - PIX não será gerado")
                     logger.error(f"   Hash: {transaction_hash} | Status: {payment_status}")
+                    logger.error(f"   Motivo: Gateway recusou a transação (verificar configurações)")
                     return None
-                elif payment_status in ['pending', 'processing', 'waiting']:
-                    logger.warning(f"⚠️ [{self.get_gateway_name()}] PIX ainda não disponível (status: {payment_status})")
-                    logger.warning(f"   O PIX será gerado via webhook quando processado")
-                    logger.warning(f"   Hash da transação: {transaction_hash}")
+                elif payment_status in ['pending', 'processing', 'waiting', '']:
+                    # ✅ CRÍTICO: Quando status é pending, o PIX pode ainda não ter sido gerado
+                    # Mas a transação foi criada com sucesso, então devemos retornar o hash
+                    # O PIX será gerado via webhook quando processado
+                    # PORÉM: O sistema precisa de um pix_code para mostrar ao usuário
+                    # Então vamos retornar None e deixar o sistema tratar o erro
+                    # O webhook vai atualizar o payment quando o PIX for gerado
+                    logger.warning(f"⚠️ [{self.get_gateway_name()}] PIX ainda não disponível na resposta (status: {payment_status or 'N/A'})")
+                    logger.warning(f"   Transação criada com sucesso (hash: {transaction_hash}), mas PIX será gerado via webhook")
+                    logger.warning(f"   O sistema aguardará o webhook para gerar o PIX")
+                    # ✅ RETORNAR None - O sistema vai tratar como erro temporário
+                    # O webhook vai atualizar o payment quando o PIX for gerado
                     return None
                 else:
                     logger.error(f"❌ [{self.get_gateway_name()}] Resposta sem pix_code/qr_code")
                     logger.error(f"   Status: {payment_status} | Hash: {transaction_hash}")
                     logger.error(f"   Campos disponíveis: {list(data.keys())}")
+                    logger.error(f"   Objeto pix: {pix_data}")
                     logger.error(f"   Resposta completa: {response_data}")
                     return None
             
@@ -527,10 +622,10 @@ class AtomPayGateway(PaymentGateway):
                 logger.error(f"❌ [{self.get_gateway_name()}] Webhook sem identificador")
                 return None
             
-            # ✅ Extrair status
+            # ✅ Extrair status (priorizar payment_status, depois status)
             status_raw = (
-                data.get('status') or
-                data.get('payment_status') or
+                data.get('payment_status') or  # 1ª prioridade (resposta real da API)
+                data.get('status') or          # 2ª prioridade (fallback)
                 ''
             ).lower()
             
@@ -548,6 +643,7 @@ class AtomPayGateway(PaymentGateway):
                 'canceled': 'failed',
                 'expired': 'failed',
                 'rejected': 'failed',
+                'refused': 'failed',  # ✅ Átomo Pay: transação recusada
                 'refunded': 'failed'
             }
             
