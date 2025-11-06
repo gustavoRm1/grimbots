@@ -16,11 +16,11 @@ logger = logging.getLogger(__name__)
 
 # Conectar ao Redis
 try:
+    # ✅ QI 1000: decode_responses=False para RQ (RQ precisa de bytes para zlib.decompress)
+    # RQ serializa jobs como bytes comprimidos, não strings
     redis_conn = Redis.from_url(
         os.environ.get('REDIS_URL', 'redis://localhost:6379/0'),
-        decode_responses=True,
-        encoding='utf-8',
-        encoding_errors='ignore'
+        decode_responses=False
     )
     # ✅ QI 200: 3 FILAS SEPARADAS
     task_queue = Queue('tasks', connection=redis_conn)  # Telegram (urgente)

@@ -27,8 +27,9 @@ except ImportError as e:
 # Conectar ao Redis
 try:
     redis_url = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
-    # ✅ QI 200: decode_responses=True para evitar problemas de encoding
-    redis_conn = Redis.from_url(redis_url, decode_responses=True, encoding='utf-8', encoding_errors='ignore')
+    # ✅ QI 1000: decode_responses=False para RQ (RQ precisa de bytes para zlib.decompress)
+    # RQ serializa jobs como bytes comprimidos, não strings
+    redis_conn = Redis.from_url(redis_url, decode_responses=False)
     # Testar conexão
     redis_conn.ping()
 except Exception as e:
