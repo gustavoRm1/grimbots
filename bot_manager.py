@@ -1384,87 +1384,140 @@ class BotManager:
                     time.sleep(delay_between)  # ✅ QI 500: Delay entre envios
                     
                     # ✅ QI 10000: Se caption > 900, enviar texto completo separadamente
-                    # O lock principal já cobre este envio (não precisa de lock adicional)
                     if text and len(text) > 900:
-                        # ✅ QI 10000: Verificação adicional no banco antes de enviar texto completo
-                        # Garante que mesmo se o lock falhar, não envia duplicado
-                        try:
-                            from app import app, db
-                            from models import BotMessage
-                            from datetime import timedelta
-                            from models import get_brazil_time
-                            
-                            with app.app_context():
-                                # Verificar se texto completo já foi enviado nos últimos 5 segundos
-                                recent_window = get_brazil_time() - timedelta(seconds=5)
-                                existing_text = BotMessage.query.filter(
-                                    BotMessage.telegram_user_id == str(chat_id),
-                                    BotMessage.message_text == text,
-                                    BotMessage.direction == 'outgoing',
-                                    BotMessage.created_at >= recent_window
-                                ).first()
-                                
-                                if existing_text:
-                                    logger.warning(f"⛔ Texto completo já foi enviado recentemente (últimos 5s): chat_id={chat_id} - BLOQUEANDO DUPLICAÇÃO")
-                                    return all_success  # Retornar sucesso parcial (mídia já foi enviada)
-                        except Exception as e:
-                            logger.warning(f"⚠️ Erro ao verificar duplicação no banco: {e} - continuando")
+                        # ========================================================================
+                        # ✅ QI 10000: LOCK ESPECÍFICO PARA TEXTO COMPLETO (CRÍTICO)
+                        # ========================================================================
+                        # Lock adicional usando APENAS hash do texto (não mídia/botões)
+                        # Isso garante que mesmo se o lock principal falhar, o texto completo não duplica
+                        text_only_hash = hashlib.md5(text.encode('utf-8')).hexdigest()[:12]
+                        text_complete_lock_key = f"lock:send_text_only:{chat_id}:{text_only_hash}"
                         
-                        logger.info(f"📝 Enviando texto completo (caption truncado, len={len(text)})...")
-                        url_msg = f"{base_url}/sendMessage"
-                        payload_msg = {
-                            'chat_id': chat_id,
-                            'text': text,
-                            'parse_mode': 'HTML'
-                        }
-                        response_msg = requests.post(url_msg, json=payload_msg, timeout=10)
-                        if response_msg.status_code == 200 and response_msg.json().get('ok'):
-                            logger.info(f"✅ Texto completo enviado")
-                            
-                            # ✅ QI 10000: Salvar mensagem enviada no banco para verificação futura
+                        # Inicializar variáveis de controle do lock
+                        text_lock_acquired = False
+                        redis_conn_text = None
+                        
+                        try:
+                            import redis
+                            redis_conn_text = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
+                            # Lock específico para texto completo (expira em 10s)
+                            text_lock_acquired = redis_conn_text.set(text_complete_lock_key, "1", ex=10, nx=True)
+                            if not text_lock_acquired:
+                                logger.warning(f"⛔ TEXTO COMPLETO já está sendo enviado: chat_id={chat_id}, hash={text_only_hash} - BLOQUEANDO DUPLICAÇÃO")
+                                return all_success  # Retornar sucesso parcial (mídia já foi enviada)
+                            else:
+                                logger.info(f"🔒 Lock de texto completo adquirido: {text_complete_lock_key} (expira em 10s)")
+                        except Exception as e:
+                            logger.warning(f"⚠️ Erro ao verificar lock de texto completo: {e} - continuando")
+                        
+                        try:
+                            # ✅ QI 10000: Verificação adicional no banco antes de enviar texto completo
+                            # Garante que mesmo se o lock falhar, não envia duplicado
                             try:
                                 from app import app, db
-                                from models import BotMessage, BotUser, Bot
+                                from models import BotMessage
+                                from datetime import timedelta
                                 from models import get_brazil_time
                                 
                                 with app.app_context():
-                                    # Buscar bot pelo token (extrair bot_id do token se possível)
-                                    # Ou usar bot_id se disponível no contexto
-                                    bot_user = BotUser.query.filter_by(
-                                        telegram_user_id=str(chat_id)
-                                    ).order_by(BotUser.last_interaction.desc()).first()
+                                    # Verificar se texto completo já foi enviado nos últimos 5 segundos
+                                    recent_window = get_brazil_time() - timedelta(seconds=5)
+                                    existing_text = BotMessage.query.filter(
+                                        BotMessage.telegram_user_id == str(chat_id),
+                                        BotMessage.message_text == text,
+                                        BotMessage.direction == 'outgoing',
+                                        BotMessage.created_at >= recent_window
+                                    ).first()
                                     
-                                    if bot_user:
-                                        telegram_msg_id = response_msg.json().get('result', {}).get('message_id')
-                                        message_id = str(telegram_msg_id) if telegram_msg_id else f"text_complete_{int(time.time())}"
-                                        
-                                        # Verificar se já existe antes de salvar
-                                        existing = BotMessage.query.filter_by(
-                                            bot_id=bot_user.bot_id,
-                                            telegram_user_id=str(chat_id),
-                                            message_id=message_id,
-                                            direction='outgoing'
-                                        ).first()
-                                        
-                                        if not existing:
-                                            bot_message = BotMessage(
-                                                bot_id=bot_user.bot_id,
-                                                bot_user_id=bot_user.id,
-                                                telegram_user_id=str(chat_id),
-                                                message_id=message_id,
-                                                message_text=text,
-                                                message_type='text',
-                                                direction='outgoing',
-                                                is_read=True
-                                            )
-                                            db.session.add(bot_message)
-                                            db.session.commit()
-                                            logger.debug(f"✅ Texto completo salvo no banco para verificação futura")
+                                    if existing_text:
+                                        logger.warning(f"⛔ Texto completo já foi enviado recentemente (últimos 5s): chat_id={chat_id} - BLOQUEANDO DUPLICAÇÃO")
+                                        # Liberar lock se foi adquirido
+                                        if text_lock_acquired and redis_conn_text:
+                                            try:
+                                                redis_conn_text.delete(text_complete_lock_key)
+                                                logger.debug(f"🔓 Lock liberado após detecção de duplicação no banco")
+                                            except:
+                                                pass
+                                        return all_success  # Retornar sucesso parcial (mídia já foi enviada)
                             except Exception as e:
-                                logger.debug(f"⚠️ Erro ao salvar texto completo no banco (não crítico): {e}")
-                        else:
-                            logger.error(f"❌ Falha ao enviar texto completo: {response_msg.text}")
-                            all_success = False
+                                logger.warning(f"⚠️ Erro ao verificar duplicação no banco: {e} - continuando")
+                            
+                            logger.info(f"📝 Enviando texto completo (caption truncado, len={len(text)}, hash={text_only_hash})...")
+                            url_msg = f"{base_url}/sendMessage"
+                            payload_msg = {
+                                'chat_id': chat_id,
+                                'text': text,
+                                'parse_mode': 'HTML'
+                            }
+                            
+                            # ✅ QI 10000: Log antes de enviar para rastrear duplicação
+                            logger.info(f"🚀 REQUISIÇÃO ÚNICA: Enviando texto completo para chat_id={chat_id}, hash={text_only_hash}")
+                            
+                            response_msg = requests.post(url_msg, json=payload_msg, timeout=10)
+                            
+                            # ✅ QI 10000: Log após enviar para confirmar
+                            if response_msg.status_code == 200:
+                                result_data = response_msg.json()
+                                if result_data.get('ok'):
+                                    message_id_sent = result_data.get('result', {}).get('message_id')
+                                    logger.info(f"✅ Texto completo enviado (message_id={message_id_sent}, hash={text_only_hash})")
+                                    
+                                    # ✅ QI 10000: Salvar mensagem enviada no banco para verificação futura
+                                    try:
+                                        from app import app, db
+                                        from models import BotMessage, BotUser, Bot
+                                        from models import get_brazil_time
+                                        
+                                        with app.app_context():
+                                            # Buscar bot pelo token (extrair bot_id do token se possível)
+                                            # Ou usar bot_id se disponível no contexto
+                                            bot_user = BotUser.query.filter_by(
+                                                telegram_user_id=str(chat_id)
+                                            ).order_by(BotUser.last_interaction.desc()).first()
+                                            
+                                            if bot_user:
+                                                telegram_msg_id = result_data.get('result', {}).get('message_id')
+                                                message_id = str(telegram_msg_id) if telegram_msg_id else f"text_complete_{int(time.time())}"
+                                                
+                                                # Verificar se já existe antes de salvar
+                                                existing = BotMessage.query.filter_by(
+                                                    bot_id=bot_user.bot_id,
+                                                    telegram_user_id=str(chat_id),
+                                                    message_id=message_id,
+                                                    direction='outgoing'
+                                                ).first()
+                                                
+                                                if not existing:
+                                                    bot_message = BotMessage(
+                                                        bot_id=bot_user.bot_id,
+                                                        bot_user_id=bot_user.id,
+                                                        telegram_user_id=str(chat_id),
+                                                        message_id=message_id,
+                                                        message_text=text,
+                                                        message_type='text',
+                                                        direction='outgoing',
+                                                        is_read=True
+                                                    )
+                                                    db.session.add(bot_message)
+                                                    db.session.commit()
+                                                    logger.debug(f"✅ Texto completo salvo no banco para verificação futura")
+                                    except Exception as e:
+                                        logger.debug(f"⚠️ Erro ao salvar texto completo no banco (não crítico): {e}")
+                                else:
+                                    logger.error(f"❌ Telegram API retornou erro: {result_data.get('description', 'Erro desconhecido')}")
+                                    all_success = False
+                            else:
+                                logger.error(f"❌ HTTP {response_msg.status_code}: {response_msg.text[:200]}")
+                                all_success = False
+                        finally:
+                            # ✅ QI 10000: SEMPRE liberar lock de texto completo após envio (ou erro)
+                            # Isso garante que o lock seja removido mesmo em caso de exceção
+                            if text_lock_acquired and redis_conn_text:
+                                try:
+                                    redis_conn_text.delete(text_complete_lock_key)
+                                    logger.debug(f"🔓 Lock de texto completo liberado: {text_complete_lock_key}")
+                                except Exception as e:
+                                    logger.debug(f"⚠️ Erro ao liberar lock de texto completo (não crítico): {e}")
                         
                         time.sleep(delay_between)  # ✅ QI 500: Delay entre envios
             
