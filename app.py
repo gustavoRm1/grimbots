@@ -3724,21 +3724,28 @@ def public_redirect(slug):
         except Exception as e:
             logger.warning(f"⚠️ Erro ao gerar _fbc: {e}")
     
-    # ✅ CRÍTICO: Salvar tracking no Redis SEMPRE (não apenas quando fbc é gerado)
+    # ✅ IMPLEMENTAÇÃO COMPLETA (QI 600+): Tracking persistente com TTL 7 dias e múltiplas estratégias
+    # Estrutura: tracking:fbclid:{fbclid} (TTL 7d) + tracking:chat:{chat_id} (TTL 7d) para fallback robusto
     try:
+        import hashlib
         r = redis.Redis(host='localhost', port=6379, decode_responses=True)
+        
+        # ✅ ESTRUTURA COMPLETA: Preparar tracking data com todos os campos
         tracking_data = {
+            'fbclid': fbclid or '',
             'ip': user_ip,
             'user_agent': user_agent,
             'session_id': session_id,
-            'timestamp': get_brazil_time().isoformat(),
+            'timestamp': int(time.time()),  # Unix timestamp para consistência
+            'iso_timestamp': get_brazil_time().isoformat(),
             'pool_id': pool.id,
             'slug': slug,
-            # ✅ CORREÇÃO CRÍTICA: Capturar `grim` para matching com campanha
-            'grim': grim_param,
             # ✅ CRÍTICO: Cookies do Meta (OBRIGATÓRIO para matching 7-9/10)
-            'fbp': fbp_cookie,  # Facebook Pixel Browser ID
-            'fbc': fbc_cookie,  # Facebook Click ID (gerado se não existir)
+            'fbp': fbp_cookie or '',  # Facebook Pixel Browser ID
+            'fbc': fbc_cookie or '',  # Facebook Click ID (gerado se não existir)
+            # ✅ Capturar `grim` para matching com campanha
+            'grim': grim_param or '',
+            'campaign_code': grim_param or '',  # Alias para compatibilidade
             # Capturar TODOS os UTMs
             'utm_source': request.args.get('utm_source', ''),
             'utm_campaign': request.args.get('utm_campaign', ''),
@@ -3746,31 +3753,54 @@ def public_redirect(slug):
             'utm_content': request.args.get('utm_content', ''),
             'utm_term': request.args.get('utm_term', ''),
             'utm_id': request.args.get('utm_id', ''),
-            # ✅ NOVO: Dados adicionais para analytics (QI 502)
+            # ✅ Dados adicionais para analytics
             'referer': request.headers.get('Referer', ''),
             'accept_language': request.headers.get('Accept-Language', ''),
             'adset_id': request.args.get('adset_id', ''),
             'ad_id': request.args.get('ad_id', ''),
-            'campaign_id': request.args.get('campaign_id', '')
+            'campaign_id': request.args.get('campaign_id', ''),
+            # ✅ Event source URL para consistência PageView → Purchase
+            'event_source_url': request.url
         }
         
-        # Se tem fbclid, adicionar e usar como chave principal
+        # ✅ TTL de 7 dias (7 * 24 * 3600 = 604800 segundos)
+        TTL_7_DAYS = 7 * 24 * 3600
+        
+        # ✅ ESTRATÉGIA 1: Salvar usando fbclid como chave principal (tracking:fbclid:{fbclid})
         if fbclid:
             tracking_data['fbclid'] = fbclid
-            r.setex(f'tracking:{fbclid}', 180, json.dumps(tracking_data))
-            logger.info(f"🎯 TRACKING ELITE | fbclid={fbclid[:20]}... | IP={user_ip} | Session={session_id[:8]}... | fbp={'✅' if fbp_cookie else '❌'} | fbc={'✅' if fbc_cookie else '❌'}")
+            key_fbclid = f'tracking:fbclid:{fbclid}'
+            r.setex(key_fbclid, TTL_7_DAYS, json.dumps(tracking_data))
+            logger.info(f"🎯 TRACKING PERSISTENTE | tracking:fbclid:{fbclid[:20]}... | TTL=7d | fbp={'✅' if fbp_cookie else '❌'} | fbc={'✅' if fbc_cookie else '❌'}")
+            
+            # ✅ ESTRATÉGIA 2: Salvar também usando hash prefix (opcional, para busca rápida)
+            try:
+                fbclid_hash_prefix = hashlib.md5(fbclid.encode()).hexdigest()[:12]
+                key_hash = f'tracking:hash:{fbclid_hash_prefix}'
+                r.setex(key_hash, TTL_7_DAYS, json.dumps(tracking_data))
+                logger.debug(f"🔑 Tracking também salvo via hash prefix: {fbclid_hash_prefix}")
+            except Exception as hash_error:
+                logger.debug(f"⚠️ Erro ao salvar hash prefix: {hash_error}")
         
-        # ✅ CRÍTICO: Se tem grim mas não tem fbclid, salvar também usando grim como chave
-        if grim_param and not fbclid:
-            r.setex(f'tracking_grim:{grim_param}', 180, json.dumps(tracking_data))
-            logger.info(f"🎯 TRACKING ELITE | grim={grim_param} | IP={user_ip} | Session={session_id[:8]}... | fbp={'✅' if fbp_cookie else '❌'} | fbc={'✅' if fbc_cookie else '❌'}")
+        # ✅ ESTRATÉGIA 3: Salvar usando grim como chave (se não tiver fbclid)
+        elif grim_param:
+            key_grim = f'tracking_grim:{grim_param}'
+            r.setex(key_grim, TTL_7_DAYS, json.dumps(tracking_data))
+            logger.info(f"🎯 TRACKING PERSISTENTE | tracking_grim:{grim_param} | TTL=7d | fbp={'✅' if fbp_cookie else '❌'} | fbc={'✅' if fbc_cookie else '❌'}")
         
-        # ✅ Se não tem nem fbclid nem grim, usar session_id como chave (fallback)
+        # ✅ ESTRATÉGIA 4: Fallback com session_id (se não tiver fbclid nem grim)
         if not fbclid and not grim_param:
-            r.setex(f'tracking_session:{session_id}', 180, json.dumps(tracking_data))
-            logger.info(f"🎯 TRACKING ELITE | session={session_id[:8]}... | IP={user_ip} | fbp={'✅' if fbp_cookie else '❌'} | fbc={'✅' if fbc_cookie else '❌'}")
+            key_session = f'tracking_session:{session_id}'
+            r.setex(key_session, TTL_7_DAYS, json.dumps(tracking_data))
+            logger.info(f"🎯 TRACKING PERSISTENTE | tracking_session:{session_id[:8]}... | TTL=7d | fbp={'✅' if fbp_cookie else '❌'} | fbc={'✅' if fbc_cookie else '❌'}")
+        
+        # ✅ NOTA: tracking:chat:{chat_id} será salvo quando o usuário interagir com o bot (/start)
+        # Isso permite recuperação mesmo se fbclid não estiver disponível no momento do Purchase
+        
     except Exception as e:
         logger.error(f"⚠️ Erro ao salvar tracking no Redis: {e}")
+        import traceback
+        traceback.print_exc()
         # Não quebrar o redirect se Redis falhar
     
     # ============================================================================
@@ -6629,35 +6659,48 @@ def send_meta_pixel_purchase_event(payment):
                 r = redis.Redis(host='localhost', port=6379, decode_responses=True)
                 
                 tracking_data_redis = None
+                recovery_strategy = None
                 
-                # ✅ ESTRATÉGIA 1: Buscar usando fbclid completo
-                tracking_key = f'tracking:{external_id_value}'
+                # ✅ ESTRATÉGIA 1: Buscar usando tracking:fbclid:{fbclid} (estrutura nova QI 600+)
+                tracking_key = f'tracking:fbclid:{external_id_value}'
                 tracking_json = r.get(tracking_key)
+                if tracking_json:
+                    recovery_strategy = "tracking:fbclid:{fbclid}"
+                    logger.info(f"🔑 Purchase - Tracking recuperado via {recovery_strategy}")
                 
-                # ✅ ESTRATÉGIA 2: Se não encontrou, tentar com hash do fbclid (12 primeiros caracteres do hash)
+                # ✅ ESTRATÉGIA 2: Se não encontrou, tentar com hash prefix (tracking:hash:{hash})
                 if not tracking_json and external_id_value.startswith('PAZ'):
                     try:
-                        # Gerar hash do fbclid (mesmo formato usado no redirect)
-                        fbclid_hash = hashlib.md5(external_id_value.encode()).hexdigest()[:12]
-                        tracking_key_hash = f'tracking:{fbclid_hash}'
+                        fbclid_hash_prefix = hashlib.md5(external_id_value.encode()).hexdigest()[:12]
+                        tracking_key_hash = f'tracking:hash:{fbclid_hash_prefix}'
                         tracking_json = r.get(tracking_key_hash)
                         if tracking_json:
-                            logger.info(f"🔑 Purchase - Tracking encontrado via hash do fbclid: {fbclid_hash}")
+                            recovery_strategy = "tracking:hash:{hash_prefix}"
+                            logger.info(f"🔑 Purchase - Tracking recuperado via {recovery_strategy}: {fbclid_hash_prefix}")
                     except Exception as hash_error:
                         logger.debug(f"⚠️ Erro ao gerar hash do fbclid: {hash_error}")
                 
-                # ✅ ESTRATÉGIA 3: Se ainda não encontrou, tentar buscar por padrões alternativos
-                if not tracking_json:
-                    # Tentar buscar todas as chaves que começam com 'tracking:' e contêm parte do fbclid
+                # ✅ ESTRATÉGIA 3: Fallback para tracking:chat:{chat_id} (QI 600+)
+                if not tracking_json and telegram_user_id:
                     try:
-                        # Buscar chaves que contenham parte do fbclid
+                        chat_tracking_key = f'tracking:chat:{telegram_user_id}'
+                        tracking_json = r.get(chat_tracking_key)
+                        if tracking_json:
+                            recovery_strategy = "tracking:chat:{chat_id}"
+                            logger.info(f"🔑 Purchase - Tracking recuperado via {recovery_strategy} (fallback robusto)")
+                    except Exception as chat_error:
+                        logger.debug(f"⚠️ Erro ao buscar tracking:chat: {chat_error}")
+                
+                # ✅ ESTRATÉGIA 4: Pattern search (último recurso, custoso)
+                if not tracking_json:
+                    try:
                         pattern = f'tracking:*{external_id_value[:20]}*'
                         matching_keys = r.keys(pattern)
                         if matching_keys:
-                            # Pegar a primeira chave encontrada
                             tracking_json = r.get(matching_keys[0])
                             if tracking_json:
-                                logger.info(f"🔑 Purchase - Tracking encontrado via busca pattern: {matching_keys[0]}")
+                                recovery_strategy = "pattern_search"
+                                logger.info(f"🔑 Purchase - Tracking recuperado via {recovery_strategy}: {matching_keys[0]}")
                     except Exception as pattern_error:
                         logger.debug(f"⚠️ Erro ao buscar por pattern: {pattern_error}")
                 
@@ -6687,9 +6730,9 @@ def send_meta_pixel_purchase_event(payment):
                     if tracking_data_redis.get('user_agent'):
                         user_agent_value = tracking_data_redis.get('user_agent')
                     
-                    logger.info(f"🔑 Purchase - Dados recuperados do Redis: fbp={'✅' if fbp_value else '❌'} | fbc={'✅' if fbc_value else '❌'} | IP={'✅' if ip_value else '❌'} | UA={'✅' if user_agent_value else '❌'}")
+                    logger.info(f"🔑 Purchase - Dados recuperados do Redis (Estratégia: {recovery_strategy}): fbp={'✅' if fbp_value else '❌'} | fbc={'✅' if fbc_value else '❌'} | IP={'✅' if ip_value else '❌'} | UA={'✅' if user_agent_value else '❌'}")
                 else:
-                    logger.warning(f"⚠️ Purchase - Tracking data não encontrado no Redis para fbclid: {external_id_value[:30]}...")
+                    logger.warning(f"⚠️ Purchase - Tracking data não encontrado no Redis para fbclid: {external_id_value[:30]}... | Estratégias tentadas: tracking:fbclid, tracking:hash, tracking:chat, pattern_search")
                     
                     # ✅ FALLBACK: Usar dados do BotUser se disponíveis (apenas se Redis não tiver)
                     if bot_user:

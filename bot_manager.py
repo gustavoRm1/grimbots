@@ -1386,8 +1386,30 @@ class BotManager:
                                            f"IP={bot_user.ip_address} | " +
                                            f"Session={bot_user.tracking_session_id[:8] if bot_user.tracking_session_id else 'N/A'}...")
                                 
-                                # Deletar do Redis após usar (não deixar lixo)
-                                r.delete(tracking_key)
+                                # ✅ IMPLEMENTAÇÃO QI 600+: Salvar tracking:chat:{chat_id} para fallback robusto
+                                # Isso permite recuperação mesmo se fbclid não estiver disponível no momento do Purchase
+                                try:
+                                    TTL_7_DAYS = 7 * 24 * 3600
+                                    chat_tracking_key = f'tracking:chat:{chat_id}'
+                                    chat_tracking_data = {
+                                        'fbclid': fbclid_completo_redis or '',
+                                        'last_fbclid': fbclid_completo_redis or '',
+                                        'fbp': tracking_elite.get('fbp', ''),
+                                        'fbc': tracking_elite.get('fbc', ''),
+                                        'ip': tracking_elite.get('ip', ''),
+                                        'ua': tracking_elite.get('user_agent', ''),
+                                        'grim': grim_from_redis or '',
+                                        'campaign_code': grim_from_redis or '',
+                                        'timestamp': int(time.time()),
+                                        'chat_id': chat_id
+                                    }
+                                    r.setex(chat_tracking_key, TTL_7_DAYS, json.dumps(chat_tracking_data))
+                                    logger.info(f"🔑 tracking:chat:{chat_id} salvo (TTL=7d) para fallback robusto")
+                                except Exception as chat_tracking_error:
+                                    logger.warning(f"⚠️ Erro ao salvar tracking:chat:{chat_id}: {chat_tracking_error}")
+                                
+                                # ✅ NÃO DELETAR do Redis após usar - manter disponível por 7 dias para Purchase
+                                # r.delete(tracking_key)  # REMOVIDO - manter para Purchase
                             else:
                                 logger.warning(f"⚠️ TRACKING ELITE | fbclid={utm_data_from_start['fbclid'][:20]}... não encontrado no Redis (expirou?)")
                         except Exception as e:
@@ -1543,8 +1565,29 @@ class BotManager:
                                            f"fbclid={'✅' if bot_user.fbclid else '❌'} | " +
                                            f"campaign_code={'✅' if bot_user.campaign_code else '❌'}")
                                 
-                                # Deletar do Redis após usar (não deixar lixo)
-                                r.delete(tracking_key)
+                                # ✅ IMPLEMENTAÇÃO QI 600+: Salvar tracking:chat:{chat_id} para fallback robusto
+                                try:
+                                    TTL_7_DAYS = 7 * 24 * 3600
+                                    chat_tracking_key = f'tracking:chat:{chat_id}'
+                                    chat_tracking_data = {
+                                        'fbclid': fbclid_completo_redis or '',
+                                        'last_fbclid': fbclid_completo_redis or '',
+                                        'fbp': tracking_elite.get('fbp', ''),
+                                        'fbc': tracking_elite.get('fbc', ''),
+                                        'ip': tracking_elite.get('ip', ''),
+                                        'ua': tracking_elite.get('user_agent', ''),
+                                        'grim': grim_from_redis or '',
+                                        'campaign_code': grim_from_redis or '',
+                                        'timestamp': int(time.time()),
+                                        'chat_id': chat_id
+                                    }
+                                    r.setex(chat_tracking_key, TTL_7_DAYS, json.dumps(chat_tracking_data))
+                                    logger.info(f"🔑 tracking:chat:{chat_id} salvo (TTL=7d) para fallback robusto (usuário existente)")
+                                except Exception as chat_tracking_error:
+                                    logger.warning(f"⚠️ Erro ao salvar tracking:chat:{chat_id}: {chat_tracking_error}")
+                                
+                                # ✅ NÃO DELETAR do Redis após usar - manter disponível por 7 dias para Purchase
+                                # r.delete(tracking_key)  # REMOVIDO - manter para Purchase
                             else:
                                 logger.warning(f"⚠️ TRACKING ELITE | fbclid={fbclid_value[:20]}... não encontrado no Redis (expirou?)")
                         except Exception as redis_error:
@@ -2536,29 +2579,24 @@ class BotManager:
                 enabled_order_bumps = [bump for bump in order_bumps if bump.get('enabled')]
                 
                 if enabled_order_bumps:
-                    # ✅ PROTEÇÃO: Verificar se já existe sessão de order bump ativa para este chat_id
+                    # ✅ CORREÇÃO CRÍTICA: Permitir que usuário escolha dentro do funil
+                    # Se já existe sessão ativa, CANCELAR automaticamente e iniciar nova
+                    # Isso permite que o usuário continue no funil sem perder leads
                     user_key = f"orderbump_{chat_id}"
                     if user_key in self.order_bump_sessions:
                         existing_session = self.order_bump_sessions[user_key]
                         existing_button_index = existing_session.get('button_index')
                         existing_description = existing_session.get('original_description', 'Produto')
                         
-                        # Se já existe sessão ativa, informar usuário e não criar nova
-                        logger.warning(f"⚠️ Sessão de order bump já existe para chat {chat_id} (botão {existing_button_index})")
+                        # ✅ SOLUÇÃO: Cancelar sessão anterior automaticamente
+                        # O usuário está manifestando nova intenção de compra - respeitar isso
+                        logger.info(f"🔄 Nova intenção de compra detectada! Cancelando sessão anterior (botão {existing_button_index}) e iniciando nova (botão {button_index})")
                         
-                        # Responder callback informando que já há oferta pendente
-                        requests.post(url, json={
-                            'callback_query_id': callback_id,
-                            'text': '⏳ Você já tem uma oferta pendente!'
-                        }, timeout=3)
+                        # Remover sessão anterior
+                        del self.order_bump_sessions[user_key]
                         
-                        # Enviar mensagem informando ao usuário
-                        self.send_telegram_message(
-                            token=token,
-                            chat_id=str(chat_id),
-                            message=f"⏳ <b>Oferta já pendente</b>\n\nVocê já tem uma oferta especial aguardando resposta:\n\n🎯 <b>{existing_description}</b>\n\n💡 Verifique as mensagens anteriores para aceitar ou recusar a oferta."
-                        )
-                        return  # Não criar nova sessão
+                        # Informar usuário que nova oferta foi iniciada (opcional - não bloquear)
+                        logger.info(f"✅ Sessão anterior cancelada automaticamente. Nova oferta iniciada para botão {button_index}")
                     
                     # Responder callback - AGUARDANDO order bump
                     requests.post(url, json={
@@ -2966,14 +3004,48 @@ Seu pagamento ainda não foi confirmado.
             # Usar apenas chat_id para garantir que sessão seja encontrada independente do bot que processa o callback
             user_key = f"orderbump_{chat_id}"
             
-            # ✅ PROTEÇÃO: Verificar se já existe sessão ativa (evita múltiplos cliques)
+            # ✅ CORREÇÃO CRÍTICA: Se já existe sessão, cancelar e substituir automaticamente
+            # Isso permite que o usuário continue no funil sem perder leads
             if user_key in self.order_bump_sessions:
                 existing_session = self.order_bump_sessions[user_key]
-                logger.warning(f"⚠️ Tentativa de criar sessão duplicada para chat {chat_id}. Sessão existente será mantida.")
-                # Não criar nova sessão, manter a existente
-                return
+                existing_button = existing_session.get('button_index', 'N/A')
+                logger.info(f"🔄 Substituindo sessão anterior (botão {existing_button}) por nova (botão {button_index})")
+                # Remover sessão anterior para permitir nova escolha do usuário
+                del self.order_bump_sessions[user_key]
             
-            # Criar nova sessão apenas se não existir
+            # ✅ IMPLEMENTAÇÃO QI 600+: Copiar tracking do Redis para sessão (anela perda se sessão substituída)
+            session_tracking = None
+            try:
+                import redis
+                r = redis.Redis(host='localhost', port=6379, decode_responses=True)
+                
+                # Tentar recuperar tracking por chat_id (fallback robusto)
+                chat_tracking_key = f'tracking:chat:{chat_id}'
+                chat_tracking_json = r.get(chat_tracking_key)
+                if chat_tracking_json:
+                    session_tracking = json.loads(chat_tracking_json)
+                    logger.info(f"🔑 Tracking copiado para sessão de order bump via tracking:chat:{chat_id}")
+                
+                # Se não encontrou por chat, tentar buscar via BotUser
+                if not session_tracking:
+                    from app import app, db
+                    from models import BotUser
+                    with app.app_context():
+                        bot_user = BotUser.query.filter_by(
+                            bot_id=bot_id,
+                            telegram_user_id=str(chat_id)
+                        ).first()
+                        if bot_user and bot_user.fbclid:
+                            # Tentar buscar tracking:fbclid:{fbclid}
+                            fbclid_key = f'tracking:fbclid:{bot_user.fbclid}'
+                            fbclid_tracking_json = r.get(fbclid_key)
+                            if fbclid_tracking_json:
+                                session_tracking = json.loads(fbclid_tracking_json)
+                                logger.info(f"🔑 Tracking copiado para sessão via tracking:fbclid:{bot_user.fbclid[:20]}...")
+            except Exception as tracking_error:
+                logger.warning(f"⚠️ Erro ao copiar tracking para sessão: {tracking_error}")
+            
+            # Criar nova sessão com tracking copiado
             self.order_bump_sessions[user_key] = {
                 'bot_id': bot_id,  # ✅ CRÍTICO: Salvar bot_id na sessão para garantir consistência
                 'chat_id': chat_id,  # ✅ Salvar chat_id também para validação
@@ -2984,7 +3056,9 @@ Seu pagamento ainda não foi confirmado.
                 'current_index': 0,
                 'accepted_bumps': [],
                 'total_bump_value': 0.0,
-                'created_at': time.time()  # ✅ Timestamp para limpeza de sessões antigas
+                'created_at': time.time(),  # ✅ Timestamp para limpeza de sessões antigas
+                'fbclid': session_tracking.get('fbclid') if session_tracking else None,  # ✅ Copiar fbclid
+                'tracking': session_tracking  # ✅ Copiar tracking completo para não perder dados
             }
             
             # Exibir primeiro order bump
