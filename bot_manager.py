@@ -1453,7 +1453,47 @@ class BotManager:
             
             logger.info(f"⭐ COMANDO /START recebido - Reiniciando funil FORÇADAMENTE (regra absoluta)")
             
-            # ✅ QI 500: Lock para evitar /start duplicado
+            # ============================================================================
+            # ✅ PATCH QI 900 - ANTI-REPROCESSAMENTO DE /START
+            # ============================================================================
+            # PATCH 1: Bloquear múltiplos /start em sequência (intervalo de 5s)
+            try:
+                import redis
+                import time as _time
+                redis_conn = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
+                last_start_key = f"last_start:{chat_id}"
+                last_start = redis_conn.get(last_start_key)
+                now = int(_time.time())
+                
+                if last_start and now - int(last_start) < 5:
+                    logger.info(f"⛔ Bloqueado /start duplicado em menos de 5s: chat_id={chat_id}")
+                    return  # Sair sem processar
+                
+                # Registrar timestamp do /start atual (expira em 5s)
+                redis_conn.set(last_start_key, now, ex=5)
+            except Exception as e:
+                logger.warning(f"⚠️ Erro ao verificar anti-duplicação de /start: {e} - continuando processamento")
+            
+            # PATCH 2: Se já enviou welcome, nunca mais envia
+            try:
+                from app import app, db
+                from models import BotUser
+                with app.app_context():
+                    bot_user = BotUser.query.filter_by(
+                        bot_id=bot_id,
+                        telegram_user_id=telegram_user_id,
+                        archived=False
+                    ).first()
+                    
+                    if bot_user and bot_user.welcome_sent:
+                        logger.info(f"⛔ Bloqueado: mensagem /start ignorada pois welcome já enviado: chat_id={chat_id}")
+                        return  # Sair sem processar
+            except Exception as e:
+                logger.warning(f"⚠️ Erro ao verificar welcome_sent: {e} - continuando processamento")
+            
+            # ============================================================================
+            # ✅ QI 500: Lock para evitar /start duplicado (lock adicional de segurança)
+            # ============================================================================
             if not self._check_start_lock(chat_id):
                 logger.warning(f"⚠️ /start duplicado bloqueado - já está processando")
                 return  # Sair sem processar
