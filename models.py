@@ -527,7 +527,18 @@ class RedirectPool(db.Model):
             'health_percentage': self.health_percentage,
             'public_url': f'/go/{self.slug}',
             'last_health_check': self.last_health_check.isoformat() if self.last_health_check else None,
-            'created_at': self.created_at.isoformat() if self.created_at else None
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            # ✅ CRÍTICO: Retornar configurações do Meta Pixel
+            'meta_pixel_id': self.meta_pixel_id,
+            'meta_access_token': self.meta_access_token,  # ⚠️ Retornar token (frontend precisa)
+            'meta_tracking_enabled': self.meta_tracking_enabled,
+            'meta_test_event_code': self.meta_test_event_code,
+            'meta_events_pageview': self.meta_events_pageview,
+            'meta_events_viewcontent': self.meta_events_viewcontent,
+            'meta_events_purchase': self.meta_events_purchase,
+            'meta_cloaker_enabled': self.meta_cloaker_enabled,
+            'meta_cloaker_param_name': self.meta_cloaker_param_name,
+            'meta_cloaker_param_value': self.meta_cloaker_param_value
         }
 
 

@@ -4084,9 +4084,48 @@ def update_redirect_pool(pool_id):
     if 'is_active' in data:
         pool.is_active = data['is_active']
     
-    db.session.commit()
+    # ✅ CRÍTICO: Salvar configurações do Meta Pixel
+    if 'meta_pixel_id' in data:
+        pool.meta_pixel_id = data['meta_pixel_id'].strip() if data['meta_pixel_id'] else None
     
-    logger.info(f"Pool atualizado: {pool.name} por {current_user.email}")
+    if 'meta_access_token' in data:
+        # ✅ Criptografar access token antes de salvar (se necessário)
+        pool.meta_access_token = data['meta_access_token'].strip() if data['meta_access_token'] else None
+    
+    if 'meta_tracking_enabled' in data:
+        pool.meta_tracking_enabled = bool(data['meta_tracking_enabled'])
+    
+    if 'meta_test_event_code' in data:
+        pool.meta_test_event_code = data['meta_test_event_code'].strip() if data['meta_test_event_code'] else None
+    
+    if 'meta_events_pageview' in data:
+        pool.meta_events_pageview = bool(data['meta_events_pageview'])
+    
+    if 'meta_events_viewcontent' in data:
+        pool.meta_events_viewcontent = bool(data['meta_events_viewcontent'])
+    
+    if 'meta_events_purchase' in data:
+        pool.meta_events_purchase = bool(data['meta_events_purchase'])
+    
+    if 'meta_cloaker_enabled' in data:
+        pool.meta_cloaker_enabled = bool(data['meta_cloaker_enabled'])
+    
+    if 'meta_cloaker_param_name' in data:
+        pool.meta_cloaker_param_name = data['meta_cloaker_param_name'].strip() if data['meta_cloaker_param_name'] else 'grim'
+    
+    if 'meta_cloaker_param_value' in data:
+        pool.meta_cloaker_param_value = data['meta_cloaker_param_value'].strip() if data['meta_cloaker_param_value'] else None
+    
+    try:
+        db.session.commit()
+        logger.info(f"✅ Pool atualizado: {pool.name} por {current_user.email}")
+        logger.info(f"   Meta Pixel: {'✅ Ativado' if pool.meta_tracking_enabled else '❌ Desativado'}")
+        if pool.meta_pixel_id:
+            logger.info(f"   Pixel ID: {pool.meta_pixel_id[:10]}...")
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"❌ Erro ao salvar pool {pool_id}: {e}", exc_info=True)
+        return jsonify({'error': f'Erro ao salvar: {str(e)}'}), 500
     
     return jsonify({
         'message': 'Pool atualizado com sucesso!',
