@@ -63,8 +63,15 @@ if __name__ == '__main__':
         print("="*70)
         
         # ✅ QI 200: Worker recebe conexão diretamente (sem Connection context manager)
-        worker = Worker(queues, connection=redis_conn)
-        worker.work()
+        # Configurar worker para ficar rodando indefinidamente
+        worker = Worker(
+            queues, 
+            connection=redis_conn,
+            default_result_ttl=3600,  # Jobs expiram em 1 hora
+            job_timeout=300  # Timeout de 5 minutos por job
+        )
+        # ✅ QI 200: work() com with_scheduler=True para manter worker ativo
+        worker.work(with_scheduler=True)
     except KeyboardInterrupt:
         print("\n⚠️ Worker interrompido pelo usuário")
         sys.exit(0)

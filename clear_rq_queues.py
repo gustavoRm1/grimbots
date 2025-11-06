@@ -6,13 +6,23 @@ Execute: python clear_rq_queues.py
 
 import os
 import sys
-from redis import Redis
 
-# Conectar ao Redis
-redis_conn = Redis.from_url(
-    os.environ.get('REDIS_URL', 'redis://localhost:6379/0'),
-    decode_responses=False  # Sem decode para limpar
-)
+try:
+    from redis import Redis
+except ImportError:
+    print("❌ Redis não instalado. Execute: pip install redis")
+    sys.exit(1)
+
+# Conectar ao Redis (sem decode para poder limpar tudo)
+try:
+    redis_conn = Redis.from_url(
+        os.environ.get('REDIS_URL', 'redis://localhost:6379/0'),
+        decode_responses=False  # Sem decode para limpar
+    )
+    redis_conn.ping()
+except Exception as e:
+    print(f"❌ Erro ao conectar Redis: {e}")
+    sys.exit(1)
 
 print("="*70)
 print(" Limpando Filas RQ Antigas")
