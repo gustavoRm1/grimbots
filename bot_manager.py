@@ -852,6 +852,28 @@ class BotManager:
                             
                             telegram_msg_id_str = str(telegram_msg_id)
                             
+                            # ============================================================================
+                            # ✅ QI 10000: ANTI-DUPLICAÇÃO ROBUSTA - Lock por chat+comando
+                            # ============================================================================
+                            # Lock adicional por chat_id+texto para prevenir race conditions
+                            lock_acquired = False
+                            try:
+                                import redis
+                                redis_conn_msg = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
+                                # Lock específico para esta mensagem (chat_id + hash do texto)
+                                import hashlib
+                                text_hash = hashlib.md5(text.encode('utf-8')).hexdigest()[:8]
+                                msg_lock_key = f"lock:msg:{bot_id}:{telegram_user_id}:{text_hash}"
+                                
+                                # Tentar adquirir lock (expira em 3 segundos)
+                                lock_acquired = redis_conn_msg.set(msg_lock_key, "1", ex=3, nx=True)
+                                if not lock_acquired:
+                                    logger.warning(f"⛔ Mensagem já está sendo processada: {text[:30]}... (lock: {msg_lock_key})")
+                                    return  # Sair sem processar
+                            except Exception as e:
+                                logger.warning(f"⚠️ Erro ao verificar lock de mensagem: {e} - continuando")
+                                # Fail-open: se Redis falhar, continuar (melhor que bloquear tudo)
+                            
                             # ✅ CRÍTICO: Verificar se mensagem já foi salva (evitar duplicação)
                             # Verificar por message_id E por texto + timestamp (fallback)
                             existing_message = BotMessage.query.filter_by(
@@ -875,31 +897,46 @@ class BotManager:
                                 
                                 if similar_message:
                                     existing_message = similar_message
-                                    logger.debug(f"⚠️ Mensagem similar encontrada nos últimos 5s, pulando duplicação")
+                                    logger.warning(f"⛔ Mensagem similar encontrada nos últimos 5s, pulando duplicação: {text[:30]}...")
                             
                             if not existing_message:
-                                # Salvar mensagem recebida (SEMPRE, mesmo que seja /start)
-                                bot_message = BotMessage(
-                                    bot_id=bot_id,
-                                    bot_user_id=bot_user.id,
-                                    telegram_user_id=telegram_user_id,
-                                    message_id=telegram_msg_id_str,
-                                    message_text=text,
-                                    message_type='text',
-                                    direction='incoming',
-                                    is_read=False,  # Será marcada como lida quando visualizada no chat
-                                    raw_data=json.dumps(message)  # Salvar dados completos para debug
-                                )
-                                db.session.add(bot_message)
-                                
-                                # Atualizar last_interaction
-                                from models import get_brazil_time
-                                bot_user.last_interaction = get_brazil_time()
-                                
-                                db.session.commit()
-                                logger.info(f"✅ Mensagem recebida salva no banco: '{text[:50]}...' (message_id: {telegram_msg_id_str})")
+                                try:
+                                    # Salvar mensagem recebida (SEMPRE, mesmo que seja /start)
+                                    bot_message = BotMessage(
+                                        bot_id=bot_id,
+                                        bot_user_id=bot_user.id,
+                                        telegram_user_id=telegram_user_id,
+                                        message_id=telegram_msg_id_str,
+                                        message_text=text,
+                                        message_type='text',
+                                        direction='incoming',
+                                        is_read=False,  # Será marcada como lida quando visualizada no chat
+                                        raw_data=json.dumps(message)  # Salvar dados completos para debug
+                                    )
+                                    db.session.add(bot_message)
+                                    
+                                    # Atualizar last_interaction
+                                    from models import get_brazil_time
+                                    bot_user.last_interaction = get_brazil_time()
+                                    
+                                    db.session.commit()
+                                    logger.info(f"✅ Mensagem recebida salva no banco: '{text[:50]}...' (message_id: {telegram_msg_id_str})")
+                                except Exception as db_error:
+                                    # ✅ QI 10000: Tratar erro de constraint única (se existir)
+                                    db.session.rollback()
+                                    # Verificar novamente se foi salva por outro processo
+                                    existing_check = BotMessage.query.filter_by(
+                                        bot_id=bot_id,
+                                        telegram_user_id=telegram_user_id,
+                                        message_id=telegram_msg_id_str,
+                                        direction='incoming'
+                                    ).first()
+                                    if existing_check:
+                                        logger.warning(f"⛔ Mensagem já foi salva por outro processo: {telegram_msg_id_str}")
+                                    else:
+                                        logger.error(f"❌ Erro ao salvar mensagem: {db_error}")
                             else:
-                                logger.debug(f"⚠️ Mensagem já existe no banco, pulando: {telegram_msg_id_str}")
+                                logger.warning(f"⛔ Mensagem já existe no banco, pulando: {telegram_msg_id_str}")
                     except Exception as e:
                         logger.error(f"❌ Erro ao salvar mensagem recebida: {e}", exc_info=True)
                         # Não interromper o fluxo se falhar ao salvar
@@ -907,6 +944,25 @@ class BotManager:
                 # Comando /start (com ou sem parâmetros deep linking)
                 # Exemplos: "/start", "/start acesso", "/start promo123"
                 if text.startswith('/start'):
+                    # ============================================================================
+                    # ✅ QI 10000: ANTI-DUPLICAÇÃO ADICIONAL PARA /START
+                    # ============================================================================
+                    # Lock adicional por chat_id para /start (além do lock de mensagem)
+                    start_lock_acquired = False
+                    try:
+                        import redis
+                        redis_conn_start = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
+                        start_lock_key = f"lock:start_process:{bot_id}:{chat_id}"
+                        
+                        # Tentar adquirir lock (expira em 10 segundos - tempo suficiente para processar /start)
+                        start_lock_acquired = redis_conn_start.set(start_lock_key, "1", ex=10, nx=True)
+                        if not start_lock_acquired:
+                            logger.warning(f"⛔ /start já está sendo processado para chat_id={chat_id}, ignorando duplicado")
+                            return  # Sair sem processar
+                    except Exception as e:
+                        logger.warning(f"⚠️ Erro ao verificar lock de /start: {e} - continuando")
+                        # Fail-open: se Redis falhar, continuar
+                    
                     # Extrair parâmetro do deep link (se houver)
                     start_param = None
                     if len(text) > 6 and text[6] == ' ':  # "/start " tem 7 caracteres
