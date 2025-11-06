@@ -503,7 +503,10 @@ class AtomPayGateway(PaymentGateway):
                 data.get('transaction_id')  # 3ª prioridade (ID numérico)
             )
             
-            transaction_id = data.get('transaction_id') or transaction_hash
+            # ✅ CRÍTICO: Converter para string SEMPRE (id pode ser int, hash é string)
+            transaction_hash_str = str(transaction_hash) if transaction_hash else None
+            
+            transaction_id = data.get('transaction_id') or transaction_hash_str
             
             # ✅ LOG: Verificar estrutura do objeto pix
             pix_data = data.get('pix', {})
@@ -581,7 +584,7 @@ class AtomPayGateway(PaymentGateway):
                     return None
             
             logger.info(f"✅ [{self.get_gateway_name()}] PIX gerado com sucesso!")
-            logger.info(f"   Transaction Hash: {transaction_hash[:20]}...")
+            logger.info(f"   Transaction Hash: {transaction_hash_str[:20] if transaction_hash_str and len(transaction_hash_str) > 20 else transaction_hash_str}...")
             logger.info(f"   Transaction ID: {transaction_id}")
             logger.info(f"   PIX Code: {pix_code[:50]}...")
             
@@ -590,7 +593,7 @@ class AtomPayGateway(PaymentGateway):
                 'pix_code': pix_code,
                 'qr_code_url': qr_code_url or qr_code_base64 or '',
                 'transaction_id': transaction_id,
-                'transaction_hash': transaction_hash,  # Hash principal para consulta
+                'transaction_hash': transaction_hash_str,  # ✅ Hash principal para consulta (string)
                 'payment_id': payment_id
             }
                 
@@ -621,6 +624,9 @@ class AtomPayGateway(PaymentGateway):
             if not transaction_hash:
                 logger.error(f"❌ [{self.get_gateway_name()}] Webhook sem identificador")
                 return None
+            
+            # ✅ CRÍTICO: Converter para string SEMPRE (id pode ser int, hash é string)
+            transaction_hash_str = str(transaction_hash)
             
             # ✅ Extrair status (priorizar payment_status, depois status)
             status_raw = (
@@ -653,10 +659,10 @@ class AtomPayGateway(PaymentGateway):
             amount_cents = data.get('amount') or data.get('amount_paid') or 0
             amount = float(amount_cents) / 100.0
             
-            logger.info(f"✅ [{self.get_gateway_name()}] Webhook processado: Hash={transaction_hash[:20]}... | Status={status_raw}→{status} | R$ {amount:.2f}")
+            logger.info(f"✅ [{self.get_gateway_name()}] Webhook processado: Hash={transaction_hash_str[:20] if len(transaction_hash_str) > 20 else transaction_hash_str}... | Status={status_raw}→{status} | R$ {amount:.2f}")
             
             return {
-                'gateway_transaction_id': transaction_hash,
+                'gateway_transaction_id': transaction_hash_str,  # ✅ Usar string convertida
                 'status': status,
                 'amount': amount
             }
@@ -720,10 +726,13 @@ class AtomPayGateway(PaymentGateway):
                 logger.error(f"❌ [{self.get_gateway_name()}] transaction_hash não fornecido")
                 return None
             
-            logger.info(f"🔍 [{self.get_gateway_name()}] Consultando transação: {transaction_id[:20]}...")
+            # ✅ CRÍTICO: Converter para string SEMPRE
+            transaction_id_str = str(transaction_id)
+            
+            logger.info(f"🔍 [{self.get_gateway_name()}] Consultando transação: {transaction_id_str[:20] if len(transaction_id_str) > 20 else transaction_id_str}...")
             
             # ✅ Endpoint específico conforme documentação: GET /transactions/{hash}
-            response = self._make_request('GET', f'/transactions/{transaction_id}')
+            response = self._make_request('GET', f'/transactions/{transaction_id_str}')
             
             if not response:
                 logger.error(f"❌ [{self.get_gateway_name()}] Falha na requisição")
@@ -744,7 +753,9 @@ class AtomPayGateway(PaymentGateway):
                         logger.error(f"❌ [{self.get_gateway_name()}] Resposta não contém 'data': {response_data}")
                         return None
                     
-                    logger.info(f"✅ [{self.get_gateway_name()}] Transação encontrada: {data.get('hash', transaction_id)[:20]}...")
+                    hash_value = data.get('hash') or transaction_id_str
+                    hash_str = str(hash_value) if hash_value else transaction_id_str
+                    logger.info(f"✅ [{self.get_gateway_name()}] Transação encontrada: {hash_str[:20] if len(hash_str) > 20 else hash_str}...")
                     logger.info(f"   Status: {data.get('status', 'N/A')} | Valor: R$ {data.get('amount', 0) / 100:.2f}")
                     
                     # Processar transação (mesma estrutura do webhook)
@@ -757,7 +768,7 @@ class AtomPayGateway(PaymentGateway):
                     return None
                     
             elif response.status_code == 404:
-                logger.warning(f"⚠️ [{self.get_gateway_name()}] Transação não encontrada (404): {transaction_id[:20]}...")
+                logger.warning(f"⚠️ [{self.get_gateway_name()}] Transação não encontrada (404): {transaction_id_str[:20] if len(transaction_id_str) > 20 else transaction_id_str}...")
                 return None
             elif response.status_code == 401:
                 logger.error(f"❌ [{self.get_gateway_name()}] Token inválido (401)")
