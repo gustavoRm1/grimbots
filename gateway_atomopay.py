@@ -396,10 +396,12 @@ class AtomPayGateway(PaymentGateway):
                             # ❌ Oferta não existe, criar dinamicamente
                             logger.info(f"🔄 [{self.get_gateway_name()}] Criando oferta dinâmica para valor R$ {amount:.2f}...")
                             create_offer_url = f"{self.base_url}/products/{self.product_hash}/offers"
+                            # ✅ CORREÇÃO: API espera 'price' em centavos, não 'amount'
                             create_offer_data = {
                                 'title': f'Oferta R$ {amount:.2f}',
-                                'amount': amount_cents
+                                'price': amount_cents  # Campo correto conforme API
                             }
+                            logger.info(f"📦 [{self.get_gateway_name()}] Payload criação oferta: {create_offer_data}")
                             create_response = requests.post(create_offer_url, params=product_params, json=create_offer_data, timeout=10)
                             
                             if create_response.status_code == 201:
