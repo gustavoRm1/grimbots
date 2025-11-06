@@ -118,20 +118,49 @@ Seu acesso será enviado em breve! 🚀"""
             bot = Bot.query.filter_by(id=payment.bot_id).first()
             
             if bot:
-                # Buscar pool que tem este bot
-                # Estratégia 1: Buscar via PoolBot
+                pool = None
+                
+                # ✅ ESTRATÉGIA 1: Buscar via PoolBot (mais preciso)
                 pool_bot = PoolBot.query.filter_by(bot_id=payment.bot_id).first()
                 if pool_bot:
                     pool = RedirectPool.query.filter_by(
                         id=pool_bot.pool_id,
                         meta_tracking_enabled=True
                     ).first()
-                else:
-                    # Estratégia 2: Buscar pool do usuário do bot (fallback)
-                    pool = RedirectPool.query.filter_by(
+                    if pool:
+                        logger.info(f"✅ Pool encontrado via PoolBot: {pool.id} - {pool.name}")
+                
+                # ✅ ESTRATÉGIA 2: Buscar TODOS os pools do usuário com Meta Pixel
+                if not pool:
+                    pools = RedirectPool.query.filter_by(
                         user_id=bot.user_id,
                         meta_tracking_enabled=True
+                    ).all()
+                    
+                    # Filtrar pools que têm pixel_id e access_token configurados
+                    for p in pools:
+                        if p.meta_pixel_id and p.meta_access_token:
+                            pool = p
+                            logger.info(f"✅ Pool encontrado via user_id: {pool.id} - {pool.name}")
+                            break
+                    
+                    if not pool and pools:
+                        logger.warning(f"⚠️ Encontrados {len(pools)} pools do usuário, mas nenhum com Meta Pixel configurado")
+                
+                # ✅ ESTRATÉGIA 3: Buscar QUALQUER pool do usuário (último recurso)
+                if not pool:
+                    pool = RedirectPool.query.filter_by(
+                        user_id=bot.user_id
                     ).first()
+                    if pool:
+                        logger.warning(f"⚠️ Pool encontrado sem filtro de Meta Tracking: {pool.id} - {pool.name}")
+                        logger.warning(f"   Meta Tracking Enabled: {pool.meta_tracking_enabled}")
+                        logger.warning(f"   Meta Pixel ID: {pool.meta_pixel_id or 'N/A'}")
+                        logger.warning(f"   Meta Access Token: {'✅' if pool.meta_access_token else '❌'}")
+                
+                if not pool:
+                    logger.error(f"❌ NENHUM pool encontrado para bot {payment.bot_id} (user_id: {bot.user_id})")
+                    logger.error(f"   PoolBot associado: {pool_bot.id if pool_bot else 'N/A'}")
                 
                 if pool and pool.meta_pixel_id and pool.meta_access_token:
                     from utils.meta_pixel import MetaPixelAPI
@@ -249,8 +278,13 @@ Seu acesso será enviado em breve! 🚀"""
                             logger.warning(f"⚠️ Falha ao enviar Meta Pixel: {result.get('error')}")
                     else:
                         logger.warning(f"⚠️ Access token não disponível para pool {pool.id}")
+                elif pool:
+                    logger.error(f"❌ Pool {pool.id} encontrado mas Meta Pixel não configurado:")
+                    logger.error(f"   Meta Tracking Enabled: {pool.meta_tracking_enabled}")
+                    logger.error(f"   Meta Pixel ID: {pool.meta_pixel_id or '❌ NÃO CONFIGURADO'}")
+                    logger.error(f"   Meta Access Token: {'✅ Configurado' if pool.meta_access_token else '❌ NÃO CONFIGURADO'}")
                 else:
-                    logger.info(f"ℹ️ Meta Pixel não configurado para este bot/pool")
+                    logger.error(f"❌ Meta Pixel não configurado: Pool não encontrado para bot {payment.bot_id}")
             else:
                 logger.warning(f"⚠️ Bot {payment.bot_id} não encontrado")
                 
