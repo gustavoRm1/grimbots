@@ -36,7 +36,8 @@ class GatewayFactory:
     def create_gateway(
         cls, 
         gateway_type: str, 
-        credentials: Dict[str, Any]
+        credentials: Dict[str, Any],
+        use_adapter: bool = True  # ✅ QI 500: Suporte a adapter
     ) -> Optional[PaymentGateway]:
         """
         Cria uma instância do gateway apropriado
@@ -44,9 +45,10 @@ class GatewayFactory:
         Args:
             gateway_type: Tipo do gateway ('syncpay', 'pushynpay', etc)
             credentials: Credenciais específicas do gateway
+            use_adapter: Se True, envolve o gateway com GatewayAdapter (padrão: True)
         
         Returns:
-            Instância do gateway configurada ou None se inválido
+            Instância do gateway configurada (com ou sem adapter) ou None se inválido
         
         Examples:
             # SyncPay
@@ -59,6 +61,9 @@ class GatewayFactory:
             gateway = GatewayFactory.create_gateway('pushynpay', {
                 'api_key': 'zzz'
             })
+            
+            # Sem adapter (gateway direto)
+            gateway = GatewayFactory.create_gateway('syncpay', {...}, use_adapter=False)
         """
         # Validar tipo de gateway
         if not gateway_type:
@@ -167,6 +172,19 @@ class GatewayFactory:
                 # Gateway registrado mas sem construtor definido
                 logger.error(f"❌ [Factory] Construtor não implementado para: {gateway_type}")
                 return None
+            
+            # ✅ QI 500: Envolver com adapter se solicitado
+            if use_adapter:
+                try:
+                    from gateway_adapter import GatewayAdapter
+                    gateway = GatewayAdapter(gateway)
+                    logger.info(f"✅ [Factory] Gateway {gateway_type} envolvido com GatewayAdapter")
+                except ImportError as e:
+                    logger.warning(f"⚠️ [Factory] GatewayAdapter não disponível - usando gateway direto: {e}")
+                    # Continuar sem adapter (não quebrar)
+                except Exception as e:
+                    logger.error(f"❌ [Factory] Erro ao envolver com adapter: {e}")
+                    # Continuar sem adapter (não quebrar)
             
             logger.info(f"✅ [Factory] Gateway {gateway.get_gateway_name()} criado com sucesso")
             return gateway

@@ -3734,6 +3734,41 @@ Seu pagamento ainda não foi confirmado.
                         telegram_user_id=customer_user_id
                     ).first()
                     
+                    # ✅ QI 500: GERAR TRACKING_TOKEN V4
+                    from utils.tracking_service import TrackingServiceV4
+                    tracking_service = TrackingServiceV4()
+                    
+                    # Recuperar dados de tracking do bot_user
+                    fbclid = getattr(bot_user, 'fbclid', None) if bot_user else None
+                    utm_source = getattr(bot_user, 'utm_source', None) if bot_user else None
+                    utm_medium = getattr(bot_user, 'utm_medium', None) if bot_user else None
+                    utm_campaign = getattr(bot_user, 'utm_campaign', None) if bot_user else None
+                    
+                    # Gerar tracking_token
+                    tracking_token = tracking_service.generate_tracking_token(
+                        bot_id=bot_id,
+                        customer_user_id=customer_user_id,
+                        payment_id=None,  # Será atualizado após criar payment
+                        fbclid=fbclid,
+                        utm_source=utm_source,
+                        utm_medium=utm_medium,
+                        utm_campaign=utm_campaign
+                    )
+                    
+                    # Gerar fbp/fbc
+                    fbp = tracking_service.generate_fbp(str(customer_user_id))
+                    fbc = tracking_service.generate_fbc(fbclid) if fbclid else None
+                    
+                    # Gerar external_ids
+                    external_ids = tracking_service.build_external_id_array(
+                        fbclid=fbclid,
+                        telegram_user_id=str(customer_user_id),
+                        email=getattr(bot_user, 'email', None) if bot_user else None,
+                        phone=getattr(bot_user, 'phone', None) if bot_user else None
+                    )
+                    
+                    logger.info(f"🔑 Tracking Token V4 gerado: {tracking_token}")
+                    
                     # ✅ CRÍTICO: Determinar status do payment
                     # Se recusado, usar 'failed' para que webhook possa atualizar
                     # Se não recusado, usar 'pending' normalmente
@@ -3819,12 +3854,30 @@ Seu pagamento ainda não foi confirmado.
                         utm_medium=getattr(bot_user, 'utm_medium', None) if bot_user else None,
                         utm_term=getattr(bot_user, 'utm_term', None) if bot_user else None,
                         # ✅ CRÍTICO QI 600+: fbclid para external_id (matching Meta Pixel)
-                        fbclid=getattr(bot_user, 'fbclid', None) if bot_user else None,
+                        fbclid=fbclid,  # ✅ Usar fbclid já extraído
                         # ✅ CRÍTICO QI 600+: campaign_code (grim) para atribuição de campanha
                         # Usar campaign_code do bot_user (grim), não external_id (que agora é fbclid)
-                        campaign_code=getattr(bot_user, 'campaign_code', None) if bot_user else None
+                        campaign_code=getattr(bot_user, 'campaign_code', None) if bot_user else None,
+                        # ✅ QI 500: TRACKING_TOKEN V4
+                        tracking_token=tracking_token
                     )
                     db.session.add(payment)
+                    db.session.flush()  # ✅ Flush para obter payment.id antes do commit
+                    
+                    # ✅ QI 500: Salvar tracking data no Redis (após criar payment para ter payment.id)
+                    tracking_service.save_tracking_data(
+                        tracking_token=tracking_token,
+                        bot_id=bot_id,
+                        customer_user_id=customer_user_id,
+                        payment_id=payment.id,
+                        fbclid=fbclid,
+                        fbp=fbp,
+                        fbc=fbc,
+                        utm_source=utm_source,
+                        utm_medium=utm_medium,
+                        utm_campaign=utm_campaign,
+                        external_ids=external_ids
+                    )
                     
                     # ✅ ATUALIZAR CONTADOR DE TRANSAÇÕES DO GATEWAY
                     gateway.total_transactions += 1

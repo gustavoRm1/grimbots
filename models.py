@@ -865,6 +865,9 @@ class Payment(db.Model):
     fbclid = db.Column(db.String(200), nullable=True)
     campaign_code = db.Column(db.String(50), nullable=True)
     
+    # ✅ TRACKING V4 - Tracking Token Universal
+    tracking_token = db.Column(db.String(100), nullable=True, index=True)  # Tracking V4 - QI 500
+    
     # ✅ DEMOGRAPHIC DATA (Para Analytics Avançado)
     customer_age = db.Column(db.Integer, nullable=True)
     customer_city = db.Column(db.String(100), nullable=True)

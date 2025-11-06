@@ -126,6 +126,31 @@ class PaymentGateway(ABC):
         """
         pass
     
+    def extract_producer_hash(
+        self,
+        webhook_data: Dict[str, Any]
+    ) -> Optional[str]:
+        """
+        Extrai producer_hash do webhook para multi-tenancy (implementação opcional).
+        
+        Gateways que suportam multi-tenancy (ex: AtomPay) devem sobrescrever este método.
+        
+        Args:
+            webhook_data: Dados brutos do webhook
+        
+        Returns:
+            str: producer_hash ou None se não suportado/não encontrado
+        
+        Example:
+            >>> gateway = AtomPayGateway(api_token="...")
+            >>> webhook_data = {"producer": {"hash": "abc123"}}
+            >>> gateway.extract_producer_hash(webhook_data)
+            "abc123"
+        """
+        # Implementação padrão: None
+        # Gateways que suportam multi-tenancy devem sobrescrever
+        return None
+    
     def validate_amount(self, amount: float) -> bool:
         """
         Valida se o valor é válido para pagamento

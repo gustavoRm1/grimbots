@@ -6927,17 +6927,38 @@ def send_meta_pixel_purchase_event(payment):
             external_id_value = payment.customer_user_id
             logger.warning(f"⚠️ Meta Purchase - Usando customer_user_id como external_id (fallback): {external_id_value}")
         
-        # ✅ PASSO 3: RECUPERAR _fbp e _fbc (SOLUÇÃO SÊNIOR QI 300 - MESMOS DADOS DO PAGEVIEW!)
-        # Prioridade: Redis (cookie do browser) > BotUser > Gerar novo
-        from utils.tracking_service import TrackingService
+        # ✅ PASSO 3: RECUPERAR _fbp e _fbc (SOLUÇÃO SÊNIOR QI 300/500 - MESMOS DADOS DO PAGEVIEW!)
+        # Prioridade: tracking_token (V4) > Redis (cookie do browser) > BotUser > Gerar novo
+        from utils.tracking_service import TrackingService, TrackingServiceV4
         
         fbp_value = None
         fbc_value = None
         ip_value = bot_user.ip_address if bot_user and bot_user.ip_address else None
         user_agent_value = bot_user.user_agent if bot_user and bot_user.user_agent else None
         
-        # ✅ PRIORIDADE 1: Redis (cookie do browser do PageView - MÁXIMA PRIORIDADE)
-        if external_id_value:
+        # ✅ QI 500: PRIORIDADE 0 - tracking_token (V4) - MÁXIMA PRIORIDADE
+        tracking_data = None
+        if payment.tracking_token:
+            try:
+                tracking_service_v4 = TrackingServiceV4()
+                tracking_data = tracking_service_v4.recover_tracking_data(
+                    tracking_token=payment.tracking_token
+                )
+                if tracking_data:
+                    fbp_value = tracking_data.get('fbp') or None
+                    fbc_value = tracking_data.get('fbc') or None
+                    if tracking_data.get('ip'):
+                        ip_value = tracking_data.get('ip')
+                    if tracking_data.get('ua'):
+                        user_agent_value = tracking_data.get('ua')
+                    # Usar external_ids do tracking_data se disponível
+                    if tracking_data.get('external_ids'):
+                        logger.info(f"🔑 Purchase - Dados recuperados via tracking_token V4: fbp={'✅' if fbp_value else '❌'} | fbc={'✅' if fbc_value else '❌'}")
+            except Exception as e:
+                logger.warning(f"⚠️ Erro ao recuperar tracking via tracking_token: {e}")
+        
+        # ✅ PRIORIDADE 1: Redis (cookie do browser do PageView) - apenas se tracking_token não encontrou
+        if not tracking_data and external_id_value:
             try:
                 tracking_data = TrackingService.recover_tracking_data(
                     fbclid=external_id_value if external_id_value.startswith('PAZ') else None,
@@ -6946,14 +6967,16 @@ def send_meta_pixel_purchase_event(payment):
                 )
                 
                 if tracking_data:
-                    # ✅ CRÍTICO: PRIORIDADE ABSOLUTA - fbp/fbc do Redis (cookie do browser)
-                    fbp_value = tracking_data.get('fbp') or None
-                    fbc_value = tracking_data.get('fbc') or None
+                    # ✅ CRÍTICO: Usar fbp/fbc do Redis apenas se tracking_token não forneceu
+                    if not fbp_value:
+                        fbp_value = tracking_data.get('fbp') or None
+                    if not fbc_value:
+                        fbc_value = tracking_data.get('fbc') or None
                     
                     # ✅ Usar MESMOS IP e User Agent do PageView
-                    if tracking_data.get('ip'):
+                    if not ip_value and tracking_data.get('ip'):
                         ip_value = tracking_data.get('ip')
-                    if tracking_data.get('ua'):
+                    if not user_agent_value and tracking_data.get('ua'):
                         user_agent_value = tracking_data.get('ua')
                     
                     logger.info(f"🔑 Purchase - Dados recuperados do Redis: fbp={'✅' if fbp_value else '❌'} | fbc={'✅' if fbc_value else '❌'} | IP={'✅' if ip_value else '❌'} | UA={'✅' if user_agent_value else '❌'}")
@@ -7232,90 +7255,53 @@ def payment_webhook(gateway_type):
     logger.info(f"📋 Headers: {dict(request.headers)}")
     
     try:
-        # ✅ PATCH 1 QI 200: Identificar Gateway/Usuário via producer_hash (multi-tenant)
-        # Permite que múltiplos usuários usem a mesma URL de webhook
-        # ✅ EXTRAÇÃO ROBUSTA: Suporta múltiplos formatos de webhook
-        gateway = None
-        if gateway_type == 'atomopay':
-            def extract_producer_hash(webhook_data):
-                """Extrai producer_hash de múltiplas fontes (diferentes formatos de webhook)"""
-                # Formato 1: producer.hash direto (webhook de /transactions)
-                if 'producer' in webhook_data and isinstance(webhook_data['producer'], dict):
-                    h = webhook_data['producer'].get('hash')
-                    if h:
-                        logger.info(f"🔍 Producer hash encontrado (formato 1 - producer.hash): {h[:12]}...")
-                        return h
-                
-                # Formato 2: offer.producer.hash (webhook de /webhook integrador)
-                if 'offer' in webhook_data and isinstance(webhook_data['offer'], dict):
-                    offer_producer = webhook_data['offer'].get('producer', {})
-                    if isinstance(offer_producer, dict):
-                        h = offer_producer.get('hash')
-                        if h:
-                            logger.info(f"🔍 Producer hash encontrado (formato 2 - offer.producer.hash): {h[:12]}...")
-                            return h
-                
-                # Formato 3: product_hash → buscar gateway → producer_hash
-                if 'items' in webhook_data and webhook_data['items']:
-                    prod_hash = webhook_data['items'][0].get('product_hash')
-                    if prod_hash:
-                        g = Gateway.query.filter_by(
-                            gateway_type='atomopay',
-                            product_hash=prod_hash
-                        ).first()
-                        if g and g.producer_hash:
-                            logger.info(f"🔍 Producer hash encontrado (formato 3 - product_hash → gateway): {g.producer_hash[:12]}...")
-                            return g.producer_hash
-                
-                # Formato 4: transaction.token → buscar payment → gateway → producer_hash
-                if 'transaction' in webhook_data and isinstance(webhook_data['transaction'], dict):
-                    token = webhook_data['transaction'].get('token')
-                    if token:
-                        # Buscar payment pelo token (se tiver campo webhook_token)
-                        # Fallback: buscar por gateway_transaction_id se token for o ID
-                        from models import Payment
-                        payment = Payment.query.filter_by(
-                            gateway_transaction_id=str(token)
-                        ).first()
-                        if payment and payment.gateway and payment.gateway.producer_hash:
-                            logger.info(f"🔍 Producer hash encontrado (formato 4 - transaction.token → payment): {payment.gateway.producer_hash[:12]}...")
-                            return payment.gateway.producer_hash
-                
-                # Formato 5: customer.document → buscar payment recente → gateway → producer_hash
-                if 'customer' in webhook_data and isinstance(webhook_data['customer'], dict):
-                    customer_doc = webhook_data['customer'].get('document')
-                    if customer_doc:
-                        from models import Payment
-                        from datetime import timedelta
-                        # Buscar payment recente (últimas 24h) com mesmo documento
-                        recent_payment = Payment.query.filter(
-                            Payment.customer_document == customer_doc,
-                            Payment.gateway_type == 'atomopay',
-                            Payment.created_at >= get_brazil_time() - timedelta(hours=24)
-                        ).order_by(Payment.created_at.desc()).first()
-                        if recent_payment and recent_payment.gateway and recent_payment.gateway.producer_hash:
-                            logger.info(f"🔍 Producer hash encontrado (formato 5 - customer.document → payment): {recent_payment.gateway.producer_hash[:12]}...")
-                            return recent_payment.gateway.producer_hash
-                
-                logger.warning(f"⚠️ Producer hash não encontrado em nenhum formato conhecido")
-                return None
-            
-            producer_hash = extract_producer_hash(data)
-            if producer_hash:
-                # ✅ Buscar Gateway pelo producer_hash para identificar o usuário
-                gateway = Gateway.query.filter_by(
-                    gateway_type='atomopay',
-                    producer_hash=producer_hash
-                ).first()
-                if gateway:
-                    logger.info(f"🔑 Gateway identificado via producer_hash: {producer_hash[:12]}... (User ID: {gateway.user_id})")
-                else:
-                    logger.warning(f"⚠️ Gateway não encontrado para producer_hash: {producer_hash[:12]}... (usuário precisa fazer pelo menos 1 transação)")
-            else:
-                logger.warning(f"⚠️ Producer hash não extraído do webhook - gateway não identificado")
+        # ✅ QI 500: PROCESSAR WEBHOOK VIA GATEWAY ADAPTER
+        # Criar gateway com adapter para normalização e extração de producer_hash
+        from gateway_factory import GatewayFactory
         
-        # Processar webhook do gateway
-        result = bot_manager.process_payment_webhook(gateway_type, data)
+        # Preparar credenciais dummy para criar gateway (webhook não precisa de credenciais reais)
+        dummy_credentials = {}
+        if gateway_type == 'syncpay':
+            dummy_credentials = {'client_id': 'dummy', 'client_secret': 'dummy'}
+        elif gateway_type == 'pushynpay':
+            dummy_credentials = {'api_key': 'dummy'}
+        elif gateway_type == 'paradise':
+            dummy_credentials = {'api_key': 'dummy', 'product_hash': 'dummy'}
+        elif gateway_type == 'wiinpay':
+            dummy_credentials = {'api_key': 'dummy'}
+        elif gateway_type == 'atomopay':
+            dummy_credentials = {'api_token': 'dummy'}
+        
+        # ✅ Criar gateway com adapter (use_adapter=True por padrão)
+        gateway_instance = GatewayFactory.create_gateway(gateway_type, dummy_credentials, use_adapter=True)
+        
+        gateway = None
+        result = None
+        
+        if gateway_instance:
+            # ✅ Extrair producer_hash via adapter (se suportado)
+            producer_hash = None
+            if hasattr(gateway_instance, 'extract_producer_hash'):
+                producer_hash = gateway_instance.extract_producer_hash(data)
+                if producer_hash:
+                    logger.info(f"🔍 Producer hash extraído via adapter: {producer_hash[:12]}...")
+                    
+                    # Buscar Gateway pelo producer_hash para identificar o usuário
+                    gateway = Gateway.query.filter_by(
+                        gateway_type=gateway_type,
+                        producer_hash=producer_hash
+                    ).first()
+                    if gateway:
+                        logger.info(f"🔑 Gateway identificado via producer_hash: {producer_hash[:12]}... (User ID: {gateway.user_id})")
+                    else:
+                        logger.warning(f"⚠️ Gateway não encontrado para producer_hash: {producer_hash[:12]}...")
+            
+            # ✅ Processar webhook via adapter (normalizado)
+            result = gateway_instance.process_webhook(data)
+        else:
+            # ✅ Fallback: usar bot_manager (método antigo) se adapter falhar
+            logger.warning(f"⚠️ GatewayAdapter não disponível, usando bot_manager.process_payment_webhook")
+            result = bot_manager.process_payment_webhook(gateway_type, data)
         
         if result:
             gateway_transaction_id = result.get('gateway_transaction_id')
