@@ -264,13 +264,26 @@ class AtomPayGateway(PaymentGateway):
             payment_id_short = str(payment_id).replace('_', '').replace('-', '')[:10]
             unique_email = f"pix{payment_id_short}{unique_hash}@bot.digital"
             
-            # ✅ CPF ÚNICO
-            cpf_base = f"{unique_hash}{str(payment_id).replace('_', '').replace('-', '')[:6]}"
+            # ✅ CPF ÚNICO (APENAS NÚMEROS - hash hexadecimal convertido para decimal)
+            # Converter hash hexadecimal para números (usar apenas dígitos)
+            hash_digits = ''.join(c for c in unique_hash if c.isdigit())
+            payment_id_digits = ''.join(c for c in str(payment_id) if c.isdigit())[:6]
+            cpf_base = f"{hash_digits}{payment_id_digits}"
+            
+            # Garantir 11 dígitos (apenas números)
             unique_cpf = cpf_base[:11] if len(cpf_base) >= 11 else cpf_base.ljust(11, '0')
             
             # Validação: CPF não pode começar com 0
             if unique_cpf[0] == '0':
                 unique_cpf = '1' + unique_cpf[1:]
+            
+            # ✅ VALIDAÇÃO FINAL: Garantir que CPF contém APENAS números
+            unique_cpf = ''.join(c for c in unique_cpf if c.isdigit())[:11]
+            if len(unique_cpf) < 11:
+                unique_cpf = unique_cpf.ljust(11, '0')
+            
+            # ✅ APLICAR VALIDAÇÃO DO MÉTODO (garante formato correto)
+            unique_cpf = self._validate_document(unique_cpf)
             
             # ✅ TELEFONE ÚNICO
             unique_phone = self._validate_phone(f"11{customer_user_id[-9:]}")
@@ -433,9 +446,14 @@ class AtomPayGateway(PaymentGateway):
                 logger.error(f"❌ [{self.get_gateway_name()}] Falha ao obter offer_hash (oferta não foi criada/encontrada)")
                 return None
             
-            # ✅ Enviar offer_hash (obrigatório)
+            # ✅ Enviar offer_hash (obrigatório) - TANTO NO PAYLOAD QUANTO NO CART
             payload['offer_hash'] = offer_hash_to_use
             logger.info(f"✅ [{self.get_gateway_name()}] offer_hash enviado: {offer_hash_to_use[:8]}...")
+            
+            # ✅ CRÍTICO: offer_hash TAMBÉM deve estar no item do cart (conforme documentação)
+            if payload.get('cart') and len(payload['cart']) > 0:
+                payload['cart'][0]['offer_hash'] = offer_hash_to_use
+                logger.info(f"✅ [{self.get_gateway_name()}] offer_hash incluído no cart: {offer_hash_to_use[:8]}...")
             
             # ✅ LOG DETALHADO DO PAYLOAD (para debug de recusas)
             logger.info(f"📦 [{self.get_gateway_name()}] Payload completo:")
