@@ -296,38 +296,96 @@ class SyncPayGateway(PaymentGateway):
         """
         Processa webhook SyncPay
         
-        Campos esperados:
-        - identifier: ID da transação
-        - status: Status do pagamento (paid, cancelled, expired, etc)
-        - amount: Valor do pagamento
+        Estrutura real do webhook SyncPay:
+        {
+            "data": {
+                "id": "eb4fe1b0-e928-4561-b4ac-7d2fcf712fbf",
+                "status": "PAID_OUT",  // ou "CANCELLED", "EXPIRED", etc
+                "amount": 33.8,
+                "idtransaction": "...",
+                "externalreference": "...",
+                ...
+            }
+        }
         """
         try:
-            identifier = data.get('identifier') or data.get('id')
-            status = data.get('status', '').lower()
-            amount = data.get('amount')
+            logger.info(f"📥 [{self.get_gateway_name()}] Processando webhook...")
+            logger.info(f"🔍 Estrutura recebida: {list(data.keys())}")
+            
+            # ✅ CORREÇÃO CRÍTICA: SyncPay envia dados dentro de 'data'
+            webhook_data = data.get('data', {})
+            if not webhook_data:
+                # Fallback: tentar usar data diretamente (caso venha sem wrapper)
+                webhook_data = data
+                logger.warning(f"⚠️ [{self.get_gateway_name()}] Webhook sem wrapper 'data', usando root")
+            
+            # ✅ Extrair identifier (pode ser 'id' ou 'idtransaction')
+            identifier = (
+                webhook_data.get('id') or
+                webhook_data.get('idtransaction') or
+                webhook_data.get('identifier') or
+                data.get('identifier') or
+                data.get('id')
+            )
+            
+            # ✅ Extrair status (pode vir em uppercase: PAID_OUT, CANCELLED, etc)
+            status_raw = webhook_data.get('status', '').upper()
+            
+            # ✅ Extrair amount (pode vir como float ou int)
+            amount = webhook_data.get('amount') or data.get('amount')
+            if amount:
+                try:
+                    amount = float(amount)
+                except (ValueError, TypeError):
+                    logger.warning(f"⚠️ [{self.get_gateway_name()}] Valor inválido: {amount}")
+                    amount = None
+            
+            # ✅ Extrair externalreference (pode conter payment_id)
+            external_reference = webhook_data.get('externalreference') or webhook_data.get('external_reference')
+            
+            logger.info(f"🔍 [{self.get_gateway_name()}] Dados extraídos:")
+            logger.info(f"   identifier: {identifier}")
+            logger.info(f"   status_raw: {status_raw}")
+            logger.info(f"   amount: {amount}")
+            logger.info(f"   external_reference: {external_reference}")
             
             if not identifier:
                 logger.error(f"❌ [{self.get_gateway_name()}] Webhook sem identifier")
+                logger.error(f"   Estrutura recebida: {data}")
+                logger.error(f"   webhook_data: {webhook_data}")
                 return None
             
-            # Mapear status da SyncPay para status interno
+            # ✅ Mapear status da SyncPay (uppercase) para status interno
+            # SyncPay usa: PAID_OUT, CANCELLED, EXPIRED, PENDING, etc
             mapped_status = 'pending'
-            if status in ['paid', 'confirmed', 'approved']:
+            if status_raw in ['PAID_OUT', 'PAID', 'CONFIRMED', 'APPROVED']:
                 mapped_status = 'paid'
-            elif status in ['cancelled', 'expired', 'failed']:
+            elif status_raw in ['CANCELLED', 'CANCELED', 'EXPIRED', 'FAILED']:
                 mapped_status = 'failed'
+            elif status_raw in ['PENDING', 'WAITING', 'PROCESSING']:
+                mapped_status = 'pending'
+            else:
+                logger.warning(f"⚠️ [{self.get_gateway_name()}] Status desconhecido: {status_raw}, usando 'pending'")
             
-            logger.info(f"📥 [{self.get_gateway_name()}] Webhook recebido: {identifier} - Status: {status} → {mapped_status}")
+            logger.info(f"✅ [{self.get_gateway_name()}] Webhook processado:")
+            logger.info(f"   Identifier: {identifier}")
+            logger.info(f"   Status: {status_raw} → {mapped_status}")
+            logger.info(f"   Amount: R$ {amount:.2f}" if amount else "   Amount: N/A")
+            logger.info(f"   External Reference: {external_reference}")
             
             return {
-                'payment_id': identifier,
+                'payment_id': identifier,  # Usar identifier como payment_id
                 'status': mapped_status,
                 'amount': amount,
-                'gateway_transaction_id': identifier
+                'gateway_transaction_id': identifier,  # ID da transação no gateway
+                'external_reference': external_reference  # Referência externa (pode conter payment_id)
             }
             
         except Exception as e:
             logger.error(f"❌ [{self.get_gateway_name()}] Erro ao processar webhook: {e}")
+            import traceback
+            logger.error(f"📋 Traceback: {traceback.format_exc()}")
+            logger.error(f"📋 Dados recebidos: {data}")
             return None
     
     def verify_credentials(self) -> bool:

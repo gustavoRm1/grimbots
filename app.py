@@ -7124,18 +7124,56 @@ def payment_webhook(gateway_type):
             
             logger.info(f"✅ Webhook processado: transaction_id={gateway_transaction_id}, status={status}")
             
-            # Buscar pagamento pelo gateway_transaction_id (Paradise retorna o ID da transação)
+            # ✅ Buscar pagamento pelo gateway_transaction_id (prioridade 1)
             payment = None
             if gateway_transaction_id:
                 payment = Payment.query.filter_by(gateway_transaction_id=gateway_transaction_id).first()
                 if not payment:
-                    # Tentar pelo payment_id como fallback
+                    # ✅ Tentar pelo payment_id como fallback (prioridade 2)
                     payment = Payment.query.filter_by(payment_id=gateway_transaction_id).first()
+                    if not payment:
+                        # ✅ CORREÇÃO CRÍTICA SYNCPAY: Tentar pelo external_reference (prioridade 3)
+                        # SyncPay envia externalreference que pode conter o payment_id original
+                        external_ref = result.get('external_reference')
+                        if external_ref:
+                            # externalreference pode ser o payment_id completo ou parcial
+                            payment = Payment.query.filter_by(payment_id=external_ref).first()
+                            if not payment:
+                                # Tentar buscar por parte do payment_id (caso external_ref seja hash parcial)
+                                # Exemplo: external_ref = "0f57f18b674274be53ad32ff456c1f"
+                                # payment_id pode ser "BOT37_1762421295_0f57f18b"
+                                payments = Payment.query.filter(
+                                    Payment.payment_id.like(f"%{external_ref}%")
+                                ).all()
+                                if payments:
+                                    payment = payments[0]  # Usar o primeiro encontrado
+                                    logger.info(f"🔍 Payment encontrado por external_reference parcial: {payment.payment_id}")
             
             if payment:
                 logger.info(f"💰 Pagamento encontrado: {payment.payment_id} | Status atual: {payment.status}")
+                logger.info(f"   Gateway: {payment.gateway_type} | Transaction ID salvo: {payment.gateway_transaction_id}")
             else:
-                logger.warning(f"⚠️ Pagamento não encontrado: transaction_id={gateway_transaction_id}")
+                logger.error(f"❌ ===== PAGAMENTO NÃO ENCONTRADO =====")
+                logger.error(f"   gateway_transaction_id buscado: {gateway_transaction_id}")
+                logger.error(f"   external_reference: {result.get('external_reference', 'N/A')}")
+                logger.error(f"   status do webhook: {status}")
+                logger.error(f"")
+                logger.error(f"   🔍 Tentando buscar por outros critérios...")
+                
+                # ✅ BUSCA ALTERNATIVA: Buscar por gateway_type e status pending recente
+                from datetime import timedelta
+                recent_payments = Payment.query.filter(
+                    Payment.gateway_type == gateway_type,
+                    Payment.status == 'pending',
+                    Payment.created_at >= get_brazil_time() - timedelta(hours=24)
+                ).order_by(Payment.created_at.desc()).limit(10).all()
+                
+                if recent_payments:
+                    logger.error(f"   📋 Últimos 10 pagamentos pending de {gateway_type}:")
+                    for p in recent_payments:
+                        logger.error(f"      - {p.payment_id} | gateway_transaction_id: {p.gateway_transaction_id} | Amount: R$ {p.amount:.2f} | Created: {p.created_at}")
+                
+                logger.error(f"   ================================================")
             
             if payment:
                 # ✅ VERIFICA STATUS ANTIGO ANTES DE QUALQUER ATUALIZAÇÃO
