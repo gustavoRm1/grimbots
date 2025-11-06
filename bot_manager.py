@@ -1277,13 +1277,13 @@ class BotManager:
             ).hexdigest()[:8]
             send_lock_key = f"lock:send:{chat_id}:{content_hash}"
             
-            # Tentar adquirir lock (expira em 5 segundos)
-            lock_acquired = redis_conn_send.set(send_lock_key, "1", ex=5, nx=True)
+            # Tentar adquirir lock (expira em 10 segundos - tempo suficiente para enviar mídia + texto)
+            lock_acquired = redis_conn_send.set(send_lock_key, "1", ex=10, nx=True)
             if not lock_acquired:
                 logger.warning(f"⛔ Mensagem já está sendo enviada: chat_id={chat_id}, hash={content_hash} - BLOQUEANDO DUPLICAÇÃO")
                 return False  # Sair sem enviar (duplicação detectada)
             else:
-                logger.debug(f"🔒 Lock de envio adquirido: {send_lock_key}")
+                logger.debug(f"🔒 Lock de envio adquirido: {send_lock_key} (expira em 10s)")
         except Exception as e:
             logger.warning(f"⚠️ Erro ao verificar lock de envio: {e} - continuando")
             # Fail-open: se Redis falhar, continuar (melhor que bloquear tudo)
@@ -1374,9 +1374,25 @@ class BotManager:
                     
                     time.sleep(delay_between)  # ✅ QI 500: Delay entre envios
                     
-                    # Se caption > 900, enviar texto completo separadamente
+                    # ✅ QI 10000: Se caption > 900, enviar texto completo separadamente
+                    # Mas apenas se realmente for necessário (texto > 900 caracteres)
                     if text and len(text) > 900:
-                        logger.info(f"📝 Enviando texto completo (caption truncado)...")
+                        # ✅ QI 10000: Lock adicional para envio de texto completo (evitar duplicação)
+                        # Usar o mesmo hash do lock principal para garantir consistência
+                        text_complete_lock_key = f"lock:send_text_complete:{chat_id}:{content_hash}"
+                        try:
+                            import redis
+                            redis_conn_text = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
+                            text_lock_acquired = redis_conn_text.set(text_complete_lock_key, "1", ex=10, nx=True)
+                            if not text_lock_acquired:
+                                logger.warning(f"⛔ Texto completo já está sendo enviado: chat_id={chat_id}, hash={content_hash} - BLOQUEANDO DUPLICAÇÃO")
+                                return all_success  # Retornar sucesso parcial (mídia já foi enviada)
+                            else:
+                                logger.debug(f"🔒 Lock de texto completo adquirido: {text_complete_lock_key}")
+                        except Exception as e:
+                            logger.warning(f"⚠️ Erro ao verificar lock de texto completo: {e} - continuando")
+                        
+                        logger.info(f"📝 Enviando texto completo (caption truncado, len={len(text)})...")
                         url_msg = f"{base_url}/sendMessage"
                         payload_msg = {
                             'chat_id': chat_id,
