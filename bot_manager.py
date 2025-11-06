@@ -3644,6 +3644,8 @@ Seu pagamento ainda não foi confirmado.
                     'client_secret': gateway.client_secret,
                     # Outros gateways usam api_key
                     'api_key': gateway.api_key,
+                    # ✅ Átomo Pay: api_token é salvo em api_key no banco, mas precisa ser passado como api_token
+                    'api_token': gateway.api_key if gateway.gateway_type == 'atomopay' else None,
                     # Paradise
                     'product_hash': gateway.product_hash,
                     'offer_hash': gateway.offer_hash,
@@ -3653,6 +3655,16 @@ Seu pagamento ainda não foi confirmado.
                     # ✅ RANKING V2.0: Usar taxa do usuário (pode ser premium)
                     'split_percentage': user_commission
                 }
+                
+                # ✅ LOG: Verificar se api_token está presente para Átomo Pay
+                if gateway.gateway_type == 'atomopay':
+                    if not credentials.get('api_token'):
+                        logger.error(f"❌ Átomo Pay: api_token (api_key) não encontrado no gateway!")
+                        logger.error(f"   gateway.api_key: {gateway.api_key}")
+                        logger.error(f"   gateway.id: {gateway.id}")
+                        return None
+                    else:
+                        logger.debug(f"🔑 Átomo Pay: api_token presente ({len(credentials['api_token'])} caracteres)")
                 
                 # Log para auditoria (apenas se for premium)
                 if user_commission < 2.0:

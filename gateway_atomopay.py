@@ -42,11 +42,18 @@ class AtomPayGateway(PaymentGateway):
             offer_hash: Hash da oferta (opcional, mas recomendado)
             product_hash: Hash do produto (opcional, usado se offer_hash não fornecido)
         """
-        self.api_token = api_token
+        # ✅ VALIDAÇÃO CRÍTICA: api_token não pode ser None ou vazio
+        if not api_token or not api_token.strip():
+            logger.error(f"❌ [{self.__class__.__name__}] api_token é None ou vazio!")
+            raise ValueError("api_token é obrigatório para Átomo Pay")
+        
+        self.api_token = api_token.strip()  # ✅ Remover espaços em branco
         self.base_url = "https://api.atomopay.com.br/api/public/v1"
-        self.offer_hash = offer_hash
-        self.product_hash = product_hash
+        self.offer_hash = offer_hash.strip() if offer_hash else None
+        self.product_hash = product_hash.strip() if product_hash else None
         self.split_percentage = 2.0  # 2% PADRÃO (se suportado)
+        
+        logger.info(f"✅ [{self.get_gateway_name()}] Gateway inicializado | api_token: {self.api_token[:10]}... ({len(self.api_token)} caracteres)")
     
     def get_gateway_name(self) -> str:
         """Nome amigável do gateway"""
@@ -93,11 +100,16 @@ class AtomPayGateway(PaymentGateway):
                 'Accept': 'application/json'
             }
             
-            logger.debug(f"🌐 [{self.get_gateway_name()}] {method} {endpoint}")
+            logger.info(f"🌐 [{self.get_gateway_name()}] {method} {endpoint}")
             if payload:
                 logger.debug(f"📦 [{self.get_gateway_name()}] Payload: {payload}")
             if request_params:
-                logger.debug(f"🔑 [{self.get_gateway_name()}] Params: api_token={'***' if request_params.get('api_token') else 'N/A'}")
+                api_token_present = request_params.get('api_token')
+                if api_token_present:
+                    logger.info(f"🔑 [{self.get_gateway_name()}] api_token presente ({len(api_token_present)} caracteres): {api_token_present[:10]}...")
+                else:
+                    logger.error(f"❌ [{self.get_gateway_name()}] api_token NÃO encontrado nos params!")
+                    logger.error(f"   Params disponíveis: {list(request_params.keys())}")
             
             if method.upper() == 'GET':
                 response = requests.get(url, params=request_params, headers=headers, timeout=15)
