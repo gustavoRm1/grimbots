@@ -7,7 +7,7 @@ CORREÇÕES APLICADAS (BASEADAS NO PARADISE):
 ✅ 2. Reference único (timestamp + hash) - evita IDs duplicados
 ✅ 3. Customer simplificado (apenas name, email, phone_number, document)
 ✅ 4. Checkout URL adicionada (pode ser obrigatório como Paradise V30)
-✅ 5. offer_hash NÃO enviado (apenas armazenado) - evita duplicação
+✅ 5. offer_hash OBRIGATÓRIO (diferente do Paradise - Átomo Pay requer)
 ✅ 6. Validações rigorosas (status code, JSON, status, campos obrigatórios)
 """
 
@@ -41,7 +41,7 @@ class AtomPayGateway(PaymentGateway):
         
         Args:
             api_token: Token de API obtido no painel da Átomo Pay
-            offer_hash: Hash da oferta (NÃO enviado na API, apenas armazenado - como Paradise)
+            offer_hash: Hash da oferta (OBRIGATÓRIO - deve ser enviado na API)
             product_hash: Hash do produto (opcional, usado no cart)
         """
         if not api_token or not api_token.strip():
@@ -51,7 +51,7 @@ class AtomPayGateway(PaymentGateway):
         self.api_token = api_token.strip()
         self.base_url = "https://api.atomopay.com.br/api/public/v1"
         
-        # ✅ offer_hash armazenado mas NÃO enviado (como Paradise - evita duplicação)
+        # ✅ offer_hash é OBRIGATÓRIO na Átomo Pay (diferente do Paradise)
         self.offer_hash = offer_hash.strip() if offer_hash else None
         self.product_hash = product_hash.strip() if product_hash else None
         self.split_percentage = 2.0
@@ -59,7 +59,9 @@ class AtomPayGateway(PaymentGateway):
         logger.info(f"✅ [{self.get_gateway_name()}] Gateway inicializado")
         logger.info(f"   api_token: {self.api_token[:10]}... ({len(self.api_token)} chars)")
         if self.offer_hash:
-            logger.info(f"   offer_hash: {self.offer_hash[:8]}... (armazenado, NÃO enviado)")
+            logger.info(f"   offer_hash: {self.offer_hash[:8]}... (obrigatório - será enviado)")
+        else:
+            logger.warning(f"⚠️ offer_hash não configurado (será obrigatório na geração de PIX)")
     
     def get_gateway_name(self) -> str:
         return "Átomo Pay"
@@ -212,7 +214,7 @@ class AtomPayGateway(PaymentGateway):
         2. Reference único (timestamp + hash) - evita IDs duplicados
         3. Customer simplificado (apenas name, email, phone_number, document)
         4. Checkout URL obrigatório (pode ser obrigatório como Paradise V30)
-        5. offer_hash NÃO enviado (apenas armazenado) - evita duplicação
+        5. offer_hash OBRIGATÓRIO (diferente do Paradise - Átomo Pay requer)
         """
         try:
             # ✅ Validar valor (como Paradise)
@@ -335,11 +337,17 @@ class AtomPayGateway(PaymentGateway):
             if any(tracking_data.values()):
                 payload['tracking'] = tracking_data
             
-            # ⚠️ CRÍTICO: offer_hash NÃO É ENVIADO (como Paradise)
-            # Enviar offer_hash pode causar IDs duplicados
-            # O offer_hash fica armazenado apenas para referência interna
-            if self.offer_hash:
-                logger.info(f"⚠️ [{self.get_gateway_name()}] offer_hash ignorado ({self.offer_hash[:8]}...) para evitar duplicação")
+            # ✅ CRÍTICO: Átomo Pay REQUER offer_hash (diferente do Paradise)
+            # Paradise: offer_hash NÃO deve ser enviado (causa duplicação)
+            # Átomo Pay: offer_hash DEVE ser enviado (é obrigatório)
+            if not self.offer_hash:
+                logger.error(f"❌ [{self.get_gateway_name()}] offer_hash é OBRIGATÓRIO na API Átomo Pay!")
+                logger.error(f"   Configure 'Offer Hash' no gateway antes de usar")
+                return None
+            
+            # ✅ Enviar offer_hash (obrigatório)
+            payload['offer_hash'] = self.offer_hash
+            logger.info(f"✅ [{self.get_gateway_name()}] offer_hash enviado: {self.offer_hash[:8]}...")
             
             logger.debug(f"📦 Payload final: {payload}")
             
