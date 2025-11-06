@@ -212,6 +212,37 @@ class BotManager:
         cleanup_thread = threading.Thread(target=cleanup_cache, daemon=True)
         cleanup_thread.start()
         
+        # ✅ LIMPEZA AUTOMÁTICA DE SESSÕES DE ORDER BUMP (a cada 10 minutos)
+        def cleanup_order_bump_sessions():
+            while True:
+                time.sleep(600)  # 10 minutos
+                current_time = time.time()
+                expired_sessions = []
+                
+                # Limpar sessões com mais de 30 minutos de idade (timeout de segurança)
+                for user_key, session in self.order_bump_sessions.items():
+                    created_at = session.get('created_at', 0)
+                    # ✅ Sessões antigas sem created_at: considerar expiradas se não tiver timestamp
+                    if created_at == 0:
+                        # Sessão antiga sem timestamp: adicionar timestamp atual para próxima verificação
+                        session['created_at'] = current_time
+                        continue
+                    
+                    age_seconds = current_time - created_at if created_at > 0 else 0
+                    
+                    if age_seconds > 1800:  # 30 minutos
+                        expired_sessions.append(user_key)
+                
+                for key in expired_sessions:
+                    del self.order_bump_sessions[key]
+                    logger.info(f"🧹 Sessão de order bump expirada removida: {key}")
+                
+                if expired_sessions:
+                    logger.info(f"🧹 Order bump sessions limpo: {len(expired_sessions)} sessões expiradas removidas")
+        
+        cleanup_ob_thread = threading.Thread(target=cleanup_order_bump_sessions, daemon=True)
+        cleanup_ob_thread.start()
+        
         logger.info("BotManager inicializado")
     
     def validate_token(self, token: str) -> Dict[str, Any]:
@@ -2435,6 +2466,30 @@ class BotManager:
                 enabled_order_bumps = [bump for bump in order_bumps if bump.get('enabled')]
                 
                 if enabled_order_bumps:
+                    # ✅ PROTEÇÃO: Verificar se já existe sessão de order bump ativa para este chat_id
+                    user_key = f"orderbump_{chat_id}"
+                    if user_key in self.order_bump_sessions:
+                        existing_session = self.order_bump_sessions[user_key]
+                        existing_button_index = existing_session.get('button_index')
+                        existing_description = existing_session.get('original_description', 'Produto')
+                        
+                        # Se já existe sessão ativa, informar usuário e não criar nova
+                        logger.warning(f"⚠️ Sessão de order bump já existe para chat {chat_id} (botão {existing_button_index})")
+                        
+                        # Responder callback informando que já há oferta pendente
+                        requests.post(url, json={
+                            'callback_query_id': callback_id,
+                            'text': '⏳ Você já tem uma oferta pendente!'
+                        }, timeout=3)
+                        
+                        # Enviar mensagem informando ao usuário
+                        self.send_telegram_message(
+                            token=token,
+                            chat_id=str(chat_id),
+                            message=f"⏳ <b>Oferta já pendente</b>\n\nVocê já tem uma oferta especial aguardando resposta:\n\n🎯 <b>{existing_description}</b>\n\n💡 Verifique as mensagens anteriores para aceitar ou recusar a oferta."
+                        )
+                        return  # Não criar nova sessão
+                    
                     # Responder callback - AGUARDANDO order bump
                     requests.post(url, json={
                         'callback_query_id': callback_id,
@@ -2840,6 +2895,15 @@ Seu pagamento ainda não foi confirmado.
             # ✅ CORREÇÃO CRÍTICA: user_key deve ser independente do bot_id
             # Usar apenas chat_id para garantir que sessão seja encontrada independente do bot que processa o callback
             user_key = f"orderbump_{chat_id}"
+            
+            # ✅ PROTEÇÃO: Verificar se já existe sessão ativa (evita múltiplos cliques)
+            if user_key in self.order_bump_sessions:
+                existing_session = self.order_bump_sessions[user_key]
+                logger.warning(f"⚠️ Tentativa de criar sessão duplicada para chat {chat_id}. Sessão existente será mantida.")
+                # Não criar nova sessão, manter a existente
+                return
+            
+            # Criar nova sessão apenas se não existir
             self.order_bump_sessions[user_key] = {
                 'bot_id': bot_id,  # ✅ CRÍTICO: Salvar bot_id na sessão para garantir consistência
                 'chat_id': chat_id,  # ✅ Salvar chat_id também para validação
@@ -2849,7 +2913,8 @@ Seu pagamento ainda não foi confirmado.
                 'order_bumps': order_bumps,
                 'current_index': 0,
                 'accepted_bumps': [],
-                'total_bump_value': 0.0
+                'total_bump_value': 0.0,
+                'created_at': time.time()  # ✅ Timestamp para limpeza de sessões antigas
             }
             
             # Exibir primeiro order bump
