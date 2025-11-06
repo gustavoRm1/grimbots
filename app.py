@@ -2490,13 +2490,13 @@ def admin_impersonate(user_id):
     try:
         logger.info(f"🔍 Iniciando impersonação: admin={current_user.id} ({current_user.email}) → target={user_id}")
         
-    target_user = User.query.get_or_404(user_id)
+        target_user = User.query.get_or_404(user_id)
         logger.info(f"✅ Usuário alvo encontrado: {target_user.email} (admin={target_user.is_admin})")
-    
-    if target_user.is_admin:
+        
+        if target_user.is_admin:
             logger.warning(f"⚠️ Tentativa de impersonar admin bloqueada: {target_user.email}")
-        return jsonify({'error': 'Não é possível impersonar outro administrador'}), 403
-    
+            return jsonify({'error': 'Não é possível impersonar outro administrador'}), 403
+        
         # ✅ CORREÇÃO: Salvar ID do admin ANTES de fazer logout/login
         admin_id = current_user.id
         admin_email = current_user.email
@@ -2511,8 +2511,8 @@ def admin_impersonate(user_id):
         
         # ✅ CORREÇÃO CRÍTICA: Configurar sessão como permanente antes de salvar
         session.permanent = True
-    
-    # Salvar ID do admin original na sessão
+        
+        # Salvar ID do admin original na sessão
         session['impersonate_admin_id'] = admin_id
         session['impersonate_admin_email'] = admin_email
         logger.info(f"💾 Dados salvos na sessão: impersonate_admin_id={admin_id}")
@@ -2520,10 +2520,10 @@ def admin_impersonate(user_id):
         # ✅ CORREÇÃO: Fazer commit do banco ANTES de mudar o usuário
         db.session.commit()
         logger.info(f"✅ Commit do banco realizado")
-    
-    # Fazer logout do admin e login como usuário
+        
+        # Fazer logout do admin e login como usuário
         logger.info(f"🔄 Fazendo logout do admin...")
-    logout_user()
+        logout_user()
         logger.info(f"✅ Logout concluído")
         
         logger.info(f"🔄 Fazendo login como {target_user.email}...")
@@ -4153,7 +4153,7 @@ def update_pool_meta_pixel_config(pool_id):
         pixel_id = data.get('meta_pixel_id', '').strip()
         if pixel_id:
             if not MetaPixelHelper.is_valid_pixel_id(pixel_id):
-            return jsonify({'error': 'Pixel ID inválido (deve ter 15-16 dígitos numéricos)'}), 400
+                return jsonify({'error': 'Pixel ID inválido (deve ter 15-16 dígitos numéricos)'}), 400
         else:
             # ✅ CORREÇÃO: String vazia = limpar campo
             pixel_id = None
@@ -6696,21 +6696,21 @@ def send_meta_pixel_purchase_event(payment):
         
         # ✅ ENFILEIRAR COM PRIORIDADE ALTA (Purchase é crítico!)
         try:
-        task = send_meta_event.apply_async(
-            args=[
-                pool.meta_pixel_id,
-                access_token,
-                event_data,
-                pool.meta_test_event_code
-            ],
-            priority=1  # Alta prioridade
-        )
-        
-        logger.info(f"📤 Purchase enfileirado: R$ {payment.amount} | " +
-                   f"Pool: {pool.name} | " +
-                   f"Event ID: {event_id} | " +
-                   f"Task: {task.id} | " +
-                   f"Type: {'Downsell' if is_downsell else 'Upsell' if is_upsell else 'Remarketing' if is_remarketing else 'Normal'}")
+            task = send_meta_event.apply_async(
+                args=[
+                    pool.meta_pixel_id,
+                    access_token,
+                    event_data,
+                    pool.meta_test_event_code
+                ],
+                priority=1  # Alta prioridade
+            )
+            
+            logger.info(f"📤 Purchase enfileirado: R$ {payment.amount} | " +
+                       f"Pool: {pool.name} | " +
+                       f"Event ID: {event_id} | " +
+                       f"Task: {task.id} | " +
+                       f"Type: {'Downsell' if is_downsell else 'Upsell' if is_upsell else 'Remarketing' if is_remarketing else 'Normal'}")
             
             # ✅ CORREÇÃO CRÍTICA: Aguardar resultado do Celery ANTES de marcar como enviado
             # Isso garante que o evento foi realmente processado e enviado à Meta
@@ -6978,7 +6978,7 @@ def payment_webhook(gateway_type):
                     try:
                         send_meta_pixel_purchase_event(payment)
                         logger.info(f"📊 Meta Pixel Purchase disparado para {payment.payment_id} via webhook {gateway_type}")
-                        except Exception as e:
+                    except Exception as e:
                         logger.error(f"❌ Erro ao disparar Meta Pixel via webhook {gateway_type}: {e}", exc_info=True)
                     
                     # ============================================================================
