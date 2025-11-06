@@ -4817,7 +4817,7 @@ Seu pagamento ainda não foi confirmado.
                 
                 elif campaign.target_audience == 'inactive':
                     from models import get_brazil_time
-                inactive_limit = get_brazil_time() - timedelta(days=7)
+                    inactive_limit = get_brazil_time() - timedelta(days=7)
                     query = query.filter(BotUser.last_interaction <= inactive_limit)
                 
                 leads = query.all()
