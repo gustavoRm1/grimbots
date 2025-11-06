@@ -90,22 +90,33 @@ class MetaPixelAPI:
         user_data = {}
         
         # ✅ CRÍTICO: External ID (obrigatório para Conversions API)
-        # ✅ ORDEM DE PRIORIDADE CORRETA: external_id (fbclid) SEMPRE PRIMEIRO > customer_user_id (telegram_user_id)
-        # Meta exige que fbclid seja o primeiro para matching com PageView
+        # ✅ SOLUÇÃO SÊNIOR QI 300: external_id IMUTÁVEL e CONSISTENTE
+        # Se external_id já for um array (do TrackingService), usar diretamente
+        # Caso contrário, construir array com ordem correta: fbclid primeiro, telegram_user_id segundo
+        
         external_ids = []
         
-        # ✅ PRIORIDADE 1: external_id (fbclid) - SEMPRE PRIMEIRO para matching com PageView
-        if external_id and isinstance(external_id, str) and external_id.strip():
-            external_ids.append(MetaPixelAPI._hash_data(external_id.strip()))
-        
-        # ✅ PRIORIDADE 2: customer_user_id (telegram_user_id) - adicionar depois do fbclid
-        # Só adicionar se for diferente do external_id (evitar duplicação)
-        if customer_user_id and isinstance(customer_user_id, str) and customer_user_id.strip():
-            customer_id_clean = customer_user_id.strip()
-            # Verificar se não é o mesmo que external_id (para evitar duplicação)
-            external_id_clean = external_id.strip() if external_id and isinstance(external_id, str) else None
-            if customer_id_clean != external_id_clean:
-                external_ids.append(MetaPixelAPI._hash_data(customer_id_clean))
+        # ✅ Se external_id já é um array (do TrackingService), usar diretamente
+        if isinstance(external_id, list):
+            external_ids = external_id
+            logger.debug(f"✅ External ID já é array (do TrackingService): {len(external_ids)} ID(s)")
+        else:
+            # ✅ Construir array com ordem correta
+            # PRIORIDADE 1: external_id (fbclid) - SEMPRE PRIMEIRO para matching com PageView
+            if external_id and isinstance(external_id, str) and external_id.strip():
+                external_ids.append(MetaPixelAPI._hash_data(external_id.strip()))
+            
+            # ✅ PRIORIDADE 2: customer_user_id (telegram_user_id) - adicionar depois do fbclid
+            # Só adicionar se for diferente do external_id (evitar duplicação)
+            if customer_user_id and isinstance(customer_user_id, str) and customer_user_id.strip():
+                customer_id_clean = customer_user_id.strip()
+                # Verificar se não é o mesmo que external_id (para evitar duplicação)
+                external_id_clean = external_id.strip() if external_id and isinstance(external_id, str) else None
+                if customer_id_clean != external_id_clean:
+                    customer_id_hash = MetaPixelAPI._hash_data(customer_id_clean)
+                    # Verificar se já não está no array (evitar duplicatas)
+                    if customer_id_hash not in external_ids:
+                        external_ids.append(customer_id_hash)
         
         # Só adicionar se tiver pelo menos um external_id válido
         if external_ids:

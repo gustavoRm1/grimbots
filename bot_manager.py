@@ -1386,25 +1386,27 @@ class BotManager:
                                            f"IP={bot_user.ip_address} | " +
                                            f"Session={bot_user.tracking_session_id[:8] if bot_user.tracking_session_id else 'N/A'}...")
                                 
-                                # ✅ IMPLEMENTAÇÃO QI 600+: Salvar tracking:chat:{chat_id} para fallback robusto
-                                # Isso permite recuperação mesmo se fbclid não estiver disponível no momento do Purchase
+                                # ✅ SOLUÇÃO SÊNIOR QI 300: Usar TrackingService para salvar tracking:chat:{chat_id}
+                                # TTL de 30 dias (não 7) para garantir persistência
                                 try:
-                                    TTL_7_DAYS = 7 * 24 * 3600
-                                    chat_tracking_key = f'tracking:chat:{chat_id}'
-                                    chat_tracking_data = {
-                                        'fbclid': fbclid_completo_redis or '',
-                                        'last_fbclid': fbclid_completo_redis or '',
-                                        'fbp': tracking_elite.get('fbp', ''),
-                                        'fbc': tracking_elite.get('fbc', ''),
-                                        'ip': tracking_elite.get('ip', ''),
-                                        'ua': tracking_elite.get('user_agent', ''),
-                                        'grim': grim_from_redis or '',
-                                        'campaign_code': grim_from_redis or '',
-                                        'timestamp': int(time.time()),
-                                        'chat_id': chat_id
-                                    }
-                                    r.setex(chat_tracking_key, TTL_7_DAYS, json.dumps(chat_tracking_data))
-                                    logger.info(f"🔑 tracking:chat:{chat_id} salvo (TTL=7d) para fallback robusto")
+                                    from utils.tracking_service import TrackingService
+                                    TrackingService.save_tracking_data(
+                                        fbclid=fbclid_completo_redis or '',
+                                        fbp=tracking_elite.get('fbp', ''),
+                                        fbc=tracking_elite.get('fbc', ''),
+                                        ip_address=tracking_elite.get('ip', ''),
+                                        user_agent=tracking_elite.get('user_agent', ''),
+                                        grim=grim_from_redis or '',
+                                        telegram_user_id=str(chat_id),
+                                        utms={
+                                            'utm_source': tracking_elite.get('utm_source', ''),
+                                            'utm_campaign': tracking_elite.get('utm_campaign', ''),
+                                            'utm_medium': tracking_elite.get('utm_medium', ''),
+                                            'utm_content': tracking_elite.get('utm_content', ''),
+                                            'utm_term': tracking_elite.get('utm_term', '')
+                                        }
+                                    )
+                                    logger.info(f"🔑 tracking:chat:{chat_id} salvo (TTL=30d) via TrackingService")
                                 except Exception as chat_tracking_error:
                                     logger.warning(f"⚠️ Erro ao salvar tracking:chat:{chat_id}: {chat_tracking_error}")
                                 
@@ -1565,24 +1567,27 @@ class BotManager:
                                            f"fbclid={'✅' if bot_user.fbclid else '❌'} | " +
                                            f"campaign_code={'✅' if bot_user.campaign_code else '❌'}")
                                 
-                                # ✅ IMPLEMENTAÇÃO QI 600+: Salvar tracking:chat:{chat_id} para fallback robusto
+                                # ✅ SOLUÇÃO SÊNIOR QI 300: Usar TrackingService para salvar tracking:chat:{chat_id}
+                                # TTL de 30 dias (não 7) para garantir persistência
                                 try:
-                                    TTL_7_DAYS = 7 * 24 * 3600
-                                    chat_tracking_key = f'tracking:chat:{chat_id}'
-                                    chat_tracking_data = {
-                                        'fbclid': fbclid_completo_redis or '',
-                                        'last_fbclid': fbclid_completo_redis or '',
-                                        'fbp': tracking_elite.get('fbp', ''),
-                                        'fbc': tracking_elite.get('fbc', ''),
-                                        'ip': tracking_elite.get('ip', ''),
-                                        'ua': tracking_elite.get('user_agent', ''),
-                                        'grim': grim_from_redis or '',
-                                        'campaign_code': grim_from_redis or '',
-                                        'timestamp': int(time.time()),
-                                        'chat_id': chat_id
-                                    }
-                                    r.setex(chat_tracking_key, TTL_7_DAYS, json.dumps(chat_tracking_data))
-                                    logger.info(f"🔑 tracking:chat:{chat_id} salvo (TTL=7d) para fallback robusto (usuário existente)")
+                                    from utils.tracking_service import TrackingService
+                                    TrackingService.save_tracking_data(
+                                        fbclid=fbclid_completo_redis or '',
+                                        fbp=tracking_elite.get('fbp', ''),
+                                        fbc=tracking_elite.get('fbc', ''),
+                                        ip_address=tracking_elite.get('ip', ''),
+                                        user_agent=tracking_elite.get('user_agent', ''),
+                                        grim=grim_from_redis or '',
+                                        telegram_user_id=str(chat_id),
+                                        utms={
+                                            'utm_source': tracking_elite.get('utm_source', ''),
+                                            'utm_campaign': tracking_elite.get('utm_campaign', ''),
+                                            'utm_medium': tracking_elite.get('utm_medium', ''),
+                                            'utm_content': tracking_elite.get('utm_content', ''),
+                                            'utm_term': tracking_elite.get('utm_term', '')
+                                        }
+                                    )
+                                    logger.info(f"🔑 tracking:chat:{chat_id} salvo (TTL=30d) via TrackingService (usuário existente)")
                                 except Exception as chat_tracking_error:
                                     logger.warning(f"⚠️ Erro ao salvar tracking:chat:{chat_id}: {chat_tracking_error}")
                                 

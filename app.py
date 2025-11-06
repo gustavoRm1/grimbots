@@ -3724,78 +3724,51 @@ def public_redirect(slug):
         except Exception as e:
             logger.warning(f"⚠️ Erro ao gerar _fbc: {e}")
     
-    # ✅ IMPLEMENTAÇÃO COMPLETA (QI 600+): Tracking persistente com TTL 7 dias e múltiplas estratégias
-    # Estrutura: tracking:fbclid:{fbclid} (TTL 7d) + tracking:chat:{chat_id} (TTL 7d) para fallback robusto
+    # ✅ SOLUÇÃO SÊNIOR QI 300: Tracking Universal Persistente (30 dias)
+    # Usar TrackingService para garantir consistência total e recuperação robusta
+    from utils.tracking_service import TrackingService
+    
     try:
-        import hashlib
-        r = redis.Redis(host='localhost', port=6379, decode_responses=True)
-        
-        # ✅ ESTRUTURA COMPLETA: Preparar tracking data com todos os campos
-        tracking_data = {
-            'fbclid': fbclid or '',
-            'ip': user_ip,
-            'user_agent': user_agent,
-            'session_id': session_id,
-            'timestamp': int(time.time()),  # Unix timestamp para consistência
-            'iso_timestamp': get_brazil_time().isoformat(),
-            'pool_id': pool.id,
-            'slug': slug,
-            # ✅ CRÍTICO: Cookies do Meta (OBRIGATÓRIO para matching 7-9/10)
-            'fbp': fbp_cookie or '',  # Facebook Pixel Browser ID
-            'fbc': fbc_cookie or '',  # Facebook Click ID (gerado se não existir)
-            # ✅ Capturar `grim` para matching com campanha
-            'grim': grim_param or '',
-            'campaign_code': grim_param or '',  # Alias para compatibilidade
-            # Capturar TODOS os UTMs
+        # ✅ Preparar UTMs para salvar
+        utms = {
             'utm_source': request.args.get('utm_source', ''),
             'utm_campaign': request.args.get('utm_campaign', ''),
             'utm_medium': request.args.get('utm_medium', ''),
             'utm_content': request.args.get('utm_content', ''),
             'utm_term': request.args.get('utm_term', ''),
-            'utm_id': request.args.get('utm_id', ''),
-            # ✅ Dados adicionais para analytics
-            'referer': request.headers.get('Referer', ''),
-            'accept_language': request.headers.get('Accept-Language', ''),
-            'adset_id': request.args.get('adset_id', ''),
-            'ad_id': request.args.get('ad_id', ''),
-            'campaign_id': request.args.get('campaign_id', ''),
-            # ✅ Event source URL para consistência PageView → Purchase
-            'event_source_url': request.url
+            'utm_id': request.args.get('utm_id', '')
         }
         
-        # ✅ TTL de 7 dias (7 * 24 * 3600 = 604800 segundos)
-        TTL_7_DAYS = 7 * 24 * 3600
+        # ✅ Gerar fbc se não existir mas tiver fbclid
+        fbc_final = fbc_cookie
+        if not fbc_final and fbclid:
+            fbc_final = TrackingService.generate_fbc(fbclid)
+            logger.info(f"🔑 _fbc gerado no redirect: {fbc_final[:50]}...")
         
-        # ✅ ESTRATÉGIA 1: Salvar usando fbclid como chave principal (tracking:fbclid:{fbclid})
+        # ✅ Salvar tracking com TTL de 30 dias (não 7!)
         if fbclid:
-            tracking_data['fbclid'] = fbclid
-            key_fbclid = f'tracking:fbclid:{fbclid}'
-            r.setex(key_fbclid, TTL_7_DAYS, json.dumps(tracking_data))
-            logger.info(f"🎯 TRACKING PERSISTENTE | tracking:fbclid:{fbclid[:20]}... | TTL=7d | fbp={'✅' if fbp_cookie else '❌'} | fbc={'✅' if fbc_cookie else '❌'}")
-            
-            # ✅ ESTRATÉGIA 2: Salvar também usando hash prefix (opcional, para busca rápida)
-            try:
-                fbclid_hash_prefix = hashlib.md5(fbclid.encode()).hexdigest()[:12]
-                key_hash = f'tracking:hash:{fbclid_hash_prefix}'
-                r.setex(key_hash, TTL_7_DAYS, json.dumps(tracking_data))
-                logger.debug(f"🔑 Tracking também salvo via hash prefix: {fbclid_hash_prefix}")
-            except Exception as hash_error:
-                logger.debug(f"⚠️ Erro ao salvar hash prefix: {hash_error}")
-        
-        # ✅ ESTRATÉGIA 3: Salvar usando grim como chave (se não tiver fbclid)
+            TrackingService.save_tracking_data(
+                fbclid=fbclid,
+                fbp=fbp_cookie,
+                fbc=fbc_final,
+                ip_address=user_ip,
+                user_agent=user_agent,
+                grim=grim_param,
+                utms=utms
+            )
+            logger.info(f"🎯 TRACKING SALVO (30d) | fbclid:{fbclid[:20]}... | fbp={'✅' if fbp_cookie else '❌'} | fbc={'✅' if fbc_final else '❌'}")
         elif grim_param:
-            key_grim = f'tracking_grim:{grim_param}'
-            r.setex(key_grim, TTL_7_DAYS, json.dumps(tracking_data))
-            logger.info(f"🎯 TRACKING PERSISTENTE | tracking_grim:{grim_param} | TTL=7d | fbp={'✅' if fbp_cookie else '❌'} | fbc={'✅' if fbc_cookie else '❌'}")
-        
-        # ✅ ESTRATÉGIA 4: Fallback com session_id (se não tiver fbclid nem grim)
-        if not fbclid and not grim_param:
-            key_session = f'tracking_session:{session_id}'
-            r.setex(key_session, TTL_7_DAYS, json.dumps(tracking_data))
-            logger.info(f"🎯 TRACKING PERSISTENTE | tracking_session:{session_id[:8]}... | TTL=7d | fbp={'✅' if fbp_cookie else '❌'} | fbc={'✅' if fbc_cookie else '❌'}")
-        
-        # ✅ NOTA: tracking:chat:{chat_id} será salvo quando o usuário interagir com o bot (/start)
-        # Isso permite recuperação mesmo se fbclid não estiver disponível no momento do Purchase
+            # Se não tiver fbclid, salvar por grim
+            TrackingService.save_tracking_data(
+                fbclid=None,
+                fbp=fbp_cookie,
+                fbc=fbc_final,
+                ip_address=user_ip,
+                user_agent=user_agent,
+                grim=grim_param,
+                utms=utms
+            )
+            logger.info(f"🎯 TRACKING SALVO (30d) | grim:{grim_param} | fbp={'✅' if fbp_cookie else '❌'} | fbc={'✅' if fbc_final else '❌'}")
         
     except Exception as e:
         logger.error(f"⚠️ Erro ao salvar tracking no Redis: {e}")
@@ -6365,41 +6338,59 @@ def send_meta_pixel_pageview_event(pool, request):
         # Extrair UTM parameters
         utm_params = MetaPixelHelper.extract_utm_params(request)
         
-        # ✅ PASSO 2: RECUPERAR _fbp e _fbc DO REDIS (ou cookies como fallback)
-        # Prioridade: Redis > Cookies do request
+        # ✅ PASSO 2: RECUPERAR _fbp e _fbc (SOLUÇÃO SÊNIOR QI 300)
+        # Prioridade: Cookies do browser > Redis > Gerar novo
+        from utils.tracking_service import TrackingService
+        
         fbp_value = None
         fbc_value = None
         
-        try:
-            import redis
-            r = redis.Redis(host='localhost', port=6379, decode_responses=True)
-            
-            # Tentar recuperar do Redis usando fbclid
-            if external_id and external_id.startswith('PAZ'):  # É fbclid
-                tracking_key = f'tracking:{external_id}'
-                tracking_json = r.get(tracking_key)
-                if tracking_json:
-                    tracking_data_redis = json.loads(tracking_json)
-                    fbp_value = tracking_data_redis.get('fbp', '')
-                    fbc_value = tracking_data_redis.get('fbc', '')
-                    logger.info(f"🔑 _fbp e _fbc recuperados do Redis via fbclid")
-        except Exception as e:
-            logger.warning(f"⚠️ Erro ao recuperar fbp/fbc do Redis: {e}")
+        # ✅ PRIORIDADE 1: Cookies do browser (MÁXIMA PRIORIDADE - Meta confia mais)
+        fbp_value = request.cookies.get('_fbp', '')
+        fbc_value = request.cookies.get('_fbc', '')
         
-        # Fallback: tentar pegar dos cookies do request
-        if not fbp_value:
-            fbp_value = request.cookies.get('_fbp', '')
-        if not fbc_value:
-            fbc_value = request.cookies.get('_fbc', '')
+        if fbp_value:
+            logger.info(f"🔑 PageView - fbp recuperado dos cookies do browser: {fbp_value[:20]}...")
+        if fbc_value:
+            logger.info(f"🔑 PageView - fbc recuperado dos cookies do browser: {fbc_value[:20]}...")
         
-        # ✅ GERAR _fbc se não existir mas tiver fbclid
-        if not fbc_value and external_id and external_id.startswith('PAZ'):
+        # ✅ PRIORIDADE 2: Redis (fallback se cookies não disponíveis)
+        if not fbp_value or not fbc_value:
             try:
-                # time já está importado no topo do arquivo
-                fbc_value = f"fb.1.{int(time.time())}.{external_id}"
-                logger.info(f"🔑 _fbc gerado manualmente no PageView: {fbc_value[:50]}...")
+                tracking_data = TrackingService.recover_tracking_data(
+                    fbclid=external_id if external_id and external_id.startswith('PAZ') else None,
+                    grim=grim_param
+                )
+                
+                if tracking_data:
+                    if not fbp_value and tracking_data.get('fbp'):
+                        fbp_value = tracking_data.get('fbp')
+                        logger.info(f"🔑 PageView - fbp recuperado do Redis: {fbp_value[:20]}...")
+                    if not fbc_value and tracking_data.get('fbc'):
+                        fbc_value = tracking_data.get('fbc')
+                        logger.info(f"🔑 PageView - fbc recuperado do Redis: {fbc_value[:20]}...")
             except Exception as e:
-                logger.warning(f"⚠️ Erro ao gerar _fbc no PageView: {e}")
+                logger.warning(f"⚠️ Erro ao recuperar fbp/fbc do Redis: {e}")
+        
+        # ✅ PRIORIDADE 3: Gerar _fbc se não existir mas tiver fbclid
+        if not fbc_value and external_id and external_id.startswith('PAZ'):
+            fbc_value = TrackingService.generate_fbc(external_id)
+            logger.info(f"🔑 PageView - _fbc gerado automaticamente: {fbc_value[:50]}...")
+        
+        # ✅ CRÍTICO: Garantir que fbp/fbc sejam salvos no Redis para Purchase
+        if external_id and external_id.startswith('PAZ'):
+            try:
+                TrackingService.save_tracking_data(
+                    fbclid=external_id,
+                    fbp=fbp_value,
+                    fbc=fbc_value,
+                    ip_address=request.remote_addr,
+                    user_agent=request.headers.get('User-Agent', ''),
+                    grim=grim_param,
+                    utms=utm_params
+                )
+            except Exception as e:
+                logger.warning(f"⚠️ Erro ao salvar tracking no Redis: {e}")
         
         # ✅ CAPTURAR DADOS PARA RETORNAR
         # ✅ CRÍTICO: Priorizar grim sobre utm_params.get('code') para matching com campanha Meta
@@ -6421,18 +6412,22 @@ def send_meta_pixel_pageview_event(pool, request):
         from celery_app import send_meta_event
         from utils.meta_pixel import MetaPixelAPI
         
-        # ✅ CRÍTICO: Usar _build_user_data para hash correto do external_id
-        # ✅ CRÍTICO: Incluir _fbp e _fbc para matching 7-9/10
-        # Isso garante matching entre PageView e Purchase (ambos usam SHA256 hash)
+        # ✅ CRÍTICO: Construir external_id array IMUTÁVEL (sempre mesmo formato)
+        # PageView: apenas fbclid (não temos telegram_user_id ainda)
+        # TrackingService retorna array de strings (não hasheadas), _build_user_data faz o hash
+        external_id_for_hash = external_id if external_id and external_id.startswith('PAZ') else None
+        
+        # ✅ CRÍTICO: Usar _build_user_data com external_id string (será hashado internamente)
+        # Isso garante que PageView e Purchase usem EXATAMENTE o mesmo formato
         user_data = MetaPixelAPI._build_user_data(
             customer_user_id=None,  # Não temos telegram_user_id no PageView
-            external_id=external_id,  # ✅ fbclid será hashado aqui
+            external_id=external_id_for_hash,  # ✅ fbclid será hashado pelo _build_user_data
             email=None,
             phone=None,
             client_ip=request.remote_addr,
             client_user_agent=request.headers.get('User-Agent', ''),
-            fbp=fbp_value,  # ✅ CRÍTICO: _fbp do Redis ou cookie
-            fbc=fbc_value  # ✅ CRÍTICO: _fbc do Redis, cookie ou gerado
+            fbp=fbp_value,  # ✅ CRÍTICO: _fbp do cookie ou Redis
+            fbc=fbc_value  # ✅ CRÍTICO: _fbc do cookie, Redis ou gerado
         )
         
         # ✅ CRÍTICO: Garantir que external_id existe (obrigatório para Conversions API)
@@ -6644,163 +6639,73 @@ def send_meta_pixel_purchase_event(payment):
             external_id_value = payment.customer_user_id
             logger.warning(f"⚠️ Meta Purchase - Usando customer_user_id como external_id (fallback): {external_id_value}")
         
-        # ✅ PASSO 3: RECUPERAR _fbp e _fbc DO REDIS (MESMOS DADOS DO PAGEVIEW!)
-        # Prioridade: Redis (usando fbclid) > bot_user > None
+        # ✅ PASSO 3: RECUPERAR _fbp e _fbc (SOLUÇÃO SÊNIOR QI 300 - MESMOS DADOS DO PAGEVIEW!)
+        # Prioridade: Redis (cookie do browser) > BotUser > Gerar novo
+        from utils.tracking_service import TrackingService
+        
         fbp_value = None
         fbc_value = None
         ip_value = bot_user.ip_address if bot_user and bot_user.ip_address else None
         user_agent_value = bot_user.user_agent if bot_user and bot_user.user_agent else None
         
-        # ✅ CRÍTICO: Buscar no Redis usando múltiplas estratégias (fbclid completo, hash, etc.)
+        # ✅ PRIORIDADE 1: Redis (cookie do browser do PageView - MÁXIMA PRIORIDADE)
         if external_id_value:
             try:
-                import redis
-                import hashlib
-                r = redis.Redis(host='localhost', port=6379, decode_responses=True)
+                tracking_data = TrackingService.recover_tracking_data(
+                    fbclid=external_id_value if external_id_value.startswith('PAZ') else None,
+                    telegram_user_id=str(telegram_user_id) if telegram_user_id else None,
+                    grim=payment.campaign_code
+                )
                 
-                tracking_data_redis = None
-                recovery_strategy = None
-                
-                # ✅ ESTRATÉGIA 1: Buscar usando tracking:fbclid:{fbclid} (estrutura nova QI 600+)
-                tracking_key = f'tracking:fbclid:{external_id_value}'
-                tracking_json = r.get(tracking_key)
-                if tracking_json:
-                    recovery_strategy = "tracking:fbclid:{fbclid}"
-                    logger.info(f"🔑 Purchase - Tracking recuperado via {recovery_strategy}")
-                
-                # ✅ ESTRATÉGIA 2: Se não encontrou, tentar com hash prefix (tracking:hash:{hash})
-                if not tracking_json and external_id_value.startswith('PAZ'):
-                    try:
-                        fbclid_hash_prefix = hashlib.md5(external_id_value.encode()).hexdigest()[:12]
-                        tracking_key_hash = f'tracking:hash:{fbclid_hash_prefix}'
-                        tracking_json = r.get(tracking_key_hash)
-                        if tracking_json:
-                            recovery_strategy = "tracking:hash:{hash_prefix}"
-                            logger.info(f"🔑 Purchase - Tracking recuperado via {recovery_strategy}: {fbclid_hash_prefix}")
-                    except Exception as hash_error:
-                        logger.debug(f"⚠️ Erro ao gerar hash do fbclid: {hash_error}")
-                
-                # ✅ ESTRATÉGIA 3: Fallback para tracking:chat:{chat_id} (QI 600+)
-                if not tracking_json and telegram_user_id:
-                    try:
-                        chat_tracking_key = f'tracking:chat:{telegram_user_id}'
-                        tracking_json = r.get(chat_tracking_key)
-                        if tracking_json:
-                            recovery_strategy = "tracking:chat:{chat_id}"
-                            logger.info(f"🔑 Purchase - Tracking recuperado via {recovery_strategy} (fallback robusto)")
-                    except Exception as chat_error:
-                        logger.debug(f"⚠️ Erro ao buscar tracking:chat: {chat_error}")
-                
-                # ✅ ESTRATÉGIA 4: Pattern search (último recurso, custoso)
-                if not tracking_json:
-                    try:
-                        pattern = f'tracking:*{external_id_value[:20]}*'
-                        matching_keys = r.keys(pattern)
-                        if matching_keys:
-                            tracking_json = r.get(matching_keys[0])
-                            if tracking_json:
-                                recovery_strategy = "pattern_search"
-                                logger.info(f"🔑 Purchase - Tracking recuperado via {recovery_strategy}: {matching_keys[0]}")
-                    except Exception as pattern_error:
-                        logger.debug(f"⚠️ Erro ao buscar por pattern: {pattern_error}")
-                
-                if tracking_json:
-                    tracking_data_redis = json.loads(tracking_json)
+                if tracking_data:
+                    # ✅ CRÍTICO: PRIORIDADE ABSOLUTA - fbp/fbc do Redis (cookie do browser)
+                    fbp_value = tracking_data.get('fbp') or None
+                    fbc_value = tracking_data.get('fbc') or None
                     
-                    # ✅ CRÍTICO #1: PRIORIDADE ABSOLUTA - fbp/fbc do Redis (vem do cookie do navegador/PageView)
-                    # Meta só confia plenamente em fbp/fbc que vieram do browser (PageView), não os salvos no BotUser
-                    # Ordem: Redis (cookie do browser) > BotUser (fallback apenas se Redis não tiver)
-                    if tracking_data_redis.get('fbp'):
-                        fbp_value = tracking_data_redis.get('fbp')
-                        logger.info(f"🔑 Purchase - fbp recuperado do Redis (cookie do browser - PRIORIDADE)")
-                    elif bot_user and hasattr(bot_user, 'fbp') and bot_user.fbp:
-                        fbp_value = bot_user.fbp
-                        logger.info(f"🔑 Purchase - fbp recuperado do BotUser (fallback)")
+                    # ✅ Usar MESMOS IP e User Agent do PageView
+                    if tracking_data.get('ip'):
+                        ip_value = tracking_data.get('ip')
+                    if tracking_data.get('ua'):
+                        user_agent_value = tracking_data.get('ua')
                     
-                    if tracking_data_redis.get('fbc'):
-                        fbc_value = tracking_data_redis.get('fbc')
-                        logger.info(f"🔑 Purchase - fbc recuperado do Redis (cookie do browser - PRIORIDADE)")
-                    elif bot_user and hasattr(bot_user, 'fbc') and bot_user.fbc:
-                        fbc_value = bot_user.fbc
-                        logger.info(f"🔑 Purchase - fbc recuperado do BotUser (fallback)")
-                    
-                    # ✅ CRÍTICO: Usar MESMOS IP e User Agent do PageView (se disponíveis no Redis)
-                    if tracking_data_redis.get('ip'):
-                        ip_value = tracking_data_redis.get('ip')
-                    if tracking_data_redis.get('user_agent'):
-                        user_agent_value = tracking_data_redis.get('user_agent')
-                    
-                    logger.info(f"🔑 Purchase - Dados recuperados do Redis (Estratégia: {recovery_strategy}): fbp={'✅' if fbp_value else '❌'} | fbc={'✅' if fbc_value else '❌'} | IP={'✅' if ip_value else '❌'} | UA={'✅' if user_agent_value else '❌'}")
-                else:
-                    logger.warning(f"⚠️ Purchase - Tracking data não encontrado no Redis para fbclid: {external_id_value[:30]}... | Estratégias tentadas: tracking:fbclid, tracking:hash, tracking:chat, pattern_search")
-                    
-                    # ✅ FALLBACK: Usar dados do BotUser se disponíveis (apenas se Redis não tiver)
-                    if bot_user:
-                        # Tentar recuperar fbp/fbc do BotUser se não encontrou no Redis
-                        if not fbp_value and hasattr(bot_user, 'fbp') and bot_user.fbp:
-                            fbp_value = bot_user.fbp
-                            logger.info(f"🔑 Purchase - fbp recuperado do BotUser (fallback)")
-                        if not fbc_value and hasattr(bot_user, 'fbc') and bot_user.fbc:
-                            fbc_value = bot_user.fbc
-                            logger.info(f"🔑 Purchase - fbc recuperado do BotUser (fallback)")
-                        
-                        # IP e User Agent já foram carregados acima como fallback
-                        if ip_value or user_agent_value:
-                            logger.info(f"🔑 Purchase - IP/UA do BotUser (fallback): IP={'✅' if ip_value else '❌'} | UA={'✅' if user_agent_value else '❌'}")
+                    logger.info(f"🔑 Purchase - Dados recuperados do Redis: fbp={'✅' if fbp_value else '❌'} | fbc={'✅' if fbc_value else '❌'} | IP={'✅' if ip_value else '❌'} | UA={'✅' if user_agent_value else '❌'}")
             except Exception as e:
-                logger.warning(f"⚠️ Erro ao recuperar fbp/fbc do Redis no Purchase: {e}")
-                
-                # ✅ FALLBACK EM CASO DE ERRO: Usar dados do BotUser (apenas se Redis falhou)
-                if bot_user:
-                    if not fbp_value and hasattr(bot_user, 'fbp') and bot_user.fbp:
-                        fbp_value = bot_user.fbp
-                        logger.info(f"🔑 Purchase - fbp recuperado do BotUser (fallback após erro no Redis)")
-                    if not fbc_value and hasattr(bot_user, 'fbc') and bot_user.fbc:
-                        fbc_value = bot_user.fbc
-                        logger.info(f"🔑 Purchase - fbc recuperado do BotUser (fallback após erro no Redis)")
+                logger.warning(f"⚠️ Erro ao recuperar tracking do Redis: {e}")
         
-        # ✅ GERAR _fbc se não existir mas tiver fbclid
+        # ✅ PRIORIDADE 2: BotUser (fallback apenas se Redis não tiver)
+        if bot_user:
+            if not fbp_value and hasattr(bot_user, 'fbp') and bot_user.fbp:
+                fbp_value = bot_user.fbp
+                logger.info(f"🔑 Purchase - fbp recuperado do BotUser (fallback)")
+            if not fbc_value and hasattr(bot_user, 'fbc') and bot_user.fbc:
+                fbc_value = bot_user.fbc
+                logger.info(f"🔑 Purchase - fbc recuperado do BotUser (fallback)")
+        
+        # ✅ PRIORIDADE 3: Gerar _fbc se não existir mas tiver fbclid
         if not fbc_value and external_id_value and external_id_value.startswith('PAZ'):
-            try:
-                # time já está importado no topo do arquivo
-                fbc_value = f"fb.1.{int(time.time())}.{external_id_value}"
-                logger.info(f"🔑 _fbc gerado manualmente no Purchase: {fbc_value[:50]}...")
-            except Exception as e:
-                logger.warning(f"⚠️ Erro ao gerar _fbc no Purchase: {e}")
+            fbc_value = TrackingService.generate_fbc(external_id_value)
+            logger.info(f"🔑 Purchase - _fbc gerado automaticamente: {fbc_value[:50]}...")
         
-        # ✅ CRÍTICO #2: external_id deve ser SEMPRE um array consolidado com múltiplos IDs
-        # Meta exige: external_id: ["<fbclid>", "<chat_id>", "<any-other-ids>"]
-        # Ordem de prioridade: fbclid (sempre primeiro) > telegram_user_id > outros IDs
-        # Isso triplica as chances de correspondência da Meta
+        # ✅ CRÍTICO #2: external_id IMUTÁVEL e CONSISTENTE (SEMPRE MESMO FORMATO DO PAGEVIEW!)
+        # Usar TrackingService para garantir consistência total
+        # IMPORTANTE: _build_user_data recebe strings (fbclid e telegram_id) e faz o hash internamente
+        # Isso garante que PageView e Purchase usem EXATAMENTE o mesmo formato de hash
         
-        # Construir lista consolidada de external_ids ANTES de chamar _build_user_data
-        external_ids_list = []
+        external_id_for_hash = external_id_value if external_id_value and external_id_value.startswith('PAZ') else None
+        telegram_id_for_hash = str(telegram_user_id) if telegram_user_id else None
         
-        # PRIORIDADE 1: fbclid (sempre primeiro para matching com PageView)
-        if external_id_value:
-            external_ids_list.append(external_id_value)
-            logger.info(f"🔑 Purchase - external_id[0] = fbclid: {external_id_value[:30]}...")
-        
-        # PRIORIDADE 2: telegram_user_id (chat_id) - adicionar se disponível e diferente do fbclid
-        if telegram_user_id:
-            telegram_user_id_str = str(telegram_user_id)
-            # Só adicionar se for diferente do fbclid (para evitar duplicação)
-            if not external_id_value or telegram_user_id_str != external_id_value:
-                external_ids_list.append(telegram_user_id_str)
-                logger.info(f"🔑 Purchase - external_id[{len(external_ids_list)-1}] = telegram_user_id: {telegram_user_id_str}")
-        
-        # PRIORIDADE 3: Outros IDs relevantes (session_id, payment_id hash, etc.) - se necessário
+        logger.info(f"🔑 Purchase - external_id: fbclid={'✅' if external_id_for_hash else '❌'} | telegram_id={'✅' if telegram_id_for_hash else '❌'}")
         
         # Construir user_data usando função correta (faz hash SHA256)
         # ✅ CRÍTICO: Usar MESMOS dados do PageView (fbp, fbc, IP, User Agent)
         # ✅ CORREÇÃO: BotUser não tem email/phone - usar None (Meta aceita sem esses campos)
-        # ✅ CRÍTICO: Passar external_id como string (fbclid principal) e telegram_user_id como customer_user_id
-        # A função _build_user_data vai consolidar ambos no array external_id
+        # ✅ CRÍTICO: Passar external_id (fbclid) e customer_user_id (telegram_id) como strings
+        # _build_user_data vai construir o array com ordem correta: fbclid primeiro, telegram_id segundo
         user_data = MetaPixelAPI._build_user_data(
-            customer_user_id=str(telegram_user_id) if telegram_user_id else None,  # ✅ Adicionar telegram_user_id como customer_user_id (será hasheado e adicionado ao array)
-            external_id=external_id_value,  # ✅ fbclid é o external_id principal (será hasheado e será o primeiro do array)
-            email=None,  # ✅ BotUser não tem email - Meta aceita sem email se tiver external_id, fbp, fbc, IP, UA
-            phone=None,  # ✅ BotUser não tem phone - Meta aceita sem phone se tiver external_id, fbp, fbc, IP, UA
+            customer_user_id=telegram_id_for_hash,  # ✅ telegram_user_id (será hashado e adicionado ao array)
+            external_id=external_id_for_hash,  # ✅ fbclid (será hashado e será o PRIMEIRO do array)
+            email=None,
+            phone=None,
             client_ip=ip_value,  # ✅ MESMO IP do PageView
             client_user_agent=user_agent_value,  # ✅ MESMO User Agent do PageView
             fbp=fbp_value,  # ✅ MESMO _fbp do PageView (do Redis - cookie do browser)
@@ -6869,6 +6774,17 @@ def send_meta_pixel_purchase_event(payment):
             custom_data['content_category'] = 'remarketing'
         else:
             custom_data['content_category'] = 'initial'
+        
+        # ✅ CRÍTICO: Valor total (base + order_bump) - Meta recebe 1 evento com valor correto
+        # O payment.amount já contém o valor total calculado no bot_manager
+        total_value = float(payment.amount)
+        
+        # ✅ Log para validação (se order_bump estiver presente)
+        if hasattr(payment, 'order_bump_value') and payment.order_bump_value:
+            base_value = total_value - payment.order_bump_value
+            logger.info(f"💰 Purchase - Valor total: R$ {total_value:.2f} (Base: R$ {base_value:.2f} + Order Bump: R$ {payment.order_bump_value:.2f})")
+        
+        custom_data['value'] = total_value  # ✅ Garantir valor total correto
         
         # UTM e campaign tracking
         if payment.utm_source:
