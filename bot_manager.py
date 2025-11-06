@@ -1911,11 +1911,13 @@ class BotManager:
             
             # ✅ NOVO: Múltiplos Order Bumps - Aceitar
             elif callback_data.startswith('multi_bump_yes_'):
-                # Formato: multi_bump_yes_USER_KEY_BUMP_INDEX_TOTAL_PRICE_CENTAVOS
+                # ✅ CORREÇÃO: Formato: multi_bump_yes_CHAT_ID_BUMP_INDEX_TOTAL_PRICE_CENTAVOS
+                # user_key agora é independente do bot_id (apenas chat_id)
                 parts = callback_data.replace('multi_bump_yes_', '').split('_')
-                user_key = f"{parts[0]}_{parts[1]}"
-                bump_index = int(parts[2])
-                total_price = float(parts[3]) / 100  # Converter centavos para reais
+                chat_id_from_callback = int(parts[0])
+                user_key = f"orderbump_{chat_id_from_callback}"
+                bump_index = int(parts[1])
+                total_price = float(parts[2]) / 100  # Converter centavos para reais
                 
                 logger.info(f"🎁 Order Bump {bump_index + 1} ACEITO | User: {user_key} | Valor Total: R$ {total_price:.2f}")
                 
@@ -1928,6 +1930,31 @@ class BotManager:
                 # Atualizar sessão
                 if user_key in self.order_bump_sessions:
                     session = self.order_bump_sessions[user_key]
+                    
+                    # ✅ VALIDAÇÃO: Verificar se chat_id do callback corresponde ao chat_id da sessão
+                    session_chat_id = session.get('chat_id')
+                    if session_chat_id and session_chat_id != chat_id_from_callback:
+                        logger.error(f"❌ Chat ID mismatch: callback de chat {chat_id_from_callback}, mas sessão é do chat {session_chat_id}!")
+                        return
+                    
+                    session_bot_id = session.get('bot_id', bot_id)  # ✅ Usar bot_id da sessão se disponível
+                    
+                    # ✅ VALIDAÇÃO: Verificar se bot_id do callback corresponde ao bot_id da sessão
+                    if session_bot_id != bot_id:
+                        logger.warning(f"⚠️ Bot ID mismatch: callback de bot {bot_id}, mas sessão é do bot {session_bot_id}. Usando bot_id da sessão.")
+                        # Buscar token e chat_id corretos para o bot da sessão
+                        with self._bots_lock:
+                            if session_bot_id in self.active_bots:
+                                session_bot_info = self.active_bots[session_bot_id]
+                                token = session_bot_info['token']
+                                bot_id = session_bot_id  # ✅ Corrigir bot_id para o da sessão
+                            else:
+                                logger.error(f"❌ Bot {session_bot_id} da sessão não está mais ativo!")
+                                return
+                    
+                    # ✅ CORREÇÃO: Usar chat_id da sessão (mais confiável)
+                    chat_id = session.get('chat_id', chat_id)
+                    
                     current_bump = session['order_bumps'][bump_index]
                     bump_price = float(current_bump.get('price', 0))
                     
@@ -1938,18 +1965,20 @@ class BotManager:
                     
                     logger.info(f"🎁 Bump aceito: {current_bump.get('description', 'Bônus')} (+R$ {bump_price:.2f})")
                     
-                    # Exibir próximo order bump ou finalizar
+                    # Exibir próximo order bump ou finalizar (usar bot_id correto)
                     self._show_next_order_bump(bot_id, token, chat_id, user_key)
                 else:
                     logger.error(f"❌ Sessão de order bump não encontrada: {user_key}")
             
             # ✅ NOVO: Múltiplos Order Bumps - Recusar
             elif callback_data.startswith('multi_bump_no_'):
-                # Formato: multi_bump_no_USER_KEY_BUMP_INDEX_CURRENT_PRICE_CENTAVOS
+                # ✅ CORREÇÃO: Formato: multi_bump_no_CHAT_ID_BUMP_INDEX_CURRENT_PRICE_CENTAVOS
+                # user_key agora é independente do bot_id (apenas chat_id)
                 parts = callback_data.replace('multi_bump_no_', '').split('_')
-                user_key = f"{parts[0]}_{parts[1]}"
-                bump_index = int(parts[2])
-                current_price = float(parts[3]) / 100  # Converter centavos para reais
+                chat_id_from_callback = int(parts[0])
+                user_key = f"orderbump_{chat_id_from_callback}"
+                bump_index = int(parts[1])
+                current_price = float(parts[2]) / 100  # Converter centavos para reais
                 
                 logger.info(f"🎁 Order Bump {bump_index + 1} RECUSADO | User: {user_key} | Valor Atual: R$ {current_price:.2f}")
                 
@@ -1962,11 +1991,36 @@ class BotManager:
                 # Atualizar sessão
                 if user_key in self.order_bump_sessions:
                     session = self.order_bump_sessions[user_key]
+                    
+                    # ✅ VALIDAÇÃO: Verificar se chat_id do callback corresponde ao chat_id da sessão
+                    session_chat_id = session.get('chat_id')
+                    if session_chat_id and session_chat_id != chat_id_from_callback:
+                        logger.error(f"❌ Chat ID mismatch: callback de chat {chat_id_from_callback}, mas sessão é do chat {session_chat_id}!")
+                        return
+                    
+                    session_bot_id = session.get('bot_id', bot_id)  # ✅ Usar bot_id da sessão se disponível
+                    
+                    # ✅ VALIDAÇÃO: Verificar se bot_id do callback corresponde ao bot_id da sessão
+                    if session_bot_id != bot_id:
+                        logger.warning(f"⚠️ Bot ID mismatch: callback de bot {bot_id}, mas sessão é do bot {session_bot_id}. Usando bot_id da sessão.")
+                        # Buscar token e chat_id corretos para o bot da sessão
+                        with self._bots_lock:
+                            if session_bot_id in self.active_bots:
+                                session_bot_info = self.active_bots[session_bot_id]
+                                token = session_bot_info['token']
+                                bot_id = session_bot_id  # ✅ Corrigir bot_id para o da sessão
+                            else:
+                                logger.error(f"❌ Bot {session_bot_id} da sessão não está mais ativo!")
+                                return
+                    
+                    # ✅ CORREÇÃO: Usar chat_id da sessão (mais confiável)
+                    chat_id = session.get('chat_id', chat_id)
+                    
                     session['current_index'] = bump_index + 1
                     
                     logger.info(f"🎁 Bump recusado: {session['order_bumps'][bump_index].get('description', 'Bônus')}")
                     
-                    # Exibir próximo order bump ou finalizar
+                    # Exibir próximo order bump ou finalizar (usar bot_id correto)
                     self._show_next_order_bump(bot_id, token, chat_id, user_key)
                 else:
                     logger.error(f"❌ Sessão de order bump não encontrada: {user_key}")
@@ -2783,9 +2837,12 @@ Seu pagamento ainda não foi confirmado.
             order_bumps: Lista de order bumps habilitados
         """
         try:
-            # Salvar dados do usuário para continuar a sequência
-            user_key = f"{bot_id}_{chat_id}"
+            # ✅ CORREÇÃO CRÍTICA: user_key deve ser independente do bot_id
+            # Usar apenas chat_id para garantir que sessão seja encontrada independente do bot que processa o callback
+            user_key = f"orderbump_{chat_id}"
             self.order_bump_sessions[user_key] = {
+                'bot_id': bot_id,  # ✅ CRÍTICO: Salvar bot_id na sessão para garantir consistência
+                'chat_id': chat_id,  # ✅ Salvar chat_id também para validação
                 'original_price': original_price,
                 'original_description': original_description,
                 'button_index': button_index,
@@ -2819,11 +2876,33 @@ Seu pagamento ainda não foi confirmado.
                 return
             
             session = self.order_bump_sessions[user_key]
+            
+            # ✅ VALIDAÇÃO: Verificar se chat_id corresponde ao chat_id da sessão
+            session_chat_id = session.get('chat_id')
+            if session_chat_id and session_chat_id != chat_id:
+                logger.warning(f"⚠️ Chat ID mismatch em _show_next_order_bump: recebido {chat_id}, mas sessão é do chat {session_chat_id}. Usando chat_id da sessão.")
+                chat_id = session_chat_id  # ✅ Corrigir chat_id para o da sessão
+            
+            # ✅ VALIDAÇÃO: Usar bot_id da sessão se disponível (garante consistência)
+            session_bot_id = session.get('bot_id', bot_id)
+            if session_bot_id != bot_id:
+                logger.warning(f"⚠️ Bot ID mismatch em _show_next_order_bump: recebido {bot_id}, mas sessão é do bot {session_bot_id}. Usando bot_id da sessão.")
+                # Buscar token correto para o bot da sessão
+                with self._bots_lock:
+                    if session_bot_id in self.active_bots:
+                        session_bot_info = self.active_bots[session_bot_id]
+                        token = session_bot_info['token']
+                        bot_id = session_bot_id  # ✅ Corrigir bot_id para o da sessão
+                    else:
+                        logger.error(f"❌ Bot {session_bot_id} da sessão não está mais ativo!")
+                        return
+            
             current_index = session['current_index']
             order_bumps = session['order_bumps']
             
             if current_index >= len(order_bumps):
                 # Todos os order bumps foram exibidos, gerar PIX final
+                # ✅ Usar bot_id e token já corrigidos pela validação acima
                 self._finalize_order_bump_session(bot_id, token, chat_id, user_key)
                 return
             
@@ -2849,15 +2928,16 @@ Seu pagamento ainda não foi confirmado.
             accept_button_text = accept_text.strip() if accept_text else f'✅ SIM! Quero por R$ {total_with_this_bump:.2f}'
             decline_button_text = decline_text.strip() if decline_text else f'❌ NÃO, continuar com R$ {current_total:.2f}'
             
-            # Botões com callback_data específico para múltiplos order bumps
+            # ✅ CORREÇÃO: Botões com callback_data usando apenas chat_id (sem bot_id na chave)
+            # Formato: multi_bump_yes_CHAT_ID_BUMP_INDEX_TOTAL_PRICE_CENTAVOS
             buttons = [
                 {
                     'text': accept_button_text,
-                    'callback_data': f'multi_bump_yes_{user_key}_{current_index}_{int(total_with_this_bump*100)}'
+                    'callback_data': f'multi_bump_yes_{chat_id}_{current_index}_{int(total_with_this_bump*100)}'
                 },
                 {
                     'text': decline_button_text,
-                    'callback_data': f'multi_bump_no_{user_key}_{current_index}_{int(current_total*100)}'
+                    'callback_data': f'multi_bump_no_{chat_id}_{current_index}_{int(current_total*100)}'
                 }
             ]
             
@@ -2917,6 +2997,27 @@ Seu pagamento ainda não foi confirmado.
                 return
             
             session = self.order_bump_sessions[user_key]
+            
+            # ✅ VALIDAÇÃO: Verificar se chat_id corresponde ao chat_id da sessão
+            session_chat_id = session.get('chat_id')
+            if session_chat_id and session_chat_id != chat_id:
+                logger.warning(f"⚠️ Chat ID mismatch em _finalize_order_bump_session: recebido {chat_id}, mas sessão é do chat {session_chat_id}. Usando chat_id da sessão.")
+                chat_id = session_chat_id  # ✅ Corrigir chat_id para o da sessão
+            
+            # ✅ VALIDAÇÃO: Usar bot_id da sessão se disponível (garante consistência)
+            session_bot_id = session.get('bot_id', bot_id)
+            if session_bot_id != bot_id:
+                logger.warning(f"⚠️ Bot ID mismatch em _finalize_order_bump_session: recebido {bot_id}, mas sessão é do bot {session_bot_id}. Usando bot_id da sessão.")
+                # Buscar token correto para o bot da sessão
+                with self._bots_lock:
+                    if session_bot_id in self.active_bots:
+                        session_bot_info = self.active_bots[session_bot_id]
+                        token = session_bot_info['token']
+                        bot_id = session_bot_id  # ✅ Corrigir bot_id para o da sessão
+                    else:
+                        logger.error(f"❌ Bot {session_bot_id} da sessão não está mais ativo!")
+                        return
+            
             original_price = session['original_price']
             original_description = session['original_description']
             button_index = session['button_index']
