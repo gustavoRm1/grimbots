@@ -559,9 +559,19 @@ class AtomPayGateway(PaymentGateway):
             if not pix_code:
                 if payment_status == 'refused':
                     logger.error(f"❌ [{self.get_gateway_name()}] Transação RECUSADA pelo gateway - PIX não será gerado")
-                    logger.error(f"   Hash: {transaction_hash} | Status: {payment_status}")
+                    logger.error(f"   Hash: {transaction_hash_str} | Status: {payment_status}")
                     logger.error(f"   Motivo: Gateway recusou a transação (verificar configurações)")
-                    return None
+                    # ✅ CRÍTICO: Retornar dados da transação mesmo quando recusada
+                    # Isso permite que o payment seja criado e o webhook possa encontrá-lo
+                    return {
+                        'pix_code': None,  # Não tem PIX porque foi recusado
+                        'qr_code_url': None,
+                        'transaction_id': transaction_id_str if transaction_id_str else transaction_hash_str,
+                        'transaction_hash': transaction_hash_str,  # Hash principal para consulta
+                        'payment_id': payment_id,
+                        'status': 'refused',  # ✅ Status da transação
+                        'error': 'Transação recusada pelo gateway'
+                    }
                 elif payment_status in ['pending', 'processing', 'waiting', '']:
                     # ✅ CRÍTICO: Quando status é pending, o PIX pode ainda não ter sido gerado
                     # Mas a transação foi criada com sucesso, então devemos retornar o hash
@@ -659,12 +669,18 @@ class AtomPayGateway(PaymentGateway):
             amount_cents = data.get('amount') or data.get('amount_paid') or 0
             amount = float(amount_cents) / 100.0
             
+            # ✅ CRÍTICO: Extrair reference (pode conter payment_id para matching)
+            external_reference = data.get('reference') or data.get('external_reference')
+            
             logger.info(f"✅ [{self.get_gateway_name()}] Webhook processado: Hash={transaction_hash_str[:20] if len(transaction_hash_str) > 20 else transaction_hash_str}... | Status={status_raw}→{status} | R$ {amount:.2f}")
+            if external_reference:
+                logger.info(f"   Reference: {external_reference}")
             
             return {
                 'gateway_transaction_id': transaction_hash_str,  # ✅ Usar string convertida
                 'status': status,
-                'amount': amount
+                'amount': amount,
+                'external_reference': external_reference  # ✅ CRÍTICO: Para matching do payment
             }
             
         except Exception as e:

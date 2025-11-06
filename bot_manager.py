@@ -3713,7 +3713,14 @@ Seu pagamento ainda não foi confirmado.
                 logger.info(f"📊 Resultado do PIX: {pix_result}")
                 
                 if pix_result:
-                    logger.info(f"✅ PIX gerado com sucesso pelo gateway!")
+                    # ✅ CRÍTICO: Verificar se transação foi recusada
+                    transaction_status = pix_result.get('status')
+                    is_refused = transaction_status == 'refused' or pix_result.get('error')
+                    
+                    if is_refused:
+                        logger.warning(f"⚠️ Transação RECUSADA pelo gateway - criando payment com status 'failed' para webhook")
+                    else:
+                        logger.info(f"✅ PIX gerado com sucesso pelo gateway!")
                     
                     # ✅ BUSCAR BOT_USER PARA COPIAR DADOS DEMOGRÁFICOS
                     from models import BotUser
@@ -3722,20 +3729,32 @@ Seu pagamento ainda não foi confirmado.
                         telegram_user_id=customer_user_id
                     ).first()
                     
+                    # ✅ CRÍTICO: Determinar status do payment
+                    # Se recusado, usar 'failed' para que webhook possa atualizar
+                    # Se não recusado, usar 'pending' normalmente
+                    payment_status = 'failed' if is_refused else 'pending'
+                    
+                    # ✅ CRÍTICO: Extrair transaction_id/hash (prioridade: transaction_id > transaction_hash)
+                    gateway_transaction_id = (
+                        pix_result.get('transaction_id') or 
+                        pix_result.get('transaction_hash') or 
+                        None
+                    )
+                    
                     # Salvar pagamento no banco (incluindo código PIX para reenvio + analytics)
                     payment = Payment(
                         bot_id=bot_id,
                         payment_id=payment_id,
                         gateway_type=gateway.gateway_type,
-                        gateway_transaction_id=pix_result.get('transaction_id'),  # Identifier da SyncPay
+                        gateway_transaction_id=gateway_transaction_id,  # ✅ Salvar mesmo quando recusado
                         gateway_transaction_hash=pix_result.get('transaction_hash'),  # ✅ Hash para consulta de status (Paradise)
                         amount=amount,
                         customer_name=customer_name,
                         customer_username=customer_username,
                         customer_user_id=customer_user_id,
                         product_name=description,
-                        product_description=pix_result.get('pix_code'),  # Salvar código PIX para reenvio
-                        status='pending',
+                        product_description=pix_result.get('pix_code'),  # Salvar código PIX para reenvio (None se recusado)
+                        status=payment_status,  # ✅ 'failed' se recusado, 'pending' se não
                         # Analytics tracking
                         order_bump_shown=order_bump_shown,
                         order_bump_accepted=order_bump_accepted,
