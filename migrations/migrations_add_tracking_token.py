@@ -46,27 +46,43 @@ def add_tracking_token():
             # Verificar se coluna já existe (idempotente)
             inspector = inspect(db.engine)
             
+            # ✅ CORREÇÃO: Detectar nome da tabela (pode ser 'payment' ou 'payments')
+            tables = inspector.get_table_names()
+            table_name = None
+            
+            # Tentar encontrar tabela de pagamentos
+            if 'payments' in tables:
+                table_name = 'payments'
+            elif 'payment' in tables:
+                table_name = 'payment'
+            else:
+                logger.error(f"❌ Tabela de pagamentos não encontrada no banco de dados!")
+                logger.error(f"   Tabelas disponíveis: {', '.join(tables)}")
+                return False
+            
+            logger.info(f"🔍 Tabela detectada: {table_name}")
+            
             try:
-                columns = [col['name'] for col in inspector.get_columns('payment')]
+                columns = [col['name'] for col in inspector.get_columns(table_name)]
                 
                 if 'tracking_token' in columns:
                     logger.info("✅ Campo tracking_token já existe em Payment - migration já aplicada")
                     return True
             except Exception as e:
-                logger.warning(f"⚠️ Tabela payment pode não existir ainda: {e}")
-                # Continuar para criar a coluna (pode falhar se tabela não existir)
+                logger.warning(f"⚠️ Erro ao verificar colunas: {e}")
+                # Continuar para criar a coluna
             
             # Adicionar coluna tracking_token
-            logger.info("🔄 Adicionando coluna tracking_token ao Payment...")
+            logger.info(f"🔄 Adicionando coluna tracking_token à tabela {table_name}...")
             
             # SQL compatível com SQLite, PostgreSQL e MySQL
             try:
-                db.session.execute(text("""
-                    ALTER TABLE payment
+                db.session.execute(text(f"""
+                    ALTER TABLE {table_name}
                     ADD COLUMN tracking_token VARCHAR(100);
                 """))
                 db.session.commit()
-                logger.info("✅ Campo tracking_token adicionado ao Payment")
+                logger.info(f"✅ Campo tracking_token adicionado à tabela {table_name}")
             except Exception as e:
                 error_msg = str(e).lower()
                 if 'duplicate' in error_msg or 'already exists' in error_msg or 'exists' in error_msg:
@@ -78,9 +94,9 @@ def add_tracking_token():
             # Criar índice (idempotente)
             try:
                 logger.info("🔄 Criando índice idx_payment_tracking_token...")
-                db.session.execute(text("""
+                db.session.execute(text(f"""
                     CREATE INDEX IF NOT EXISTS idx_payment_tracking_token 
-                    ON payment(tracking_token);
+                    ON {table_name}(tracking_token);
                 """))
                 db.session.commit()
                 logger.info("✅ Índice idx_payment_tracking_token criado")
@@ -122,6 +138,21 @@ def rollback_tracking_token():
         try:
             logger.warning("⚠️ REMOVENDO tracking_token - dados serão perdidos!")
             
+            # ✅ CORREÇÃO: Detectar nome da tabela (pode ser 'payment' ou 'payments')
+            inspector = inspect(db.engine)
+            tables = inspector.get_table_names()
+            table_name = None
+            
+            if 'payments' in tables:
+                table_name = 'payments'
+            elif 'payment' in tables:
+                table_name = 'payment'
+            else:
+                logger.error(f"❌ Tabela de pagamentos não encontrada!")
+                return False
+            
+            logger.info(f"🔍 Tabela detectada para rollback: {table_name}")
+            
             # Remover índice
             try:
                 db.session.execute(text("""
@@ -137,8 +168,8 @@ def rollback_tracking_token():
             # Para SQLite, seria necessário recriar a tabela
             # Para PostgreSQL/MySQL, usar:
             try:
-                db.session.execute(text("""
-                    ALTER TABLE payment DROP COLUMN tracking_token;
+                db.session.execute(text(f"""
+                    ALTER TABLE {table_name} DROP COLUMN tracking_token;
                 """))
                 db.session.commit()
                 logger.info("✅ Coluna tracking_token removida")
