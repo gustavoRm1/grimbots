@@ -985,12 +985,24 @@ function poolsApp() {
                 }
                 
                 // ✅ CRÍTICO: Detectar se access_token foi alterado
-                // Se não foi alterado, enviar "..." para que backend mantenha o existente
+                // Se não foi alterado E token original existe, enviar "..." para que backend mantenha o existente
                 let accessTokenToSend = this.metaPixelConfig.meta_access_token;
+                
+                // ✅ VALIDAÇÃO: Só enviar marcador se:
+                // 1. Token original existe E não está vazio
+                // 2. Token atual é igual ao original
+                // 3. Token atual não está vazio
                 if (this.originalMetaAccessToken && 
+                    this.originalMetaAccessToken.trim() !== '' &&
+                    this.metaPixelConfig.meta_access_token &&
+                    this.metaPixelConfig.meta_access_token.trim() !== '' &&
                     this.metaPixelConfig.meta_access_token === this.originalMetaAccessToken) {
                     // Token não foi alterado, enviar marcador
                     accessTokenToSend = '...' + this.originalMetaAccessToken.substring(0, 10);
+                    console.log('🔍 [Frontend] Token não alterado - enviando marcador');
+                } else {
+                    // Token foi alterado ou não existe original - enviar token completo
+                    console.log('🔍 [Frontend] Token alterado ou original não existe - enviando token completo');
                 }
                 
                 // ✅ GARANTIR: Sempre enviar "grim" como nome do parâmetro (nunca pode ser alterado)

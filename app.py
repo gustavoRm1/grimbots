@@ -4355,9 +4355,18 @@ def update_pool_meta_pixel_config(pool_id):
         if access_token:
             # Se começar com "..." significa que não foi alterado (campo mascarado do frontend)
             if access_token.startswith('...'):
-                # Token não foi alterado, manter o existente (não atualizar)
-                logger.info(f"✅ [Meta Pixel Save] Token não foi alterado (marcador '...' detectado) - mantendo existente")
-                access_token = None
+                # ✅ CRÍTICO: Verificar se token original existe no banco
+                if pool.meta_access_token:
+                    # Token não foi alterado, manter o existente (não atualizar)
+                    logger.info(f"✅ [Meta Pixel Save] Token não foi alterado (marcador '...' detectado) - mantendo existente")
+                    access_token = None
+                else:
+                    # ❌ PROBLEMA: Marcador enviado mas token não existe no banco!
+                    # Isso significa que é primeira configuração ou token foi perdido
+                    logger.error(f"❌ [Meta Pixel Save] ERRO CRÍTICO: Marcador '...' recebido mas token não existe no banco!")
+                    logger.error(f"   Isso indica que frontend pensa que token existe, mas banco está vazio")
+                    logger.error(f"   SOLUÇÃO: Exigir que usuário insira token completo")
+                    return jsonify({'error': 'Access Token é obrigatório. Por favor, insira o token completo.'}), 400
             else:
                 logger.info(f"🔄 [Meta Pixel Save] Token foi alterado - validando e testando conexão...")
                 if not MetaPixelHelper.is_valid_access_token(access_token):
