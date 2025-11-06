@@ -89,17 +89,23 @@ class MetaPixelAPI:
         """
         user_data = {}
         
-        # ✅ External ID (obrigatório para Conversions API)
-        # Prioridade: external_id > customer_user_id (fbclid é mais confiável)
+        # ✅ CRÍTICO: External ID (obrigatório para Conversions API)
+        # ✅ ORDEM DE PRIORIDADE CORRETA: external_id (fbclid) SEMPRE PRIMEIRO > customer_user_id (telegram_user_id)
+        # Meta exige que fbclid seja o primeiro para matching com PageView
         external_ids = []
         
-        # Adicionar customer_user_id se válido
-        if customer_user_id and isinstance(customer_user_id, str) and customer_user_id.strip():
-            external_ids.append(MetaPixelAPI._hash_data(customer_user_id.strip()))
-        
-        # Adicionar external_id se válido (prioridade - geralmente é fbclid)
+        # ✅ PRIORIDADE 1: external_id (fbclid) - SEMPRE PRIMEIRO para matching com PageView
         if external_id and isinstance(external_id, str) and external_id.strip():
             external_ids.append(MetaPixelAPI._hash_data(external_id.strip()))
+        
+        # ✅ PRIORIDADE 2: customer_user_id (telegram_user_id) - adicionar depois do fbclid
+        # Só adicionar se for diferente do external_id (evitar duplicação)
+        if customer_user_id and isinstance(customer_user_id, str) and customer_user_id.strip():
+            customer_id_clean = customer_user_id.strip()
+            # Verificar se não é o mesmo que external_id (para evitar duplicação)
+            external_id_clean = external_id.strip() if external_id and isinstance(external_id, str) else None
+            if customer_id_clean != external_id_clean:
+                external_ids.append(MetaPixelAPI._hash_data(customer_id_clean))
         
         # Só adicionar se tiver pelo menos um external_id válido
         if external_ids:
