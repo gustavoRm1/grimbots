@@ -4350,7 +4350,7 @@ def create_gateway():
         gateway_type = data.get('gateway_type')
     
         # ✅ Validar tipo de gateway
-        if gateway_type not in ['syncpay', 'pushynpay', 'paradise', 'wiinpay']:
+        if gateway_type not in ['syncpay', 'pushynpay', 'paradise', 'wiinpay', 'atomopay']:
             logger.error(f"❌ Tipo de gateway inválido: {gateway_type}")
             return jsonify({'error': 'Tipo de gateway inválido'}), 400
         
@@ -4392,6 +4392,12 @@ def create_gateway():
             # Fallback para o ID da plataforma se não fornecido
             gateway.split_user_id = data.get('split_user_id', '6877edeba3c39f8451ba5bdd')
         
+        elif gateway_type == 'atomopay':
+            # ✅ ÁTOMO PAY
+            gateway.api_key = data.get('api_token') or data.get('api_key')  # Aceita ambos
+            gateway.offer_hash = data.get('offer_hash')
+            gateway.product_hash = data.get('product_hash')
+        
         # ✅ Split percentage (comum a todos)
         gateway.split_percentage = float(data.get('split_percentage', 2.0))  # 2% PADRÃO
         
@@ -4416,8 +4422,9 @@ def create_gateway():
                 'client_id': gateway.client_id,
                 'client_secret': gateway.client_secret,
                 'api_key': gateway.api_key,
-                'product_hash': gateway.product_hash,  # Paradise
-                'offer_hash': gateway.offer_hash,      # Paradise
+                'api_token': gateway.api_key,  # Átomo Pay usa api_token (mesmo valor)
+                'product_hash': gateway.product_hash,  # Paradise / Átomo Pay
+                'offer_hash': gateway.offer_hash,      # Paradise / Átomo Pay
                 'store_id': gateway.store_id,          # Paradise
                 'organization_id': gateway.organization_id,  # HooPay
                 'split_user_id': gateway.split_user_id  # WiinPay
@@ -4677,6 +4684,14 @@ def update_gateway(gateway_id):
                 gateway.api_key = data['api_key']
             if data.get('split_user_id'):
                 gateway.split_user_id = data['split_user_id']
+        
+        elif gateway_type == 'atomopay':
+            if data.get('api_token') or data.get('api_key'):
+                gateway.api_key = data.get('api_token') or data.get('api_key')
+            if data.get('offer_hash'):
+                gateway.offer_hash = data['offer_hash']
+            if data.get('product_hash'):
+                gateway.product_hash = data['product_hash']
         
         db.session.commit()
         

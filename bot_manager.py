@@ -778,16 +778,34 @@ class BotManager:
                             ).first()
                             
                             # Se não existe, criar (será atualizado depois no /start se necessário)
+                            # ✅ CORREÇÃO CRÍTICA: Tratamento de race condition
                             if not bot_user:
-                                bot_user = BotUser(
-                                    bot_id=bot_id,
-                                    telegram_user_id=telegram_user_id,
-                                    first_name=user.get('first_name', 'Usuário'),
-                                    username=user.get('username', ''),
-                                    archived=False
-                                )
-                                db.session.add(bot_user)
-                                db.session.flush()  # Obter ID sem commit
+                                try:
+                                    bot_user = BotUser(
+                                        bot_id=bot_id,
+                                        telegram_user_id=telegram_user_id,
+                                        first_name=user.get('first_name', 'Usuário'),
+                                        username=user.get('username', ''),
+                                        archived=False
+                                    )
+                                    db.session.add(bot_user)
+                                    db.session.flush()  # Obter ID sem commit (detecta duplicação)
+                                except Exception as e:
+                                    # ✅ RACE CONDITION: Outro processo criou entre a busca e o add
+                                    db.session.rollback()
+                                    logger.debug(f"⚠️ Race condition ao criar BotUser (esperado em /start), buscando: {e}")
+                                    # Buscar novamente (pode ter sido criado pelo outro processo ou no /start)
+                                    bot_user = BotUser.query.filter_by(
+                                        bot_id=bot_id,
+                                        telegram_user_id=telegram_user_id,
+                                        archived=False
+                                    ).first()
+                                    if not bot_user:
+                                        # Se ainda não encontrou, buscar sem filtro archived
+                                        bot_user = BotUser.query.filter_by(
+                                            bot_id=bot_id,
+                                            telegram_user_id=telegram_user_id
+                                        ).first()
                             
                             # ✅ CRÍTICO: Gerar message_id único se não existir
                             telegram_msg_id = message.get('message_id')
@@ -866,6 +884,9 @@ class BotManager:
                     else:
                         logger.info(f"⭐ COMANDO /START - Enviando mensagem de boas-vindas...")
                     
+                    # ✅ CORREÇÃO CRÍTICA: Passar telegram_user_id para _handle_start_command
+                    # A função irá buscar/criar bot_user dentro do seu próprio app_context
+                    # Isso evita race conditions entre diferentes contextos de sessão
                     self._handle_start_command(bot_id, token, config, chat_id, message, start_param)
                 
                 # ✅ SOLUÇÃO HÍBRIDA: Mensagens de texto também reiniciam o funil
@@ -1129,11 +1150,27 @@ class BotManager:
                 first_name = user_from.get('first_name', 'Usuário')
                 username = user_from.get('username', '')
                 
-                # Verificar se usuário já existe
+                # ✅ CORREÇÃO CRÍTICA: get_or_create pattern com tratamento de race condition
+                # Buscar primeiro com filtro archived=False (usuários ativos)
                 bot_user = BotUser.query.filter_by(
                     bot_id=bot_id,
-                    telegram_user_id=telegram_user_id
+                    telegram_user_id=telegram_user_id,
+                    archived=False
                 ).first()
+                
+                # ✅ SE NÃO ENCONTROU COM archived=False, buscar sem filtro (pode estar arquivado)
+                if not bot_user:
+                    bot_user = BotUser.query.filter_by(
+                        bot_id=bot_id,
+                        telegram_user_id=telegram_user_id
+                    ).first()
+                    
+                    # Se encontrou arquivado, re-ativar
+                    if bot_user and bot_user.archived:
+                        logger.info(f"🔄 Usuário arquivado detectado - re-ativando: {first_name}")
+                        bot_user.archived = False
+                        bot_user.archived_reason = None
+                        bot_user.archived_at = None
                 
                 # ============================================================================
                 # ✅ EXTRAIR TRACKING DATA DO START PARAM (QI 540 - FIX CRÍTICO)
@@ -1224,6 +1261,7 @@ class BotManager:
                 should_send_welcome = False  # Flag para controlar envio
                 is_new_user = False
                 
+                # ✅ CORREÇÃO CRÍTICA: Se ainda não existe, criar com tratamento de race condition
                 if not bot_user:
                     # Novo usuário - criar registro
                     bot_user = BotUser(
@@ -1361,7 +1399,35 @@ class BotManager:
                                f"utm_source={utm_data_from_start.get('utm_source')} | " +
                                f"utm_campaign={utm_data_from_start.get('utm_campaign')}")
                     
-                    db.session.add(bot_user)
+                    # ✅ CORREÇÃO CRÍTICA: Adicionar com tratamento de race condition
+                    # Se outro processo criar entre a busca e o add, capturar IntegrityError
+                    try:
+                        db.session.add(bot_user)
+                        db.session.flush()  # Tentar flush para detectar duplicação imediatamente
+                    except Exception as e:
+                        # ✅ RACE CONDITION DETECTADA: Outro processo criou o registro entre a busca e o add
+                        # Rollback e buscar novamente
+                        db.session.rollback()
+                        logger.warning(f"⚠️ Race condition detectada ao criar BotUser, buscando novamente: {e}")
+                        
+                        # Buscar o registro que foi criado pelo outro processo
+                        bot_user = BotUser.query.filter_by(
+                            bot_id=bot_id,
+                            telegram_user_id=telegram_user_id,
+                            archived=False
+                        ).first()
+                        
+                        if not bot_user:
+                            # Se ainda não encontrou, buscar sem filtro archived
+                            bot_user = BotUser.query.filter_by(
+                                bot_id=bot_id,
+                                telegram_user_id=telegram_user_id
+                            ).first()
+                        
+                        if not bot_user:
+                            # Se ainda não encontrou, erro crítico
+                            logger.error(f"❌ ERRO CRÍTICO: Não foi possível criar nem buscar BotUser após race condition")
+                            raise
                     
                     # Atualizar contador do bot (bot já foi carregado acima)
                     # ✅ Contar apenas usuários ativos (não arquivados)

@@ -10,6 +10,7 @@ from gateway_syncpay import SyncPayGateway
 from gateway_pushyn import PushynGateway
 from gateway_paradise import ParadisePaymentGateway
 from gateway_wiinpay import WiinPayGateway
+from gateway_atomopay import AtomPayGateway
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +29,7 @@ class GatewayFactory:
         'pushynpay': PushynGateway,
         'paradise': ParadisePaymentGateway,
         'wiinpay': WiinPayGateway,
+        'atomopay': AtomPayGateway,  # ✅ Átomo Pay
     }
     
     @classmethod
@@ -139,6 +141,26 @@ class GatewayFactory:
                 gateway = gateway_class(
                     api_key=api_key,
                     split_user_id=split_user_id
+                )
+            
+            elif gateway_type == 'atomopay':
+                # ✅ Átomo Pay requer: api_token
+                # Opcional: offer_hash ou product_hash (recomendado)
+                api_token = credentials.get('api_token') or credentials.get('api_key')
+                offer_hash = credentials.get('offer_hash', '')
+                product_hash = credentials.get('product_hash', '')
+                
+                if not api_token:
+                    logger.error(f"❌ [Factory] Átomo Pay requer api_token")
+                    return None
+                
+                if not offer_hash and not product_hash:
+                    logger.warning(f"⚠️ [Factory] Átomo Pay: offer_hash ou product_hash não configurado. Usando fallback.")
+                
+                gateway = gateway_class(
+                    api_token=api_token,
+                    offer_hash=offer_hash if offer_hash else None,
+                    product_hash=product_hash if product_hash else None
                 )
             
             else:

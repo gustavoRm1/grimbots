@@ -409,7 +409,7 @@
             <div class="stat-card">
                 <div class="stat-label">Gateways Configurados</div>
                 <div class="stat-value" style="color: #FFB800;">
-                    <span x-text="gatewaysList.filter(g => g.is_verified && g.gateway_type !== 'hoopay' && g.gateway_type !== 'syncpay').length"></span><span class="text-2xl text-gray-600">/3</span>
+                    <span x-text="gatewaysList.filter(g => g.is_verified && g.gateway_type !== 'hoopay' && g.gateway_type !== 'syncpay').length"></span><span class="text-2xl text-gray-600">/4</span>
                 </div>
                 <div class="text-sm text-gray-500">Gateways verificados</div>
             </div>
@@ -452,6 +452,9 @@
                                     </template>
                                     <template x-if="gateway.gateway_type === 'wiinpay'">
                                         <img src="{{ url_for('static', filename='img/wiinpay.ico') }}" alt="WiinPay" class="w-12 h-12 object-contain">
+                                    </template>
+                                    <template x-if="gateway.gateway_type === 'atomopay'">
+                                        <img src="{{ url_for('static', filename='img/atomopay.png') }}" alt="Átomo Pay" class="w-12 h-12 object-contain">
                                     </template>
                                 </div>
                                 <div class="flex-1">
@@ -575,6 +578,48 @@
                                                 <i class="fas" :class="show ? 'fa-eye-slash' : 'fa-eye'"></i>
                                             </button>
                                         </div>
+                                    </div>
+                                    <button type="submit" :disabled="loading" class="btn-action btn-action-primary w-full">
+                                        <i class="fas fa-save mr-2"></i>
+                                        <span x-text="loading ? 'Salvando...' : 'Atualizar'"></span>
+                                    </button>
+                                </form>
+                            </template>
+
+                            <!-- Átomo Pay -->
+                            <template x-if="gateway.gateway_type === 'atomopay'">
+                                <form @submit.prevent="updateGateway(gateway.id, 'atomopay')" class="space-y-3">
+                                    <div x-data="{ show: false }">
+                                        <label class="text-xs font-bold text-gray-400 block mb-1">API Token</label>
+                                        <div class="relative">
+                                            <input :type="show ? 'text' : 'password'" 
+                                                   x-model="editGateway.api_token" 
+                                                   class="form-input pr-10"
+                                                   placeholder="●●●●●●●●">
+                                            <button type="button" @click="show = !show" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">
+                                                <i class="fas" :class="show ? 'fa-eye-slash' : 'fa-eye'"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label class="text-xs font-bold text-gray-400 block mb-1">Offer Hash (Recomendado)</label>
+                                        <input type="text" 
+                                               x-model="editGateway.offer_hash" 
+                                               class="form-input"
+                                               placeholder="hash-da-oferta">
+                                    </div>
+                                    <div>
+                                        <label class="text-xs font-bold text-gray-400 block mb-1">Product Hash (Alternativa)</label>
+                                        <input type="text" 
+                                               x-model="editGateway.product_hash" 
+                                               class="form-input"
+                                               placeholder="hash-do-produto">
+                                    </div>
+                                    <div class="info-box-warning info-box p-2">
+                                        <p class="text-xs text-gray-300">
+                                            <i class="fas fa-info-circle mr-1"></i>
+                                            Configure offer_hash OU product_hash para melhor compatibilidade
+                                        </p>
                                     </div>
                                     <button type="submit" :disabled="loading" class="btn-action btn-action-primary w-full">
                                         <i class="fas fa-save mr-2"></i>
@@ -756,6 +801,69 @@
                         </button>
                     </form>
                 </div>
+
+                <!-- Átomo Pay -->
+                <div class="gateway-card" x-show="!getGatewayStatus('atomopay')?.is_verified">
+                    <div class="flex items-start justify-between mb-4">
+                        <div class="flex items-center gap-3 flex-1">
+                            <div class="w-12 h-12 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0" 
+                                 style="background: linear-gradient(135deg, rgba(255, 184, 0, 0.1), rgba(255, 184, 0, 0.05));">
+                                <img src="{{ url_for('static', filename='img/atomopay.png') }}" 
+                                     alt="Átomo Pay" 
+                                     class="w-12 h-12 object-contain">
+                            </div>
+                            <div>
+                                <h3 class="text-sm font-bold text-white">Átomo Pay</h3>
+                                <p class="text-xs text-gray-500">PCI DSS Certificado</p>
+                            </div>
+                        </div>
+                        <span class="gateway-status-unconfigured">
+                            <i class="fas fa-exclamation-circle"></i>
+                            Novo
+                        </span>
+                    </div>
+
+                    <form @submit.prevent="saveGateway('atomopay')" class="space-y-3">
+                        <div x-data="{ show: false }">
+                            <label class="text-xs font-bold text-gray-400 block mb-1">API Token</label>
+                            <div class="relative">
+                                <input :type="show ? 'text' : 'password'" 
+                                       x-model="gateways.atomopay.api_token" 
+                                       class="form-input pr-10"
+                                       placeholder="●●●●●●●●">
+                                <button type="button" @click="show = !show" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">
+                                    <i class="fas" :class="show ? 'fa-eye-slash' : 'fa-eye'"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-gray-400 block mb-1">Offer Hash (Recomendado)</label>
+                            <input type="text" 
+                                   x-model="gateways.atomopay.offer_hash" 
+                                   class="form-input"
+                                   placeholder="hash-da-oferta">
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-gray-400 block mb-1">Product Hash (Alternativa)</label>
+                            <input type="text" 
+                                   x-model="gateways.atomopay.product_hash" 
+                                   class="form-input"
+                                   placeholder="hash-do-produto">
+                        </div>
+                        <div class="info-box-warning info-box p-2">
+                            <p class="text-xs text-gray-300">
+                                <i class="fas fa-info-circle mr-1"></i>
+                                Configure offer_hash OU product_hash para melhor compatibilidade
+                            </p>
+                        </div>
+                        <button type="submit" 
+                                :disabled="loading"
+                                class="btn-action btn-action-primary w-full">
+                            <i class="fas fa-save mr-2"></i>
+                            <span x-text="loading ? 'Salvando...' : 'Salvar'"></span>
+                        </button>
+                    </form>
+                </div>
             </div>
         </div>
     </div>
@@ -901,7 +1009,8 @@ function settingsApp() {
         gateways: {
             pushynpay: { api_key: '' },
             paradise: { api_key: '', offer_hash: '', product_hash: '' },
-            wiinpay: { api_key: '', split_user_id: '' }
+            wiinpay: { api_key: '', split_user_id: '' },
+            atomopay: { api_token: '', offer_hash: '', product_hash: '' }
         },
         editGateway: {},
         gatewaysList: [],
