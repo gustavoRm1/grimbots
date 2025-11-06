@@ -430,218 +430,172 @@
             </p>
         </div>
 
-        <!-- ✅ QI 500: Instruções de Webhook (OBRIGATÓRIO) -->
-        <div class="chart-container mb-8" style="background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(239, 68, 68, 0.05)); border: 2px solid rgba(239, 68, 68, 0.3);">
-            <div class="flex items-start gap-4 mb-4">
-                <div class="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0" style="background: rgba(239, 68, 68, 0.2);">
-                    <i class="fas fa-exclamation-triangle text-2xl text-red-400"></i>
+        <!-- ✅ QI 500: Instruções de Webhook (OBRIGATÓRIO) - Apenas Paradise e Átomo Pay -->
+        <template x-for="gateway in gatewaysList.filter(g => g.is_verified && (g.gateway_type === 'paradise' || g.gateway_type === 'atomopay'))" :key="'webhook-' + gateway.id">
+            <div class="chart-container mb-8" style="background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), rgba(239, 68, 68, 0.05)); border: 2px solid rgba(239, 68, 68, 0.3);">
+                <div class="flex items-start gap-4 mb-4">
+                    <div class="w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0" style="background: rgba(239, 68, 68, 0.2);">
+                        <i class="fas fa-exclamation-triangle text-2xl text-red-400"></i>
+                    </div>
+                    <div class="flex-1">
+                        <h3 class="text-xl font-black text-white mb-2">
+                            🔒 Configuração Obrigatória do Webhook - <span x-text="gateway.gateway_type.toUpperCase()"></span>
+                        </h3>
+                        <p class="text-sm text-gray-300 mb-4">
+                            Para que suas vendas sejam registradas corretamente nas campanhas (Meta/Google) e para que o status dos pagamentos seja atualizado dentro da plataforma, é <strong class="text-red-400">obrigatório</strong> configurar o webhook no seu gateway.
+                        </p>
+                    </div>
                 </div>
-                <div class="flex-1">
-                    <h3 class="text-xl font-black text-white mb-2">
-                        🔒 Configuração Obrigatória do Webhook
-                    </h3>
-                    <p class="text-sm text-gray-300 mb-4">
-                        Para que suas vendas sejam registradas corretamente nas campanhas (Meta/Google) e para que o status dos pagamentos seja atualizado dentro da plataforma, é <strong class="text-red-400">obrigatório</strong> configurar o webhook no seu gateway.
+
+                <!-- URL do Webhook (Pronta) -->
+                <div class="bg-black bg-opacity-40 rounded-lg p-4 mb-4 border border-red-500 border-opacity-30">
+                    <label class="block text-xs font-bold text-gray-400 mb-2">
+                        <i class="fas fa-link mr-1 text-yellow-500"></i>
+                        URL do Webhook que você deve configurar no seu Gateway:
+                    </label>
+                    <div class="flex items-center gap-2">
+                        <input type="text" 
+                               :id="'webhook-url-input-' + gateway.gateway_type"
+                               readonly
+                               :value="'https://app.grimbots.online/webhook/payment/' + gateway.gateway_type"
+                               class="flex-1 form-input bg-gray-900 font-mono text-sm text-yellow-400 cursor-text"
+                               @click="$event.target.select(); document.execCommand('copy'); copyWebhookUrlSpecific(gateway.gateway_type)">
+                        <button type="button" 
+                                @click="copyWebhookUrlSpecific(gateway.gateway_type)"
+                                class="px-4 py-2 rounded-lg text-sm font-bold text-white transition-all"
+                                style="background: linear-gradient(135deg, #FFB800, #DAA520);">
+                            <i class="fas fa-copy mr-2"></i>
+                            Copiar
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Eventos Obrigatórios -->
+                <div class="bg-gray-900 rounded-lg p-4 mb-4 border border-gray-700">
+                    <label class="block text-xs font-bold text-gray-400 mb-3">
+                        <i class="fas fa-check-circle mr-1 text-green-500"></i>
+                        Eventos obrigatórios para ativar:
+                    </label>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                        <div class="flex items-center gap-2 p-2 bg-green-900 bg-opacity-30 rounded">
+                            <i class="fas fa-check text-green-400 text-xs"></i>
+                            <span class="text-xs text-gray-300">approved</span>
+                        </div>
+                        <div class="flex items-center gap-2 p-2 bg-yellow-900 bg-opacity-30 rounded">
+                            <i class="fas fa-check text-yellow-400 text-xs"></i>
+                            <span class="text-xs text-gray-300">pending</span>
+                        </div>
+                        <div class="flex items-center gap-2 p-2 bg-blue-900 bg-opacity-30 rounded">
+                            <i class="fas fa-check text-blue-400 text-xs"></i>
+                            <span class="text-xs text-gray-300">refunded</span>
+                        </div>
+                        <div class="flex items-center gap-2 p-2 bg-red-900 bg-opacity-30 rounded">
+                            <i class="fas fa-check text-red-400 text-xs"></i>
+                            <span class="text-xs text-gray-300">cancelled / refused</span>
+                        </div>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-3">
+                        <i class="fas fa-info-circle mr-1"></i>
+                        Certifique-se de marcar <strong>todos</strong> os eventos acima no painel do seu gateway.
                     </p>
                 </div>
-            </div>
 
-            <!-- URL do Webhook -->
-            <div class="bg-black bg-opacity-40 rounded-lg p-4 mb-4 border border-red-500 border-opacity-30">
-                <label class="block text-xs font-bold text-gray-400 mb-2">
-                    <i class="fas fa-link mr-1 text-yellow-500"></i>
-                    URL do Webhook que você deve configurar no seu Gateway:
-                </label>
-                <div class="flex items-center gap-2">
-                    <input type="text" 
-                           id="webhook-url-input"
-                           readonly
-                           value="https://app.grimbots.online/webhook/payment/{GATEWAY}"
-                           class="flex-1 form-input bg-gray-900 font-mono text-sm text-yellow-400 cursor-text"
-                           onclick="this.select(); document.execCommand('copy'); showCopiedTooltip(this);">
-                    <button type="button" 
-                            onclick="copyWebhookUrl()"
-                            class="px-4 py-2 rounded-lg text-sm font-bold text-white transition-all"
-                            style="background: linear-gradient(135deg, #FFB800, #DAA520);">
-                        <i class="fas fa-copy mr-2"></i>
-                        Copiar
-                    </button>
-                </div>
-                <p class="text-xs text-gray-500 mt-2">
-                    <i class="fas fa-info-circle mr-1"></i>
-                    <strong>Substitua</strong> <code class="bg-gray-800 px-1 rounded">{GATEWAY}</code> pelo nome do seu gateway: <code class="bg-gray-800 px-1 rounded">atomopay</code>, <code class="bg-gray-800 px-1 rounded">syncpay</code>, <code class="bg-gray-800 px-1 rounded">pushynpay</code>, <code class="bg-gray-800 px-1 rounded">paradise</code> ou <code class="bg-gray-800 px-1 rounded">wiinpay</code>
-                </p>
-            </div>
-
-            <!-- Exemplos de URLs por Gateway -->
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
-                <div class="bg-gray-900 rounded-lg p-3 border border-gray-700 cursor-pointer hover:border-yellow-500 transition-colors" 
-                     onclick="updateWebhookUrl('atomopay')">
-                    <div class="flex items-center justify-between">
-                        <div class="text-xs font-bold text-gray-400 mb-1">Átomo Pay</div>
-                        <i class="fas fa-copy text-gray-500 text-xs"></i>
+                <!-- Por que é obrigatório -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div class="bg-red-900 bg-opacity-20 rounded-lg p-4 border border-red-500 border-opacity-30">
+                        <h4 class="text-sm font-bold text-red-400 mb-3">
+                            <i class="fas fa-times-circle mr-2"></i>
+                            Sem o webhook configurado:
+                        </h4>
+                        <ul class="space-y-2 text-xs text-gray-300">
+                            <li class="flex items-start gap-2">
+                                <i class="fas fa-times text-red-400 mt-1"></i>
+                                <span>A venda não é enviada para o Meta</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <i class="fas fa-times text-red-400 mt-1"></i>
+                                <span>O Pixel não registra o Purchase</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <i class="fas fa-times text-red-400 mt-1"></i>
+                                <span>O status da venda não atualiza</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <i class="fas fa-times text-red-400 mt-1"></i>
+                                <span>Você perde dados das campanhas</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <i class="fas fa-times text-red-400 mt-1"></i>
+                                <span>O gestor não tem rastreamento correto</span>
+                            </li>
+                        </ul>
                     </div>
-                    <div class="text-xs font-mono text-yellow-400 break-all">https://app.grimbots.online/webhook/payment/atomopay</div>
-                </div>
-                <div class="bg-gray-900 rounded-lg p-3 border border-gray-700 cursor-pointer hover:border-yellow-500 transition-colors" 
-                     onclick="updateWebhookUrl('syncpay')">
-                    <div class="flex items-center justify-between">
-                        <div class="text-xs font-bold text-gray-400 mb-1">SyncPay</div>
-                        <i class="fas fa-copy text-gray-500 text-xs"></i>
-                    </div>
-                    <div class="text-xs font-mono text-yellow-400 break-all">https://app.grimbots.online/webhook/payment/syncpay</div>
-                </div>
-                <div class="bg-gray-900 rounded-lg p-3 border border-gray-700 cursor-pointer hover:border-yellow-500 transition-colors" 
-                     onclick="updateWebhookUrl('pushynpay')">
-                    <div class="flex items-center justify-between">
-                        <div class="text-xs font-bold text-gray-400 mb-1">PushynPay</div>
-                        <i class="fas fa-copy text-gray-500 text-xs"></i>
-                    </div>
-                    <div class="text-xs font-mono text-yellow-400 break-all">https://app.grimbots.online/webhook/payment/pushynpay</div>
-                </div>
-                <div class="bg-gray-900 rounded-lg p-3 border border-gray-700 cursor-pointer hover:border-yellow-500 transition-colors" 
-                     onclick="updateWebhookUrl('paradise')">
-                    <div class="flex items-center justify-between">
-                        <div class="text-xs font-bold text-gray-400 mb-1">Paradise</div>
-                        <i class="fas fa-copy text-gray-500 text-xs"></i>
-                    </div>
-                    <div class="text-xs font-mono text-yellow-400 break-all">https://app.grimbots.online/webhook/payment/paradise</div>
-                </div>
-                <div class="bg-gray-900 rounded-lg p-3 border border-gray-700 cursor-pointer hover:border-yellow-500 transition-colors" 
-                     onclick="updateWebhookUrl('wiinpay')">
-                    <div class="flex items-center justify-between">
-                        <div class="text-xs font-bold text-gray-400 mb-1">WiinPay</div>
-                        <i class="fas fa-copy text-gray-500 text-xs"></i>
-                    </div>
-                    <div class="text-xs font-mono text-yellow-400 break-all">https://app.grimbots.online/webhook/payment/wiinpay</div>
-                </div>
-            </div>
-
-            <!-- Eventos Obrigatórios -->
-            <div class="bg-gray-900 rounded-lg p-4 mb-4 border border-gray-700">
-                <label class="block text-xs font-bold text-gray-400 mb-3">
-                    <i class="fas fa-check-circle mr-1 text-green-500"></i>
-                    Eventos obrigatórios para ativar:
-                </label>
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
-                    <div class="flex items-center gap-2 p-2 bg-green-900 bg-opacity-30 rounded">
-                        <i class="fas fa-check text-green-400 text-xs"></i>
-                        <span class="text-xs text-gray-300">approved</span>
-                    </div>
-                    <div class="flex items-center gap-2 p-2 bg-yellow-900 bg-opacity-30 rounded">
-                        <i class="fas fa-check text-yellow-400 text-xs"></i>
-                        <span class="text-xs text-gray-300">pending</span>
-                    </div>
-                    <div class="flex items-center gap-2 p-2 bg-blue-900 bg-opacity-30 rounded">
-                        <i class="fas fa-check text-blue-400 text-xs"></i>
-                        <span class="text-xs text-gray-300">refunded</span>
-                    </div>
-                    <div class="flex items-center gap-2 p-2 bg-red-900 bg-opacity-30 rounded">
-                        <i class="fas fa-check text-red-400 text-xs"></i>
-                        <span class="text-xs text-gray-300">cancelled / refused</span>
-                    </div>
-                </div>
-                <p class="text-xs text-gray-500 mt-3">
-                    <i class="fas fa-info-circle mr-1"></i>
-                    Certifique-se de marcar <strong>todos</strong> os eventos acima no painel do seu gateway.
-                </p>
-            </div>
-
-            <!-- Por que é obrigatório -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                <div class="bg-red-900 bg-opacity-20 rounded-lg p-4 border border-red-500 border-opacity-30">
-                    <h4 class="text-sm font-bold text-red-400 mb-3">
-                        <i class="fas fa-times-circle mr-2"></i>
-                        Sem o webhook configurado:
-                    </h4>
-                    <ul class="space-y-2 text-xs text-gray-300">
-                        <li class="flex items-start gap-2">
-                            <i class="fas fa-times text-red-400 mt-1"></i>
-                            <span>A venda não é enviada para o Meta</span>
-                        </li>
-                        <li class="flex items-start gap-2">
-                            <i class="fas fa-times text-red-400 mt-1"></i>
-                            <span>O Pixel não registra o Purchase</span>
-                        </li>
-                        <li class="flex items-start gap-2">
-                            <i class="fas fa-times text-red-400 mt-1"></i>
-                            <span>O status da venda não atualiza</span>
-                        </li>
-                        <li class="flex items-start gap-2">
-                            <i class="fas fa-times text-red-400 mt-1"></i>
-                            <span>Você perde dados das campanhas</span>
-                        </li>
-                        <li class="flex items-start gap-2">
-                            <i class="fas fa-times text-red-400 mt-1"></i>
-                            <span>O gestor não tem rastreamento correto</span>
-                        </li>
-                    </ul>
-                </div>
-                <div class="bg-green-900 bg-opacity-20 rounded-lg p-4 border border-green-500 border-opacity-30">
-                    <h4 class="text-sm font-bold text-green-400 mb-3">
-                        <i class="fas fa-check-circle mr-2"></i>
-                        Com o webhook configurado:
-                    </h4>
-                    <ul class="space-y-2 text-xs text-gray-300">
-                        <li class="flex items-start gap-2">
-                            <i class="fas fa-check text-green-400 mt-1"></i>
-                            <span>Venda rastreada em tempo real</span>
-                        </li>
-                        <li class="flex items-start gap-2">
-                            <i class="fas fa-check text-green-400 mt-1"></i>
-                            <span>Purchase enviado para o Meta com tracking completo</span>
-                        </li>
-                        <li class="flex items-start gap-2">
-                            <i class="fas fa-check text-green-400 mt-1"></i>
-                            <span>Status sincronizado automaticamente</span>
-                        </li>
-                        <li class="flex items-start gap-2">
-                            <i class="fas fa-check text-green-400 mt-1"></i>
-                            <span>Nenhuma venda perdida</span>
-                        </li>
-                        <li class="flex items-start gap-2">
-                            <i class="fas fa-check text-green-400 mt-1"></i>
-                            <span>Total compatibilidade com tráfego pago</span>
-                        </li>
-                    </ul>
-                </div>
-            </div>
-
-            <!-- Aviso Importante -->
-            <div class="bg-yellow-900 bg-opacity-30 rounded-lg p-4 border border-yellow-500 border-opacity-50 mb-4">
-                <div class="flex items-start gap-3">
-                    <i class="fas fa-exclamation-triangle text-yellow-400 text-xl mt-1"></i>
-                    <div class="flex-1">
-                        <h4 class="text-sm font-bold text-yellow-400 mb-2">⚠️ Aviso Importante</h4>
-                        <p class="text-xs text-gray-300 mb-3">
-                            Se você não configurar o webhook corretamente no seu gateway:
-                        </p>
-                        <ul class="space-y-1 text-xs text-gray-300 ml-4">
-                            <li>➡️ Seu Pixel <strong class="text-red-400">NÃO</strong> vai registrar as vendas</li>
-                            <li>➡️ O Meta <strong class="text-red-400">NÃO</strong> vai contabilizar as conversões</li>
-                            <li>➡️ O sistema <strong class="text-red-400">NÃO</strong> consegue atualizar o status do pagamento</li>
+                    <div class="bg-green-900 bg-opacity-20 rounded-lg p-4 border border-green-500 border-opacity-30">
+                        <h4 class="text-sm font-bold text-green-400 mb-3">
+                            <i class="fas fa-check-circle mr-2"></i>
+                            Com o webhook configurado:
+                        </h4>
+                        <ul class="space-y-2 text-xs text-gray-300">
+                            <li class="flex items-start gap-2">
+                                <i class="fas fa-check text-green-400 mt-1"></i>
+                                <span>Venda rastreada em tempo real</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <i class="fas fa-check text-green-400 mt-1"></i>
+                                <span>Purchase enviado para o Meta com tracking completo</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <i class="fas fa-check text-green-400 mt-1"></i>
+                                <span>Status sincronizado automaticamente</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <i class="fas fa-check text-green-400 mt-1"></i>
+                                <span>Nenhuma venda perdida</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <i class="fas fa-check text-green-400 mt-1"></i>
+                                <span>Total compatibilidade com tráfego pago</span>
+                            </li>
                         </ul>
                     </div>
                 </div>
-            </div>
 
-            <!-- Passo a Passo -->
-            <div class="bg-blue-900 bg-opacity-20 rounded-lg p-4 border border-blue-500 border-opacity-30">
-                <h4 class="text-sm font-bold text-blue-400 mb-3">
-                    <i class="fas fa-list-ol mr-2"></i>
-                    O que você precisa fazer agora:
-                </h4>
-                <ol class="space-y-2 text-xs text-gray-300 ml-4 list-decimal">
-                    <li>Copie a URL do webhook acima (exemplo para seu gateway)</li>
-                    <li>Entre no painel do seu Gateway (Átomo Pay, SyncPay, etc.)</li>
-                    <li>Vá na seção de <strong>Webhook/Postback</strong></li>
-                    <li>Cole a URL no campo de webhook</li>
-                    <li>Ative os eventos recomendados (approved, pending, refunded, cancelled)</li>
-                    <li>Salve as configurações</li>
-                    <li>Pronto! Suas vendas serão rastreadas automaticamente</li>
-                </ol>
+                <!-- Aviso Importante -->
+                <div class="bg-yellow-900 bg-opacity-30 rounded-lg p-4 border border-yellow-500 border-opacity-50 mb-4">
+                    <div class="flex items-start gap-3">
+                        <i class="fas fa-exclamation-triangle text-yellow-400 text-xl mt-1"></i>
+                        <div class="flex-1">
+                            <h4 class="text-sm font-bold text-yellow-400 mb-2">⚠️ Aviso Importante</h4>
+                            <p class="text-xs text-gray-300 mb-3">
+                                Se você não configurar o webhook corretamente no seu gateway:
+                            </p>
+                            <ul class="space-y-1 text-xs text-gray-300 ml-4">
+                                <li>➡️ Seu Pixel <strong class="text-red-400">NÃO</strong> vai registrar as vendas</li>
+                                <li>➡️ O Meta <strong class="text-red-400">NÃO</strong> vai contabilizar as conversões</li>
+                                <li>➡️ O sistema <strong class="text-red-400">NÃO</strong> consegue atualizar o status do pagamento</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Passo a Passo -->
+                <div class="bg-blue-900 bg-opacity-20 rounded-lg p-4 border border-blue-500 border-opacity-30">
+                    <h4 class="text-sm font-bold text-blue-400 mb-3">
+                        <i class="fas fa-list-ol mr-2"></i>
+                        O que você precisa fazer agora:
+                    </h4>
+                    <ol class="space-y-2 text-xs text-gray-300 ml-4 list-decimal">
+                        <li>Copie a URL do webhook acima</li>
+                        <li>Entre no painel do seu Gateway <span x-text="gateway.gateway_type === 'atomopay' ? '(Átomo Pay)' : '(Paradise)'"></span></li>
+                        <li>Vá na seção de <strong>Webhook/Postback</strong></li>
+                        <li>Cole a URL no campo de webhook</li>
+                        <li>Ative os eventos recomendados (approved, pending, refunded, cancelled)</li>
+                        <li>Salve as configurações</li>
+                        <li>Pronto! Suas vendas serão rastreadas automaticamente</li>
+                    </ol>
+                </div>
             </div>
-        </div>
+        </template>
 
         <!-- Gateways Configurados (Ativar/Desativar) -->
         <div class="chart-container mb-8" x-show="gatewaysList.filter(g => g.is_verified).length > 0">
@@ -1351,6 +1305,18 @@ function settingsApp() {
             await this.initPWA();
         },
 
+        // ✅ QI 500: Copiar URL do webhook específico
+        copyWebhookUrlSpecific(gatewayType) {
+            const inputId = `webhook-url-input-${gatewayType}`;
+            const input = document.getElementById(inputId);
+            if (input) {
+                input.select();
+                input.setSelectionRange(0, 99999);
+                document.execCommand('copy');
+                this.showNotification(`✅ URL do ${gatewayType.toUpperCase()} copiada!`);
+            }
+        },
+
         async loadGateways() {
             try {
                 const response = await fetch('/api/gateways');
@@ -1788,25 +1754,13 @@ function settingsApp() {
     }
 }
 
-// ✅ QI 500: Funções para copiar URL do webhook
-function copyWebhookUrl() {
-    const input = document.getElementById('webhook-url-input');
+// ✅ QI 500: Funções para copiar URL do webhook (Alpine.js)
+function copyWebhookUrlSpecific(gatewayType, inputElement = null) {
+    const inputId = `webhook-url-input-${gatewayType}`;
+    const input = inputElement || document.getElementById(inputId);
     if (input) {
         input.select();
         input.setSelectionRange(0, 99999); // Para mobile
-        document.execCommand('copy');
-        showCopiedTooltip(input);
-        showNotification('✅ URL do webhook copiada!');
-    }
-}
-
-function updateWebhookUrl(gatewayType) {
-    const input = document.getElementById('webhook-url-input');
-    if (input) {
-        const url = `https://app.grimbots.online/webhook/payment/${gatewayType}`;
-        input.value = url;
-        input.select();
-        input.setSelectionRange(0, 99999);
         document.execCommand('copy');
         showCopiedTooltip(input);
         showNotification(`✅ URL do ${gatewayType.toUpperCase()} copiada!`);
@@ -1842,19 +1796,5 @@ function showNotification(message) {
     setTimeout(() => notification.remove(), 3000);
 }
 
-// Atualizar URL do webhook dinamicamente quando gateway for selecionado
-document.addEventListener('DOMContentLoaded', function() {
-    const webhookInput = document.getElementById('webhook-url-input');
-    if (webhookInput) {
-        // Ao clicar no input, copiar automaticamente
-        webhookInput.addEventListener('click', function() {
-            this.select();
-            this.setSelectionRange(0, 99999);
-            document.execCommand('copy');
-            showCopiedTooltip(this);
-            showNotification('✅ URL do webhook copiada!');
-        });
-    }
-});
 </script>
 {% endblock %}
