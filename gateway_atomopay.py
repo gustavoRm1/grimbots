@@ -389,16 +389,35 @@ class AtomPayGateway(PaymentGateway):
                 logger.error(f"❌ [{self.get_gateway_name()}] Resposta não é JSON válido: {response.text[:500]}")
                 return None
             
-            # ✅ Validar success no root (conforme documentação)
-            if not response_data.get('success', False):
-                logger.error(f"❌ [{self.get_gateway_name()}] Resposta não tem success=true: {response_data}")
+            # ✅ CORREÇÃO CRÍTICA: A resposta pode vir de duas formas:
+            # 1. Com wrapper: {success: true, data: {...}} (conforme documentação)
+            # 2. Direta: {...} (resposta real da API quando cria transação)
+            # Vamos tratar ambos os casos
+            
+            if response_data.get('success', False) and 'data' in response_data:
+                # Formato com wrapper (conforme documentação)
+                data = response_data.get('data', {})
+            else:
+                # Formato direto (resposta real da API)
+                data = response_data
+            
+            if not data:
+                logger.error(f"❌ [{self.get_gateway_name()}] Resposta vazia: {response_data}")
                 return None
             
-            # ✅ CRÍTICO: Dados vêm dentro de 'data' (conforme documentação)
-            data = response_data.get('data', {})
-            if not data:
-                logger.error(f"❌ [{self.get_gateway_name()}] Resposta não contém 'data': {response_data}")
+            # ✅ CRÍTICO: Verificar payment_status (pode ser 'refused', 'pending', 'paid', etc.)
+            payment_status = data.get('payment_status', '').lower()
+            if payment_status == 'refused':
+                logger.error(f"❌ [{self.get_gateway_name()}] Transação RECUSADA pelo gateway")
+                logger.error(f"   Hash: {data.get('hash', 'N/A')} | Status: {payment_status}")
                 return None
+            
+            # ✅ Verificar se PIX está disponível (pode estar None se recusado)
+            pix_data = data.get('pix', {})
+            if not pix_data or (pix_data.get('pix_url') is None and pix_data.get('pix_qr_code') is None and pix_data.get('pix_base64') is None):
+                logger.warning(f"⚠️ [{self.get_gateway_name()}] PIX não disponível na resposta (pode estar pendente)")
+                logger.warning(f"   Hash: {data.get('hash', 'N/A')} | Status: {payment_status}")
+                # Não retornar None ainda - pode ser que o PIX seja gerado depois via webhook
             
             # ✅ EXTRAIR DADOS (priorizar campos mais importantes) - conforme documentação
             transaction_hash = (
@@ -410,41 +429,61 @@ class AtomPayGateway(PaymentGateway):
             
             transaction_id = data.get('transaction_id') or transaction_hash
             
-            # ✅ PIX_CODE: Conforme documentação, vem como 'pix_code' (código copia-e-cola)
-            # qr_code é a imagem base64, NÃO o código PIX
+            # ✅ PIX_CODE: Extrair do objeto 'pix' ou do root
+            # A resposta real tem: pix: {pix_url, pix_qr_code, pix_base64}
+            pix_data = data.get('pix', {})
+            
+            # ✅ PIX_CODE: Código copia-e-cola (pix_qr_code ou pix_base64 podem conter)
             pix_code = (
-                data.get('pix_code') or     # 1ª prioridade (código PIX copia-e-cola)
+                data.get('pix_code') or           # 1ª prioridade (se existir no root)
+                pix_data.get('pix_qr_code') or    # 2ª prioridade (código PIX no objeto pix)
+                pix_data.get('pix_base64') or     # 3ª prioridade (base64 pode conter código)
                 data.get('pix_copy_paste') or
                 data.get('copy_paste')
             )
             
-            # ✅ QR_CODE: Imagem base64 (data:image/png;base64,...) ou URL
-            qr_code_raw = data.get('qr_code', '')
-            if qr_code_raw and qr_code_raw.startswith('data:image'):
-                # É base64 com prefixo, extrair apenas a parte base64
-                qr_code_base64 = qr_code_raw.split(',', 1)[1] if ',' in qr_code_raw else qr_code_raw
-                qr_code_url = None
-            elif qr_code_raw and qr_code_raw.startswith('http'):
-                # É URL
-                qr_code_url = qr_code_raw
-                qr_code_base64 = None
-            else:
-                # Tentar URL alternativa
-                qr_code_url = data.get('qr_code_url') or data.get('qr_code_image_url')
-                qr_code_base64 = qr_code_raw if qr_code_raw else None
+            # ✅ QR_CODE: URL ou base64 da imagem
+            qr_code_url = pix_data.get('pix_url')
+            qr_code_base64 = None
+            
+            # Se pix_base64 existe e não é o código PIX, usar como imagem
+            if pix_data.get('pix_base64') and not pix_code:
+                qr_code_base64 = pix_data.get('pix_base64')
+            
+            # Fallback: tentar do root
+            if not qr_code_url and not qr_code_base64:
+                qr_code_raw = data.get('qr_code', '')
+                if qr_code_raw and qr_code_raw.startswith('data:image'):
+                    qr_code_base64 = qr_code_raw.split(',', 1)[1] if ',' in qr_code_raw else qr_code_raw
+                elif qr_code_raw and qr_code_raw.startswith('http'):
+                    qr_code_url = qr_code_raw
+                else:
+                    qr_code_url = data.get('qr_code_url') or data.get('qr_code_image_url')
             
             # ✅ VALIDAÇÕES OBRIGATÓRIAS
             if not transaction_hash:
                 logger.error(f"❌ [{self.get_gateway_name()}] Resposta sem hash/transaction_hash/id")
-                logger.error(f"Campos disponíveis em 'data': {list(data.keys())}")
+                logger.error(f"Campos disponíveis: {list(data.keys())}")
                 logger.error(f"Resposta completa: {response_data}")
                 return None
             
+            # ✅ VALIDAÇÃO: Se não tem pix_code, verificar payment_status
             if not pix_code:
-                logger.error(f"❌ [{self.get_gateway_name()}] Resposta sem pix_code/qr_code")
-                logger.error(f"Campos disponíveis em 'data': {list(data.keys())}")
-                logger.error(f"Resposta completa: {response_data}")
-                return None
+                if payment_status == 'refused':
+                    logger.error(f"❌ [{self.get_gateway_name()}] Transação RECUSADA - PIX não será gerado")
+                    logger.error(f"   Hash: {transaction_hash} | Status: {payment_status}")
+                    return None
+                elif payment_status in ['pending', 'processing', 'waiting']:
+                    logger.warning(f"⚠️ [{self.get_gateway_name()}] PIX ainda não disponível (status: {payment_status})")
+                    logger.warning(f"   O PIX será gerado via webhook quando processado")
+                    logger.warning(f"   Hash da transação: {transaction_hash}")
+                    return None
+                else:
+                    logger.error(f"❌ [{self.get_gateway_name()}] Resposta sem pix_code/qr_code")
+                    logger.error(f"   Status: {payment_status} | Hash: {transaction_hash}")
+                    logger.error(f"   Campos disponíveis: {list(data.keys())}")
+                    logger.error(f"   Resposta completa: {response_data}")
+                    return None
             
             logger.info(f"✅ [{self.get_gateway_name()}] PIX gerado com sucesso!")
             logger.info(f"   Transaction Hash: {transaction_hash[:20]}...")

@@ -4195,6 +4195,13 @@ Seu pagamento ainda não foi confirmado.
                     'api_key': 'dummy',
                     'split_user_id': 'dummy-user-id'
                 }
+            elif gateway_type == 'atomopay':
+                # ✅ ÁTOMO PAY: Credenciais dummy para webhook (não precisa de credenciais reais)
+                dummy_credentials = {
+                    'api_token': 'dummy_token',
+                    'offer_hash': 'dummy_offer',
+                    'product_hash': 'dummy_product'
+                }
             
             # Criar instância do gateway via Factory
             payment_gateway = GatewayFactory.create_gateway(
