@@ -53,8 +53,7 @@ def send_delivery_and_meta_pixel(payment: Payment) -> bool:
                 
                 if chat_id:
                     try:
-                        import telegram
-                        bot_telegram = telegram.Bot(token=bot.token)
+                        import requests
                         
                         # Verificar se bot tem config e access_link
                         has_access_link = bot.config and bot.config.access_link
@@ -82,14 +81,21 @@ Aproveite! 🚀"""
 
 Seu acesso será enviado em breve! 🚀"""
                         
-                        bot_telegram.send_message(
-                            chat_id=chat_id,
-                            text=delivery_message,
-                            parse_mode='HTML'
-                        )
+                        # Enviar mensagem via API do Telegram
+                        url = f"https://api.telegram.org/bot{bot.token}/sendMessage"
+                        payload = {
+                            'chat_id': chat_id,
+                            'text': delivery_message,
+                            'parse_mode': 'HTML'
+                        }
                         
-                        logger.info(f"✅ Entregável enviado para chat {chat_id}")
-                        delivery_sent = True
+                        response = requests.post(url, json=payload, timeout=10)
+                        
+                        if response.status_code == 200:
+                            logger.info(f"✅ Entregável enviado para chat {chat_id}")
+                            delivery_sent = True
+                        else:
+                            logger.warning(f"⚠️ Erro ao enviar entregável: {response.status_code} - {response.text}")
                     except Exception as e:
                         logger.warning(f"⚠️ Erro ao enviar entregável: {e}")
                         import traceback
@@ -113,10 +119,19 @@ Seu acesso será enviado em breve! 🚀"""
             
             if bot:
                 # Buscar pool que tem este bot
-                pool = RedirectPool.query.join(PoolBot).filter(
-                    PoolBot.bot_id == payment.bot_id,
-                    RedirectPool.meta_tracking_enabled == True
-                ).first()
+                # Estratégia 1: Buscar via PoolBot
+                pool_bot = PoolBot.query.filter_by(bot_id=payment.bot_id).first()
+                if pool_bot:
+                    pool = RedirectPool.query.filter_by(
+                        id=pool_bot.pool_id,
+                        meta_tracking_enabled=True
+                    ).first()
+                else:
+                    # Estratégia 2: Buscar pool do usuário do bot (fallback)
+                    pool = RedirectPool.query.filter_by(
+                        user_id=bot.user_id,
+                        meta_tracking_enabled=True
+                    ).first()
                 
                 if pool and pool.meta_pixel_id and pool.meta_access_token:
                     from utils.meta_pixel import MetaPixelAPI
