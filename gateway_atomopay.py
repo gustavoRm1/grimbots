@@ -636,8 +636,15 @@ class AtomPayGateway(PaymentGateway):
             transaction_id_str = str(transaction_id) if transaction_id else None
             
             # ✅ Hash para consulta de status (usar hash se disponível, senão id)
-            transaction_hash = data.get('hash') or transaction_id_str
-            transaction_hash_str = str(transaction_hash) if transaction_hash else None
+            # ✅ CRÍTICO: gateway_hash é o campo 'hash' da resposta (diferente de gateway_transaction_id que é 'id')
+            gateway_hash = data.get('hash')  # Hash da transação (para webhook matching)
+            transaction_hash_str = str(gateway_hash) if gateway_hash else transaction_id_str
+            
+            # ✅ LOG CRÍTICO: Dados extraídos para salvar no Payment
+            logger.info(f"💾 [{self.get_gateway_name()}] Dados extraídos para salvar no Payment:")
+            logger.info(f"   gateway_transaction_id (id): {transaction_id_str}")
+            logger.info(f"   gateway_hash (hash): {gateway_hash}")
+            logger.info(f"   reference: {payload.get('reference', 'N/A')}")
             
             # ✅ LOG: Verificar estrutura do objeto pix
             pix_data = data.get('pix', {})
@@ -680,7 +687,7 @@ class AtomPayGateway(PaymentGateway):
                     qr_code_url = data.get('qr_code_url') or data.get('qr_code_image_url')
             
             # ✅ VALIDAÇÕES OBRIGATÓRIAS
-            if not transaction_hash:
+            if not gateway_hash and not transaction_id_str:
                 logger.error(f"❌ [{self.get_gateway_name()}] Resposta sem hash/transaction_hash/id")
                 logger.error(f"Campos disponíveis: {list(data.keys())}")
                 logger.error(f"Resposta completa: {response_data}")
@@ -690,16 +697,20 @@ class AtomPayGateway(PaymentGateway):
             if not pix_code:
                 if payment_status == 'refused':
                     logger.error(f"❌ [{self.get_gateway_name()}] Transação RECUSADA pelo gateway - PIX não será gerado")
-                    logger.error(f"   Hash: {transaction_hash_str} | Status: {payment_status}")
+                    logger.error(f"   Hash: {gateway_hash or transaction_id_str} | Status: {payment_status}")
                     logger.error(f"   Motivo: Gateway recusou a transação (verificar configurações)")
                     # ✅ CRÍTICO: Retornar dados da transação mesmo quando recusada
                     # Isso permite que o payment seja criado e o webhook possa encontrá-lo
+                    # ✅ CRÍTICO: Retornar dados mesmo quando recusado para que Payment seja criado
+                    gateway_hash = data.get('hash')
                     return {
                         'pix_code': None,  # Não tem PIX porque foi recusado
                         'qr_code_url': None,
                         'transaction_id': transaction_id_str,  # ✅ Usar id (webhook busca por este)
-                        'transaction_hash': transaction_hash_str,  # Hash para consulta de status
+                        'transaction_hash': transaction_hash_str,  # Hash para consulta de status (fallback)
+                        'gateway_hash': gateway_hash,  # ✅ CRÍTICO: Hash da transação (para webhook matching)
                         'payment_id': payment_id,
+                        'reference': payload.get('reference'),  # ✅ CRÍTICO: Reference para matching
                         'status': 'refused',  # ✅ Status da transação
                         'error': 'Transação recusada pelo gateway'
                     }
@@ -711,14 +722,14 @@ class AtomPayGateway(PaymentGateway):
                     # Então vamos retornar None e deixar o sistema tratar o erro
                     # O webhook vai atualizar o payment quando o PIX for gerado
                     logger.warning(f"⚠️ [{self.get_gateway_name()}] PIX ainda não disponível na resposta (status: {payment_status or 'N/A'})")
-                    logger.warning(f"   Transação criada com sucesso (hash: {transaction_hash}), mas PIX será gerado via webhook")
+                    logger.warning(f"   Transação criada com sucesso (hash: {gateway_hash or transaction_id_str}), mas PIX será gerado via webhook")
                     logger.warning(f"   O sistema aguardará o webhook para gerar o PIX")
                     # ✅ RETORNAR None - O sistema vai tratar como erro temporário
                     # O webhook vai atualizar o payment quando o PIX for gerado
                     return None
                 else:
                     logger.error(f"❌ [{self.get_gateway_name()}] Resposta sem pix_code/qr_code")
-                    logger.error(f"   Status: {payment_status} | Hash: {transaction_hash}")
+                    logger.error(f"   Status: {payment_status} | Hash: {gateway_hash or transaction_id_str}")
                     logger.error(f"   Campos disponíveis: {list(data.keys())}")
                     logger.error(f"   Objeto pix: {pix_data}")
                     logger.error(f"   Resposta completa: {response_data}")
@@ -726,16 +737,19 @@ class AtomPayGateway(PaymentGateway):
             
             logger.info(f"✅ [{self.get_gateway_name()}] PIX gerado com sucesso!")
             logger.info(f"   Transaction ID: {transaction_id_str} (webhook busca por este)")
-            logger.info(f"   Transaction Hash: {transaction_hash_str[:20] if transaction_hash_str and len(transaction_hash_str) > 20 else transaction_hash_str}...")
+            logger.info(f"   Gateway Hash: {gateway_hash[:20] if gateway_hash and len(gateway_hash) > 20 else gateway_hash}...")
             logger.info(f"   PIX Code: {pix_code[:50]}...")
             
             # ✅ RETORNO PADRONIZADO (como Paradise)
+            # ✅ CRÍTICO: Incluir gateway_hash separado para webhook matching
             return {
                 'pix_code': pix_code,
                 'qr_code_url': qr_code_url or qr_code_base64 or '',
                 'transaction_id': transaction_id_str,  # ✅ Usar id (webhook busca por este)
-                'transaction_hash': transaction_hash_str,  # Hash para consulta de status
-                'payment_id': payment_id
+                'transaction_hash': transaction_hash_str,  # Hash para consulta de status (fallback)
+                'gateway_hash': gateway_hash,  # ✅ CRÍTICO: Hash da transação (para webhook matching)
+                'payment_id': payment_id,
+                'reference': payload.get('reference')  # ✅ CRÍTICO: Reference para matching
             }
                 
         except Exception as e:
@@ -814,6 +828,7 @@ class AtomPayGateway(PaymentGateway):
             
             return {
                 'gateway_transaction_id': transaction_id_str,  # ✅ Usar id (webhook busca por este)
+                'gateway_hash': transaction_hash_str,  # ✅ CRÍTICO: Hash da transação (para webhook matching)
                 'status': status,
                 'amount': amount,
                 'external_reference': external_reference  # ✅ CRÍTICO: Para matching do payment

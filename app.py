@@ -7241,69 +7241,86 @@ def payment_webhook(gateway_type):
             
             logger.info(f"✅ Webhook processado: transaction_id={gateway_transaction_id}, status={status}")
             
-            # ✅ Buscar pagamento pelo gateway_transaction_id (prioridade 1)
+            # ✅ Buscar pagamento por múltiplas chaves (conforme análise QI 600)
             payment = None
+            
+            # ✅ PRIORIDADE 1: gateway_transaction_id (campo 'id' da resposta)
             if gateway_transaction_id:
-                payment = Payment.query.filter_by(gateway_transaction_id=gateway_transaction_id).first()
-                if not payment:
-                    # ✅ Tentar pelo payment_id como fallback (prioridade 2)
-                    payment = Payment.query.filter_by(payment_id=gateway_transaction_id).first()
+                payment = Payment.query.filter_by(gateway_transaction_id=str(gateway_transaction_id)).first()
+                if payment:
+                    logger.info(f"✅ Payment encontrado por gateway_transaction_id: {gateway_transaction_id}")
+            
+            # ✅ PRIORIDADE 2: gateway_transaction_hash (campo 'hash' da resposta)
+            if not payment:
+                gateway_hash = result.get('gateway_hash') or data.get('hash')
+                if gateway_hash:
+                    payment = Payment.query.filter_by(gateway_transaction_hash=str(gateway_hash)).first()
+                    if payment:
+                        logger.info(f"✅ Payment encontrado por gateway_transaction_hash: {gateway_hash}")
+            
+            # ✅ PRIORIDADE 3: payment_id como fallback
+            if not payment and gateway_transaction_id:
+                payment = Payment.query.filter_by(payment_id=str(gateway_transaction_id)).first()
+                if payment:
+                    logger.info(f"✅ Payment encontrado por payment_id (fallback): {gateway_transaction_id}")
+            
+            # ✅ PRIORIDADE 4: reference (external_reference)
+            if not payment:
+                # ✅ CORREÇÃO CRÍTICA: Tentar pelo external_reference (prioridade 4)
+                # SyncPay/Átomo Pay enviam reference que pode conter o payment_id original
+                external_ref = result.get('external_reference')
+                if external_ref:
+                    # ✅ ÁTOMO PAY: reference pode ser "BOT35-1762426706-594358e0-1762426706325-d5ad225d"
+                    # payment_id salvo é "BOT35_1762426706_594358e0" (underscores, sem partes extras)
+                    # Extrair payment_id do reference: "BOT35-1762426706-594358e0" -> "BOT35_1762426706_594358e0"
+                    import re
+                    # Tentar extrair padrão BOT{id}_{timestamp}_{hash} do reference
+                    # Exemplo: "BOT35-1762426706-594358e0-..." -> "BOT35_1762426706_594358e0"
+                    ref_parts = external_ref.split('-')
+                    if len(ref_parts) >= 3 and ref_parts[0].startswith('BOT'):
+                        # Construir payment_id esperado: BOT{id}_{timestamp}_{hash}
+                        extracted_payment_id = f"{ref_parts[0]}_{ref_parts[1]}_{ref_parts[2]}"
+                        payment = Payment.query.filter_by(payment_id=extracted_payment_id).first()
+                        if payment:
+                            logger.info(f"✅ Payment encontrado por external_reference (extraído: {extracted_payment_id})")
+                    
+                    # Se não encontrou pelo payment_id extraído, tentar busca direta
                     if not payment:
-                        # ✅ CORREÇÃO CRÍTICA: Tentar pelo external_reference (prioridade 3)
-                        # SyncPay/Átomo Pay enviam reference que pode conter o payment_id original
-                        external_ref = result.get('external_reference')
-                        if external_ref:
-                            # ✅ ÁTOMO PAY: reference pode ser "BOT35-1762426706-594358e0-1762426706325-d5ad225d"
-                            # payment_id salvo é "BOT35_1762426706_594358e0" (underscores, sem partes extras)
-                            # Extrair payment_id do reference: "BOT35-1762426706-594358e0" -> "BOT35_1762426706_594358e0"
-                            import re
-                            # Tentar extrair padrão BOT{id}_{timestamp}_{hash} do reference
-                            # Exemplo: "BOT35-1762426706-594358e0-..." -> "BOT35_1762426706_594358e0"
-                            ref_parts = external_ref.split('-')
-                            if len(ref_parts) >= 3 and ref_parts[0].startswith('BOT'):
-                                # Construir payment_id esperado: BOT{id}_{timestamp}_{hash}
-                                extracted_payment_id = f"{ref_parts[0]}_{ref_parts[1]}_{ref_parts[2]}"
-                                payment = Payment.query.filter_by(payment_id=extracted_payment_id).first()
-                                if payment:
-                                    logger.info(f"✅ Payment encontrado por external_reference (extraído: {extracted_payment_id})")
-                            
-                            # Se não encontrou pelo payment_id extraído, tentar busca direta
-                            if not payment:
-                                payment = Payment.query.filter_by(payment_id=external_ref).first()
-                            
-                            if not payment:
-                                logger.info(f"🔍 external_reference completo não encontrado, tentando busca parcial...")
-                                # Tentar buscar por parte do payment_id (caso external_ref seja hash parcial)
-                                # Exemplo: external_ref = "0f57f18b674274be53ad32ff456c1f"
-                                # payment_id pode ser "BOT37_1762421295_0f57f18b"
-                                # Tentar pelos primeiros 8 caracteres (hash parcial comum)
-                                if len(external_ref) >= 8:
-                                    hash_prefix = external_ref[:8]
-                                    payments = Payment.query.filter(
-                                        Payment.payment_id.like(f"%{hash_prefix}%")
-                                    ).all()
-                                    if payments:
-                                        # ✅ Priorizar payment do mesmo gateway e mais recente
-                                        matching_payments = [p for p in payments if p.gateway_type == gateway_type]
-                                        if matching_payments:
-                                            payment = matching_payments[0]
-                                            logger.info(f"✅ Payment encontrado por external_reference (hash parcial {hash_prefix}): {payment.payment_id}")
-                                        else:
-                                            payment = payments[0]  # Fallback
-                                            logger.info(f"⚠️ Payment encontrado por external_reference (hash parcial, gateway diferente): {payment.payment_id}")
-                                # Se ainda não encontrou, tentar busca completa no payment_id
-                                if not payment:
-                                    payments = Payment.query.filter(
-                                        Payment.payment_id.like(f"%{external_ref}%")
-                                    ).all()
-                                    if payments:
-                                        matching_payments = [p for p in payments if p.gateway_type == gateway_type]
-                                        if matching_payments:
-                                            payment = matching_payments[0]
-                                            logger.info(f"✅ Payment encontrado por external_reference (busca completa): {payment.payment_id}")
-                                        else:
-                                            payment = payments[0]
-                                            logger.info(f"⚠️ Payment encontrado por external_reference (busca completa, gateway diferente): {payment.payment_id}")
+                        payment = Payment.query.filter_by(payment_id=external_ref).first()
+                    
+                    if not payment:
+                        logger.info(f"🔍 external_reference completo não encontrado, tentando busca parcial...")
+                        # Tentar buscar por parte do payment_id (caso external_ref seja hash parcial)
+                        # Exemplo: external_ref = "0f57f18b674274be53ad32ff456c1f"
+                        # payment_id pode ser "BOT37_1762421295_0f57f18b"
+                        # Tentar pelos primeiros 8 caracteres (hash parcial comum)
+                        if len(external_ref) >= 8:
+                            hash_prefix = external_ref[:8]
+                            payments = Payment.query.filter(
+                                Payment.payment_id.like(f"%{hash_prefix}%")
+                            ).all()
+                            if payments:
+                                # ✅ Priorizar payment do mesmo gateway e mais recente
+                                matching_payments = [p for p in payments if p.gateway_type == gateway_type]
+                                if matching_payments:
+                                    payment = matching_payments[0]
+                                    logger.info(f"✅ Payment encontrado por external_reference (hash parcial {hash_prefix}): {payment.payment_id}")
+                                else:
+                                    payment = payments[0]  # Fallback
+                                    logger.info(f"⚠️ Payment encontrado por external_reference (hash parcial, gateway diferente): {payment.payment_id}")
+                        # Se ainda não encontrou, tentar busca completa no payment_id
+                        if not payment:
+                            payments = Payment.query.filter(
+                                Payment.payment_id.like(f"%{external_ref}%")
+                            ).all()
+                            if payments:
+                                matching_payments = [p for p in payments if p.gateway_type == gateway_type]
+                                if matching_payments:
+                                    payment = matching_payments[0]
+                                    logger.info(f"✅ Payment encontrado por external_reference (busca completa): {payment.payment_id}")
+                                else:
+                                    payment = payments[0]
+                                    logger.info(f"⚠️ Payment encontrado por external_reference (busca completa, gateway diferente): {payment.payment_id}")
             
             if payment:
                 logger.info(f"💰 Pagamento encontrado: {payment.payment_id} | Status atual: {payment.status}")
