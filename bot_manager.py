@@ -1117,6 +1117,201 @@ class BotManager:
         except Exception as e:
             logger.error(f"❌ Erro ao enviar mensagem de boas-vindas: {e}")
     
+    def _check_start_lock(self, chat_id: int) -> bool:
+        """
+        ✅ QI 500: Lock para evitar /start duplicado
+        
+        Retorna True se pode processar (lock adquirido)
+        Retorna False se já está processando (lock já existe)
+        """
+        try:
+            import redis
+            redis_conn = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
+            lock_key = f"lock:start:{chat_id}"
+            
+            # Tentar adquirir lock (expira em 3 segundos)
+            acquired = redis_conn.set(lock_key, "1", ex=3, nx=True)
+            
+            if acquired:
+                logger.info(f"🔒 Lock adquirido para /start: chat_id={chat_id}")
+                return True
+            else:
+                logger.warning(f"⚠️ /start duplicado bloqueado: chat_id={chat_id} (já processando)")
+                return False
+        except Exception as e:
+            logger.error(f"❌ Erro ao verificar lock /start: {e}")
+            # Em caso de erro, permitir processar (fail open)
+            return True
+    
+    def send_funnel_step_sequential(self, token: str, chat_id: str, 
+                                   text: str = None,
+                                   media_url: str = None,
+                                   media_type: str = None,
+                                   buttons: list = None,
+                                   delay_between: float = 0.2):
+        """
+        ✅ QI 500: Envia step do funil SEQUENCIALMENTE (garante ordem)
+        
+        Envia na ordem:
+        1. Texto (se houver)
+        2. Mídia (se houver)
+        3. Botões (se houver)
+        
+        Tudo na mesma thread, com delay entre envios.
+        
+        Args:
+            token: Token do bot
+            chat_id: ID do chat
+            text: Texto da mensagem
+            media_url: URL da mídia
+            media_type: Tipo da mídia (photo, video, audio)
+            buttons: Lista de botões
+            delay_between: Delay em segundos entre envios (padrão 0.2s)
+        
+        Returns:
+            bool: True se todos os envios foram bem-sucedidos
+        """
+        import time
+        
+        try:
+            base_url = f"https://api.telegram.org/bot{token}"
+            all_success = True
+            
+            # 1️⃣ ENVIAR TEXTO (se houver e NÃO houver mídia - se houver mídia, texto será caption)
+            if text and text.strip() and not media_url:
+                logger.info(f"📝 Enviando texto sequencial...")
+                url = f"{base_url}/sendMessage"
+                payload = {
+                    'chat_id': chat_id,
+                    'text': text,
+                    'parse_mode': 'HTML'
+                }
+                response = requests.post(url, json=payload, timeout=10)
+                if response.status_code == 200 and response.json().get('ok'):
+                    logger.info(f"✅ Texto enviado")
+                else:
+                    logger.error(f"❌ Falha ao enviar texto: {response.text}")
+                    all_success = False
+                
+                time.sleep(delay_between)  # ✅ QI 500: Delay entre envios
+            
+            # 2️⃣ ENVIAR MÍDIA (se houver)
+            if media_url:
+                logger.info(f"🖼️ Enviando mídia sequencial ({media_type})...")
+                caption_text = text[:900] if text and len(text) > 900 else (text or '')
+                
+                if media_type == 'photo':
+                    url = f"{base_url}/sendPhoto"
+                    payload = {
+                        'chat_id': chat_id,
+                        'photo': media_url,
+                        'parse_mode': 'HTML'
+                    }
+                    if caption_text:
+                        payload['caption'] = caption_text
+                elif media_type == 'video':
+                    url = f"{base_url}/sendVideo"
+                    payload = {
+                        'chat_id': chat_id,
+                        'video': media_url,
+                        'parse_mode': 'HTML'
+                    }
+                    if caption_text:
+                        payload['caption'] = caption_text
+                elif media_type == 'audio':
+                    url = f"{base_url}/sendAudio"
+                    payload = {
+                        'chat_id': chat_id,
+                        'audio': media_url,
+                        'parse_mode': 'HTML'
+                    }
+                    if caption_text:
+                        payload['caption'] = caption_text
+                else:
+                    logger.warning(f"⚠️ Tipo de mídia desconhecido: {media_type}")
+                    all_success = False
+                    media_url = None  # Não enviar mídia inválida
+                
+                if media_url:
+                    # ✅ QI 500: Adicionar botões à mídia se houver
+                    if buttons:
+                        inline_keyboard = []
+                        for button in buttons:
+                            button_dict = {'text': button.get('text')}
+                            if button.get('url'):
+                                button_dict['url'] = button['url']
+                            elif button.get('callback_data'):
+                                button_dict['callback_data'] = button['callback_data']
+                            else:
+                                button_dict['callback_data'] = 'button_pressed'
+                            inline_keyboard.append([button_dict])
+                        payload['reply_markup'] = {'inline_keyboard': inline_keyboard}
+                    
+                    response = requests.post(url, json=payload, timeout=10)
+                    if response.status_code == 200 and response.json().get('ok'):
+                        logger.info(f"✅ Mídia enviada{' com botões' if buttons else ''}")
+                    else:
+                        logger.error(f"❌ Falha ao enviar mídia: {response.text}")
+                        all_success = False
+                    
+                    time.sleep(delay_between)  # ✅ QI 500: Delay entre envios
+                    
+                    # Se caption > 900, enviar texto completo separadamente
+                    if text and len(text) > 900:
+                        logger.info(f"📝 Enviando texto completo (caption truncado)...")
+                        url_msg = f"{base_url}/sendMessage"
+                        payload_msg = {
+                            'chat_id': chat_id,
+                            'text': text,
+                            'parse_mode': 'HTML'
+                        }
+                        response_msg = requests.post(url_msg, json=payload_msg, timeout=10)
+                        if response_msg.status_code == 200 and response_msg.json().get('ok'):
+                            logger.info(f"✅ Texto completo enviado")
+                        else:
+                            logger.error(f"❌ Falha ao enviar texto completo: {response_msg.text}")
+                            all_success = False
+                        
+                        time.sleep(delay_between)  # ✅ QI 500: Delay entre envios
+            
+            # 3️⃣ ENVIAR BOTÕES (se houver e NÃO foram enviados com mídia)
+            if buttons and not media_url:
+                # Preparar teclado inline
+                inline_keyboard = []
+                for button in buttons:
+                    button_dict = {'text': button.get('text')}
+                    if button.get('url'):
+                        button_dict['url'] = button['url']
+                    elif button.get('callback_data'):
+                        button_dict['callback_data'] = button['callback_data']
+                    else:
+                        button_dict['callback_data'] = 'button_pressed'
+                    inline_keyboard.append([button_dict])
+                reply_markup = {'inline_keyboard': inline_keyboard}
+                
+                logger.info(f"🔘 Enviando botões sequencial...")
+                url = f"{base_url}/sendMessage"
+                payload = {
+                    'chat_id': chat_id,
+                    'text': text[:100] if text else "⬇️ Escolha uma opção",
+                    'parse_mode': 'HTML',
+                    'reply_markup': reply_markup
+                }
+                response = requests.post(url, json=payload, timeout=10)
+                if response.status_code == 200 and response.json().get('ok'):
+                    logger.info(f"✅ Botões enviados")
+                else:
+                    logger.error(f"❌ Falha ao enviar botões: {response.text}")
+                    all_success = False
+            
+            return all_success
+            
+        except Exception as e:
+            logger.error(f"❌ Erro ao enviar step sequencial: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
+    
     def _reset_user_funnel(self, bot_id: int, chat_id: int, telegram_user_id: str, db_session=None):
         """
         ✅ QI 500: RESET ABSOLUTO DO FUNIL
@@ -1225,6 +1420,11 @@ class BotManager:
             
             logger.info(f"⭐ COMANDO /START recebido - Reiniciando funil FORÇADAMENTE (regra absoluta)")
             
+            # ✅ QI 500: Lock para evitar /start duplicado
+            if not self._check_start_lock(chat_id):
+                logger.warning(f"⚠️ /start duplicado bloqueado - já está processando")
+                return  # Sair sem processar
+            
             # ✅ QI 200: FAST RESPONSE MODE - Buscar apenas config mínima (1 query rápida)
             from app import app, db
             from models import Bot, BotUser
@@ -1304,6 +1504,7 @@ class BotManager:
                             'url': btn['url']  # Botão com URL abre direto no navegador
                         })
                 
+                # ✅ QI 500: Enviar tudo SEQUENCIALMENTE (garante ordem)
                 # Verificar se URL de mídia é válida (não pode ser canal privado)
                 valid_media = False
                 if welcome_media_url:
@@ -1313,36 +1514,17 @@ class BotManager:
                     else:
                         logger.info(f"⚠️ Mídia de canal privado detectada - enviando só texto")
                 
-                if valid_media:
-                    # Tentar com mídia
-                    result = self.send_telegram_message(
-                        token=token,
-                        chat_id=str(chat_id),
-                        message=welcome_message,
-                        media_url=welcome_media_url,
-                        media_type=welcome_media_type,
-                        buttons=buttons
-                    )
-                    if not result:
-                        logger.warning(f"⚠️ Falha com mídia. Enviando só texto...")
-                        result = self.send_telegram_message(
-                            token=token,
-                            chat_id=str(chat_id),
-                            message=welcome_message,
-                            media_url=None,
-                            media_type=None,
-                            buttons=buttons
-                        )
-                else:
-                    # Enviar direto sem mídia (mais rápido e confiável)
-                    result = self.send_telegram_message(
-                        token=token,
-                        chat_id=str(chat_id),
-                        message=welcome_message,
-                        media_url=None,
-                        media_type=None,
-                        buttons=buttons
-                    )
+                # ✅ QI 500: Usar função sequencial para garantir ordem
+                # Texto sempre enviado (como caption se houver mídia, ou mensagem separada)
+                result = self.send_funnel_step_sequential(
+                    token=token,
+                    chat_id=str(chat_id),
+                    text=welcome_message,  # Sempre enviar texto (será caption se houver mídia)
+                    media_url=welcome_media_url if valid_media else None,
+                    media_type=welcome_media_type if valid_media else None,
+                    buttons=buttons,
+                    delay_between=0.2  # ✅ QI 500: Delay de 0.2s entre envios
+                )
                 
                 if result:
                     logger.info(f"✅ Mensagem /start enviada com {len(buttons)} botão(ões)")
