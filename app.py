@@ -3749,36 +3749,42 @@ def public_redirect(slug):
             'utm_id': request.args.get('utm_id', '')
         }
         
-        # ✅ Gerar fbc se não existir mas tiver fbclid
+        # ✅ CRÍTICO: Sempre gerar fbp ANTES de salvar (independente da origem)
+        fbp_final = fbp_cookie
+        if not fbp_final:
+            fbp_final = TrackingService.generate_fbp()
+            logger.info(f"🔑 _fbp gerado no redirect (antes de salvar): {fbp_final[:30]}...")
+        
+        # ✅ Gerar fbc se existir fbclid
         fbc_final = fbc_cookie
-        if not fbc_final and fbclid:
-            fbc_final = TrackingService.generate_fbc(fbclid)
+        if fbclid and not fbc_final:
+            fbc_final = f"fb.1.{int(time.time())}.{fbclid}"
             logger.info(f"🔑 _fbc gerado no redirect: {fbc_final[:50]}...")
         
-        # ✅ Salvar tracking com TTL de 30 dias (não 7!)
+        # ✅ Salvamento correto (com fbclid ou com grim)
         if fbclid:
             TrackingService.save_tracking_data(
                 fbclid=fbclid,
-                fbp=fbp_cookie,
+                fbp=fbp_final,
                 fbc=fbc_final,
                 ip_address=user_ip,
                 user_agent=user_agent,
                 grim=grim_param,
                 utms=utms
             )
-            logger.info(f"🎯 TRACKING SALVO (30d) | fbclid:{fbclid[:20]}... | fbp={'✅' if fbp_cookie else '❌'} | fbc={'✅' if fbc_final else '❌'}")
+            logger.info(f"🎯 TRACKING SALVO (30d) | fbclid:{fbclid[:20]}... | fbp=✅ | fbc={'✅' if fbc_final else '❌'}")
         elif grim_param:
-            # Se não tiver fbclid, salvar por grim
+            # ✅ Se NÃO tiver fbclid mas tiver grim → salvar mesmo assim!
             TrackingService.save_tracking_data(
                 fbclid=None,
-                fbp=fbp_cookie,
+                fbp=fbp_final,
                 fbc=fbc_final,
                 ip_address=user_ip,
                 user_agent=user_agent,
                 grim=grim_param,
                 utms=utms
             )
-            logger.info(f"🎯 TRACKING SALVO (30d) | grim:{grim_param} | fbp={'✅' if fbp_cookie else '❌'} | fbc={'✅' if fbc_final else '❌'}")
+            logger.info(f"🎯 TRACKING SALVO (30d) | grim:{grim_param} | fbp=✅ | fbc={'✅' if fbc_final else '❌'}")
         
     except Exception as e:
         logger.error(f"⚠️ Erro ao salvar tracking no Redis: {e}")

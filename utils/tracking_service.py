@@ -108,7 +108,7 @@ class TrackingService:
     
     @staticmethod
     def save_tracking_data(
-        fbclid: str,
+        fbclid: Optional[str] = None,
         fbp: Optional[str] = None,
         fbc: Optional[str] = None,
         ip_address: Optional[str] = None,
@@ -121,22 +121,30 @@ class TrackingService:
         Salva tracking data no Redis com múltiplas estratégias de chave
         
         Estratégias:
-        1. tracking:fbclid:{fbclid} - chave exata
+        1. tracking:fbclid:{fbclid} - chave exata (se fbclid disponível)
         2. tracking:hash:{hash_prefix} - chave por hash (12 primeiros chars)
         3. tracking:chat:{telegram_user_id} - chave por chat_id
-        4. tracking_grim:{grim} - chave por grim (se disponível)
+        4. tracking_grim:{grim} - chave por grim (se disponível) - ✅ FUNCIONA MESMO SEM FBCLID
+        
+        ✅ CRÍTICO: fbp e fbc são sempre gerados se não fornecidos
         """
         if not r:
             logger.warning("⚠️ Redis não disponível - tracking não salvo")
             return False
         
-        if not fbclid:
-            logger.warning("⚠️ Sem fbclid - não é possível salvar tracking")
-            return False
+        # ✅ CRÍTICO: Sempre gerar fbp quando não existir
+        if not fbp:
+            fbp = TrackingService.generate_fbp()
+            logger.debug("🔑 _fbp gerado automaticamente no save_tracking_data()")
         
         # Gerar fbc se não fornecido mas tiver fbclid
         if not fbc and fbclid:
             fbc = TrackingService.generate_fbc(fbclid)
+        
+        # ✅ Bloqueios corrigidos (agora salva por grim mesmo sem fbclid)
+        if not fbclid and not grim:
+            logger.warning("⚠️ Sem fbclid e sem grim — não é possível salvar tracking")
+            return False
         
         tracking_data = {
             'fbclid': fbclid,
@@ -154,35 +162,35 @@ class TrackingService:
         ttl_seconds = TrackingService.TTL_DAYS * 24 * 3600
         
         try:
-            # Estratégia 1: Chave exata por fbclid
-            key1 = f"tracking:fbclid:{fbclid}"
-            r.setex(key1, ttl_seconds, json.dumps(tracking_data))
-            logger.debug(f"🔑 Tracking salvo: {key1}")
+            # ✅ 1. Salvar por fbclid
+            if fbclid:
+                key1 = f"tracking:fbclid:{fbclid}"
+                r.setex(key1, ttl_seconds, json.dumps(tracking_data))
+                logger.debug(f"🔑 Tracking salvo: {key1}")
+                
+                # ✅ 1b. Salvar hash
+                fbclid_hash = TrackingService.hash_fbclid(fbclid)
+                if fbclid_hash:
+                    key2 = f"tracking:hash:{fbclid_hash[:12]}"
+                    r.setex(key2, ttl_seconds, json.dumps(tracking_data))
+                    logger.debug(f"🔑 Tracking salvo: {key2}")
             
-            # Estratégia 2: Chave por hash prefix (12 primeiros caracteres)
-            fbclid_hash = TrackingService.hash_fbclid(fbclid)
-            if fbclid_hash:
-                hash_prefix = fbclid_hash[:12]
-                key2 = f"tracking:hash:{hash_prefix}"
-                r.setex(key2, ttl_seconds, json.dumps(tracking_data))
-                logger.debug(f"🔑 Tracking salvo: {key2}")
-            
-            # Estratégia 3: Chave por chat_id (se disponível)
-            if telegram_user_id:
-                key3 = f"tracking:chat:{telegram_user_id}"
+            # ✅ 2. Salvar por GRIM (mesmo sem fbclid!)
+            if grim:
+                key3 = f"tracking_grim:{grim}"
                 r.setex(key3, ttl_seconds, json.dumps(tracking_data))
                 logger.debug(f"🔑 Tracking salvo: {key3}")
             
-            # Estratégia 4: Chave por grim (se disponível)
-            if grim:
-                key4 = f"tracking_grim:{grim}"
+            # ✅ 3. Salvar por chat_id (se disponível)
+            if telegram_user_id:
+                key4 = f"tracking:chat:{telegram_user_id}"
                 r.setex(key4, ttl_seconds, json.dumps(tracking_data))
                 logger.debug(f"🔑 Tracking salvo: {key4}")
             
             return True
             
         except Exception as e:
-            logger.error(f"❌ Erro ao salvar tracking no Redis: {e}")
+            logger.error(f"❌ Erro salvando tracking: {e}")
             return False
     
     @staticmethod
