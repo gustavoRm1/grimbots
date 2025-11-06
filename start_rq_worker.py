@@ -17,7 +17,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 try:
-    from rq import Worker, Queue, Connection
+    from rq import Worker, Queue
     from redis import Redis
 except ImportError as e:
     print(f"❌ ERRO: Módulo não encontrado: {e}")
@@ -61,9 +61,9 @@ if __name__ == '__main__':
         print(f" Redis: {os.environ.get('REDIS_URL', 'redis://localhost:6379/0')}")
         print("="*70)
         
-        with Connection(redis_conn):
-            worker = Worker(queues)
-            worker.work()
+        # ✅ QI 200: Worker recebe conexão diretamente (sem Connection context manager)
+        worker = Worker(queues, connection=redis_conn)
+        worker.work()
     except KeyboardInterrupt:
         print("\n⚠️ Worker interrompido pelo usuário")
         sys.exit(0)
