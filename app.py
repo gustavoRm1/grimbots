@@ -6461,12 +6461,28 @@ def send_meta_pixel_pageview_event(pool, request):
             if fbc_value:
                 logger.info(f"🔑 PageView - _fbc gerado automaticamente: {fbc_value[:50]}...")
         
-        # ✅ CRÍTICO: Garantir que fbp/fbc sejam salvos no Redis para Purchase
-        if external_id and external_id.startswith('PAZ'):
+        # ✅ CRÍTICO: Se fbp veio do cookie do browser, atualizar Redis (browser gerou!)
+        # Isso garante que o Purchase terá o fbp correto
+        if fbp_value and external_id and external_id.startswith('PAZ'):
             try:
                 TrackingService.save_tracking_data(
                     fbclid=external_id,
-                    fbp=fbp_value,
+                    fbp=fbp_value,  # ✅ FBP do browser (prioridade máxima)
+                    fbc=fbc_value,
+                    ip_address=request.remote_addr,
+                    user_agent=request.headers.get('User-Agent', ''),
+                    grim=grim_param,
+                    utms=utm_params
+                )
+                logger.info(f"✅ PageView - fbp do browser salvo no Redis para Purchase")
+            except Exception as e:
+                logger.warning(f"⚠️ Erro ao salvar fbp do browser no Redis: {e}")
+        elif external_id and external_id.startswith('PAZ'):
+            # Se não tem fbp mas tem external_id, salvar mesmo assim (fbc já está)
+            try:
+                TrackingService.save_tracking_data(
+                    fbclid=external_id,
+                    fbp=fbp_value,  # Pode ser vazio (browser ainda não gerou)
                     fbc=fbc_value,
                     ip_address=request.remote_addr,
                     user_agent=request.headers.get('User-Agent', ''),
@@ -6533,9 +6549,15 @@ def send_meta_pixel_pageview_event(pool, request):
             1 if user_data.get('fbc') else 0
         ])
         
+        # ✅ LOG MELHORADO: Indicar quando fbp está ausente (browser ainda não gerou)
+        fbp_status = '✅' if user_data.get('fbp') else '⏳(browser)'
+        if not user_data.get('fbp'):
+            logger.info(f"⏳ PageView - fbp ausente (browser ainda não gerou via Meta Pixel JS - normal no primeiro acesso)")
+            logger.info(f"   Purchase terá fbp quando browser gerar (será salvo no Redis automaticamente)")
+        
         logger.info(f"🔍 Meta PageView - User Data: {attributes_count}/7 atributos | " +
                    f"external_id={'✅' if external_ids else '❌'} [{external_ids[0][:16] if external_ids else 'N/A'}...] | " +
-                   f"fbp={'✅' if user_data.get('fbp') else '❌'} | " +
+                   f"fbp={fbp_status} | " +
                    f"fbc={'✅' if user_data.get('fbc') else '❌'} | " +
                    f"ip={'✅' if user_data.get('client_ip_address') else '❌'} | " +
                    f"ua={'✅' if user_data.get('client_user_agent') else '❌'}")
