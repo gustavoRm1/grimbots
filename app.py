@@ -100,15 +100,19 @@ app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get(
     f'sqlite:///{DB_PATH}'
 )
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+# Ajuste para suportar PostgreSQL (sem check_same_thread)
+connect_args = (
+    {'check_same_thread': False, 'timeout': 30}
+    if app.config['SQLALCHEMY_DATABASE_URI'].startswith('sqlite')
+    else {}
+)
+
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
     'pool_pre_ping': True,
     'pool_recycle': 300,
     'pool_size': 20,  # ✅ Pool maior para múltiplos usuários simultâneos
     'max_overflow': 10,  # ✅ Permitir até 30 conexões totais (20 + 10)
-    'connect_args': {
-        'check_same_thread': False,  # ✅ Permitir acesso de múltiplas threads
-        'timeout': 30  # ✅ Timeout maior para evitar lock em alta carga
-    }
+    'connect_args': connect_args
 }
 
 # Inicializar extensões
