@@ -827,9 +827,9 @@ class Payment(db.Model):
     net_amount = db.Column(db.Float)
     
     # Dados do cliente
-    customer_user_id = db.Column(db.String(50))
-    customer_name = db.Column(db.String(100))
-    customer_username = db.Column(db.String(100))
+    customer_user_id = db.Column(db.String(255))
+    customer_name = db.Column(db.String(255))
+    customer_username = db.Column(db.String(255))
     
     # Produto
     product_name = db.Column(db.String(100))
@@ -857,13 +857,13 @@ class Payment(db.Model):
     meta_viewcontent_sent_at = db.Column(db.DateTime, nullable=True)
     
     # ✅ UTM TRACKING
-    utm_source = db.Column(db.String(50), nullable=True)
-    utm_campaign = db.Column(db.String(100), nullable=True)
-    utm_content = db.Column(db.String(100), nullable=True)
-    utm_medium = db.Column(db.String(50), nullable=True)
-    utm_term = db.Column(db.String(100), nullable=True)
-    fbclid = db.Column(db.String(200), nullable=True)
-    campaign_code = db.Column(db.String(50), nullable=True)
+    utm_source = db.Column(db.String(255), nullable=True)
+    utm_campaign = db.Column(db.String(255), nullable=True)
+    utm_content = db.Column(db.String(255), nullable=True)
+    utm_medium = db.Column(db.String(255), nullable=True)
+    utm_term = db.Column(db.String(255), nullable=True)
+    fbclid = db.Column(db.String(255), nullable=True)
+    campaign_code = db.Column(db.String(255), nullable=True)
     
     # ✅ TRACKING V4 - Tracking Token Universal
     tracking_token = db.Column(db.String(100), nullable=True, index=True)  # Tracking V4 - QI 500
@@ -871,15 +871,15 @@ class Payment(db.Model):
     # ✅ DEMOGRAPHIC DATA (Para Analytics Avançado)
     customer_age = db.Column(db.Integer, nullable=True)
     customer_city = db.Column(db.String(100), nullable=True)
-    customer_state = db.Column(db.String(50), nullable=True)
-    customer_country = db.Column(db.String(50), nullable=True, default='BR')
-    customer_gender = db.Column(db.String(20), nullable=True)
+    customer_state = db.Column(db.String(255), nullable=True)
+    customer_country = db.Column(db.String(255), nullable=True, default='BR')
+    customer_gender = db.Column(db.String(50), nullable=True)
     
     # ✅ DEVICE DATA
-    device_type = db.Column(db.String(20), nullable=True)  # mobile/desktop
-    os_type = db.Column(db.String(50), nullable=True)  # iOS/Android/Windows/Linux/macOS
-    browser = db.Column(db.String(50), nullable=True)  # Chrome/Safari/Firefox
-    device_model = db.Column(db.String(100), nullable=True)  # iPhone 14 Pro, Galaxy S23, etc.
+    device_type = db.Column(db.String(50), nullable=True)  # mobile/desktop
+    os_type = db.Column(db.String(255), nullable=True)  # iOS/Android/Windows/Linux/macOS
+    browser = db.Column(db.String(255), nullable=True)  # Chrome/Safari/Firefox
+    device_model = db.Column(db.String(255), nullable=True)  # iPhone 14 Pro, Galaxy S23, etc.
     
     # Datas
     created_at = db.Column(db.DateTime, default=get_brazil_time, index=True)
