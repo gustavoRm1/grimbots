@@ -97,17 +97,6 @@ def migrate_table(sqlite_conn, pg_conn, table_name, batch_size=1000):
     )
     boolean_columns = {row[0] for row in pg_cursor.fetchall()}
 
-    # Identificar colunas booleanas no PostgreSQL para conversão adequada
-    pg_cursor.execute(
-        """
-        SELECT column_name
-        FROM information_schema.columns
-        WHERE table_name = %s AND data_type = 'boolean'
-        """,
-        (table_name,)
-    )
-    boolean_columns = {row[0] for row in pg_cursor.fetchall()}
-    
     # Converter rows para tuplas
     values = []
     for row in rows:
@@ -121,11 +110,8 @@ def migrate_table(sqlite_conn, pg_conn, table_name, batch_size=1000):
                 if value.startswith('{') or value.startswith('['):
                     try:
                         json.loads(value)  # Validar JSON
-                        row_values.append(value)
                     except:
-                        row_values.append(value)
-                else:
-                    row_values.append(value)
+                        pass
             # Ajustar valores booleanos (SQLite armazena como 0/1)
             if column_name in boolean_columns:
                 if value is None:
