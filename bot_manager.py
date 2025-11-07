@@ -9,6 +9,7 @@ import time
 import logging
 import json
 import subprocess
+import socket
 import urllib3.util.connection
 from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta
@@ -25,6 +26,17 @@ logger.setLevel(logging.INFO)
 urllib3.util.connection.HAS_IPV6 = False
 try:
     requests.packages.urllib3.util.connection.HAS_IPV6 = False  # type: ignore[attr-defined]
+except AttributeError:
+    pass
+
+
+def _ipv4_only_family() -> int:
+    return socket.AF_INET
+
+
+urllib3.util.connection.allowed_gai_family = _ipv4_only_family
+try:
+    requests.packages.urllib3.util.connection.allowed_gai_family = _ipv4_only_family  # type: ignore[attr-defined]
 except AttributeError:
     pass
 
