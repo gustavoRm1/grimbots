@@ -17,6 +17,7 @@ import time
 import uuid
 from dotenv import load_dotenv
 from redis_manager import get_redis_connection, redis_health_check
+from sqlalchemy import text
 
 # ============================================================================
 # CARREGAR VARIÁVEIS DE AMBIENTE (.env)
@@ -640,7 +641,6 @@ def load_user(user_id):
     return db.session.get(User, int(user_id))
 
 # ==================== DECORATORS E HELPERS ====================
-
 def admin_required(f):
     """Decorator para proteger rotas que requerem permissão de admin"""
     @wraps(f)
@@ -758,7 +758,6 @@ def index():
     if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
     return redirect(url_for('login'))
-
 @app.route('/register', methods=['GET', 'POST'])
 @limiter.limit("3 per hour")  # ✅ PROTEÇÃO: Spam de registro
 def register():
@@ -1193,7 +1192,6 @@ def api_sales_chart():
         })
     
     return jsonify(result)
-
 @app.route('/api/dashboard/analytics')
 @login_required
 def api_dashboard_analytics():
@@ -1551,7 +1549,6 @@ def delete_bot(bot_id):
     
     logger.info(f"Bot deletado: {bot_name} por {current_user.email}")
     return jsonify({'message': 'Bot deletado com sucesso'})
-
 @app.route('/api/bots/<int:bot_id>/duplicate', methods=['POST'])
 @login_required
 @csrf.exempt
@@ -1826,7 +1823,6 @@ def stop_bot(bot_id):
     except Exception as e:
         logger.error(f"Erro ao parar bot: {e}")
         return jsonify({'error': str(e)}), 500
-
 @app.route('/api/bots/<int:bot_id>/debug', methods=['GET'])
 @login_required
 def debug_bot(bot_id):
@@ -2335,7 +2331,6 @@ def admin_dashboard():
     log_admin_action('view_dashboard', 'Acessou dashboard admin')
     
     return render_template('admin/dashboard.html', stats=stats, top_users=top_users_list)
-
 @app.route('/admin/users')
 @login_required
 @admin_required
@@ -2459,7 +2454,6 @@ def admin_user_detail(user_id):
                          recent_sales=recent_sales,
                          login_logs=login_logs,
                          financial_stats=financial_stats)
-
 @app.route('/admin/users/<int:user_id>/ban', methods=['POST'])
 @login_required
 @admin_required
@@ -2892,7 +2886,6 @@ def bot_stats_page(bot_id):
     """Página de estatísticas detalhadas do bot"""
     bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
     return render_template('bot_stats.html', bot=bot)
-
 @app.route('/api/bots/<int:bot_id>/analytics-v2', methods=['GET'])
 @login_required
 def get_bot_analytics_v2(bot_id):
@@ -3542,7 +3535,6 @@ def update_bot_config(bot_id):
         return jsonify({'error': str(e)}), 500
 
 # ==================== LOAD BALANCER / REDIRECT POOLS ====================
-
 def validate_cloaker_access(request, pool, slug):
     """
     🔐 CLOAKER V2.0 - À PROVA DE BURRICE HUMANA
@@ -3627,8 +3619,6 @@ def log_cloaker_event_json(event_type, slug, validation_result, request, pool, l
     }
     
     logger.info(f"CLOAKER_EVENT: {json.dumps(log_entry, ensure_ascii=False)}")
-
-
 @app.route('/go/<slug>')
 @limiter.limit("10000 per hour")  # Override: endpoint público precisa de limite alto
 def public_redirect(slug):
@@ -4170,8 +4160,6 @@ def delete_redirect_pool(pool_id):
     logger.info(f"Pool deletado: {pool_name} por {current_user.email}")
     
     return jsonify({'message': 'Pool deletado com sucesso'})
-
-
 @app.route('/api/redirect-pools/<int:pool_id>/bots', methods=['POST'])
 @login_required
 @csrf.exempt
@@ -4324,8 +4312,6 @@ def get_pool_meta_pixel_config(pool_id):
         'meta_cloaker_param_name': 'grim',  # Sempre fixo como "grim"
         'meta_cloaker_param_value': pool.meta_cloaker_param_value if pool.meta_cloaker_param_value else None
     })
-
-
 @app.route('/api/redirect-pools/<int:pool_id>/meta-pixel', methods=['PUT'])
 @login_required
 @csrf.exempt
@@ -4761,7 +4747,6 @@ def _reload_user_bots_config(user_id: int):
                     
     except Exception as e:
         logger.error(f"❌ Erro ao recarregar bots do usuário {user_id}: {e}")
-
 def restart_all_active_bots():
     """Reinicia automaticamente todos os bots ativos de todos os usuários no startup da VPS.
 
@@ -4961,8 +4946,6 @@ def delete_gateway(gateway_id):
 def gamification_profile():
     """Perfil de gamificação do usuário"""
     return render_template('gamification_profile.html')
-
-
 def update_ranking_premium_rates():
     """
     ✅ RANKING V2.0 - Sistema de Premiação Dinâmico e Inteligente (100% FUNCIONAL)
@@ -5270,7 +5253,6 @@ def generate_anonymous_avatar(user_id, position=None):
         'gradient': gradient,
         'hash': hash_hex[:8]  # Primeiros 8 caracteres para referência
     }
-
 @app.route('/ranking')
 @login_required
 def ranking():
@@ -5748,7 +5730,6 @@ def chat():
         })
     
     return render_template('chat.html', bots=bots_data)
-
 @app.route('/api/chat/conversations/<int:bot_id>', methods=['GET'])
 @login_required
 def get_chat_conversations(bot_id):
@@ -5900,7 +5881,6 @@ def get_chat_conversations(bot_id):
         'conversations': conversations,
         'total': len(conversations)
     })
-
 @app.route('/api/chat/messages/<int:bot_id>/<telegram_user_id>', methods=['GET'])
 @login_required
 def get_chat_messages(bot_id, telegram_user_id):
@@ -6504,7 +6484,6 @@ def test_meta_pixel_connection(bot_id):
     except Exception as e:
         logger.error(f"Erro ao testar Meta Pixel: {e}")
         return jsonify({'error': str(e)}), 500
-
 def send_meta_pixel_pageview_event(pool, request):
     """
     Enfileira evento PageView para Meta Pixel (ASSÍNCRONO - MVP DIA 2)
@@ -6807,7 +6786,6 @@ def send_meta_pixel_pageview_event(pool, request):
         logger.error(f"💥 Erro ao enfileirar Meta PageView: {e}")
         # Não impedir o redirect se Meta falhar
         return None, {}
-
 def send_meta_pixel_purchase_event(payment):
     """
     Envia evento Purchase para Meta Pixel quando pagamento é confirmado
@@ -7265,7 +7243,6 @@ def get_bot_webhook_info(bot_id):
     except Exception as e:
         logger.error(f"Erro ao obter webhook-info do bot {bot_id}: {e}")
         return jsonify({'error': str(e)}), 500
-
 @app.route('/webhook/payment/<string:gateway_type>', methods=['POST'])
 @limiter.limit("500 per minute")  # ✅ PROTEÇÃO: Webhooks de pagamento
 @csrf.exempt  # ✅ Webhooks externos não enviam CSRF token
@@ -7608,7 +7585,7 @@ def payment_webhook(gateway_type):
                         
                         if new_badges:
                             logger.info(f"🎉 {len(new_badges)} nova(s) conquista(s) desbloqueada(s)!")
-                    
+                
                 # ✅ ENVIAR ENTREGÁVEL E META PIXEL SEMPRE QUE STATUS VIRA 'paid' (CRÍTICO!)
                 # Isso garante que mesmo se estatísticas já foram processadas, o entregável e Meta Pixel são enviados
                 if deve_enviar_entregavel:
@@ -7829,7 +7806,6 @@ def unsubscribe_push():
         db.session.rollback()
         logger.error(f"❌ Erro ao remover subscription: {e}")
         return jsonify({'error': str(e)}), 500
-
 def send_push_notification(user_id, title, body, data=None, color='green'):
     """
     Envia Push Notification para todas as subscriptions ativas do usuário
@@ -8065,7 +8041,6 @@ def internal_error(error):
         return render_template('500.html'), 500
     except:
         return '<h1>500 - Erro Interno</h1><a href="/">Voltar</a>', 500
-
 # ==================== INICIALIZAÇÃO ====================
 
 @app.route('/api/dashboard/check-updates', methods=['GET'])
@@ -8407,7 +8382,6 @@ except Exception as e:
 
 
 # ==================== HEALTH CHECK ENDPOINT ====================
-
 @app.route('/health', methods=['GET'])
 @limiter.exempt  # Sem rate limit (load balancer precisa verificar frequentemente)
 def health_check():
@@ -8429,7 +8403,7 @@ def health_check():
     
     # Check 1: Banco de dados
     try:
-        db.session.execute('SELECT 1')
+        db.session.execute(text('SELECT 1'))
         checks['checks']['database'] = 'ok'
     except Exception as e:
         checks['checks']['database'] = f'error: {str(e)}'
@@ -8449,7 +8423,7 @@ def health_check():
     
     # Check 3: RQ Workers
     try:
-        from rq import Queue
+        from rq import Queue, Worker
         redis_conn = get_redis_connection(decode_responses=False)
         
         queues = {
@@ -8458,29 +8432,32 @@ def health_check():
             'webhook': Queue('webhook', connection=redis_conn)
         }
         
-        workers_count = {
-            name: len(queue.workers)
-            for name, queue in queues.items()
-        }
+        queue_sizes = {name: len(queue) for name, queue in queues.items()}
         
-        queue_sizes = {
-            name: len(queue)
-            for name, queue in queues.items()
-        }
+        workers = Worker.all(connection=redis_conn)
+        workers_count = {name: 0 for name in queues.keys()}
+        
+        for worker in workers:
+            try:
+                worker_queue_names = worker.queue_names()  # RQ >= 1.15
+            except AttributeError:
+                worker_queue_names = [q.name for q in getattr(worker, 'queues', [])]
+            
+            for queue_name in worker_queue_names:
+                if queue_name in workers_count:
+                    workers_count[queue_name] += 1
         
         checks['checks']['rq_workers'] = {
             'workers': workers_count,
             'queue_sizes': queue_sizes,
-            'total_workers': sum(workers_count.values())
+            'total_workers': len(workers)
         }
         
-        # Alertar se alguma fila sem workers
-        if any(count == 0 for count in workers_count.values()):
+        if workers and any(count == 0 for count in workers_count.values()):
             checks['status'] = 'degraded'
             checks['checks']['rq_workers']['warning'] = 'Some queues have no workers'
             logger.warning(f"⚠️ Health check - Some RQ queues without workers: {workers_count}")
         
-        # Alertar se filas muito grandes (backlog)
         if any(size > 1000 for size in queue_sizes.values()):
             checks['status'] = 'degraded'
             checks['checks']['rq_workers']['warning'] = 'High queue backlog detected'
@@ -8523,4 +8500,3 @@ if __name__ == '__main__':
     print("Aguardando acoes...\n")
     
     socketio.run(app, debug=debug, host='0.0.0.0', port=port, log_output=False, allow_unsafe_werkzeug=True)
-
