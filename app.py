@@ -119,6 +119,24 @@ app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
     'connect_args': connect_args
 }
 
+# ==================== CONFIGURAÇÃO DE COOKIES/SESSÃO ====================
+session_cookie_domain = os.environ.get('SESSION_COOKIE_DOMAIN')
+if session_cookie_domain:
+    app.config['SESSION_COOKIE_DOMAIN'] = session_cookie_domain
+
+session_cookie_secure = os.environ.get('SESSION_COOKIE_SECURE', 'true').lower() in {'1', 'true', 'yes'}
+app.config['SESSION_COOKIE_SECURE'] = session_cookie_secure
+app.config['REMEMBER_COOKIE_SECURE'] = session_cookie_secure
+
+session_cookie_samesite = os.environ.get('SESSION_COOKIE_SAMESITE', 'None')
+app.config['SESSION_COOKIE_SAMESITE'] = session_cookie_samesite
+app.config['REMEMBER_COOKIE_SAMESITE'] = session_cookie_samesite
+
+if session_cookie_domain:
+    app.config['REMEMBER_COOKIE_DOMAIN'] = session_cookie_domain
+
+app.config['PREFERRED_URL_SCHEME'] = os.environ.get('PREFERRED_URL_SCHEME', 'https')
+
 # Inicializar extensões
 db.init_app(app)
 
@@ -7807,10 +7825,16 @@ def subscribe_push():
                 'updated_at': now,
             }
 
-            upsert_stmt = pg_insert(PushSubscription.__table__).values(**insert_payload)
-            upsert_stmt = upsert_stmt.on_conflict_do_update(
-                index_elements=[PushSubscription.__table__.c.endpoint],
-                set_={
+            insert_stmt = pg_insert(PushSubscription.__table__).values(**insert_payload)
+            upsert_stmt = insert_stmt.on_conflict_do_nothing(
+                index_elements=[PushSubscription.__table__.c.endpoint]
+            )
+
+            db.session.execute(upsert_stmt)
+
+            # Atualizar dados (garante is_active e reassociação de usuário)
+            PushSubscription.query.filter_by(endpoint=endpoint).update(
+                {
                     'user_id': current_user.id,
                     'p256dh': keys['p256dh'],
                     'auth': keys['auth'],
@@ -7818,14 +7842,14 @@ def subscribe_push():
                     'device_info': device_info,
                     'is_active': True,
                     'updated_at': now,
-                }
+                },
+                synchronize_session=False
             )
 
-            db.session.execute(upsert_stmt)
             db.session.commit()
 
             logger.info(
-                "✅ Subscription upsert concluído para user %s (endpoint %s)",
+                "✅ Subscription registrada/atualizada para user %s (endpoint %s)",
                 current_user.id,
                 endpoint[:60],
             )
