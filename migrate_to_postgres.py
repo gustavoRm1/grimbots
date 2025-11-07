@@ -58,8 +58,44 @@ def migrate_table(sqlite_conn, pg_conn, table_name, batch_size=1000):
     if not rows:
         return 0
     
-    # Obter colunas
-    columns = [desc[0] for desc in sqlite_cursor.description]
+    # Colunas do SQLite
+    sqlite_columns = [desc[0] for desc in sqlite_cursor.description]
+
+    # Colunas válidas no PostgreSQL (ordem real da tabela destino)
+    pg_cursor.execute(
+        """
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_name = %s
+        ORDER BY ordinal_position
+        """,
+        (table_name,)
+    )
+    target_columns = [row[0] for row in pg_cursor.fetchall()]
+    if not target_columns:
+        print(f"  ⚠️  Tabela {table_name} não existe no PostgreSQL – pulando")
+        return 0
+
+    # Colunas em comum (presentes no SQLite e no PostgreSQL)
+    common_columns = [col for col in sqlite_columns if col in target_columns]
+    missing_in_pg = [col for col in sqlite_columns if col not in common_columns]
+    if missing_in_pg:
+        print(f"  ⚠️  Colunas ignoradas (não existem no PostgreSQL): {missing_in_pg}")
+
+    if not common_columns:
+        print(f"  ⚠️  Nenhuma coluna em comum para {table_name}, pulando")
+        return 0
+
+    # Identificar colunas booleanas no PostgreSQL para conversão adequada
+    pg_cursor.execute(
+        """
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_name = %s AND data_type = 'boolean'
+        """,
+        (table_name,)
+    )
+    boolean_columns = {row[0] for row in pg_cursor.fetchall()}
 
     # Identificar colunas booleanas no PostgreSQL para conversão adequada
     pg_cursor.execute(
@@ -75,9 +111,10 @@ def migrate_table(sqlite_conn, pg_conn, table_name, batch_size=1000):
     # Converter rows para tuplas
     values = []
     for row in rows:
+        row_dict = dict(zip(sqlite_columns, row))
         row_values = []
-        for idx, value in enumerate(row):
-            column_name = columns[idx]
+        for column_name in common_columns:
+            value = row_dict.get(column_name)
             # Converter valores especiais
             if isinstance(value, str):
                 # Tentar decodificar JSON se parecer JSON
@@ -89,31 +126,26 @@ def migrate_table(sqlite_conn, pg_conn, table_name, batch_size=1000):
                         row_values.append(value)
                 else:
                     row_values.append(value)
-            else:
-                row_values.append(value)
-
             # Ajustar valores booleanos (SQLite armazena como 0/1)
             if column_name in boolean_columns:
-                raw_value = row_values[-1]
-                if raw_value is None:
-                    converted = None
-                elif isinstance(raw_value, bool):
-                    converted = raw_value
-                elif isinstance(raw_value, (int, float)):
-                    converted = bool(raw_value)
-                elif isinstance(raw_value, str):
-                    lowered = raw_value.strip().lower()
+                if value is None:
+                    value = None
+                elif isinstance(value, bool):
+                    value = value
+                elif isinstance(value, (int, float)):
+                    value = bool(value)
+                elif isinstance(value, str):
+                    lowered = value.strip().lower()
                     if lowered in {'true', 't', 'yes', 'y', '1'}:
-                        converted = True
+                        value = True
                     elif lowered in {'false', 'f', 'no', 'n', '0'}:
-                        converted = False
+                        value = False
                     else:
-                        # Fallback: qualquer string não vazia vira True
-                        converted = bool(raw_value)
+                        value = bool(value)
                 else:
-                    converted = bool(raw_value)
+                    value = bool(value)
 
-                row_values[-1] = converted
+            row_values.append(value)
         
         values.append(tuple(row_values))
     
@@ -123,8 +155,8 @@ def migrate_table(sqlite_conn, pg_conn, table_name, batch_size=1000):
         batch = values[i:i + batch_size]
         
         # Preparar query
-        placeholders = ','.join(['%s'] * len(columns))
-        columns_str = ','.join([f'"{col}"' for col in columns])
+        placeholders = ','.join(['%s'] * len(common_columns))
+        columns_str = ','.join([f'"{col}"' for col in common_columns])
         insert_query = f'INSERT INTO {table_name} ({columns_str}) VALUES %s ON CONFLICT DO NOTHING'
         
         try:
