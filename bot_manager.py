@@ -9,6 +9,8 @@ import time
 import logging
 import json
 import subprocess
+import socket
+import urllib3.util.connection
 from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta
 from redis_manager import get_redis_connection
@@ -19,6 +21,14 @@ logger = logging.getLogger(__name__)
 
 # Configurar logging para este módulo
 logger.setLevel(logging.INFO)
+
+# Forçar urllib3/requests a usar apenas IPv4 (evita NameResolutionError com IPv6)
+def _ipv4_only_connection(address, *args, **kwargs):
+    host, port = address
+    return socket.create_connection((host, port), *args, family=socket.AF_INET, **kwargs)
+
+
+urllib3.util.connection.create_connection = _ipv4_only_connection
 
 def send_meta_pixel_viewcontent_event(bot, bot_user, message, pool_id=None):
     """
