@@ -1,0 +1,33 @@
+## 🚀 COMANDO ÚNICO - COPIE E COLE NA VPS
+
+cd ~/grimbots && chmod +x git_pull_and_deploy.sh && ./git_pull_and_deploy.sh
+
+
+## Se o script acima não existir, use este:
+
+cd ~/grimbots && git stash save "Auto-stash $(date +%Y%m%d_%H%M%S)" && git pull origin main && chmod +x DEPLOY_COMPLETO.sh && ./DEPLOY_COMPLETO.sh
+
+
+## Ou passo a passo:
+
+cd ~/grimbots
+git stash save "Mudanças locais antes do pull"
+git pull origin main
+chmod +x DEPLOY_COMPLETO.sh setup_systemd.sh start_system.sh verificar_sistema.sh
+./DEPLOY_COMPLETO.sh
+
+
+## Validar:
+
+./verificar_sistema.sh
+
+
+## Monitorar:
+
+sudo journalctl -u grimbots -f
+
+
+## Health check:
+
+curl http://localhost:5000/health
+
