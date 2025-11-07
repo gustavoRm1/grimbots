@@ -53,62 +53,32 @@ class RedisManager:
         redis_url = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
         
         # Extrair componentes da URL
-        if redis_url.startswith('redis://'):
-            redis_url = redis_url[8:]  # Remove redis://
-        
-        if '@' in redis_url:
-            # redis://user:pass@host:port/db
-            auth, location = redis_url.split('@')
-            password = auth.split(':')[1] if ':' in auth else None
-        else:
-            password = None
-            location = redis_url
-        
-        # Parse host:port/db
-        if '/' in location:
-            host_port, db = location.split('/')
-        else:
-            host_port = location
-            db = '0'
-        
-        if ':' in host_port:
-            host, port = host_port.split(':')
-        else:
-            host = host_port
-            port = '6379'
+        # ConnectionPool from_url já trata credenciais, database e port corretamente.
+        # Registramos a URL limpa para logs apenas.
+        url_for_pool = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
         
         # Criar connection pool
-        self.pool = ConnectionPool(
-            host=host,
-            port=int(port),
-            db=int(db),
-            password=password,
-            max_connections=50,  # Pool size
+        self.pool = ConnectionPool.from_url(
+            url_for_pool,
+            max_connections=50,
             socket_keepalive=True,
             socket_connect_timeout=5,
-            # socket_timeout longo para operações comuns (None = sem timeout)
-            socket_timeout=None,
-            retry_on_timeout=True,
-            health_check_interval=30  # Health check a cada 30s
-        )
-        
-        # Pool separado para RQ (decode_responses=False)
-        self.pool_rq = ConnectionPool(
-            host=host,
-            port=int(port),
-            db=int(db),
-            password=password,
-            max_connections=30,
-            socket_keepalive=True,
-            socket_connect_timeout=5,
-            # Workers RQ usam BRPOP bloqueante – nunca colocar socket_timeout
-            socket_timeout=None,
-            decode_responses=False,  # RQ precisa de bytes
             retry_on_timeout=True,
             health_check_interval=30
         )
         
-        logger.info(f"✅ Redis Connection Pool inicializado: {host}:{port}/{db} (max 50 conexões)")
+        # Pool separado para RQ (decode_responses=False)
+        self.pool_rq = ConnectionPool.from_url(
+            url_for_pool,
+            max_connections=30,
+            socket_keepalive=True,
+            socket_connect_timeout=5,
+            retry_on_timeout=True,
+            health_check_interval=30,
+            decode_responses=False
+        )
+        
+        logger.info(f"✅ Redis Connection Pool inicializado: {url_for_pool} (max 50 conexões)")
     
     def get_connection(self, decode_responses=True):
         """
