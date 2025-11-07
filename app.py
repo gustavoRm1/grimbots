@@ -7788,7 +7788,8 @@ def subscribe_push():
         device_info = data.get('device_info', 'unknown')
         now = get_brazil_time()
 
-        dialect_name = db.session.bind.dialect.name if db.session.bind is not None else ''
+        bind = db.session.get_bind()
+        dialect_name = bind.dialect.name if bind is not None else ''
 
         if dialect_name == 'postgresql':
             insert_payload = {
