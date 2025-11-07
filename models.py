@@ -183,7 +183,7 @@ class Bot(db.Model):
     
     # Configurações básicas
     token = db.Column(db.String(100), unique=True, nullable=False, index=True)
-    name = db.Column(db.String(100), nullable=False)
+    name = db.Column(db.String(255), nullable=False)
     username = db.Column(db.String(100))
     bot_id = db.Column(db.String(50))
     
@@ -437,7 +437,7 @@ class RedirectPool(db.Model):
     meta_pixel_id = db.Column(db.String(50), nullable=True)
     meta_access_token = db.Column(db.Text, nullable=True)  # Criptografado
     meta_tracking_enabled = db.Column(db.Boolean, default=False)
-    meta_test_event_code = db.Column(db.String(100), nullable=True)
+    meta_test_event_code = db.Column(db.String(255), nullable=True)
     meta_events_pageview = db.Column(db.Boolean, default=True)
     meta_events_viewcontent = db.Column(db.Boolean, default=True)
     meta_events_purchase = db.Column(db.Boolean, default=True)
@@ -911,8 +911,8 @@ class BotUser(db.Model):
     
     # Dados do usuário do Telegram
     telegram_user_id = db.Column(db.String(50), nullable=False, index=True)
-    first_name = db.Column(db.String(100))
-    username = db.Column(db.String(100))
+    first_name = db.Column(db.String(255))
+    username = db.Column(db.String(255))
     
     # Arquivamento (quando bot troca de token)
     archived = db.Column(db.Boolean, default=False, index=True)  # Usuario de token antigo
@@ -931,10 +931,10 @@ class BotUser(db.Model):
     
     # ✅ UTM TRACKING
     utm_source = db.Column(db.String(50), nullable=True)
-    utm_campaign = db.Column(db.String(100), nullable=True)
-    utm_content = db.Column(db.String(100), nullable=True)
+    utm_campaign = db.Column(db.String(255), nullable=True)
+    utm_content = db.Column(db.String(255), nullable=True)
     utm_medium = db.Column(db.String(50), nullable=True)
-    utm_term = db.Column(db.String(100), nullable=True)
+    utm_term = db.Column(db.String(255), nullable=True)
     fbclid = db.Column(db.String(200), nullable=True)
     campaign_code = db.Column(db.String(50), nullable=True)
     external_id = db.Column(db.String(100), nullable=True)  # Para tracking de cliques
@@ -942,7 +942,7 @@ class BotUser(db.Model):
     # ✅ TRACKING ELITE (IP/User-Agent capturados no redirect)
     ip_address = db.Column(db.String(50), nullable=True)  # IP do primeiro click
     user_agent = db.Column(db.Text, nullable=True)  # User-Agent completo
-    tracking_session_id = db.Column(db.String(100), nullable=True)  # UUID para correlação
+    tracking_session_id = db.Column(db.String(255), nullable=True)  # UUID para correlação
     click_timestamp = db.Column(db.DateTime, nullable=True)  # Timestamp do click
     
     # ✅ DEMOGRAPHIC DATA (Para Analytics Avançado)
@@ -956,7 +956,7 @@ class BotUser(db.Model):
     device_type = db.Column(db.String(20), nullable=True)  # mobile/desktop
     os_type = db.Column(db.String(50), nullable=True)  # iOS/Android/Windows/Linux/macOS
     browser = db.Column(db.String(50), nullable=True)  # Chrome/Safari/Firefox
-    device_model = db.Column(db.String(100), nullable=True)  # iPhone 14 Pro, Galaxy S23, etc.
+    device_model = db.Column(db.String(255), nullable=True)  # iPhone 14 Pro, Galaxy S23, etc.
     
     # Datas
     first_interaction = db.Column(db.DateTime, default=get_brazil_time)
