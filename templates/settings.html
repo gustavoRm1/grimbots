@@ -430,104 +430,6 @@
             </p>
         </div>
 
-        <!-- ✅ QI 500: Instruções de Webhook (OBRIGATÓRIO) - Apenas Paradise e Átomo Pay -->
-        <template x-for="gateway in gatewaysList.filter(g => g.is_verified && (g.gateway_type === 'paradise' || g.gateway_type === 'atomopay'))" :key="'webhook-' + gateway.id">
-            <div class="chart-container mb-8" style="background: var(--bg-secondary); border: 1px solid var(--border-subtle);">
-                <div class="flex items-start gap-3 mb-4">
-                    <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style="background: rgba(255, 184, 0, 0.12);">
-                        <i class="fas fa-exclamation-triangle text-yellow-300"></i>
-                    </div>
-                    <div class="flex-1">
-                        <h3 class="text-lg font-bold text-white">
-                            Webhook obrigatório • <span x-text="gateway.gateway_type.toUpperCase()"></span>
-                        </h3>
-                        <p class="text-xs text-gray-400 mt-1">
-                            Mantemos o pixel e o status de vendas sincronizados via webhook. Configure uma vez para evitar perda de tracking.
-                        </p>
-                    </div>
-                </div>
-
-                <div class="bg-gray-900 rounded-lg p-4 mb-4 border border-gray-800">
-                    <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">
-                        URL do webhook
-                    </label>
-                    <div class="flex flex-col sm:flex-row sm:items-center gap-2">
-                        <input type="text"
-                               :id="'webhook-url-input-' + gateway.gateway_type"
-                               readonly
-                               :value="'https://app.grimbots.online/webhook/payment/' + gateway.gateway_type"
-                               class="flex-1 form-input bg-black bg-opacity-40 font-mono text-sm text-yellow-400 cursor-text border border-gray-700"
-                               @click="$event.target.select(); document.execCommand('copy'); copyWebhookUrlSpecific(gateway.gateway_type)">
-                        <button type="button"
-                                @click="copyWebhookUrlSpecific(gateway.gateway_type)"
-                                class="btn-action btn-action-primary sm:w-auto w-full">
-                            <i class="fas fa-copy mr-2"></i>
-                            Copiar
-                        </button>
-                    </div>
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div class="rounded-lg border border-gray-800 p-4 bg-gray-900 bg-opacity-60">
-                        <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3 flex items-center gap-2">
-                            <i class="fas fa-check-circle text-green-400"></i>
-                            Eventos para habilitar
-                        </p>
-                        <div class="flex flex-wrap gap-2 text-xs font-semibold">
-                            <span class="inline-flex items-center px-2 py-1 rounded-md" style="background: rgba(16, 185, 129, 0.15); color: #10B981; border: 1px solid rgba(16, 185, 129, 0.3);">
-                                approved
-                            </span>
-                            <span class="inline-flex items-center px-2 py-1 rounded-md" style="background: rgba(251, 191, 36, 0.15); color: #FBBF24; border: 1px solid rgba(251, 191, 36, 0.3);">
-                                pending
-                            </span>
-                            <span class="inline-flex items-center px-2 py-1 rounded-md" style="background: rgba(59, 130, 246, 0.15); color: #3B82F6; border: 1px solid rgba(59, 130, 246, 0.3);">
-                                refunded
-                            </span>
-                            <span class="inline-flex items-center px-2 py-1 rounded-md" style="background: rgba(239, 68, 68, 0.15); color: #EF4444; border: 1px solid rgba(239, 68, 68, 0.3);">
-                                cancelled
-                            </span>
-                        </div>
-                        <p class="text-xs text-gray-500 mt-3">
-                            Marque todos os eventos acima no painel do gateway.
-                        </p>
-                    </div>
-                    <div class="rounded-lg border border-gray-800 p-4 bg-gray-900 bg-opacity-60">
-                        <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3 flex items-center gap-2">
-                            <i class="fas fa-bullseye text-blue-400"></i>
-                            Benefícios imediatos
-                        </p>
-                        <ul class="space-y-2 text-xs text-gray-300">
-                            <li class="flex items-start gap-2">
-                                <i class="fas fa-check text-green-400 mt-1 text-xs"></i>
-                                <span>Purchase enviado para Meta/Google sem atraso.</span>
-                            </li>
-                            <li class="flex items-start gap-2">
-                                <i class="fas fa-check text-green-400 mt-1 text-xs"></i>
-                                <span>Status de pagamentos atualizado automaticamente.</span>
-                            </li>
-                            <li class="flex items-start gap-2">
-                                <i class="fas fa-check text-green-400 mt-1 text-xs"></i>
-                                <span>Relatórios e remarketing com dados confiáveis.</span>
-                            </li>
-                        </ul>
-                    </div>
-                </div>
-
-                <div class="rounded-lg border border-gray-800 p-4 bg-gray-900 bg-opacity-60">
-                    <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3 flex items-center gap-2">
-                        <i class="fas fa-clipboard-check text-yellow-300"></i>
-                        Passos rápidos
-                    </p>
-                    <ol class="ml-5 list-decimal space-y-2 text-xs text-gray-300">
-                        <li>Copie a URL acima.</li>
-                        <li>Acesse o painel do gateway <span class="text-yellow-300" x-text="gateway.gateway_type.toUpperCase()"></span>.</li>
-                        <li>Em “Webhook/Postback”, cole a URL e habilite os eventos listados.</li>
-                        <li>Salve. Vendas e pixel passam a sincronizar em tempo real.</li>
-                    </ol>
-                </div>
-            </div>
-        </template>
-
         <!-- Gateways Configurados (Ativar/Desativar) -->
         <div class="chart-container mb-8" x-show="gatewaysList.filter(g => g.is_verified).length > 0">
             <div class="mb-6">
@@ -895,6 +797,99 @@
                             <span x-text="loading ? 'Salvando...' : 'Salvar'"></span>
                         </button>
                     </form>
+
+            <div class="mt-6 space-y-4" x-show="getGatewayStatus('paradise')?.is_verified">
+                <div class="bg-gray-900 rounded-lg p-4 border border-gray-800">
+                    <div class="flex items-start gap-3 mb-4">
+                        <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style="background: rgba(255, 184, 0, 0.12);">
+                            <i class="fas fa-exclamation-triangle text-yellow-300"></i>
+                        </div>
+                        <div>
+                            <h4 class="text-lg font-bold text-white">Webhook obrigatório • PARADISE</h4>
+                            <p class="text-xs text-gray-400 mt-1">
+                                Mantemos o pixel e o status de vendas sincronizados via webhook. Configure uma vez para evitar perda de tracking.
+                            </p>
+                        </div>
+                    </div>
+
+                    <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">
+                        URL do webhook
+                    </label>
+                    <div class="flex flex-col sm:flex-row sm:items-center gap-2">
+                        <input type="text"
+                               id="webhook-url-input-paradise"
+                               readonly
+                               value="https://app.grimbots.online/webhook/payment/paradise"
+                               class="flex-1 form-input bg-black bg-opacity-40 font-mono text-sm text-yellow-400 cursor-text border border-gray-700"
+                               @click="$event.target.select(); document.execCommand('copy'); copyWebhookUrlSpecific('paradise')">
+                        <button type="button"
+                                @click="copyWebhookUrlSpecific('paradise')"
+                                class="btn-action btn-action-primary sm:w-auto w-full">
+                            <i class="fas fa-copy mr-2"></i>
+                            Copiar
+                        </button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="rounded-lg border border-gray-800 p-4 bg-gray-900 bg-opacity-60">
+                        <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3 flex items-center gap-2">
+                            <i class="fas fa-check-circle text-green-400"></i>
+                            Eventos para habilitar
+                        </p>
+                        <div class="flex flex-wrap gap-2 text-xs font-semibold">
+                            <span class="inline-flex items-center px-2 py-1 rounded-md" style="background: rgba(16, 185, 129, 0.15); color: #10B981; border: 1px solid rgba(16, 185, 129, 0.3);">
+                                approved
+                            </span>
+                            <span class="inline-flex items-center px-2 py-1 rounded-md" style="background: rgba(251, 191, 36, 0.15); color: #FBBF24; border: 1px solid rgba(251, 191, 36, 0.3);">
+                                pending
+                            </span>
+                            <span class="inline-flex items-center px-2 py-1 rounded-md" style="background: rgba(59, 130, 246, 0.15); color: #3B82F6; border: 1px solid rgba(59, 130, 246, 0.3);">
+                                refunded
+                            </span>
+                            <span class="inline-flex items-center px-2 py-1 rounded-md" style="background: rgba(239, 68, 68, 0.15); color: #EF4444; border: 1px solid rgba(239, 68, 68, 0.3);">
+                                cancelled
+                            </span>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-3">
+                            Marque todos os eventos acima no painel do gateway.
+                        </p>
+                    </div>
+                    <div class="rounded-lg border border-gray-800 p-4 bg-gray-900 bg-opacity-60">
+                        <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3 flex items-center gap-2">
+                            <i class="fas fa-bullseye text-blue-400"></i>
+                            Benefícios imediatos
+                        </p>
+                        <ul class="space-y-2 text-xs text-gray-300">
+                            <li class="flex items-start gap-2">
+                                <i class="fas fa-check text-green-400 mt-1 text-xs"></i>
+                                <span>Purchase enviado para Meta/Google sem atraso.</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <i class="fas fa-check text-green-400 mt-1 text-xs"></i>
+                                <span>Status de pagamentos atualizado automaticamente.</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <i class="fas fa-check text-green-400 mt-1 text-xs"></i>
+                                <span>Relatórios e remarketing com dados confiáveis.</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="rounded-lg border border-gray-800 p-4 bg-gray-900 bg-opacity-60">
+                    <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3 flex items-center gap-2">
+                        <i class="fas fa-clipboard-check text-yellow-300"></i>
+                        Passos rápidos
+                    </p>
+                    <ol class="ml-5 list-decimal space-y-2 text-xs text-gray-300">
+                        <li>Copie a URL acima.</li>
+                        <li>Acesse o painel do gateway <span class="text-yellow-300">PARADISE</span>.</li>
+                        <li>Em “Webhook/Postback”, cole a URL e habilite os eventos listados.</li>
+                        <li>Salve. Vendas e pixel passam a sincronizar em tempo real.</li>
+                    </ol>
+                </div>
+            </div>
                 </div>
 
                 <!-- WiinPay -->
@@ -1005,6 +1000,99 @@
                             <span x-text="loading ? 'Salvando...' : 'Salvar'"></span>
                         </button>
                     </form>
+
+            <div class="mt-6 space-y-4" x-show="getGatewayStatus('atomopay')?.is_verified">
+                <div class="bg-gray-900 rounded-lg p-4 border border-gray-800">
+                    <div class="flex items-start gap-3 mb-4">
+                        <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style="background: rgba(255, 184, 0, 0.12);">
+                            <i class="fas fa-exclamation-triangle text-yellow-300"></i>
+                        </div>
+                        <div>
+                            <h4 class="text-lg font-bold text-white">Webhook obrigatório • ÁTOMO PAY</h4>
+                            <p class="text-xs text-gray-400 mt-1">
+                                O webhook garante que o funil, o pixel e os relatórios reflitam cada pagamento em tempo real.
+                            </p>
+                        </div>
+                    </div>
+
+                    <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">
+                        URL do webhook
+                    </label>
+                    <div class="flex flex-col sm:flex-row sm:items-center gap-2">
+                        <input type="text"
+                               id="webhook-url-input-atomopay"
+                               readonly
+                               value="https://app.grimbots.online/webhook/payment/atomopay"
+                               class="flex-1 form-input bg-black bg-opacity-40 font-mono text-sm text-yellow-400 cursor-text border border-gray-700"
+                               @click="$event.target.select(); document.execCommand('copy'); copyWebhookUrlSpecific('atomopay')">
+                        <button type="button"
+                                @click="copyWebhookUrlSpecific('atomopay')"
+                                class="btn-action btn-action-primary sm:w-auto w-full">
+                            <i class="fas fa-copy mr-2"></i>
+                            Copiar
+                        </button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="rounded-lg border border-gray-800 p-4 bg-gray-900 bg-opacity-60">
+                        <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3 flex items-center gap-2">
+                            <i class="fas fa-check-circle text-green-400"></i>
+                            Eventos para habilitar
+                        </p>
+                        <div class="flex flex-wrap gap-2 text-xs font-semibold">
+                            <span class="inline-flex items-center px-2 py-1 rounded-md" style="background: rgba(16, 185, 129, 0.15); color: #10B981; border: 1px solid rgba(16, 185, 129, 0.3);">
+                                approved
+                            </span>
+                            <span class="inline-flex items-center px-2 py-1 rounded-md" style="background: rgba(251, 191, 36, 0.15); color: #FBBF24; border: 1px solid rgba(251, 191, 36, 0.3);">
+                                pending
+                            </span>
+                            <span class="inline-flex items-center px-2 py-1 rounded-md" style="background: rgba(59, 130, 246, 0.15); color: #3B82F6; border: 1px solid rgba(59, 130, 246, 0.3);">
+                                refunded
+                            </span>
+                            <span class="inline-flex items-center px-2 py-1 rounded-md" style="background: rgba(239, 68, 68, 0.15); color: #EF4444; border: 1px solid rgba(239, 68, 68, 0.3);">
+                                cancelled
+                            </span>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-3">
+                            Marque todos os eventos acima no painel do gateway.
+                        </p>
+                    </div>
+                    <div class="rounded-lg border border-gray-800 p-4 bg-gray-900 bg-opacity-60">
+                        <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3 flex items-center gap-2">
+                            <i class="fas fa-bullseye text-blue-400"></i>
+                            Benefícios imediatos
+                        </p>
+                        <ul class="space-y-2 text-xs text-gray-300">
+                            <li class="flex items-start gap-2">
+                                <i class="fas fa-check text-green-400 mt-1 text-xs"></i>
+                                <span>Purchase dispara no Meta/Google com o mesmo timestamp da venda.</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <i class="fas fa-check text-green-400 mt-1 text-xs"></i>
+                                <span>Status e remarketing atualizados sem intervenção manual.</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <i class="fas fa-check text-green-400 mt-1 text-xs"></i>
+                                <span>Relatórios e automações operando com dados íntegros.</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="rounded-lg border border-gray-800 p-4 bg-gray-900 bg-opacity-60">
+                    <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3 flex items-center gap-2">
+                        <i class="fas fa-clipboard-check text-yellow-300"></i>
+                        Passos rápidos
+                    </p>
+                    <ol class="ml-5 list-decimal space-y-2 text-xs text-gray-300">
+                        <li>Copie a URL acima.</li>
+                        <li>Acesse o painel do gateway <span class="text-yellow-300">ÁTOMO PAY</span>.</li>
+                        <li>Em “Webhook/Postback”, cole a URL e habilite os eventos listados.</li>
+                        <li>Salve. O funil passa a reagir em tempo real a cada venda.</li>
+                    </ol>
+                </div>
+            </div>
                 </div>
 
                 <!-- SyncPay -->
