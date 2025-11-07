@@ -5,6 +5,9 @@ GRIMBOTS v2.1.0
 import multiprocessing
 import os
 
+# ✅ Evita que o eventlet use greendns (stub 127.0.0.53 causava timeouts no Telegram)
+os.environ.setdefault("EVENTLET_NO_GREENDNS", "yes")
+
 # ========================================
 # SERVER SOCKET
 # ========================================
