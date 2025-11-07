@@ -910,7 +910,7 @@ class BotUser(db.Model):
     bot_id = db.Column(db.Integer, db.ForeignKey('bots.id'), nullable=False, index=True)
     
     # Dados do usuário do Telegram
-    telegram_user_id = db.Column(db.String(50), nullable=False, index=True)
+    telegram_user_id = db.Column(db.String(255), nullable=False, index=True)
     first_name = db.Column(db.String(255))
     username = db.Column(db.String(255))
     
@@ -988,7 +988,7 @@ class BotMessage(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     bot_id = db.Column(db.Integer, db.ForeignKey('bots.id'), nullable=False, index=True)
     bot_user_id = db.Column(db.Integer, db.ForeignKey('bot_users.id'), nullable=False, index=True)
-    telegram_user_id = db.Column(db.String(50), nullable=False, index=True)
+    telegram_user_id = db.Column(db.String(255), nullable=False, index=True)
     
     # Dados da mensagem
     message_id = db.Column(db.String(100), nullable=False, index=True)  # ID da mensagem no Telegram
@@ -1108,7 +1108,7 @@ class RemarketingBlacklist(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     bot_id = db.Column(db.Integer, db.ForeignKey('bots.id'), nullable=False, index=True)
-    telegram_user_id = db.Column(db.String(50), nullable=False, index=True)
+    telegram_user_id = db.Column(db.String(255), nullable=False, index=True)
     reason = db.Column(db.String(50))  # user_request, bot_blocked, spam_report
     created_at = db.Column(db.DateTime, default=get_brazil_time)
     
