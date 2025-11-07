@@ -321,49 +321,47 @@ class BotManager:
                 wait = backoff_seconds[min(attempt - 1, len(backoff_seconds) - 1)]
                 time.sleep(wait)
 
-        # Se esgotaram as tentativas
-        if isinstance(last_exception, requests.exceptions.Timeout):
-            error = Exception('Timeout ao conectar com API do Telegram')
-            error.error_type = 'connection_error'
-            raise error
-        elif isinstance(last_exception, requests.exceptions.RequestException):
-            message = str(last_exception)
-            logger.warning("Falha persistente ao validar token via requests; tentando fallback com curl")
-            try:
-                cmd = [
-                    'curl',
-                    '--silent',
-                    '--show-error',
-                    '--max-time', '15',
-                    '--retry', '4',
-                    '--retry-all-errors',
-                    '--retry-delay', '2',
-                    f'https://api.telegram.org/bot{token}/getMe'
-                ]
-                completed = subprocess.run(cmd, capture_output=True, text=True, check=True)
-                data = json.loads(completed.stdout)
+        # Se esgotaram as tentativas com requests, tentar fallback com curl
+        message = str(last_exception) if last_exception else 'desconhecido'
+        logger.warning("Falha persistente ao validar token via requests; tentando fallback com curl")
+        logger.warning(f"Última exceção registrada: {message}")
 
-                if not data.get('ok'):
-                    error = Exception(data.get('description', 'Token inválido'))
-                    error.error_type = 'invalid_token'
-                    raise error
+        try:
+            cmd = [
+                'curl',
+                '--silent',
+                '--show-error',
+                '--max-time', '20',
+                '--retry', '5',
+                '--retry-all-errors',
+                '--retry-delay', '2',
+                '--retry-max-time', '60',
+                f'https://api.telegram.org/bot{token}/getMe'
+            ]
+            completed = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            logger.debug(f"curl stdout: {completed.stdout[:200]}")
+            data = json.loads(completed.stdout)
 
-                bot_info = data.get('result', {})
-                logger.info(f"Token validado via fallback curl: @{bot_info.get('username')}")
-                return {
-                    'bot_info': bot_info,
-                    'error_type': None
-                }
-            except Exception as curl_exc:
-                logger.error(f"Fallback curl também falhou: {curl_exc}")
-                if isinstance(curl_exc, subprocess.CalledProcessError):
-                    logger.error(f"curl stdout: {curl_exc.stdout}")
-                    logger.error(f"curl stderr: {curl_exc.stderr}")
-                error = Exception(f"Erro de conexão com API do Telegram: {message}")
-                error.error_type = 'connection_error'
+            if not data.get('ok'):
+                error = Exception(data.get('description', 'Token inválido'))
+                error.error_type = 'invalid_token'
                 raise error
-        else:
-            raise last_exception  # type: ignore
+
+            bot_info = data.get('result', {})
+            logger.info(f"Token validado via fallback curl: @{bot_info.get('username')}")
+            return {
+                'bot_info': bot_info,
+                'error_type': None
+            }
+        except Exception as curl_exc:
+            logger.error(f"Fallback curl também falhou: {curl_exc}")
+            if isinstance(curl_exc, subprocess.CalledProcessError):
+                logger.error(f"curl stdout: {curl_exc.stdout}")
+                logger.error(f"curl stderr: {curl_exc.stderr}")
+
+        error = Exception('Erro de conexão com API do Telegram após múltiplas tentativas')
+        error.error_type = 'connection_error'
+        raise error
     
     def start_bot(self, bot_id: int, token: str, config: Dict[str, Any]):
         """
