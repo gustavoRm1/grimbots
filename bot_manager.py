@@ -296,11 +296,16 @@ class BotManager:
             except requests.exceptions.RequestException as e:
                 last_exception = e
                 message = str(e)
-                if (attempt < max_attempts and any(keyword in message for keyword in ('Failed to resolve', 'NameResolutionError', 'Temporary failure in name resolution'))):
+                keywords = ('Failed to resolve', 'NameResolutionError', 'Temporary failure in name resolution')
+                if attempt < max_attempts and any(keyword in message for keyword in keywords):
                     wait = backoff_seconds[min(attempt - 1, len(backoff_seconds) - 1)]
                     logger.warning(f"Falha de DNS/Conexão ao validar token (tentativa {attempt}/{max_attempts}): {message}. Retentativa em {wait}s")
                     time.sleep(wait)
                     continue
+                if any(keyword in message for keyword in keywords):
+                    logger.error(f"Erro ao validar token após {attempt} tentativas: {message}")
+                    break  # sair do loop e acionar fallback
+                
                 logger.error(f"Erro ao validar token: {e}")
                 error = Exception(f"Erro de conexão com API do Telegram: {message}")
                 error.error_type = 'connection_error'
