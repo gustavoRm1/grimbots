@@ -15,6 +15,7 @@ import logging
 import json
 import time
 import uuid
+import atexit
 from dotenv import load_dotenv
 from redis_manager import get_redis_connection, redis_health_check
 from sqlalchemy import text
@@ -160,9 +161,55 @@ logger.info("✅ Rate Limiting configurado")
 
 # Inicializar scheduler para polling
 from flask_apscheduler import APScheduler
+SCHEDULER_LOCK_PATH = Path(os.environ.get('GRIMBOTS_SCHEDULER_LOCK', '/tmp/grimbots_scheduler.lock'))
+
+def _is_pid_running(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    else:
+        return True
+
+def _acquire_scheduler_lock() -> bool:
+    while True:
+        try:
+            fd = os.open(str(SCHEDULER_LOCK_PATH), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            os.write(fd, str(os.getpid()).encode())
+            os.close(fd)
+            return True
+        except FileExistsError:
+            try:
+                existing_pid = int(SCHEDULER_LOCK_PATH.read_text().strip())
+            except Exception:
+                existing_pid = None
+
+            if existing_pid and not _is_pid_running(existing_pid):
+                try:
+                    SCHEDULER_LOCK_PATH.unlink()
+                except FileNotFoundError:
+                    pass
+                continue
+
+            return False
+
 scheduler = APScheduler()
 scheduler.init_app(app)
-scheduler.start()
+_scheduler_owner = _acquire_scheduler_lock()
+
+if _scheduler_owner:
+    logger.info(f"✅ APScheduler iniciado por PID {os.getpid()}")
+
+    @atexit.register
+    def _release_scheduler_lock():
+        try:
+            SCHEDULER_LOCK_PATH.unlink()
+        except FileNotFoundError:
+            pass
+else:
+    logger.info("⚠️ APScheduler não iniciado neste processo (lock em uso)")
 
 # Inicializar gerenciador de bots
 bot_manager = BotManager(socketio, scheduler)
@@ -499,20 +546,15 @@ def enqueue_reconcile_pushynpay():
     except Exception as e:
         logger.warning(f"Erro ao enfileirar reconciliação PushynPay: {e}")
 
-try:
+if _scheduler_owner:
     scheduler.add_job(id='reconcile_paradise', func=enqueue_reconcile_paradise,
                       trigger='interval', seconds=300, replace_existing=True, max_instances=1)
     logger.info("✅ Job de reconciliação Paradise agendado (5min, fila async)")
-except Exception as _e:
-    logger.warning(f"⚠️ Não foi possível agendar reconciliador Paradise: {_e}")
 
-try:
+if _scheduler_owner:
     scheduler.add_job(id='reconcile_pushynpay', func=enqueue_reconcile_pushynpay,
                       trigger='interval', seconds=300, replace_existing=True, max_instances=1)
     logger.info("✅ Job de reconciliação PushynPay agendado (5min, fila async)")
-except Exception as _e:
-    logger.warning(f"⚠️ Não foi possível agendar reconciliador PushynPay: {_e}")
-
 # ✅ JOB PERIÓDICO: Verificar e sincronizar status dos bots
 def sync_bots_status():
     """
@@ -612,15 +654,16 @@ def sync_bots_status():
         logger.error(f"❌ Erro ao sincronizar status dos bots: {e}")
 
 # Registrar job periódico (a cada 30 segundos)
-scheduler.add_job(
-    id='sync_bots_status',
-    func=sync_bots_status,
-    trigger='interval',
-    seconds=30,
-    max_instances=1,
-    replace_existing=True
-)
-logger.info("✅ Job de sincronização de status dos bots configurado (30s)")
+if _scheduler_owner:
+    scheduler.add_job(
+        id='sync_bots_status',
+        func=sync_bots_status,
+        trigger='interval',
+        seconds=30,
+        max_instances=1,
+        replace_existing=True
+    )
+    logger.info("✅ Job de sincronização de status dos bots configurado (30s)")
 
 # Registrar eventos WebSocket de gamificação
 if GAMIFICATION_V2_ENABLED:
@@ -639,7 +682,6 @@ if GAMIFICATION_V2_ENABLED:
 @login_manager.user_loader
 def load_user(user_id):
     return db.session.get(User, int(user_id))
-
 # ==================== DECORATORS E HELPERS ====================
 def admin_required(f):
     """Decorator para proteger rotas que requerem permissão de admin"""
@@ -1149,7 +1191,6 @@ def api_dashboard_stats():
             'pending_sales': b.pending_sales
         } for b in bot_stats]
     })
-
 @app.route('/api/dashboard/sales-chart')
 @login_required
 def api_sales_chart():
@@ -1797,7 +1838,6 @@ def verify_bots_status():
         logger.error(f"❌ Erro ao verificar status dos bots: {e}", exc_info=True)
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
-
 @app.route('/api/bots/<int:bot_id>/stop', methods=['POST'])
 @login_required
 @csrf.exempt
@@ -2384,7 +2424,6 @@ def admin_users():
     log_admin_action('view_users', f'Visualizou lista de usuários (filtro: {status_filter})')
     
     return render_template('admin/users.html', users=users_data, status_filter=status_filter, search=search)
-
 @app.route('/admin/users/<int:user_id>')
 @login_required
 @admin_required
@@ -3533,7 +3572,6 @@ def update_bot_config(bot_id):
         db.session.rollback()
         logger.error(f"Erro ao atualizar configuração: {e}")
         return jsonify({'error': str(e)}), 500
-
 # ==================== LOAD BALANCER / REDIRECT POOLS ====================
 def validate_cloaker_access(request, pool, slug):
     """
@@ -4809,7 +4847,6 @@ def restart_all_active_bots():
         
     except Exception as e:
         logger.error(f"❌ ERRO CRÍTICO na reinicialização automática: {e}", exc_info=True)
-
 @app.route('/api/gateways/<int:gateway_id>/toggle', methods=['POST'])
 @login_required
 @csrf.exempt
@@ -7366,7 +7403,7 @@ def payment_webhook(gateway_type):
                 if external_ref:
                     # ✅ ÁTOMO PAY: reference pode ser "BOT35-1762426706-594358e0-1762426706325-d5ad225d"
                     # payment_id salvo é "BOT35_1762426706_594358e0" (underscores, sem partes extras)
-                    # Extrair payment_id do reference: "BOT35-1762426706-594358e0" -> "BOT35_1762426706_594358e0"
+                    # Extrair payment_id do reference: "BOT35-1762426706-594358e0-..." -> "BOT35_1762426706_594358e0"
                     import re
                     # Tentar extrair padrão BOT{id}_{timestamp}_{hash} do reference
                     # Exemplo: "BOT35-1762426706-594358e0-..." -> "BOT35_1762426706_594358e0"
@@ -8042,7 +8079,6 @@ def internal_error(error):
     except:
         return '<h1>500 - Erro Interno</h1><a href="/">Voltar</a>', 500
 # ==================== INICIALIZAÇÃO ====================
-
 @app.route('/api/dashboard/check-updates', methods=['GET'])
 @login_required
 def check_dashboard_updates():
@@ -8368,18 +8404,24 @@ def check_scheduled_remarketing_campaigns():
 
 # Agendar verificação de campanhas agendadas a cada 1 minuto
 try:
-    scheduler.add_job(
-        id='check_scheduled_remarketing',
-        func=check_scheduled_remarketing_campaigns,
-        trigger='interval',
-        minutes=1,  # Verificar a cada 1 minuto
-        replace_existing=True,
-        max_instances=1
-    )
-    logger.info("✅ Job de verificação de campanhas agendadas configurado (1 minuto)")
+    if _scheduler_owner:
+        scheduler.add_job(
+            id='check_scheduled_remarketing',
+            func=check_scheduled_remarketing_campaigns,
+            trigger='interval',
+            minutes=1,  # Verificar a cada 1 minuto
+            replace_existing=True,
+            max_instances=1
+        )
+        logger.info("✅ Job de verificação de campanhas agendadas configurado (1 minuto)")
 except Exception as e:
     logger.warning(f"⚠️ Não foi possível agendar verificação de campanhas: {e}")
 
+if _scheduler_owner:
+    try:
+        scheduler.start()
+    except Exception as e:
+        logger.error(f"❌ Erro ao iniciar APScheduler: {e}")
 
 # ==================== HEALTH CHECK ENDPOINT ====================
 @app.route('/health', methods=['GET'])
