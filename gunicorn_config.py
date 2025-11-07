@@ -24,10 +24,10 @@ backlog = 2048
 # ========================================
 # WORKER PROCESSES - QI 200 OTIMIZADO
 # ========================================
-# ✅ QI 200: Múltiplos workers para alta concorrência
-# Mínimo 3 workers, máximo baseado em CPU
-cpu_count = multiprocessing.cpu_count()
-workers = max(3, min(cpu_count * 2 + 1, 8))  # Entre 3 e 8 workers
+# ✅ IMPORTANTE: BotManager mantém estado in-memory. Usar um único worker garante
+# que webhooks e rotinas de reinício compartilhem o mesmo BotManager.
+# Concurrency continua alta via eventlet (1 worker, 1000 conexões verdes).
+workers = 1
 
 # ✅ IMPORTANTE: eventlet para Socket.IO
 worker_class = "eventlet"
