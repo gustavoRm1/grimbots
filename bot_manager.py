@@ -59,6 +59,22 @@ except ImportError:
     # eventlet não disponível (execução síncrona/local)
     pass
 
+# urllib3>=2 passa family/flags para create_connection; eventlet ignora.
+_original_create_connection = urllib3.util.connection.create_connection
+
+
+def _create_connection_strip_family(address, timeout=None, source_address=None, **kwargs):
+    kwargs.pop("family", None)
+    kwargs.pop("flags", None)
+    return _original_create_connection(address, timeout, source_address, **kwargs)
+
+
+urllib3.util.connection.create_connection = _create_connection_strip_family
+try:
+    requests.packages.urllib3.util.connection.create_connection = _create_connection_strip_family  # type: ignore[attr-defined]
+except AttributeError:
+    pass
+
 def send_meta_pixel_viewcontent_event(bot, bot_user, message, pool_id=None):
     """
     Envia evento ViewContent para Meta Pixel quando usuário inicia conversa com bot
