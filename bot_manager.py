@@ -253,13 +253,13 @@ class BotManager:
         Returns dict com bot_info e error_type (None se OK)
         """
         url = f"https://api.telegram.org/bot{token}/getMe"
-        max_attempts = 3
-        backoff_seconds = [1, 2, 3]
+        max_attempts = 5
+        backoff_seconds = [1, 2, 4, 8]
         last_exception = None
 
         for attempt in range(1, max_attempts + 1):
             try:
-                response = requests.get(url, timeout=10)
+                response = requests.get(url, timeout=15)
                 data = response.json()
 
                 if not data.get('ok'):
@@ -329,7 +329,10 @@ class BotManager:
                     'curl',
                     '--silent',
                     '--show-error',
-                    '--max-time', '10',
+                    '--max-time', '15',
+                    '--retry', '4',
+                    '--retry-all-errors',
+                    '--retry-delay', '2',
                     f'https://api.telegram.org/bot{token}/getMe'
                 ]
                 completed = subprocess.run(cmd, capture_output=True, text=True, check=True)
@@ -348,6 +351,9 @@ class BotManager:
                 }
             except Exception as curl_exc:
                 logger.error(f"Fallback curl também falhou: {curl_exc}")
+                if isinstance(curl_exc, subprocess.CalledProcessError):
+                    logger.error(f"curl stdout: {curl_exc.stdout}")
+                    logger.error(f"curl stderr: {curl_exc.stderr}")
                 error = Exception(f"Erro de conexão com API do Telegram: {message}")
                 error.error_type = 'connection_error'
                 raise error
