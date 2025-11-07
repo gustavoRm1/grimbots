@@ -124,7 +124,11 @@ db.init_app(app)
 # ============================================================================
 # CORREÇÃO #1: CORS RESTRITO (não aceitar *)
 # ============================================================================
-ALLOWED_ORIGINS = os.environ.get('ALLOWED_ORIGINS', 'http://localhost:5000,http://127.0.0.1:5000').split(',')
+ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get('ALLOWED_ORIGINS', 'http://localhost:5000,http://127.0.0.1:5000').split(',')
+    if origin.strip()
+]
 socketio = SocketIO(
     app,
     cors_allowed_origins=ALLOWED_ORIGINS,  # ✅ CORRIGIDO: Lista específica
@@ -7802,7 +7806,38 @@ def subscribe_push():
             db.session.add(new_subscription)
             logger.info(f"✅ Nova subscription registrada para user {current_user.id}")
         
-        db.session.commit()
+        try:
+            db.session.commit()
+        except IntegrityError as integrity_err:
+            logger.warning(
+                "⚠️ Conflito de subscription detectado para endpoint %s: %s",
+                endpoint[:60],
+                integrity_err,
+            )
+            db.session.rollback()
+
+            existing = PushSubscription.query.filter_by(endpoint=endpoint).first()
+            if existing:
+                if existing.user_id != current_user.id:
+                    logger.info(
+                        "♻️ Reatribuindo subscription %s do user %s para %s após conflito",
+                        endpoint[:60],
+                        existing.user_id,
+                        current_user.id,
+                    )
+                    existing.user_id = current_user.id
+
+                existing.p256dh = keys['p256dh']
+                existing.auth = keys['auth']
+                existing.user_agent = data.get('user_agent', request.headers.get('User-Agent', ''))
+                existing.device_info = data.get('device_info', 'unknown')
+                existing.is_active = True
+                existing.updated_at = get_brazil_time()
+
+                db.session.commit()
+            else:
+                raise
+
         return jsonify({'message': 'Subscription registrada com sucesso'}), 200
         
     except Exception as e:

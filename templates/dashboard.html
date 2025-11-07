@@ -1558,7 +1558,12 @@ function dashboardApp() {
                 return;
             }
             
-            const socket = io();
+            const socket = io(window.location.origin, {
+                transports: ['websocket', 'polling'],
+                withCredentials: true
+            });
+            this.socket = socket;
+            window.socket = socket;
             
             socket.on('connect', () => {
                 console.log('🔌 WebSocket conectado!');
