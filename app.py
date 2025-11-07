@@ -19,6 +19,7 @@ import atexit
 from dotenv import load_dotenv
 from redis_manager import get_redis_connection, redis_health_check
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 
 # ============================================================================
 # CARREGAR VARIÁVEIS DE AMBIENTE (.env)
@@ -7765,11 +7766,20 @@ def subscribe_push():
         if not endpoint or not keys.get('p256dh') or not keys.get('auth'):
             return jsonify({'error': 'Dados de subscription inválidos'}), 400
         
-        # Verificar se já existe subscription com este endpoint
-        existing = PushSubscription.query.filter_by(endpoint=endpoint, user_id=current_user.id).first()
+        # Verificar se já existe subscription com este endpoint (independente do usuário)
+        existing = PushSubscription.query.filter_by(endpoint=endpoint).first()
         
         if existing:
-            # Atualizar existente
+            # Atualizar existente (reatribuir para o usuário atual caso necessário)
+            if existing.user_id != current_user.id:
+                previous_user_id = existing.user_id
+                existing.user_id = current_user.id
+                logger.info(
+                    "♻️ Subscription com endpoint %s migrada do user %s para %s",
+                    endpoint[:60],
+                    previous_user_id,
+                    current_user.id,
+                )
             existing.p256dh = keys['p256dh']
             existing.auth = keys['auth']
             existing.user_agent = data.get('user_agent', request.headers.get('User-Agent', ''))

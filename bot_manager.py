@@ -9,7 +9,6 @@ import time
 import logging
 import json
 import subprocess
-import socket
 import urllib3.util.connection
 from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta
@@ -22,22 +21,12 @@ logger = logging.getLogger(__name__)
 # Configurar logging para este módulo
 logger.setLevel(logging.INFO)
 
-# Forçar urllib3/requests a usar apenas IPv4 (evita NameResolutionError com IPv6)
-def _ipv4_only_connection(address, timeout=None, source_address=None, **kwargs):
-    host, port = address
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.settimeout(timeout)
-    try:
-        if source_address:
-            sock.bind(source_address)
-        sock.connect((host, port))
-    except Exception:
-        sock.close()
-        raise
-    return sock
-
-
-urllib3.util.connection.create_connection = _ipv4_only_connection
+# Forçar urllib3/requests a ignorar IPv6 (evita NameResolutionError com IPv6 instável)
+urllib3.util.connection.HAS_IPV6 = False
+try:
+    requests.packages.urllib3.util.connection.HAS_IPV6 = False  # type: ignore[attr-defined]
+except AttributeError:
+    pass
 
 def send_meta_pixel_viewcontent_event(bot, bot_user, message, pool_id=None):
     """
