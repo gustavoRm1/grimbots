@@ -4,9 +4,16 @@ GRIMBOTS v2.1.0
 """
 import multiprocessing
 import os
+from pathlib import Path
 
 # ✅ Evita que o eventlet use greendns (stub 127.0.0.53 causava timeouts no Telegram)
 os.environ.setdefault("EVENTLET_NO_GREENDNS", "yes")
+
+# ========================================
+# PREPARAÇÃO DE DIRETÓRIOS
+# ========================================
+LOG_DIR = Path(__file__).resolve().parent / "logs"
+LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 # ========================================
 # SERVER SOCKET
@@ -30,12 +37,13 @@ max_requests = 1000  # Restart worker após N requests (previne memory leak)
 max_requests_jitter = 50
 timeout = 120
 keepalive = 5
+graceful_timeout = 30
 
 # ========================================
 # LOGGING
 # ========================================
-accesslog = "logs/access.log"
-errorlog = "logs/error.log"
+accesslog = str(LOG_DIR / "access.log")
+errorlog = str(LOG_DIR / "error.log")
 loglevel = "info"
 access_log_format = '%(h)s %(l)s %(u)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s" %(D)s'
 
