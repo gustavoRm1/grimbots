@@ -20,6 +20,7 @@ from dotenv import load_dotenv
 from redis_manager import get_redis_connection, redis_health_check
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 # ============================================================================
 # CARREGAR VARIÁVEIS DE AMBIENTE (.env)
@@ -129,12 +130,24 @@ ALLOWED_ORIGINS = [
     for origin in os.environ.get('ALLOWED_ORIGINS', 'http://localhost:5000,http://127.0.0.1:5000').split(',')
     if origin.strip()
 ]
-socketio = SocketIO(
-    app,
-    cors_allowed_origins=ALLOWED_ORIGINS,  # ✅ CORRIGIDO: Lista específica
-    async_mode='eventlet'
-)
+
+socketio_options = {
+    'cors_allowed_origins': ALLOWED_ORIGINS,
+    'async_mode': 'eventlet',
+    'cors_credentials': True,
+}
+
+message_queue_url = os.environ.get('SOCKETIO_MESSAGE_QUEUE') or os.environ.get('REDIS_URL')
+if message_queue_url:
+    socketio_options['message_queue'] = message_queue_url
+    socketio_options['channel'] = os.environ.get('SOCKETIO_CHANNEL', 'grimbots_socketio')
+
+socketio = SocketIO(app, **socketio_options)
 logger.info(f"✅ CORS configurado: {ALLOWED_ORIGINS}")
+if 'message_queue' in socketio_options:
+    logger.info("✅ Socket.IO message queue: %s", socketio_options['message_queue'])
+else:
+    logger.warning("⚠️ Socket.IO sem message queue configurada – limite workers simultâneos ou defina REDIS_URL/SOCKETIO_MESSAGE_QUEUE")
 
 login_manager = LoginManager()
 login_manager.init_app(app)
@@ -7771,11 +7784,54 @@ def subscribe_push():
         if not endpoint or not keys.get('p256dh') or not keys.get('auth'):
             return jsonify({'error': 'Dados de subscription inválidos'}), 400
         
-        # Verificar se já existe subscription com este endpoint (independente do usuário)
+        user_agent = data.get('user_agent', request.headers.get('User-Agent', ''))
+        device_info = data.get('device_info', 'unknown')
+        now = get_brazil_time()
+
+        dialect_name = db.session.bind.dialect.name if db.session.bind is not None else ''
+
+        if dialect_name == 'postgresql':
+            insert_payload = {
+                'user_id': current_user.id,
+                'endpoint': endpoint,
+                'p256dh': keys['p256dh'],
+                'auth': keys['auth'],
+                'user_agent': user_agent,
+                'device_info': device_info,
+                'is_active': True,
+                'created_at': now,
+                'updated_at': now,
+            }
+
+            upsert_stmt = pg_insert(PushSubscription.__table__).values(**insert_payload)
+            upsert_stmt = upsert_stmt.on_conflict_do_update(
+                index_elements=[PushSubscription.__table__.c.endpoint],
+                set_={
+                    'user_id': current_user.id,
+                    'p256dh': keys['p256dh'],
+                    'auth': keys['auth'],
+                    'user_agent': user_agent,
+                    'device_info': device_info,
+                    'is_active': True,
+                    'updated_at': now,
+                }
+            )
+
+            db.session.execute(upsert_stmt)
+            db.session.commit()
+
+            logger.info(
+                "✅ Subscription upsert concluído para user %s (endpoint %s)",
+                current_user.id,
+                endpoint[:60],
+            )
+
+            return jsonify({'message': 'Subscription registrada com sucesso'}), 200
+
+        # Fallback para ambientes não-PostgreSQL (ex.: desenvolvimento local com SQLite)
         existing = PushSubscription.query.filter_by(endpoint=endpoint).first()
-        
+
         if existing:
-            # Atualizar existente (reatribuir para o usuário atual caso necessário)
             if existing.user_id != current_user.id:
                 previous_user_id = existing.user_id
                 existing.user_id = current_user.id
@@ -7785,58 +7841,28 @@ def subscribe_push():
                     previous_user_id,
                     current_user.id,
                 )
+
             existing.p256dh = keys['p256dh']
             existing.auth = keys['auth']
-            existing.user_agent = data.get('user_agent', request.headers.get('User-Agent', ''))
-            existing.device_info = data.get('device_info', 'unknown')
+            existing.user_agent = user_agent
+            existing.device_info = device_info
             existing.is_active = True
-            existing.updated_at = get_brazil_time()
-            logger.info(f"✅ Subscription atualizada para user {current_user.id}")
+            existing.updated_at = now
+            logger.info("✅ Subscription atualizada para user %s (SQLite fallback)", current_user.id)
         else:
-            # Criar nova
             new_subscription = PushSubscription(
                 user_id=current_user.id,
                 endpoint=endpoint,
                 p256dh=keys['p256dh'],
                 auth=keys['auth'],
-                user_agent=data.get('user_agent', request.headers.get('User-Agent', '')),
-                device_info=data.get('device_info', 'unknown'),
-                is_active=True
+                user_agent=user_agent,
+                device_info=device_info,
+                is_active=True,
             )
             db.session.add(new_subscription)
-            logger.info(f"✅ Nova subscription registrada para user {current_user.id}")
-        
-        try:
-            db.session.commit()
-        except IntegrityError as integrity_err:
-            logger.warning(
-                "⚠️ Conflito de subscription detectado para endpoint %s: %s",
-                endpoint[:60],
-                integrity_err,
-            )
-            db.session.rollback()
+            logger.info("✅ Nova subscription registrada para user %s (SQLite fallback)", current_user.id)
 
-            existing = PushSubscription.query.filter_by(endpoint=endpoint).first()
-            if existing:
-                if existing.user_id != current_user.id:
-                    logger.info(
-                        "♻️ Reatribuindo subscription %s do user %s para %s após conflito",
-                        endpoint[:60],
-                        existing.user_id,
-                        current_user.id,
-                    )
-                    existing.user_id = current_user.id
-
-                existing.p256dh = keys['p256dh']
-                existing.auth = keys['auth']
-                existing.user_agent = data.get('user_agent', request.headers.get('User-Agent', ''))
-                existing.device_info = data.get('device_info', 'unknown')
-                existing.is_active = True
-                existing.updated_at = get_brazil_time()
-
-                db.session.commit()
-            else:
-                raise
+        db.session.commit()
 
         return jsonify({'message': 'Subscription registrada com sucesso'}), 200
         
