@@ -25,7 +25,16 @@ logger.setLevel(logging.INFO)
 # Forçar urllib3/requests a usar apenas IPv4 (evita NameResolutionError com IPv6)
 def _ipv4_only_connection(address, timeout=None, source_address=None, **kwargs):
     host, port = address
-    return socket.create_connection((host, port), timeout=timeout, source_address=source_address, family=socket.AF_INET)
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.settimeout(timeout)
+    try:
+        if source_address:
+            sock.bind(source_address)
+        sock.connect((host, port))
+    except Exception:
+        sock.close()
+        raise
+    return sock
 
 
 urllib3.util.connection.create_connection = _ipv4_only_connection
