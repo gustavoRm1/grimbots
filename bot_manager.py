@@ -881,8 +881,22 @@ class BotManager:
                 pass
             
             if bot_id not in self.active_bots:
-                logger.warning(f"⚠️ Bot {bot_id} não está mais ativo, ignorando update")
-                return
+                logger.warning(f"⚠️ Bot {bot_id} não está mais ativo em memória, tentando auto-start (webhook fallback)")
+                try:
+                    from app import app, db
+                    from models import Bot, BotConfig
+                    with app.app_context():
+                        bot = db.session.get(Bot, bot_id)
+                        if bot and bot.is_active:
+                            config_obj = bot.config or BotConfig.query.filter_by(bot_id=bot.id).first()
+                            config_dict = config_obj.to_dict() if config_obj else {}
+                            self.start_bot(bot.id, bot.token, config_dict)
+                except Exception as autostart_error:
+                    logger.error(f"❌ Falha ao auto-start bot {bot_id} durante webhook: {autostart_error}")
+                
+                if bot_id not in self.active_bots:
+                    logger.warning(f"⚠️ Bot {bot_id} ainda indisponível após auto-start, ignorando update")
+                    return
             
             # ✅ CORREÇÃO: Acessar com LOCK
             with self._bots_lock:
