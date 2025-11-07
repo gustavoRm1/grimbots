@@ -7789,6 +7789,9 @@ def subscribe_push():
         now = get_brazil_time()
 
         bind = db.session.get_bind()
+        if bind is None:
+            bind = db.engine
+
         dialect_name = bind.dialect.name if bind is not None else ''
 
         if dialect_name == 'postgresql':
