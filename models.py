@@ -435,7 +435,7 @@ class RedirectPool(db.Model):
     # - Configuração simplificada (1 vez por pool vs N vezes por bot)
     # ============================================================================
     meta_pixel_id = db.Column(db.String(50), nullable=True)
-    meta_access_token = db.Column(db.String(255), nullable=True)  # Criptografado
+    meta_access_token = db.Column(db.Text, nullable=True)  # Criptografado
     meta_tracking_enabled = db.Column(db.Boolean, default=False)
     meta_test_event_code = db.Column(db.String(100), nullable=True)
     meta_events_pageview = db.Column(db.Boolean, default=True)
