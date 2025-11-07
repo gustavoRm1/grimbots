@@ -86,7 +86,8 @@ class RedisManager:
             max_connections=50,  # Pool size
             socket_keepalive=True,
             socket_connect_timeout=5,
-            socket_timeout=5,
+            # socket_timeout longo para operações comuns (None = sem timeout)
+            socket_timeout=None,
             retry_on_timeout=True,
             health_check_interval=30  # Health check a cada 30s
         )
@@ -100,7 +101,8 @@ class RedisManager:
             max_connections=30,
             socket_keepalive=True,
             socket_connect_timeout=5,
-            socket_timeout=5,
+            # Workers RQ usam BRPOP bloqueante – nunca colocar socket_timeout
+            socket_timeout=None,
             decode_responses=False,  # RQ precisa de bytes
             retry_on_timeout=True,
             health_check_interval=30
