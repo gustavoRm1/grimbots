@@ -248,67 +248,84 @@ class BotManager:
     
     def validate_token(self, token: str) -> Dict[str, Any]:
         """
-        Valida token do Telegram usando getMe
-        
-        Args:
-            token: Token do bot
-            
-        Returns:
-            Dict com 'bot_info' e 'error_type' (None se OK)
-            Exemplo: {'bot_info': {...}, 'error_type': None}
-                   ou {'bot_info': None, 'error_type': 'banned'}
-            
-        Raises:
-            Exception: Se token for inválido (com error_type no exception)
+        Valida token do bot no Telegram
+        Returns dict com bot_info e error_type (None se OK)
         """
-        try:
-            url = f"https://api.telegram.org/bot{token}/getMe"
-            response = requests.get(url, timeout=10)
-            data = response.json()
-            
-            if not data.get('ok'):
-                error_description = data.get('description', 'Token inválido').lower()
-                error_code = data.get('error_code')
-                
-                # ✅ DETECÇÃO DE BANIMENTO
-                if error_code == 401 or 'unauthorized' in error_description:
-                    # Verificar se é banimento ou token inválido
-                    if any(keyword in error_description for keyword in ['revoked', 'blocked', 'banned', 'deactivated']):
-                        error = Exception('Bot foi banido ou token foi revogado')
-                        error.error_type = 'banned'
-                        raise error
+        url = f"https://api.telegram.org/bot{token}/getMe"
+        max_attempts = 3
+        backoff_seconds = [1, 2, 3]
+        last_exception = None
+
+        for attempt in range(1, max_attempts + 1):
+            try:
+                response = requests.get(url, timeout=10)
+                data = response.json()
+
+                if not data.get('ok'):
+                    if 'description' in data:
+                        desc = data['description'].lower()
+                        if 'bot was blocked by the user' in desc:
+                            error = Exception('Bot bloqueado pelo usuário')
+                            error.error_type = 'blocked'
+                            raise error
+                        elif 'bot token is invalid' in desc:
+                            error = Exception('Token inválido ou banido pelo Telegram')
+                            error.error_type = 'invalid_token'
+                            raise error
+                        else:
+                            error = Exception('Token inválido ou expirado')
+                            error.error_type = 'invalid_token'
+                            raise error
                     else:
-                        error = Exception('Token inválido ou expirado')
-                        error.error_type = 'invalid_token'
+                        error = Exception(data.get('description', 'Token inválido'))
+                        error.error_type = 'unknown'
                         raise error
-                else:
-                    error = Exception(data.get('description', 'Token inválido'))
-                    error.error_type = 'unknown'
-                    raise error
-            
-            bot_info = data.get('result', {})
-            logger.info(f"Token validado: @{bot_info.get('username')}")
-            
-            return {
-                'bot_info': bot_info,
-                'error_type': None
-            }
-            
-        except requests.exceptions.Timeout:
+
+                bot_info = data.get('result', {})
+                logger.info(f"Token validado: @{bot_info.get('username')}")
+
+                return {
+                    'bot_info': bot_info,
+                    'error_type': None
+                }
+
+            except requests.exceptions.Timeout as e:
+                last_exception = e
+                logger.warning(f"Timeout ao validar token (tentativa {attempt}/{max_attempts})")
+            except requests.exceptions.RequestException as e:
+                last_exception = e
+                message = str(e)
+                if (attempt < max_attempts and any(keyword in message for keyword in ('Failed to resolve', 'NameResolutionError', 'Temporary failure in name resolution'))):
+                    wait = backoff_seconds[min(attempt - 1, len(backoff_seconds) - 1)]
+                    logger.warning(f"Falha de DNS/Conexão ao validar token (tentativa {attempt}/{max_attempts}): {message}. Retentativa em {wait}s")
+                    time.sleep(wait)
+                    continue
+                logger.error(f"Erro ao validar token: {e}")
+                error = Exception(f"Erro de conexão com API do Telegram: {message}")
+                error.error_type = 'connection_error'
+                raise error
+            except Exception as e:
+                if not hasattr(e, 'error_type'):
+                    e.error_type = 'unknown'
+                logger.error(f"Erro ao validar token: {e} (tipo: {getattr(e, 'error_type', 'unknown')})")
+                raise
+
+            # Se chegamos aqui, foi timeout e vamos tentar novamente
+            if attempt < max_attempts:
+                wait = backoff_seconds[min(attempt - 1, len(backoff_seconds) - 1)]
+                time.sleep(wait)
+
+        # Se esgotaram as tentativas
+        if isinstance(last_exception, requests.exceptions.Timeout):
             error = Exception('Timeout ao conectar com API do Telegram')
             error.error_type = 'connection_error'
             raise error
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Erro ao validar token: {e}")
-            error = Exception(f"Erro de conexão com API do Telegram: {str(e)}")
+        elif isinstance(last_exception, requests.exceptions.RequestException):
+            error = Exception(f"Erro de conexão com API do Telegram: {str(last_exception)}")
             error.error_type = 'connection_error'
             raise error
-        except Exception as e:
-            # Se já tem error_type, preservar
-            if not hasattr(e, 'error_type'):
-                e.error_type = 'unknown'
-            logger.error(f"Erro ao validar token: {e} (tipo: {getattr(e, 'error_type', 'unknown')})")
-            raise
+        else:
+            raise last_exception  # type: ignore
     
     def start_bot(self, bot_id: int, token: str, config: Dict[str, Any]):
         """
@@ -3465,7 +3482,7 @@ Seu pagamento ainda não foi confirmado.
             logger.error(f"❌ Erro ao finalizar sessão de order bumps: {e}")
             import traceback
             traceback.print_exc()
-
+    
     def _show_downsell_order_bump(self, bot_id: int, token: str, chat_id: int, user_info: Dict[str, Any],
                                  downsell_price: float, downsell_description: str, downsell_index: int,
                                  order_bump: Dict[str, Any]):
