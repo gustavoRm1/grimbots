@@ -1,6 +1,6 @@
 """
 Gateway WiinPay - Implementação Completa
-Documentação: https://api.wiinpay.com.br/
+Documentação: https://api-v2.wiinpay.com.br/
 """
 
 import os
@@ -33,7 +33,7 @@ class WiinPayGateway(PaymentGateway):
             split_user_id: User ID para splits (opcional)
         """
         self.api_key = api_key
-        self.base_url = "https://api.wiinpay.com.br"
+        self.base_url = "https://api-v2.wiinpay.com.br"
         
         # Split configuration (você é o dono da plataforma)
         self.split_user_id = split_user_id or os.environ.get('WIINPAY_PLATFORM_USER_ID', '6877edeba3c39f8451ba5bdd')
@@ -94,7 +94,7 @@ class WiinPayGateway(PaymentGateway):
                 customer_name = customer_data.get('name', customer_name)
                 customer_email = customer_data.get('email', customer_email)
             
-            # ✅ ENDPOINT: https://api.wiinpay.com.br/payment/create
+            # ✅ ENDPOINT: https://api-v2.wiinpay.com.br/payment/create
             create_url = f"{self.base_url}/payment/create"
             
             # ✅ PAYLOAD completo
