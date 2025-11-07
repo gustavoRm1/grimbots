@@ -8,6 +8,7 @@ import threading
 import time
 import logging
 import json
+import subprocess
 from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta
 from redis_manager import get_redis_connection
@@ -321,9 +322,35 @@ class BotManager:
             error.error_type = 'connection_error'
             raise error
         elif isinstance(last_exception, requests.exceptions.RequestException):
-            error = Exception(f"Erro de conexão com API do Telegram: {str(last_exception)}")
-            error.error_type = 'connection_error'
-            raise error
+            message = str(last_exception)
+            logger.warning("Falha persistente ao validar token via requests; tentando fallback com curl")
+            try:
+                cmd = [
+                    'curl',
+                    '--silent',
+                    '--show-error',
+                    '--max-time', '10',
+                    f'https://api.telegram.org/bot{token}/getMe'
+                ]
+                completed = subprocess.run(cmd, capture_output=True, text=True, check=True)
+                data = json.loads(completed.stdout)
+
+                if not data.get('ok'):
+                    error = Exception(data.get('description', 'Token inválido'))
+                    error.error_type = 'invalid_token'
+                    raise error
+
+                bot_info = data.get('result', {})
+                logger.info(f"Token validado via fallback curl: @{bot_info.get('username')}")
+                return {
+                    'bot_info': bot_info,
+                    'error_type': None
+                }
+            except Exception as curl_exc:
+                logger.error(f"Fallback curl também falhou: {curl_exc}")
+                error = Exception(f"Erro de conexão com API do Telegram: {message}")
+                error.error_type = 'connection_error'
+                raise error
         else:
             raise last_exception  # type: ignore
     
