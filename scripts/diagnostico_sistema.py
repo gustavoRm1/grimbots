@@ -15,9 +15,9 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 import socket
 import subprocess
-import sys
 import time
 from datetime import datetime
 from pathlib import Path
@@ -28,6 +28,14 @@ from dotenv import load_dotenv
 from requests.exceptions import RequestException
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
+
+# Garantir que o diretório raiz do projeto esteja no sys.path
+ROOT_DIR = Path(__file__).resolve().parent.parent
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
+# Carregar variáveis de ambiente o mais cedo possível
+load_dotenv()
 
 # Inicializar Flask e extensões do projeto
 from app import app, db  # noqa: E402  (importar após carregar dotenv)
