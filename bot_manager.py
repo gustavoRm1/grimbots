@@ -1565,16 +1565,21 @@ class BotManager:
                             except Exception as e:
                                 logger.warning(f"⚠️ Erro ao verificar duplicação no banco: {e} - continuando")
                             
-                            logger.info(f"📝 Enviando texto completo (caption truncado, len={len(text)}, hash={text_only_hash})...")
+                            remaining_text = text[900:].strip()
+                            if not remaining_text:
+                                logger.info("ℹ️ Texto excedente após caption vazio — não enviar mensagem adicional.")
+                                return all_success
+
+                            logger.info(f"📝 Enviando texto complementar (restante da caption, len={len(remaining_text)}, hash={text_only_hash})...")
                             url_msg = f"{base_url}/sendMessage"
                             payload_msg = {
                                 'chat_id': chat_id,
-                                'text': text,
+                                'text': remaining_text,
                                 'parse_mode': 'HTML'
                             }
                             
                             # ✅ QI 10000: Log antes de enviar para rastrear duplicação
-                            logger.info(f"🚀 REQUISIÇÃO ÚNICA: Enviando texto completo para chat_id={chat_id}, hash={text_only_hash}")
+                            logger.info(f"🚀 REQUISIÇÃO ÚNICA: Enviando texto complementar para chat_id={chat_id}, hash={text_only_hash}")
                             
                             response_msg = requests.post(url_msg, json=payload_msg, timeout=10)
                             
@@ -1583,7 +1588,7 @@ class BotManager:
                                 result_data = response_msg.json()
                                 if result_data.get('ok'):
                                     message_id_sent = result_data.get('result', {}).get('message_id')
-                                    logger.info(f"✅ Texto completo enviado (message_id={message_id_sent}, hash={text_only_hash})")
+                                    logger.info(f"✅ Texto complementar enviado (message_id={message_id_sent}, hash={text_only_hash})")
                                     
                                     # ✅ QI 10000: Salvar mensagem enviada no banco para verificação futura
                                     try:
@@ -1616,7 +1621,7 @@ class BotManager:
                                                         bot_user_id=bot_user.id,
                                                         telegram_user_id=str(chat_id),
                                                         message_id=message_id,
-                                                        message_text=text,
+                                                        message_text=remaining_text,
                                                         message_type='text',
                                                         direction='outgoing',
                                                         is_read=True
