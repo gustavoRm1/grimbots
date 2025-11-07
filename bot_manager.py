@@ -1818,10 +1818,12 @@ class BotManager:
                     ).first()
                     
                     if bot_user and bot_user.welcome_sent:
-                        logger.info(f"⛔ Bloqueado: mensagem /start ignorada pois welcome já enviado: chat_id={chat_id}")
-                        return  # Sair sem processar
+                        logger.info(f"🔁 Flag welcome_sent resetada para permitir novo /start: chat_id={chat_id}")
+                        bot_user.welcome_sent = False
+                        bot_user.welcome_sent_at = None
+                        db.session.commit()
             except Exception as e:
-                logger.warning(f"⚠️ Erro ao verificar welcome_sent: {e} - continuando processamento")
+                logger.warning(f"⚠️ Erro ao verificar/resetar welcome_sent: {e} - continuando processamento")
             
             # ============================================================================
             # ✅ QI 500: Lock para evitar /start duplicado (lock adicional de segurança)
