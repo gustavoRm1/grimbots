@@ -930,17 +930,17 @@ class BotUser(db.Model):
     meta_viewcontent_sent_at = db.Column(db.DateTime, nullable=True)
     
     # ✅ UTM TRACKING
-    utm_source = db.Column(db.String(50), nullable=True)
+    utm_source = db.Column(db.String(255), nullable=True)
     utm_campaign = db.Column(db.String(255), nullable=True)
     utm_content = db.Column(db.String(255), nullable=True)
-    utm_medium = db.Column(db.String(50), nullable=True)
+    utm_medium = db.Column(db.String(255), nullable=True)
     utm_term = db.Column(db.String(255), nullable=True)
-    fbclid = db.Column(db.String(200), nullable=True)
-    campaign_code = db.Column(db.String(50), nullable=True)
-    external_id = db.Column(db.String(100), nullable=True)  # Para tracking de cliques
+    fbclid = db.Column(db.String(255), nullable=True)
+    campaign_code = db.Column(db.String(255), nullable=True)
+    external_id = db.Column(db.String(255), nullable=True)  # Para tracking de cliques
     
     # ✅ TRACKING ELITE (IP/User-Agent capturados no redirect)
-    ip_address = db.Column(db.String(50), nullable=True)  # IP do primeiro click
+    ip_address = db.Column(db.String(255), nullable=True)  # IP do primeiro click
     user_agent = db.Column(db.Text, nullable=True)  # User-Agent completo
     tracking_session_id = db.Column(db.String(255), nullable=True)  # UUID para correlação
     click_timestamp = db.Column(db.DateTime, nullable=True)  # Timestamp do click
