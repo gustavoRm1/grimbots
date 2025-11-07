@@ -209,9 +209,11 @@
                     </button>
                     
                     <!-- Desktop Logout -->
-                    <a href="{{ url_for('logout') }}" class="hidden sm:inline-flex px-4 py-2 text-sm font-semibold rounded-lg transition-all" style="background: var(--brand-red-500); color: var(--txt-primary);" onmouseover="this.style.background='var(--brand-red-700)'" onmouseout="this.style.background='var(--brand-red-500)'">
-                        <i class="fas fa-sign-out-alt mr-1"></i> Sair
-                    </a>
+                    <form action="{{ url_for('logout') }}" method="post" class="hidden sm:inline">
+                        <button type="submit" class="inline-flex px-4 py-2 text-sm font-semibold rounded-lg transition-all" style="background: var(--brand-red-500); color: var(--txt-primary);" onmouseover="this.style.background='var(--brand-red-700)'" onmouseout="this.style.background='var(--brand-red-500)'">
+                            <i class="fas fa-sign-out-alt mr-1"></i> Sair
+                        </button>
+                    </form>
                 </div>
             </div>
             
@@ -249,9 +251,11 @@
                         <div class="px-4 py-2 text-sm text-gray-400">
                             <i class="fas fa-user mr-2" style="color: var(--brand-gold-500);"></i> {{ current_user.username }}
                         </div>
-                        <a href="{{ url_for('logout') }}" class="flex items-center px-4 py-3 rounded-lg transition-all text-red-400 hover:text-red-300 hover:bg-red-900/20">
-                            <i class="fas fa-sign-out-alt mr-3"></i> Sair
-                        </a>
+                        <form action="{{ url_for('logout') }}" method="post">
+                            <button type="submit" class="w-full flex items-center px-4 py-3 rounded-lg transition-all text-red-400 hover:text-red-300 hover:bg-red-900/20">
+                                <i class="fas fa-sign-out-alt mr-3"></i> Sair
+                            </button>
+                        </form>
                     </div>
                 </div>
             </div>

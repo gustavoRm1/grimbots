@@ -940,14 +940,43 @@ def forgot_password():
     
     return render_template('forgot_password.html')
 
-@app.route('/logout')
+@app.route('/logout', methods=['GET', 'POST'])
 @login_required
+@csrf.exempt
 def logout():
     """Logout de usuário"""
     logger.info(f"Logout: {current_user.email}")
+    
+    # Encerrar sessão Flask-Login
     logout_user()
+    
+    # Limpar sessão e cookies
+    session.clear()
+    
+    response = redirect(url_for('login'))
+    
+    session_cookie_name = app.config.get('SESSION_COOKIE_NAME', 'session')
+    session_cookie_domain = app.config.get('SESSION_COOKIE_DOMAIN')
+    session_cookie_path = app.config.get('SESSION_COOKIE_PATH', '/')
+    
+    response.delete_cookie(
+        session_cookie_name,
+        domain=session_cookie_domain,
+        path=session_cookie_path
+    )
+    
+    remember_cookie_name = app.config.get('REMEMBER_COOKIE_NAME', 'remember_token')
+    remember_cookie_domain = app.config.get('REMEMBER_COOKIE_DOMAIN')
+    remember_cookie_path = app.config.get('REMEMBER_COOKIE_PATH', '/')
+    
+    response.delete_cookie(
+        remember_cookie_name,
+        domain=remember_cookie_domain,
+        path=remember_cookie_path
+    )
+    
     flash('Logout realizado com sucesso!', 'info')
-    return redirect(url_for('login'))
+    return response
 
 # ==================== DOCUMENTOS JURÍDICOS ====================
 
