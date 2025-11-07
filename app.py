@@ -125,9 +125,10 @@ db.init_app(app)
 # CORREÇÃO #1: CORS RESTRITO (não aceitar *)
 # ============================================================================
 ALLOWED_ORIGINS = os.environ.get('ALLOWED_ORIGINS', 'http://localhost:5000,http://127.0.0.1:5000').split(',')
-socketio = SocketIO(app, 
+socketio = SocketIO(
+    app,
     cors_allowed_origins=ALLOWED_ORIGINS,  # ✅ CORRIGIDO: Lista específica
-    async_mode='threading'
+    async_mode='eventlet'
 )
 logger.info(f"✅ CORS configurado: {ALLOWED_ORIGINS}")
 

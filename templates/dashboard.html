@@ -2155,7 +2155,7 @@ function dashboardApp() {
                 
                 // Marcar todos os bots como "verificando"
                 this.bots.forEach(bot => {
-                    this.$set(this.botsStatusVerifying, bot.id, true);
+                    this.botsStatusVerifying[bot.id] = true;
                 });
                 
                 const response = await fetch('/api/bots/verify-status', {
@@ -2179,13 +2179,13 @@ function dashboardApp() {
                         bot.is_running = botStatus.is_running;
                     }
                     // Remover flag de verificação
-                    this.$delete(this.botsStatusVerifying, botStatus.id);
+                    delete this.botsStatusVerifying[botStatus.id];
                 });
                 
                 // Se algum bot não foi retornado, remover flag também
                 Object.keys(this.botsStatusVerifying).forEach(botId => {
                     if (!data.bots.find(b => b.id === parseInt(botId))) {
-                        this.$delete(this.botsStatusVerifying, botId);
+                        delete this.botsStatusVerifying[botId];
                     }
                 });
                 
@@ -2197,7 +2197,7 @@ function dashboardApp() {
                 console.error('❌ Erro ao verificar status dos bots:', error);
                 // Remover todas as flags de verificação em caso de erro
                 this.bots.forEach(bot => {
-                    this.$delete(this.botsStatusVerifying, bot.id);
+                    delete this.botsStatusVerifying[bot.id];
                 });
             }
         },
