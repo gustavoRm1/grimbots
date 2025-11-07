@@ -946,6 +946,7 @@ def forgot_password():
 def logout():
     """Logout de usuário"""
     logger.info(f"Logout: {current_user.email}")
+    logger.debug(f"Cookies recebidos no logout: {request.cookies}")
     
     # Encerrar sessão Flask-Login
     logout_user()
@@ -959,20 +960,60 @@ def logout():
     session_cookie_domain = app.config.get('SESSION_COOKIE_DOMAIN')
     session_cookie_path = app.config.get('SESSION_COOKIE_PATH', '/')
     
-    response.delete_cookie(
+    host_domain = request.host.split(':')[0]
+    domain_candidates = {
+        session_cookie_domain,
+        app.config.get('SERVER_NAME'),
+        host_domain,
+        f".{host_domain}" if not host_domain.startswith('.') else host_domain
+    }
+
+    for domain in domain_candidates:
+        response.delete_cookie(
+            session_cookie_name,
+            domain=domain or None,
+            path=session_cookie_path,
+        )
+
+    response.set_cookie(
         session_cookie_name,
-        domain=session_cookie_domain,
-        path=session_cookie_path
+        value='',
+        expires=0,
+        max_age=0,
+        domain=session_cookie_domain or None,
+        path=session_cookie_path,
+        secure=app.config.get('SESSION_COOKIE_SECURE', True),
+        samesite=app.config.get('SESSION_COOKIE_SAMESITE', 'None'),
+        httponly=True,
     )
     
     remember_cookie_name = app.config.get('REMEMBER_COOKIE_NAME', 'remember_token')
     remember_cookie_domain = app.config.get('REMEMBER_COOKIE_DOMAIN')
     remember_cookie_path = app.config.get('REMEMBER_COOKIE_PATH', '/')
     
-    response.delete_cookie(
+    remember_domain_candidates = {
+        remember_cookie_domain,
+        host_domain,
+        f".{host_domain}" if not host_domain.startswith('.') else host_domain
+    }
+
+    for domain in remember_domain_candidates:
+        response.delete_cookie(
+            remember_cookie_name,
+            domain=domain or None,
+            path=remember_cookie_path,
+        )
+
+    response.set_cookie(
         remember_cookie_name,
-        domain=remember_cookie_domain,
-        path=remember_cookie_path
+        value='',
+        expires=0,
+        max_age=0,
+        domain=remember_cookie_domain or None,
+        path=remember_cookie_path,
+        secure=app.config.get('REMEMBER_COOKIE_SECURE', app.config.get('SESSION_COOKIE_SECURE', True)),
+        samesite=app.config.get('REMEMBER_COOKIE_SAMESITE', app.config.get('SESSION_COOKIE_SAMESITE', 'None')),
+        httponly=True,
     )
     
     flash('Logout realizado com sucesso!', 'info')
