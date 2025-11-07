@@ -60,12 +60,24 @@ def migrate_table(sqlite_conn, pg_conn, table_name, batch_size=1000):
     
     # Obter colunas
     columns = [desc[0] for desc in sqlite_cursor.description]
+
+    # Identificar colunas booleanas no PostgreSQL para conversão adequada
+    pg_cursor.execute(
+        """
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_name = %s AND data_type = 'boolean'
+        """,
+        (table_name,)
+    )
+    boolean_columns = {row[0] for row in pg_cursor.fetchall()}
     
     # Converter rows para tuplas
     values = []
     for row in rows:
         row_values = []
-        for value in row:
+        for idx, value in enumerate(row):
+            column_name = columns[idx]
             # Converter valores especiais
             if isinstance(value, str):
                 # Tentar decodificar JSON se parecer JSON
@@ -79,6 +91,29 @@ def migrate_table(sqlite_conn, pg_conn, table_name, batch_size=1000):
                     row_values.append(value)
             else:
                 row_values.append(value)
+
+            # Ajustar valores booleanos (SQLite armazena como 0/1)
+            if column_name in boolean_columns:
+                raw_value = row_values[-1]
+                if raw_value is None:
+                    converted = None
+                elif isinstance(raw_value, bool):
+                    converted = raw_value
+                elif isinstance(raw_value, (int, float)):
+                    converted = bool(raw_value)
+                elif isinstance(raw_value, str):
+                    lowered = raw_value.strip().lower()
+                    if lowered in {'true', 't', 'yes', 'y', '1'}:
+                        converted = True
+                    elif lowered in {'false', 'f', 'no', 'n', '0'}:
+                        converted = False
+                    else:
+                        # Fallback: qualquer string não vazia vira True
+                        converted = bool(raw_value)
+                else:
+                    converted = bool(raw_value)
+
+                row_values[-1] = converted
         
         values.append(tuple(row_values))
     
