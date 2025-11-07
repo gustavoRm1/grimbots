@@ -40,6 +40,25 @@ try:
 except AttributeError:
     pass
 
+# Compatibilidade com eventlet: create_connection do socket verde não aceita "family"
+try:
+    import eventlet.green.socket as eventlet_socket  # type: ignore[import]
+
+    _green_create_connection = eventlet_socket.create_connection
+
+    def _create_connection_ipv4(address, timeout=None, source_address=None, **kwargs):
+        """
+        Compat layer para eventlet >=0.33 com urllib3>=2, removendo kwargs não suportados.
+        """
+        kwargs.pop("family", None)
+        return _green_create_connection(address, timeout, source_address, **kwargs)
+
+    eventlet_socket.create_connection = _create_connection_ipv4
+    socket.create_connection = _create_connection_ipv4
+except ImportError:
+    # eventlet não disponível (execução síncrona/local)
+    pass
+
 def send_meta_pixel_viewcontent_event(bot, bot_user, message, pool_id=None):
     """
     Envia evento ViewContent para Meta Pixel quando usuário inicia conversa com bot
