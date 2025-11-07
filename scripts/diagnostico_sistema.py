@@ -146,7 +146,8 @@ def get_bot_tokens(limit: int) -> List[Dict[str, object]]:
     bots_info: List[Dict[str, object]] = []
     with app.app_context():
         query = (
-            Bot.query.filter(Bot.token.isnot(None))
+            Bot.query.filter(Bot.is_active.is_(True))
+            .filter(Bot.token.isnot(None))
             .filter(Bot.token != "")
             .order_by(Bot.id.asc())
             .limit(limit)

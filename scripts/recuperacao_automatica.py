@@ -27,12 +27,15 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List
 
+import requests
 from dotenv import load_dotenv
 
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 LOG_DIR = ROOT_DIR / "logs"
 LOG_DIR.mkdir(exist_ok=True)
+
+HEALTH_URL = "http://127.0.0.1:5000/health"
 
 
 def load_environment() -> None:
@@ -138,6 +141,22 @@ def summarize(report: Dict[str, object]) -> None:
             print("Todos os bots testados responderam OK")
 
 
+def wait_for_health(url: str, timeout: int = 30, interval: int = 2) -> bool:
+    print(f"[⏳] Aguardando /health responder 200 (timeout {timeout}s)...")
+    start = time.monotonic()
+    while time.monotonic() - start < timeout:
+        try:
+            response = requests.get(url, timeout=3)
+            if response.status_code == 200:
+                print("[✅] /health respondeu 200")
+                return True
+        except requests.RequestException:
+            pass
+        time.sleep(interval)
+    print("[⚠️] /health não respondeu 200 dentro do timeout")
+    return False
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Recuperação automatizada do ambiente GRIMBOTS")
     parser.add_argument("--bots", type=int, default=10, help="Quantidade de bots para testar no diagnóstico final")
@@ -155,8 +174,10 @@ def main() -> int:
     restart_rq_workers(env)
 
     # Conceder tempo para processos inicializarem e conexões se estabilizarem
-    print(f"[⏳] Aguardando {args.sleep}s para estabilização...")
+    print(f"[⏳] Aguardando {args.sleep}s para estabilização inicial...")
     time.sleep(args.sleep)
+
+    wait_for_health(HEALTH_URL)
 
     try:
         report = run_diagnostico(args.bots)
