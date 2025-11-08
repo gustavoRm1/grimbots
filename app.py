@@ -7021,15 +7021,15 @@ def send_meta_pixel_purchase_event(payment):
         telegram_user_id = None
         if payment.customer_user_id:
             if payment.customer_user_id.startswith('user_'):
-                telegram_user_id = int(payment.customer_user_id.replace('user_', ''))
-            elif payment.customer_user_id.isdigit():
-                telegram_user_id = int(payment.customer_user_id)
+                telegram_user_id = payment.customer_user_id.replace('user_', '')
+            else:
+                telegram_user_id = str(payment.customer_user_id)
         
         bot_user = None
         if telegram_user_id:
             bot_user = BotUser.query.filter_by(
                 bot_id=payment.bot_id,
-                telegram_user_id=telegram_user_id
+                telegram_user_id=str(telegram_user_id)
             ).first()
         
         # ============================================================================
