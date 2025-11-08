@@ -967,12 +967,6 @@
                                 Ofertas serão criadas dinamicamente para cada valor de transação
                             </p>
                         </div>
-                        <div class="info-box-warning info-box p-2">
-                            <p class="text-xs text-gray-300">
-                                <i class="fas fa-info-circle mr-1"></i>
-                                Ofertas são criadas automaticamente para evitar conflitos de valor (order bumps, downsells, etc.)
-                            </p>
-                        </div>
                         <button type="submit" 
                                 :disabled="loading"
                                 class="btn-action btn-action-primary w-full">
@@ -1101,12 +1095,6 @@
                                     <i class="fas" :class="show ? 'fa-eye-slash' : 'fa-eye'"></i>
                                 </button>
                             </div>
-                        </div>
-                        <div class="info-box-warning info-box p-2">
-                            <p class="text-xs text-gray-300">
-                                <i class="fas fa-info-circle mr-1"></i>
-                                Autenticação via Bearer Token (expira em 1h)
-                            </p>
                         </div>
                         <button type="submit" 
                                 :disabled="loading"
