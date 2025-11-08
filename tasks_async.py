@@ -317,7 +317,7 @@ def process_webhook_async(gateway_type: str, data: Dict[str, Any]):
         from app import app, db
         from models import Payment, Gateway, Bot, get_brazil_time, Commission
         from gateway_factory import GatewayFactory
-        from app import bot_manager, send_payment_delivery
+        from app import bot_manager, send_payment_delivery, send_meta_pixel_purchase_event
         
         with app.app_context():
             # Criar gateway com adapter
@@ -382,19 +382,27 @@ def process_webhook_async(gateway_type: str, data: Dict[str, Any]):
                     status_antigo = payment.status
                     
                     if payment.status == 'paid' and status == 'paid':
-                        # Webhook duplicado - tentar reenviar entregável
+                        # Webhook duplicado - tentar reenviar entregável e garantir Meta Purchase
                         try:
                             send_payment_delivery(payment, bot_manager)
                         except Exception as e:
                             logger.error(f"Erro ao reenviar entregável (duplicado): {e}")
+                        if not payment.meta_purchase_sent:
+                            try:
+                                logger.info(f"♻️ Webhook duplicado para {payment.payment_id}, meta_purchase_sent ainda falso - reenfileirando Meta Purchase")
+                                send_meta_pixel_purchase_event(payment)
+                            except Exception as e:
+                                logger.warning(f"Erro ao reenfileirar Meta Pixel Purchase (duplicado): {e}")
                         return {'status': 'already_processed'}
                     
                     if payment.status != 'paid':
                         payment.status = status
-                    
-                    deve_processar_estatisticas = (status == 'paid' and was_pending)
-                    deve_enviar_entregavel = (status == 'paid')
-                    
+
+                    status_is_paid = (status == 'paid')
+                    deve_processar_estatisticas = status_is_paid and was_pending
+                    deve_enviar_entregavel = status_is_paid
+                    deve_enviar_meta_purchase = status_is_paid and not payment.meta_purchase_sent
+
                     if deve_processar_estatisticas:
                         payment.paid_at = get_brazil_time()
                         payment.bot.total_sales += 1
@@ -444,9 +452,8 @@ def process_webhook_async(gateway_type: str, data: Dict[str, Any]):
                         except Exception as e:
                             logger.warning(f"Erro em gamificação: {e}")
                         
-                        # Meta Pixel Purchase
+                    if deve_enviar_meta_purchase:
                         try:
-                            from app import send_meta_pixel_purchase_event
                             send_meta_pixel_purchase_event(payment)
                         except Exception as e:
                             logger.warning(f"Erro ao enviar Meta Pixel Purchase: {e}")
