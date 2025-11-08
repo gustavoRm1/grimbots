@@ -317,7 +317,7 @@ def process_webhook_async(gateway_type: str, data: Dict[str, Any]):
         from app import app, db
         from models import Payment, Gateway, Bot, get_brazil_time, Commission
         from gateway_factory import GatewayFactory
-        from bot_manager import send_payment_delivery
+        from app import bot_manager, send_payment_delivery
         
         with app.app_context():
             # Criar gateway com adapter
@@ -385,8 +385,8 @@ def process_webhook_async(gateway_type: str, data: Dict[str, Any]):
                         # Webhook duplicado - tentar reenviar entregável
                         try:
                             send_payment_delivery(payment, bot_manager)
-                        except:
-                            pass
+                        except Exception as e:
+                            logger.error(f"Erro ao reenviar entregável (duplicado): {e}")
                         return {'status': 'already_processed'}
                     
                     if payment.status != 'paid':
@@ -468,8 +468,6 @@ def process_webhook_async(gateway_type: str, data: Dict[str, Any]):
                     
                     if deve_enviar_entregavel:
                         try:
-                            # Importar bot_manager e send_payment_delivery do app
-                            from app import bot_manager, send_payment_delivery
                             send_payment_delivery(payment, bot_manager)
                         except Exception as e:
                             logger.error(f"Erro ao enviar entregável: {e}")
