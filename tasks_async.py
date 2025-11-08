@@ -315,7 +315,7 @@ def process_webhook_async(gateway_type: str, data: Dict[str, Any]):
     """
     try:
         from app import app, db
-        from models import Payment, Gateway, Bot, BotUser, get_brazil_time, Commission
+        from models import Payment, Gateway, Bot, get_brazil_time, Commission
         from gateway_factory import GatewayFactory
         from app import bot_manager, send_payment_delivery
         
@@ -446,25 +446,8 @@ def process_webhook_async(gateway_type: str, data: Dict[str, Any]):
                         
                         # Meta Pixel Purchase
                         try:
-                            from utils.meta_pixel import MetaPixelAPI
-                            from models import RedirectPool, PoolBot
-                            
-                            pool_bot = PoolBot.query.filter_by(bot_id=payment.bot_id).first()
-                            if pool_bot:
-                                pool = RedirectPool.query.get(pool_bot.pool_id)
-                                if pool and pool.meta_tracking_enabled:
-                                    bot_user = BotUser.query.filter_by(
-                                        bot_id=payment.bot_id,
-                                        telegram_user_id=str(payment.customer_user_id),
-                                        archived=False
-                                    ).first()
-                                    
-                                    if bot_user:
-                                        MetaPixelAPI.send_purchase_event(
-                                            pool=pool,
-                                            bot_user=bot_user,
-                                            payment=payment
-                                        )
+                            from app import send_meta_pixel_purchase_event
+                            send_meta_pixel_purchase_event(payment)
                         except Exception as e:
                             logger.warning(f"Erro ao enviar Meta Pixel Purchase: {e}")
                     
