@@ -264,36 +264,38 @@
     {% endif %}
 
     <!-- Flash Messages (Paleta v2.0) -->
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
-            {% for category, message in messages %}
-            <div class="rounded-xl p-4 mb-4" 
-                 style="{% if category == 'error' %}background: rgba(239, 68, 68, 0.1); border: 1px solid var(--brand-red-500);{% elif category == 'success' %}background: rgba(16, 185, 129, 0.1); border: 1px solid var(--brand-green-500);{% elif category == 'warning' %}background: rgba(245, 158, 11, 0.1); border: 1px solid var(--brand-gold-500);{% else %}background: rgba(59, 130, 246, 0.1); border: 1px solid var(--brand-blue-500);{% endif %}" 
-                 x-data="{show: true}" x-show="show" x-cloak>
-                <div class="flex items-start gap-3">
-                    <div class="flex-shrink-0">
-                        <i class="{% if category == 'error' %}fas fa-exclamation-circle{% elif category == 'success' %}fas fa-check-circle{% elif category == 'warning' %}fas fa-exclamation-triangle{% else %}fas fa-info-circle{% endif %} text-lg" 
-                           style="{% if category == 'error' %}color: var(--brand-red-300);{% elif category == 'success' %}color: var(--brand-green-300);{% elif category == 'warning' %}color: var(--brand-gold-300);{% else %}color: var(--brand-blue-300);{% endif %}"></i>
-                    </div>
-                    <div class="flex-1">
-                        <p class="text-sm font-semibold" 
-                           style="{% if category == 'error' %}color: var(--brand-red-100);{% elif category == 'success' %}color: var(--brand-green-100);{% elif category == 'warning' %}color: var(--brand-gold-300);{% else %}color: var(--brand-blue-100);{% endif %}">
-                            {{ message }}
-                        </p>
-                    </div>
-                    <div class="flex-shrink-0">
-                        <button @click="show = false" class="inline-flex rounded-md p-1.5 transition-all hover:opacity-70" 
-                                style="{% if category == 'error' %}color: var(--brand-red-300);{% elif category == 'success' %}color: var(--brand-green-300);{% elif category == 'warning' %}color: var(--brand-gold-300);{% else %}color: var(--brand-blue-300);{% endif %}">
-                            <i class="fas fa-times"></i>
-                        </button>
+    {% if request.endpoint != 'login' %}
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-4">
+                {% for category, message in messages %}
+                <div class="rounded-xl p-4 mb-4" 
+                     style="{% if category == 'error' %}background: rgba(239, 68, 68, 0.1); border: 1px solid var(--brand-red-500);{% elif category == 'success' %}background: rgba(16, 185, 129, 0.1); border: 1px solid var(--brand-green-500);{% elif category == 'warning' %}background: rgba(245, 158, 11, 0.1); border: 1px solid var(--brand-gold-500);{% else %}background: rgba(59, 130, 246, 0.1); border: 1px solid var(--brand-blue-500);{% endif %}" 
+                     x-data="{show: true}" x-show="show" x-cloak>
+                    <div class="flex items-start gap-3">
+                        <div class="flex-shrink-0">
+                            <i class="{% if category == 'error' %}fas fa-exclamation-circle{% elif category == 'success' %}fas fa-check-circle{% elif category == 'warning' %}fas fa-exclamation-triangle{% else %}fas fa-info-circle{% endif %} text-lg" 
+                               style="{% if category == 'error' %}color: var(--brand-red-300);{% elif category == 'success' %}color: var(--brand-green-300);{% elif category == 'warning' %}color: var(--brand-gold-300);{% else %}color: var(--brand-blue-300);{% endif %}"></i>
+                        </div>
+                        <div class="flex-1">
+                            <p class="text-sm font-semibold" 
+                               style="{% if category == 'error' %}color: var(--brand-red-100);{% elif category == 'success' %}color: var(--brand-green-100);{% elif category == 'warning' %}color: var(--brand-gold-300);{% else %}color: var(--brand-blue-100);{% endif %}">
+                                {{ message }}
+                            </p>
+                        </div>
+                        <div class="flex-shrink-0">
+                            <button @click="show = false" class="inline-flex rounded-md p-1.5 transition-all hover:opacity-70" 
+                                    style="{% if category == 'error' %}color: var(--brand-red-300);{% elif category == 'success' %}color: var(--brand-green-300);{% elif category == 'warning' %}color: var(--brand-gold-300);{% else %}color: var(--brand-blue-300);{% endif %}">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
+                {% endfor %}
             </div>
-            {% endfor %}
-        </div>
-        {% endif %}
-    {% endwith %}
+            {% endif %}
+        {% endwith %}
+    {% endif %}
 
     <!-- Main Content -->
     <main>
