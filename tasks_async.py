@@ -315,7 +315,7 @@ def process_webhook_async(gateway_type: str, data: Dict[str, Any]):
     """
     try:
         from app import app, db
-        from models import Payment, Gateway, Bot, get_brazil_time, Commission
+        from models import Payment, Gateway, Bot, BotUser, get_brazil_time, Commission
         from gateway_factory import GatewayFactory
         from app import bot_manager, send_payment_delivery
         
@@ -453,8 +453,10 @@ def process_webhook_async(gateway_type: str, data: Dict[str, Any]):
                             if pool_bot:
                                 pool = RedirectPool.query.get(pool_bot.pool_id)
                                 if pool and pool.meta_tracking_enabled:
-                                    bot_user = payment.bot.bot_users.filter_by(
-                                        telegram_user_id=str(payment.customer_user_id)
+                                    bot_user = BotUser.query.filter_by(
+                                        bot_id=payment.bot_id,
+                                        telegram_user_id=str(payment.customer_user_id),
+                                        archived=False
                                     ).first()
                                     
                                     if bot_user:

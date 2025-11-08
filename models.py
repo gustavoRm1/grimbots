@@ -5,7 +5,7 @@ Models - Sistema SaaS de Gerenciamento de Bots
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import json
 import logging
 
@@ -130,17 +130,24 @@ class User(UserMixin, db.Model):
     
     def update_streak(self, sale_date):
         """Atualiza streak de vendas consecutivas"""
-        from datetime import date, timedelta
+        if isinstance(sale_date, datetime):
+            sale_date_obj = sale_date.date()
+        elif isinstance(sale_date, date):
+            sale_date_obj = sale_date
+        else:
+            sale_date_obj = datetime.utcnow().date()
         
-        sale_date_obj = sale_date if isinstance(sale_date, date) else sale_date.date()
+        last_date = self.last_sale_date
+        if isinstance(last_date, datetime):
+            last_date = last_date.date()
         
-        if not self.last_sale_date:
+        if not last_date:
             # Primeira venda
             self.current_streak = 1
             self.best_streak = 1
             self.last_sale_date = sale_date_obj
         else:
-            days_diff = (sale_date_obj - self.last_sale_date).days
+            days_diff = (sale_date_obj - last_date).days
             
             if days_diff == 1:
                 # Dia consecutivo
@@ -228,6 +235,7 @@ class Bot(db.Model):
     # Relacionamentos
     config = db.relationship('BotConfig', backref='bot', uselist=False, cascade='all, delete-orphan')
     payments = db.relationship('Payment', backref='bot', lazy='dynamic', cascade='all, delete-orphan')
+    bot_users = db.relationship('BotUser', backref='bot', lazy='dynamic', cascade='all, delete-orphan')
     pool_associations = db.relationship('PoolBot', backref='associated_bot', lazy='dynamic', cascade='all, delete-orphan')  # ✅ DELETE CASCADE
     
     def to_dict(self):
