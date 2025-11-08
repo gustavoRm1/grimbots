@@ -3843,18 +3843,17 @@ def public_redirect(slug):
     
     # Incrementar métricas com lock para evitar deadlocks
     try:
-        with db.session.begin():
-            locked_pool_bot = db.session.execute(
-                select(PoolBot).where(PoolBot.id == pool_bot.id).with_for_update()
-            ).scalar_one()
-            locked_pool = db.session.execute(
-                select(RedirectPool).where(RedirectPool.id == pool.id).with_for_update()
-            ).scalar_one()
+        locked_pool_bot = db.session.execute(
+            select(PoolBot).where(PoolBot.id == pool_bot.id).with_for_update()
+        ).scalar_one()
+        locked_pool = db.session.execute(
+            select(RedirectPool).where(RedirectPool.id == pool.id).with_for_update()
+        ).scalar_one()
 
-            locked_pool_bot.total_redirects = (locked_pool_bot.total_redirects or 0) + 1
-            locked_pool.total_redirects = (locked_pool.total_redirects or 0) + 1
+        locked_pool_bot.total_redirects = (locked_pool_bot.total_redirects or 0) + 1
+        locked_pool.total_redirects = (locked_pool.total_redirects or 0) + 1
 
-            db.session.flush()
+        db.session.commit()
 
         db.session.refresh(pool_bot)
         db.session.refresh(pool)
