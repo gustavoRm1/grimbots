@@ -18,8 +18,8 @@ import uuid
 import atexit
 from dotenv import load_dotenv
 from redis_manager import get_redis_connection, redis_health_check
-from sqlalchemy import text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import text, select
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 # ============================================================================
@@ -3841,10 +3841,27 @@ def public_redirect(slug):
         else:
             abort(503, 'Nenhum bot disponível no momento. Tente novamente em instantes.')
     
-    # Incrementar métricas
-    pool_bot.total_redirects += 1
-    pool.total_redirects += 1
-    db.session.commit()
+    # Incrementar métricas com lock para evitar deadlocks
+    try:
+        with db.session.begin():
+            locked_pool_bot = db.session.execute(
+                select(PoolBot).where(PoolBot.id == pool_bot.id).with_for_update()
+            ).scalar_one()
+            locked_pool = db.session.execute(
+                select(RedirectPool).where(RedirectPool.id == pool.id).with_for_update()
+            ).scalar_one()
+
+            locked_pool_bot.total_redirects = (locked_pool_bot.total_redirects or 0) + 1
+            locked_pool.total_redirects = (locked_pool.total_redirects or 0) + 1
+
+            db.session.flush()
+
+        db.session.refresh(pool_bot)
+        db.session.refresh(pool)
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        logger.exception("Erro ao atualizar métricas de redirect (FOR UPDATE): %s", e)
+        abort(500, 'Erro ao processar redirect')
     
     # Log
     logger.info(f"Redirect: /go/{slug} → @{pool_bot.bot.username} | Estratégia: {pool.distribution_strategy} | Total: {pool_bot.total_redirects}")
