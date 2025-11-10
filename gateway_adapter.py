@@ -184,15 +184,52 @@ class GatewayAdapter(PaymentGateway):
         Garante que todos os gateways retornem o mesmo formato.
         """
         # Normalizar status
-        status_str = str(result.get('status', '')).lower()
-        if status_str in ['paid', 'pago', 'approved', 'aprovado', 'confirmed']:
+        status_candidates = []
+
+        def _append_status(value):
+            if value is None:
+                return
+            status_str = str(value).strip().lower()
+            if status_str:
+                status_candidates.append(status_str)
+
+        _append_status(result.get('status'))
+        _append_status(result.get('raw_status'))
+
+        raw_statuses = result.get('raw_statuses')
+        if isinstance(raw_statuses, list):
+            for status_candidate in raw_statuses:
+                _append_status(status_candidate)
+
+        paid_aliases = {
+            'paid', 'pago', 'approved', 'aprovado', 'confirmed', 'confirmado',
+            'completed', 'concluded', 'concluido', 'concluído', 'success', 'succeeded',
+            'received', 'recebido', 'settled', 'captured', 'finished', 'done'
+        }
+        failed_aliases = {
+            'failed', 'falhou', 'cancelled', 'canceled', 'refused', 'rejected',
+            'expired', 'chargeback', 'reversed', 'denied'
+        }
+
+        status = 'pending'
+        if any(candidate in paid_aliases for candidate in status_candidates):
             status = 'paid'
-        elif status_str in ['pending', 'pendente', 'waiting']:
-            status = 'pending'
-        elif status_str in ['refunded', 'reembolsado', 'failed', 'cancelled', 'canceled', 'expired', 'refused']:
+        elif any(candidate in failed_aliases for candidate in status_candidates):
             status = 'failed'
         else:
-            status = 'pending'
+            paid_substrings = ['confirm', 'aprov', 'conclu', 'receb', 'settled', 'success', 'feito']
+            failed_substrings = ['fail', 'cancel', 'expir', 'refus', 'rejeit', 'chargeback', 'revers']
+
+            if any(any(substr in candidate for substr in paid_substrings) for candidate in status_candidates):
+                status = 'paid'
+            elif any(any(substr in candidate for substr in failed_substrings) for candidate in status_candidates):
+                status = 'failed'
+            else:
+                status = 'pending'
+
+        # Indicadores complementares (ex.: presença de end_to_end_id)
+        if status != 'paid' and (result.get('end_to_end_id') or result.get('payer_name')):
+            status = 'paid'
         
         # Normalizar amount (converter centavos para reais se necessário)
         amount = result.get('amount', 0)
@@ -213,7 +250,11 @@ class GatewayAdapter(PaymentGateway):
             'producer_hash': result.get('producer_hash'),
             'payer_name': result.get('payer_name'),
             'payer_document': result.get('payer_document'),
-            'end_to_end_id': result.get('end_to_end_id')
+            'end_to_end_id': result.get('end_to_end_id'),
+            'raw_status': result.get('raw_status'),
+            'raw_statuses': result.get('raw_statuses'),
+            'raw_data': result.get('raw_data'),
+            'status_reason': result.get('status_reason'),
         }
         
         # Garantir gateway_transaction_id

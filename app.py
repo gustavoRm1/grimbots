@@ -515,7 +515,25 @@ def reconcile_pushynpay_payments():
                         continue
                     
                     result = gateway.get_payment_status(str(transaction_id))
-                    if result and result.get('status') == 'paid':
+
+                    if not result:
+                        logger.warning(f"⚠️ PushynPay: Não foi possível obter status da transação {transaction_id}")
+                        continue
+
+                    status = result.get('status')
+                    raw_status = result.get('raw_status')
+                    status_reason = result.get('status_reason')
+                    end_to_end = result.get('end_to_end_id')
+                    paid_value = result.get('paid_value')
+
+                    if status != 'paid':
+                        logger.debug(
+                            f"⏳ PushynPay: Payment {p.id} ainda pendente | "
+                            f"status={status} raw_status={raw_status} reason={status_reason} "
+                            f"end_to_end={end_to_end} paid_value={paid_value}"
+                        )
+
+                    if status == 'paid':
                         # Atualizar pagamento e estatísticas
                         p.status = 'paid'
                         p.paid_at = get_brazil_time()
@@ -557,6 +575,9 @@ def reconcile_pushynpay_payments():
                             })
                         except Exception:
                             pass
+                    else:
+                        continue
+
                 except Exception as e:
                     logger.error(f"❌ Erro ao reconciliar payment PushynPay {p.id}: {e}")
                     continue
@@ -590,8 +611,8 @@ if _scheduler_owner:
 
 if _scheduler_owner:
     scheduler.add_job(id='reconcile_pushynpay', func=enqueue_reconcile_pushynpay,
-                      trigger='interval', seconds=300, replace_existing=True, max_instances=1)
-    logger.info("✅ Job de reconciliação PushynPay agendado (5min, fila async)")
+                      trigger='interval', seconds=60, replace_existing=True, max_instances=1)
+    logger.info("✅ Job de reconciliação PushynPay agendado (60s, fila async)")
 # ✅ JOB PERIÓDICO: Verificar e sincronizar status dos bots
 def sync_bots_status():
     """
