@@ -193,6 +193,9 @@ class PushynGateway(PaymentGateway):
                 logger.error(f"❌ [{self.get_gateway_name()}] Webhook sem ID")
                 return None
 
+            normalized_identifier = str(identifier).strip()
+            identifier_lower = normalized_identifier.lower()
+
             # Normalizar status e coletar todos os campos relacionados
             raw_statuses: List[str] = []
 
@@ -305,10 +308,10 @@ class PushynGateway(PaymentGateway):
                 logger.info(f"🔑 End-to-End ID: {end_to_end}")
 
             return {
-                'payment_id': identifier,
+                'payment_id': normalized_identifier,
                 'status': mapped_status,
                 'amount': amount,
-                'gateway_transaction_id': identifier,
+                'gateway_transaction_id': identifier_lower,
                 'payer_name': payer_name,
                 'payer_document': payer_cpf,
                 'end_to_end_id': end_to_end,
