@@ -1863,40 +1863,96 @@ def verify_bots_status():
         if not user_bots:
             return jsonify({'bots': []})
         
+        from models import get_brazil_time
+        
+        # Obter conexão Redis (reutilizar dentro do loop)
+        redis_conn = None
+        try:
+            redis_conn = get_redis_connection()
+        except Exception as redis_err:
+            logger.debug(f"verify_bots_status: Redis indisponível ({redis_err}) - prosseguindo sem heartbeat")
+            redis_conn = None
+        
         bots_status = []
+        restarted_ids = []
+        restart_failures = {}
+        db_dirty = False
         
         for bot in user_bots:
-            # Verificar status em memória
             status_memory = bot_manager.get_bot_status(bot.id, verify_telegram=False)
             is_in_memory = status_memory.get('is_running', False)
             
-            # Verificar heartbeat compartilhado (Redis) para ambientes multi-worker
             has_recent_heartbeat = False
-            try:
-                r = get_redis_connection()
-                hb = r.get(f'bot_heartbeat:{bot.id}')
-                if hb:
-                    # Se existe a chave (TTL gerenciado pelo monitor), consideramos recente
-                    has_recent_heartbeat = True
-            except Exception as redis_err:
-                logger.debug(f"verify_bots_status: falha ao obter heartbeat no Redis para bot {bot.id}: {redis_err}")
-
-            actual_is_running = bool(is_in_memory or has_recent_heartbeat)
+            if redis_conn:
+                try:
+                    if redis_conn.get(f'bot_heartbeat:{bot.id}'):
+                        has_recent_heartbeat = True
+                except Exception as redis_err:
+                    logger.debug(f"verify_bots_status: falha ao obter heartbeat no Redis para bot {bot.id}: {redis_err}")
             
-            # Adicionar ao resultado
+            actual_is_running = bool(is_in_memory or has_recent_heartbeat)
+            auto_restarted = False
+            restart_error = None
+            
+            # Autocorreção: se bot deveria estar ativo mas está offline, tentar restart automático
+            if bot.is_active and not actual_is_running:
+                should_attempt_restart = True
+                
+                # Evitar thundering herd com lock curto no Redis
+                if redis_conn:
+                    try:
+                        lock_key = f'bot_autorestart_lock:{bot.id}'
+                        # NX=True => só primeiro processo reinicia, EX=90 impede repetição intensa
+                        lock_acquired = redis_conn.set(lock_key, '1', nx=True, ex=90)
+                        if not lock_acquired:
+                            should_attempt_restart = False
+                    except Exception as lock_err:
+                        logger.debug(f"verify_bots_status: falha ao adquirir lock de restart para bot {bot.id}: {lock_err}")
+                
+                if should_attempt_restart:
+                    if not bot.config or not bot.config.welcome_message:
+                        restart_error = 'missing_config'
+                        restart_failures[bot.id] = restart_error
+                    else:
+                        try:
+                            bot_manager.start_bot(bot.id, bot.token, bot.config.to_dict())
+                            bot.is_running = True
+                            bot.last_started = get_brazil_time()
+                            actual_is_running = True
+                            auto_restarted = True
+                            restarted_ids.append(bot.id)
+                            db_dirty = True
+                            logger.info(f"♻️ Auto-restart aplicado ao bot {bot.id} (@{bot.username}) via verify_bots_status")
+                        except Exception as restart_exc:
+                            restart_error = str(restart_exc)
+                            bot.last_error = restart_error[:500]
+                            restart_failures[bot.id] = restart_error
+                            db_dirty = True
+                            logger.error(f"❌ Auto-restart falhou para bot {bot.id}: {restart_exc}")
+            
             bots_status.append({
                 'id': bot.id,
                 'is_running': actual_is_running,
                 'verified': True,
+                'auto_restarted': auto_restarted,
+                'restart_error': restart_error,
                 'sources': {
                     'memory': is_in_memory,
                     'heartbeat': has_recent_heartbeat
                 }
             })
         
+        if db_dirty:
+            try:
+                db.session.commit()
+            except Exception as commit_err:
+                db.session.rollback()
+                logger.error(f"❌ Erro ao salvar alterações de auto-restart: {commit_err}", exc_info=True)
+        
         return jsonify({
             'bots': bots_status,
-            'updated_count': 0
+            'restarted_count': len(restarted_ids),
+            'restart_failures': restart_failures
         })
         
     except Exception as e:
