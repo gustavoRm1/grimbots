@@ -688,15 +688,10 @@
                                     <p class="text-xs text-gray-500">@<span x-text="bot.username"></span></p>
                         </div>
                             </div>
-                            <span :class="botsStatusVerifying[bot.id] ? 'bot-status-verifying' : (bot.is_running ? 'bot-status-online' : 'bot-status-offline')">
+                            <span :class="bot.is_running ? 'bot-status-online' : 'bot-status-offline'">
                                 <span class="w-2 h-2 rounded-full" 
-                                      :class="botsStatusVerifying[bot.id] ? 'bg-yellow-400 animate-pulse' : (bot.is_running ? 'bg-green-400 animate-pulse' : 'bg-gray-600')"></span>
-                                <template x-if="botsStatusVerifying[bot.id]">
-                                    <span>Verificando...</span>
-                                </template>
-                                <template x-if="!botsStatusVerifying[bot.id]">
-                                    <span x-text="bot.is_running ? 'Online' : 'Offline'"></span>
-                                </template>
+                                      :class="bot.is_running ? 'bg-green-400 animate-pulse' : 'bg-gray-600'"></span>
+                                <span x-text="bot.is_running ? 'Operando' : 'Requer atenção'"></span>
                         </span>
                     </div>
                     
@@ -732,24 +727,6 @@
                                 
                                 <!-- Linha 3: Iniciar/Parar, Duplicar e Deletar -->
                             <div class="flex gap-2">
-                                    <template x-if="bot.is_running">
-                                    <button @click="stopBot(bot.id)" class="btn-action btn-action-danger flex-1">
-                            <i class="fas fa-stop mr-1"></i> Parar
-                        </button>
-                                    </template>
-                                    <template x-if="!bot.is_running && bot.config && bot.config.welcome_message">
-                                    <button @click="startBot(bot.id)" class="btn-action btn-action-success flex-1">
-                            <i class="fas fa-play mr-1"></i> Iniciar
-                        </button>
-                                    </template>
-                                    <template x-if="!bot.is_running && (!bot.config || !bot.config.welcome_message)">
-                                    <button @click="window.location.href='/bots/' + bot.id + '/config'" 
-                                            class="btn-action flex-1"
-                                            style="background: rgba(251, 191, 36, 0.1); border-color: rgba(251, 191, 36, 0.3); color: #FCD34D;"
-                                            title="Configure o bot antes de iniciar">
-                            <i class="fas fa-cog mr-1"></i> Configurar Primeiro
-                        </button>
-                                    </template>
                                 <button @click="openDuplicateBotModal(bot)" class="btn-action flex-1"
                                         style="background: rgba(255, 255, 255, 0.05); color: #D1D5DB; border: 1px solid rgba(255, 255, 255, 0.1);">
                                     <i class="fas fa-clone mr-1"></i> Duplicar
@@ -1482,9 +1459,6 @@ function dashboardApp() {
             notify_approved_sales: true,
             notify_pending_sales: false
         },
-        // Estado de verificação de status dos bots
-        botsStatusVerifying: {},
-
         // Inicialização
         init() {
             // Prevenir inicialização dupla
@@ -2158,11 +2132,6 @@ function dashboardApp() {
             try {
                 console.log('🔄 Verificando status dos bots...');
                 
-                // Marcar todos os bots como "verificando"
-                this.bots.forEach(bot => {
-                    this.botsStatusVerifying[bot.id] = true;
-                });
-                
                 const response = await fetch('/api/bots/verify-status', {
                     method: 'POST',
                     headers: {
@@ -2177,33 +2146,16 @@ function dashboardApp() {
                 const data = await response.json();
                 console.log('✅ Status verificado:', data);
                 
-                // Atualizar status dos bots
                 data.bots.forEach(botStatus => {
                     const bot = this.bots.find(b => b.id === botStatus.id);
                     if (bot) {
                         bot.is_running = botStatus.is_running;
-                    }
-                    // Remover flag de verificação
-                    delete this.botsStatusVerifying[botStatus.id];
-                });
-                
-                // Se algum bot não foi retornado, remover flag também
-                Object.keys(this.botsStatusVerifying).forEach(botId => {
-                    if (!data.bots.find(b => b.id === parseInt(botId))) {
-                        delete this.botsStatusVerifying[botId];
+                        bot.status_sources = botStatus.sources || null;
                     }
                 });
-                
-                if (data.updated_count > 0) {
-                    console.log(`✅ ${data.updated_count} bots tiveram status atualizado`);
-                }
                 
             } catch (error) {
                 console.error('❌ Erro ao verificar status dos bots:', error);
-                // Remover todas as flags de verificação em caso de erro
-                this.bots.forEach(bot => {
-                    delete this.botsStatusVerifying[bot.id];
-                });
             }
         },
         
@@ -2253,98 +2205,6 @@ function dashboardApp() {
             return null;
         },
         
-        async startBot(botId) {
-            const bot = this.bots.find(b => b.id === botId);
-            try {
-                console.log(`▶️ Iniciando bot ${botId}...`);
-                this.$set(this.botsStatusVerifying, botId, true);
-                
-                const csrfToken = this.getCsrfToken();
-                const headers = { 'Content-Type': 'application/json' };
-                if (csrfToken) headers['X-CSRF-Token'] = csrfToken;
-                
-                const response = await fetch(`/api/bots/${botId}/start`, { 
-                    method: 'POST',
-                    headers: headers,
-                    credentials: 'same-origin'
-                });
-                
-                if (response.ok) {
-                    console.log('✅ Bot iniciado com sucesso!');
-                    if (bot) {
-                        bot.is_running = true;
-                    }
-                    window.utils?.showToast?.('Bot iniciado com sucesso!');
-                    this.$delete(this.botsStatusVerifying, botId);
-                    // Forçar uma verificação suave alguns segundos depois
-                    setTimeout(() => this.verifyBotsStatus(), 2000);
-                } else {
-                    const data = await response.json();
-                    console.error('❌ Erro ao iniciar bot:', data);
-                    this.$delete(this.botsStatusVerifying, botId);
-                    
-                    // ✅ DETECÇÃO DE BANIMENTO (QI 500)
-                    if (data.error_type === 'banned') {
-                        this.bannedBotInfo = {
-                            bot_id: botId,
-                            bot_name: bot ? bot.name : `Bot #${botId}`,
-                            message: data.message || 'O bot foi banido ou o token foi revogado. Acesse as configurações do bot e atualize o token com um novo token do @BotFather.'
-                        };
-                        this.showBannedBotModal = true;
-                        return;
-                    }
-                    
-                    if (data.error && data.error.includes('Configure')) {
-                        if (confirm(`⚠️ ${data.error}\n\nDeseja ir para a página de configuração agora?`)) {
-                            window.location.href = `/bots/${botId}/config`;
-                        }
-                    } else {
-                        window.utils?.showToast?.(`Erro ao iniciar bot: ${data.error || 'Erro desconhecido'}`, 'error');
-                    }
-                }
-            } catch (error) {
-                console.error('❌ Erro ao iniciar bot:', error);
-                this.$delete(this.botsStatusVerifying, botId);
-                window.utils?.showToast?.('Erro ao iniciar bot. Verifique o console para detalhes.', 'error');
-            }
-        },
-
-        async stopBot(botId) {
-            const bot = this.bots.find(b => b.id === botId);
-            try {
-                console.log(`🛑 Parando bot ${botId}...`);
-                this.$set(this.botsStatusVerifying, botId, true);
-                
-                const csrfToken = this.getCsrfToken();
-                const headers = { 'Content-Type': 'application/json' };
-                if (csrfToken) headers['X-CSRF-Token'] = csrfToken;
-                
-                const response = await fetch(`/api/bots/${botId}/stop`, { 
-                    method: 'POST',
-                    headers: headers,
-                    credentials: 'same-origin'
-                });
-                
-                if (response.ok) {
-                    console.log('✅ Bot parado com sucesso!');
-                    if (bot) {
-                        bot.is_running = false;
-                    }
-                    window.utils?.showToast?.('Bot parado com sucesso!');
-                } else {
-                    const text = await response.text();
-                    console.error('❌ Erro ao parar bot:', text);
-                    window.utils?.showToast?.('Erro ao parar bot. Verifique os logs.', 'error');
-                }
-            } catch (error) {
-                console.error('❌ Erro ao parar bot:', error);
-                window.utils?.showToast?.('Erro ao parar bot. Verifique o console.', 'error');
-            } finally {
-                this.$delete(this.botsStatusVerifying, botId);
-                setTimeout(() => this.verifyBotsStatus(), 2000);
-            }
-        },
-
         // Duplicar Bot
         openDuplicateBotModal(bot) {
             this.botToDuplicate = bot;

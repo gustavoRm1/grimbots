@@ -1465,15 +1465,35 @@ def create_bot():
         )
         
         db.session.add(bot)
-        db.session.commit()
+        db.session.flush()  # garante bot.id
         
         # Criar configuração padrão
         config = BotConfig(bot_id=bot.id)
         db.session.add(config)
+        db.session.flush()
+        
+        auto_started = False
+        try:
+            logger.info(f"⚙️ Auto-start do bot recém-criado {bot.id} (@{bot.username})")
+            bot_manager.start_bot(
+                bot_id=bot.id,
+                token=bot.token,
+                config=config.to_dict()
+            )
+            bot.is_running = True
+            bot.last_started = get_brazil_time()
+            auto_started = True
+            logger.info(f"✅ Bot {bot.id} iniciado automaticamente após criação")
+        except Exception as start_error:
+            logger.error(f"❌ Falha ao iniciar bot {bot.id} automaticamente: {start_error}")
+            bot.is_running = True  # Mantém marcado como ativo; watchdog cuidará do restart
+        
         db.session.commit()
         
+        bot_payload = bot.to_dict()
+        bot_payload['auto_started'] = auto_started
         logger.info(f"Bot criado: {bot.name} (@{bot.username}) por {current_user.email}")
-        return jsonify(bot.to_dict()), 201
+        return jsonify(bot_payload), 201
         
     except Exception as e:
         db.session.rollback()
@@ -1866,27 +1886,8 @@ def verify_bots_status():
 @login_required
 @csrf.exempt
 def stop_bot(bot_id):
-    """Para um bot"""
-    bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
-    
-    try:
-        bot_manager.stop_bot(bot.id)
-        bot.is_running = False
-        bot.last_stopped = get_brazil_time()
-        db.session.commit()
-        
-        logger.info(f"Bot parado: {bot.name} por {current_user.email}")
-        
-        # Notificar via WebSocket
-        socketio.emit('bot_status_update', {
-            'bot_id': bot.id,
-            'is_running': False
-        }, room=f'user_{current_user.id}')
-        
-        return jsonify({'message': 'Bot parado com sucesso'})
-    except Exception as e:
-        logger.error(f"Erro ao parar bot: {e}")
-        return jsonify({'error': str(e)}), 500
+    """Bots são mantidos ligados permanentemente (ação não permitida via painel)."""
+    return jsonify({'error': 'Bots ficam sempre ativos e não podem ser desligados pelo painel.'}), 400
 @app.route('/api/bots/<int:bot_id>/debug', methods=['GET'])
 @login_required
 def debug_bot(bot_id):
@@ -4848,6 +4849,7 @@ def restart_all_active_bots():
             restarted_count = 0
             failed_count = 0
             
+            commit_required = False
             for bot in active_bots:
                 try:
                     # Buscar configuração do bot
@@ -4870,6 +4872,10 @@ def restart_all_active_bots():
                         config=config.to_dict()
                     )
                     
+                    bot.is_running = True
+                    bot.last_started = get_brazil_time()
+                    commit_required = True
+                    
                     restarted_count += 1
                     logger.info(f"✅ Bot {bot.id} (@{bot.username}) reiniciado com sucesso!")
                     
@@ -4884,6 +4890,9 @@ def restart_all_active_bots():
             logger.info(f"✅ Sucessos: {restarted_count}")
             logger.info(f"❌ Falhas: {failed_count}")
             logger.info(f"📊 Total: {len(active_bots)}")
+            
+            if commit_required:
+                db.session.commit()
         
     except Exception as e:
         logger.error(f"❌ ERRO CRÍTICO na reinicialização automática: {e}", exc_info=True)
