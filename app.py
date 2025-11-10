@@ -1736,13 +1736,34 @@ def duplicate_bot(bot_id):
             new_config = BotConfig(bot_id=new_bot.id)
             db.session.add(new_config)
         
+        db.session.flush()
+        
+        auto_started = False
+        try:
+            logger.info(f"⚙️ Auto-start do bot duplicado {new_bot.id} (@{new_bot.username})")
+            bot_manager.start_bot(
+                bot_id=new_bot.id,
+                token=new_bot.token,
+                config=new_config.to_dict()
+            )
+            new_bot.is_running = True
+            new_bot.last_started = get_brazil_time()
+            auto_started = True
+            logger.info(f"✅ Bot duplicado {new_bot.id} iniciado automaticamente")
+        except Exception as start_error:
+            new_bot.is_running = True  # Mantém marcado ativo para watchdog
+            logger.error(f"❌ Falha ao iniciar bot duplicado {new_bot.id}: {start_error}")
+        
         db.session.commit()
         
         logger.info(f"Bot duplicado: {bot_original.name} → {new_bot.name} (@{new_bot.username}) por {current_user.email}")
         
+        bot_payload = new_bot.to_dict()
+        bot_payload['auto_started'] = auto_started
+        
         return jsonify({
             'message': 'Bot duplicado com sucesso!',
-            'bot': new_bot.to_dict(),
+            'bot': bot_payload,
             'copied_features': {
                 'welcome_message': bool(bot_original.config and bot_original.config.welcome_message),
                 'welcome_media': bool(bot_original.config and bot_original.config.welcome_media_url),
