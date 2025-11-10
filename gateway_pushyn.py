@@ -194,8 +194,7 @@ class PushynGateway(PaymentGateway):
                 return None
 
             normalized_identifier = str(identifier).strip()
-            normalized_identifier = normalized_identifier.replace('-', '').replace('_', '')
-            identifier_lower = normalized_identifier.lower()
+            identifier_lower = normalized_identifier.replace('-', '').replace('_', '').lower()
 
             # Normalizar status e coletar todos os campos relacionados
             raw_statuses: List[str] = []
