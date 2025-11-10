@@ -2254,8 +2254,10 @@ function dashboardApp() {
         },
         
         async startBot(botId) {
+            const bot = this.bots.find(b => b.id === botId);
             try {
                 console.log(`▶️ Iniciando bot ${botId}...`);
+                this.$set(this.botsStatusVerifying, botId, true);
                 
                 const csrfToken = this.getCsrfToken();
                 const headers = { 'Content-Type': 'application/json' };
@@ -2269,15 +2271,20 @@ function dashboardApp() {
                 
                 if (response.ok) {
                     console.log('✅ Bot iniciado com sucesso!');
-                    location.reload();
+                    if (bot) {
+                        bot.is_running = true;
+                    }
+                    window.utils?.showToast?.('Bot iniciado com sucesso!');
+                    this.$delete(this.botsStatusVerifying, botId);
+                    // Forçar uma verificação suave alguns segundos depois
+                    setTimeout(() => this.verifyBotsStatus(), 2000);
                 } else {
                     const data = await response.json();
                     console.error('❌ Erro ao iniciar bot:', data);
+                    this.$delete(this.botsStatusVerifying, botId);
                     
                     // ✅ DETECÇÃO DE BANIMENTO (QI 500)
                     if (data.error_type === 'banned') {
-                        // Encontrar nome do bot
-                        const bot = this.bots.find(b => b.id === botId);
                         this.bannedBotInfo = {
                             bot_id: botId,
                             bot_name: bot ? bot.name : `Bot #${botId}`,
@@ -2287,24 +2294,26 @@ function dashboardApp() {
                         return;
                     }
                     
-                    // Se o erro for de configuração, redirecionar
                     if (data.error && data.error.includes('Configure')) {
                         if (confirm(`⚠️ ${data.error}\n\nDeseja ir para a página de configuração agora?`)) {
                             window.location.href = `/bots/${botId}/config`;
                         }
                     } else {
-                        alert(`❌ Erro: ${data.error || 'Erro desconhecido'}`);
+                        window.utils?.showToast?.(`Erro ao iniciar bot: ${data.error || 'Erro desconhecido'}`, 'error');
                     }
                 }
             } catch (error) {
                 console.error('❌ Erro ao iniciar bot:', error);
-                alert('❌ Erro ao iniciar bot. Verifique o console para detalhes.');
+                this.$delete(this.botsStatusVerifying, botId);
+                window.utils?.showToast?.('Erro ao iniciar bot. Verifique o console para detalhes.', 'error');
             }
         },
 
         async stopBot(botId) {
+            const bot = this.bots.find(b => b.id === botId);
             try {
                 console.log(`🛑 Parando bot ${botId}...`);
+                this.$set(this.botsStatusVerifying, botId, true);
                 
                 const csrfToken = this.getCsrfToken();
                 const headers = { 'Content-Type': 'application/json' };
@@ -2318,13 +2327,21 @@ function dashboardApp() {
                 
                 if (response.ok) {
                     console.log('✅ Bot parado com sucesso!');
-                    location.reload();
+                    if (bot) {
+                        bot.is_running = false;
+                    }
+                    window.utils?.showToast?.('Bot parado com sucesso!');
                 } else {
                     const text = await response.text();
                     console.error('❌ Erro ao parar bot:', text);
+                    window.utils?.showToast?.('Erro ao parar bot. Verifique os logs.', 'error');
                 }
             } catch (error) {
                 console.error('❌ Erro ao parar bot:', error);
+                window.utils?.showToast?.('Erro ao parar bot. Verifique o console.', 'error');
+            } finally {
+                this.$delete(this.botsStatusVerifying, botId);
+                setTimeout(() => this.verifyBotsStatus(), 2000);
             }
         },
 
