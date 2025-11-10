@@ -613,115 +613,13 @@ if _scheduler_owner:
     scheduler.add_job(id='reconcile_pushynpay', func=enqueue_reconcile_pushynpay,
                       trigger='interval', seconds=60, replace_existing=True, max_instances=1)
     logger.info("✅ Job de reconciliação PushynPay agendado (60s, fila async)")
-# ✅ JOB PERIÓDICO: Verificar e sincronizar status dos bots
+# ✅ JOB PERIÓDICO: Verificar e sincronizar status dos bots (desativado)
 def sync_bots_status():
     """
-    Verifica e corrige status dos bots periodicamente
-    
-    Roda a cada 30 segundos para garantir que bots que caíram
-    sejam marcados como offline automaticamente
-    
-    VERIFICAÇÃO REAL:
-    1. Verifica se bot está em BotManager.active_bots (memória)
-    2. Verifica se bot REALMENTE responde no Telegram (getMe)
-    3. Se qualquer verificação falhar → marca como offline
+    Sincronização automática desativada para evitar desligamentos involuntários.
+    Mantido apenas por compatibilidade com o agendador legado.
     """
-    try:
-        # Guard para evitar concorrência entre múltiplos processos (file lock leve por tempo)
-        import os, time as _time
-        lock_path = "/tmp/grimbots_sync_bots_status.lock" if os.name != 'nt' else "C:/temp/grimbots_sync_bots_status.lock"
-        now = _time.time()
-        try:
-            # se o lock existir e for recente (< 10s), aborta esta execução
-            if os.path.exists(lock_path):
-                mtime = os.path.getmtime(lock_path)
-                if now - mtime < 10:
-                    return
-            # toca o arquivo (atualiza mtime)
-            os.makedirs(os.path.dirname(lock_path), exist_ok=True)
-            with open(lock_path, 'w') as f:
-                f.write(str(now))
-        except Exception as _e:
-            logger.debug(f"sync_bots_status lock warn: {_e}")
-        with app.app_context():
-            from models import Bot
-            
-            # Buscar todos os bots marcados como is_running=True
-            running_bots = Bot.query.filter_by(is_running=True).all()
-            
-            bots_to_update = []
-            for bot in running_bots:
-                # ✅ VERIFICAÇÃO 1: Status no BotManager (memória)
-                status_memory = bot_manager.get_bot_status(bot.id, verify_telegram=False)
-                is_running_in_memory = status_memory.get('is_running', False)
-                # ✅ VERIFICAÇÃO 1b: Heartbeat compartilhado (Redis)
-                has_recent_heartbeat = False
-                try:
-                    import redis
-                    r = get_redis_connection()
-                    if r.get(f'bot_heartbeat:{bot.id}'):
-                        has_recent_heartbeat = True
-                except Exception:
-                    pass
-
-                # ✅ VERIFICAÇÃO 2: Bot REALMENTE responde no Telegram
-                status_telegram = bot_manager.get_bot_status(bot.id, verify_telegram=True)
-                is_running_telegram = status_telegram.get('is_running', False)
-                reason_telegram = status_telegram.get('reason')
-
-                # ✅ NOVA REGRA (mais segura):
-                # Se o bot está rodando em memória, NÃO marcar offline via job.
-                # Isso evita falsos negativos do Telegram derrubarem o status no dashboard.
-                # Só marcar offline automaticamente quando NÃO está rodando em memória.
-                if is_running_in_memory or has_recent_heartbeat:
-                    actual_is_running = True
-                else:
-                    # Não está em memória: considerar offline
-                    actual_is_running = False
-                
-                # Se bot está marcado como running mas não está realmente online (fora de memória), corrigir
-                if not actual_is_running:
-                    bots_to_update.append(bot.id)
-                    bot.is_running = False
-                    bot.last_stopped = get_brazil_time()
-
-                    reason = status_telegram.get('reason', 'unknown')
-                    logger.info(f"🔴 Bot {bot.id} ({bot.name}) marcado como offline (memória: {is_running_in_memory}, telegram: {is_running_telegram}, motivo: {reason})")
-
-                    # Remover de active_bots somente quando realmente não está em memória (queda real)
-                    try:
-                        bot_manager.stop_bot(bot.id)
-                        logger.info(f"🧹 Bot {bot.id} removido de active_bots")
-                    except:
-                        pass
-            
-            if bots_to_update:
-                db.session.commit()
-                logger.info(f"✅ {len(bots_to_update)} bots sincronizados e marcados como offline")
-                
-                # Notificar via WebSocket
-                for bot_id in bots_to_update:
-                    bot = next((b for b in running_bots if b.id == bot_id), None)
-                    if bot:
-                        socketio.emit('bot_status_update', {
-                            'bot_id': bot_id,
-                            'is_running': False
-                        }, room=f'user_{bot.user_id}')
-    
-    except Exception as e:
-        logger.error(f"❌ Erro ao sincronizar status dos bots: {e}")
-
-# Registrar job periódico (a cada 30 segundos)
-if _scheduler_owner:
-    scheduler.add_job(
-        id='sync_bots_status',
-        func=sync_bots_status,
-        trigger='interval',
-        seconds=30,
-        max_instances=1,
-        replace_existing=True
-    )
-    logger.info("✅ Job de sincronização de status dos bots configurado (30s)")
+    logger.debug("sync_bots_status desativado - nenhuma ação executada.")
 
 # Registrar eventos WebSocket de gamificação
 if GAMIFICATION_V2_ENABLED:
@@ -1925,7 +1823,6 @@ def verify_bots_status():
             return jsonify({'bots': []})
         
         bots_status = []
-        bots_to_update = []
         
         for bot in user_bots:
             # Verificar status em memória
@@ -1943,47 +1840,22 @@ def verify_bots_status():
             except Exception as redis_err:
                 logger.debug(f"verify_bots_status: falha ao obter heartbeat no Redis para bot {bot.id}: {redis_err}")
 
-            # Verificar status no Telegram (pode demorar) - opcional
-            status_telegram = bot_manager.get_bot_status(bot.id, verify_telegram=True)
-            # is_running_telegram = status_telegram.get('is_running', False)
-            # reason = status_telegram.get('reason')
-            
-            # ✅ NOVA REGRA (coerente com o job): se está em memória, considerar online
-            # para evitar falsos negativos de API derrubarem o status no dashboard
-            if is_in_memory or has_recent_heartbeat:
-                actual_is_running = True
-            else:
-                actual_is_running = False
+            actual_is_running = bool(is_in_memory or has_recent_heartbeat)
             
             # Adicionar ao resultado
             bots_status.append({
                 'id': bot.id,
                 'is_running': actual_is_running,
-                'verified': True
+                'verified': True,
+                'sources': {
+                    'memory': is_in_memory,
+                    'heartbeat': has_recent_heartbeat
+                }
             })
-            
-            # Marcar para atualizar banco se status mudou
-            if bot.is_running != actual_is_running:
-                bots_to_update.append((bot.id, actual_is_running))
-                bot.is_running = actual_is_running
-                
-                if not actual_is_running:
-                    bot.last_stopped = get_brazil_time()
-                    # Se estava em memória mas não responde, remover
-                    if is_in_memory and not is_running_telegram:
-                        try:
-                            bot_manager.stop_bot(bot.id)
-                        except:
-                            pass
-        
-        # Atualizar banco em batch
-        if bots_to_update:
-            db.session.commit()
-            logger.info(f"✅ Status verificado e atualizado: {len(bots_to_update)} bots corrigidos")
         
         return jsonify({
             'bots': bots_status,
-            'updated_count': len(bots_to_update)
+            'updated_count': 0
         })
         
     except Exception as e:
