@@ -6,7 +6,7 @@ Sistema de gerenciamento de bots do Telegram com painel web
 from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, abort, session
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from flask_socketio import SocketIO, emit, join_room, leave_room
-from models import db, User, Bot, BotConfig, Gateway, Payment, AuditLog, Achievement, UserAchievement, BotUser, RedirectPool, PoolBot, RemarketingCampaign, RemarketingBlacklist, PushSubscription, NotificationSettings, get_brazil_time
+from models import db, User, Bot, BotConfig, Gateway, Payment, AuditLog, Achievement, UserAchievement, BotUser, BotMessage, RedirectPool, PoolBot, RemarketingCampaign, RemarketingBlacklist, Commission, PushSubscription, NotificationSettings, get_brazil_time
 from bot_manager import BotManager
 from datetime import datetime, timedelta
 from functools import wraps
@@ -18,7 +18,7 @@ import uuid
 import atexit
 from dotenv import load_dotenv
 from redis_manager import get_redis_connection, redis_health_check
-from sqlalchemy import text, select
+from sqlalchemy import text, select, delete
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
@@ -1692,8 +1692,33 @@ def delete_bot(bot_id):
         bot_manager.stop_bot(bot.id)
     
     bot_name = bot.name
-    db.session.delete(bot)
-    db.session.commit()
+    bot_identifier = f"{bot_name} (ID {bot.id})"
+    
+    try:
+        cleanup_operations = [
+            ("mensagens", delete(BotMessage).where(BotMessage.bot_id == bot.id)),
+            ("usuários do bot", delete(BotUser).where(BotUser.bot_id == bot.id)),
+            ("campanhas de remarketing", delete(RemarketingCampaign).where(RemarketingCampaign.bot_id == bot.id)),
+            ("blacklist de remarketing", delete(RemarketingBlacklist).where(RemarketingBlacklist.bot_id == bot.id)),
+            ("comissões", delete(Commission).where(Commission.bot_id == bot.id)),
+            ("pagamentos", delete(Payment).where(Payment.bot_id == bot.id)),
+            ("configuração", delete(BotConfig).where(BotConfig.bot_id == bot.id)),
+            ("associações em pools", delete(PoolBot).where(PoolBot.bot_id == bot.id)),
+        ]
+        
+        for label, stmt in cleanup_operations:
+            result = db.session.execute(stmt)
+            deleted_rows = result.rowcount if result.rowcount is not None else 0
+            if deleted_rows:
+                logger.info(f"🧹 Removidos {deleted_rows} registros de {label} do bot {bot_identifier}")
+        
+        db.session.delete(bot)
+        db.session.commit()
+    
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Erro ao deletar bot {bot_identifier}: {e}", exc_info=True)
+        return jsonify({'error': 'Erro interno ao deletar bot'}), 500
     
     logger.info(f"Bot deletado: {bot_name} por {current_user.email}")
     return jsonify({'message': 'Bot deletado com sucesso'})
