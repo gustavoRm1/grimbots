@@ -7456,10 +7456,35 @@ def payment_webhook(gateway_type):
     Webhook para confirmação de pagamento - QI 200 FAST MODE
     ✅ Retorna 200 IMEDIATAMENTE e processa em background
     """
-    data = request.json
+    raw_body = request.get_data(cache=True, as_text=True)
+    data = request.get_json(silent=True)
+    payload_source = 'json'
+
+    if data is None:
+        payload_source = 'form'
+        data = {}
+        if request.form:
+            data.update(request.form.to_dict(flat=True))
+
+    if (not data) and raw_body:
+        payload_source = 'raw'
+        try:
+            parsed = json.loads(raw_body)
+            if isinstance(parsed, dict):
+                data = parsed
+            else:
+                data = {'_raw_payload': parsed}
+        except (ValueError, TypeError):
+            data = {'_raw_body': raw_body}
+
+    if not isinstance(data, dict):
+        data = {'_raw_payload': data}
+
+    data.setdefault('_content_type', request.content_type)
+    data.setdefault('_payload_source', payload_source)
     
     # ✅ QI 200: Log mínimo (reduzir 80% dos logs)
-    logger.info(f"🔔 Webhook {gateway_type} recebido")
+    logger.info(f"🔔 Webhook {gateway_type} recebido | content-type={request.content_type} | source={payload_source}")
     
     # ✅ QI 200: Enfileirar processamento pesado na fila WEBHOOK
     try:
