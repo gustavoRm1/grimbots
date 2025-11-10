@@ -1914,14 +1914,13 @@ def verify_bots_status():
             # Verificar heartbeat compartilhado (Redis) para ambientes multi-worker
             has_recent_heartbeat = False
             try:
-                import redis, time as _t
-                r = redis.Redis(host='localhost', port=6379, decode_responses=True)
+                r = get_redis_connection()
                 hb = r.get(f'bot_heartbeat:{bot.id}')
                 if hb:
                     # Se existe a chave (TTL gerenciado pelo monitor), consideramos recente
                     has_recent_heartbeat = True
-            except Exception:
-                pass
+            except Exception as redis_err:
+                logger.debug(f"verify_bots_status: falha ao obter heartbeat no Redis para bot {bot.id}: {redis_err}")
 
             # Verificar status no Telegram (pode demorar) - opcional
             status_telegram = bot_manager.get_bot_status(bot.id, verify_telegram=True)
