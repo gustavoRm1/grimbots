@@ -400,11 +400,17 @@ def process_webhook_async(gateway_type: str, data: Dict[str, Any]):
                             values_seen.add(value)
 
                     add_equal(event_id, Payment.gateway_transaction_id)
-                    add_equal(event_tx, Payment.gateway_transaction_id)
-                    add_equal(str(data.get('id') or '').strip(), Payment.gateway_transaction_id)
-                    add_equal(event_hash, Payment.gateway_transaction_hash)
+                    add_equal(event_id, Payment.gateway_transaction_hash)
+                    add_equal(event_ref, Payment.gateway_transaction_id)
+                    add_equal(event_ref, Payment.gateway_transaction_hash)
                     add_equal(event_ref, Payment.payment_id)
-                    add_equal(producer, Payment.external_id)
+
+                    if event_hash:
+                        search_filters.append(Payment.gateway_transaction_hash.ilike(f"%{event_hash}%"))
+
+                    if event_ref and "_" in event_ref:
+                        suffix = event_ref.split("_")[-1]
+                        search_filters.append(Payment.payment_id.ilike(f"%{suffix}%"))
 
                     add_like(event_id)
                     add_like(event_tx)
