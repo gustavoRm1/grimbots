@@ -320,6 +320,7 @@ def process_webhook_async(gateway_type: str, data: Dict[str, Any]):
         from app import bot_manager, send_payment_delivery, send_meta_pixel_purchase_event
         
         with app.app_context():
+            grim_payment_id = data.pop('_grim_payment_id', None)
             # Criar gateway com adapter
             dummy_credentials = {}
             if gateway_type == 'syncpay':
@@ -400,6 +401,9 @@ def process_webhook_async(gateway_type: str, data: Dict[str, Any]):
                 # 5) MATCH por hash interno do checkout
                 if not payment and event_hash:
                     payment = payment_query.filter(Payment.payment_id.ilike(f"%{event_hash}%")).first()
+
+                if not payment and grim_payment_id:
+                    payment = Payment.query.get(int(grim_payment_id))
 
                 if not payment:
                     logger.warning(

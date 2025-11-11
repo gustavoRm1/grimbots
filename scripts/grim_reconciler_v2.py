@@ -117,7 +117,7 @@ def _fetch_atomopay_status(gateway_instance, payment: Payment):
     return None
 
 
-def _queue_webhook(payload: dict) -> None:
+def _queue_webhook(payload: dict, payment_id: int) -> None:
     """
     Processa o payload usando a mesma função oficial dos webhooks.
     Por padrão, executa inline (síncrono) para garantir reconciliação imediata.
@@ -127,6 +127,7 @@ def _queue_webhook(payload: dict) -> None:
     payload.setdefault("event", "transaction")
     payload["_reconciled_by"] = "grim_reconciler_v2"
     payload["_reconciled_at"] = datetime.utcnow().isoformat()
+    payload["_grim_payment_id"] = payment_id
 
     use_queue = os.environ.get("ATOMOPAY_RECON_USE_QUEUE", "0") in {"1", "true", "yes"}
 
@@ -186,7 +187,7 @@ def main():
                 if status != "paid":
                     continue  # ainda aguardando pagamento
 
-                _queue_webhook(api_payload)
+                _queue_webhook(api_payload, payment.id)
                 print(
                     f"✅ Payment {payment.payment_id} ({payment.id}) reconciliação enfileirada."
                 )
