@@ -24,10 +24,14 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 from app import app
+from app import db
 from models import Payment, Gateway
 from gateway_factory import GatewayFactory
 from redis_manager import get_redis_connection
 from tasks_async import webhook_queue, process_webhook_async
+from app import bot_manager, send_payment_delivery, send_meta_pixel_purchase_event
+from models import get_brazil_time
+from models import Commission
 
 
 BATCH_LIMIT = int(os.environ.get("ATOMOPAY_RECON_BATCH", 30))
@@ -140,8 +144,82 @@ def _queue_webhook(payload: dict, payment_id: int) -> None:
             "atomopay",
             payload,
         )
-    else:
-        process_webhook_async("atomopay", payload)
+        return
+
+    result = process_webhook_async("atomopay", payload)
+
+    payment = Payment.query.get(payment_id)
+    if payment and payment.status == "paid":
+        return
+
+    if result and result.get("status") in {"success", "already_processed"}:
+        return
+
+    if payment:
+        _force_finalize_payment(payment)
+
+
+def _force_finalize_payment(payment: Payment) -> None:
+    """Atualiza pagamento manualmente quando o processamento padrão não conclui."""
+    try:
+        was_pending = payment.status != "paid"
+
+        payment.status = "paid"
+        if not payment.paid_at:
+            payment.paid_at = get_brazil_time()
+
+        if was_pending and payment.bot:
+            payment.bot.total_sales = (payment.bot.total_sales or 0) + 1
+            payment.bot.total_revenue = (payment.bot.total_revenue or 0) + (payment.amount or 0)
+
+            owner = payment.bot.owner
+            if owner:
+                owner.total_sales = (owner.total_sales or 0) + 1
+                owner.total_revenue = (owner.total_revenue or 0) + (payment.amount or 0)
+
+        if was_pending and payment.gateway_type and payment.bot:
+            gateway = Gateway.query.filter_by(
+                user_id=payment.bot.user_id,
+                gateway_type=payment.gateway_type
+            ).first()
+            if gateway:
+                gateway.total_transactions = (gateway.total_transactions or 0) + 1
+                gateway.successful_transactions = (gateway.successful_transactions or 0) + 1
+
+        owner = payment.bot.owner if payment.bot else None
+        if was_pending and owner:
+            existing_commission = Commission.query.filter_by(payment_id=payment.id).first()
+            if not existing_commission:
+                commission_amount = owner.add_commission(payment.amount)
+                commission = Commission(
+                    user_id=owner.id,
+                    payment_id=payment.id,
+                    bot_id=payment.bot.id if payment.bot else None,
+                    sale_amount=payment.amount,
+                    commission_amount=commission_amount,
+                    commission_rate=owner.commission_percentage,
+                    status="paid",
+                    paid_at=get_brazil_time(),
+                )
+                db.session.add(commission)
+                owner.total_commission_paid = (owner.total_commission_paid or 0) + commission_amount
+
+        db.session.commit()
+
+        try:
+            send_meta_pixel_purchase_event(payment)
+        except Exception as e:
+            print(f"⚠️ Forçando meta purchase falhou: {e}")
+
+        try:
+            send_payment_delivery(payment, bot_manager)
+        except Exception as e:
+            print(f"⚠️ Forçando entregável falhou: {e}")
+
+        print(f"✅ Payment {payment.payment_id} marcado como paid via fallback.")
+    except Exception as exc:
+        db.session.rollback()
+        print(f"❌ Erro ao finalizar manualmente {payment.payment_id}: {exc}")
 
 
 def main():
