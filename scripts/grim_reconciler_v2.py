@@ -119,23 +119,28 @@ def _fetch_atomopay_status(gateway_instance, payment: Payment):
 
 def _queue_webhook(payload: dict) -> None:
     """
-    Enfileira o processamento via tasks_async.process_webhook_async,
-    reutilizando toda a lógica oficial do webhook.
+    Processa o payload usando a mesma função oficial dos webhooks.
+    Por padrão, executa inline (síncrono) para garantir reconciliação imediata.
+    Se quiser usar a fila, defina ATOMOPAY_RECON_USE_QUEUE=1.
     """
-    if not webhook_queue:
-        print("⚠️ webhook_queue indisponível – verifique os workers RQ.")
-        return
-
-    # Anota a origem para fácil rastreio nos logs
     payload = dict(payload)
+    payload.setdefault("event", "transaction")
     payload["_reconciled_by"] = "grim_reconciler_v2"
     payload["_reconciled_at"] = datetime.utcnow().isoformat()
 
-    webhook_queue.enqueue(
-        process_webhook_async,
-        "atomopay",
-        payload,
-    )
+    use_queue = os.environ.get("ATOMOPAY_RECON_USE_QUEUE", "0") in {"1", "true", "yes"}
+
+    if use_queue:
+        if not webhook_queue:
+            print("⚠️ webhook_queue indisponível – verifique os workers RQ.")
+            return
+        webhook_queue.enqueue(
+            process_webhook_async,
+            "atomopay",
+            payload,
+        )
+    else:
+        process_webhook_async("atomopay", payload)
 
 
 def main():
