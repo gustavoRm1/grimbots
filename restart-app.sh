@@ -8,6 +8,13 @@ if [[ ! -d "venv" ]]; then
   exit 1
 fi
 
+# Exportar variáveis do .env (para SECRET_KEY, ENCRYPTION_KEY, REDIS_URL, etc.)
+if [[ -f ".env" ]]; then
+  set -a
+  source .env
+  set +a
+fi
+
 source venv/bin/activate
 
 echo "🚫 Encerrando Gunicorn..."
