@@ -812,31 +812,53 @@ class AtomPayGateway(PaymentGateway):
         try:
             logger.info(f"📥 [{self.get_gateway_name()}] Processando webhook...")
             logger.debug(f"Dados: {data}")
-            
+
+            # ✅ NORMALIZAÇÃO: alguns webhooks chegam encapsulados em data/payload/transaction
+            normalized = data if isinstance(data, dict) else {}
+            if isinstance(normalized.get('data'), dict):
+                candidate = normalized['data']
+                if any(candidate.get(k) for k in ('id', 'hash', 'transaction_id', 'transaction_hash')):
+                    normalized = candidate
+            elif isinstance(normalized.get('payload'), dict):
+                candidate = normalized['payload']
+                if any(candidate.get(k) for k in ('id', 'hash', 'transaction_id', 'transaction_hash')):
+                    normalized = candidate
+            elif isinstance(normalized.get('transaction'), dict):
+                candidate = normalized['transaction']
+                if any(candidate.get(k) for k in ('id', 'hash', 'transaction_id', 'transaction_hash')):
+                    # Propagar reference/producer para o nível interno se necessário
+                    if normalized.get('reference') and 'reference' not in candidate:
+                        candidate['reference'] = normalized['reference']
+                    if normalized.get('producer') and 'producer' not in candidate:
+                        candidate['producer'] = normalized['producer']
+                    normalized = candidate
+
             # ✅ CRÍTICO: Extrair transaction_id (prioridade: id > hash > transaction_id)
-            # O webhook busca pelo 'id', então devemos usar 'id' como gateway_transaction_id
             transaction_id = (
-                data.get('id') or           # 1ª prioridade (webhook busca por este)
-                data.get('hash') or         # 2ª prioridade (fallback)
-                data.get('transaction_id') or
-                data.get('transaction_hash')
+                normalized.get('id') or
+                normalized.get('hash') or
+                normalized.get('transaction_id') or
+                normalized.get('transaction_hash') or
+                data.get('token')  # fallback extremo para webhooks simplificados
             )
-            
+
             if not transaction_id:
-                logger.error(f"❌ [{self.get_gateway_name()}] Webhook sem identificador")
+                logger.error(f"❌ [{self.get_gateway_name()}] Webhook sem identificador | payload normalizado: {normalized}")
                 return None
             
             # ✅ CRÍTICO: Converter para string SEMPRE (id pode ser int, hash é string)
             transaction_id_str = str(transaction_id)
             
             # ✅ Hash para consulta de status (usar hash se disponível, senão id)
-            transaction_hash = data.get('hash') or transaction_id_str
+            transaction_hash = normalized.get('hash') or data.get('hash') or transaction_id_str
             transaction_hash_str = str(transaction_hash)
             
             # ✅ Extrair status (priorizar payment_status, depois status)
             status_raw = (
-                data.get('payment_status') or  # 1ª prioridade (resposta real da API)
-                data.get('status') or          # 2ª prioridade (fallback)
+                normalized.get('payment_status') or
+                normalized.get('status') or
+                data.get('payment_status') or
+                data.get('status') or
                 ''
             ).lower()
             
@@ -861,16 +883,29 @@ class AtomPayGateway(PaymentGateway):
             status = status_map.get(status_raw, 'pending')
             
             # ✅ Extrair valor (converter de centavos para reais)
-            amount_cents = data.get('amount') or data.get('amount_paid') or 0
+            amount_cents = (
+                normalized.get('amount') or
+                normalized.get('amount_paid') or
+                data.get('amount') or
+                data.get('amount_paid') or
+                0
+            )
             amount = float(amount_cents) / 100.0
             
             # ✅ CRÍTICO: Extrair reference (pode conter payment_id para matching)
-            # Átomo Pay envia 'reference' no webhook (não 'external_reference')
-            external_reference = data.get('reference') or data.get('external_reference') or data.get('reference_id')
+            external_reference = (
+                normalized.get('reference') or
+                normalized.get('external_reference') or
+                normalized.get('reference_id') or
+                data.get('reference') or
+                data.get('external_reference') or
+                data.get('reference_id')
+            )
             
             # ✅ CRÍTICO: Extrair producer.hash para identificar conta do usuário (multi-tenant)
-            # Cada conta do Átomo Pay tem um producer.hash único - permite múltiplos usuários na mesma URL
-            producer_data = data.get('producer', {})
+            producer_data = normalized.get('producer')
+            if not isinstance(producer_data, dict):
+                producer_data = data.get('producer', {})
             producer_hash = producer_data.get('hash') if isinstance(producer_data, dict) else None
             
             logger.info(f"✅ [{self.get_gateway_name()}] Webhook processado: Hash={transaction_hash_str[:20] if len(transaction_hash_str) > 20 else transaction_hash_str}... | Status={status_raw}→{status} | R$ {amount:.2f}")
