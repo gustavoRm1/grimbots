@@ -365,17 +365,56 @@ def process_webhook_async(gateway_type: str, data: Dict[str, Any]):
                     if user_bot_ids:
                         payment_query = payment_query.filter(Payment.bot_id.in_(user_bot_ids))
                 
+                # ---------------------------------------------------------
+                # MATCH ROBUSTO ÁTOMO PAY — QI 500 (RESOLVE PENDING)
+                # ---------------------------------------------------------
+                event_id = str(gateway_transaction_id or '').strip()
+                event_tx = str(data.get('transaction_id') or result.get('transaction_id') or '').strip()
+                event_hash = str(result.get('gateway_hash') or data.get('transaction_hash') or data.get('hash') or '').strip()
+                event_ref = str(result.get('external_reference') or data.get('reference') or '').strip()
+                producer = str(result.get('producer_hash') or data.get('producer_hash') or '').strip()
+
                 payment = None
-                if gateway_transaction_id:
-                    payment = payment_query.filter_by(gateway_transaction_id=str(gateway_transaction_id)).first()
-                
+
+                # 1) Busca DIRETA pelos possíveis transaction_id/charge_id enviados
+                for candidate in filter(None, [event_id, event_tx, data.get('id')]):
+                    payment = payment_query.filter_by(gateway_transaction_id=str(candidate)).first()
+                    if payment:
+                        break
+
+                # 2) Busca pelo hash salvo na criação
+                if not payment and event_hash:
+                    payment = payment_query.filter_by(gateway_transaction_hash=event_hash).first()
+
+                # 3) Busca pelo payment_id completo
+                if not payment and event_ref:
+                    payment = payment_query.filter_by(payment_id=event_ref).first()
+
+                # 4) MATCH INTELIGENTE: casando sufixo do payment_id com transaction_id
                 if not payment:
-                    gateway_hash = result.get('gateway_hash') or data.get('hash')
-                    if gateway_hash:
-                        payment = payment_query.filter_by(gateway_transaction_hash=str(gateway_hash)).first()
-                
-                if not payment and gateway_transaction_id:
-                    payment = payment_query.filter_by(payment_id=str(gateway_transaction_id)).first()
+                    for candidate in filter(None, [event_id, event_tx]):
+                        payment = payment_query.filter(Payment.payment_id.ilike(f"%{candidate}%")).first()
+                        if payment:
+                            break
+
+                # 5) MATCH por hash interno do checkout
+                if not payment and event_hash:
+                    payment = payment_query.filter(Payment.payment_id.ilike(f"%{event_hash}%")).first()
+
+                if not payment:
+                    logger.warning(
+                        "❌ Payment não encontrado | gateway=%s | event_id=%s | event_tx=%s | "
+                        "event_hash=%s | event_ref=%s | producer=%s | payload=%s | result=%s",
+                        gateway_type,
+                        event_id,
+                        event_tx,
+                        event_hash,
+                        event_ref,
+                        producer,
+                        data,
+                        result,
+                    )
+                    return {'status': 'payment_not_found'}
                 
                 if payment:
                     was_pending = payment.status == 'pending'
