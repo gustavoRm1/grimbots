@@ -635,7 +635,6 @@ def generate_pix_async(
                 external_reference=payment_id
             )
             
-            pix_code = None
             if pix_result:
                 pix_code = (
                     pix_result.get('pix_qr_code')
@@ -643,51 +642,62 @@ def generate_pix_async(
                     or pix_result.get('qr_code')
                     or pix_result.get('emv')
                 )
+            else:
+                pix_code = None
 
-            if pix_result and pix_code:
-                payment.gateway_transaction_id = (
+            has_transaction = False
+            if pix_result:
+                transaction_id_value = (
                     pix_result.get('transaction_id')
                     or pix_result.get('id')
                     or pix_result.get('hash')
-                    or ''
+                    or pix_result.get('transaction_hash')
                 )
-                payment.gateway_transaction_hash = (
+                gateway_hash_value = (
                     pix_result.get('gateway_hash')
                     or pix_result.get('hash')
                     or pix_result.get('transaction_hash')
-                    or ''
                 )
+                if transaction_id_value or gateway_hash_value:
+                    payment.gateway_transaction_id = str(transaction_id_value or '')
+                    payment.gateway_transaction_hash = str(gateway_hash_value or '')
+                    has_transaction = True
+
+            if has_transaction:
                 db.session.commit()
                 
-                # Enviar mensagem com QR Code
-                bot_manager = BotManager(None, None)
-                message = f"💰 PIX Gerado!\n\nValor: R$ {price:.2f}\n\nEscaneie o QR Code ou copie o código PIX:"
-                qr_code = pix_code
-                
-                bot_manager.send_telegram_message(
-                    token=token,
-                    chat_id=str(chat_id),
-                    message=message,
-                    buttons=[{
-                        'text': '✅ Verificar Pagamento',
-                        'callback_data': f'verify_{payment.id}'
-                    }]
-                )
-                
-                # Enviar QR Code como imagem
-                media_url = (
-                    pix_result.get('pix_qr_code_image')
-                    or pix_result.get('qr_code_url')
-                    or pix_result.get('qr_code_base64')
-                )
-                if media_url:
+                if pix_code:
+                    # Enviar mensagem com QR Code
+                    bot_manager = BotManager(None, None)
+                    message = f"💰 PIX Gerado!\n\nValor: R$ {price:.2f}\n\nEscaneie o QR Code ou copie o código PIX:"
+                    qr_code = pix_code
+                    
                     bot_manager.send_telegram_message(
                         token=token,
                         chat_id=str(chat_id),
-                        message="",
-                        media_url=media_url,
-                        media_type='photo'
+                        message=message,
+                        buttons=[{
+                            'text': '✅ Verificar Pagamento',
+                            'callback_data': f'verify_{payment.id}'
+                        }]
                     )
+                    
+                    # Enviar QR Code como imagem
+                    media_url = (
+                        pix_result.get('pix_qr_code_image')
+                        or pix_result.get('qr_code_url')
+                        or pix_result.get('qr_code_base64')
+                    )
+                    if media_url:
+                        bot_manager.send_telegram_message(
+                            token=token,
+                            chat_id=str(chat_id),
+                            message="",
+                            media_url=media_url,
+                            media_type='photo'
+                        )
+                else:
+                    logger.warning(f"⚠️ PIX gerado sem código disponível imediato: payment_id={payment.payment_id} (aguardando webhook).")
                 
                 logger.info(f"✅ PIX gerado: {payment_id}")
             else:

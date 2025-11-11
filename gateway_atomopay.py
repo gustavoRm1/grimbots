@@ -753,18 +753,20 @@ class AtomPayGateway(PaymentGateway):
                         'error': 'Transação recusada pelo gateway'
                     }
                 elif payment_status in ['pending', 'processing', 'waiting', '']:
-                    # ✅ CRÍTICO: Quando status é pending, o PIX pode ainda não ter sido gerado
-                    # Mas a transação foi criada com sucesso, então devemos retornar o hash
-                    # O PIX será gerado via webhook quando processado
-                    # PORÉM: O sistema precisa de um pix_code para mostrar ao usuário
-                    # Então vamos retornar None e deixar o sistema tratar o erro
-                    # O webhook vai atualizar o payment quando o PIX for gerado
+                    # ✅ Transação criada, mas PIX ainda não disponível.
                     logger.warning(f"⚠️ [{self.get_gateway_name()}] PIX ainda não disponível na resposta (status: {payment_status or 'N/A'})")
-                    logger.warning(f"   Transação criada com sucesso (hash: {gateway_hash or transaction_id_str}), mas PIX será gerado via webhook")
-                    logger.warning(f"   O sistema aguardará o webhook para gerar o PIX")
-                    # ✅ RETORNAR None - O sistema vai tratar como erro temporário
-                    # O webhook vai atualizar o payment quando o PIX for gerado
-                    return None
+                    logger.warning(f"   Transação criada com sucesso (hash: {gateway_hash or transaction_id_str}), aguardando webhook para código PIX")
+                    return {
+                        'pix_code': None,
+                        'qr_code_url': None,
+                        'transaction_id': transaction_id_str,
+                        'transaction_hash': transaction_hash_str,
+                        'gateway_hash': gateway_hash,
+                        'producer_hash': producer_hash,
+                        'payment_id': payment_id,
+                        'reference': payload.get('reference'),
+                        'status': 'pending'
+                    }
                 else:
                     logger.error(f"❌ [{self.get_gateway_name()}] Resposta sem pix_code/qr_code")
                     logger.error(f"   Status: {payment_status} | Hash: {gateway_hash or transaction_id_str}")
