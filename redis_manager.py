@@ -50,12 +50,13 @@ class RedisManager:
     
     def _initialize(self):
         """Inicializa o connection pool"""
-        redis_url = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
+        env_redis_url = os.environ.get('REDIS_URL', '').strip()
+        redis_url = env_redis_url or 'redis://localhost:6379/0'
         
         # Extrair componentes da URL
         # ConnectionPool from_url já trata credenciais, database e port corretamente.
         # Registramos a URL limpa para logs apenas.
-        url_for_pool = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
+        url_for_pool = redis_url
         
         # Criar connection pool
         self.pool = ConnectionPool.from_url(
