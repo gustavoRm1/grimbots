@@ -18,10 +18,14 @@ fi
 source venv/bin/activate
 
 echo "🚫 Encerrando Gunicorn..."
-pgrep -f "gunicorn.*wsgi:app" | xargs -r kill -9
+if pgrep -f "gunicorn.*wsgi:app" >/dev/null; then
+  pgrep -f "gunicorn.*wsgi:app" | xargs -r kill -9
+fi
 
 echo "🚫 Encerrando workers RQ..."
-pgrep -f start_rq_worker.py | xargs -r kill -9
+if pgrep -f start_rq_worker.py >/dev/null; then
+  pgrep -f start_rq_worker.py | xargs -r kill -9
+fi
 
 echo "🚀 Iniciando Gunicorn (1 worker eventlet)..."
 EVENTLET_NO_GREENDNS=yes nohup gunicorn -w 1 -k eventlet -c gunicorn_config.py wsgi:app > logs/gunicorn.log 2>&1 &
