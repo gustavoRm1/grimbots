@@ -20,6 +20,7 @@ import json
 from typing import Dict, Any, Optional
 from datetime import datetime
 from gateway_interface import PaymentGateway
+from utils.validators import cpf_valido
 
 logger = logging.getLogger(__name__)
 
@@ -263,28 +264,17 @@ class AtomPayGateway(PaymentGateway):
             # ✅ EMAIL ÚNICO
             payment_id_short = str(payment_id).replace('_', '').replace('-', '')[:10]
             unique_email = f"pix{payment_id_short}{unique_hash}@bot.digital"
-            
-            # ✅ CPF ÚNICO (APENAS NÚMEROS - hash hexadecimal convertido para decimal)
-            # Converter hash hexadecimal para números (usar apenas dígitos)
-            hash_digits = ''.join(c for c in unique_hash if c.isdigit())
-            payment_id_digits = ''.join(c for c in str(payment_id) if c.isdigit())[:6]
-            cpf_base = f"{hash_digits}{payment_id_digits}"
-            
-            # Garantir 11 dígitos (apenas números)
-            unique_cpf = cpf_base[:11] if len(cpf_base) >= 11 else cpf_base.ljust(11, '0')
-            
-            # Validação: CPF não pode começar com 0
-            if unique_cpf[0] == '0':
-                unique_cpf = '1' + unique_cpf[1:]
-            
-            # ✅ VALIDAÇÃO FINAL: Garantir que CPF contém APENAS números
-            unique_cpf = ''.join(c for c in unique_cpf if c.isdigit())[:11]
-            if len(unique_cpf) < 11:
-                unique_cpf = unique_cpf.ljust(11, '0')
-            
-            # ✅ APLICAR VALIDAÇÃO DO MÉTODO (garante formato correto)
-            unique_cpf = self._validate_document(unique_cpf)
-            
+
+            # ✅ DOCUMENTO (CPF) - apenas enviar se realmente válido
+            raw_document = customer_data.get('document')
+            document_digits = ''.join(filter(str.isdigit, str(raw_document))) if raw_document else ''
+            if cpf_valido(document_digits):
+                document_value = document_digits
+            else:
+                document_value = None
+                if raw_document:
+                    logger.debug(f"⚠️ [{self.get_gateway_name()}] Documento inválido recebido, omitindo campo para evitar recusa.")
+
             # ✅ TELEFONE ÚNICO
             unique_phone = self._validate_phone(f"11{customer_user_id[-9:]}")
             
@@ -304,15 +294,19 @@ class AtomPayGateway(PaymentGateway):
             logger.info(f"   Payment ID: {payment_id}")
             logger.info(f"   Reference: {safe_reference}")
             logger.info(f"   Email único: {unique_email}")
-            logger.info(f"   CPF único: {unique_cpf[:3]}***")
+            if document_value:
+                logger.info(f"   CPF informado: {document_value[:3]}***")
+            else:
+                logger.info(f"   CPF omitido (não informado ou inválido)")
             
             # ✅ CUSTOMER SIMPLIFICADO (apenas campos aceitos pela API)
             customer = {
                 'name': unique_name,
                 'email': unique_email,
-                'phone_number': unique_phone,
-                'document': unique_cpf
+                'phone_number': unique_phone
             }
+            if document_value:
+                customer['document'] = document_value
             
             # ✅ CHECKOUT URL (pode ser obrigatório como Paradise V30)
             checkout_url = self._get_dynamic_checkout_url(payment_id)
