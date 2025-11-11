@@ -1049,7 +1049,7 @@ class WebhookPendingMatch(db.Model):
     attempts = db.Column(db.Integer, default=0)
     created_at = db.Column(db.DateTime, default=get_brazil_time, index=True)
     last_attempt_at = db.Column(db.DateTime, nullable=True)
-
+    
     def to_dict(self):
         """Retorna dados do pending match em formato dict"""
         return {
