@@ -11,6 +11,7 @@ import logging
 from rq import Queue
 from redis import Redis
 from typing import Dict, Any, Optional
+from sqlalchemy import or_
 from redis_manager import get_redis_connection
 
 logger = logging.getLogger(__name__)
@@ -377,33 +378,61 @@ def process_webhook_async(gateway_type: str, data: Dict[str, Any]):
 
                 payment = None
 
-                # 1) Busca DIRETA pelos possíveis transaction_id/charge_id enviados
-                for candidate in filter(None, [event_id, event_tx, data.get('id')]):
-                    payment = payment_query.filter_by(gateway_transaction_id=str(candidate)).first()
+                # 0) Se o reconciliador indicou explicitamente o payment_id interno, usar primeiro
+                if grim_payment_id:
+                    payment = Payment.query.get(int(grim_payment_id))
                     if payment:
-                        break
+                        logger.info("🎯 Payment encontrado via _grim_payment_id: %s", payment.payment_id)
 
-                # 2) Busca pelo hash salvo na criação
-                if not payment and event_hash:
-                    payment = payment_query.filter_by(gateway_transaction_hash=event_hash).first()
-
-                # 3) Busca pelo payment_id completo
-                if not payment and event_ref:
-                    payment = payment_query.filter_by(payment_id=event_ref).first()
-
-                # 4) MATCH INTELIGENTE: casando sufixo do payment_id com transaction_id
+                # 1) Construir filtros unificados (evita divergências por espaços/formatação)
                 if not payment:
-                    for candidate in filter(None, [event_id, event_tx]):
-                        payment = payment_query.filter(Payment.payment_id.ilike(f"%{candidate}%")).first()
+                    search_filters = []
+                    values_seen = set()
+
+                    def add_equal(value, column):
+                        if value and value not in values_seen:
+                            search_filters.append(column == value)
+                            values_seen.add(value)
+
+                    def add_like(value):
+                        if value and value not in values_seen:
+                            search_filters.append(Payment.payment_id.ilike(f"%{value}%"))
+                            values_seen.add(value)
+
+                    add_equal(event_id, Payment.gateway_transaction_id)
+                    add_equal(event_tx, Payment.gateway_transaction_id)
+                    add_equal(str(data.get('id') or '').strip(), Payment.gateway_transaction_id)
+                    add_equal(event_hash, Payment.gateway_transaction_hash)
+                    add_equal(event_ref, Payment.payment_id)
+                    add_equal(producer, Payment.external_id)
+
+                    add_like(event_id)
+                    add_like(event_tx)
+                    add_like(event_hash)
+
+                    if search_filters:
+                        payment = (
+                            payment_query
+                            .filter(or_(*search_filters))
+                            .order_by(Payment.created_at.desc())
+                            .first()
+                        )
+
+                # 2) Fallback extra: busca incremental se ainda não achou (mantém compatibilidade)
+                if not payment:
+                    for candidate in filter(None, [event_id, event_tx, data.get('id')]):
+                        payment = payment_query.filter_by(gateway_transaction_id=str(candidate).strip()).first()
                         if payment:
                             break
 
-                # 5) MATCH por hash interno do checkout
+                if not payment and event_hash:
+                    payment = payment_query.filter_by(gateway_transaction_hash=event_hash).first()
+
+                if not payment and event_ref:
+                    payment = payment_query.filter_by(payment_id=event_ref).first()
+
                 if not payment and event_hash:
                     payment = payment_query.filter(Payment.payment_id.ilike(f"%{event_hash}%")).first()
-
-                if not payment and grim_payment_id:
-                    payment = Payment.query.get(int(grim_payment_id))
 
                 if not payment:
                     logger.warning(
