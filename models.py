@@ -820,6 +820,9 @@ class Gateway(db.Model):
 class Payment(db.Model):
     """Pagamento"""
     __tablename__ = 'payments'
+    __table_args__ = (
+        db.UniqueConstraint('gateway_type', 'gateway_transaction_hash', name='uq_payment_gateway_hash'),
+    )
     
     id = db.Column(db.Integer, primary_key=True)
     bot_id = db.Column(db.Integer, db.ForeignKey('bots.id'), nullable=False, index=True)
@@ -863,7 +866,6 @@ class Payment(db.Model):
     meta_event_id = db.Column(db.String(100), nullable=True)
     meta_viewcontent_sent = db.Column(db.Boolean, default=False)
     meta_viewcontent_sent_at = db.Column(db.DateTime, nullable=True)
-    
     # ✅ UTM TRACKING
     utm_source = db.Column(db.String(255), nullable=True)
     utm_campaign = db.Column(db.String(255), nullable=True)
@@ -1018,20 +1020,47 @@ class BotMessage(db.Model):
     bot = db.relationship('Bot', backref='messages')
     bot_user = db.relationship('BotUser', backref='messages')
     
+
+class WebhookEvent(db.Model):
+    """Registro bruto de webhooks recebidos para auditoria e replay."""
+    __tablename__ = 'webhook_events'
+
+    id = db.Column(db.Integer, primary_key=True)
+    gateway_type = db.Column(db.String(50), nullable=False, index=True)
+    dedup_key = db.Column(db.String(200), nullable=False, unique=True)
+    transaction_id = db.Column(db.String(150), index=True)
+    transaction_hash = db.Column(db.String(150), index=True)
+    status = db.Column(db.String(30), index=True)
+    payload = db.Column(db.JSON, nullable=False)
+    received_at = db.Column(db.DateTime, default=get_brazil_time, index=True)
+
+
+class WebhookPendingMatch(db.Model):
+    """Webhooks que ainda não puderam ser aplicados a um Payment existente."""
+    __tablename__ = 'webhook_pending_matches'
+
+    id = db.Column(db.Integer, primary_key=True)
+    gateway_type = db.Column(db.String(50), nullable=False, index=True)
+    dedup_key = db.Column(db.String(200), nullable=False, unique=True)
+    transaction_id = db.Column(db.String(150), index=True)
+    transaction_hash = db.Column(db.String(150), index=True)
+    status = db.Column(db.String(30), index=True)
+    payload = db.Column(db.JSON, nullable=False)
+    attempts = db.Column(db.Integer, default=0)
+    created_at = db.Column(db.DateTime, default=get_brazil_time, index=True)
+    last_attempt_at = db.Column(db.DateTime, nullable=True)
+
     def to_dict(self):
-        """Retorna dados da mensagem em formato dict"""
+        """Retorna dados do pending match em formato dict"""
         return {
             'id': self.id,
-            'bot_id': self.bot_id,
-            'bot_user_id': self.bot_user_id,
-            'telegram_user_id': self.telegram_user_id,
-            'message_id': self.message_id,
-            'message_text': self.message_text,
-            'message_type': self.message_type,
-            'media_url': self.media_url,
-            'direction': self.direction,
-            'is_read': self.is_read,
-            'created_at': self.created_at.isoformat() if self.created_at else None
+            'gateway_type': self.gateway_type,
+            'transaction_id': self.transaction_id,
+            'transaction_hash': self.transaction_hash,
+            'status': self.status,
+            'attempts': self.attempts,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'last_attempt_at': self.last_attempt_at.isoformat() if self.last_attempt_at else None,
         }
 
 

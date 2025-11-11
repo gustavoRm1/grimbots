@@ -12,6 +12,7 @@ from rq import Queue
 from redis import Redis
 from typing import Dict, Any, Optional
 from sqlalchemy import or_
+from sqlalchemy.exc import IntegrityError
 from redis_manager import get_redis_connection
 
 logger = logging.getLogger(__name__)
@@ -33,6 +34,166 @@ except Exception as e:
     task_queue = None
     gateway_queue = None
     webhook_queue = None
+
+
+_AUX_TABLES_READY = False
+
+
+def _ensure_aux_tables() -> None:
+    """Garante que tabelas auxiliares de webhook existam (create if not)."""
+    global _AUX_TABLES_READY
+    if _AUX_TABLES_READY:
+        return
+
+    try:
+        from app import db
+        from models import WebhookEvent, WebhookPendingMatch
+
+        WebhookEvent.__table__.create(db.engine, checkfirst=True)
+        WebhookPendingMatch.__table__.create(db.engine, checkfirst=True)
+        _AUX_TABLES_READY = True
+    except Exception as e:
+        logger.warning(f"⚠️ Não foi possível garantir tabelas auxiliares de webhook: {e}")
+
+
+def _persist_webhook_event(
+    gateway_type: str,
+    result: Dict[str, Any],
+    raw_payload: Dict[str, Any]
+) -> None:
+    """
+    Salva ou atualiza o registro do webhook em webhook_events para auditoria.
+    """
+    from app import db
+    from models import WebhookEvent, get_brazil_time
+
+    _ensure_aux_tables()
+
+    transaction_id = str(
+        result.get('gateway_transaction_id')
+        or raw_payload.get('id')
+        or raw_payload.get('transaction_id')
+        or ''
+    ).strip()
+    transaction_hash = str(
+        result.get('gateway_hash')
+        or raw_payload.get('hash')
+        or raw_payload.get('transaction_hash')
+        or ''
+    ).strip()
+
+    base_key = (transaction_hash or transaction_id or raw_payload.get('event') or '').strip()
+    if base_key:
+        dedup_key = f"{gateway_type}:{base_key}".lower()
+    else:
+        dedup_key = f"{gateway_type}:{get_brazil_time().timestamp()}"
+
+    existing = WebhookEvent.query.filter_by(dedup_key=dedup_key).first()
+    if existing:
+        existing.status = result.get('status')
+        existing.transaction_id = transaction_id or existing.transaction_id
+        existing.transaction_hash = transaction_hash or existing.transaction_hash
+        existing.payload = raw_payload
+        existing.received_at = get_brazil_time()
+        try:
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+    else:
+        event = WebhookEvent(
+            gateway_type=gateway_type,
+            dedup_key=dedup_key,
+            transaction_id=transaction_id or None,
+            transaction_hash=transaction_hash or None,
+            status=result.get('status'),
+            payload=raw_payload
+        )
+        db.session.add(event)
+        try:
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+
+
+def _enqueue_pending_match(
+    gateway_type: str,
+    transaction_id: Optional[str],
+    transaction_hash: Optional[str],
+    payload: Dict[str, Any],
+    status: Optional[str] = None,
+    max_pending_records: int = 1000
+) -> None:
+    """
+    Registra payload para retry posterior quando payment ainda não existe.
+    """
+    from app import db
+    from models import WebhookPendingMatch, get_brazil_time
+
+    if not transaction_id and not transaction_hash:
+        return
+
+    key = (transaction_hash or transaction_id or '').strip()
+    if not key:
+        return
+
+    _ensure_aux_tables()
+
+    dedup_key = f"{gateway_type}:{key}".lower()
+
+    existing = WebhookPendingMatch.query.filter_by(dedup_key=dedup_key).first()
+
+    if existing:
+        existing.payload = payload
+        existing.status = status or existing.status
+        existing.last_attempt_at = get_brazil_time()
+        existing.attempts = existing.attempts or 0
+        db.session.commit()
+        return
+
+    total_pending = WebhookPendingMatch.query.filter_by(gateway_type=gateway_type).count()
+    if total_pending >= max_pending_records:
+        logger.warning(f"⚠️ Limite de pending matches atingido para {gateway_type}. Ignorando novo registro.")
+        return
+
+    pending = WebhookPendingMatch(
+        gateway_type=gateway_type,
+        dedup_key=dedup_key,
+        transaction_id=transaction_id or None,
+        transaction_hash=transaction_hash or None,
+        payload=payload,
+        status=status or 'pending'
+    )
+    db.session.add(pending)
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+
+
+def _clear_pending_match(
+    gateway_type: str,
+    transaction_id: Optional[str],
+    transaction_hash: Optional[str]
+) -> None:
+    """Remove pending match associado ao webhook processado."""
+    from app import db
+    from models import WebhookPendingMatch
+
+    if not transaction_id and not transaction_hash:
+        return
+
+    key = (transaction_hash or transaction_id or '').strip()
+    if not key:
+        return
+
+    dedup_key = f"{gateway_type}:{key}".lower()
+    pending = WebhookPendingMatch.query.filter_by(dedup_key=dedup_key).first()
+    if pending:
+        db.session.delete(pending)
+        try:
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
 
 
 def process_start_async(
@@ -316,7 +477,7 @@ def process_webhook_async(gateway_type: str, data: Dict[str, Any]):
     """
     try:
         from app import app, db
-        from models import Payment, Gateway, Bot, get_brazil_time, Commission
+        from models import Payment, Gateway, Bot, get_brazil_time, Commission, WebhookEvent, WebhookPendingMatch
         from gateway_factory import GatewayFactory
         from app import bot_manager, send_payment_delivery, send_meta_pixel_purchase_event
         
@@ -356,6 +517,16 @@ def process_webhook_async(gateway_type: str, data: Dict[str, Any]):
                 result = bot_manager.process_payment_webhook(gateway_type, data)
             
             if result:
+                # Registrar evento para auditoria (deduplicado por gateway/hash)
+                try:
+                    _persist_webhook_event(
+                        gateway_type=gateway_type,
+                        result=result,
+                        raw_payload=data
+                    )
+                except Exception as log_error:
+                    logger.warning(f"⚠️ Falha ao registrar webhook em webhook_events: {log_error}")
+
                 gateway_transaction_id = result.get('gateway_transaction_id')
                 status = result.get('status')
                 
@@ -441,18 +612,31 @@ def process_webhook_async(gateway_type: str, data: Dict[str, Any]):
                     payment = payment_query.filter(Payment.payment_id.ilike(f"%{event_hash}%")).first()
 
                 if not payment:
+                    should_enqueue_pending = not data.get('_skip_pending_enqueue')
                     logger.warning(
                         "❌ Payment não encontrado | gateway=%s | event_id=%s | event_tx=%s | "
-                        "event_hash=%s | event_ref=%s | producer=%s | payload=%s | result=%s",
+                        "event_hash=%s | event_ref=%s | producer=%s | enqueue_pending=%s | payload=%s | result=%s",
                         gateway_type,
                         event_id,
                         event_tx,
                         event_hash,
                         event_ref,
                         producer,
+                        should_enqueue_pending,
                         data,
                         result,
                     )
+                    if should_enqueue_pending and gateway_type == 'atomopay':
+                        try:
+                            _enqueue_pending_match(
+                                gateway_type=gateway_type,
+                                transaction_id=event_id or event_tx,
+                                transaction_hash=event_hash,
+                                payload=data,
+                                status=status
+                            )
+                        except Exception as pending_error:
+                            logger.error(f"❌ Falha ao registrar pending match: {pending_error}", exc_info=True)
                     return {'status': 'payment_not_found'}
                 
                 if payment:
@@ -542,7 +726,17 @@ def process_webhook_async(gateway_type: str, data: Dict[str, Any]):
                         except Exception as e:
                             logger.error(f"Erro ao enviar entregável: {e}")
                     
-                    db.session.commit()
+                    try:
+                        db.session.commit()
+                    except Exception:
+                        db.session.rollback()
+                        raise
+                    finally:
+                        _clear_pending_match(
+                            gateway_type=gateway_type,
+                            transaction_id=event_id or event_tx,
+                            transaction_hash=event_hash
+                        )
                     logger.info(f"✅ Webhook processado: {payment.payment_id} -> {status}")
                     return {'status': 'success', 'payment_id': payment.payment_id}
                 else:
@@ -572,6 +766,57 @@ def reconcile_pushynpay_payments_async():
         reconcile_pushynpay_payments()
     except Exception as e:
         logger.error(f"❌ Erro em reconcile_pushynpay_payments_async: {e}", exc_info=True)
+
+def process_pending_webhooks(limit: int = 50, max_attempts: int = 12) -> int:
+    """
+    Reprocessa webhooks armazenados em webhook_pending_matches.
+
+    Retorna quantidade processada com sucesso.
+    """
+    from app import app, db
+    from models import WebhookPendingMatch, get_brazil_time
+
+    processed = 0
+
+    with app.app_context():
+        pendings = (
+            WebhookPendingMatch.query
+            .order_by(WebhookPendingMatch.last_attempt_at.asc().nullsfirst())
+            .limit(limit)
+            .all()
+        )
+
+        for pending in pendings:
+            try:
+                payload = dict(pending.payload or {})
+                payload['_skip_pending_enqueue'] = True
+                pending.attempts = (pending.attempts or 0) + 1
+                pending.last_attempt_at = get_brazil_time()
+                db.session.commit()
+
+                result = process_webhook_async(pending.gateway_type, payload)
+                status = (result or {}).get('status')
+
+                if status in {'success', 'already_processed'}:
+                    db.session.delete(pending)
+                    db.session.commit()
+                    processed += 1
+                elif pending.attempts >= max_attempts:
+                    logger.error(
+                        "❌ Pending webhook descartado após %s tentativas | gateway=%s | transaction_id=%s | hash=%s",
+                        pending.attempts,
+                        pending.gateway_type,
+                        pending.transaction_id,
+                        pending.transaction_hash
+                    )
+                    db.session.delete(pending)
+                    db.session.commit()
+            except Exception as e:
+                logger.error(f"❌ Erro ao reprocessar pending webhook: {e}", exc_info=True)
+                db.session.rollback()
+
+    return processed
+
 
 def generate_pix_async(
     bot_id: int,

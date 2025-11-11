@@ -28,7 +28,7 @@ from app import db
 from models import Payment, Gateway
 from gateway_factory import GatewayFactory
 from redis_manager import get_redis_connection
-from tasks_async import webhook_queue, process_webhook_async
+from tasks_async import webhook_queue, process_webhook_async, process_pending_webhooks
 from app import bot_manager, send_payment_delivery, send_meta_pixel_purchase_event
 from models import get_brazil_time
 from models import Commission
@@ -224,6 +224,10 @@ def _force_finalize_payment(payment: Payment) -> None:
 
 def main():
     with app.app_context():
+        processed_pending = process_pending_webhooks(limit=50)
+        if processed_pending:
+            print(f"♻️ {processed_pending} webhook(s) pendente(s) reprocessado(s).")
+
         pendentes = (
             Payment.query.filter_by(gateway_type="atomopay", status="pending")
             .order_by(Payment.id.desc())
@@ -233,6 +237,8 @@ def main():
 
         if not pendentes:
             print("Nenhum payment pending encontrado.")
+            if not processed_pending:
+                print("Nenhum pending webhook para reprocessar.")
             return
 
         print(f"🔍 Processando {len(pendentes)} payment(s) pending (Átomo Pay).")
