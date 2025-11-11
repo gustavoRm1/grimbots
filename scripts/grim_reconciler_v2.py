@@ -80,35 +80,39 @@ def _build_gateway(payment: Payment):
     return GatewayFactory.create_gateway("atomopay", creds, use_adapter=False)
 
 
-def _fetch_atomopay_status(gateway_instance, transaction_id: str):
+def _fetch_atomopay_status(gateway_instance, payment: Payment):
     """
     Consulta a API da Átomo Pay para obter o status atualizado de uma transação.
 
+    Tenta com os identificadores conhecidos (hash primeiro, depois id numérico).
     Retorna o payload bruto (dict) em caso de sucesso; caso contrário, None.
     """
-    if not transaction_id:
-        return None
+    candidates = [
+        str(payment.gateway_transaction_hash or "").strip(),
+        str(payment.gateway_transaction_id or "").strip(),
+        str(payment.payment_id or "").strip(),
+    ]
+    candidates = [c for c in candidates if c]
 
-    try:
-        endpoint = API_PATH_TEMPLATE.format(transaction_id=transaction_id)
-        response = gateway_instance._make_request("GET", endpoint, params=None)  # type: ignore[attr-defined]
-    except Exception:
-        return None
+    for candidate in candidates:
+        try:
+            endpoint = API_PATH_TEMPLATE.format(transaction_id=candidate)
+            response = gateway_instance._make_request("GET", endpoint, params=None)  # type: ignore[attr-defined]
+        except Exception:
+            continue
 
-    if not response or response.status_code != 200:
-        return None
+        if not response or response.status_code != 200:
+            continue
 
-    try:
-        payload = response.json()
-    except ValueError:
-        return None
+        try:
+            payload = response.json()
+        except ValueError:
+            continue
 
-    if isinstance(payload, dict):
-        # Formato com wrapper {"success": true, "data": {...}}
-        if payload.get("success") and isinstance(payload.get("data"), dict):
-            return payload["data"]
-        # Em alguns casos a API pode retornar diretamente os campos
-        return payload
+        if isinstance(payload, dict):
+            if payload.get("success") and isinstance(payload.get("data"), dict):
+                return payload["data"]
+            return payload
 
     return None
 
@@ -164,9 +168,7 @@ def main():
                 if not gateway_instance or not transaction_id:
                     continue
 
-                api_payload = _fetch_atomopay_status(
-                    gateway_instance, str(transaction_id)
-                )
+                api_payload = _fetch_atomopay_status(gateway_instance, payment)
                 if not api_payload:
                     continue
 
