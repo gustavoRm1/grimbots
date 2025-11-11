@@ -635,15 +635,34 @@ def generate_pix_async(
                 external_reference=payment_id
             )
             
-            if pix_result and pix_result.get('pix_qr_code'):
-                payment.gateway_transaction_id = pix_result.get('transaction_id', '')
-                payment.gateway_transaction_hash = pix_result.get('hash', '')
+            pix_code = None
+            if pix_result:
+                pix_code = (
+                    pix_result.get('pix_qr_code')
+                    or pix_result.get('pix_code')
+                    or pix_result.get('qr_code')
+                    or pix_result.get('emv')
+                )
+
+            if pix_result and pix_code:
+                payment.gateway_transaction_id = (
+                    pix_result.get('transaction_id')
+                    or pix_result.get('id')
+                    or pix_result.get('hash')
+                    or ''
+                )
+                payment.gateway_transaction_hash = (
+                    pix_result.get('gateway_hash')
+                    or pix_result.get('hash')
+                    or pix_result.get('transaction_hash')
+                    or ''
+                )
                 db.session.commit()
                 
                 # Enviar mensagem com QR Code
                 bot_manager = BotManager(None, None)
                 message = f"💰 PIX Gerado!\n\nValor: R$ {price:.2f}\n\nEscaneie o QR Code ou copie o código PIX:"
-                qr_code = pix_result['pix_qr_code']
+                qr_code = pix_code
                 
                 bot_manager.send_telegram_message(
                     token=token,
@@ -656,12 +675,17 @@ def generate_pix_async(
                 )
                 
                 # Enviar QR Code como imagem
-                if pix_result.get('pix_qr_code_image'):
+                media_url = (
+                    pix_result.get('pix_qr_code_image')
+                    or pix_result.get('qr_code_url')
+                    or pix_result.get('qr_code_base64')
+                )
+                if media_url:
                     bot_manager.send_telegram_message(
                         token=token,
                         chat_id=str(chat_id),
                         message="",
-                        media_url=pix_result['pix_qr_code_image'],
+                        media_url=media_url,
                         media_type='photo'
                     )
                 
