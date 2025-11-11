@@ -778,6 +778,8 @@ def process_pending_webhooks(limit: int = 50, max_attempts: int = 12) -> int:
 
     processed = 0
 
+    _ensure_aux_tables()
+
     with app.app_context():
         pendings = (
             WebhookPendingMatch.query
