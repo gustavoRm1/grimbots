@@ -4025,16 +4025,39 @@ Seu pagamento ainda não foi confirmado.
                     utm_content = getattr(bot_user, 'utm_content', None) if bot_user else None
                     utm_term = getattr(bot_user, 'utm_term', None) if bot_user else None
                     
-                    tracking_token = getattr(bot_user, 'tracking_session_id', None) if bot_user else None
-                    tracking_data_v4: Dict[str, Any] = {}
-                    
+                    redis_tracking_payload: Dict[str, Any] = {}
+                    tracking_token = None
+
+                    if customer_user_id:
+                        try:
+                            cached_token = tracking_service.redis.get(f"tracking:last_token:user:{customer_user_id}")
+                            if cached_token:
+                                tracking_token = cached_token
+                        except Exception:
+                            logger.exception("Falha ao recuperar tracking:last_token do Redis")
+                        if not tracking_token:
+                            try:
+                                cached_payload = tracking_service.redis.get(f"tracking:chat:{customer_user_id}")
+                                if cached_payload:
+                                    redis_tracking_payload = json.loads(cached_payload)
+                                    tracking_token = redis_tracking_payload.get("tracking_token") or tracking_token
+                            except Exception:
+                                logger.exception("Falha ao recuperar tracking:chat do Redis")
+
+                    if not tracking_token and bot_user:
+                        tracking_token = getattr(bot_user, 'tracking_session_id', None)
+
+                    tracking_data_v4: Dict[str, Any] = redis_tracking_payload if isinstance(redis_tracking_payload, dict) else {}
+
                     if tracking_token:
-                        tracking_data_v4 = tracking_service.recover_tracking_data(tracking_token) or {}
-                        if not tracking_data_v4:
-                            logger.warning(f"⚠️ Tracking token {tracking_token} sem payload no Redis - tentando reconstruir via BotUser")
-                    else:
-                        tracking_token = None
-                    
+                        recovered_payload = tracking_service.recover_tracking_data(tracking_token) or {}
+                        if recovered_payload:
+                            tracking_data_v4 = recovered_payload
+                        elif not tracking_data_v4:
+                            logger.warning("Tracking token %s sem payload no Redis - tentando reconstruir via BotUser", tracking_token)
+                        if bot_user and getattr(bot_user, 'tracking_session_id', None) != tracking_token:
+                            bot_user.tracking_session_id = tracking_token
+
                     if not tracking_token:
                         tracking_token = tracking_service.generate_tracking_token(
                             bot_id=bot_id,
@@ -4045,7 +4068,7 @@ Seu pagamento ainda não foi confirmado.
                             utm_medium=utm_medium,
                             utm_campaign=utm_campaign
                         )
-                        logger.warning(f"⚠️ Token de tracking ausente - gerado novo {tracking_token} para BotUser {bot_user.id if bot_user else 'N/A'}")
+                        logger.warning("Tracking token ausente - gerado novo %s para BotUser %s", tracking_token, bot_user.id if bot_user else 'N/A')
                         seed_payload = {
                             "tracking_token": tracking_token,
                             "bot_id": bot_id,
@@ -4056,12 +4079,12 @@ Seu pagamento ainda não foi confirmado.
                             "utm_campaign": utm_campaign,
                             "utm_content": utm_content,
                             "utm_term": utm_term,
+                            "pageview_ts": tracking_data_v4.get('pageview_ts'),
                             "created_from": "generate_pix_payment",
                         }
                         tracking_service.save_tracking_token(tracking_token, {k: v for k, v in seed_payload.items() if v})
                         if bot_user:
                             bot_user.tracking_session_id = tracking_token
-                    
                     if not tracking_data_v4:
                         tracking_data_v4 = tracking_service.recover_tracking_data(tracking_token) or {}
                     
@@ -4117,6 +4140,7 @@ Seu pagamento ainda não foi confirmado.
                         "fbp": fbp,
                         "fbc": fbc,
                         "pageview_event_id": pageview_event_id,
+                        "pageview_ts": tracking_data_v4.get('pageview_ts'),
                         "grim": tracking_data_v4.get('grim'),
                         "utm_source": utm_source,
                         "utm_medium": utm_medium,
@@ -4128,7 +4152,7 @@ Seu pagamento ainda não foi confirmado.
                     }
                     tracking_service.save_tracking_token(tracking_token, {k: v for k, v in tracking_update_payload.items() if v})
                     
-                    logger.info(f"🔑 Tracking Token V4 pronto: {tracking_token} | fbp={'ok' if fbp else 'missing'} | fbc={'ok' if fbc else 'missing'} | pageview={'ok' if pageview_event_id else 'missing'}")
+                    logger.info("Tracking token pronto: %s | fbp=%s | fbc=%s | pageview=%s", tracking_token, 'ok' if fbp else 'missing', 'ok' if fbc else 'missing', 'ok' if pageview_event_id else 'missing')
                     
                     # ✅ CRÍTICO: Determinar status do payment
                     # Se recusado, usar 'failed' para que webhook possa atualizar

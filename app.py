@@ -3909,6 +3909,7 @@ def public_redirect(slug):
     tracking_service_v4 = TrackingServiceV4()
     tracking_token = uuid.uuid4().hex
     pageview_event_id = f"pageview_{uuid.uuid4().hex}"
+    pageview_ts = int(time.time())
     TRACKING_TOKEN_TTL = TrackingServiceV4.TRACKING_TOKEN_TTL_SECONDS
 
     fbp_cookie = request.cookies.get('_fbp')
@@ -3942,6 +3943,7 @@ def public_redirect(slug):
             'fbp': fbp_cookie,
             'fbc': fbc_cookie,
             'pageview_event_id': pageview_event_id,
+            'pageview_ts': pageview_ts,
             'client_ip': user_ip,
             'client_ua': user_agent,
             'grim': grim_param or None,
@@ -7079,7 +7081,16 @@ def send_meta_pixel_purchase_event(payment):
                 "fbclid": getattr(payment, "fbclid", None),
                 "client_ip": getattr(payment, "client_ip", None),
                 "client_user_agent": getattr(payment, "client_user_agent", None),
+                "pageview_ts": getattr(payment, "pageview_ts", None),
             }
+
+        pageview_ts_value = tracking_data.get('pageview_ts')
+        pageview_ts_int = None
+        if pageview_ts_value is not None:
+            try:
+                pageview_ts_int = int(float(pageview_ts_value))
+            except (TypeError, ValueError):
+                pageview_ts_int = None
 
         external_id_value = tracking_data.get('fbclid')
         fbp_value = tracking_data.get('fbp')
@@ -7131,6 +7142,16 @@ def send_meta_pixel_purchase_event(payment):
             event_time = now_ts
         elif event_time < now_ts - three_day_window:
             event_time = now_ts - three_day_window
+        if pageview_ts_int:
+            if pageview_ts_int > now_ts:
+                pageview_ts_int = now_ts
+            lower_bound = now_ts - three_day_window
+            if pageview_ts_int < lower_bound:
+                pageview_ts_int = lower_bound
+            if event_time < pageview_ts_int:
+                candidate_time = pageview_ts_int + 5
+                event_time = candidate_time if candidate_time <= now_ts else now_ts
+
 
         if not event_id:
             event_id = tracking_data.get('pageview_event_id')
@@ -7280,6 +7301,7 @@ def send_meta_pixel_purchase_event(payment):
         event_data = {
             'event_name': 'Purchase',
             'event_time': event_time,
+            'creation_time': event_time,
             'event_id': event_id,
             'action_source': 'website',  # ✅ Correto para server-side events
             'event_source_url': event_source_url,

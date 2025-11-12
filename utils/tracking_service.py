@@ -104,7 +104,7 @@ class TrackingServiceV4:
         if not tracking_token:
             logger.warning("save_tracking_token chamado com token vazio")
             return False
-        
+
         ttl = ttl or TRACKING_TOKEN_TTL_SECONDS
         key = self._key(tracking_token)
         legacy = self._legacy_key(tracking_token)
@@ -120,10 +120,10 @@ class TrackingServiceV4:
                 except Exception:
                     logger.exception("Falha ao mesclar payload existente; substituindo")
 
-            payload['tracking_token'] = tracking_token
+            payload["tracking_token"] = tracking_token
             now_iso = datetime.utcnow().isoformat()
-            payload.setdefault('created_at', now_iso)
-            payload['updated_at'] = now_iso
+            payload.setdefault("created_at", now_iso)
+            payload["updated_at"] = now_iso
 
             json_payload = json.dumps(payload, ensure_ascii=False)
             self.redis.setex(key, ttl, json_payload)
@@ -134,7 +134,38 @@ class TrackingServiceV4:
                 try:
                     self.redis.setex(f"tracking:fbclid:{fbclid}", ttl, tracking_token)
                 except Exception:
-                    logger.exception("Não foi possível indexar fbclid")
+                    logger.exception("Nao foi possivel indexar fbclid")
+
+            customer_user_id = payload.get("customer_user_id")
+            if customer_user_id:
+                chat_key = f"tracking:chat:{customer_user_id}"
+                try:
+                    chat_payload = payload.copy()
+                    existing_chat = self.redis.get(chat_key)
+                    if existing_chat:
+                        try:
+                            existing_data = json.loads(existing_chat)
+                            if isinstance(existing_data, dict):
+                                existing_data.update(chat_payload)
+                                chat_payload = existing_data
+                        except Exception:
+                            logger.exception("Falha ao mesclar registro tracking:chat existente")
+                    chat_payload["tracking_token"] = tracking_token
+                    chat_payload_json = json.dumps(chat_payload, ensure_ascii=False)
+                    self.redis.setex(chat_key, ttl, chat_payload_json)
+                except Exception:
+                    logger.exception("Falha ao indexar tracking por chat_id")
+                try:
+                    self.redis.setex(f"tracking:last_token:user:{customer_user_id}", ttl, tracking_token)
+                except Exception:
+                    logger.exception("Falha ao indexar tracking last token por usuario")
+
+            payment_id = payload.get("payment_id")
+            if payment_id:
+                try:
+                    self.redis.setex(f"tracking:payment:{payment_id}", ttl, json_payload)
+                except Exception:
+                    logger.exception("Falha ao indexar tracking por payment_id")
 
             return True
         except Exception:
