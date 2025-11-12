@@ -7301,7 +7301,6 @@ def send_meta_pixel_purchase_event(payment):
         event_data = {
             'event_name': 'Purchase',
             'event_time': event_time,
-            'creation_time': event_time,
             'event_id': event_id,
             'action_source': 'website',  # ✅ Correto para server-side events
             'event_source_url': event_source_url,
