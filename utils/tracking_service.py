@@ -34,6 +34,8 @@ def _redis_client(decode_responses: bool = True) -> redis.Redis:
 class TrackingServiceV4:
     """Persistência resiliente de tracking tokens com compatibilidade legada."""
 
+    TRACKING_TOKEN_TTL_SECONDS = TRACKING_TOKEN_TTL_SECONDS
+
     def __init__(self) -> None:
         self.redis = _redis_client(decode_responses=True)
 
@@ -118,6 +120,11 @@ class TrackingServiceV4:
                 except Exception:
                     logger.exception("Falha ao mesclar payload existente; substituindo")
 
+            payload['tracking_token'] = tracking_token
+            now_iso = datetime.utcnow().isoformat()
+            payload.setdefault('created_at', now_iso)
+            payload['updated_at'] = now_iso
+
             json_payload = json.dumps(payload, ensure_ascii=False)
             self.redis.setex(key, ttl, json_payload)
             self.redis.setex(legacy, ttl, json_payload)
@@ -185,6 +192,9 @@ class TrackingServiceV4:
             "utm_campaign": utm_campaign,
             "external_ids": external_ids or [],
         }
+        now_iso = datetime.utcnow().isoformat()
+        payload.setdefault("created_at", now_iso)
+        payload["updated_at"] = now_iso
         compact = {k: v for k, v in payload.items() if v not in (None, "", [])}
         ok = self.save_tracking_token(tracking_token, compact)
         if not ok:
