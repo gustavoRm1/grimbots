@@ -4013,7 +4013,7 @@ Seu pagamento ainda não foi confirmado.
                         telegram_user_id=customer_user_id
                     ).first()
                     
-                    # ✅ QI 500: GERAR TRACKING_TOKEN V4
+                    # ✅ QI 500: GERAR/REUTILIZAR TRACKING_TOKEN V4 (mantém vínculo PageView → Purchase)
                     from utils.tracking_service import TrackingServiceV4
                     tracking_service = TrackingServiceV4()
                     
@@ -4022,23 +4022,86 @@ Seu pagamento ainda não foi confirmado.
                     utm_source = getattr(bot_user, 'utm_source', None) if bot_user else None
                     utm_medium = getattr(bot_user, 'utm_medium', None) if bot_user else None
                     utm_campaign = getattr(bot_user, 'utm_campaign', None) if bot_user else None
+                    utm_content = getattr(bot_user, 'utm_content', None) if bot_user else None
+                    utm_term = getattr(bot_user, 'utm_term', None) if bot_user else None
                     
-                    # Gerar tracking_token
-                    tracking_token = tracking_service.generate_tracking_token(
-                        bot_id=bot_id,
-                        customer_user_id=customer_user_id,
-                        payment_id=None,  # Será atualizado após criar payment
-                        fbclid=fbclid,
-                        utm_source=utm_source,
-                        utm_medium=utm_medium,
-                        utm_campaign=utm_campaign
-                    )
+                    tracking_token = getattr(bot_user, 'tracking_session_id', None) if bot_user else None
+                    tracking_data_v4: Dict[str, Any] = {}
                     
-                    # Gerar fbp/fbc
-                    fbp = tracking_service.generate_fbp(str(customer_user_id))
-                    fbc = tracking_service.generate_fbc(fbclid) if fbclid else None
+                    if tracking_token:
+                        tracking_data_v4 = tracking_service.recover_tracking_data(tracking_token) or {}
+                        if not tracking_data_v4:
+                            logger.warning(f"⚠️ Tracking token {tracking_token} sem payload no Redis - tentando reconstruir via BotUser")
+                    else:
+                        tracking_token = None
                     
-                    # Gerar external_ids
+                    if not tracking_token:
+                        tracking_token = tracking_service.generate_tracking_token(
+                            bot_id=bot_id,
+                            customer_user_id=customer_user_id,
+                            payment_id=None,
+                            fbclid=fbclid,
+                            utm_source=utm_source,
+                            utm_medium=utm_medium,
+                            utm_campaign=utm_campaign
+                        )
+                        logger.warning(f"⚠️ Token de tracking ausente - gerado novo {tracking_token} para BotUser {bot_user.id if bot_user else 'N/A'}")
+                        seed_payload = {
+                            "tracking_token": tracking_token,
+                            "bot_id": bot_id,
+                            "customer_user_id": customer_user_id,
+                            "fbclid": fbclid,
+                            "utm_source": utm_source,
+                            "utm_medium": utm_medium,
+                            "utm_campaign": utm_campaign,
+                            "utm_content": utm_content,
+                            "utm_term": utm_term,
+                            "created_from": "generate_pix_payment",
+                        }
+                        tracking_service.save_tracking_token(tracking_token, {k: v for k, v in seed_payload.items() if v})
+                        if bot_user:
+                            bot_user.tracking_session_id = tracking_token
+                    
+                    if not tracking_data_v4:
+                        tracking_data_v4 = tracking_service.recover_tracking_data(tracking_token) or {}
+                    
+                    # Enriquecer com dados do BotUser quando faltarem no payload
+                    enrichment_source = {
+                        "fbclid": fbclid,
+                        "utm_source": utm_source,
+                        "utm_medium": utm_medium,
+                        "utm_campaign": utm_campaign,
+                        "utm_content": utm_content,
+                        "utm_term": utm_term,
+                        "grim": getattr(bot_user, 'campaign_code', None) if bot_user else None,
+                    }
+                    for key, value in enrichment_source.items():
+                        if value and key not in tracking_data_v4:
+                            tracking_data_v4[key] = value
+                    
+                    if tracking_data_v4.get('fbclid'):
+                        fbclid = tracking_data_v4['fbclid']
+                    if tracking_data_v4.get('utm_source'):
+                        utm_source = tracking_data_v4['utm_source']
+                    if tracking_data_v4.get('utm_medium'):
+                        utm_medium = tracking_data_v4['utm_medium']
+                    if tracking_data_v4.get('utm_campaign'):
+                        utm_campaign = tracking_data_v4['utm_campaign']
+                    if tracking_data_v4.get('utm_content'):
+                        utm_content = tracking_data_v4['utm_content']
+                    if tracking_data_v4.get('utm_term'):
+                        utm_term = tracking_data_v4['utm_term']
+                    
+                    fbp = tracking_data_v4.get('fbp')
+                    fbc = tracking_data_v4.get('fbc')
+                    pageview_event_id = tracking_data_v4.get('pageview_event_id')
+                    
+                    if not fbp:
+                        fbp = tracking_service.generate_fbp(str(customer_user_id))
+                    if not fbc and fbclid:
+                        fbc = tracking_service.generate_fbc(fbclid)
+                    
+                    # Gerar external_ids com dados reais recuperados
                     external_ids = tracking_service.build_external_id_array(
                         fbclid=fbclid,
                         telegram_user_id=str(customer_user_id),
@@ -4046,7 +4109,26 @@ Seu pagamento ainda não foi confirmado.
                         phone=getattr(bot_user, 'phone', None) if bot_user else None
                     )
                     
-                    logger.info(f"🔑 Tracking Token V4 gerado: {tracking_token}")
+                    tracking_update_payload = {
+                        "tracking_token": tracking_token,
+                        "bot_id": bot_id,
+                        "customer_user_id": customer_user_id,
+                        "fbclid": fbclid,
+                        "fbp": fbp,
+                        "fbc": fbc,
+                        "pageview_event_id": pageview_event_id,
+                        "grim": tracking_data_v4.get('grim'),
+                        "utm_source": utm_source,
+                        "utm_medium": utm_medium,
+                        "utm_campaign": utm_campaign,
+                        "utm_content": utm_content,
+                        "utm_term": utm_term,
+                        "external_ids": external_ids,
+                        "updated_from": "generate_pix_payment",
+                    }
+                    tracking_service.save_tracking_token(tracking_token, {k: v for k, v in tracking_update_payload.items() if v})
+                    
+                    logger.info(f"🔑 Tracking Token V4 pronto: {tracking_token} | fbp={'ok' if fbp else 'missing'} | fbc={'ok' if fbc else 'missing'} | pageview={'ok' if pageview_event_id else 'missing'}")
                     
                     # ✅ CRÍTICO: Determinar status do payment
                     # Se recusado, usar 'failed' para que webhook possa atualizar

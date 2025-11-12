@@ -3,7 +3,7 @@ SaaS Bot Manager - Aplicação Principal
 Sistema de gerenciamento de bots do Telegram com painel web
 """
 
-from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, abort, session
+from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, abort, session, make_response
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from models import db, User, Bot, BotConfig, Gateway, Payment, AuditLog, Achievement, UserAchievement, BotUser, BotMessage, RedirectPool, PoolBot, RemarketingCampaign, RemarketingBlacklist, Commission, PushSubscription, NotificationSettings, get_brazil_time
@@ -4091,32 +4091,22 @@ def public_redirect(slug):
     # ✅ CRÍTICO: Injetar cookies _fbp e _fbc no redirect response
     # Isso sincroniza o FBP gerado no servidor com o browser
     # Meta Pixel JS usará o mesmo FBP, garantindo matching perfeito
-    response = redirect(redirect_url, code=302)
+    response = make_response(redirect(redirect_url, code=302))
     
-    # ✅ Injetar _fbp se foi gerado no servidor (não estava no cookie original)
-    if fbp_cookie and not request.cookies.get('_fbp'):
-        # Cookie válido por 90 dias (padrão Meta)
-        response.set_cookie(
-            '_fbp',
-            fbp_cookie,
-            max_age=90 * 24 * 60 * 60,  # 90 dias
-            httponly=False,  # Meta Pixel JS precisa acessar
-            secure=True,  # HTTPS only
-            samesite='Lax'  # Permite cross-site para Meta Pixel
-        )
+    # ✅ Injetar _fbp/_fbc gerados no servidor (90 dias - padrão Meta)
+    cookie_kwargs = {
+        'max_age': 90 * 24 * 60 * 60,  # 90 dias
+        'httponly': False,  # Meta Pixel JS precisa acessar
+        'secure': True,  # HTTPS only
+        'samesite': 'None',  # Permite cross-site necessário para Meta
+    }
+    
+    if fbp_cookie:
+        response.set_cookie('_fbp', fbp_cookie, **cookie_kwargs)
         logger.info(f"✅ Cookie _fbp injetado no redirect: {fbp_cookie[:30]}...")
     
-    # ✅ Injetar _fbc se foi gerado no servidor (não estava no cookie original)
-    if fbc_cookie and not request.cookies.get('_fbc'):
-        # Cookie válido por 90 dias (padrão Meta)
-        response.set_cookie(
-            '_fbc',
-            fbc_cookie,
-            max_age=90 * 24 * 60 * 60,  # 90 dias
-            httponly=False,  # Meta Pixel JS precisa acessar
-            secure=True,  # HTTPS only
-            samesite='Lax'  # Permite cross-site para Meta Pixel
-        )
+    if fbc_cookie:
+        response.set_cookie('_fbc', fbc_cookie, **cookie_kwargs)
         logger.info(f"✅ Cookie _fbc injetado no redirect: {fbc_cookie[:30]}...")
     
     return response

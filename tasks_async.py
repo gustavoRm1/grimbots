@@ -447,6 +447,9 @@ def process_start_async(
                 if utm_data_from_start.get('fbclid') and not bot_user.fbclid:
                     bot_user.fbclid = utm_data_from_start['fbclid']
 
+                if tracking_token_from_start and bot_user.tracking_session_id != tracking_token_from_start:
+                    bot_user.tracking_session_id = tracking_token_from_start
+
                 if tracking_token_from_start:
                     payload = {
                         "tracking_token": tracking_token_from_start,
@@ -458,6 +461,7 @@ def process_start_async(
                         "utm_medium": getattr(bot_user, 'utm_medium', None),
                         "utm_content": getattr(bot_user, 'utm_content', None),
                         "utm_term": getattr(bot_user, 'utm_term', None),
+                        "grim": bot_user.campaign_code or utm_data_from_start.get('campaign_code'),
                         "last_interaction_at": get_brazil_time().isoformat(),
                     }
                     compact_payload = {k: v for k, v in payload.items() if v}
