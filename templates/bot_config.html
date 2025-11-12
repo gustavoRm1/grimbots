@@ -375,7 +375,7 @@
                           maxlength="1500"
                           @input="config.welcome_message = config.welcome_message?.slice(0, 1500) || ''"
                           placeholder="Olá! Bem-vindo ao nosso bot de vendas...&#10;&#10;Escolha uma das opções abaixo:"></textarea>
-                <p class="text-xs text-gray-400 mt-1">Máximo de 1500 caracteres (o excedente será enviado em mensagem separada).</p>
+                <p class="text-xs text-gray-400 mt-1">Máximo de 1500 caracteres. O campo bloqueia novos caracteres ao atingir o limite.</p>
             </div>
 
             <!-- Mídia -->
@@ -553,7 +553,7 @@
                                                               maxlength="1500"
                                                               @input="orderBump.message = orderBump.message?.slice(0, 1500) || ''"
                                                               placeholder="🎁 Oferta Especial!&#10;&#10;Adicione este bônus por apenas +R$ 5!"></textarea>
-                                                    <p class="text-[11px] text-gray-400 mt-1">Máximo 1500 caracteres.</p>
+                                                    <p class="text-[11px] text-gray-400 mt-1">Máximo 1500 caracteres. O campo bloqueia novos caracteres ao atingir o limite.</p>
                                                 </div>
 
                                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -773,7 +773,7 @@
                                           maxlength="1500"
                                           @input="downsell.message = downsell.message?.slice(0, 1500) || ''"
                                           placeholder="Oferta especial!"></textarea>
-                                <p class="text-[11px] text-gray-400 mt-1">Máximo 1500 caracteres.</p>
+                                <p class="text-[11px] text-gray-400 mt-1">Máximo 1500 caracteres. O campo bloqueia novos caracteres ao atingir o limite.</p>
                             </div>
 
                             <!-- ✅ MODO DE PRECIFICAÇÃO (Preço Fixo vs Desconto %) -->
@@ -1002,7 +1002,7 @@
                                                   maxlength="1500"
                                                   @input="downsell.order_bump.message = downsell.order_bump.message?.slice(0, 1500) || ''"
                                                   placeholder="🎁 Oferta Especial!&#10;&#10;Adicione este bônus por apenas +R$ 5!"></textarea>
-                                        <p class="text-[11px] text-gray-400 mt-1">Máximo 1500 caracteres.</p>
+                                        <p class="text-[11px] text-gray-400 mt-1">Máximo 1500 caracteres. O campo bloqueia novos caracteres ao atingir o limite.</p>
                                     </div>
 
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1173,7 +1173,7 @@
                                           maxlength="1500"
                                           @input="upsell.message = upsell.message?.slice(0, 1500) || ''"
                                           placeholder="🔥 Upgrade para Premium!"></textarea>
-                                <p class="text-[11px] text-gray-400 mt-1">Máximo 1500 caracteres.</p>
+                                <p class="text-[11px] text-gray-400 mt-1">Máximo 1500 caracteres. O campo bloqueia novos caracteres ao atingir o limite.</p>
                             </div>
 
                             <!-- Mídia (URL + Tipo) -->
