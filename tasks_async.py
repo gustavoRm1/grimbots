@@ -223,7 +223,8 @@ def process_start_async(
         import base64
         import json
         import redis
-        
+        from utils.tracking_service import TrackingServiceV4
+
         with app.app_context():
             # Recarregar config do banco
             bot = db.session.get(Bot, bot_id)
@@ -234,11 +235,9 @@ def process_start_async(
             telegram_user_id = str(user_from.get('id', ''))
             first_name = user_from.get('first_name', 'Usuário')
             username = user_from.get('username', '')
-            
-            # Extrair tracking do start_param
-            pool_id_from_start = None
-            external_id_from_start = None
-            utm_data_from_start = {}
+
+            tracking_service_v4 = TrackingServiceV4()
+            tracking_token_from_start = None
             
             if start_param:
                 if start_param.startswith('t'):
@@ -250,9 +249,10 @@ def process_start_async(
                         
                         tracking_json = base64.urlsafe_b64decode(tracking_encoded).decode()
                         tracking_data = json.loads(tracking_json)
-                        
+
                         pool_id_from_start = tracking_data.get('p')
                         external_id_from_start = tracking_data.get('e')
+                        tracking_token_from_start = tracking_data.get('tt')
                         
                         if tracking_data.get('s'):
                             utm_data_from_start['utm_source'] = tracking_data['s']
@@ -312,7 +312,8 @@ def process_start_async(
                     utm_source=utm_data_from_start.get('utm_source'),
                     utm_campaign=utm_data_from_start.get('utm_campaign'),
                     campaign_code=utm_data_from_start.get('campaign_code'),
-                    fbclid=utm_data_from_start.get('fbclid')
+                    fbclid=utm_data_from_start.get('fbclid'),
+                    tracking_session_id=tracking_token_from_start
                 )
                 is_new_user = True
                 
@@ -393,8 +394,7 @@ def process_start_async(
                             
                             # Salvar tracking:chat:{chat_id} via TrackingService
                             try:
-                                from utils.tracking_service import TrackingService
-                                TrackingService.save_tracking_data(
+                                TrackingServiceV4.save_tracking_data(
                                     fbclid=fbclid_completo_redis or '',
                                     fbp=tracking_elite.get('fbp', ''),
                                     fbc=tracking_elite.get('fbc', ''),
@@ -446,6 +446,25 @@ def process_start_async(
                     bot_user.campaign_code = utm_data_from_start['campaign_code']
                 if utm_data_from_start.get('fbclid') and not bot_user.fbclid:
                     bot_user.fbclid = utm_data_from_start['fbclid']
+
+                if tracking_token_from_start:
+                    payload = {
+                        "tracking_token": tracking_token_from_start,
+                        "bot_id": bot_id,
+                        "customer_user_id": telegram_user_id,
+                        "fbclid": bot_user.fbclid or utm_data_from_start.get('fbclid'),
+                        "utm_source": bot_user.utm_source,
+                        "utm_campaign": bot_user.utm_campaign,
+                        "utm_medium": getattr(bot_user, 'utm_medium', None),
+                        "utm_content": getattr(bot_user, 'utm_content', None),
+                        "utm_term": getattr(bot_user, 'utm_term', None),
+                        "last_interaction_at": get_brazil_time().isoformat(),
+                    }
+                    compact_payload = {k: v for k, v in payload.items() if v}
+                    ok = tracking_service_v4.save_tracking_token(tracking_token_from_start, compact_payload)
+                    if not ok:
+                        logger.warning("Retry saving tracking_token once (start)")
+                        tracking_service_v4.save_tracking_token(tracking_token_from_start, compact_payload)
                 
                 db.session.commit()
             

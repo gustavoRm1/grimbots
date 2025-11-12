@@ -1506,7 +1506,6 @@ def get_bot(bot_id):
     """Obtém detalhes de um bot"""
     bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
     return jsonify(bot.to_dict())
-
 @app.route('/api/bots/<int:bot_id>/token', methods=['PUT'])
 @login_required
 @csrf.exempt
@@ -2112,7 +2111,6 @@ def count_eligible_leads(bot_id):
     )
     
     return jsonify({'count': count})
-
 @app.route('/api/remarketing/general', methods=['POST'])
 @login_required
 @csrf.exempt
@@ -2309,9 +2307,6 @@ def general_remarketing():
     except Exception as e:
         logger.error(f"❌ Erro no remarketing geral: {e}")
         return jsonify({'error': str(e)}), 500
-
-@app.route('/api/remarketing/<int:bot_id>/stats', methods=['GET'])
-@login_required
 def get_remarketing_stats(bot_id):
     """
     API: Estatísticas gerais de remarketing por bot
@@ -2868,7 +2863,6 @@ def admin_logs():
                          action_filter=action_filter,
                          admin_filter=admin_filter,
                          limit=limit)
-
 @app.route('/admin/revenue')
 @login_required
 @admin_required
@@ -3579,7 +3573,6 @@ def get_bot_config(bot_id):
     except Exception as e:
         logger.error(f"❌ Erro ao buscar config do bot {bot_id}: {e}", exc_info=True)
         return jsonify({'error': f'Erro ao buscar configuração: {str(e)}'}), 500
-
 @app.route('/api/bots/<int:bot_id>/config', methods=['PUT'])
 @login_required
 @csrf.exempt
@@ -3955,7 +3948,10 @@ def public_redirect(slug):
         }
 
         try:
-            tracking_service_v4.save_tracking_token(tracking_token, tracking_payload, ttl=TRACKING_TOKEN_TTL)
+            ok = tracking_service_v4.save_tracking_token(tracking_token, tracking_payload, ttl=TRACKING_TOKEN_TTL)
+            if not ok:
+                logger.warning("Retry saving tracking_token once (redirect)")
+                tracking_service_v4.save_tracking_token(tracking_token, tracking_payload, ttl=TRACKING_TOKEN_TTL)
             # Compatibilidade com tracking V3 (fbclid/grim)
             TrackingService.save_tracking_data(
                 fbclid=fbclid,
@@ -3994,11 +3990,18 @@ def public_redirect(slug):
     else:
         if tracking_token and pageview_context:
             try:
-                tracking_service_v4.save_tracking_token(
+                ok = tracking_service_v4.save_tracking_token(
                     tracking_token,
                     pageview_context,
                     ttl=TRACKING_TOKEN_TTL
                 )
+                if not ok:
+                    logger.warning("Retry saving pageview_context once (redirect)")
+                    tracking_service_v4.save_tracking_token(
+                        tracking_token,
+                        pageview_context,
+                        ttl=TRACKING_TOKEN_TTL
+                    )
             except Exception as e:
                 logger.warning(f"⚠️ Erro ao atualizar tracking_token {tracking_token} com pageview_context: {e}")
     
@@ -4359,8 +4362,6 @@ def add_bot_to_pool(pool_id):
         db.session.rollback()
         logger.error(f"Erro ao adicionar bot ao pool: {e}")
         return jsonify({'error': str(e)}), 400
-
-
 @app.route('/api/redirect-pools/<int:pool_id>/bots/<int:pool_bot_id>', methods=['DELETE'])
 @login_required
 @csrf.exempt
@@ -7053,12 +7054,36 @@ def send_meta_pixel_purchase_event(payment):
         tracking_service_v4 = TrackingServiceV4()
 
         tracking_data = {}
-        if payment.tracking_token:
+        if getattr(payment, "tracking_token", None):
             try:
-                tracking_data = tracking_service_v4.recover_tracking_data(tracking_token=payment.tracking_token) or {}
-            except Exception as e:
-                logger.warning(f"⚠️ Erro ao recuperar tracking_token {payment.tracking_token}: {e}")
-                tracking_data = {}
+                tracking_data = tracking_service_v4.recover_tracking_data(payment.tracking_token) or {}
+            except Exception:
+                logger.exception("Erro recovering tracking token")
+
+        if not tracking_data:
+            try:
+                raw = tracking_service_v4.redis.get(f"tracking:payment:{payment.payment_id}")
+                if raw:
+                    tracking_data = json.loads(raw)
+            except Exception:
+                pass
+
+        if not tracking_data and getattr(payment, "fbclid", None):
+            try:
+                token = tracking_service_v4.redis.get(f"tracking:fbclid:{payment.fbclid}")
+                if token:
+                    tracking_data = tracking_service_v4.recover_tracking_data(token) or {}
+            except Exception:
+                pass
+
+        if not tracking_data:
+            tracking_data = {
+                "fbp": getattr(payment, "fbp", None),
+                "fbc": getattr(payment, "fbc", None),
+                "fbclid": getattr(payment, "fbclid", None),
+                "client_ip": getattr(payment, "client_ip", None),
+                "client_user_agent": getattr(payment, "client_user_agent", None),
+            }
 
         external_id_value = tracking_data.get('fbclid')
         fbp_value = tracking_data.get('fbp')
@@ -7068,27 +7093,12 @@ def send_meta_pixel_purchase_event(payment):
         if not event_id:
             event_id = tracking_data.get('pageview_event_id')
 
-        # Fallback legado (TrackingService V3) se ainda houver lacunas
-        if (not external_id_value or not fbp_value or not fbc_value):
-            legacy_tracking = TrackingService.recover_tracking_data(
-                fbclid=external_id_value or payment.fbclid or (bot_user.fbclid if bot_user else None),
-                telegram_user_id=str(telegram_user_id) if telegram_user_id else None,
-                grim=payment.campaign_code
-            )
-            if legacy_tracking:
-                external_id_value = external_id_value or legacy_tracking.get('fbclid')
-                fbp_value = fbp_value or legacy_tracking.get('fbp')
-                fbc_value = fbc_value or legacy_tracking.get('fbc')
-                ip_value = ip_value or legacy_tracking.get('ip')
-                user_agent_value = user_agent_value or legacy_tracking.get('ua')
-
         # Persistir fbclid recuperado no Payment/BotUser
         if external_id_value and not payment.fbclid:
             payment.fbclid = external_id_value
         if external_id_value and bot_user and not bot_user.fbclid:
             bot_user.fbclid = external_id_value
 
-        # Fallback final seguindo a ordem original
         if not external_id_value:
             if payment.fbclid:
                 external_id_value = payment.fbclid
@@ -8112,7 +8122,6 @@ def send_push_notification(user_id, title, body, data=None, color='green'):
         logger.error("❌ pywebpush não instalado. Execute: pip install pywebpush")
     except Exception as e:
         logger.error(f"❌ Erro ao enviar push notifications: {e}")
-
 def send_sale_notification(user_id, payment, status='approved'):
     """
     Envia notificação de venda (pendente ou aprovada) conforme configurações do usuário spread
