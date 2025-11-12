@@ -7080,6 +7080,10 @@ def send_meta_pixel_purchase_event(payment):
         fbc_value = tracking_data.get('fbc')
         ip_value = tracking_data.get('client_ip') or tracking_data.get('ip')
         user_agent_value = tracking_data.get('client_user_agent') or tracking_data.get('ua')
+        if not ip_value and getattr(payment, 'client_ip', None):
+            ip_value = payment.client_ip
+        if not user_agent_value and getattr(payment, 'client_user_agent', None):
+            user_agent_value = payment.client_user_agent
         if not event_id:
             event_id = tracking_data.get('pageview_event_id')
 
@@ -7136,6 +7140,12 @@ def send_meta_pixel_purchase_event(payment):
         telegram_id_for_hash = str(telegram_user_id) if telegram_user_id else None
         
         logger.info(f"🔑 Purchase - external_id: fbclid={'✅' if external_id_for_hash else '❌'} | telegram_id={'✅' if telegram_id_for_hash else '❌'}")
+
+        email_value = getattr(bot_user, 'email', None)
+        phone_value = getattr(bot_user, 'phone', None)
+        if phone_value:
+            digits_only = ''.join(filter(str.isdigit, str(phone_value)))
+            phone_value = digits_only or None
         
         # Construir user_data usando função correta (faz hash SHA256)
         # ✅ CRÍTICO: Usar MESMOS dados do PageView (fbp, fbc, IP, User Agent)
@@ -7145,8 +7155,8 @@ def send_meta_pixel_purchase_event(payment):
         user_data = MetaPixelAPI._build_user_data(
             customer_user_id=telegram_id_for_hash,  # ✅ telegram_user_id (será hashado e adicionado ao array)
             external_id=external_id_for_hash,  # ✅ fbclid (será hashado e será o PRIMEIRO do array)
-            email=None,
-            phone=None,
+            email=email_value,
+            phone=phone_value,
             client_ip=ip_value,  # ✅ MESMO IP do PageView
             client_user_agent=user_agent_value,  # ✅ MESMO User Agent do PageView
             fbp=fbp_value,  # ✅ MESMO _fbp do PageView (do Redis - cookie do browser)
@@ -7234,6 +7244,13 @@ def send_meta_pixel_purchase_event(payment):
             custom_data['utm_campaign'] = payment.utm_campaign
         if payment.campaign_code:
             custom_data['campaign_code'] = payment.campaign_code
+
+        tracking_campaign = tracking_data.get('grim') or tracking_data.get('campaign_code')
+        if tracking_campaign and not custom_data.get('campaign_code'):
+            custom_data['campaign_code'] = tracking_campaign
+        for utm_key in ('utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'):
+            if tracking_data.get(utm_key) and not custom_data.get(utm_key):
+                custom_data[utm_key] = tracking_data.get(utm_key)
         
         # ✅ LOG CRÍTICO: Parâmetros enviados para Meta (para debug)
         external_id_hash = user_data.get('external_id', ['N/A'])[0] if user_data.get('external_id') else 'N/A'
@@ -7248,12 +7265,18 @@ def send_meta_pixel_purchase_event(payment):
         logger.info(f"📊 Meta Purchase - Custom Data: {json.dumps(custom_data, ensure_ascii=False)}")
         
         # Construir event_data completo
+        event_source_url = (
+            tracking_data.get('event_source_url')
+            or tracking_data.get('landing_url')
+            or (f'https://app.grimbots.online/go/{payment.pool.slug}' if getattr(payment, 'pool', None) and getattr(payment.pool, 'slug', None) else f'https://t.me/{payment.bot.username}')
+        )
+
         event_data = {
             'event_name': 'Purchase',
             'event_time': event_time,
             'event_id': event_id,
             'action_source': 'website',  # ✅ Correto para server-side events
-            'event_source_url': f'https://t.me/{payment.bot.username}',  # ✅ OBRIGATÓRIO para melhor matching
+            'event_source_url': event_source_url,
             'user_data': user_data,
             'custom_data': custom_data
         }
