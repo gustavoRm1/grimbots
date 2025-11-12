@@ -3,7 +3,7 @@ SaaS Bot Manager - Aplicação Principal
 Sistema de gerenciamento de bots do Telegram com painel web
 """
 
-from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, abort, session, make_response
+from flask import Flask, render_template, render_template_string, request, jsonify, redirect, url_for, flash, abort, session, make_response
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from models import db, User, Bot, BotConfig, Gateway, Payment, AuditLog, Achievement, UserAchievement, BotUser, BotMessage, RedirectPool, PoolBot, RemarketingCampaign, RemarketingBlacklist, Commission, PushSubscription, NotificationSettings, get_brazil_time
@@ -3944,6 +3944,7 @@ def public_redirect(slug):
             'client_ip': user_ip,
             'client_ua': user_agent,
             'grim': grim_param or None,
+            'event_source_url': request.url,
             **{k: v for k, v in utms.items() if v}
         }
 
@@ -4088,26 +4089,71 @@ def public_redirect(slug):
     
     redirect_url = f"https://t.me/{pool_bot.bot.username}?start={tracking_param}"
     
-    # ✅ CRÍTICO: Injetar cookies _fbp e _fbc no redirect response
-    # Isso sincroniza o FBP gerado no servidor com o browser
-    # Meta Pixel JS usará o mesmo FBP, garantindo matching perfeito
-    response = make_response(redirect(redirect_url, code=302))
-    
-    # ✅ Injetar _fbp/_fbc gerados no servidor (90 dias - padrão Meta)
+    # ✅ CRÍTICO: Injetar cookies _fbp e _fbc no browser real
     cookie_kwargs = {
-        'max_age': 90 * 24 * 60 * 60,  # 90 dias
-        'httponly': False,  # Meta Pixel JS precisa acessar
-        'secure': True,  # HTTPS only
-        'samesite': 'None',  # Permite cross-site necessário para Meta
+        'max_age': 90 * 24 * 60 * 60,
+        'httponly': False,
+        'secure': True,
+        'samesite': 'None',
     }
+    
+    render_pixel_bridge = (
+        not is_crawler_request and
+        pool.meta_pixel_id and
+        request.method == 'GET'
+    )
+    
+    target_redirect_url = f"{redirect_url}&tt={tracking_token}"
+    
+    if render_pixel_bridge:
+        html_bridge = render_template_string(
+            """
+            <!DOCTYPE html>
+            <html lang="pt-BR">
+              <head>
+                <meta charset="utf-8" />
+                <title>Conectando…</title>
+                <script>
+                  window.fbAsyncInit = function() {
+                    fbq('init', '{{ pixel_id }}');
+                    fbq('track', 'PageView', {}, {eventID: '{{ event_id }}'});
+                    setTimeout(function() {
+                      window.location.href = '{{ redirect_url }}';
+                    }, 1800);
+                  };
+                  !function(f,b,e,v,n,t,s)
+                  {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+                  n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+                  if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+                  n.queue=[];t=b.createElement(e);t.async=!0;
+                  t.src=v;s=b.getElementsByTagName(e)[0];
+                  s.parentNode.insertBefore(t,s)}(window, document, 'script',
+                  'https://connect.facebook.net/en_US/fbevents.js');
+                </script>
+                <noscript>
+                  <img height="1" width="1" style="display:none"
+                       src="https://www.facebook.com/tr?id={{ pixel_id }}&ev=PageView&noscript=1"/>
+                </noscript>
+              </head>
+              <body>
+                <p>Conectando ao bot…</p>
+              </body>
+            </html>
+            """,
+            pixel_id=pool.meta_pixel_id,
+            event_id=pageview_event_id,
+            redirect_url=target_redirect_url
+        )
+        response = make_response(html_bridge, 200)
+    else:
+        response = make_response(redirect(target_redirect_url if not is_crawler_request else redirect_url, code=302))
     
     if fbp_cookie:
         response.set_cookie('_fbp', fbp_cookie, **cookie_kwargs)
-        logger.info(f"✅ Cookie _fbp injetado no redirect: {fbp_cookie[:30]}...")
-    
+        logger.info(f"✅ Cookie _fbp injetado: {fbp_cookie[:30]}...")
     if fbc_cookie:
         response.set_cookie('_fbc', fbc_cookie, **cookie_kwargs)
-        logger.info(f"✅ Cookie _fbc injetado no redirect: {fbc_cookie[:30]}...")
+        logger.info(f"✅ Cookie _fbc injetado: {fbc_cookie[:30]}...")
     
     return response
 
