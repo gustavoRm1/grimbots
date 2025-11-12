@@ -4102,6 +4102,12 @@ def public_redirect(slug):
     response = make_response(redirect(target_redirect_url, code=302))
     
     # ✅ Injetar _fbp/_fbc gerados no servidor (90 dias - padrão Meta)
+    cookie_kwargs = {
+        'max_age': 90 * 24 * 60 * 60,
+        'httponly': False,
+        'secure': True,
+        'samesite': 'None',
+    }
     if fbp_cookie:
         response.set_cookie('_fbp', fbp_cookie, **cookie_kwargs)
         logger.info(f"✅ Cookie _fbp injetado: {fbp_cookie[:30]}...")
