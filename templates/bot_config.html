@@ -372,10 +372,10 @@
                 </label>
                 <textarea x-model="config.welcome_message"
                           class="form-textarea"
-                          maxlength="900"
-                          @input="config.welcome_message = config.welcome_message?.slice(0, 900) || ''"
+                          maxlength="1500"
+                          @input="config.welcome_message = config.welcome_message?.slice(0, 1500) || ''"
                           placeholder="Olá! Bem-vindo ao nosso bot de vendas...&#10;&#10;Escolha uma das opções abaixo:"></textarea>
-                <p class="text-xs text-gray-400 mt-1">Máximo de 900 caracteres (limite do Telegram para legendas).</p>
+                <p class="text-xs text-gray-400 mt-1">Máximo de 1500 caracteres (o excedente será enviado em mensagem separada).</p>
             </div>
 
             <!-- Mídia -->
@@ -550,10 +550,10 @@
                                                     <label class="form-label">Mensagem da Oferta</label>
                                                     <textarea x-model="orderBump.message"
                                                               class="form-textarea"
-                                                              maxlength="900"
-                                                              @input="orderBump.message = orderBump.message?.slice(0, 900) || ''"
+                                                              maxlength="1500"
+                                                              @input="orderBump.message = orderBump.message?.slice(0, 1500) || ''"
                                                               placeholder="🎁 Oferta Especial!&#10;&#10;Adicione este bônus por apenas +R$ 5!"></textarea>
-                                                    <p class="text-[11px] text-gray-400 mt-1">Máximo 900 caracteres.</p>
+                                                    <p class="text-[11px] text-gray-400 mt-1">Máximo 1500 caracteres.</p>
                                                 </div>
 
                                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -770,10 +770,10 @@
                                 <label class="form-label">Mensagem</label>
                                 <textarea x-model="downsell.message"
                                           class="form-textarea"
-                                          maxlength="900"
-                                          @input="downsell.message = downsell.message?.slice(0, 900) || ''"
+                                          maxlength="1500"
+                                          @input="downsell.message = downsell.message?.slice(0, 1500) || ''"
                                           placeholder="Oferta especial!"></textarea>
-                                <p class="text-[11px] text-gray-400 mt-1">Máximo 900 caracteres.</p>
+                                <p class="text-[11px] text-gray-400 mt-1">Máximo 1500 caracteres.</p>
                             </div>
 
                             <!-- ✅ MODO DE PRECIFICAÇÃO (Preço Fixo vs Desconto %) -->
@@ -999,10 +999,10 @@
                                         <label class="form-label">Mensagem do Order Bump</label>
                                         <textarea x-model="downsell.order_bump.message"
                                                   class="form-textarea"
-                                                  maxlength="900"
-                                                  @input="downsell.order_bump.message = downsell.order_bump.message?.slice(0, 900) || ''"
+                                                  maxlength="1500"
+                                                  @input="downsell.order_bump.message = downsell.order_bump.message?.slice(0, 1500) || ''"
                                                   placeholder="🎁 Oferta Especial!&#10;&#10;Adicione este bônus por apenas +R$ 5!"></textarea>
-                                        <p class="text-[11px] text-gray-400 mt-1">Máximo 900 caracteres.</p>
+                                        <p class="text-[11px] text-gray-400 mt-1">Máximo 1500 caracteres.</p>
                                     </div>
 
                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1170,10 +1170,10 @@
                                 <label class="form-label">Mensagem</label>
                                 <textarea x-model="upsell.message"
                                           class="form-textarea"
-                                          maxlength="900"
-                                          @input="upsell.message = upsell.message?.slice(0, 900) || ''"
+                                          maxlength="1500"
+                                          @input="upsell.message = upsell.message?.slice(0, 1500) || ''"
                                           placeholder="🔥 Upgrade para Premium!"></textarea>
-                                <p class="text-[11px] text-gray-400 mt-1">Máximo 900 caracteres.</p>
+                                <p class="text-[11px] text-gray-400 mt-1">Máximo 1500 caracteres.</p>
                             </div>
 
                             <!-- Mídia (URL + Tipo) -->
