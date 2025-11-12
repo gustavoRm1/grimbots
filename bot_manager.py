@@ -1448,7 +1448,7 @@ class BotManager:
             # 2️⃣ ENVIAR MÍDIA (se houver)
             if media_url:
                 logger.info(f"🖼️ Enviando mídia sequencial ({media_type})...")
-                caption_text = text[:900] if text and len(text) > 900 else (text or '')
+                caption_text = text[:1500] if text and len(text) > 1500 else (text or '')
                 
                 if media_type == 'photo':
                     url = f"{base_url}/sendPhoto"
@@ -1506,8 +1506,8 @@ class BotManager:
                     
                     time.sleep(delay_between)  # ✅ QI 500: Delay entre envios
                     
-                    # ✅ QI 10000: Se caption > 900, enviar texto completo separadamente
-                    if text and len(text) > 900:
+                    # ✅ QI 10000: Se caption > 1500, enviar texto completo separadamente
+                    if text and len(text) > 1500:
                         # ========================================================================
                         # ✅ QI 10000: LOCK ESPECÍFICO PARA TEXTO COMPLETO (CRÍTICO)
                         # ========================================================================
@@ -1565,7 +1565,7 @@ class BotManager:
                             except Exception as e:
                                 logger.warning(f"⚠️ Erro ao verificar duplicação no banco: {e} - continuando")
                             
-                            remaining_text = text[900:].strip()
+                            remaining_text = text[1500:].strip()
                             if not remaining_text:
                                 logger.info("ℹ️ Texto excedente após caption vazio — não enviar mensagem adicional.")
                                 return all_success
@@ -5031,7 +5031,7 @@ Seu pagamento ainda não foi confirmado.
             # ✅ QI 200: Enviar mídia + mensagem com validações
             if media_url:
                 # ✅ QI 200: Validar tipo de mídia e limitar caption (max 900 chars)
-                caption_text = message[:900] if len(message) > 900 else message
+                caption_text = message[:1500] if len(message) > 1500 else message
                 
                 # ✅ QI 200: Validar extensão de arquivo para photos
                 if media_type == 'photo':
@@ -5050,8 +5050,8 @@ Seu pagamento ainda não foi confirmado.
                             payload['reply_markup'] = reply_markup
                         response = requests.post(url, json=payload, timeout=3)
                     else:
-                        # ✅ QI 200: Se caption > 900, enviar mídia sem caption e mensagem separada
-                        if len(message) > 900:
+                        # ✅ QI 200: Se caption > 1500, enviar mídia sem caption e mensagem separada
+                        if len(message) > 1500:
                             # Enviar mídia sem caption
                             url = f"{base_url}/sendPhoto"
                             payload = {
@@ -5084,8 +5084,8 @@ Seu pagamento ainda não foi confirmado.
                                 payload['reply_markup'] = reply_markup
                             response = requests.post(url, json=payload, timeout=3)
                 elif media_type == 'video':
-                    # ✅ QI 200: Se caption > 900, enviar vídeo sem caption e mensagem separada
-                    if len(message) > 900:
+                    # ✅ QI 200: Se caption > 1500, enviar vídeo sem caption e mensagem separada
+                    if len(message) > 1500:
                         url = f"{base_url}/sendVideo"
                         payload = {
                             'chat_id': chat_id,
@@ -5117,8 +5117,8 @@ Seu pagamento ainda não foi confirmado.
                             payload['reply_markup'] = reply_markup
                         response = requests.post(url, json=payload, timeout=3)
                 elif media_type == 'audio':
-                    # ✅ QI 200: Se caption > 900, enviar áudio sem caption e mensagem separada
-                    if len(message) > 900:
+                    # ✅ QI 200: Se caption > 1500, enviar áudio sem caption e mensagem separada
+                    if len(message) > 1500:
                         url = f"{base_url}/sendAudio"
                         payload = {
                             'chat_id': chat_id,
