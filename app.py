@@ -3871,7 +3871,6 @@ def public_redirect(slug):
     user_ip = request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0].strip()
     user_agent = request.headers.get('User-Agent', '')
     fbclid = request.args.get('fbclid', '')
-    session_id = str(uuid.uuid4())
     
     # ✅ CRÍTICO QI 300: Detectar crawlers e NÃO salvar tracking
     # Crawlers não têm cookies, não geram FBP/FBC válidos, e poluem o Redis
@@ -3909,101 +3908,68 @@ def public_redirect(slug):
     if is_crawler_request:
         logger.info(f"🤖 CRAWLER DETECTADO: {user_agent[:50]}... | Tracking NÃO será salvo")
     
-    # ✅ CRÍTICO: Salvar tracking no Redis SEMPRE (TTL 180s = 3 min)
-    # Mesmo sem fbclid, salvar usando grim ou session_id como chave
     grim_param = request.args.get('grim', '')
     import json
-    
-    # ✅ PASSO 1: CAPTURAR _fbp e _fbc DOS COOKIES (CRÍTICO PARA MATCHING!)
-    # ✅ CORREÇÃO CRÍTICA QI 300: Para funil server-side, FBP DEVE ser gerado no servidor
-    # Meta aceita e recomenda FBP server-side para CAPI (Conversions API)
-    # Isso garante matching perfeito PageView ↔ Purchase (7/7 atributos sempre)
-    from utils.tracking_service import TrackingService
-    
-    fbp_cookie = request.cookies.get('_fbp', '')
-    fbc_cookie = request.cookies.get('_fbc', '')
-    
-    # ✅ GERAR FBP NO SERVIDOR se não existir (CRÍTICO para funil server-side)
-    # Isso garante que PageView e Purchase usem o MESMO FBP desde o primeiro acesso
+    from utils.tracking_service import TrackingService, TrackingServiceV4
+
+    tracking_service_v4 = TrackingServiceV4()
+    tracking_token = uuid.uuid4().hex
+    pageview_event_id = f"pageview_{uuid.uuid4().hex}"
+    TRACKING_TOKEN_TTL = TrackingServiceV4.TRACKING_TOKEN_TTL_SECONDS
+
+    fbp_cookie = request.cookies.get('_fbp')
+    fbc_cookie = request.cookies.get('_fbc')
+
     if not fbp_cookie and not is_crawler_request:
-        fbp_cookie = TrackingService.generate_fbp()
-        logger.info(f"🔑 _fbp gerado no servidor (funil server-side): {fbp_cookie[:30]}...")
-    
-    # ✅ GERAR _fbc se não existir mas tiver fbclid (FBC pode ser gerado do fbclid)
-    # Formato: fb.1.{timestamp}.{fbclid}
+        try:
+            fbp_cookie = TrackingService.generate_fbp()
+        except Exception:
+            fbp_cookie = None
+
     if not fbc_cookie and fbclid and not is_crawler_request:
         try:
-            # time já está importado no topo do arquivo
-            # Formato: fb.1.{timestamp}.{fbclid}
-            fbc_cookie = f"fb.1.{int(time.time())}.{fbclid}"
-            logger.info(f"🔑 _fbc gerado manualmente: {fbc_cookie[:50]}...")
-        except Exception as e:
-            logger.warning(f"⚠️ Erro ao gerar _fbc: {e}")
-    
-    # ✅ SOLUÇÃO SÊNIOR QI 300: Tracking Universal Persistente (30 dias)
-    # Usar TrackingService para garantir consistência total e recuperação robusta
-    # ✅ CRÍTICO: NÃO salvar tracking para crawlers (poluem Redis com dados incompletos)
-    
-    # ✅ SALVAR TRACKING APENAS SE NÃO FOR CRAWLER
+            fbc_cookie = TrackingService.generate_fbc(fbclid)
+        except Exception:
+            fbc_cookie = None
+
     if not is_crawler_request:
+        utms = {
+            'utm_source': request.args.get('utm_source', ''),
+            'utm_campaign': request.args.get('utm_campaign', ''),
+            'utm_medium': request.args.get('utm_medium', ''),
+            'utm_content': request.args.get('utm_content', ''),
+            'utm_term': request.args.get('utm_term', ''),
+            'utm_id': request.args.get('utm_id', '')
+        }
+
+        tracking_payload = {
+            'tracking_token': tracking_token,
+            'fbclid': fbclid or None,
+            'fbp': fbp_cookie,
+            'fbc': fbc_cookie,
+            'pageview_event_id': pageview_event_id,
+            'client_ip': user_ip,
+            'client_ua': user_agent,
+            'grim': grim_param or None,
+            **{k: v for k, v in utms.items() if v}
+        }
+
         try:
-            # ✅ Preparar UTMs para salvar
-            utms = {
-                'utm_source': request.args.get('utm_source', ''),
-                'utm_campaign': request.args.get('utm_campaign', ''),
-                'utm_medium': request.args.get('utm_medium', ''),
-                'utm_content': request.args.get('utm_content', ''),
-                'utm_term': request.args.get('utm_term', ''),
-                'utm_id': request.args.get('utm_id', '')
-            }
-            
-            # ✅ CORREÇÃO CRÍTICA: FBP já foi gerado acima se não existia
-            # Agora garantimos que SEMPRE temos FBP (do cookie ou gerado no servidor)
-            fbp_final = fbp_cookie  # Já foi gerado acima se necessário
-            
-            # ✅ Gerar fbc se existir fbclid (FBC pode ser gerado do fbclid)
-            fbc_final = fbc_cookie
-            if fbclid and not fbc_final:
-                fbc_final = f"fb.1.{int(time.time())}.{fbclid}"
-                logger.info(f"🔑 _fbc gerado no redirect: {fbc_final[:50]}...")
-            
-            # ✅ VALIDAÇÃO CRÍTICA: Com a correção acima, fbp_final SEMPRE existe (gerado no servidor se necessário)
-            # Sempre salvar tracking (fbp sempre existe, fbc pode existir se tiver fbclid)
-            if fbp_final:
-                # ✅ Salvamento correto (com fbclid ou com grim)
-                if fbclid:
-                    TrackingService.save_tracking_data(
-                        fbclid=fbclid,
-                        fbp=fbp_final,  # ✅ SEMPRE existe (gerado no servidor se necessário)
-                        fbc=fbc_final,  # Sempre gerado se tiver fbclid
-                        ip_address=user_ip,
-                        user_agent=user_agent,
-                        grim=grim_param,
-                        utms=utms
-                    )
-                    logger.info(f"🎯 TRACKING SALVO (30d) | fbclid:{fbclid[:20]}... | fbp=✅ | fbc={'✅' if fbc_final else '❌'}")
-                elif grim_param:
-                    # ✅ Se NÃO tiver fbclid mas tiver grim → salvar mesmo assim!
-                    TrackingService.save_tracking_data(
-                        fbclid=None,
-                        fbp=fbp_final,  # ✅ SEMPRE existe (gerado no servidor se necessário)
-                        fbc=fbc_final,  # Pode ser vazio se não tiver fbclid
-                        ip_address=user_ip,
-                        user_agent=user_agent,
-                        grim=grim_param,
-                        utms=utms
-                    )
-                    logger.info(f"🎯 TRACKING SALVO (30d) | grim:{grim_param} | fbp=✅ | fbc={'✅' if fbc_final else '❌'}")
-            else:
-                # ✅ Isso NÃO deveria acontecer (fbp sempre é gerado), mas mantido como fallback de segurança
-                logger.error(f"❌ ERRO CRÍTICO: Tracking NÃO salvo - fbp ausente (deveria ter sido gerado no servidor!)")
-        
+            tracking_service_v4.save_tracking_token(tracking_token, tracking_payload, ttl=TRACKING_TOKEN_TTL)
+            # Compatibilidade com tracking V3 (fbclid/grim)
+            TrackingService.save_tracking_data(
+                fbclid=fbclid,
+                fbp=fbp_cookie,
+                fbc=fbc_cookie,
+                ip_address=user_ip,
+                user_agent=user_agent,
+                grim=grim_param,
+                utms=utms
+            )
         except Exception as e:
-            logger.error(f"⚠️ Erro ao salvar tracking no Redis: {e}")
-            import traceback
-            traceback.print_exc()
-            # Não quebrar o redirect se Redis falhar
+            logger.error(f"⚠️ Erro ao persistir tracking_token {tracking_token}: {e}", exc_info=True)
     else:
+        tracking_token = None
         logger.info(f"🤖 Crawler detectado - Tracking NÃO salvo (evita poluição do Redis)")
     
     # ============================================================================
@@ -4015,10 +3981,26 @@ def public_redirect(slug):
     utm_data = {}
     
     try:
-        external_id, utm_data = send_meta_pixel_pageview_event(pool, request)
+        external_id, utm_data, pageview_context = send_meta_pixel_pageview_event(
+            pool,
+            request,
+            pageview_event_id=pageview_event_id if not is_crawler_request else None,
+            tracking_token=tracking_token
+        )
     except Exception as e:
         logger.error(f"Erro ao enviar PageView para Meta Pixel: {e}")
         # Não impedir o redirect se Meta falhar
+        pageview_context = {}
+    else:
+        if tracking_token and pageview_context:
+            try:
+                tracking_service_v4.save_tracking_token(
+                    tracking_token,
+                    pageview_context,
+                    ttl=TRACKING_TOKEN_TTL
+                )
+            except Exception as e:
+                logger.warning(f"⚠️ Erro ao atualizar tracking_token {tracking_token} com pageview_context: {e}")
     
     # Emitir evento WebSocket para o dono do pool
     socketio.emit('pool_redirect', {
@@ -4046,6 +4028,8 @@ def public_redirect(slug):
     tracking_data = {
         'p': pool.id,  # pool_id
     }
+    if tracking_token:
+        tracking_data['tt'] = tracking_token
     
     # 🎯 TRACKING ELITE: Priorizar fbclid, fallback para grim
     if fbclid_param:
@@ -6647,7 +6631,7 @@ def test_meta_pixel_connection(bot_id):
     except Exception as e:
         logger.error(f"Erro ao testar Meta Pixel: {e}")
         return jsonify({'error': str(e)}), 500
-def send_meta_pixel_pageview_event(pool, request):
+def send_meta_pixel_pageview_event(pool, request, pageview_event_id=None, tracking_token=None):
     """
     Enfileira evento PageView para Meta Pixel (ASSÍNCRONO - MVP DIA 2)
     
@@ -6661,7 +6645,7 @@ def send_meta_pixel_pageview_event(pool, request):
     CRÍTICO: Não espera resposta da Meta API
     
     Returns:
-        tuple: (external_id, utm_data) para vincular eventos posteriores
+        tuple: (external_id, utm_data, pageview_context) para vincular eventos posteriores
     """
     try:
         # ✅ VERIFICAÇÃO 0: É crawler? (NÃO enviar PageView para crawlers)
@@ -6681,20 +6665,20 @@ def send_meta_pixel_pageview_event(pool, request):
         
         if is_crawler(user_agent):
             logger.info(f"🤖 CRAWLER DETECTADO no PageView: {user_agent[:50]}... | PageView NÃO será enviado")
-            return None, {}
+            return None, {}, {}
         
         # ✅ VERIFICAÇÃO 1: Pool tem Meta Pixel configurado?
         if not pool.meta_tracking_enabled:
-            return None, {}
+            return None, {}, {}
         
         if not pool.meta_pixel_id or not pool.meta_access_token:
             logger.warning(f"Pool {pool.id} tem tracking ativo mas sem pixel_id ou access_token")
-            return None, {}
+            return None, {}, {}
         
         # ✅ VERIFICAÇÃO 2: Evento PageView está habilitado?
         if not pool.meta_events_pageview:
             logger.info(f"Evento PageView desabilitado para pool {pool.id}")
-            return None, {}
+            return None, {}, {}
         
         # Importar helpers
         from utils.meta_pixel import MetaPixelHelper
@@ -6720,14 +6704,14 @@ def send_meta_pixel_pageview_event(pool, request):
             external_id = MetaPixelHelper.generate_external_id()
             logger.warning(f"⚠️ Sem grim nem fbclid, usando external_id sintético: {external_id}")
         
-        event_id = f"pageview_{pool.id}_{int(time.time())}_{external_id[:8]}"
+        event_id = pageview_event_id or f"pageview_{pool.id}_{int(time.time())}_{external_id[:8]}"
         
         # Descriptografar access token
         try:
             access_token = decrypt(pool.meta_access_token)
         except Exception as e:
             logger.error(f"Erro ao descriptografar access_token do pool {pool.id}: {e}")
-            return None, {}
+            return None, {}, {}
         
         # Extrair UTM parameters
         utm_params = MetaPixelHelper.extract_utm_params(request)
@@ -6942,13 +6926,23 @@ def send_meta_pixel_pageview_event(pool, request):
         
         logger.info(f"📤 PageView enfileirado: Pool {pool.id} | Event ID: {event_id} | Task: {task.id}")
         
+        pageview_context = {
+            'pageview_event_id': event_id,
+            'fbp': fbp_value,
+            'fbc': fbc_value,
+            'client_ip': request.remote_addr,
+            'client_user_agent': request.headers.get('User-Agent', ''),
+            'tracking_token': tracking_token,
+            'task_id': task.id if task else None
+        }
+        
         # ✅ RETORNAR IMEDIATAMENTE (não espera envio!)
-        return external_id, utm_data
+        return external_id, utm_data, pageview_context
     
     except Exception as e:
         logger.error(f"💥 Erro ao enfileirar Meta PageView: {e}")
         # Não impedir o redirect se Meta falhar
-        return None, {}
+        return None, {}, {}
 def send_meta_pixel_purchase_event(payment):
     """
     Envia evento Purchase para Meta Pixel quando pagamento é confirmado
@@ -7018,11 +7012,7 @@ def send_meta_pixel_purchase_event(payment):
         from models import BotUser
         from celery_app import send_meta_event
         
-        # ✅ CORREÇÃO CRÍTICA: Gerar event_id ABSOLUTAMENTE ÚNICO
-        # Combinar payment_id + timestamp em milissegundos + UUID para garantir unicidade total
-        timestamp_ms = int(time.time() * 1000)  # Milissegundos para evitar colisões
-        unique_suffix = uuid.uuid4().hex[:8]  # 8 caracteres aleatórios
-        event_id = f"purchase_{payment.payment_id}_{timestamp_ms}_{unique_suffix}"
+        event_id = None
         
         # Descriptografar access token
         try:
@@ -7058,115 +7048,76 @@ def send_meta_pixel_purchase_event(payment):
         # ✅ CORREÇÃO CRÍTICA: Usar _build_user_data para hash correto dos dados
         from utils.meta_pixel import MetaPixelAPI
         
-        # ✅ CRÍTICO: external_id deve ser fbclid para matching com PageView no Meta!
-        # Prioridade: payment.fbclid > bot_user.fbclid > bot_user.external_id (se for fbclid) > payment.customer_user_id
-        external_id_value = None
-        
-        # PRIORIDADE 1: fbclid do payment (mais confiável)
-        if payment.fbclid:
-            external_id_value = payment.fbclid
-            logger.info(f"🎯 Meta Purchase - Using payment.fbclid as external_id: {external_id_value[:30]}...")
-        # PRIORIDADE 2: fbclid do bot_user
-        elif bot_user and bot_user.fbclid:
-            external_id_value = bot_user.fbclid
-            logger.info(f"🎯 Meta Purchase - Using bot_user.fbclid as external_id: {external_id_value[:30]}...")
-        # PRIORIDADE 3: bot_user.external_id (se for fbclid, não grim)
-        elif bot_user and bot_user.external_id:
-            # Verificar se é fbclid (longo) ou grim (curto)
-            is_fbclid = len(bot_user.external_id) > 50 or 'PAZ' in bot_user.external_id
-            if is_fbclid:
-                external_id_value = bot_user.external_id
-                logger.info(f"🎯 Meta Purchase - Using bot_user.external_id (fbclid) as external_id: {external_id_value[:30]}...")
-            else:
-                # É grim, não usar como external_id - buscar fbclid do bot_user
-                if bot_user.fbclid:
-                    external_id_value = bot_user.fbclid
-                    logger.info(f"🎯 Meta Purchase - bot_user.external_id é grim, usando bot_user.fbclid: {external_id_value[:30]}...")
-                else:
-                    # Fallback: usar grim mesmo (não ideal, mas melhor que nada)
-                    external_id_value = bot_user.external_id
-                    logger.warning(f"⚠️ Meta Purchase - Usando grim como external_id (fbclid não encontrado): {external_id_value}")
-        # PRIORIDADE 4: customer_user_id como último recurso
-        else:
-            external_id_value = payment.customer_user_id
-            logger.warning(f"⚠️ Meta Purchase - Usando customer_user_id como external_id (fallback): {external_id_value}")
-        
-        # ✅ PASSO 3: RECUPERAR _fbp e _fbc (SOLUÇÃO SÊNIOR QI 300/500 - MESMOS DADOS DO PAGEVIEW!)
-        # Prioridade: tracking_token (V4) > Redis (cookie do browser) > BotUser > Gerar novo
+        # ✅ RECUPERAR DADOS DO TRACKING TOKEN (fluxo anterior ao problema)
         from utils.tracking_service import TrackingService, TrackingServiceV4
-        
-        fbp_value = None
-        fbc_value = None
-        ip_value = bot_user.ip_address if bot_user and bot_user.ip_address else None
-        user_agent_value = bot_user.user_agent if bot_user and bot_user.user_agent else None
-        
-        # ✅ QI 500: PRIORIDADE 0 - tracking_token (V4) - MÁXIMA PRIORIDADE
-        tracking_data = None
+        tracking_service_v4 = TrackingServiceV4()
+
+        tracking_data = {}
         if payment.tracking_token:
             try:
-                tracking_service_v4 = TrackingServiceV4()
-                tracking_data = tracking_service_v4.recover_tracking_data(
-                    tracking_token=payment.tracking_token
-                )
-                if tracking_data:
-                    fbp_value = tracking_data.get('fbp') or None
-                    fbc_value = tracking_data.get('fbc') or None
-                    if tracking_data.get('ip'):
-                        ip_value = tracking_data.get('ip')
-                    if tracking_data.get('ua'):
-                        user_agent_value = tracking_data.get('ua')
-                    # Usar external_ids do tracking_data se disponível
-                    if tracking_data.get('external_ids'):
-                        logger.info(f"🔑 Purchase - Dados recuperados via tracking_token V4: fbp={'✅' if fbp_value else '❌'} | fbc={'✅' if fbc_value else '❌'}")
+                tracking_data = tracking_service_v4.recover_tracking_data(tracking_token=payment.tracking_token) or {}
             except Exception as e:
-                logger.warning(f"⚠️ Erro ao recuperar tracking via tracking_token: {e}")
-        
-        # ✅ PRIORIDADE 1: Redis (cookie do browser do PageView) - apenas se tracking_token não encontrou
-        if not tracking_data and external_id_value:
-            try:
-                tracking_data = TrackingService.recover_tracking_data(
-                    fbclid=external_id_value if external_id_value.startswith('PAZ') else None,
-                    telegram_user_id=str(telegram_user_id) if telegram_user_id else None,
-                    grim=payment.campaign_code
-                )
-                
-                if tracking_data:
-                    # ✅ CRÍTICO: Usar fbp/fbc do Redis apenas se tracking_token não forneceu
-                    if not fbp_value:
-                        fbp_value = tracking_data.get('fbp') or None
-                    if not fbc_value:
-                        fbc_value = tracking_data.get('fbc') or None
-                    
-                    # ✅ Usar MESMOS IP e User Agent do PageView
-                    if not ip_value and tracking_data.get('ip'):
-                        ip_value = tracking_data.get('ip')
-                    if not user_agent_value and tracking_data.get('ua'):
-                        user_agent_value = tracking_data.get('ua')
-                    
-                    logger.info(f"🔑 Purchase - Dados recuperados do Redis: fbp={'✅' if fbp_value else '❌'} | fbc={'✅' if fbc_value else '❌'} | IP={'✅' if ip_value else '❌'} | UA={'✅' if user_agent_value else '❌'}")
-            except Exception as e:
-                logger.warning(f"⚠️ Erro ao recuperar tracking do Redis: {e}")
-        
-        # ✅ PRIORIDADE 2: BotUser (fallback apenas se Redis não tiver)
-        if bot_user:
-            if not fbp_value and hasattr(bot_user, 'fbp') and bot_user.fbp:
-                fbp_value = bot_user.fbp
-                logger.info(f"🔑 Purchase - fbp recuperado do BotUser (fallback)")
-            if not fbc_value and hasattr(bot_user, 'fbc') and bot_user.fbc:
-                fbc_value = bot_user.fbc
-                logger.info(f"🔑 Purchase - fbc recuperado do BotUser (fallback)")
-        
-        # ✅ PRIORIDADE 3: Gerar _fbc se não existir mas tiver fbclid
-        if not fbc_value and external_id_value and external_id_value.startswith('PAZ'):
-            fbc_value = TrackingService.generate_fbc(external_id_value)
-            logger.info(f"🔑 Purchase - _fbc gerado automaticamente: {fbc_value[:50]}...")
+                logger.warning(f"⚠️ Erro ao recuperar tracking_token {payment.tracking_token}: {e}")
+                tracking_data = {}
+
+        external_id_value = tracking_data.get('fbclid')
+        fbp_value = tracking_data.get('fbp')
+        fbc_value = tracking_data.get('fbc')
+        ip_value = tracking_data.get('client_ip') or tracking_data.get('ip')
+        user_agent_value = tracking_data.get('client_user_agent') or tracking_data.get('ua')
+        if not event_id:
+            event_id = tracking_data.get('pageview_event_id')
+
+        # Fallback legado (TrackingService V3) se ainda houver lacunas
+        if (not external_id_value or not fbp_value or not fbc_value):
+            legacy_tracking = TrackingService.recover_tracking_data(
+                fbclid=external_id_value or payment.fbclid or (bot_user.fbclid if bot_user else None),
+                telegram_user_id=str(telegram_user_id) if telegram_user_id else None,
+                grim=payment.campaign_code
+            )
+            if legacy_tracking:
+                external_id_value = external_id_value or legacy_tracking.get('fbclid')
+                fbp_value = fbp_value or legacy_tracking.get('fbp')
+                fbc_value = fbc_value or legacy_tracking.get('fbc')
+                ip_value = ip_value or legacy_tracking.get('ip')
+                user_agent_value = user_agent_value or legacy_tracking.get('ua')
+
+        # Persistir fbclid recuperado no Payment/BotUser
+        if external_id_value and not payment.fbclid:
+            payment.fbclid = external_id_value
+        if external_id_value and bot_user and not bot_user.fbclid:
+            bot_user.fbclid = external_id_value
+
+        # Fallback final seguindo a ordem original
+        if not external_id_value:
+            if payment.fbclid:
+                external_id_value = payment.fbclid
+            elif bot_user and bot_user.fbclid:
+                external_id_value = bot_user.fbclid
+            elif bot_user and bot_user.external_id:
+                external_id_value = bot_user.external_id
+            else:
+                external_id_value = payment.customer_user_id
+
+        if not fbp_value and bot_user and getattr(bot_user, 'fbp', None):
+            fbp_value = bot_user.fbp
+        if not fbc_value and bot_user and getattr(bot_user, 'fbc', None):
+            fbc_value = bot_user.fbc
+
+        if not fbc_value and external_id_value:
+            generated_fbc = TrackingService.generate_fbc(external_id_value)
+            if generated_fbc:
+                fbc_value = generated_fbc
+
+        if not event_id:
+            event_id = f"purchase_{payment.payment_id}_{int(time.time())}"
         
         # ✅ CRÍTICO #2: external_id IMUTÁVEL e CONSISTENTE (SEMPRE MESMO FORMATO DO PAGEVIEW!)
         # Usar TrackingService para garantir consistência total
         # IMPORTANTE: _build_user_data recebe strings (fbclid e telegram_id) e faz o hash internamente
         # Isso garante que PageView e Purchase usem EXATAMENTE o mesmo formato de hash
         
-        external_id_for_hash = external_id_value if external_id_value and external_id_value.startswith('PAZ') else None
+        external_id_for_hash = external_id_value if external_id_value else None
         telegram_id_for_hash = str(telegram_user_id) if telegram_user_id else None
         
         logger.info(f"🔑 Purchase - external_id: fbclid={'✅' if external_id_for_hash else '❌'} | telegram_id={'✅' if telegram_id_for_hash else '❌'}")

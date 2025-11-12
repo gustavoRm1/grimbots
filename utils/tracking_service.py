@@ -43,6 +43,7 @@ class TrackingServiceV4:
     """
     
     TTL_DAYS = 30  # TTL padrão de 30 dias
+    TRACKING_TOKEN_TTL_SECONDS = 24 * 3600
     
     def __init__(self, redis_client: redis.Redis = None):
         """
@@ -277,6 +278,43 @@ class TrackingServiceV4:
             logger.error(f"❌ Erro ao salvar tracking data: {e}", exc_info=True)
             return False
     
+    def save_tracking_token(
+        self,
+        tracking_token: str,
+        payload: Dict[str, Any],
+        ttl: Optional[int] = None
+    ) -> bool:
+        """
+        Salva/atualiza payload principal do tracking_token (padrão pré-migração).
+        """
+        if not self.redis or not tracking_token:
+            logger.warning("⚠️ Redis não disponível ou tracking_token vazio - save_tracking_token ignorado")
+            return False
+
+        key = f"tracking:{tracking_token}"
+        ttl_seconds = ttl or self.TRACKING_TOKEN_TTL_SECONDS
+
+        try:
+            stored = self.redis.get(key)
+            if stored:
+                try:
+                    previous = json.loads(stored)
+                    if isinstance(previous, dict):
+                        previous.update({k: v for k, v in payload.items() if v is not None})
+                        payload = previous
+                except Exception:
+                    pass
+
+            payload['tracking_token'] = tracking_token
+            payload.setdefault('created_at', datetime.utcnow().isoformat())
+            payload['updated_at'] = datetime.utcnow().isoformat()
+
+            self.redis.set(key, json.dumps(payload), ex=ttl_seconds)
+            return True
+        except Exception as e:
+            logger.error(f"❌ Erro ao salvar tracking_token {tracking_token}: {e}", exc_info=True)
+            return False
+    
     def recover_tracking_data(
         self,
         tracking_token: Optional[str] = None,
@@ -311,7 +349,7 @@ class TrackingServiceV4:
         try:
             # 1. Por tracking_token (PRIORIDADE MÁXIMA)
             if tracking_token:
-                data = self.redis.get(f"tracking:token:{tracking_token}")
+                data = self.redis.get(f"tracking:{tracking_token}") or self.redis.get(f"tracking:token:{tracking_token}")
                 if data:
                     return json.loads(data)
             
