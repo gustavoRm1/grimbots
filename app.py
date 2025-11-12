@@ -7104,13 +7104,28 @@ def send_meta_pixel_purchase_event(payment):
         if not fbc_value and bot_user and getattr(bot_user, 'fbc', None):
             fbc_value = bot_user.fbc
 
-        if not fbc_value and external_id_value:
-            generated_fbc = TrackingService.generate_fbc(external_id_value)
-            if generated_fbc:
+        if not fbc_value:
+            fbclid_fallback = external_id_value or tracking_data.get('fbclid') or getattr(payment, 'fbclid', None)
+            if fbclid_fallback:
+                base_dt = payment.created_at or payment.paid_at or datetime.utcnow()
+                generated_fbc = f"fb.1.{int(base_dt.timestamp())}.{fbclid_fallback}"
                 fbc_value = generated_fbc
+        if fbc_value and not getattr(payment, 'fbc', None):
+            payment.fbc = fbc_value
+
+        event_time_source = payment.paid_at or payment.created_at
+        event_time = int(event_time_source.timestamp()) if event_time_source else int(time.time())
+        now_ts = int(time.time())
+        three_day_window = 3 * 24 * 60 * 60
+        if event_time > now_ts:
+            event_time = now_ts
+        elif event_time < now_ts - three_day_window:
+            event_time = now_ts - three_day_window
 
         if not event_id:
-            event_id = f"purchase_{payment.payment_id}_{int(time.time())}"
+            event_id = tracking_data.get('pageview_event_id')
+        if not event_id:
+            event_id = f"purchase_{payment.payment_id}_{event_time}"
         
         # ✅ CRÍTICO #2: external_id IMUTÁVEL e CONSISTENTE (SEMPRE MESMO FORMATO DO PAGEVIEW!)
         # Usar TrackingService para garantir consistência total
@@ -7235,7 +7250,7 @@ def send_meta_pixel_purchase_event(payment):
         # Construir event_data completo
         event_data = {
             'event_name': 'Purchase',
-            'event_time': int(time.time()),
+            'event_time': event_time,
             'event_id': event_id,
             'action_source': 'website',  # ✅ Correto para server-side events
             'event_source_url': f'https://t.me/{payment.bot.username}',  # ✅ OBRIGATÓRIO para melhor matching
