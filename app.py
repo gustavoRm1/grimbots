@@ -21,6 +21,7 @@ from redis_manager import get_redis_connection, redis_health_check
 from sqlalchemy import text, select, delete
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.dialects.postgresql import insert as pg_insert
+from urllib.parse import urlparse, urlencode, parse_qsl, urlunparse
 
 # ============================================================================
 # CARREGAR VARIÁVEIS DE AMBIENTE (.env)
@@ -4088,6 +4089,12 @@ def public_redirect(slug):
         tracking_param = f"p{pool.id}"
     
     redirect_url = f"https://t.me/{pool_bot.bot.username}?start={tracking_param}"
+    parsed_redirect = urlparse(redirect_url)
+    redirect_query = dict(parse_qsl(parsed_redirect.query))
+    redirect_url_base = urlunparse(parsed_redirect._replace(query=urlencode(redirect_query)))
+    if not is_crawler_request:
+        redirect_query['tt'] = tracking_token
+    target_redirect_url = urlunparse(parsed_redirect._replace(query=urlencode(redirect_query)))
     
     # ✅ CRÍTICO: Injetar cookies _fbp e _fbc no browser real
     cookie_kwargs = {
@@ -4102,8 +4109,6 @@ def public_redirect(slug):
         pool.meta_pixel_id and
         request.method == 'GET'
     )
-    
-    target_redirect_url = f"{redirect_url}&tt={tracking_token}"
     
     if render_pixel_bridge:
         html_bridge = render_template_string(
@@ -4146,7 +4151,7 @@ def public_redirect(slug):
         )
         response = make_response(html_bridge, 200)
     else:
-        response = make_response(redirect(target_redirect_url if not is_crawler_request else redirect_url, code=302))
+        response = make_response(redirect(target_redirect_url if not is_crawler_request else redirect_url_base, code=302))
     
     if fbp_cookie:
         response.set_cookie('_fbp', fbp_cookie, **cookie_kwargs)
