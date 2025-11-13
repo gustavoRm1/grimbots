@@ -125,6 +125,23 @@ class TrackingServiceV4:
                         elif preserved_pageview_event_id and new_pageview_event_id:
                             # Se ambos têm valor, usar o novo (mais recente)
                             logger.debug(f"✅ Usando pageview_event_id do novo payload: {new_pageview_event_id}")
+                        
+                        # ✅ CRÍTICO: Preservar fbc do payload anterior se o novo não tiver ou for None/vazio
+                        preserved_fbc = previous.get('fbc')
+                        new_fbc = payload.get('fbc')
+                        if preserved_fbc and (not new_fbc or new_fbc == 'None' or new_fbc == ''):
+                            payload['fbc'] = preserved_fbc
+                            logger.debug(f"✅ Preservando fbc do payload anterior: {preserved_fbc[:50]}...")
+                        # ✅ CRÍTICO: Não sobrescrever fbc válido com None ou vazio
+                        elif preserved_fbc and new_fbc:
+                            # Se ambos têm valor, usar o novo (mais recente) - mas só se for válido
+                            if new_fbc and new_fbc != 'None' and new_fbc != '':
+                                logger.debug(f"✅ Usando fbc do novo payload: {new_fbc[:50]}...")
+                            else:
+                                # Se o novo não é válido, preservar o anterior
+                                payload['fbc'] = preserved_fbc
+                                logger.debug(f"✅ Preservando fbc anterior (novo inválido): {preserved_fbc[:50]}...")
+                        
                         previous.update(payload)
                         payload = previous
                 except Exception:

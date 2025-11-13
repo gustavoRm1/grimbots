@@ -4187,11 +4187,14 @@ Seu pagamento ainda não foi confirmado.
                     else:
                         logger.info(f"✅ fbp recuperado do tracking_data_v4: {fbp[:30]}...")
                     
-                    if not fbc and fbclid:
-                        fbc = tracking_service.generate_fbc(fbclid)
-                        logger.warning(f"⚠️ fbc não encontrado no tracking_data_v4 - gerado sintético: {fbc[:30] if fbc else 'None'}...")
-                    elif fbc:
+                    # ✅ CRÍTICO: NUNCA gerar fbc sintético em generate_pix_payment
+                    # O fbc deve vir EXATAMENTE do redirect (cookie do browser)
+                    # Gerar sintético aqui quebra a atribuição porque o timestamp não corresponde ao clique original
+                    if fbc:
                         logger.info(f"✅ fbc recuperado do tracking_data_v4: {fbc[:30]}...")
+                    else:
+                        logger.warning(f"⚠️ fbc não encontrado no tracking_data_v4 - NÃO gerando sintético (preservando atribuição)")
+                        # ✅ NÃO gerar fbc sintético - deixar None e confiar no fallback do Purchase
                     
                     if pageview_event_id:
                         logger.info(f"✅ pageview_event_id recuperado do tracking_data_v4: {pageview_event_id}")
@@ -4199,7 +4202,8 @@ Seu pagamento ainda não foi confirmado.
                         # ✅ FALLBACK: Tentar recuperar do bot_user (se houver tracking_session_id)
                         if bot_user and bot_user.tracking_session_id:
                             try:
-                                fallback_tracking = tracking_service_v4.recover_tracking_data(bot_user.tracking_session_id)
+                                # ✅ CORREÇÃO: Usar tracking_service (já instanciado acima) ao invés de tracking_service_v4
+                                fallback_tracking = tracking_service.recover_tracking_data(bot_user.tracking_session_id)
                                 pageview_event_id = fallback_tracking.get('pageview_event_id')
                                 if pageview_event_id:
                                     logger.info(f"✅ pageview_event_id recuperado do bot_user.tracking_session_id: {pageview_event_id}")
@@ -4223,7 +4227,9 @@ Seu pagamento ainda não foi confirmado.
                         "customer_user_id": customer_user_id,
                         "fbclid": fbclid,
                         "fbp": fbp,
-                        "fbc": fbc,
+                        # ✅ CRÍTICO: Só incluir fbc se for válido (não None)
+                        # Não sobrescrever fbc válido do Redis com None
+                        **({"fbc": fbc} if fbc else {}),
                         "pageview_event_id": pageview_event_id,
                         "pageview_ts": tracking_data_v4.get('pageview_ts'),
                         "grim": tracking_data_v4.get('grim'),
@@ -4235,6 +4241,7 @@ Seu pagamento ainda não foi confirmado.
                         "external_ids": external_ids,
                         "updated_from": "generate_pix_payment",
                     }
+                    # ✅ CRÍTICO: Filtrar None/vazios para não sobrescrever dados válidos no Redis
                     tracking_service.save_tracking_token(tracking_token, {k: v for k, v in tracking_update_payload.items() if v})
                     
                     logger.info("Tracking token pronto: %s | fbp=%s | fbc=%s | pageview=%s", tracking_token, 'ok' if fbp else 'missing', 'ok' if fbc else 'missing', 'ok' if pageview_event_id else 'missing')
