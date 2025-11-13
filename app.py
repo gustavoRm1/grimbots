@@ -62,6 +62,38 @@ def sanitize_payload(payload: Any) -> Any:
         return strip_surrogate_chars(payload)
     return payload
 
+
+def normalize_external_id(fbclid: str) -> str:
+    """
+    Normaliza external_id (fbclid) para garantir matching consistente entre PageView e Purchase.
+    
+    ✅ CRÍTICO: PageView e Purchase DEVEM usar o MESMO algoritmo de normalização!
+    
+    Regras:
+    - Se fbclid > 80 chars: retorna hash MD5 (32 chars) - mesmo critério usado no PageView
+    - Se fbclid <= 80 chars: retorna fbclid original
+    - Se fbclid é None/vazio: retorna None
+    
+    Isso garante que ambos os eventos usem o mesmo external_id, permitindo matching perfeito no Meta.
+    """
+    if not fbclid or not isinstance(fbclid, str):
+        return None
+    
+    fbclid = fbclid.strip()
+    if not fbclid:
+        return None
+    
+    # ✅ CRÍTICO: Mesmo critério usado no PageView (80 chars)
+    # Se fbclid > 80 chars, normalizar para hash MD5 (32 chars)
+    if len(fbclid) > 80:
+        import hashlib
+        normalized = hashlib.md5(fbclid.encode('utf-8')).hexdigest()
+        logger.debug(f"🔑 External ID normalizado (MD5): {normalized} (original len={len(fbclid)})")
+        return normalized
+    
+    # Se <= 80 chars, usar original
+    return fbclid
+
 # ============================================================================
 # GAMIFICAÇÃO V2.0 - IMPORTS
 # ============================================================================
@@ -6681,19 +6713,28 @@ def send_meta_pixel_pageview_event(pool, request, pageview_event_id=None, tracki
         fbclid_from_request = request.args.get('fbclid', '')
         
         # ✅ PRIORIDADE: fbclid como external_id (obrigatório para matching)
+        external_id_raw = None
         if fbclid_from_request:
-            external_id = fbclid_from_request
-            logger.info(f"🎯 TRACKING ELITE | Using fbclid as external_id: {external_id[:30]}...")
+            external_id_raw = fbclid_from_request
+            logger.info(f"🎯 TRACKING ELITE | Using fbclid as external_id: {external_id_raw[:30]}... (len={len(external_id_raw)})")
         elif grim_param:
             # Fallback: usar grim se não tiver fbclid (não ideal, mas melhor que nada)
-            external_id = grim_param
-            logger.warning(f"⚠️ Sem fbclid, usando grim como external_id: {external_id}")
+            external_id_raw = grim_param
+            logger.warning(f"⚠️ Sem fbclid, usando grim como external_id: {external_id_raw}")
         else:
             # Último recurso: gerar sintético
-            external_id = MetaPixelHelper.generate_external_id()
-            logger.warning(f"⚠️ Sem grim nem fbclid, usando external_id sintético: {external_id}")
+            external_id_raw = MetaPixelHelper.generate_external_id()
+            logger.warning(f"⚠️ Sem grim nem fbclid, usando external_id sintético: {external_id_raw}")
         
-        event_id = pageview_event_id or f"pageview_{pool.id}_{int(time.time())}_{external_id[:8]}"
+        # ✅ CRÍTICO: Normalizar external_id para garantir matching consistente com Purchase
+        # Se fbclid > 80 chars, normalizar para hash MD5 (32 chars) - MESMO algoritmo usado no Purchase
+        external_id = normalize_external_id(external_id_raw)
+        if external_id != external_id_raw:
+            logger.info(f"✅ PageView - external_id normalizado: {external_id} (original len={len(external_id_raw)})")
+        else:
+            logger.info(f"✅ PageView - external_id usado original: {external_id[:30]}... (len={len(external_id)})")
+        
+        event_id = pageview_event_id or f"pageview_{pool.id}_{int(time.time())}_{external_id[:8] if external_id else 'unknown'}"
         
         # Descriptografar access token
         try:
@@ -6845,13 +6886,14 @@ def send_meta_pixel_pageview_event(pool, request, pageview_event_id=None, tracki
         )
         
         # ✅ CRÍTICO: Garantir que external_id existe (obrigatório para Conversions API)
-        # ✅ CORREÇÃO: Se _build_user_data não retornou external_id, mas temos external_id (fbclid), forçar inclusão
+        # ✅ CORREÇÃO: Se _build_user_data não retornou external_id, mas temos external_id normalizado, forçar inclusão
         if not user_data.get('external_id'):
-            # ✅ PRIORIDADE 1: Usar fbclid real se disponível (NUNCA usar fallback sintético se temos fbclid!)
-            if external_id and external_id.startswith(('PAZ', 'IwZ')):
-                # fbclid válido da Meta - usar diretamente (será hashado pelo _build_user_data)
+            # ✅ PRIORIDADE 1: Usar fbclid normalizado se disponível (NUNCA usar fallback sintético se temos fbclid!)
+            if external_id:
+                # fbclid normalizado (MD5 se > 80 chars, ou original se <= 80) - usar diretamente (será hashado SHA256 pelo _build_user_data)
                 user_data['external_id'] = [MetaPixelAPI._hash_data(external_id)]
-                logger.info(f"✅ PageView - external_id (fbclid) forçado no user_data: {external_id[:50]}... (len={len(external_id)})")
+                logger.info(f"✅ PageView - external_id (fbclid normalizado) forçado no user_data: {external_id} (len={len(external_id)})")
+                logger.info(f"✅ PageView - MATCH GARANTIDO com Purchase (mesmo external_id normalizado)")
             # ✅ PRIORIDADE 2: Usar grim se disponível (melhor que sintético)
             elif grim_param:
                 user_data['external_id'] = [MetaPixelAPI._hash_data(grim_param)]
@@ -6863,15 +6905,18 @@ def send_meta_pixel_pageview_event(pool, request, pageview_event_id=None, tracki
                 logger.warning(f"⚠️ PageView - External ID não encontrado, usando fallback: {fallback_external_id}")
                 logger.warning(f"⚠️ PageView - Isso pode quebrar matching com Purchase! Verifique se fbclid está sendo capturado corretamente.")
         else:
-            # ✅ VALIDAÇÃO: Verificar se o external_id retornado confere com o fbclid original
+            # ✅ VALIDAÇÃO: Verificar se o external_id retornado confere com o fbclid normalizado
             first_external_id_hash = user_data['external_id'][0] if user_data.get('external_id') else None
-            if first_external_id_hash and external_id and external_id.startswith(('PAZ', 'IwZ')):
-                expected_hash = MetaPixelAPI._hash_data(external_id)
+            if first_external_id_hash and external_id:
+                # ✅ CRÍTICO: Comparar com versão NORMALIZADA (não original!)
+                expected_hash = MetaPixelAPI._hash_data(external_id)  # external_id já está normalizado aqui
                 if first_external_id_hash == expected_hash:
-                    logger.info(f"✅ PageView - external_id[0] confere com fbclid original (len={len(external_id)})")
+                    logger.info(f"✅ PageView - external_id[0] confere com fbclid normalizado (len={len(external_id)})")
+                    logger.info(f"   Hash esperado: {expected_hash[:16]}... | Hash recebido: {first_external_id_hash[:16]}...")
                 else:
-                    logger.warning(f"⚠️ PageView - external_id[0] NÃO confere com fbclid original! Isso pode quebrar matching!")
+                    logger.warning(f"⚠️ PageView - external_id[0] NÃO confere com fbclid normalizado! Isso pode quebrar matching!")
                     logger.warning(f"   Esperado: {expected_hash[:16]}... | Recebido: {first_external_id_hash[:16]}...")
+                    logger.warning(f"   External ID normalizado: {external_id[:30]}...")
                     # ✅ CORREÇÃO AUTOMÁTICA: Substituir pelo hash correto
                     user_data['external_id'] = [expected_hash]
                     logger.info(f"✅ PageView - external_id corrigido automaticamente para garantir matching")
@@ -7205,11 +7250,19 @@ def send_meta_pixel_purchase_event(payment):
             event_id = f"purchase_{payment.payment_id}_{event_time}"
         
         # ✅ CRÍTICO #2: external_id IMUTÁVEL e CONSISTENTE (SEMPRE MESMO FORMATO DO PAGEVIEW!)
-        # Usar TrackingService para garantir consistência total
-        # IMPORTANTE: _build_user_data recebe strings (fbclid e telegram_id) e faz o hash internamente
+        # ✅ CORREÇÃO CIRÚRGICA: Normalizar external_id com MESMO algoritmo usado no PageView
+        # Se fbclid > 80 chars, normalizar para hash MD5 (32 chars) - GARANTE MATCHING PERFEITO!
+        external_id_normalized = normalize_external_id(external_id_value) if external_id_value else None
+        if external_id_normalized != external_id_value and external_id_value:
+            logger.info(f"✅ Purchase - external_id normalizado: {external_id_normalized} (original len={len(external_id_value)})")
+            logger.info(f"✅ Purchase - MATCH GARANTIDO com PageView (mesmo algoritmo de normalização)")
+        elif external_id_normalized:
+            logger.info(f"✅ Purchase - external_id usado original: {external_id_normalized[:30]}... (len={len(external_id_normalized)})")
+        
+        # IMPORTANTE: _build_user_data recebe strings (fbclid normalizado e telegram_id) e faz o hash SHA256 internamente
         # Isso garante que PageView e Purchase usem EXATAMENTE o mesmo formato de hash
         
-        external_id_for_hash = external_id_value if external_id_value else None
+        external_id_for_hash = external_id_normalized  # ✅ Usar versão normalizada (garante matching!)
         telegram_id_for_hash = str(telegram_user_id) if telegram_user_id else None
         
         logger.info(f"🔑 Purchase - external_id: fbclid={'✅' if external_id_for_hash else '❌'} | telegram_id={'✅' if telegram_id_for_hash else '❌'}")
@@ -7237,13 +7290,14 @@ def send_meta_pixel_purchase_event(payment):
         )
         
         # ✅ VALIDAÇÃO: Garantir que external_id é um array e tem pelo menos fbclid
-        # ✅ CRÍTICO: Se _build_user_data não retornou external_id, mas temos external_id_value, forçar inclusão
+        # ✅ CRÍTICO: Se _build_user_data não retornou external_id, mas temos external_id_normalized, forçar inclusão
         if not user_data.get('external_id'):
-            # ✅ PRIORIDADE 1: Usar fbclid real se disponível (NUNCA usar fallback sintético se temos fbclid!)
-            if external_id_value and external_id_value.startswith(('PAZ', 'IwZ')):
-                # fbclid válido da Meta - usar diretamente (será hashado pelo _build_user_data)
-                user_data['external_id'] = [MetaPixelAPI._hash_data(external_id_value)]
-                logger.info(f"✅ Purchase - external_id (fbclid) forçado no user_data: {external_id_value[:50]}... (len={len(external_id_value)})")
+            # ✅ PRIORIDADE 1: Usar fbclid normalizado se disponível (NUNCA usar fallback sintético se temos fbclid!)
+            if external_id_normalized:
+                # fbclid normalizado (MD5 se > 80 chars, ou original se <= 80) - usar diretamente (será hashado SHA256 pelo _build_user_data)
+                user_data['external_id'] = [MetaPixelAPI._hash_data(external_id_normalized)]
+                logger.info(f"✅ Purchase - external_id (fbclid normalizado) forçado no user_data: {external_id_normalized} (len={len(external_id_normalized)})")
+                logger.info(f"✅ Purchase - MATCH GARANTIDO com PageView (mesmo external_id normalizado)")
             # ✅ PRIORIDADE 2: Usar telegram_user_id se disponível
             elif telegram_id_for_hash:
                 user_data['external_id'] = [MetaPixelAPI._hash_data(telegram_id_for_hash)]
@@ -7260,15 +7314,18 @@ def send_meta_pixel_purchase_event(payment):
             logger.info(f"🔑 Purchase - external_id array consolidado: {external_ids_count} ID(s) | Primeiro: {user_data['external_id'][0][:16]}...")
             if external_ids_count >= 2:
                 logger.info(f"✅ Purchase - external_id múltiplo detectado (match quality otimizado): fbclid + telegram_user_id")
-            # ✅ VALIDAÇÃO: Verificar se o primeiro external_id é realmente o fbclid (deve começar com hash de PAZ ou IwZ)
+            # ✅ VALIDAÇÃO: Verificar se o primeiro external_id é realmente o fbclid normalizado
             first_external_id_hash = user_data['external_id'][0] if user_data.get('external_id') else None
-            if first_external_id_hash and external_id_value and external_id_value.startswith(('PAZ', 'IwZ')):
-                expected_hash = MetaPixelAPI._hash_data(external_id_value)
+            if first_external_id_hash and external_id_normalized:
+                # ✅ CRÍTICO: Comparar com versão NORMALIZADA (não original!)
+                expected_hash = MetaPixelAPI._hash_data(external_id_normalized)
                 if first_external_id_hash == expected_hash:
-                    logger.info(f"✅ Purchase - external_id[0] confere com fbclid original (match garantido com PageView)")
+                    logger.info(f"✅ Purchase - external_id[0] confere com fbclid normalizado (match garantido com PageView)")
+                    logger.info(f"   Hash esperado: {expected_hash[:16]}... | Hash recebido: {first_external_id_hash[:16]}...")
                 else:
-                    logger.warning(f"⚠️ Purchase - external_id[0] NÃO confere com fbclid original! Isso pode quebrar matching!")
+                    logger.warning(f"⚠️ Purchase - external_id[0] NÃO confere com fbclid normalizado! Isso pode quebrar matching!")
                     logger.warning(f"   Esperado: {expected_hash[:16]}... | Recebido: {first_external_id_hash[:16]}...")
+                    logger.warning(f"   External ID normalizado: {external_id_normalized[:30]}...")
         
         # ✅ LOG CRÍTICO: Mostrar dados enviados para matching (quantidade de atributos)
         external_ids = user_data.get('external_id', [])
