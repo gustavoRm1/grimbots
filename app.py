@@ -4065,12 +4065,13 @@ def public_redirect(slug):
         }
 
         try:
+            logger.info(f"✅ Redirect - Salvando tracking_payload inicial com pageview_event_id: {tracking_payload.get('pageview_event_id', 'N/A')}")
             ok = tracking_service_v4.save_tracking_token(tracking_token, tracking_payload, ttl=TRACKING_TOKEN_TTL)
             if not ok:
                 logger.warning("Retry saving tracking_token once (redirect)")
                 tracking_service_v4.save_tracking_token(tracking_token, tracking_payload, ttl=TRACKING_TOKEN_TTL)
             else:
-                logger.info(f"✅ Redirect - tracking_token salvo no Redis com fbclid completo (len={len(fbclid_to_save) if fbclid_to_save else 0})")
+                logger.info(f"✅ Redirect - tracking_token salvo no Redis com fbclid completo (len={len(fbclid_to_save) if fbclid_to_save else 0}) e pageview_event_id: {tracking_payload.get('pageview_event_id', 'N/A')}")
             # Compatibilidade com tracking V3 (fbclid/grim)
             TrackingService.save_tracking_data(
                 fbclid=fbclid,
@@ -4107,18 +4108,40 @@ def public_redirect(slug):
         # Não impedir o redirect se Meta falhar
         pageview_context = {}
     else:
-        if tracking_token and pageview_context:
+        # ✅ CRÍTICO: Sempre salvar pageview_context, mesmo se vazio, para garantir que pageview_event_id seja preservado
+        if tracking_token:
             try:
-                ok = tracking_service_v4.save_tracking_token(
-                    tracking_token,
-                    pageview_context,
-                    ttl=TRACKING_TOKEN_TTL
-                )
-                if not ok:
-                    logger.warning("Retry saving pageview_context once (redirect)")
-                    tracking_service_v4.save_tracking_token(
+                # ✅ Garantir que pageview_event_id do tracking_payload inicial seja preservado
+                if pageview_context:
+                    # Se pageview_context tem pageview_event_id, usar ele; senão, usar do tracking_payload inicial
+                    if not pageview_context.get('pageview_event_id') and 'pageview_event_id' in tracking_payload:
+                        pageview_context['pageview_event_id'] = tracking_payload['pageview_event_id']
+                        logger.info(f"✅ Preservando pageview_event_id do tracking_payload inicial: {tracking_payload['pageview_event_id']}")
+                    
+                    ok = tracking_service_v4.save_tracking_token(
                         tracking_token,
                         pageview_context,
+                        ttl=TRACKING_TOKEN_TTL
+                    )
+                else:
+                    # Se pageview_context está vazio, salvar apenas o pageview_event_id do tracking_payload inicial
+                    logger.warning(f"⚠️ pageview_context vazio - preservando apenas pageview_event_id do tracking_payload inicial")
+                    fallback_context = {
+                        'pageview_event_id': tracking_payload.get('pageview_event_id'),
+                        'pageview_ts': tracking_payload.get('pageview_ts')
+                    }
+                    ok = tracking_service_v4.save_tracking_token(
+                        tracking_token,
+                        fallback_context,
+                        ttl=TRACKING_TOKEN_TTL
+                    )
+                
+                if not ok:
+                    logger.warning("Retry saving pageview_context once (redirect)")
+                    retry_context = pageview_context if pageview_context else {'pageview_event_id': tracking_payload.get('pageview_event_id')}
+                    tracking_service_v4.save_tracking_token(
+                        tracking_token,
+                        retry_context,
                         ttl=TRACKING_TOKEN_TTL
                     )
             except Exception as e:
