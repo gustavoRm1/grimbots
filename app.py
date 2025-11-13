@@ -7517,9 +7517,12 @@ def send_meta_pixel_purchase_event(payment):
                     payment.meta_event_id = event_id
                     db.session.commit()
                     
+                    events_received = result.get('events_received', 0)
+                    logger.info(f"📤 Purchase ENVIADO: {payment.payment_id} | Events Received: {events_received} | event_id: {event_id}")
                     logger.info(f"✅ Purchase ENVIADO com sucesso para Meta: R$ {payment.amount} | " +
-                               f"Events Received: {result.get('events_received', 0)} | " +
-                               f"Task: {task.id}")
+                               f"Events Received: {events_received} | " +
+                               f"Task: {task.id} | " +
+                               f"Deduplicação: event_id={event_id} (reutilizado do PageView: {tracking_data.get('pageview_event_id', 'N/A')})")
                 else:
                     # Falhou silenciosamente - não marcar como enviado
                     logger.error(f"❌ Purchase FALHOU silenciosamente: R$ {payment.amount} | " +
@@ -7968,13 +7971,23 @@ def payment_webhook(gateway_type):
                         if new_badges:
                             logger.info(f"🎉 {len(new_badges)} nova(s) conquista(s) desbloqueada(s)!")
                 
+                # ✅ CORREÇÃO CRÍTICA: COMMIT ANTES DE ENVIAR ENTREGÁVEL E META PIXEL
+                # Garantir que payment.status='paid' está persistido antes de processar entregável/Meta
+                db.session.commit()
+                logger.info(f"🔔 Webhook -> payment {payment.payment_id} atualizado para paid e commitado")
+                
                 # ✅ ENVIAR ENTREGÁVEL E META PIXEL SEMPRE QUE STATUS VIRA 'paid' (CRÍTICO!)
                 # Isso garante que mesmo se estatísticas já foram processadas, o entregável e Meta Pixel são enviados
                 if deve_enviar_entregavel:
                     logger.info(f"📦 Enviando entregável para payment {payment.payment_id} (status: {payment.status})")
-                    resultado = send_payment_delivery(payment, bot_manager)
-                    if not resultado:
-                        logger.warning(f"⚠️ Falha ao enviar entregável para payment {payment.payment_id}")
+                    try:
+                        resultado = send_payment_delivery(payment, bot_manager)
+                        if resultado:
+                            logger.info(f"✅ Entregável enviado com sucesso para {payment.payment_id}")
+                        else:
+                            logger.warning(f"⚠️ Falha ao enviar entregável para payment {payment.payment_id}")
+                    except Exception as delivery_error:
+                        logger.exception(f"❌ Erro ao enviar entregável: {delivery_error}")
                     
                     # ============================================================================
                     # ✅ META PIXEL: ENVIAR PURCHASE EVENT (SEMPRE quando status é 'paid')
@@ -7984,10 +7997,11 @@ def payment_webhook(gateway_type):
                     # Isso garante que mesmo se reconciliador atualizar antes do webhook,
                     # o Meta Pixel será enviado via webhook também (idempotente)
                     try:
+                        logger.info(f"✅ Enviando Meta Purchase para {payment.payment_id}")
                         send_meta_pixel_purchase_event(payment)
                         logger.info(f"📊 Meta Pixel Purchase disparado para {payment.payment_id} via webhook {gateway_type}")
                     except Exception as e:
-                        logger.error(f"❌ Erro ao disparar Meta Pixel via webhook {gateway_type}: {e}", exc_info=True)
+                        logger.exception(f"❌ Erro ao disparar Meta Pixel via webhook {gateway_type}: {e}")
                     
                     # ============================================================================
                     # ✅ UPSELLS AUTOMÁTICOS - APÓS COMPRA APROVADA (só se estatísticas foram processadas)
@@ -8032,7 +8046,8 @@ def payment_webhook(gateway_type):
                             import traceback
                             traceback.print_exc()
                 
-                db.session.commit()
+                # ✅ COMMIT JÁ FOI FEITO ANTES (linha 7973) - não duplicar
+                # db.session.commit() removido - commit já ocorreu antes de enviar entregável/Meta
                 
                 # Notificar em tempo real via WebSocket
                 socketio.emit('payment_update', {

@@ -4054,11 +4054,14 @@ Seu pagamento ainda não foi confirmado.
                     redis_tracking_payload: Dict[str, Any] = {}
                     tracking_token = None
 
+                    # ✅ CORREÇÃO: Recuperar tracking_token ANTES de gerar valores sintéticos
+                    # Prioridade: tracking:last_token > tracking:chat > bot_user.tracking_session_id
                     if customer_user_id:
                         try:
                             cached_token = tracking_service.redis.get(f"tracking:last_token:user:{customer_user_id}")
                             if cached_token:
                                 tracking_token = cached_token
+                                logger.info(f"✅ Tracking token recuperado de tracking:last_token:user:{customer_user_id}: {tracking_token[:20]}...")
                         except Exception:
                             logger.exception("Falha ao recuperar tracking:last_token do Redis")
                         if not tracking_token:
@@ -4067,20 +4070,26 @@ Seu pagamento ainda não foi confirmado.
                                 if cached_payload:
                                     redis_tracking_payload = json.loads(cached_payload)
                                     tracking_token = redis_tracking_payload.get("tracking_token") or tracking_token
+                                    if tracking_token:
+                                        logger.info(f"✅ Tracking token recuperado de tracking:chat:{customer_user_id}: {tracking_token[:20]}...")
                             except Exception:
                                 logger.exception("Falha ao recuperar tracking:chat do Redis")
 
                     if not tracking_token and bot_user:
                         tracking_token = getattr(bot_user, 'tracking_session_id', None)
+                        if tracking_token:
+                            logger.info(f"✅ Tracking token recuperado de bot_user.tracking_session_id: {tracking_token[:20]}...")
 
                     tracking_data_v4: Dict[str, Any] = redis_tracking_payload if isinstance(redis_tracking_payload, dict) else {}
 
+                    # ✅ CRÍTICO: Recuperar payload completo do Redis ANTES de gerar valores sintéticos
                     if tracking_token:
                         recovered_payload = tracking_service.recover_tracking_data(tracking_token) or {}
                         if recovered_payload:
                             tracking_data_v4 = recovered_payload
+                            logger.info(f"✅ Tracking payload recuperado do Redis para token {tracking_token[:20]}... | fbp={'ok' if recovered_payload.get('fbp') else 'missing'} | fbc={'ok' if recovered_payload.get('fbc') else 'missing'} | pageview_event_id={'ok' if recovered_payload.get('pageview_event_id') else 'missing'}")
                         elif not tracking_data_v4:
-                            logger.warning("Tracking token %s sem payload no Redis - tentando reconstruir via BotUser", tracking_token)
+                            logger.warning("⚠️ Tracking token %s sem payload no Redis - tentando reconstruir via BotUser", tracking_token)
                         if bot_user and getattr(bot_user, 'tracking_session_id', None) != tracking_token:
                             bot_user.tracking_session_id = tracking_token
 
@@ -4141,14 +4150,27 @@ Seu pagamento ainda não foi confirmado.
                     if tracking_data_v4.get('utm_term'):
                         utm_term = tracking_data_v4['utm_term']
                     
+                    # ✅ CRÍTICO: Usar valores do Redis se disponíveis, só gerar sintéticos se faltar
                     fbp = tracking_data_v4.get('fbp')
                     fbc = tracking_data_v4.get('fbc')
                     pageview_event_id = tracking_data_v4.get('pageview_event_id')
                     
                     if not fbp:
                         fbp = tracking_service.generate_fbp(str(customer_user_id))
+                        logger.warning(f"⚠️ fbp não encontrado no tracking_data_v4 - gerado sintético: {fbp[:30]}...")
+                    else:
+                        logger.info(f"✅ fbp recuperado do tracking_data_v4: {fbp[:30]}...")
+                    
                     if not fbc and fbclid:
                         fbc = tracking_service.generate_fbc(fbclid)
+                        logger.warning(f"⚠️ fbc não encontrado no tracking_data_v4 - gerado sintético: {fbc[:30] if fbc else 'None'}...")
+                    elif fbc:
+                        logger.info(f"✅ fbc recuperado do tracking_data_v4: {fbc[:30]}...")
+                    
+                    if pageview_event_id:
+                        logger.info(f"✅ pageview_event_id recuperado do tracking_data_v4: {pageview_event_id}")
+                    else:
+                        logger.warning(f"⚠️ pageview_event_id não encontrado no tracking_data_v4 - Purchase pode não fazer dedup perfeito")
                     
                     # Gerar external_ids com dados reais recuperados
                     external_ids = tracking_service.build_external_id_array(
