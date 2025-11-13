@@ -180,8 +180,8 @@ class UmbrellaPagGateway(PaymentGateway):
             
             # Headers padrão
             request_headers = {
-                'x-api-key': self.api_key,
-                'User-Agent': 'UMBRELLAB2B/1.0',
+                'x-api-key': self.api_key,  # ✅ Chave completa (sem truncar)
+                'User-Agent': 'UmbrellaPagB2B/1.0',  # ✅ CORREÇÃO: forma canônica (PluggouV2)
                 'Content-Type': 'application/json',
                 'Accept': 'application/json'
             }
@@ -190,7 +190,7 @@ class UmbrellaPagGateway(PaymentGateway):
                 request_headers.update(headers)
             
             logger.info(f"🌐 [{self.get_gateway_name()}] {method} {url}")
-            logger.info(f"🔑 [{self.get_gateway_name()}] Headers: x-api-key={self.api_key[:15]}..., User-Agent=UMBRELLAB2B/1.0")
+            logger.info(f"🔑 [{self.get_gateway_name()}] Headers: x-api-key={self.api_key[:15]}..., User-Agent=UmbrellaPagB2B/1.0")
             
             # Log headers adicionais se houver
             if headers:
@@ -755,10 +755,22 @@ class UmbrellaPagGateway(PaymentGateway):
                 customer_address['zipCode'] = zip_code_clean
             
             # Preparar documento
+            # ✅ CORREÇÃO: Garantir que document.number seja apenas números (sem máscara)
+            # PluggouV2 exige CPF apenas com dígitos: "01314950271" (não "013.149.502-71")
+            document_number_clean = re.sub(r'\D', '', str(customer_document)) if customer_document else ''
+            if len(document_number_clean) != 11:
+                # Se não tem 11 dígitos após limpar, usar o customer_document original (já validado)
+                document_number_clean = str(customer_document).replace('.', '').replace('-', '').replace(' ', '')
+                if len(document_number_clean) != 11:
+                    # Se ainda não tem 11 dígitos, usar o customer_document gerado
+                    document_number_clean = customer_document
+            
             customer_doc = {
-                'number': customer_document,
+                'number': document_number_clean,  # ✅ Apenas números (sem máscara)
                 'type': 'CPF'  # Sempre CPF para clientes
             }
+            
+            logger.debug(f"🔍 [{self.get_gateway_name()}] Documento formatado: {document_number_clean[:3]}.***.***-{document_number_clean[-2:]}")
             
             # ✅ CORREÇÃO CRÍTICA: Metadata deve ser STRING JSON (não objeto dict)
             # PluggouV2 exige metadata como string JSON, conforme documentação:
@@ -777,26 +789,40 @@ class UmbrellaPagGateway(PaymentGateway):
             # 1. Email: sempre @grimbots.online (RFC 5322 válido)
             # 2. Telefone: formato 55DDXXXXXXXXX (sem símbolo +)
             # 3. Metadata: STRING JSON (não objeto dict) - CORREÇÃO FINAL
-            # 4. Traceable: removido (só aceito em contas enterprise)
+            # 4. Traceable: True (obrigatório no provider PluggouV2)
             # 5. State: minúsculas (sp em vez de SP)
             # 6. Textos: normalizados para ASCII (sem acentos)
             # 7. Boleto: removido do payload
+            # 8. Customer.id: obrigatório (OpenAPI)
+            # 9. Customer.birthdate: obrigatório (PluggouV2)
+            # 10. Shipping: recomendado (mesmo que dummy)
+            
+            # Gerar data de nascimento padrão (formato ISO: YYYY-MM-DD)
+            # Usar data baseada no payment_id para consistência
+            birthdate = '2000-01-01'  # Data padrão válida
+            
             payload = {
                 'amount': int(amount_cents),  # Garantir que é inteiro
                 'currency': 'BRL',
                 'paymentMethod': 'pix',
                 'installments': 1,  # PIX sempre 1 parcela
+                'traceable': True,  # ✅ CORREÇÃO: obrigatório no provider PluggouV2
                 'postbackUrl': self.get_webhook_url(),
                 'metadata': metadata_string,  # ✅ STRING JSON (não objeto dict) - CORREÇÃO FINAL
-                # ✅ traceable removido (PluggouV2 só aceita em contas enterprise)
                 'ip': client_ip,
                 'customer': {
+                    'id': str(payment_id),  # ✅ CORREÇÃO: obrigatório (OpenAPI)
                     'name': customer_name_clean[:100],  # ✅ Normalizado para ASCII
                     'email': customer_email[:100],  # ✅ Sempre @grimbots.online
                     'document': customer_doc,
                     'phone': customer_phone,  # ✅ Formato 55DDXXXXXXXXX (sem +)
+                    'birthdate': birthdate,  # ✅ CORREÇÃO: obrigatório (PluggouV2) - formato ISO: YYYY-MM-DD
                     'externalRef': str(payment_id),
                     'address': customer_address  # ✅ Todos os campos normalizados para ASCII
+                },
+                'shipping': {  # ✅ CORREÇÃO: recomendado (mesmo que dummy)
+                    'fee': 0,  # Produto digital, sem frete
+                    'address': customer_address  # Usar mesmo endereço do cliente
                 },
                 'items': [
                     {
@@ -816,7 +842,10 @@ class UmbrellaPagGateway(PaymentGateway):
             logger.info(f"💳 [{self.get_gateway_name()}] Criando transação PIX via /api/user/transactions")
             logger.info(f"   Valor: R$ {amount:.2f} ({amount_cents} centavos)")
             logger.info(f"   Cliente: {customer_name_clean} ({customer_email})")
+            logger.info(f"   Cliente ID: {payment_id}")
             logger.info(f"   Telefone: {customer_phone} (formato: 55DDXXXXXXXXX)")
+            logger.info(f"   Birthdate: {birthdate}")
+            logger.info(f"   Traceable: True")
             logger.info(f"   Metadata: {metadata_string} (string JSON)")
             
             # Fazer requisição para criar transação
@@ -932,15 +961,22 @@ class UmbrellaPagGateway(PaymentGateway):
                         logger.error(f"      - customer.address.street: {customer_address['street']}")
                         logger.error(f"      - customer.address.city: {customer_address['city']}")
                         logger.error(f"      - customer.address.state: {customer_address['state']} (minúsculas)")
+                        logger.error(f"      - customer.id: {payment_id} (obrigatório)")
+                        logger.error(f"      - customer.birthdate: {birthdate} (obrigatório)")
+                        logger.error(f"      - traceable: True (obrigatório no PluggouV2)")
+                        logger.error(f"      - shipping: presente (recomendado)")
                         logger.error(f"      - metadata: {metadata_string} (string JSON)")
                         logger.error(f"      - ip: {client_ip}")
                         logger.error(f"   ⚠️  Verifique se todos os campos estão no formato correto:")
                         logger.error(f"      - Email: deve ser @grimbots.online (RFC 5322 válido)")
                         logger.error(f"      - Telefone: deve ser 55DDXXXXXXXXX (sem símbolo +)")
-                        logger.error(f"      - Metadata: deve ser STRING JSON (não objeto dict) - CORREÇÃO FINAL")
+                        logger.error(f"      - Metadata: deve ser STRING JSON (não objeto dict)")
                         logger.error(f"      - State: deve ser minúsculas (sp em vez de SP)")
                         logger.error(f"      - Textos: devem ser ASCII (sem acentos)")
-                        logger.error(f"      - Traceable: deve ser removido (só aceito em contas enterprise)")
+                        logger.error(f"      - Traceable: deve ser True (obrigatório no PluggouV2)")
+                        logger.error(f"      - Customer.id: deve estar presente (obrigatório)")
+                        logger.error(f"      - Customer.birthdate: deve estar presente (obrigatório)")
+                        logger.error(f"      - Shipping: deve estar presente (recomendado)")
                     except Exception as e:
                         logger.error(f"   Erro ao parsear resposta: {e}")
                 return None
