@@ -581,21 +581,61 @@ class UmbrellaPagGateway(PaymentGateway):
             customer_document = customer_data.get('document')
             
             # ✅ CORREÇÃO 1: Validar e formatar email (deve ser formato válido RFC 5322)
-            # Remover @telegram.user e usar domínio válido
-            if '@telegram.user' in customer_email or not '@' in customer_email:
-                # Extrair ID do Telegram se presente
-                telegram_id_match = re.search(r'(\d+)', customer_email or '')
-                telegram_id = telegram_id_match.group(1) if telegram_id_match else payment_id.split('_')[1] if '_' in payment_id else '0'
+            # SEMPRE validar email - PluggouV2 é muito rigoroso
+            customer_email_lower = str(customer_email).lower().strip() if customer_email else ''
+            
+            # Lista de domínios inválidos ou suspeitos
+            invalid_domains = ['@telegram.user', '@telegram', '.user', '@bot.digital', '@bot', '@test']
+            is_invalid_email = (
+                not customer_email_lower or 
+                not '@' in customer_email_lower or
+                any(domain in customer_email_lower for domain in invalid_domains) or
+                customer_email_lower.count('@') != 1
+            )
+            
+            if is_invalid_email:
+                # Extrair ID do Telegram do email, payment_id ou customer_data
+                telegram_id = None
+                # Tentar extrair do email
+                telegram_id_match = re.search(r'(\d+)', customer_email_lower or '')
+                if telegram_id_match:
+                    telegram_id = telegram_id_match.group(1)
+                # Tentar extrair do payment_id (formato: BOT47_1763007586_5e9123b2)
+                elif '_' in payment_id:
+                    try:
+                        telegram_id = payment_id.split('_')[1]
+                    except:
+                        pass
+                # Tentar extrair do customer_data (user_id)
+                if not telegram_id:
+                    user_id = customer_data.get('user_id') or customer_data.get('telegram_id')
+                    if user_id:
+                        telegram_id = str(user_id)
+                # Se não encontrou, gerar hash do payment_id
+                if not telegram_id:
+                    hash_obj = hashlib.md5(payment_id.encode())
+                    hash_hex = hash_obj.hexdigest()
+                    telegram_id = ''.join([str(int(c, 16) % 10) for c in hash_hex[:10]])
+                
                 customer_email = f'user{telegram_id}@grimbots.online'
-                logger.info(f"ℹ️ [{self.get_gateway_name()}] Email inválido, gerando email válido: {customer_email}")
-            elif not customer_email or customer_email == '':
-                customer_email = f'user{payment_id}@grimbots.online'
+                logger.info(f"ℹ️ [{self.get_gateway_name()}] Email inválido ('{customer_email_lower}'), gerando email válido: {customer_email}")
+            else:
+                # Email parece válido, mas garantir que não tem caracteres estranhos
+                customer_email = customer_email_lower
+                # Garantir que é um email válido (tem @ e domínio)
+                if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', customer_email):
+                    # Email mal formatado, gerar novo
+                    telegram_id = re.search(r'(\d+)', customer_email or '')
+                    telegram_id = telegram_id.group(1) if telegram_id else payment_id.split('_')[1] if '_' in payment_id else '0'
+                    customer_email = f'user{telegram_id}@grimbots.online'
+                    logger.info(f"ℹ️ [{self.get_gateway_name()}] Email mal formatado, gerando email válido: {customer_email}")
             
-            # ✅ CORREÇÃO 2: Validar e formatar telefone com DDI +55 (formato E.164)
-            validated_phone = self._validate_phone(customer_phone)
+            # ✅ CORREÇÃO 2: Validar e formatar telefone (PluggouV2: apenas números, formato 55DDXXXXXXXXX)
+            # SEMPRE remover todos os símbolos e garantir formato correto
+            phone_clean = re.sub(r'\D', '', str(customer_phone) if customer_phone else '')
             
-            # Se telefone não é válido (None ou muito curto), gerar telefone válido
-            if not validated_phone:
+            # Se telefone é muito curto ou parece ser ID do Telegram, gerar telefone válido
+            if len(phone_clean) < 10 or (len(phone_clean) == 10 and phone_clean.startswith('1614')):
                 # Gerar telefone válido baseado no payment_id (hash MD5)
                 hash_obj = hashlib.md5(payment_id.encode())
                 hash_hex = hash_obj.hexdigest()
@@ -603,18 +643,34 @@ class UmbrellaPagGateway(PaymentGateway):
                 ddd = 11 + (int(hash_hex[0], 16) % 89)  # DDD entre 11-99
                 # Número de 9 dígitos (celular sempre começa com 9)
                 numero = '9' + ''.join([str(int(c, 16) % 10) for c in hash_hex[1:9]])
-                validated_phone = f'{ddd}{numero}'
-                logger.info(f"ℹ️ [{self.get_gateway_name()}] Telefone inválido, gerando telefone válido: ({validated_phone[:2]}) {validated_phone[2:7]}-{validated_phone[7:]}")
+                phone_clean = f'{ddd}{numero}'
+                logger.info(f"ℹ️ [{self.get_gateway_name()}] Telefone inválido, gerando telefone válido: ({phone_clean[:2]}) {phone_clean[2:7]}-{phone_clean[7:]}")
             
-            # ✅ CORREÇÃO: Formatar telefone SEM "+" (PluggouV2 não aceita símbolos)
-            # Apenas números, formato 55DDXXXXXXXXX (10-13 dígitos)
-            phone_clean = re.sub(r'\D', '', validated_phone)
-            # Garantir que começa com 55 (DDI do Brasil)
-            if not phone_clean.startswith('55'):
+            # Validar formato brasileiro (10 ou 11 dígitos sem DDI)
+            if len(phone_clean) == 10:
+                # Telefone fixo (10 dígitos), adicionar 9 no início (celular)
+                phone_clean = '9' + phone_clean
+            elif len(phone_clean) > 11:
+                # Muitos dígitos, usar apenas os últimos 11
+                phone_clean = phone_clean[-11:]
+            
+            # ✅ CORREÇÃO CRÍTICA: PluggouV2 exige formato 55DDXXXXXXXXX (SEM símbolo +)
+            # Remover DDI 55 se já existe e garantir que está correto
+            if phone_clean.startswith('55'):
+                # Já tem DDI, garantir que tem pelo menos 13 dígitos (55 + 11)
+                if len(phone_clean) < 13:
+                    # Adicionar zeros ou ajustar
+                    phone_clean = '55' + phone_clean[2:].zfill(11)
+                elif len(phone_clean) > 13:
+                    # Muitos dígitos, usar apenas os últimos 13
+                    phone_clean = '55' + phone_clean[-11:]
+            else:
+                # Não tem DDI, adicionar 55
                 phone_clean = '55' + phone_clean
-            # PluggouV2: apenas números, SEM "+" ou outros símbolos
+            
+            # PluggouV2: APENAS números, SEM "+" ou outros símbolos
             customer_phone = phone_clean
-            logger.info(f"ℹ️ [{self.get_gateway_name()}] Telefone formatado: {customer_phone} (sem +)")
+            logger.info(f"ℹ️ [{self.get_gateway_name()}] Telefone formatado: {customer_phone} (formato: 55DDXXXXXXXXX, sem +)")
             
             # Validar documento (CPF)
             validated_document = None
@@ -642,6 +698,7 @@ class UmbrellaPagGateway(PaymentGateway):
                 customer_document = validated_document
             
             # ✅ CORREÇÃO: Normalizar texto para ASCII (remover acentos)
+            # PluggouV2 não aceita caracteres não ASCII (ê, ã, ó, etc.)
             def normalize_ascii(text: str) -> str:
                 """Remove acentos e caracteres especiais, mantém apenas ASCII"""
                 if not text:
@@ -651,11 +708,22 @@ class UmbrellaPagGateway(PaymentGateway):
                 # Manter apenas caracteres não combinantes (sem acentos)
                 text_ascii = ''.join(c for c in text_normalized if not unicodedata.combining(c))
                 # Remover espaços duplos e trim
-                return ' '.join(text_ascii.split())
+                text_clean = ' '.join(text_ascii.split())
+                # Garantir que não tem caracteres especiais problemáticos
+                # Substituir caracteres problemáticos comuns
+                replacements = {
+                    'ç': 'c', 'Ç': 'C',
+                    'ñ': 'n', 'Ñ': 'N',
+                }
+                for old, new in replacements.items():
+                    text_clean = text_clean.replace(old, new)
+                return text_clean.strip()
             
-            # Normalizar description e title
+            # Normalizar description, title e customer_name para ASCII
             description_clean = normalize_ascii(description)
+            customer_name_clean = normalize_ascii(customer_name)
             logger.debug(f"🔍 [{self.get_gateway_name()}] Description normalizado: '{description}' -> '{description_clean}'")
+            logger.debug(f"🔍 [{self.get_gateway_name()}] Customer name normalizado: '{customer_name}' -> '{customer_name_clean}'")
             
             # Obter IP do cliente (usar IP válido, não 0.0.0.0)
             client_ip = customer_data.get('ip')
@@ -665,6 +733,7 @@ class UmbrellaPagGateway(PaymentGateway):
                 logger.debug(f"🔍 [{self.get_gateway_name()}] IP não fornecido ou inválido, usando: {client_ip}")
             
             # Preparar endereço do cliente (valores válidos e realistas)
+            # ✅ CORREÇÃO: Normalizar todos os campos de endereço para ASCII
             address_data = customer_data.get('address', {})
             customer_address = {
                 'street': normalize_ascii(address_data.get('street') or 'Avenida Paulista'),
@@ -673,7 +742,7 @@ class UmbrellaPagGateway(PaymentGateway):
                 'zipCode': address_data.get('zipCode') or '01310100',  # CEP válido
                 'neighborhood': normalize_ascii(address_data.get('neighborhood') or 'Bela Vista'),
                 'city': normalize_ascii(address_data.get('city') or 'Sao Paulo'),  # Sem acento
-                'state': (address_data.get('state') or 'sp').lower(),  # ✅ CORREÇÃO: minúsculas (PluggouV2)
+                'state': (address_data.get('state') or 'sp').lower().strip(),  # ✅ CORREÇÃO: minúsculas e sem espaços (PluggouV2)
                 'country': address_data.get('country') or 'BR'
             }
             
@@ -691,42 +760,59 @@ class UmbrellaPagGateway(PaymentGateway):
                 'type': 'CPF'  # Sempre CPF para clientes
             }
             
+            # ✅ CORREÇÃO CRÍTICA: Metadata deve ser objeto dict (não string JSON)
+            # PluggouV2 rejeita se metadata for string JSON serializado
+            metadata_dict = {
+                'payment_id': str(payment_id),
+                'description': str(description_clean)[:200]  # Limitar tamanho
+            }
+            
             # Payload para criar transação PIX usando endpoint /api/user/transactions
+            # ✅ TODAS AS CORREÇÕES APLICADAS:
+            # 1. Email: sempre @grimbots.online (RFC 5322 válido)
+            # 2. Telefone: formato 55DDXXXXXXXXX (sem símbolo +)
+            # 3. Metadata: objeto dict (não string JSON)
+            # 4. Traceable: removido (só aceito em contas enterprise)
+            # 5. State: minúsculas (sp em vez de SP)
+            # 6. Textos: normalizados para ASCII (sem acentos)
+            # 7. Boleto: removido do payload
             payload = {
-                'amount': amount_cents,  # Valor em centavos
+                'amount': int(amount_cents),  # Garantir que é inteiro
                 'currency': 'BRL',
                 'paymentMethod': 'pix',
                 'installments': 1,  # PIX sempre 1 parcela
                 'postbackUrl': self.get_webhook_url(),
-                'metadata': {'payment_id': payment_id, 'description': description_clean},  # ✅ CORREÇÃO 3: Objeto dict, não string JSON
-                # ✅ CORREÇÃO: traceable removido (PluggouV2 só aceita em contas enterprise)
+                'metadata': metadata_dict,  # ✅ Objeto dict (não string JSON)
+                # ✅ traceable removido (PluggouV2 só aceita em contas enterprise)
                 'ip': client_ip,
                 'customer': {
-                    'name': customer_name[:100],
-                    'email': customer_email[:100],
+                    'name': customer_name_clean[:100],  # ✅ Normalizado para ASCII
+                    'email': customer_email[:100],  # ✅ Sempre @grimbots.online
                     'document': customer_doc,
-                    'phone': customer_phone,
-                    'externalRef': payment_id,
-                    'address': customer_address
+                    'phone': customer_phone,  # ✅ Formato 55DDXXXXXXXXX (sem +)
+                    'externalRef': str(payment_id),
+                    'address': customer_address  # ✅ Todos os campos normalizados para ASCII
                 },
                 'items': [
                     {
-                        'title': description_clean[:100] if description_clean else f'Produto {payment_id}',  # ✅ CORREÇÃO: ASCII sem acentos
-                        'unitPrice': amount_cents,
+                        'title': description_clean[:100] if description_clean else f'Produto {payment_id}',  # ✅ ASCII sem acentos
+                        'unitPrice': int(amount_cents),  # Garantir que é inteiro
                         'quantity': 1,
                         'tangible': False,  # Produto digital
-                        'externalRef': payment_id
+                        'externalRef': str(payment_id)
                     }
                 ],
                 'pix': {
                     'expiresInDays': 3  # PIX expira em 3 dias
                 }
-                # ✅ CORREÇÃO 4: Removido 'boleto' do payload (não é necessário para PIX)
+                # ✅ boleto removido (não é necessário para PIX)
             }
             
             logger.info(f"💳 [{self.get_gateway_name()}] Criando transação PIX via /api/user/transactions")
             logger.info(f"   Valor: R$ {amount:.2f} ({amount_cents} centavos)")
-            logger.info(f"   Cliente: {customer_name} ({customer_email})")
+            logger.info(f"   Cliente: {customer_name_clean} ({customer_email})")
+            logger.info(f"   Telefone: {customer_phone} (formato: 55DDXXXXXXXXX)")
+            logger.info(f"   Metadata: {json.dumps(metadata_dict)} (objeto dict)")
             
             # Fazer requisição para criar transação
             response = self._make_request('POST', '/user/transactions', payload=payload)
@@ -737,8 +823,8 @@ class UmbrellaPagGateway(PaymentGateway):
             
             logger.info(f"📥 [{self.get_gateway_name()}] Resposta recebida: Status {response.status_code}")
             
-            # Status 200 = sucesso conforme documentação
-            if response.status_code == 200:
+            # ✅ CORREÇÃO: Status 200 ou 201 = sucesso (PluggouV2 pode retornar 201)
+            if response.status_code in [200, 201]:
                 try:
                     data = response.json()
                     logger.info(f"📥 [{self.get_gateway_name()}] Resposta completa: {json.dumps(data, indent=2)[:500]}")
@@ -833,14 +919,23 @@ class UmbrellaPagGateway(PaymentGateway):
                         logger.error(f"   📦 Payload enviado (resumo):")
                         logger.error(f"      - amount: {amount_cents} centavos (R$ {amount:.2f})")
                         logger.error(f"      - paymentMethod: pix")
-                        logger.error(f"      - customer.name: {customer_name}")
+                        logger.error(f"      - customer.name: {customer_name_clean}")
                         logger.error(f"      - customer.email: {customer_email}")
-                        logger.error(f"      - customer.phone: {customer_phone}")
+                        logger.error(f"      - customer.phone: {customer_phone} (formato: 55DDXXXXXXXXX)")
                         logger.error(f"      - customer.document: {customer_document[:3]}.***.***-{customer_document[-2:]}")
                         logger.error(f"      - customer.address.zipCode: {customer_address['zipCode']}")
                         logger.error(f"      - customer.address.street: {customer_address['street']}")
                         logger.error(f"      - customer.address.city: {customer_address['city']}")
+                        logger.error(f"      - customer.address.state: {customer_address['state']} (minúsculas)")
+                        logger.error(f"      - metadata: {json.dumps(metadata_dict)} (objeto dict)")
                         logger.error(f"      - ip: {client_ip}")
+                        logger.error(f"   ⚠️  Verifique se todos os campos estão no formato correto:")
+                        logger.error(f"      - Email: deve ser @grimbots.online (RFC 5322 válido)")
+                        logger.error(f"      - Telefone: deve ser 55DDXXXXXXXXX (sem símbolo +)")
+                        logger.error(f"      - Metadata: deve ser objeto dict (não string JSON)")
+                        logger.error(f"      - State: deve ser minúsculas (sp em vez de SP)")
+                        logger.error(f"      - Textos: devem ser ASCII (sem acentos)")
+                        logger.error(f"      - Traceable: deve ser removido (só aceito em contas enterprise)")
                     except Exception as e:
                         logger.error(f"   Erro ao parsear resposta: {e}")
                 return None
