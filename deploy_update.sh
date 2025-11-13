@@ -20,7 +20,7 @@ git reset --hard HEAD
 
 # 3. Limpar arquivos não rastreados (exceto logs e arquivos importantes)
 echo "🧹 Limpando arquivos não rastreados..."
-git clean -fd -e logs/ -e .env -e venv/ -e *.pid -e nohup.out 2>/dev/null || true
+git clean -fd -e logs/ -e .env -e venv/ -e "*.pid" -e nohup.out -e "*.log" -e "*.pyc" -e "__pycache__" 2>/dev/null || true
 
 # 4. Fazer pull do repositório remoto
 echo ""
