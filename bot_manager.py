@@ -4093,6 +4093,20 @@ Seu pagamento ainda não foi confirmado.
                         if bot_user and getattr(bot_user, 'tracking_session_id', None) != tracking_token:
                             bot_user.tracking_session_id = tracking_token
 
+                    # ✅ CRÍTICO: NUNCA gerar novo token se bot_user.tracking_session_id existir
+                    # Isso garante que o token do public_redirect seja sempre reutilizado
+                    if not tracking_token and bot_user and bot_user.tracking_session_id:
+                        tracking_token = bot_user.tracking_session_id
+                        logger.info(f"✅ Tracking token recuperado de bot_user.tracking_session_id (fallback final): {tracking_token[:20]}...")
+                        # Tentar recuperar payload do Redis com este token
+                        try:
+                            recovered_payload = tracking_service.recover_tracking_data(tracking_token) or {}
+                            if recovered_payload:
+                                tracking_data_v4 = recovered_payload
+                                logger.info(f"✅ Tracking payload recuperado do bot_user.tracking_session_id: {tracking_token[:20]}... | fbp={'ok' if recovered_payload.get('fbp') else 'missing'} | fbc={'ok' if recovered_payload.get('fbc') else 'missing'} | pageview_event_id={'ok' if recovered_payload.get('pageview_event_id') else 'missing'}")
+                        except Exception as e:
+                            logger.warning(f"⚠️ Erro ao recuperar payload do bot_user.tracking_session_id: {e}")
+                    
                     if not tracking_token:
                         tracking_token = tracking_service.generate_tracking_token(
                             bot_id=bot_id,
