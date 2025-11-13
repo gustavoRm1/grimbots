@@ -58,7 +58,7 @@
                      showSuccess('Bot criado com sucesso! Redirecionando...');
                      setTimeout(() => {
                          window.location.href = '/dashboard';
-                     }, 1500);
+                    }, 1500);
                  } else {
                      showFriendlyError(data.error);
                      this.loading = false;
@@ -272,15 +272,15 @@
                     </label>
                     <textarea x-model="formData.welcome_message"
                               rows="6"
-                              maxlength="1500"
-                              @input="formData.welcome_message = formData.welcome_message?.slice(0, 1500) || ''"
+                              maxlength="900"
+                              @input="formData.welcome_message = formData.welcome_message?.slice(0, 900) || ''"
                               class="w-full px-4 py-3 border-2 border-white border-opacity-10 rounded-lg focus:border-trust-500 focus:ring-2 focus:ring-blue-200 transition-all"
                               placeholder="Olá! Bem-vindo ao nosso bot de vendas 🎉
 
 Aqui você encontra os melhores produtos com entrega rápida.
 
 Escolha uma opção abaixo para começar:"></textarea>
-                    <p class="text-xs text-gray-400 mt-1">Máximo de 1500 caracteres.</p>
+                    <p class="text-xs text-gray-400 mt-1">Máximo de 900 caracteres.</p>
                     <p class="mt-2 text-xs text-txt-primary">
                         💡 Você pode usar <strong>emojis</strong> para deixar mais atrativo!
                     </p>
