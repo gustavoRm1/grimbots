@@ -115,6 +115,16 @@ class TrackingServiceV4:
                 try:
                     previous = json.loads(current)
                     if isinstance(previous, dict):
+                        # ✅ CRÍTICO: Preservar pageview_event_id do payload anterior se o novo não tiver ou for None/vazio
+                        preserved_pageview_event_id = previous.get('pageview_event_id')
+                        new_pageview_event_id = payload.get('pageview_event_id')
+                        if preserved_pageview_event_id and (not new_pageview_event_id or new_pageview_event_id == 'None' or new_pageview_event_id == ''):
+                            payload['pageview_event_id'] = preserved_pageview_event_id
+                            logger.debug(f"✅ Preservando pageview_event_id do payload anterior: {preserved_pageview_event_id}")
+                        # ✅ CRÍTICO: Não sobrescrever pageview_event_id se o novo payload não tiver um valor válido
+                        elif preserved_pageview_event_id and new_pageview_event_id:
+                            # Se ambos têm valor, usar o novo (mais recente)
+                            logger.debug(f"✅ Usando pageview_event_id do novo payload: {new_pageview_event_id}")
                         previous.update(payload)
                         payload = previous
                 except Exception:
