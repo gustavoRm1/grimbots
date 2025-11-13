@@ -18,6 +18,7 @@ import time
 import json
 import re
 import unicodedata
+import uuid
 from typing import Dict, Any, Optional
 from datetime import datetime
 from gateway_interface import PaymentGateway
@@ -793,13 +794,15 @@ class UmbrellaPagGateway(PaymentGateway):
             # 5. State: minúsculas (sp em vez de SP)
             # 6. Textos: normalizados para ASCII (sem acentos)
             # 7. Boleto: removido do payload
-            # 8. Customer.id: obrigatório (OpenAPI)
-            # 9. Customer.birthdate: obrigatório (PluggouV2)
+            # 8. Customer.id: UUID válido (obrigatório no OpenAPI - não aceita payment_id simples)
+            # 9. Customer.birthdate: REMOVIDO (não deve existir - causa erro 400)
             # 10. Shipping: recomendado (mesmo que dummy)
             
-            # Gerar data de nascimento padrão (formato ISO: YYYY-MM-DD)
-            # Usar data baseada no payment_id para consistência
-            birthdate = '2000-01-01'  # Data padrão válida
+            # ✅ CORREÇÃO: Gerar UUID válido para customer.id
+            # PluggouV2 exige que customer.id seja um UUID válido (não aceita payment_id simples)
+            # Gerar UUID baseado no payment_id para consistência (mesmo payment_id = mesmo UUID)
+            customer_id_hash = hashlib.md5(str(payment_id).encode()).hexdigest()
+            customer_uuid = str(uuid.UUID(customer_id_hash))
             
             payload = {
                 'amount': int(amount_cents),  # Garantir que é inteiro
@@ -811,12 +814,12 @@ class UmbrellaPagGateway(PaymentGateway):
                 'metadata': metadata_string,  # ✅ STRING JSON (não objeto dict) - CORREÇÃO FINAL
                 'ip': client_ip,
                 'customer': {
-                    'id': str(payment_id),  # ✅ CORREÇÃO: obrigatório (OpenAPI)
+                    'id': customer_uuid,  # ✅ CORREÇÃO: UUID válido (obrigatório no OpenAPI)
                     'name': customer_name_clean[:100],  # ✅ Normalizado para ASCII
                     'email': customer_email[:100],  # ✅ Sempre @grimbots.online
                     'document': customer_doc,
                     'phone': customer_phone,  # ✅ Formato 55DDXXXXXXXXX (sem +)
-                    'birthdate': birthdate,  # ✅ CORREÇÃO: obrigatório (PluggouV2) - formato ISO: YYYY-MM-DD
+                    # ✅ CORREÇÃO: birthdate REMOVIDO (não deve existir - causa erro 400)
                     'externalRef': str(payment_id),
                     'address': customer_address  # ✅ Todos os campos normalizados para ASCII
                 },
@@ -842,9 +845,9 @@ class UmbrellaPagGateway(PaymentGateway):
             logger.info(f"💳 [{self.get_gateway_name()}] Criando transação PIX via /api/user/transactions")
             logger.info(f"   Valor: R$ {amount:.2f} ({amount_cents} centavos)")
             logger.info(f"   Cliente: {customer_name_clean} ({customer_email})")
-            logger.info(f"   Cliente ID: {payment_id}")
+            logger.info(f"   Cliente ID (UUID): {customer_uuid}")
+            logger.info(f"   Payment ID: {payment_id}")
             logger.info(f"   Telefone: {customer_phone} (formato: 55DDXXXXXXXXX)")
-            logger.info(f"   Birthdate: {birthdate}")
             logger.info(f"   Traceable: True")
             logger.info(f"   Metadata: {metadata_string} (string JSON)")
             
@@ -961,8 +964,7 @@ class UmbrellaPagGateway(PaymentGateway):
                         logger.error(f"      - customer.address.street: {customer_address['street']}")
                         logger.error(f"      - customer.address.city: {customer_address['city']}")
                         logger.error(f"      - customer.address.state: {customer_address['state']} (minúsculas)")
-                        logger.error(f"      - customer.id: {payment_id} (obrigatório)")
-                        logger.error(f"      - customer.birthdate: {birthdate} (obrigatório)")
+                        logger.error(f"      - customer.id: {customer_uuid} (UUID válido)")
                         logger.error(f"      - traceable: True (obrigatório no PluggouV2)")
                         logger.error(f"      - shipping: presente (recomendado)")
                         logger.error(f"      - metadata: {metadata_string} (string JSON)")
@@ -974,8 +976,8 @@ class UmbrellaPagGateway(PaymentGateway):
                         logger.error(f"      - State: deve ser minúsculas (sp em vez de SP)")
                         logger.error(f"      - Textos: devem ser ASCII (sem acentos)")
                         logger.error(f"      - Traceable: deve ser True (obrigatório no PluggouV2)")
-                        logger.error(f"      - Customer.id: deve estar presente (obrigatório)")
-                        logger.error(f"      - Customer.birthdate: deve estar presente (obrigatório)")
+                        logger.error(f"      - Customer.id: deve ser UUID válido (não payment_id simples)")
+                        logger.error(f"      - Customer.birthdate: NÃO deve existir (causa erro 400)")
                         logger.error(f"      - Shipping: deve estar presente (recomendado)")
                     except Exception as e:
                         logger.error(f"   Erro ao parsear resposta: {e}")
