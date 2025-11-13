@@ -4063,6 +4063,12 @@ def public_redirect(slug):
             'event_source_url': request.url,
             **{k: v for k, v in utms.items() if v}
         }
+        
+        # ✅ LOG DIAGNÓSTICO: Verificar se fbc está sendo salvo
+        if fbc_cookie:
+            logger.info(f"✅ Redirect - fbc será salvo no Redis: {fbc_cookie[:50]}... (len={len(fbc_cookie)})")
+        else:
+            logger.warning(f"⚠️ Redirect - fbc_cookie está vazio! Não será salvo no Redis. fbclid={'✅' if fbclid else '❌'}")
 
         try:
             logger.info(f"✅ Redirect - Salvando tracking_payload inicial com pageview_event_id: {tracking_payload.get('pageview_event_id', 'N/A')}")
@@ -7243,6 +7249,13 @@ def send_meta_pixel_purchase_event(payment):
         fbc_value = tracking_data.get('fbc')
         ip_value = tracking_data.get('client_ip') or tracking_data.get('ip')
         user_agent_value = tracking_data.get('client_user_agent') or tracking_data.get('ua')
+        
+        # ✅ LOG DIAGNÓSTICO: Verificar o que foi recuperado do tracking_data
+        logger.info(f"🔍 Purchase - tracking_data recuperado: fbp={'✅' if fbp_value else '❌'}, fbc={'✅' if fbc_value else '❌'}, fbclid={'✅' if external_id_value else '❌'}")
+        if fbc_value:
+            logger.info(f"✅ Purchase - fbc recuperado do tracking_data (Redis): {fbc_value[:50]}...")
+        else:
+            logger.warning(f"⚠️ Purchase - fbc NÃO encontrado no tracking_data (Redis)")
         if not ip_value and getattr(payment, 'client_ip', None):
             ip_value = payment.client_ip
         if not user_agent_value and getattr(payment, 'client_user_agent', None):
