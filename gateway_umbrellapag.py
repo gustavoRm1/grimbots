@@ -140,6 +140,15 @@ class UmbrellaPagGateway(PaymentGateway):
             logger.info(f"🌐 [{self.get_gateway_name()}] {method} {url}")
             logger.info(f"🔑 [{self.get_gateway_name()}] Headers: x-api-key={self.api_key[:15]}..., User-Agent=UMBRELLAB2B/1.0")
             
+            # Log headers adicionais se houver
+            if headers:
+                logger.info(f"🔑 [{self.get_gateway_name()}] Headers adicionais: {', '.join(headers.keys())}")
+                for key, value in headers.items():
+                    if key.lower() in ['origin', 'referer']:
+                        logger.info(f"   {key}: {value}")
+                    elif 'key' in key.lower() or 'token' in key.lower():
+                        logger.info(f"   {key}: {value[:15]}...")
+            
             if payload is not None:
                 logger.info(f"📦 [{self.get_gateway_name()}] Payload: {json.dumps(payload)}")
             else:
@@ -365,11 +374,29 @@ class UmbrellaPagGateway(PaymentGateway):
             # Passar body vazio {} conforme documentação
             payload = {}
             
+            # Adicionar headers adicionais para endpoints /public/
+            # O erro "Hostname não identificado" pode exigir Origin ou Referer
+            additional_headers = {}
+            try:
+                webhook_url = os.environ.get('WEBHOOK_URL', '')
+                if webhook_url:
+                    # Extrair domínio do WEBHOOK_URL
+                    from urllib.parse import urlparse
+                    parsed = urlparse(webhook_url)
+                    domain = f"{parsed.scheme}://{parsed.netloc}"
+                    additional_headers['Origin'] = domain
+                    additional_headers['Referer'] = domain
+                    logger.info(f"🌐 [{self.get_gateway_name()}] Adicionando headers Origin/Referer: {domain}")
+                else:
+                    logger.warning(f"⚠️ [{self.get_gateway_name()}] WEBHOOK_URL não configurado - headers Origin/Referer não serão enviados")
+            except Exception as e:
+                logger.warning(f"⚠️ [{self.get_gateway_name()}] Erro ao extrair domínio: {e}")
+            
             logger.info(f"🌐 [{self.get_gateway_name()}] POST {endpoint}")
             logger.info(f"📦 [{self.get_gateway_name()}] Payload: {json.dumps(payload)}")
             logger.info(f"📦 [{self.get_gateway_name()}] Product Link ID: {unique_product_link_id}")
             
-            response = self._make_request('POST', endpoint, payload=payload)
+            response = self._make_request('POST', endpoint, payload=payload, headers=additional_headers)
             
             if not response:
                 logger.error(f"❌ [{self.get_gateway_name()}] Erro ao criar pedido (sem resposta)")
@@ -414,13 +441,26 @@ class UmbrellaPagGateway(PaymentGateway):
                 logger.error(f"   URL completa: {self.base_url}{endpoint}")
                 logger.error(f"   Product Link ID: {unique_product_link_id}")
                 logger.error(f"   API Key: {self.api_key[:15]}... ({len(self.api_key)} chars)")
+                
+                # Log detalhado do erro
                 if response.text:
                     logger.error(f"   Resposta: {response.text[:500]}")
                     try:
                         error_data = response.json()
+                        error_message = error_data.get('message', '')
+                        error_status_code = error_data.get('statusCode', response.status_code)
+                        
                         logger.error(f"   Erro JSON: {json.dumps(error_data, indent=2)}")
-                    except:
-                        pass
+                        logger.error(f"   Mensagem de erro: {error_message}")
+                        logger.error(f"   Status Code: {error_status_code}")
+                        
+                        # Se o erro for "Hostname não identificado", pode precisar de header adicional
+                        if 'hostname' in error_message.lower() or 'hostname' in str(error_data).lower():
+                            logger.warning(f"⚠️ [{self.get_gateway_name()}] Erro relacionado a hostname!")
+                            logger.warning(f"   Possível causa: endpoint /public/ pode precisar de header ou payload adicional")
+                            logger.warning(f"   Verifique a documentação do endpoint /api/public/checkout/create-order/{{id}}")
+                    except Exception as e:
+                        logger.error(f"   Erro ao parsear resposta: {e}")
                 else:
                     logger.error(f"   Resposta: (vazia)")
                 return None
