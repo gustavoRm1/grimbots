@@ -10,7 +10,7 @@ Autenticação:
 - Header: User-Agent: UmbrellaPagB2B/1.0 (forma canônica para PluggouV2)
 
 ✅ CORREÇÕES APLICADAS (2025-11-13):
-- Customer.id: UUID válido gerado a partir do hash MD5 do payment_id (obrigatório no OpenAPI)
+- Customer.id: UUID válido gerado com uuid.uuid5() (RFC 4122 válido - obrigatório no OpenAPI)
 - Customer.birthdate: REMOVIDO (não deve existir - causa erro 400)
 - Metadata: STRING JSON usando json.dumps() (não objeto dict - conforme documentação)
 - Traceable: True (obrigatório no provider PluggouV2)
@@ -814,9 +814,9 @@ class UmbrellaPagGateway(PaymentGateway):
             
             # ✅ CORREÇÃO: Gerar UUID válido para customer.id
             # PluggouV2 exige que customer.id seja um UUID válido (não aceita payment_id simples)
-            # Gerar UUID baseado no payment_id para consistência (mesmo payment_id = mesmo UUID)
-            customer_id_hash = hashlib.md5(str(payment_id).encode()).hexdigest()
-            customer_uuid = str(uuid.UUID(customer_id_hash))
+            # Usar uuid.uuid5() com namespace fixo para garantir UUID válido e determinístico
+            # (mesmo payment_id = mesmo UUID, sempre válido conforme RFC 4122)
+            customer_uuid = str(uuid.uuid5(uuid.NAMESPACE_URL, f"umbrellapag:customer:{payment_id}"))
             
             payload = {
                 'amount': int(amount_cents),  # Garantir que é inteiro
