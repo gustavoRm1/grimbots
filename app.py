@@ -7342,6 +7342,9 @@ def send_meta_pixel_purchase_event(payment):
             logger.info(f"✅ Purchase - fbc recuperado do bot_user: {fbc_value[:50]}...")
         
         # ✅ FALLBACK FINAL: Tentar recuperar do payment (se foi salvo anteriormente)
+        if not fbp_value and getattr(payment, 'fbp', None):
+            fbp_value = payment.fbp
+            logger.info(f"✅ Purchase - fbp recuperado do payment: {fbp_value[:30]}...")
         if not fbc_value and getattr(payment, 'fbc', None):
             fbc_value = payment.fbc
             logger.info(f"✅ Purchase - fbc recuperado do payment: {fbc_value[:50]}...")
@@ -7357,7 +7360,10 @@ def send_meta_pixel_purchase_event(payment):
             # O fbc deve vir EXATAMENTE do cookie _fbc capturado no PageView
             # Gerar um novo fbc com timestamp atual quebra a atribuição porque o Meta espera o timestamp do clique original
         
-        # ✅ Salvar fbc no payment se encontrado (para próximas tentativas)
+        # ✅ CRÍTICO: Salvar fbp e fbc no payment se encontrado (para próximas tentativas e fallback)
+        if fbp_value and not getattr(payment, 'fbp', None):
+            payment.fbp = fbp_value
+            logger.info(f"✅ Purchase - fbp salvo no payment para futuras referências: {fbp_value[:30]}...")
         if fbc_value and not getattr(payment, 'fbc', None):
             payment.fbc = fbc_value
             logger.info(f"✅ Purchase - fbc salvo no payment para futuras referências: {fbc_value[:50]}...")
