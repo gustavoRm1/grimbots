@@ -45,10 +45,23 @@ logging.getLogger('apscheduler.executors').setLevel(logging.ERROR)
 logger = logging.getLogger(__name__)
 
 def strip_surrogate_chars(value: Any) -> Any:
-    """Remove caracteres surrogate inválidos de strings para evitar UnicodeEncodeError."""
+    """
+    Remove caracteres surrogate inválidos de strings para evitar UnicodeEncodeError.
+    
+    ⚠️ ATENÇÃO: Esta função NÃO deve ser aplicada a welcome_message, pois corrompe emojis
+    e caracteres Unicode especiais válidos. O Telegram e o banco de dados suportam UTF-8 completo.
+    
+    ✅ Para welcome_message, use o texto diretamente sem sanitização.
+    """
     if isinstance(value, str):
-        # encode/decode ignora surrogates sem levantar exceção
-        return value.encode('utf-8', 'ignore').decode('utf-8', 'ignore')
+        # ✅ CORREÇÃO: Usar 'replace' ao invés de 'ignore' para preservar melhor os caracteres
+        # Apenas substituir surrogates verdadeiramente inválidos (muito raros)
+        try:
+            # Tentar normalizar o texto sem perder caracteres válidos
+            return value.encode('utf-8', 'replace').decode('utf-8', 'replace')
+        except Exception:
+            # Se houver erro, retornar como está (melhor que corromper)
+            return value
     return value
 
 
@@ -3635,9 +3648,28 @@ def update_bot_config(bot_id):
     
     bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
     raw_data = request.get_json() or {}
-    data = sanitize_payload(raw_data)
+    
+    # ✅ CORREÇÃO CRÍTICA: NÃO sanitizar welcome_message - preservar emojis e caracteres especiais
+    # A sanitização estava corrompendo emojis e caracteres Unicode especiais
+    data = raw_data.copy() if isinstance(raw_data, dict) else {}
+    
+    # Sanitizar apenas outros campos (não welcome_message)
+    if 'welcome_message' in raw_data:
+        # Preservar welcome_message SEM sanitização (preserva emojis, Unicode, caracteres especiais)
+        data['welcome_message'] = raw_data['welcome_message']
+    
+    # Sanitizar outros campos normalmente
+    for key, value in raw_data.items():
+        if key != 'welcome_message':
+            if isinstance(value, (dict, list)):
+                data[key] = sanitize_payload(value)
+            elif isinstance(value, str):
+                data[key] = strip_surrogate_chars(value)
+            else:
+                data[key] = value
     
     logger.info(f"📊 Dados recebidos: {list(data.keys())}")
+    logger.info(f"✅ welcome_message preservado (sem sanitização): {len(data.get('welcome_message', ''))} caracteres")
     
     if not bot.config:
         logger.info(f"📝 Criando nova configuração para bot {bot_id}")

@@ -284,9 +284,16 @@
             return '';
         }
         try {
-            return value.replace(/[\uD800-\uDFFF]/g, '');
+            // ✅ CORREÇÃO CRÍTICA: Remover APENAS surrogates inválidos (isolados)
+            // Preservar pares de surrogates válidos (emojis, caracteres Unicode especiais)
+            // Surrogates válidos vêm em pares: high surrogate (\uD800-\uDBFF) + low surrogate (\uDC00-\uDFFF)
+            // Surrogates inválidos são isolados ou fora de ordem
+            
+            // Não remover nada - deixar o texto como está
+            // O Telegram e o banco de dados suportam UTF-8 completo
+            return value;
         } catch (err) {
-            return '';
+            return value || '';
         }
     };
 </script>
@@ -387,37 +394,16 @@
                           maxlength="4096"
                           @input="validateWelcomeMessage()"
                           placeholder="Olá! Bem-vindo ao nosso bot de vendas...&#10;&#10;Escolha uma das opções abaixo:"></textarea>
-                <p class="text-xs text-gray-400 mt-1">
-                    <span class="text-green-400">
-                        ✅ Máximo de 4096 caracteres (Telegram)
-                    </span>
-                    <span x-show="config.welcome_media_url" class="text-yellow-400 ml-2">
-                        ⚠️ Com mídia: recomenda-se até 1024 caracteres (caption), mas pode testar mais!
-                    </span>
-                    <span class="text-gray-500 ml-2">
-                        | Banco de dados: TEXT (ilimitado)
-                    </span>
-                </p>
                 <p class="text-xs mt-1" x-show="config.welcome_message">
                     <span class="text-gray-500">Caracteres: </span>
                     <span :class="{'text-green-400 font-bold': getWelcomeMessageLength() <= 4096, 'text-red-400 font-bold': getWelcomeMessageLength() > 4096}" 
                           x-text="getWelcomeMessageLength()"></span>
                     <span class="text-gray-500"> / </span>
                     <span class="text-gray-400 font-bold">4096</span>
-                    <span x-show="config.welcome_media_url && getWelcomeMessageLength() > 1024" 
-                          class="text-yellow-400 ml-2 font-bold">
-                        ⚠️ Testando: Com mídia e {getWelcomeMessageLength()} caracteres (recomendado: 1024)
-                    </span>
                     <span x-show="getWelcomeMessageLength() > 4096" 
                           class="text-red-400 ml-2 font-bold">
                         ❌ Excede o limite do Telegram (4096)!
                     </span>
-                </p>
-                <p class="text-xs text-blue-400 mt-1" x-show="config.welcome_message && getWelcomeMessageLength() > 0">
-                    💾 Banco de dados: TEXT (ilimitado - pode armazenar até 65KB no MySQL ou 1GB no SQLite/PostgreSQL)
-                </p>
-                <p class="text-xs text-green-400 mt-1">
-                    ✅ Suporta: Emojis (😀 🎉 💰), caracteres especiais (á, é, õ, ç), fontes diferentes, Unicode completo
                 </p>
             </div>
 
@@ -435,9 +421,6 @@
                            class="form-input"
                            placeholder="https://t.me/canal/123">
                     <p class="text-xs text-gray-500 mt-2">Link do Telegram (vídeo, foto ou áudio)</p>
-                    <p class="text-xs text-yellow-400 mt-1" x-show="config.welcome_media_url && getWelcomeMessageLength() > 1024">
-                        ⚠️ Atenção: Com mídia, a mensagem deve ter no máximo 1024 caracteres (caption do Telegram)
-                    </p>
                 </div>
 
                 <div class="form-group">
@@ -2143,14 +2126,15 @@ function botConfigApp() {
             }
         },
         
-        // ✅ VALIDAÇÃO: Mensagem de boas-vindas (apenas limpeza de surrogates inválidos)
+        // ✅ VALIDAÇÃO: Mensagem de boas-vindas (preservar emojis e caracteres especiais)
         validateWelcomeMessage() {
             if (!this.config.welcome_message) {
                 return;
             }
             
-            // Remover apenas caracteres surrogate inválidos (preserva emojis válidos)
-            this.config.welcome_message = window.stripSurrogateChars(this.config.welcome_message || '');
+            // ✅ REMOVIDO: Sanitização que corrompia emojis e caracteres especiais
+            // O texto é preservado como está (Telegram e banco suportam UTF-8 completo)
+            // Não aplicar stripSurrogateChars - estava corrompendo emojis válidos
             
             // ✅ REMOVIDO: Validação restritiva - permitir testar mídia com texto > 1024
             // Apenas aviso se exceder 4096 (limite absoluto do Telegram)
