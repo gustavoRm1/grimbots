@@ -1448,8 +1448,43 @@ class BotManager:
             # 2️⃣ ENVIAR MÍDIA (se houver)
             if media_url:
                 logger.info(f"🖼️ Enviando mídia sequencial ({media_type})...")
-                caption_text = text[:1500] if text and len(text) > 1500 else (text or '')
-                
+                CAPTION_LIMIT = 1500
+                text_sent_separately = False
+                inline_keyboard: List[List[Dict[str, str]]] = []
+                if buttons:
+                    for button in buttons:
+                        button_dict = {'text': button.get('text')}
+                        if button.get('url'):
+                            button_dict['url'] = button['url']
+                        elif button.get('callback_data'):
+                            button_dict['callback_data'] = button['callback_data']
+                        else:
+                            button_dict['callback_data'] = 'button_pressed'
+                        inline_keyboard.append([button_dict])
+
+                if text and len(text or '') > CAPTION_LIMIT:
+                    logger.info(" Texto excede limite de caption. Enviando mensagem completa antes da mídia...")
+                    payload_full_text = {
+                        'chat_id': chat_id,
+                        'text': text,
+                        'parse_mode': 'HTML'
+                    }
+                    if inline_keyboard:
+                        payload_full_text['reply_markup'] = {'inline_keyboard': inline_keyboard}
+                    response_full_text = requests.post(f"{base_url}/sendMessage", json=payload_full_text, timeout=10)
+                    if response_full_text.status_code == 200 and response_full_text.json().get('ok'):
+                        logger.info(" Texto completo enviado antes da mídia")
+                    else:
+                        logger.error(f" Falha ao enviar texto completo antes da mídia: {response_full_text.text[:200]}")
+                        all_success = False
+                    time.sleep(delay_between)
+                    text_sent_separately = True
+
+                caption_text = ''
+                if text and text.strip():
+                    if not text_sent_separately:
+                        caption_text = text[:CAPTION_LIMIT] if len(text) > CAPTION_LIMIT else text
+
                 if media_type == 'photo':
                     url = f"{base_url}/sendPhoto"
                     payload = {
@@ -1481,33 +1516,23 @@ class BotManager:
                     logger.warning(f"⚠️ Tipo de mídia desconhecido: {media_type}")
                     all_success = False
                     media_url = None  # Não enviar mídia inválida
-                
+
                 if media_url:
-                    # ✅ QI 500: Adicionar botões à mídia se houver
-                    if buttons:
-                        inline_keyboard = []
-                        for button in buttons:
-                            button_dict = {'text': button.get('text')}
-                            if button.get('url'):
-                                button_dict['url'] = button['url']
-                            elif button.get('callback_data'):
-                                button_dict['callback_data'] = button['callback_data']
-                            else:
-                                button_dict['callback_data'] = 'button_pressed'
-                            inline_keyboard.append([button_dict])
+                    # ✅ QI 500: Adicionar botões à mídia se houver (somente quando texto não foi enviado separadamente)
+                    if inline_keyboard and not text_sent_separately:
                         payload['reply_markup'] = {'inline_keyboard': inline_keyboard}
-                    
+
                     response = requests.post(url, json=payload, timeout=10)
                     if response.status_code == 200 and response.json().get('ok'):
-                        logger.info(f"✅ Mídia enviada{' com botões' if buttons else ''}")
+                        logger.info(f"✅ Mídia enviada{' com botões' if inline_keyboard and not text_sent_separately else ''}")
                     else:
                         logger.error(f"❌ Falha ao enviar mídia: {response.text}")
                         all_success = False
-                    
+
                     time.sleep(delay_between)  # ✅ QI 500: Delay entre envios
-                    
-                    # ✅ QI 10000: Se caption > 1500, enviar texto completo separadamente
-                    if text and len(text) > 1500:
+
+                    # ✅ QI 10000: Se caption > 1500 e texto não foi enviado previamente, enviar restante separadamente
+                    if text and len(text or '') > CAPTION_LIMIT and not text_sent_separately:
                         # ========================================================================
                         # ✅ QI 10000: LOCK ESPECÍFICO PARA TEXTO COMPLETO (CRÍTICO)
                         # ========================================================================
@@ -1515,11 +1540,11 @@ class BotManager:
                         # Isso garante que mesmo se o lock principal falhar, o texto completo não duplica
                         text_only_hash = hashlib.md5(text.encode('utf-8')).hexdigest()[:12]
                         text_complete_lock_key = f"lock:send_text_only:{chat_id}:{text_only_hash}"
-                        
+
                         # Inicializar variáveis de controle do lock
                         text_lock_acquired = False
                         redis_conn_text = None
-                        
+
                         try:
                             import redis
                             redis_conn_text = get_redis_connection()
@@ -1532,7 +1557,7 @@ class BotManager:
                                 logger.info(f"🔒 Lock de texto completo adquirido: {text_complete_lock_key} (expira em 10s)")
                         except Exception as e:
                             logger.warning(f"⚠️ Erro ao verificar lock de texto completo: {e} - continuando")
-                        
+
                         try:
                             # ✅ QI 10000: Verificação adicional no banco antes de enviar texto completo
                             # Garante que mesmo se o lock falhar, não envia duplicado
@@ -1541,7 +1566,7 @@ class BotManager:
                                 from models import BotMessage
                                 from datetime import timedelta
                                 from models import get_brazil_time
-                                
+
                                 with app.app_context():
                                     # Verificar se texto completo já foi enviado nos últimos 5 segundos
                                     recent_window = get_brazil_time() - timedelta(seconds=5)
@@ -1551,7 +1576,7 @@ class BotManager:
                                         BotMessage.direction == 'outgoing',
                                         BotMessage.created_at >= recent_window
                                     ).first()
-                                    
+
                                     if existing_text:
                                         logger.warning(f"⛔ Texto completo já foi enviado recentemente (últimos 5s): chat_id={chat_id} - BLOQUEANDO DUPLICAÇÃO")
                                         # Liberar lock se foi adquirido
@@ -1564,8 +1589,8 @@ class BotManager:
                                         return all_success  # Retornar sucesso parcial (mídia já foi enviada)
                             except Exception as e:
                                 logger.warning(f"⚠️ Erro ao verificar duplicação no banco: {e} - continuando")
-                            
-                            remaining_text = text[1500:].strip()
+
+                            remaining_text = text[CAPTION_LIMIT:].strip()
                             if not remaining_text:
                                 logger.info("ℹ️ Texto excedente após caption vazio — não enviar mensagem adicional.")
                                 return all_success
@@ -1577,36 +1602,36 @@ class BotManager:
                                 'text': remaining_text,
                                 'parse_mode': 'HTML'
                             }
-                            
+
                             # ✅ QI 10000: Log antes de enviar para rastrear duplicação
                             logger.info(f"🚀 REQUISIÇÃO ÚNICA: Enviando texto complementar para chat_id={chat_id}, hash={text_only_hash}")
-                            
+
                             response_msg = requests.post(url_msg, json=payload_msg, timeout=10)
-                            
+
                             # ✅ QI 10000: Log após enviar para confirmar
                             if response_msg.status_code == 200:
                                 result_data = response_msg.json()
                                 if result_data.get('ok'):
                                     message_id_sent = result_data.get('result', {}).get('message_id')
                                     logger.info(f"✅ Texto complementar enviado (message_id={message_id_sent}, hash={text_only_hash})")
-                                    
+
                                     # ✅ QI 10000: Salvar mensagem enviada no banco para verificação futura
                                     try:
                                         from app import app, db
                                         from models import BotMessage, BotUser, Bot
                                         from models import get_brazil_time
-                                        
+
                                         with app.app_context():
                                             # Buscar bot pelo token (extrair bot_id do token se possível)
                                             # Ou usar bot_id se disponível no contexto
                                             bot_user = BotUser.query.filter_by(
                                                 telegram_user_id=str(chat_id)
                                             ).order_by(BotUser.last_interaction.desc()).first()
-                                            
+
                                             if bot_user:
                                                 telegram_msg_id = result_data.get('result', {}).get('message_id')
                                                 message_id = str(telegram_msg_id) if telegram_msg_id else f"text_complete_{int(time.time())}"
-                                                
+
                                                 # Verificar se já existe antes de salvar
                                                 existing = BotMessage.query.filter_by(
                                                     bot_id=bot_user.bot_id,
@@ -1614,7 +1639,7 @@ class BotManager:
                                                     message_id=message_id,
                                                     direction='outgoing'
                                                 ).first()
-                                                
+
                                                 if not existing:
                                                     bot_message = BotMessage(
                                                         bot_id=bot_user.bot_id,
@@ -1646,9 +1671,9 @@ class BotManager:
                                     logger.debug(f"🔓 Lock de texto completo liberado: {text_complete_lock_key}")
                                 except Exception as e:
                                     logger.debug(f"⚠️ Erro ao liberar lock de texto completo (não crítico): {e}")
-                        
+
                         time.sleep(delay_between)  # ✅ QI 500: Delay entre envios
-            
+
             # 3️⃣ ENVIAR BOTÕES (se houver e NÃO foram enviados com mídia)
             if buttons and not media_url:
                 # Preparar teclado inline
