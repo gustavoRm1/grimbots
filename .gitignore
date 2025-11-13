@@ -54,6 +54,12 @@ grimbots.pid
 nohup.out
 *.tmp
 
+# Arquivos temporários de desenvolvimento/teste
+*_fixed.py
+*_backup.py
+reenqueue_*.py
+*gateway_*_fixed.py
+
 # IDE
 .vscode/
 .idea/
