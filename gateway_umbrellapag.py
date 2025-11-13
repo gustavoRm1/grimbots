@@ -17,6 +17,7 @@ import hashlib
 import time
 import json
 import re
+import unicodedata
 from typing import Dict, Any, Optional
 from datetime import datetime
 from gateway_interface import PaymentGateway
@@ -605,14 +606,15 @@ class UmbrellaPagGateway(PaymentGateway):
                 validated_phone = f'{ddd}{numero}'
                 logger.info(f"ℹ️ [{self.get_gateway_name()}] Telefone inválido, gerando telefone válido: ({validated_phone[:2]}) {validated_phone[2:7]}-{validated_phone[7:]}")
             
-            # Formatar telefone com DDI +55 (formato E.164)
+            # ✅ CORREÇÃO: Formatar telefone SEM "+" (PluggouV2 não aceita símbolos)
+            # Apenas números, formato 55DDXXXXXXXXX (10-13 dígitos)
             phone_clean = re.sub(r'\D', '', validated_phone)
             # Garantir que começa com 55 (DDI do Brasil)
             if not phone_clean.startswith('55'):
                 phone_clean = '55' + phone_clean
-            # Formato E.164: +55XXXXXXXXXXX
-            customer_phone = '+' + phone_clean
-            logger.info(f"ℹ️ [{self.get_gateway_name()}] Telefone formatado E.164: {customer_phone}")
+            # PluggouV2: apenas números, SEM "+" ou outros símbolos
+            customer_phone = phone_clean
+            logger.info(f"ℹ️ [{self.get_gateway_name()}] Telefone formatado: {customer_phone} (sem +)")
             
             # Validar documento (CPF)
             validated_document = None
@@ -639,6 +641,22 @@ class UmbrellaPagGateway(PaymentGateway):
             else:
                 customer_document = validated_document
             
+            # ✅ CORREÇÃO: Normalizar texto para ASCII (remover acentos)
+            def normalize_ascii(text: str) -> str:
+                """Remove acentos e caracteres especiais, mantém apenas ASCII"""
+                if not text:
+                    return text
+                # Normalizar e remover diacríticos
+                text_normalized = unicodedata.normalize('NFKD', str(text))
+                # Manter apenas caracteres não combinantes (sem acentos)
+                text_ascii = ''.join(c for c in text_normalized if not unicodedata.combining(c))
+                # Remover espaços duplos e trim
+                return ' '.join(text_ascii.split())
+            
+            # Normalizar description e title
+            description_clean = normalize_ascii(description)
+            logger.debug(f"🔍 [{self.get_gateway_name()}] Description normalizado: '{description}' -> '{description_clean}'")
+            
             # Obter IP do cliente (usar IP válido, não 0.0.0.0)
             client_ip = customer_data.get('ip')
             if not client_ip or client_ip == '0.0.0.0' or client_ip == '127.0.0.1':
@@ -647,16 +665,15 @@ class UmbrellaPagGateway(PaymentGateway):
                 logger.debug(f"🔍 [{self.get_gateway_name()}] IP não fornecido ou inválido, usando: {client_ip}")
             
             # Preparar endereço do cliente (valores válidos e realistas)
-            # Se não tem endereço, usar endereço padrão válido brasileiro
             address_data = customer_data.get('address', {})
             customer_address = {
-                'street': address_data.get('street') or 'Avenida Paulista',
+                'street': normalize_ascii(address_data.get('street') or 'Avenida Paulista'),
                 'streetNumber': address_data.get('streetNumber') or '1000',
-                'complement': address_data.get('complement') or '',
+                'complement': normalize_ascii(address_data.get('complement') or ''),
                 'zipCode': address_data.get('zipCode') or '01310100',  # CEP válido
-                'neighborhood': address_data.get('neighborhood') or 'Bela Vista',
-                'city': address_data.get('city') or 'São Paulo',
-                'state': address_data.get('state') or 'SP',
+                'neighborhood': normalize_ascii(address_data.get('neighborhood') or 'Bela Vista'),
+                'city': normalize_ascii(address_data.get('city') or 'Sao Paulo'),  # Sem acento
+                'state': (address_data.get('state') or 'sp').lower(),  # ✅ CORREÇÃO: minúsculas (PluggouV2)
                 'country': address_data.get('country') or 'BR'
             }
             
@@ -681,8 +698,8 @@ class UmbrellaPagGateway(PaymentGateway):
                 'paymentMethod': 'pix',
                 'installments': 1,  # PIX sempre 1 parcela
                 'postbackUrl': self.get_webhook_url(),
-                'metadata': {'payment_id': payment_id, 'description': description},  # ✅ CORREÇÃO 3: Objeto dict, não string JSON
-                'traceable': True,
+                'metadata': {'payment_id': payment_id, 'description': description_clean},  # ✅ CORREÇÃO 3: Objeto dict, não string JSON
+                # ✅ CORREÇÃO: traceable removido (PluggouV2 só aceita em contas enterprise)
                 'ip': client_ip,
                 'customer': {
                     'name': customer_name[:100],
@@ -694,7 +711,7 @@ class UmbrellaPagGateway(PaymentGateway):
                 },
                 'items': [
                     {
-                        'title': description[:100] if description else f'Produto {payment_id}',
+                        'title': description_clean[:100] if description_clean else f'Produto {payment_id}',  # ✅ CORREÇÃO: ASCII sem acentos
                         'unitPrice': amount_cents,
                         'quantity': 1,
                         'tangible': False,  # Produto digital
