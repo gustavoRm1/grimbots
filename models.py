@@ -879,7 +879,7 @@ class Payment(db.Model):
     campaign_code = db.Column(db.String(255), nullable=True)
     
     # ✅ TRACKING V4 - Tracking Token Universal
-    tracking_token = db.Column(db.String(100), nullable=True, index=True)  # Tracking V4 - QI 500
+    tracking_token = db.Column(db.String(200), nullable=True, index=True)  # Tracking V4 - QI 500 (aumentado para 200 para garantir compatibilidade)
     
     # ✅ DEMOGRAPHIC DATA (Para Analytics Avançado)
     customer_age = db.Column(db.Integer, nullable=True)

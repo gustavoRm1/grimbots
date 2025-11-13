@@ -240,7 +240,32 @@ def process_start_async(
             tracking_token_from_start = None
             
             if start_param:
-                if start_param.startswith('t'):
+                # ✅ NOVO FORMATO (V4): tracking_token direto (32 chars hex)
+                # tracking_token é um UUID4 em hex, então tem exatamente 32 caracteres
+                if len(start_param) == 32 and all(c in '0123456789abcdef' for c in start_param.lower()):
+                    tracking_token_from_start = start_param
+                    logger.info(f"✅ Tracking token V4 detectado no start param: {tracking_token_from_start}")
+                    
+                    # Recuperar dados completos do Redis
+                    try:
+                        tracking_data = tracking_service_v4.recover_tracking_data(tracking_token_from_start)
+                        if tracking_data:
+                            if tracking_data.get('fbclid'):
+                                utm_data_from_start['fbclid'] = tracking_data['fbclid']
+                            if tracking_data.get('utm_source'):
+                                utm_data_from_start['utm_source'] = tracking_data['utm_source']
+                            if tracking_data.get('utm_campaign'):
+                                utm_data_from_start['utm_campaign'] = tracking_data['utm_campaign']
+                            if tracking_data.get('campaign_code'):
+                                utm_data_from_start['campaign_code'] = tracking_data['campaign_code']
+                            if tracking_data.get('grim'):
+                                utm_data_from_start['campaign_code'] = tracking_data['grim']
+                            logger.info(f"✅ Dados de tracking recuperados do Redis para token {tracking_token_from_start}")
+                    except Exception as e:
+                        logger.warning(f"⚠️ Erro ao recuperar tracking data do Redis: {e}")
+                
+                # ✅ COMPATIBILIDADE: Formato antigo V3 (t{base64})
+                elif start_param.startswith('t'):
                     try:
                         tracking_encoded = start_param[1:]
                         missing_padding = len(tracking_encoded) % 4
@@ -273,8 +298,13 @@ def process_start_async(
                                 utm_data_from_start['fbclid'] = fbclid_hash
                     except Exception as e:
                         logger.warning(f"Erro ao decodificar tracking V3: {e}")
+                
+                # ✅ FALLBACK: Formato antigo p{pool_id}
                 elif start_param.startswith('p') and start_param[1:].isdigit():
                     pool_id_from_start = int(start_param[1:])
+                    logger.info(f"⚠️ Formato antigo detectado (p{pool_id_from_start}), sem tracking_token")
+                
+                # ✅ LEGACY: Formato pool_{id}_{external_id}
                 elif start_param.startswith('pool_'):
                     parts = start_param.split('_')
                     if len(parts) >= 2:

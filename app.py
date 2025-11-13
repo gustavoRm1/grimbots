@@ -4039,90 +4039,29 @@ def public_redirect(slug):
     }, room=f'user_{pool.user_id}')
     
     # ============================================================================
-    # ✅ REDIRECT PARA TELEGRAM COM TRACKING DATA
+    # ✅ REDIRECT PARA TELEGRAM COM TRACKING TOKEN
     # ============================================================================
-    # Passar pool_id, external_id e UTMs no parâmetro start
-    # Formato: start=p{pool_id}_e{external_id}_s{utm_source}_c{utm_campaign}
-    # Limitado a 64 caracteres pelo Telegram
+    # SOLUÇÃO DEFINITIVA: Usar APENAS tracking_token no start param (32 chars)
+    # Todos os dados (fbclid, fbp, fbc, UTMs, etc.) já estão salvos no Redis
+    # com a chave tracking:{tracking_token}
     # ============================================================================
-    import base64
-    import json
     
-    # Construir payload de tracking (MÍNIMO - só pool e hash!)
-    # UTMs já estão no Redis, não precisa repetir no start_param
-    grim_param = request.args.get('grim', '')
-    fbclid_param = request.args.get('fbclid', '')
-    
-    tracking_data = {
-        'p': pool.id,  # pool_id
-    }
-    if tracking_token:
-        tracking_data['tt'] = tracking_token
-    
-    # 🎯 TRACKING ELITE: Priorizar fbclid, fallback para grim
-    if fbclid_param:
-        # Gerar hash curto do fbclid (12 chars)
-        import hashlib
-        fbclid_hash = hashlib.sha256(fbclid_param.encode()).hexdigest()[:12]
-        tracking_data['f'] = fbclid_hash  # Apenas hash!
-        
-        # ✅ SALVAR MAPEAMENTO: hash → fbclid completo no Redis
-        try:
-            r = redis.Redis(host='localhost', port=6379, decode_responses=True)
-            r.setex(f'tracking_hash:{fbclid_hash}', 180, fbclid_param)
-            logger.info(f"🔑 HASH: {fbclid_hash} → fbclid completo (salvo)")
-        except Exception as e:
-            logger.error(f"Erro ao salvar hash no Redis: {e}")
-    elif grim_param:
-        # ✅ CRÍTICO: Se não tem fbclid mas tem grim, incluir grim no tracking
-        # Limitar tamanho do grim para caber no Telegram deep link (64 chars)
-        if len(grim_param) <= 20:  # Grim curto, pode incluir
-            tracking_data['g'] = grim_param  # 'g' = grim
-            logger.info(f"🔑 GRIM: {grim_param} incluído no tracking param")
-        else:
-            # Grim muito longo, usar hash
-            import hashlib
-            grim_hash = hashlib.sha256(grim_param.encode()).hexdigest()[:12]
-            tracking_data['g'] = grim_hash
-            logger.info(f"🔑 GRIM HASH: {grim_hash} → grim completo (salvo no Redis)")
-    
-    # ✅ NÃO incluir UTMs no start_param - economiza espaço e já estão no Redis!
-    
-    # Serializar e encodar (base64 para reduzir tamanho)
-    try:
-        tracking_json = json.dumps(tracking_data, separators=(',', ':'))
-        tracking_base64 = base64.urlsafe_b64encode(tracking_json.encode()).decode()
-        
-        # Debug: mostrar tamanhos
-        logger.info(f"📏 Tracking data: {tracking_json}")
-        logger.info(f"📏 Base64 length: {len(tracking_base64)} chars")
-        
-        # Telegram limita start param a 64 chars
-        # Se exceder, usar apenas pool_id
-        if len(tracking_base64) + 1 > 64:  # +1 para o 't' inicial
-            # Fallback: apenas pool_id
-            tracking_param = f"p{pool.id}"
-            logger.warning(f"⚠️ Tracking param muito longo ({len(tracking_base64)} chars), usando fallback: {tracking_param}")
-        else:
-            tracking_param = f"t{tracking_base64}"
-            logger.info(f"✅ Tracking param: {tracking_param} ({len(tracking_param)} chars)")
-    except Exception as e:
-        # Fallback simples se encoding falhar
-        logger.error(f"Erro ao encodar tracking: {e}")
+    # ✅ SEMPRE usar tracking_token no start param (32 chars, cabe perfeitamente em 64)
+    if tracking_token and not is_crawler_request:
+        # tracking_token tem 32 caracteres (uuid4.hex), bem abaixo do limite de 64
+        tracking_param = tracking_token
+        logger.info(f"✅ Tracking param: {tracking_token} ({len(tracking_token)} chars)")
+    else:
+        # Fallback apenas para crawlers (sem tracking)
         tracking_param = f"p{pool.id}"
+        logger.info(f"🤖 Crawler ou sem tracking - usando fallback: {tracking_param}")
     
     redirect_url = f"https://t.me/{pool_bot.bot.username}?start={tracking_param}"
-    parsed_redirect = urlparse(redirect_url)
-    redirect_query = dict(parse_qsl(parsed_redirect.query))
-    target_redirect_url = redirect_url
-    if not is_crawler_request:
-        redirect_query['tt'] = tracking_token
-        target_redirect_url = urlunparse(parsed_redirect._replace(query=urlencode(redirect_query)))
     
     # ✅ CRÍTICO: Injetar cookies _fbp e _fbc no redirect response
     # Isso sincroniza o FBP gerado no servidor com o browser
     # Meta Pixel JS usará o mesmo FBP, garantindo matching perfeito
-    response = make_response(redirect(target_redirect_url, code=302))
+    response = make_response(redirect(redirect_url, code=302))
     
     # ✅ Injetar _fbp/_fbc gerados no servidor (90 dias - padrão Meta)
     cookie_kwargs = {
