@@ -7224,8 +7224,17 @@ def send_meta_pixel_purchase_event(payment):
             ip_value = payment.client_ip
         if not user_agent_value and getattr(payment, 'client_user_agent', None):
             user_agent_value = payment.client_user_agent
+        
+        # ✅ CRÍTICO: Recuperar pageview_event_id para deduplicação (prioridade: tracking_data > payment)
         if not event_id:
             event_id = tracking_data.get('pageview_event_id')
+            if event_id:
+                logger.info(f"✅ Purchase - event_id recuperado do tracking_data (Redis): {event_id}")
+        
+        # ✅ FALLBACK: Se não encontrou no tracking_data, usar do Payment
+        if not event_id and getattr(payment, 'pageview_event_id', None):
+            event_id = payment.pageview_event_id
+            logger.info(f"✅ Purchase - event_id recuperado do Payment (fallback): {event_id}")
 
         # ✅ LOG: Rastrear origem do external_id
         external_id_source = None
@@ -7306,10 +7315,22 @@ def send_meta_pixel_purchase_event(payment):
                 event_time = candidate_time if candidate_time <= now_ts else now_ts
 
 
+        # ✅ CRÍTICO: Reutilizar pageview_event_id para deduplicação perfeita
+        # Prioridade: tracking_data (Redis) > payment.pageview_event_id > gerar novo
         if not event_id:
             event_id = tracking_data.get('pageview_event_id')
+            if event_id:
+                logger.info(f"✅ Purchase - event_id reutilizado do tracking_data (Redis): {event_id}")
+        
+        # ✅ FALLBACK: Se não encontrou no tracking_data, usar do Payment
+        if not event_id and getattr(payment, 'pageview_event_id', None):
+            event_id = payment.pageview_event_id
+            logger.info(f"✅ Purchase - event_id reutilizado do Payment (fallback): {event_id}")
+        
+        # ✅ ÚLTIMO RECURSO: Gerar novo event_id se não encontrou em nenhum lugar
         if not event_id:
             event_id = f"purchase_{payment.payment_id}_{event_time}"
+            logger.warning(f"⚠️ Purchase - event_id não encontrado, gerado novo: {event_id} (deduplicação pode falhar)")
         
         # ✅ CRÍTICO #2: external_id IMUTÁVEL e CONSISTENTE (SEMPRE MESMO FORMATO DO PAGEVIEW!)
         # ✅ CORREÇÃO CIRÚRGICA: Normalizar external_id com MESMO algoritmo usado no PageView
@@ -7527,11 +7548,15 @@ def send_meta_pixel_purchase_event(payment):
                     db.session.commit()
                     
                     events_received = result.get('events_received', 0)
+                    # ✅ CRÍTICO: Mostrar origem real do event_id usado (pode vir do Redis ou Payment)
+                    pageview_event_id_used = tracking_data.get('pageview_event_id') or getattr(payment, 'pageview_event_id', None) or 'N/A'
+                    pageview_event_id_source = 'Redis' if tracking_data.get('pageview_event_id') else ('Payment' if getattr(payment, 'pageview_event_id', None) else 'N/A')
+                    
                     logger.info(f"📤 Purchase ENVIADO: {payment.payment_id} | Events Received: {events_received} | event_id: {event_id}")
                     logger.info(f"✅ Purchase ENVIADO com sucesso para Meta: R$ {payment.amount} | " +
                                f"Events Received: {events_received} | " +
                                f"Task: {task.id} | " +
-                               f"Deduplicação: event_id={event_id} (reutilizado do PageView: {tracking_data.get('pageview_event_id', 'N/A')})")
+                               f"Deduplicação: event_id={event_id} (reutilizado do PageView: {pageview_event_id_used} via {pageview_event_id_source})")
                 else:
                     # Falhou silenciosamente - não marcar como enviado
                     logger.error(f"❌ Purchase FALHOU silenciosamente: R$ {payment.amount} | " +
