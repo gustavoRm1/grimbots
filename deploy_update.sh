@@ -1,5 +1,6 @@
 #!/bin/bash
-# Script para fazer deploy das mudanças (commit, pull, restart)
+# Script para fazer deploy das mudanças (pull, restart)
+# Descartar mudanças locais e fazer pull do repositório remoto
 
 set -e  # Parar em caso de erro
 
@@ -10,17 +11,18 @@ echo "=========================================="
 # 1. Verificar status do git
 echo ""
 echo "📋 Verificando status do Git..."
-git status
+git status --short
 
-# 2. Fazer commit das mudanças locais
+# 2. Descartar mudanças locais não commitadas
 echo ""
-echo "💾 Fazendo commit das mudanças locais..."
-git add -A
-git commit -m "fix: QI 10000 - Lock específico para texto completo após mídia (anti-duplicação)" || {
-    echo "⚠️ Nenhuma mudança para commitar ou commit já existe"
-}
+echo "🗑️  Descartando mudanças locais não commitadas..."
+git reset --hard HEAD
 
-# 3. Fazer pull do repositório remoto
+# 3. Limpar arquivos não rastreados (exceto logs e arquivos importantes)
+echo "🧹 Limpando arquivos não rastreados..."
+git clean -fd -e logs/ -e .env -e venv/ -e *.pid -e nohup.out 2>/dev/null || true
+
+# 4. Fazer pull do repositório remoto
 echo ""
 echo "⬇️ Fazendo pull do repositório remoto..."
 git pull origin main || {
