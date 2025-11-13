@@ -137,34 +137,68 @@ class UmbrellaPagGateway(PaymentGateway):
             if headers:
                 request_headers.update(headers)
             
-            logger.debug(f"🌐 [{self.get_gateway_name()}] {method} {endpoint}")
+            logger.info(f"🌐 [{self.get_gateway_name()}] {method} {url}")
+            logger.info(f"🔑 [{self.get_gateway_name()}] Headers: x-api-key={self.api_key[:15]}..., User-Agent=UMBRELLAB2B/1.0")
             
-            if payload:
-                logger.debug(f"📦 [{self.get_gateway_name()}] Payload: {json.dumps(payload, indent=2)}")
+            if payload is not None:
+                logger.info(f"📦 [{self.get_gateway_name()}] Payload: {json.dumps(payload)}")
+            else:
+                logger.info(f"📦 [{self.get_gateway_name()}] Payload: None")
             
             # Fazer requisição
-            if method.upper() == 'GET':
-                response = requests.get(url, headers=request_headers, timeout=30)
-            elif method.upper() == 'POST':
-                response = requests.post(url, headers=request_headers, json=payload, timeout=30)
-            elif method.upper() == 'PUT':
-                response = requests.put(url, headers=request_headers, json=payload, timeout=30)
-            else:
-                logger.error(f"❌ [{self.get_gateway_name()}] Método HTTP não suportado: {method}")
+            try:
+                if method.upper() == 'GET':
+                    logger.info(f"📤 [{self.get_gateway_name()}] Enviando GET...")
+                    response = requests.get(url, headers=request_headers, timeout=30)
+                elif method.upper() == 'POST':
+                    # Sempre passar json=payload, mesmo se for None ou {}
+                    if payload is None:
+                        payload = {}
+                    logger.info(f"📤 [{self.get_gateway_name()}] Enviando POST com payload: {json.dumps(payload)}")
+                    response = requests.post(url, headers=request_headers, json=payload, timeout=30)
+                elif method.upper() == 'PUT':
+                    if payload is None:
+                        payload = {}
+                    logger.info(f"📤 [{self.get_gateway_name()}] Enviando PUT com payload: {json.dumps(payload)}")
+                    response = requests.put(url, headers=request_headers, json=payload, timeout=30)
+                elif method.upper() == 'DELETE':
+                    logger.info(f"📤 [{self.get_gateway_name()}] Enviando DELETE...")
+                    response = requests.delete(url, headers=request_headers, timeout=30)
+                else:
+                    logger.error(f"❌ [{self.get_gateway_name()}] Método HTTP não suportado: {method}")
+                    return None
+                
+                logger.info(f"📥 [{self.get_gateway_name()}] Status: {response.status_code}")
+                if response.text:
+                    logger.info(f"📥 [{self.get_gateway_name()}] Resposta: {response.text[:500]}")
+                else:
+                    logger.info(f"📥 [{self.get_gateway_name()}] Resposta: (vazia)")
+                
+                return response
+            except requests.exceptions.Timeout as e:
+                logger.error(f"❌ [{self.get_gateway_name()}] Timeout na requisição: {endpoint}")
+                logger.error(f"   URL: {url}")
+                logger.error(f"   Erro: {str(e)}")
+                import traceback
+                logger.error(f"📋 Traceback: {traceback.format_exc()}")
+                return None
+            except requests.exceptions.ConnectionError as e:
+                logger.error(f"❌ [{self.get_gateway_name()}] Erro de conexão: {endpoint}")
+                logger.error(f"   URL: {url}")
+                logger.error(f"   Erro: {str(e)}")
+                import traceback
+                logger.error(f"📋 Traceback: {traceback.format_exc()}")
+                return None
+            except requests.exceptions.RequestException as e:
+                logger.error(f"❌ [{self.get_gateway_name()}] Erro na requisição: {endpoint}")
+                logger.error(f"   URL: {url}")
+                logger.error(f"   Erro: {str(e)}")
+                import traceback
+                logger.error(f"📋 Traceback: {traceback.format_exc()}")
                 return None
             
-            logger.debug(f"📥 [{self.get_gateway_name()}] Status: {response.status_code}")
-            
-            return response
-            
-        except requests.exceptions.Timeout:
-            logger.error(f"❌ [{self.get_gateway_name()}] Timeout na requisição: {endpoint}")
-            return None
-        except requests.exceptions.RequestException as e:
-            logger.error(f"❌ [{self.get_gateway_name()}] Erro na requisição: {e}")
-            return None
         except Exception as e:
-            logger.error(f"❌ [{self.get_gateway_name()}] Erro inesperado: {e}")
+            logger.error(f"❌ [{self.get_gateway_name()}] Erro inesperado na requisição: {e}")
             import traceback
             logger.error(f"📋 Traceback: {traceback.format_exc()}")
             return None
@@ -325,11 +359,29 @@ class UmbrellaPagGateway(PaymentGateway):
         try:
             logger.info(f"🛒 [{self.get_gateway_name()}] Criando pedido para produto: {unique_product_link_id}")
             
-            response = self._make_request('POST', f'/public/checkout/create-order/{unique_product_link_id}')
+            # Endpoint: /api/public/checkout/create-order/{uniqueProductLinkId}
+            endpoint = f'/public/checkout/create-order/{unique_product_link_id}'
+            
+            # Passar body vazio {} conforme documentação
+            payload = {}
+            
+            logger.info(f"🌐 [{self.get_gateway_name()}] POST {endpoint}")
+            logger.info(f"📦 [{self.get_gateway_name()}] Payload: {json.dumps(payload)}")
+            logger.info(f"📦 [{self.get_gateway_name()}] Product Link ID: {unique_product_link_id}")
+            
+            response = self._make_request('POST', endpoint, payload=payload)
             
             if not response:
                 logger.error(f"❌ [{self.get_gateway_name()}] Erro ao criar pedido (sem resposta)")
+                logger.error(f"   Endpoint: {endpoint}")
+                logger.error(f"   URL completa: {self.base_url}{endpoint}")
+                logger.error(f"   Payload: {payload}")
+                logger.error(f"   API Key: {self.api_key[:15]}... ({len(self.api_key)} chars)")
+                logger.error(f"   Isso indica que a requisição falhou antes de receber resposta")
+                logger.error(f"   Possíveis causas: timeout, erro de conexão, ou erro de autenticação")
                 return None
+            
+            logger.info(f"📥 [{self.get_gateway_name()}] Resposta recebida: Status {response.status_code}")
             
             if response.status_code == 201:
                 try:
@@ -358,8 +410,19 @@ class UmbrellaPagGateway(PaymentGateway):
                     return None
             else:
                 logger.error(f"❌ [{self.get_gateway_name()}] Falha ao criar pedido (status {response.status_code})")
+                logger.error(f"   Endpoint: {endpoint}")
+                logger.error(f"   URL completa: {self.base_url}{endpoint}")
+                logger.error(f"   Product Link ID: {unique_product_link_id}")
+                logger.error(f"   API Key: {self.api_key[:15]}... ({len(self.api_key)} chars)")
                 if response.text:
                     logger.error(f"   Resposta: {response.text[:500]}")
+                    try:
+                        error_data = response.json()
+                        logger.error(f"   Erro JSON: {json.dumps(error_data, indent=2)}")
+                    except:
+                        pass
+                else:
+                    logger.error(f"   Resposta: (vazia)")
                 return None
                 
         except Exception as e:
