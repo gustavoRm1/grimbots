@@ -3958,9 +3958,16 @@ def public_redirect(slug):
             'utm_id': request.args.get('utm_id', '')
         }
 
+        # ✅ CRÍTICO: Garantir que fbclid completo (até 255 chars) seja salvo - NUNCA truncar antes de salvar no Redis!
+        fbclid_to_save = fbclid or None
+        if fbclid_to_save:
+            logger.info(f"✅ Redirect - Salvando fbclid completo no Redis: {fbclid_to_save[:50]}... (len={len(fbclid_to_save)})")
+            if len(fbclid_to_save) > 255:
+                logger.warning(f"⚠️ Redirect - fbclid excede 255 chars ({len(fbclid_to_save)}), mas será salvo completo no Redis (sem truncar)")
+        
         tracking_payload = {
             'tracking_token': tracking_token,
-            'fbclid': fbclid or None,
+            'fbclid': fbclid_to_save,  # ✅ fbclid completo (até 255 chars) - NUNCA truncar aqui!
             'fbp': fbp_cookie,
             'fbc': fbc_cookie,
             'pageview_event_id': pageview_event_id,
@@ -3977,6 +3984,8 @@ def public_redirect(slug):
             if not ok:
                 logger.warning("Retry saving tracking_token once (redirect)")
                 tracking_service_v4.save_tracking_token(tracking_token, tracking_payload, ttl=TRACKING_TOKEN_TTL)
+            else:
+                logger.info(f"✅ Redirect - tracking_token salvo no Redis com fbclid completo (len={len(fbclid_to_save) if fbclid_to_save else 0})")
             # Compatibilidade com tracking V3 (fbclid/grim)
             TrackingService.save_tracking_data(
                 fbclid=fbclid,
@@ -6836,11 +6845,36 @@ def send_meta_pixel_pageview_event(pool, request, pageview_event_id=None, tracki
         )
         
         # ✅ CRÍTICO: Garantir que external_id existe (obrigatório para Conversions API)
+        # ✅ CORREÇÃO: Se _build_user_data não retornou external_id, mas temos external_id (fbclid), forçar inclusão
         if not user_data.get('external_id'):
-            # Se não há external_id, criar um baseado no grim ou fbclid
-            fallback_external_id = external_id if external_id else MetaPixelHelper.generate_external_id()
-            user_data['external_id'] = [MetaPixelAPI._hash_data(fallback_external_id)]
-            logger.warning(f"⚠️ External ID não encontrado no PageView, usando fallback: {fallback_external_id}")
+            # ✅ PRIORIDADE 1: Usar fbclid real se disponível (NUNCA usar fallback sintético se temos fbclid!)
+            if external_id and external_id.startswith(('PAZ', 'IwZ')):
+                # fbclid válido da Meta - usar diretamente (será hashado pelo _build_user_data)
+                user_data['external_id'] = [MetaPixelAPI._hash_data(external_id)]
+                logger.info(f"✅ PageView - external_id (fbclid) forçado no user_data: {external_id[:50]}... (len={len(external_id)})")
+            # ✅ PRIORIDADE 2: Usar grim se disponível (melhor que sintético)
+            elif grim_param:
+                user_data['external_id'] = [MetaPixelAPI._hash_data(grim_param)]
+                logger.info(f"✅ PageView - external_id (grim) forçado no user_data: {grim_param[:30]}...")
+            # ✅ ÚLTIMO RECURSO: Fallback sintético (só se realmente não tiver nenhum ID)
+            else:
+                fallback_external_id = external_id if external_id else MetaPixelHelper.generate_external_id()
+                user_data['external_id'] = [MetaPixelAPI._hash_data(fallback_external_id)]
+                logger.warning(f"⚠️ PageView - External ID não encontrado, usando fallback: {fallback_external_id}")
+                logger.warning(f"⚠️ PageView - Isso pode quebrar matching com Purchase! Verifique se fbclid está sendo capturado corretamente.")
+        else:
+            # ✅ VALIDAÇÃO: Verificar se o external_id retornado confere com o fbclid original
+            first_external_id_hash = user_data['external_id'][0] if user_data.get('external_id') else None
+            if first_external_id_hash and external_id and external_id.startswith(('PAZ', 'IwZ')):
+                expected_hash = MetaPixelAPI._hash_data(external_id)
+                if first_external_id_hash == expected_hash:
+                    logger.info(f"✅ PageView - external_id[0] confere com fbclid original (len={len(external_id)})")
+                else:
+                    logger.warning(f"⚠️ PageView - external_id[0] NÃO confere com fbclid original! Isso pode quebrar matching!")
+                    logger.warning(f"   Esperado: {expected_hash[:16]}... | Recebido: {first_external_id_hash[:16]}...")
+                    # ✅ CORREÇÃO AUTOMÁTICA: Substituir pelo hash correto
+                    user_data['external_id'] = [expected_hash]
+                    logger.info(f"✅ PageView - external_id corrigido automaticamente para garantir matching")
         
         # ✅ LOG CRÍTICO: Mostrar dados enviados para matching (quantidade de atributos)
         external_ids = user_data.get('external_id', [])
@@ -7073,6 +7107,7 @@ def send_meta_pixel_purchase_event(payment):
             except (TypeError, ValueError):
                 pageview_ts_int = None
 
+        # ✅ CRÍTICO: Recuperar fbclid completo (até 255 chars) - NUNCA truncar!
         external_id_value = tracking_data.get('fbclid')
         fbp_value = tracking_data.get('fbp')
         fbc_value = tracking_data.get('fbc')
@@ -7085,21 +7120,51 @@ def send_meta_pixel_purchase_event(payment):
         if not event_id:
             event_id = tracking_data.get('pageview_event_id')
 
-        # Persistir fbclid recuperado no Payment/BotUser
-        if external_id_value and not payment.fbclid:
-            payment.fbclid = external_id_value
-        if external_id_value and bot_user and not bot_user.fbclid:
-            bot_user.fbclid = external_id_value
-
+        # ✅ LOG: Rastrear origem do external_id
+        external_id_source = None
+        if external_id_value:
+            external_id_source = 'tracking_data (Redis)'
+            logger.info(f"✅ Purchase - external_id recuperado do tracking_data (Redis): {external_id_value[:50]}... (len={len(external_id_value)})")
+        
+        # ✅ PRIORIDADE 1: fbclid do tracking_data (Redis) - MAIS CONFIÁVEL
+        # ✅ PRIORIDADE 2: fbclid do Payment (pode ter sido salvo anteriormente)
         if not external_id_value:
             if payment.fbclid:
                 external_id_value = payment.fbclid
+                external_id_source = 'payment.fbclid'
+                logger.info(f"✅ Purchase - external_id recuperado do payment.fbclid: {external_id_value[:50]}... (len={len(external_id_value)})")
+            # ✅ PRIORIDADE 3: fbclid do BotUser
             elif bot_user and bot_user.fbclid:
                 external_id_value = bot_user.fbclid
+                external_id_source = 'bot_user.fbclid'
+                logger.info(f"✅ Purchase - external_id recuperado do bot_user.fbclid: {external_id_value[:50]}... (len={len(external_id_value)})")
+            # ✅ PRIORIDADE 4: external_id do BotUser (legacy)
             elif bot_user and bot_user.external_id:
                 external_id_value = bot_user.external_id
+                external_id_source = 'bot_user.external_id'
+                logger.info(f"✅ Purchase - external_id recuperado do bot_user.external_id: {external_id_value[:50]}... (len={len(external_id_value)})")
+            # ✅ ÚLTIMO RECURSO: customer_user_id (não ideal, mas melhor que nada)
             else:
                 external_id_value = payment.customer_user_id
+                external_id_source = 'payment.customer_user_id (fallback)'
+                logger.warning(f"⚠️ Purchase - external_id não encontrado, usando customer_user_id como fallback: {external_id_value}")
+
+        # ✅ CRÍTICO: Persistir fbclid completo no Payment/BotUser (até 255 chars - nunca truncar!)
+        if external_id_value and external_id_value != payment.fbclid:
+            # Garantir que não exceda 255 chars (limite do banco)
+            if len(external_id_value) > 255:
+                logger.warning(f"⚠️ Purchase - external_id excede 255 chars ({len(external_id_value)}), truncando para salvar no banco")
+                payment.fbclid = external_id_value[:255]
+            else:
+                payment.fbclid = external_id_value
+            logger.info(f"✅ Purchase - fbclid salvo no payment: {payment.fbclid[:50]}... (len={len(payment.fbclid)})")
+        
+        if external_id_value and bot_user and bot_user.fbclid != external_id_value:
+            if len(external_id_value) > 255:
+                bot_user.fbclid = external_id_value[:255]
+            else:
+                bot_user.fbclid = external_id_value
+            logger.info(f"✅ Purchase - fbclid salvo no bot_user: {bot_user.fbclid[:50]}... (len={len(bot_user.fbclid)})")
 
         if not fbp_value and bot_user and getattr(bot_user, 'fbp', None):
             fbp_value = bot_user.fbp
@@ -7172,18 +7237,38 @@ def send_meta_pixel_purchase_event(payment):
         )
         
         # ✅ VALIDAÇÃO: Garantir que external_id é um array e tem pelo menos fbclid
+        # ✅ CRÍTICO: Se _build_user_data não retornou external_id, mas temos external_id_value, forçar inclusão
         if not user_data.get('external_id'):
-            # Último recurso: criar um baseado no payment_id
-            # time já está importado no topo do arquivo
-            fallback_external_id = f'purchase_{payment.payment_id}_{int(time.time())}'
-            user_data['external_id'] = [MetaPixelAPI._hash_data(fallback_external_id)]
-            logger.warning(f"⚠️ External ID não encontrado, usando fallback: {fallback_external_id}")
+            # ✅ PRIORIDADE 1: Usar fbclid real se disponível (NUNCA usar fallback sintético se temos fbclid!)
+            if external_id_value and external_id_value.startswith(('PAZ', 'IwZ')):
+                # fbclid válido da Meta - usar diretamente (será hashado pelo _build_user_data)
+                user_data['external_id'] = [MetaPixelAPI._hash_data(external_id_value)]
+                logger.info(f"✅ Purchase - external_id (fbclid) forçado no user_data: {external_id_value[:50]}... (len={len(external_id_value)})")
+            # ✅ PRIORIDADE 2: Usar telegram_user_id se disponível
+            elif telegram_id_for_hash:
+                user_data['external_id'] = [MetaPixelAPI._hash_data(telegram_id_for_hash)]
+                logger.info(f"✅ Purchase - external_id (telegram_user_id) forçado no user_data: {telegram_id_for_hash[:30]}...")
+            # ✅ ÚLTIMO RECURSO: Fallback sintético (só se realmente não tiver nenhum ID)
+            else:
+                fallback_external_id = f'purchase_{payment.payment_id}_{int(time.time())}'
+                user_data['external_id'] = [MetaPixelAPI._hash_data(fallback_external_id)]
+                logger.warning(f"⚠️ Purchase - External ID não encontrado, usando fallback sintético: {fallback_external_id}")
+                logger.warning(f"⚠️ Purchase - Isso pode quebrar matching com PageView! Verifique se tracking_token está sendo salvo corretamente.")
         else:
             # ✅ LOG: Mostrar quantos external_ids foram enviados (deve ser >= 2 para melhor match)
             external_ids_count = len(user_data.get('external_id', []))
             logger.info(f"🔑 Purchase - external_id array consolidado: {external_ids_count} ID(s) | Primeiro: {user_data['external_id'][0][:16]}...")
             if external_ids_count >= 2:
                 logger.info(f"✅ Purchase - external_id múltiplo detectado (match quality otimizado): fbclid + telegram_user_id")
+            # ✅ VALIDAÇÃO: Verificar se o primeiro external_id é realmente o fbclid (deve começar com hash de PAZ ou IwZ)
+            first_external_id_hash = user_data['external_id'][0] if user_data.get('external_id') else None
+            if first_external_id_hash and external_id_value and external_id_value.startswith(('PAZ', 'IwZ')):
+                expected_hash = MetaPixelAPI._hash_data(external_id_value)
+                if first_external_id_hash == expected_hash:
+                    logger.info(f"✅ Purchase - external_id[0] confere com fbclid original (match garantido com PageView)")
+                else:
+                    logger.warning(f"⚠️ Purchase - external_id[0] NÃO confere com fbclid original! Isso pode quebrar matching!")
+                    logger.warning(f"   Esperado: {expected_hash[:16]}... | Recebido: {first_external_id_hash[:16]}...")
         
         # ✅ LOG CRÍTICO: Mostrar dados enviados para matching (quantidade de atributos)
         external_ids = user_data.get('external_id', [])
