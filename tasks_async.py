@@ -518,6 +518,8 @@ def process_webhook_async(gateway_type: str, data: Dict[str, Any]):
                 dummy_credentials = {'api_key': 'dummy'}
             elif gateway_type == 'atomopay':
                 dummy_credentials = {'api_token': 'dummy'}
+            elif gateway_type == 'umbrellapag':
+                dummy_credentials = {'api_key': 'dummy'}
             
             gateway_instance = GatewayFactory.create_gateway(gateway_type, dummy_credentials, use_adapter=True)
             

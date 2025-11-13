@@ -813,6 +813,9 @@ class Gateway(db.Model):
             result['product_hash'] = self.product_hash
             # ✅ REMOVIDO: offer_hash não é mais necessário (ofertas são criadas dinamicamente)
             # result['offer_hash'] = self.offer_hash
+        elif self.gateway_type == 'umbrellapag':
+            result['api_key'] = self.api_key
+            result['product_hash'] = self.product_hash
         
         return result
 

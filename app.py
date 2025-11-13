@@ -4687,7 +4687,7 @@ def create_gateway():
         gateway_type = data.get('gateway_type')
     
         # ✅ Validar tipo de gateway
-        if gateway_type not in ['syncpay', 'pushynpay', 'paradise', 'wiinpay', 'atomopay']:
+        if gateway_type not in ['syncpay', 'pushynpay', 'paradise', 'wiinpay', 'atomopay', 'umbrellapag']:
             logger.error(f"❌ Tipo de gateway inválido: {gateway_type}")
             return jsonify({'error': 'Tipo de gateway inválido'}), 400
         
@@ -4752,6 +4752,27 @@ def create_gateway():
                 logger.info(f"✅ [Átomo Pay] product_hash salvo (criptografado)")
             else:
                 logger.warning(f"⚠️ [Átomo Pay] product_hash não fornecido")
+        
+        elif gateway_type == 'umbrellapag':
+            # ✅ UMBRELLAPAG
+            api_key_value = data.get('api_key')
+            product_hash_value = data.get('product_hash')
+            
+            logger.info(f"📦 [UmbrellaPag] Dados recebidos:")
+            logger.info(f"   api_key: {'SIM' if api_key_value else 'NÃO'} ({len(api_key_value) if api_key_value else 0} chars)")
+            logger.info(f"   product_hash: {'SIM' if product_hash_value else 'NÃO'} ({len(product_hash_value) if product_hash_value else 0} chars)")
+            
+            if api_key_value:
+                gateway.api_key = api_key_value  # Criptografia automática via setter
+                logger.info(f"✅ [UmbrellaPag] api_key salvo (criptografado)")
+            else:
+                logger.warning(f"⚠️ [UmbrellaPag] api_key não fornecido")
+            
+            if product_hash_value:
+                gateway.product_hash = product_hash_value  # Criptografia automática via setter
+                logger.info(f"✅ [UmbrellaPag] product_hash salvo (criptografado)")
+            else:
+                logger.info(f"ℹ️ [UmbrellaPag] product_hash não fornecido (será criado dinamicamente)")
         
         # ✅ Split percentage (comum a todos)
         gateway.split_percentage = float(data.get('split_percentage', 2.0))  # 2% PADRÃO
@@ -7515,6 +7536,8 @@ def payment_webhook(gateway_type):
             dummy_credentials = {'api_key': 'dummy'}
         elif gateway_type == 'atomopay':
             dummy_credentials = {'api_token': 'dummy'}
+        elif gateway_type == 'umbrellapag':
+            dummy_credentials = {'api_key': 'dummy'}
         
         # ✅ Criar gateway com adapter (use_adapter=True por padrão)
         gateway_instance = GatewayFactory.create_gateway(gateway_type, dummy_credentials, use_adapter=True)

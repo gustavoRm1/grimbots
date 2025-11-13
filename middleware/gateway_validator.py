@@ -43,7 +43,7 @@ def validate_gateway_request(f):
         # Validar gateway_type
         gateway_type = kwargs.get('gateway_type') or request.args.get('gateway_type')
         if gateway_type:
-            valid_types = ['syncpay', 'pushynpay', 'paradise', 'wiinpay', 'atomopay']
+            valid_types = ['syncpay', 'pushynpay', 'paradise', 'wiinpay', 'atomopay', 'umbrellapag']
             if gateway_type.lower() not in valid_types:
                 logger.warning(f"⚠️ Gateway type inválido: {gateway_type}")
                 return jsonify({'error': f'Gateway type inválido: {gateway_type}'}), 400

@@ -4198,7 +4198,7 @@ Seu pagamento ainda não foi confirmado.
                     reference = pix_result.get('reference')
                     
                     # ✅ PATCH 2 QI 200: Salvar product_hash se foi criado dinamicamente
-                    if gateway.gateway_type == 'atomopay' and payment_gateway:
+                    if gateway.gateway_type in ['atomopay', 'umbrellapag'] and payment_gateway:
                         # Verificar se product_hash foi criado dinamicamente
                         current_product_hash = getattr(payment_gateway, 'product_hash', None)
                         if current_product_hash and current_product_hash != original_product_hash:
@@ -4215,9 +4215,12 @@ Seu pagamento ainda não foi confirmado.
                             logger.info(f"💾 Producer Hash salvo no Gateway: {producer_hash[:12]}...")
                     
                     # ✅ PATCH 2 & 3 QI 200: Commit de todas as alterações do Gateway
-                    if gateway.gateway_type == 'atomopay':
+                    if gateway.gateway_type in ['atomopay', 'umbrellapag']:
                         db.session.commit()
-                        logger.info(f"💾 Gateway atualizado (product_hash, producer_hash)")
+                        if gateway.gateway_type == 'atomopay':
+                            logger.info(f"💾 Gateway atualizado (product_hash, producer_hash)")
+                        else:
+                            logger.info(f"💾 Gateway atualizado (product_hash)")
                     
                     logger.info(f"💾 Salvando Payment com dados do gateway:")
                     logger.info(f"   payment_id: {payment_id}")

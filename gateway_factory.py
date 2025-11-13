@@ -11,6 +11,7 @@ from gateway_pushyn import PushynGateway
 from gateway_paradise import ParadisePaymentGateway
 from gateway_wiinpay import WiinPayGateway
 from gateway_atomopay import AtomPayGateway
+from gateway_umbrellapag import UmbrellaPagGateway
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +31,7 @@ class GatewayFactory:
         'paradise': ParadisePaymentGateway,
         'wiinpay': WiinPayGateway,
         'atomopay': AtomPayGateway,  # ✅ Átomo Pay
+        'umbrellapag': UmbrellaPagGateway,  # ✅ UmbrellaPag
     }
     
     @classmethod
@@ -165,6 +167,24 @@ class GatewayFactory:
                 gateway = gateway_class(
                     api_token=api_token,
                     offer_hash=offer_hash if offer_hash else None,
+                    product_hash=product_hash if product_hash else None
+                )
+            
+            elif gateway_type == 'umbrellapag':
+                # ✅ UmbrellaPag requer: api_key
+                # Opcional: product_hash (será criado dinamicamente se não informado)
+                api_key = credentials.get('api_key')
+                product_hash = credentials.get('product_hash', '')
+                
+                if not api_key:
+                    logger.error(f"❌ [Factory] UmbrellaPag requer api_key")
+                    return None
+                
+                if not product_hash:
+                    logger.info(f"ℹ️ [Factory] UmbrellaPag: product_hash não configurado. Será criado dinamicamente.")
+                
+                gateway = gateway_class(
+                    api_key=api_key,
                     product_hash=product_hash if product_hash else None
                 )
             
