@@ -4,6 +4,11 @@
 
 set -e
 
+# Configurações do banco (ajustar se necessário)
+export PGPASSWORD="${PGPASSWORD:-123sefudeu}"
+DB_USER="${DB_USER:-grimbots}"
+DB_NAME="${DB_NAME:-grimbots}"
+
 echo "=========================================="
 echo "  VALIDAÇÃO COMPLETA - META PIXEL"
 echo "=========================================="
@@ -15,21 +20,21 @@ echo ""
 echo "=========================================="
 echo "1. SCHEMA DO BANCO (\\d+ payments)"
 echo "=========================================="
-psql -c "\d+ payments"
+psql -U "$DB_USER" -d "$DB_NAME" -c "\d+ payments"
 echo ""
 
 # 2. Tamanhos das colunas
 echo "=========================================="
 echo "2. TAMANHOS DAS COLUNAS"
 echo "=========================================="
-psql -c "SELECT column_name, data_type, character_maximum_length FROM information_schema.columns WHERE table_name='payments' AND column_name IN ('tracking_token','fbclid','pageview_event_id','meta_event_id');"
+psql -U "$DB_USER" -d "$DB_NAME" -c "SELECT column_name, data_type, character_maximum_length FROM information_schema.columns WHERE table_name='payments' AND column_name IN ('tracking_token','fbclid','pageview_event_id','meta_event_id');"
 echo ""
 
 # 3. Verificar truncamento
 echo "=========================================="
 echo "3. VERIFICAR TRUNCAMENTO"
 echo "=========================================="
-psql -c "SELECT payment_id, length(fbclid) AS fbclid_len, length(tracking_token) AS token_len, length(meta_event_id) AS event_id_len FROM payments WHERE fbclid IS NOT NULL ORDER BY created_at DESC LIMIT 20;"
+psql -U "$DB_USER" -d "$DB_NAME" -c "SELECT payment_id, length(fbclid) AS fbclid_len, length(tracking_token) AS token_len, length(meta_event_id) AS event_id_len FROM payments WHERE fbclid IS NOT NULL ORDER BY created_at DESC LIMIT 20;"
 echo ""
 
 # 4. Redis - Listar tokens recentes
