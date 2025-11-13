@@ -7,7 +7,21 @@ Fluxo de criação de pagamento:
 
 Autenticação:
 - Header: x-api-key (token de API)
-- Header: User-Agent: UMBRELLAB2B/1.0
+- Header: User-Agent: UmbrellaPagB2B/1.0 (forma canônica para PluggouV2)
+
+✅ CORREÇÕES APLICADAS (2025-11-13):
+- Customer.id: UUID válido gerado a partir do hash MD5 do payment_id (obrigatório no OpenAPI)
+- Customer.birthdate: REMOVIDO (não deve existir - causa erro 400)
+- Metadata: STRING JSON usando json.dumps() (não objeto dict - conforme documentação)
+- Traceable: True (obrigatório no provider PluggouV2)
+- Shipping: presente com fee=0 e address (recomendado)
+- Email: sempre @grimbots.online (RFC 5322 válido)
+- Telefone: formato 55DDXXXXXXXXX (sem símbolo +, apenas números)
+- State: minúsculas (sp em vez de SP)
+- Textos: normalizados para ASCII (remove acentos)
+- Document.number: apenas números (sem máscara - pontos, hífens, espaços removidos)
+- User-Agent: UmbrellaPagB2B/1.0 (forma canônica)
+- Boleto: removido do payload (não necessário para PIX)
 """
 
 import os
