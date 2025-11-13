@@ -3,9 +3,7 @@ Gateway UmbrellaPag
 Baseado na documentação oficial: https://docs.umbrellapag.com/
 
 Fluxo de criação de pagamento:
-1. Criar produto (POST /api/user/products) → retorna uniqueProductLinkId
-2. Criar pedido (POST /api/public/checkout/create-order/{uniqueProductLinkId}) → retorna id do pedido
-3. Criar pagamento PIX (POST /api/public/checkout/payment/{id}) → retorna dados do PIX
+1. Criar transação diretamente (POST /api/user/transactions) → retorna dados do PIX
 
 Autenticação:
 - Header: x-api-key (token de API)
@@ -492,12 +490,7 @@ class UmbrellaPagGateway(PaymentGateway):
         customer_data: Optional[Dict[str, Any]] = None
     ) -> Optional[Dict[str, Any]]:
         """
-        Gera PIX via UmbrellaPag
-        
-        Fluxo:
-        1. Criar produto (se não existir product_hash)
-        2. Criar pedido
-        3. Criar pagamento PIX
+        Gera PIX via UmbrellaPag usando endpoint /api/user/transactions
         
         Args:
             amount: Valor em reais (ex: 10.50)
@@ -521,31 +514,8 @@ class UmbrellaPagGateway(PaymentGateway):
             logger.info(f"💰 [{self.get_gateway_name()}] Gerando PIX - R$ {amount:.2f}")
             logger.info(f"   Payment ID: {payment_id}")
             
-            # 1. Criar ou usar produto existente
-            unique_product_link_id = self.product_hash
-            
-            if not unique_product_link_id:
-                logger.info(f"📦 [{self.get_gateway_name()}] Criando produto dinamicamente...")
-                unique_product_link_id = self._create_product(amount, description, payment_id)
-                
-                if not unique_product_link_id:
-                    logger.error(f"❌ [{self.get_gateway_name()}] Falha ao criar produto")
-                    return None
-                
-                # Salvar product_hash para uso futuro
-                self.product_hash = unique_product_link_id
-            else:
-                logger.info(f"✅ [{self.get_gateway_name()}] Usando produto existente: {unique_product_link_id}")
-            
-            # 2. Criar pedido
-            order_id = self._create_order(unique_product_link_id)
-            
-            if not order_id:
-                logger.error(f"❌ [{self.get_gateway_name()}] Falha ao criar pedido")
-                return None
-            
-            # 3. Criar pagamento PIX
-            logger.info(f"💳 [{self.get_gateway_name()}] Criando pagamento PIX para pedido: {order_id}")
+            # Converter valor para centavos
+            amount_cents = int(amount * 100)
             
             # Preparar dados do cliente
             if not customer_data:
@@ -563,53 +533,131 @@ class UmbrellaPagGateway(PaymentGateway):
             if customer_document:
                 customer_document = self._validate_document(customer_document)
             
-            # Payload para criar pagamento PIX
-            payment_payload = {
+            # Obter IP do cliente (se disponível)
+            client_ip = customer_data.get('ip', '0.0.0.0')
+            
+            # Preparar endereço do cliente (mínimo necessário)
+            customer_address = {
+                'street': customer_data.get('address', {}).get('street', 'Não informado'),
+                'streetNumber': customer_data.get('address', {}).get('streetNumber', '0'),
+                'complement': customer_data.get('address', {}).get('complement', ''),
+                'zipCode': customer_data.get('address', {}).get('zipCode', '00000000'),
+                'neighborhood': customer_data.get('address', {}).get('neighborhood', 'Não informado'),
+                'city': customer_data.get('address', {}).get('city', 'São Paulo'),
+                'state': customer_data.get('address', {}).get('state', 'SP'),
+                'country': customer_data.get('address', {}).get('country', 'BR')
+            }
+            
+            # Preparar documento
+            customer_doc = {}
+            if customer_document:
+                # Determinar tipo de documento (CPF ou CNPJ)
+                doc_type = 'CNPJ' if len(customer_document) == 14 else 'CPF'
+                customer_doc = {
+                    'number': customer_document,
+                    'type': doc_type
+                }
+            else:
+                # Se não tem documento, usar CPF padrão
+                customer_doc = {
+                    'number': '00000000000',
+                    'type': 'CPF'
+                }
+            
+            # Payload para criar transação PIX usando endpoint /api/user/transactions
+            payload = {
+                'amount': amount_cents,  # Valor em centavos
+                'currency': 'BRL',
                 'paymentMethod': 'pix',
+                'installments': 1,  # PIX sempre 1 parcela
+                'postbackUrl': self.get_webhook_url(),
+                'metadata': json.dumps({'payment_id': payment_id, 'description': description}),
+                'traceable': True,
+                'ip': client_ip,
                 'customer': {
                     'name': customer_name[:100],
                     'email': customer_email[:100],
-                    'phone': customer_phone
+                    'document': customer_doc,
+                    'phone': customer_phone,
+                    'externalRef': payment_id,
+                    'address': customer_address
+                },
+                'items': [
+                    {
+                        'title': description[:100] if description else f'Produto {payment_id}',
+                        'unitPrice': amount_cents,
+                        'quantity': 1,
+                        'tangible': False,  # Produto digital
+                        'externalRef': payment_id
+                    }
+                ],
+                'pix': {
+                    'expiresInDays': 3  # PIX expira em 3 dias
+                },
+                'boleto': {
+                    'expiresInDays': 3  # Não usado para PIX, mas pode ser obrigatório
                 }
             }
             
-            # Adicionar documento se válido
-            if customer_document:
-                payment_payload['customer']['document'] = customer_document
+            logger.info(f"💳 [{self.get_gateway_name()}] Criando transação PIX via /api/user/transactions")
+            logger.info(f"   Valor: R$ {amount:.2f} ({amount_cents} centavos)")
+            logger.info(f"   Cliente: {customer_name} ({customer_email})")
             
-            # Adicionar webhook URL
-            webhook_url = self.get_webhook_url()
-            if webhook_url:
-                payment_payload['webhookUrl'] = webhook_url
-            
-            # Adicionar metadata com payment_id
-            payment_payload['metadata'] = {
-                'payment_id': payment_id,
-                'platform': 'grimbots'
-            }
-            
-            response = self._make_request('POST', f'/public/checkout/payment/{order_id}', payload=payment_payload)
+            # Fazer requisição para criar transação
+            response = self._make_request('POST', '/user/transactions', payload=payload)
             
             if not response:
-                logger.error(f"❌ [{self.get_gateway_name()}] Erro ao criar pagamento (sem resposta)")
+                logger.error(f"❌ [{self.get_gateway_name()}] Erro ao criar transação (sem resposta)")
                 return None
             
-            if response.status_code == 201:
+            logger.info(f"📥 [{self.get_gateway_name()}] Resposta recebida: Status {response.status_code}")
+            
+            # Status 200 = sucesso conforme documentação
+            if response.status_code == 200:
                 try:
                     data = response.json()
+                    logger.info(f"📥 [{self.get_gateway_name()}] Resposta completa: {json.dumps(data, indent=2)[:500]}")
                     
-                    # Verificar formato da resposta
+                    # Verificar formato da resposta conforme documentação
                     if isinstance(data, dict) and 'data' in data:
-                        payment_data = data.get('data', {})
+                        transaction_data = data.get('data', {})
                         
-                        # Extrair dados do PIX
-                        pix_code = payment_data.get('pixCode') or payment_data.get('pix_code') or payment_data.get('qrCode') or payment_data.get('qr_code')
-                        qr_code_url = payment_data.get('qrCodeUrl') or payment_data.get('qr_code_url') or payment_data.get('qrCodeImage') or payment_data.get('qr_code_image')
-                        transaction_id = payment_data.get('id') or payment_data.get('transactionId') or payment_data.get('transaction_id') or order_id
+                        # Extrair dados do PIX conforme documentação
+                        pix_data = transaction_data.get('pix', {})
+                        
+                        # Código PIX pode estar em diferentes campos
+                        pix_code = (
+                            pix_data.get('qrCode') or 
+                            pix_data.get('qr_code') or 
+                            pix_data.get('code') or
+                            transaction_data.get('qrCode') or
+                            transaction_data.get('qr_code')
+                        )
+                        
+                        # QR Code URL
+                        qr_code_url = (
+                            pix_data.get('qrCodeUrl') or
+                            pix_data.get('qr_code_url') or
+                            pix_data.get('url') or
+                            transaction_data.get('qrCodeUrl') or
+                            transaction_data.get('qr_code_url')
+                        )
+                        
+                        # Transaction ID
+                        transaction_id = (
+                            transaction_data.get('id') or
+                            transaction_data.get('transactionId') or
+                            transaction_data.get('transaction_id') or
+                            transaction_data.get('externalRef') or
+                            payment_id
+                        )
+                        
+                        # Status da transação
+                        transaction_status = transaction_data.get('status', 'WAITING_PAYMENT')
                         
                         if not pix_code:
                             logger.error(f"❌ [{self.get_gateway_name()}] pix_code não encontrado na resposta")
-                            logger.error(f"   Resposta: {json.dumps(data, indent=2)}")
+                            logger.error(f"   Resposta completa: {json.dumps(data, indent=2)}")
                             return None
                         
                         # Gerar QR Code URL se não fornecido
@@ -618,6 +666,7 @@ class UmbrellaPagGateway(PaymentGateway):
                         
                         logger.info(f"✅ [{self.get_gateway_name()}] PIX gerado com sucesso")
                         logger.info(f"   Transaction ID: {transaction_id}")
+                        logger.info(f"   Status: {transaction_status}")
                         logger.info(f"   PIX Code: {pix_code[:50]}...")
                         
                         return {
@@ -626,9 +675,9 @@ class UmbrellaPagGateway(PaymentGateway):
                             'transaction_id': str(transaction_id),
                             'payment_id': payment_id,
                             'gateway_transaction_id': str(transaction_id),
-                            'gateway_transaction_hash': str(transaction_id),  # Usar transaction_id como hash
-                            'order_id': order_id,
-                            'product_hash': unique_product_link_id
+                            'gateway_transaction_hash': str(transaction_id),
+                            'status': transaction_status,
+                            'external_ref': transaction_data.get('externalRef', payment_id)
                         }
                     else:
                         logger.error(f"❌ [{self.get_gateway_name()}] Formato de resposta inválido")
@@ -640,9 +689,15 @@ class UmbrellaPagGateway(PaymentGateway):
                     logger.error(f"   Resposta: {response.text[:500]}")
                     return None
             else:
-                logger.error(f"❌ [{self.get_gateway_name()}] Falha ao criar pagamento (status {response.status_code})")
+                logger.error(f"❌ [{self.get_gateway_name()}] Falha ao criar transação (status {response.status_code})")
                 if response.text:
                     logger.error(f"   Resposta: {response.text[:500]}")
+                    try:
+                        error_data = response.json()
+                        error_message = error_data.get('message', '')
+                        logger.error(f"   Mensagem de erro: {error_message}")
+                    except:
+                        pass
                 return None
                 
         except Exception as e:
