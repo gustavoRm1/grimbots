@@ -7310,12 +7310,13 @@ def send_meta_pixel_purchase_event(payment):
         if not fbc_value and bot_user and getattr(bot_user, 'fbc', None):
             fbc_value = bot_user.fbc
 
+        # ✅ CRÍTICO: NUNCA gerar fbc sintético - sempre usar o valor capturado do cookie do browser
+        # Se não tiver fbc, deixar None (Meta aceita sem fbc, mas com fbc é melhor para atribuição)
         if not fbc_value:
-            fbclid_fallback = external_id_value or tracking_data.get('fbclid') or getattr(payment, 'fbclid', None)
-            if fbclid_fallback:
-                base_dt = payment.created_at or payment.paid_at or datetime.utcnow()
-                generated_fbc = f"fb.1.{int(base_dt.timestamp())}.{fbclid_fallback}"
-                fbc_value = generated_fbc
+            logger.warning(f"⚠️ Purchase - fbc não encontrado no tracking_data nem no bot_user - Meta pode ter atribuição reduzida")
+            # ❌ REMOVIDO: Não gerar fbc sintético (causa erro de creationTime inválido no Meta)
+            # O fbc deve vir EXATAMENTE do cookie _fbc capturado no PageView
+            # Gerar um novo fbc com timestamp atual quebra a atribuição porque o Meta espera o timestamp do clique original
         if fbc_value and not getattr(payment, 'fbc', None):
             payment.fbc = fbc_value
 
@@ -7527,14 +7528,18 @@ def send_meta_pixel_purchase_event(payment):
             or (f'https://app.grimbots.online/go/{payment.pool.slug}' if getattr(payment, 'pool', None) and getattr(payment.pool, 'slug', None) else f'https://t.me/{payment.bot.username}')
         )
 
+        # ✅ CRÍTICO: creation_time REMOVIDO - Meta está rejeitando (erro 2804019)
+        # Se necessário adicionar no futuro, usar: 'creation_time': event_time (sempre igual a event_time, em segundos)
+        # NUNCA usar milissegundos (time.time()*1000) - Meta interpreta como futuro (ano 56000)
         event_data = {
             'event_name': 'Purchase',
-            'event_time': event_time,
+            'event_time': event_time,  # ✅ Já está em segundos (int) - correto
             'event_id': event_id,
             'action_source': 'website',  # ✅ Correto para server-side events
             'event_source_url': event_source_url,
             'user_data': user_data,
             'custom_data': custom_data
+            # ✅ creation_time não incluído (opcional e estava causando erro)
         }
         
         # ✅ ENFILEIRAR COM PRIORIDADE ALTA (Purchase é crítico!)

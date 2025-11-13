@@ -4075,10 +4075,14 @@ Seu pagamento ainda não foi confirmado.
                             except Exception:
                                 logger.exception("Falha ao recuperar tracking:chat do Redis")
 
+                    # ✅ CRÍTICO: Verificar bot_user.tracking_session_id ANTES de tentar Redis
+                    # Isso garante que o token do public_redirect seja sempre usado
                     if not tracking_token and bot_user:
                         tracking_token = getattr(bot_user, 'tracking_session_id', None)
                         if tracking_token:
                             logger.info(f"✅ Tracking token recuperado de bot_user.tracking_session_id: {tracking_token[:20]}...")
+                        else:
+                            logger.warning(f"⚠️ BotUser {bot_user.id} encontrado mas tracking_session_id está vazio (telegram_user_id: {customer_user_id})")
 
                     tracking_data_v4: Dict[str, Any] = redis_tracking_payload if isinstance(redis_tracking_payload, dict) else {}
 
@@ -4108,6 +4112,14 @@ Seu pagamento ainda não foi confirmado.
                             logger.warning(f"⚠️ Erro ao recuperar payload do bot_user.tracking_session_id: {e}")
                     
                     if not tracking_token:
+                        # ✅ ÚLTIMA TENTATIVA: Verificar se bot_user foi encontrado mas tracking_session_id está vazio
+                        if bot_user:
+                            logger.warning(f"⚠️ Tracking token não encontrado para BotUser {bot_user.id} (telegram_user_id: {customer_user_id})")
+                            logger.warning(f"   bot_user.tracking_session_id: {getattr(bot_user, 'tracking_session_id', None)}")
+                            logger.warning(f"   Tentando recuperar de tracking:last_token:user:{customer_user_id} e tracking:chat:{customer_user_id}")
+                        else:
+                            logger.warning(f"⚠️ BotUser não encontrado para customer_user_id: {customer_user_id}, bot_id: {bot_id}")
+                        
                         tracking_token = tracking_service.generate_tracking_token(
                             bot_id=bot_id,
                             customer_user_id=customer_user_id,
@@ -4117,7 +4129,7 @@ Seu pagamento ainda não foi confirmado.
                             utm_medium=utm_medium,
                             utm_campaign=utm_campaign
                         )
-                        logger.warning("Tracking token ausente - gerado novo %s para BotUser %s", tracking_token, bot_user.id if bot_user else 'N/A')
+                        logger.warning("⚠️ Token de tracking ausente - gerado novo %s para BotUser %s (customer_user_id: %s)", tracking_token, bot_user.id if bot_user else 'N/A', customer_user_id)
                         seed_payload = {
                             "tracking_token": tracking_token,
                             "bot_id": bot_id,
