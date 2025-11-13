@@ -172,26 +172,73 @@ class UmbrellaPagGateway(PaymentGateway):
     def verify_credentials(self) -> bool:
         """
         Verifica se as credenciais são válidas
-        Tenta fazer uma requisição simples à API
+        Tenta fazer uma requisição simples à API para buscar dados da empresa
         """
         try:
-            # Tentar buscar dados da empresa (endpoint simples)
+            # Tentar buscar dados da empresa (endpoint mais simples e confiável)
+            # Se conseguir buscar dados, as credenciais são válidas
             response = self._make_request('GET', '/user/sellers')
             
-            if response and response.status_code == 200:
-                logger.info(f"✅ [{self.get_gateway_name()}] Credenciais válidas")
-                return True
-            elif response:
+            # Verificar resposta
+            if not response:
+                logger.error(f"❌ [{self.get_gateway_name()}] Erro ao verificar credenciais (sem resposta)")
+                return False
+            
+            # Status 200 ou 201 = sucesso (credenciais válidas)
+            if response.status_code in [200, 201]:
+                try:
+                    response_data = response.json()
+                    # Verificar se a resposta contém dados válidos
+                    if isinstance(response_data, dict):
+                        # Se tiver 'message' com sucesso ou 'data', credenciais são válidas
+                        message = response_data.get('message', '').lower()
+                        has_data = 'data' in response_data or 'id' in response_data
+                        
+                        if 'sucesso' in message or 'encontrada' in message or has_data:
+                            logger.info(f"✅ [{self.get_gateway_name()}] Credenciais válidas (status {response.status_code})")
+                            return True
+                        else:
+                            logger.warning(f"⚠️ [{self.get_gateway_name()}] Resposta inesperada, mas status {response.status_code} = sucesso")
+                            return True
+                    else:
+                        # Resposta válida mesmo sem JSON estruturado
+                        logger.info(f"✅ [{self.get_gateway_name()}] Credenciais válidas (status {response.status_code})")
+                        return True
+                except Exception as e:
+                    # Se não conseguir parsear JSON, mas status é 200/201, considerar válido
+                    logger.info(f"✅ [{self.get_gateway_name()}] Credenciais válidas (status {response.status_code})")
+                    return True
+            
+            # Status 401 ou 403 = credenciais inválidas
+            elif response.status_code in [401, 403]:
                 logger.error(f"❌ [{self.get_gateway_name()}] Credenciais inválidas (status {response.status_code})")
                 if response.text:
                     logger.error(f"   Resposta: {response.text[:200]}")
                 return False
+            
+            # Outros status = erro temporário ou inesperado
             else:
-                logger.error(f"❌ [{self.get_gateway_name()}] Erro ao verificar credenciais")
+                logger.warning(f"⚠️ [{self.get_gateway_name()}] Status inesperado {response.status_code}, mas tentando continuar...")
+                # Verificar se a resposta indica sucesso mesmo com status diferente
+                try:
+                    response_data = response.json()
+                    if isinstance(response_data, dict):
+                        message = response_data.get('message', '').lower()
+                        if 'sucesso' in message or 'encontrada' in message:
+                            logger.info(f"✅ [{self.get_gateway_name()}] Credenciais válidas (mensagem de sucesso)")
+                            return True
+                except:
+                    pass
+                # Se não conseguir verificar, considerar credenciais inválidas por segurança
+                logger.error(f"❌ [{self.get_gateway_name()}] Status {response.status_code} não reconhecido como sucesso")
+                if response.text:
+                    logger.error(f"   Resposta: {response.text[:200]}")
                 return False
                 
         except Exception as e:
             logger.error(f"❌ [{self.get_gateway_name()}] Erro ao verificar credenciais: {e}")
+            import traceback
+            logger.error(f"📋 Traceback: {traceback.format_exc()}")
             return False
     
     def _create_product(self, amount: float, description: str, payment_id: str) -> Optional[str]:
