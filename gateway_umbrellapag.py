@@ -16,6 +16,7 @@ import logging
 import hashlib
 import time
 import json
+import re
 from typing import Dict, Any, Optional
 from datetime import datetime
 from gateway_interface import PaymentGateway
@@ -578,23 +579,40 @@ class UmbrellaPagGateway(PaymentGateway):
             customer_phone = customer_data.get('phone', '11999999999')
             customer_document = customer_data.get('document')
             
-            # Validar e formatar telefone
+            # ✅ CORREÇÃO 1: Validar e formatar email (deve ser formato válido RFC 5322)
+            # Remover @telegram.user e usar domínio válido
+            if '@telegram.user' in customer_email or not '@' in customer_email:
+                # Extrair ID do Telegram se presente
+                telegram_id_match = re.search(r'(\d+)', customer_email or '')
+                telegram_id = telegram_id_match.group(1) if telegram_id_match else payment_id.split('_')[1] if '_' in payment_id else '0'
+                customer_email = f'user{telegram_id}@grimbots.online'
+                logger.info(f"ℹ️ [{self.get_gateway_name()}] Email inválido, gerando email válido: {customer_email}")
+            elif not customer_email or customer_email == '':
+                customer_email = f'user{payment_id}@grimbots.online'
+            
+            # ✅ CORREÇÃO 2: Validar e formatar telefone com DDI +55 (formato E.164)
             validated_phone = self._validate_phone(customer_phone)
             
             # Se telefone não é válido (None ou muito curto), gerar telefone válido
             if not validated_phone:
                 # Gerar telefone válido baseado no payment_id (hash MD5)
-                import hashlib
                 hash_obj = hashlib.md5(payment_id.encode())
                 hash_hex = hash_obj.hexdigest()
                 # DDD válido brasileiro (11-99)
                 ddd = 11 + (int(hash_hex[0], 16) % 89)  # DDD entre 11-99
                 # Número de 9 dígitos (celular sempre começa com 9)
                 numero = '9' + ''.join([str(int(c, 16) % 10) for c in hash_hex[1:9]])
-                customer_phone = f'{ddd}{numero}'
-                logger.info(f"ℹ️ [{self.get_gateway_name()}] Telefone inválido, gerando telefone válido: ({customer_phone[:2]}) {customer_phone[2:7]}-{customer_phone[7:]}")
-            else:
-                customer_phone = validated_phone
+                validated_phone = f'{ddd}{numero}'
+                logger.info(f"ℹ️ [{self.get_gateway_name()}] Telefone inválido, gerando telefone válido: ({validated_phone[:2]}) {validated_phone[2:7]}-{validated_phone[7:]}")
+            
+            # Formatar telefone com DDI +55 (formato E.164)
+            phone_clean = re.sub(r'\D', '', validated_phone)
+            # Garantir que começa com 55 (DDI do Brasil)
+            if not phone_clean.startswith('55'):
+                phone_clean = '55' + phone_clean
+            # Formato E.164: +55XXXXXXXXXXX
+            customer_phone = '+' + phone_clean
+            logger.info(f"ℹ️ [{self.get_gateway_name()}] Telefone formatado E.164: {customer_phone}")
             
             # Validar documento (CPF)
             validated_document = None
@@ -604,7 +622,6 @@ class UmbrellaPagGateway(PaymentGateway):
             # Se documento não é válido, gerar CPF baseado em hash
             if not validated_document:
                 # Gerar CPF válido baseado no payment_id (hash MD5)
-                import hashlib
                 hash_obj = hashlib.md5(payment_id.encode())
                 hash_hex = hash_obj.hexdigest()
                 # Gerar 11 dígitos do hash (evitar zeros repetidos)
@@ -664,7 +681,7 @@ class UmbrellaPagGateway(PaymentGateway):
                 'paymentMethod': 'pix',
                 'installments': 1,  # PIX sempre 1 parcela
                 'postbackUrl': self.get_webhook_url(),
-                'metadata': json.dumps({'payment_id': payment_id, 'description': description}),
+                'metadata': {'payment_id': payment_id, 'description': description},  # ✅ CORREÇÃO 3: Objeto dict, não string JSON
                 'traceable': True,
                 'ip': client_ip,
                 'customer': {
@@ -686,10 +703,8 @@ class UmbrellaPagGateway(PaymentGateway):
                 ],
                 'pix': {
                     'expiresInDays': 3  # PIX expira em 3 dias
-                },
-                'boleto': {
-                    'expiresInDays': 3  # Não usado para PIX, mas pode ser obrigatório
                 }
+                # ✅ CORREÇÃO 4: Removido 'boleto' do payload (não é necessário para PIX)
             }
             
             logger.info(f"💳 [{self.get_gateway_name()}] Criando transação PIX via /api/user/transactions")
