@@ -2,6 +2,21 @@
 
 {% block title %}Criar Novo Bot - grimbots{% endblock %}
 
+{% block extra_head %}
+<script>
+    window.stripSurrogateChars = function (value) {
+        if (!value) {
+            return '';
+        }
+        try {
+            return value.replace(/[\uD800-\uDFFF]/g, '');
+        } catch (err) {
+            return '';
+        }
+    };
+</script>
+{% endblock %}
+
 {% block content %}
 <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8" 
      x-data="{
@@ -273,7 +288,7 @@
                     <textarea x-model="formData.welcome_message"
                               rows="6"
                               maxlength="900"
-                              @input="formData.welcome_message = formData.welcome_message?.slice(0, 900) || ''"
+                              @input="formData.welcome_message = stripSurrogateChars(formData.welcome_message || '').slice(0, 900)"
                               class="w-full px-4 py-3 border-2 border-white border-opacity-10 rounded-lg focus:border-trust-500 focus:ring-2 focus:ring-blue-200 transition-all"
                               placeholder="Olá! Bem-vindo ao nosso bot de vendas 🎉
 

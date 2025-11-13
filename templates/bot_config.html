@@ -278,6 +278,18 @@
     background: #374151;
 }
 </style>
+<script>
+    window.stripSurrogateChars = function (value) {
+        if (!value) {
+            return '';
+        }
+        try {
+            return value.replace(/[\uD800-\uDFFF]/g, '');
+        } catch (err) {
+            return '';
+        }
+    };
+</script>
 {% endblock %}
 
 {% block content %}
@@ -373,7 +385,7 @@
                 <textarea x-model="config.welcome_message"
                           class="form-textarea"
                           maxlength="900"
-                          @input="config.welcome_message = config.welcome_message?.slice(0, 900) || ''"
+                          @input="config.welcome_message = stripSurrogateChars(config.welcome_message || '').slice(0, 900)"
                           placeholder="Olá! Bem-vindo ao nosso bot de vendas...&#10;&#10;Escolha uma das opções abaixo:"></textarea>
                 <p class="text-xs text-gray-400 mt-1">Máximo de 900 caracteres.</p>
             </div>
@@ -551,7 +563,7 @@
                                                     <textarea x-model="orderBump.message"
                                                               class="form-textarea"
                                                               maxlength="900"
-                                                              @input="orderBump.message = orderBump.message?.slice(0, 900) || ''"
+                                                              @input="orderBump.message = stripSurrogateChars(orderBump.message || '').slice(0, 900)"
                                                               placeholder="🎁 Oferta Especial!&#10;&#10;Adicione este bônus por apenas +R$ 5!"></textarea>
                                                     <p class="text-[11px] text-gray-400 mt-1">Máximo 900 caracteres. O campo bloqueia novos caracteres ao atingir o limite.</p>
                                                 </div>
@@ -771,7 +783,7 @@
                                 <textarea x-model="downsell.message"
                                           class="form-textarea"
                                           maxlength="900"
-                                          @input="downsell.message = downsell.message?.slice(0, 900) || ''"
+                                          @input="downsell.message = stripSurrogateChars(downsell.message || '').slice(0, 900)"
                                           placeholder="Oferta especial!"></textarea>
                                 <p class="text-[11px] text-gray-400 mt-1">Máximo 900 caracteres. O campo bloqueia novos caracteres ao atingir o limite.</p>
                             </div>
@@ -1000,7 +1012,7 @@
                                         <textarea x-model="downsell.order_bump.message"
                                                   class="form-textarea"
                                                   maxlength="900"
-                                                  @input="downsell.order_bump.message = downsell.order_bump.message?.slice(0, 900) || ''"
+                                                  @input="downsell.order_bump.message = stripSurrogateChars(downsell.order_bump.message || '').slice(0, 900)"
                                                   placeholder="🎁 Oferta Especial!&#10;&#10;Adicione este bônus por apenas +R$ 5!"></textarea>
                                         <p class="text-[11px] text-gray-400 mt-1">Máximo 900 caracteres. O campo bloqueia novos caracteres ao atingir o limite.</p>
                                     </div>
@@ -1171,7 +1183,7 @@
                                 <textarea x-model="upsell.message"
                                           class="form-textarea"
                                           maxlength="900"
-                                          @input="upsell.message = upsell.message?.slice(0, 900) || ''"
+                                          @input="upsell.message = stripSurrogateChars(upsell.message || '').slice(0, 900)"
                                           placeholder="🔥 Upgrade para Premium!"></textarea>
                                 <p class="text-[11px] text-gray-400 mt-1">Máximo 900 caracteres. O campo bloqueia novos caracteres ao atingir o limite.</p>
                             </div>

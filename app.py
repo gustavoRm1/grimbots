@@ -16,6 +16,7 @@ import json
 import time
 import uuid
 import atexit
+from typing import Any
 from dotenv import load_dotenv
 from redis_manager import get_redis_connection, redis_health_check
 from sqlalchemy import text, select, delete
@@ -42,6 +43,24 @@ logging.getLogger('apscheduler.scheduler').setLevel(logging.ERROR)
 logging.getLogger('apscheduler.executors').setLevel(logging.ERROR)
 
 logger = logging.getLogger(__name__)
+
+def strip_surrogate_chars(value: Any) -> Any:
+    """Remove caracteres surrogate inválidos de strings para evitar UnicodeEncodeError."""
+    if isinstance(value, str):
+        # encode/decode ignora surrogates sem levantar exceção
+        return value.encode('utf-8', 'ignore').decode('utf-8', 'ignore')
+    return value
+
+
+def sanitize_payload(payload: Any) -> Any:
+    """Sanitiza estruturas (dict/list) removendo surrogates de todas as strings."""
+    if isinstance(payload, dict):
+        return {key: sanitize_payload(value) for key, value in payload.items()}
+    if isinstance(payload, list):
+        return [sanitize_payload(item) for item in payload]
+    if isinstance(payload, str):
+        return strip_surrogate_chars(payload)
+    return payload
 
 # ============================================================================
 # GAMIFICAÇÃO V2.0 - IMPORTS
@@ -1441,7 +1460,8 @@ def create_bot():
     if not current_user.can_add_bot():
         return jsonify({'error': 'Limite de bots atingido! Faça upgrade do seu plano.'}), 403
     
-    data = request.json
+    raw_data = request.get_json() or {}
+    data = sanitize_payload(raw_data)
     token = data.get('token')
     
     if not token:
@@ -3582,7 +3602,8 @@ def update_bot_config(bot_id):
     logger.info(f"🔄 Iniciando atualização de config para bot {bot_id}")
     
     bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
-    data = request.json
+    raw_data = request.get_json() or {}
+    data = sanitize_payload(raw_data)
     
     logger.info(f"📊 Dados recebidos: {list(data.keys())}")
     
