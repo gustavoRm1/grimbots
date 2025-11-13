@@ -19,7 +19,7 @@ import atexit
 from typing import Any
 from dotenv import load_dotenv
 from redis_manager import get_redis_connection, redis_health_check
-from sqlalchemy import text, select, delete
+from sqlalchemy import text, select, delete, update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from urllib.parse import urlparse, urlencode, parse_qsl, urlunparse
@@ -3929,26 +3929,33 @@ def public_redirect(slug):
         else:
             abort(503, 'Nenhum bot disponível no momento. Tente novamente em instantes.')
     
-    # Incrementar métricas com lock para evitar deadlocks
+    # ✅ CORREÇÃO DEADLOCK: Usar UPDATE atômico ao invés de FOR UPDATE
+    # UPDATE atômico evita deadlocks e é mais eficiente (1 query ao invés de SELECT + UPDATE)
     try:
-        locked_pool_bot = db.session.execute(
-            select(PoolBot).where(PoolBot.id == pool_bot.id).with_for_update()
-        ).scalar_one()
-        locked_pool = db.session.execute(
-            select(RedirectPool).where(RedirectPool.id == pool.id).with_for_update()
-        ).scalar_one()
-
-        locked_pool_bot.total_redirects = (locked_pool_bot.total_redirects or 0) + 1
-        locked_pool.total_redirects = (locked_pool.total_redirects or 0) + 1
-
+        # Incrementar total_redirects de forma atômica (evita deadlocks)
+        # Usar coalesce para tratar NULL (valores antigos podem ser NULL)
+        db.session.execute(
+            update(PoolBot)
+            .where(PoolBot.id == pool_bot.id)
+            .values(total_redirects=text('COALESCE(total_redirects, 0) + 1'))
+        )
+        db.session.execute(
+            update(RedirectPool)
+            .where(RedirectPool.id == pool.id)
+            .values(total_redirects=text('COALESCE(total_redirects, 0) + 1'))
+        )
+        
         db.session.commit()
-
+        
+        # Refresh para obter valores atualizados (opcional, apenas se necessário para log)
         db.session.refresh(pool_bot)
         db.session.refresh(pool)
     except SQLAlchemyError as e:
         db.session.rollback()
-        logger.exception("Erro ao atualizar métricas de redirect (FOR UPDATE): %s", e)
-        abort(500, 'Erro ao processar redirect')
+        # ✅ Não abortar em caso de erro de métricas - redirect deve continuar funcionando
+        # Métricas são secundárias, o redirect é crítico
+        logger.warning(f"⚠️ Erro ao atualizar métricas de redirect (não crítico): {e}")
+        # Continuar execução - redirect não deve falhar por causa de métricas
     
     # Log
     logger.info(f"Redirect: /go/{slug} → @{pool_bot.bot.username} | Estratégia: {pool.distribution_strategy} | Total: {pool_bot.total_redirects}")
