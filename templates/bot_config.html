@@ -384,10 +384,41 @@
                 </label>
                 <textarea x-model="config.welcome_message"
                           class="form-textarea"
-                          maxlength="900"
-                          @input="config.welcome_message = stripSurrogateChars(config.welcome_message || '').slice(0, 900)"
+                          maxlength="4096"
+                          @input="validateWelcomeMessage()"
                           placeholder="Olá! Bem-vindo ao nosso bot de vendas...&#10;&#10;Escolha uma das opções abaixo:"></textarea>
-                <p class="text-xs text-gray-400 mt-1">Máximo de 900 caracteres.</p>
+                <p class="text-xs text-gray-400 mt-1">
+                    <span class="text-green-400">
+                        ✅ Máximo de 4096 caracteres (Telegram)
+                    </span>
+                    <span x-show="config.welcome_media_url" class="text-yellow-400 ml-2">
+                        ⚠️ Com mídia: recomenda-se até 1024 caracteres (caption), mas pode testar mais!
+                    </span>
+                    <span class="text-gray-500 ml-2">
+                        | Banco de dados: TEXT (ilimitado)
+                    </span>
+                </p>
+                <p class="text-xs mt-1" x-show="config.welcome_message">
+                    <span class="text-gray-500">Caracteres: </span>
+                    <span :class="{'text-green-400 font-bold': getWelcomeMessageLength() <= 4096, 'text-red-400 font-bold': getWelcomeMessageLength() > 4096}" 
+                          x-text="getWelcomeMessageLength()"></span>
+                    <span class="text-gray-500"> / </span>
+                    <span class="text-gray-400 font-bold">4096</span>
+                    <span x-show="config.welcome_media_url && getWelcomeMessageLength() > 1024" 
+                          class="text-yellow-400 ml-2 font-bold">
+                        ⚠️ Testando: Com mídia e {getWelcomeMessageLength()} caracteres (recomendado: 1024)
+                    </span>
+                    <span x-show="getWelcomeMessageLength() > 4096" 
+                          class="text-red-400 ml-2 font-bold">
+                        ❌ Excede o limite do Telegram (4096)!
+                    </span>
+                </p>
+                <p class="text-xs text-blue-400 mt-1" x-show="config.welcome_message && getWelcomeMessageLength() > 0">
+                    💾 Banco de dados: TEXT (ilimitado - pode armazenar até 65KB no MySQL ou 1GB no SQLite/PostgreSQL)
+                </p>
+                <p class="text-xs text-green-400 mt-1">
+                    ✅ Suporta: Emojis (😀 🎉 💰), caracteres especiais (á, é, õ, ç), fontes diferentes, Unicode completo
+                </p>
             </div>
 
             <!-- Mídia -->
@@ -399,9 +430,14 @@
                     </label>
                     <input type="url" 
                            x-model="config.welcome_media_url" 
+                           @input="validateWelcomeMessage()"
+                           @change="validateWelcomeMessage()"
                            class="form-input"
                            placeholder="https://t.me/canal/123">
                     <p class="text-xs text-gray-500 mt-2">Link do Telegram (vídeo, foto ou áudio)</p>
+                    <p class="text-xs text-yellow-400 mt-1" x-show="config.welcome_media_url && getWelcomeMessageLength() > 1024">
+                        ⚠️ Atenção: Com mídia, a mensagem deve ter no máximo 1024 caracteres (caption do Telegram)
+                    </p>
                 </div>
 
                 <div class="form-group">
@@ -2107,11 +2143,48 @@ function botConfigApp() {
             }
         },
         
+        // ✅ VALIDAÇÃO: Mensagem de boas-vindas (apenas limpeza de surrogates inválidos)
+        validateWelcomeMessage() {
+            if (!this.config.welcome_message) {
+                return;
+            }
+            
+            // Remover apenas caracteres surrogate inválidos (preserva emojis válidos)
+            this.config.welcome_message = window.stripSurrogateChars(this.config.welcome_message || '');
+            
+            // ✅ REMOVIDO: Validação restritiva - permitir testar mídia com texto > 1024
+            // Apenas aviso se exceder 4096 (limite absoluto do Telegram)
+            if (this.config.welcome_message.length > 4096) {
+                this.config.welcome_message = this.config.welcome_message.slice(0, 4096);
+                console.warn(`⚠️ Mensagem truncada para 4096 caracteres (limite absoluto do Telegram)`);
+            }
+        },
+        
+        // ✅ OBTER TAMANHO: Mensagem de boas-vindas
+        getWelcomeMessageLength() {
+            if (!this.config.welcome_message) {
+                return 0;
+            }
+            return this.config.welcome_message.length;
+        },
+        
         async saveConfig() {
             console.log('🔄 Iniciando salvamento de configuração...');
             this.loading = true;
             
             try {
+                // ✅ VALIDAÇÃO: Apenas verificar limite absoluto do Telegram (4096)
+                if (this.config.welcome_message && this.config.welcome_message.length > 4096) {
+                    alert(`❌ Mensagem muito longa! O máximo é 4096 caracteres (Telegram). Você tem ${this.config.welcome_message.length} caracteres.`);
+                    this.loading = false;
+                    return;
+                }
+                
+                // ✅ AVISO: Se tem mídia e texto > 1024, apenas avisar (não bloquear)
+                if (this.config.welcome_media_url && this.config.welcome_message && this.config.welcome_message.length > 1024) {
+                    console.warn(`⚠️ Testando: Mensagem com mídia tem ${this.config.welcome_message.length} caracteres (recomendado: 1024 para caption)`);
+                }
+                
                 console.log('📊 Dados a serem enviados:', this.config);
                 
                 const response = await fetch('/api/bots/{{ bot.id }}/config', {

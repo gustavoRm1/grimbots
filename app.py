@@ -3650,7 +3650,21 @@ def update_bot_config(bot_id):
     try:
         # Atualizar campos
         if 'welcome_message' in data:
-            config.welcome_message = data['welcome_message']
+            welcome_message = data['welcome_message'] or ''
+            welcome_media_url = data.get('welcome_media_url') or config.welcome_media_url
+            
+            # ✅ REMOVIDO: Validação restritiva - permitir testar mídia com texto > 1024
+            # Apenas aviso informativo no log (não bloqueia)
+            if welcome_media_url and len(welcome_message) > 1024:
+                logger.warning(f"⚠️ Mensagem com mídia tem {len(welcome_message)} caracteres (recomendado: 1024 para caption do Telegram). Testando comportamento...")
+            elif len(welcome_message) > 4096:
+                logger.error(f"❌ Mensagem muito longa: {len(welcome_message)} caracteres (máximo Telegram: 4096)")
+                return jsonify({
+                    'error': f'Mensagem muito longa! O máximo é 4096 caracteres (Telegram). Você enviou {len(welcome_message)} caracteres.'
+                }), 400
+            
+            config.welcome_message = welcome_message
+            logger.info(f"✅ Mensagem de boas-vindas salva: {len(welcome_message)} caracteres (com mídia: {bool(welcome_media_url)})")
         if 'welcome_media_url' in data:
             config.welcome_media_url = data['welcome_media_url']
         if 'welcome_media_type' in data:
