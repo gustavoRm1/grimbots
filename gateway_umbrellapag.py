@@ -371,12 +371,9 @@ class UmbrellaPagGateway(PaymentGateway):
             # Endpoint: /api/public/checkout/create-order/{uniqueProductLinkId}
             endpoint = f'/public/checkout/create-order/{unique_product_link_id}'
             
-            # Passar body vazio {} conforme documentação
-            payload = {}
-            
-            # Adicionar headers adicionais para endpoints /public/
-            # O erro "Hostname não identificado" pode exigir Origin ou Referer
-            additional_headers = {}
+            # Tentar extrair domínio do WEBHOOK_URL para adicionar ao payload ou headers
+            domain = None
+            hostname = None
             try:
                 webhook_url = os.environ.get('WEBHOOK_URL', '')
                 if webhook_url:
@@ -384,13 +381,29 @@ class UmbrellaPagGateway(PaymentGateway):
                     from urllib.parse import urlparse
                     parsed = urlparse(webhook_url)
                     domain = f"{parsed.scheme}://{parsed.netloc}"
-                    additional_headers['Origin'] = domain
-                    additional_headers['Referer'] = domain
-                    logger.info(f"🌐 [{self.get_gateway_name()}] Adicionando headers Origin/Referer: {domain}")
+                    hostname = parsed.netloc
+                    logger.info(f"🌐 [{self.get_gateway_name()}] Domínio extraído: {domain} (hostname: {hostname})")
                 else:
-                    logger.warning(f"⚠️ [{self.get_gateway_name()}] WEBHOOK_URL não configurado - headers Origin/Referer não serão enviados")
+                    logger.warning(f"⚠️ [{self.get_gateway_name()}] WEBHOOK_URL não configurado")
             except Exception as e:
                 logger.warning(f"⚠️ [{self.get_gateway_name()}] Erro ao extrair domínio: {e}")
+            
+            # Tentar diferentes abordagens para resolver "Hostname não identificado"
+            # Abordagem 1: Payload com hostname (se o endpoint aceitar)
+            payload = {}
+            if hostname:
+                # Tentar adicionar hostname/domain no payload (teste)
+                payload['hostname'] = hostname
+                payload['domain'] = domain
+                logger.info(f"🌐 [{self.get_gateway_name()}] Adicionando hostname/domain no payload: {hostname}")
+            
+            # Abordagem 2: Headers adicionais
+            additional_headers = {}
+            if domain:
+                additional_headers['Origin'] = domain
+                additional_headers['Referer'] = domain
+                additional_headers['X-Forwarded-Host'] = hostname
+                logger.info(f"🌐 [{self.get_gateway_name()}] Adicionando headers Origin/Referer/X-Forwarded-Host: {domain}")
             
             logger.info(f"🌐 [{self.get_gateway_name()}] POST {endpoint}")
             logger.info(f"📦 [{self.get_gateway_name()}] Payload: {json.dumps(payload)}")
