@@ -4170,7 +4170,18 @@ Seu pagamento ainda não foi confirmado.
                     if pageview_event_id:
                         logger.info(f"✅ pageview_event_id recuperado do tracking_data_v4: {pageview_event_id}")
                     else:
-                        logger.warning(f"⚠️ pageview_event_id não encontrado no tracking_data_v4 - Purchase pode não fazer dedup perfeito")
+                        # ✅ FALLBACK: Tentar recuperar do bot_user (se houver tracking_session_id)
+                        if bot_user and bot_user.tracking_session_id:
+                            try:
+                                fallback_tracking = tracking_service_v4.recover_tracking_data(bot_user.tracking_session_id)
+                                pageview_event_id = fallback_tracking.get('pageview_event_id')
+                                if pageview_event_id:
+                                    logger.info(f"✅ pageview_event_id recuperado do bot_user.tracking_session_id: {pageview_event_id}")
+                            except Exception as e:
+                                logger.warning(f"⚠️ Erro ao recuperar pageview_event_id do bot_user: {e}")
+                        
+                        if not pageview_event_id:
+                            logger.warning(f"⚠️ pageview_event_id não encontrado no tracking_data_v4 nem no bot_user - Purchase pode não fazer dedup perfeito")
                     
                     # Gerar external_ids com dados reais recuperados
                     external_ids = tracking_service.build_external_id_array(
