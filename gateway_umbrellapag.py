@@ -760,18 +760,23 @@ class UmbrellaPagGateway(PaymentGateway):
                 'type': 'CPF'  # Sempre CPF para clientes
             }
             
-            # ✅ CORREÇÃO CRÍTICA: Metadata deve ser objeto dict (não string JSON)
-            # PluggouV2 rejeita se metadata for string JSON serializado
+            # ✅ CORREÇÃO CRÍTICA: Metadata deve ser STRING JSON (não objeto dict)
+            # PluggouV2 exige metadata como string JSON, conforme documentação:
+            # "metadata | string | Dados adicionais personalizados em formato JSON"
             metadata_dict = {
                 'payment_id': str(payment_id),
                 'description': str(description_clean)[:200]  # Limitar tamanho
             }
+            # Serializar metadata como string JSON
+            # ✅ CORREÇÃO FINAL: Metadata deve ser STRING JSON (não objeto dict)
+            # Conforme documentação UmbrellaPag: "metadata | string | Dados adicionais personalizados em formato JSON"
+            metadata_string = json.dumps(metadata_dict, ensure_ascii=True)
             
             # Payload para criar transação PIX usando endpoint /api/user/transactions
             # ✅ TODAS AS CORREÇÕES APLICADAS:
             # 1. Email: sempre @grimbots.online (RFC 5322 válido)
             # 2. Telefone: formato 55DDXXXXXXXXX (sem símbolo +)
-            # 3. Metadata: objeto dict (não string JSON)
+            # 3. Metadata: STRING JSON (não objeto dict) - CORREÇÃO FINAL
             # 4. Traceable: removido (só aceito em contas enterprise)
             # 5. State: minúsculas (sp em vez de SP)
             # 6. Textos: normalizados para ASCII (sem acentos)
@@ -782,7 +787,7 @@ class UmbrellaPagGateway(PaymentGateway):
                 'paymentMethod': 'pix',
                 'installments': 1,  # PIX sempre 1 parcela
                 'postbackUrl': self.get_webhook_url(),
-                'metadata': metadata_dict,  # ✅ Objeto dict (não string JSON)
+                'metadata': metadata_string,  # ✅ STRING JSON (não objeto dict) - CORREÇÃO FINAL
                 # ✅ traceable removido (PluggouV2 só aceita em contas enterprise)
                 'ip': client_ip,
                 'customer': {
@@ -812,7 +817,7 @@ class UmbrellaPagGateway(PaymentGateway):
             logger.info(f"   Valor: R$ {amount:.2f} ({amount_cents} centavos)")
             logger.info(f"   Cliente: {customer_name_clean} ({customer_email})")
             logger.info(f"   Telefone: {customer_phone} (formato: 55DDXXXXXXXXX)")
-            logger.info(f"   Metadata: {json.dumps(metadata_dict)} (objeto dict)")
+            logger.info(f"   Metadata: {metadata_string} (string JSON)")
             
             # Fazer requisição para criar transação
             response = self._make_request('POST', '/user/transactions', payload=payload)
@@ -927,12 +932,12 @@ class UmbrellaPagGateway(PaymentGateway):
                         logger.error(f"      - customer.address.street: {customer_address['street']}")
                         logger.error(f"      - customer.address.city: {customer_address['city']}")
                         logger.error(f"      - customer.address.state: {customer_address['state']} (minúsculas)")
-                        logger.error(f"      - metadata: {json.dumps(metadata_dict)} (objeto dict)")
+                        logger.error(f"      - metadata: {metadata_string} (string JSON)")
                         logger.error(f"      - ip: {client_ip}")
                         logger.error(f"   ⚠️  Verifique se todos os campos estão no formato correto:")
                         logger.error(f"      - Email: deve ser @grimbots.online (RFC 5322 válido)")
                         logger.error(f"      - Telefone: deve ser 55DDXXXXXXXXX (sem símbolo +)")
-                        logger.error(f"      - Metadata: deve ser objeto dict (não string JSON)")
+                        logger.error(f"      - Metadata: deve ser STRING JSON (não objeto dict) - CORREÇÃO FINAL")
                         logger.error(f"      - State: deve ser minúsculas (sp em vez de SP)")
                         logger.error(f"      - Textos: devem ser ASCII (sem acentos)")
                         logger.error(f"      - Traceable: deve ser removido (só aceito em contas enterprise)")
@@ -995,9 +1000,21 @@ class UmbrellaPagGateway(PaymentGateway):
             normalized_status = status_map.get(status, 'pending') if status else 'pending'
             
             # Extrair payment_id do metadata
+            # ✅ CORREÇÃO: Metadata pode vir como string JSON ou dict (dependendo da origem)
             payment_id = None
-            if isinstance(data.get('metadata'), dict):
-                payment_id = data.get('metadata', {}).get('payment_id')
+            metadata = data.get('metadata')
+            
+            if metadata:
+                if isinstance(metadata, str):
+                    # Metadata é string JSON, fazer parse
+                    try:
+                        metadata_dict = json.loads(metadata)
+                        payment_id = metadata_dict.get('payment_id')
+                    except (json.JSONDecodeError, TypeError):
+                        logger.warning(f"⚠️ [{self.get_gateway_name()}] Erro ao parsear metadata como JSON: {metadata}")
+                elif isinstance(metadata, dict):
+                    # Metadata já é dict
+                    payment_id = metadata.get('payment_id')
             
             # Se não encontrou no metadata, tentar outros campos
             if not payment_id:
