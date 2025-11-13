@@ -3169,8 +3169,20 @@ Desculpe, não foi possível processar seu pagamento.
                     logger.info(f"✅ PAGAMENTO CONFIRMADO! Liberando acesso...")
                     
                     # ============================================================================
-                    # ⚠️ META PIXEL REMOVIDO AQUI - JÁ FOI DISPARADO NA CONSULTA ATIVA (linha 2144)
+                    # ✅ META PIXEL PURCHASE: Disparar se ainda não foi enviado
                     # ============================================================================
+                    # CRÍTICO: Se pagamento foi confirmado via webhook ANTES do botão verify,
+                    # o Meta Pixel pode não ter sido disparado. Verificar e disparar se necessário.
+                    if not payment.meta_purchase_sent:
+                        try:
+                            from app import send_meta_pixel_purchase_event
+                            logger.info(f"📊 Disparando Meta Pixel Purchase para {payment.payment_id} (via botão verify)")
+                            send_meta_pixel_purchase_event(payment)
+                            logger.info(f"✅ Meta Pixel Purchase enviado via botão verify")
+                        except Exception as e:
+                            logger.error(f"❌ Erro ao enviar Meta Purchase via botão verify: {e}", exc_info=True)
+                    else:
+                        logger.info(f"ℹ️ Meta Pixel Purchase já foi enviado anteriormente (meta_purchase_sent=True)")
                     
                     # Cancelar downsells agendados
                     self.cancel_downsells(payment.payment_id)
