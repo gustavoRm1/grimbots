@@ -7305,20 +7305,34 @@ def send_meta_pixel_purchase_event(payment):
                 bot_user.fbclid = external_id_value
             logger.info(f"✅ Purchase - fbclid salvo no bot_user: {bot_user.fbclid[:50]}... (len={len(bot_user.fbclid)})")
 
+        # ✅ FALLBACK: Tentar recuperar fbp/fbc do bot_user se não estiver no tracking_data
         if not fbp_value and bot_user and getattr(bot_user, 'fbp', None):
             fbp_value = bot_user.fbp
+            logger.info(f"✅ Purchase - fbp recuperado do bot_user: {fbp_value[:30]}...")
         if not fbc_value and bot_user and getattr(bot_user, 'fbc', None):
             fbc_value = bot_user.fbc
-
+            logger.info(f"✅ Purchase - fbc recuperado do bot_user: {fbc_value[:50]}...")
+        
+        # ✅ FALLBACK FINAL: Tentar recuperar do payment (se foi salvo anteriormente)
+        if not fbc_value and getattr(payment, 'fbc', None):
+            fbc_value = payment.fbc
+            logger.info(f"✅ Purchase - fbc recuperado do payment: {fbc_value[:50]}...")
+        
         # ✅ CRÍTICO: NUNCA gerar fbc sintético - sempre usar o valor capturado do cookie do browser
         # Se não tiver fbc, deixar None (Meta aceita sem fbc, mas com fbc é melhor para atribuição)
         if not fbc_value:
-            logger.warning(f"⚠️ Purchase - fbc não encontrado no tracking_data nem no bot_user - Meta pode ter atribuição reduzida")
+            logger.warning(f"⚠️ Purchase - fbc não encontrado no tracking_data, bot_user nem payment - Meta pode ter atribuição reduzida")
+            logger.warning(f"   tracking_data tem fbc: {bool(tracking_data.get('fbc'))}")
+            logger.warning(f"   bot_user tem fbc: {bool(bot_user and getattr(bot_user, 'fbc', None))}")
+            logger.warning(f"   payment tem fbc: {bool(getattr(payment, 'fbc', None))}")
             # ❌ REMOVIDO: Não gerar fbc sintético (causa erro de creationTime inválido no Meta)
             # O fbc deve vir EXATAMENTE do cookie _fbc capturado no PageView
             # Gerar um novo fbc com timestamp atual quebra a atribuição porque o Meta espera o timestamp do clique original
+        
+        # ✅ Salvar fbc no payment se encontrado (para próximas tentativas)
         if fbc_value and not getattr(payment, 'fbc', None):
             payment.fbc = fbc_value
+            logger.info(f"✅ Purchase - fbc salvo no payment para futuras referências: {fbc_value[:50]}...")
 
         event_time_source = payment.paid_at or payment.created_at
         event_time = int(event_time_source.timestamp()) if event_time_source else int(time.time())

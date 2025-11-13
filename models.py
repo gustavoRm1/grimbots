@@ -954,6 +954,10 @@ class BotUser(db.Model):
     campaign_code = db.Column(db.String(255), nullable=True)
     external_id = db.Column(db.String(255), nullable=True)  # Para tracking de cliques
     
+    # ✅ META PIXEL COOKIES (para matching Purchase com PageView)
+    fbp = db.Column(db.String(255), nullable=True)  # Facebook Browser ID (_fbp cookie)
+    fbc = db.Column(db.String(255), nullable=True)  # Facebook Click ID (_fbc cookie)
+    
     # ✅ TRACKING ELITE (IP/User-Agent capturados no redirect)
     ip_address = db.Column(db.String(255), nullable=True)  # IP do primeiro click
     user_agent = db.Column(db.Text, nullable=True)  # User-Agent completo

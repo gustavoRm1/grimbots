@@ -401,6 +401,14 @@ def process_start_async(
                             grim_from_redis = tracking_elite.get('grim', '')
                             fbclid_completo_redis = tracking_elite.get('fbclid')
                             
+                            # ✅ CRÍTICO: Salvar fbp e fbc no bot_user para uso posterior no Purchase
+                            if tracking_elite.get('fbp'):
+                                bot_user.fbp = tracking_elite.get('fbp')
+                                logger.info(f"✅ process_start_async - fbp salvo no bot_user: {bot_user.fbp[:30]}...")
+                            if tracking_elite.get('fbc'):
+                                bot_user.fbc = tracking_elite.get('fbc')
+                                logger.info(f"✅ process_start_async - fbc salvo no bot_user: {bot_user.fbc[:50]}...")
+                            
                             if fbclid_completo_redis:
                                 bot_user.fbclid = fbclid_completo_redis
                                 bot_user.external_id = fbclid_completo_redis
@@ -486,6 +494,8 @@ def process_start_async(
                         "bot_id": bot_id,
                         "customer_user_id": telegram_user_id,
                         "fbclid": bot_user.fbclid or utm_data_from_start.get('fbclid'),
+                        "fbp": getattr(bot_user, 'fbp', None),  # ✅ Incluir fbp no payload
+                        "fbc": getattr(bot_user, 'fbc', None),  # ✅ Incluir fbc no payload
                         "utm_source": bot_user.utm_source,
                         "utm_campaign": bot_user.utm_campaign,
                         "utm_medium": getattr(bot_user, 'utm_medium', None),
