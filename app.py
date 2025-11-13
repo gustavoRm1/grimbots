@@ -7187,6 +7187,7 @@ def send_meta_pixel_purchase_event(payment):
             except Exception:
                 pass
 
+        # ✅ FALLBACK: Se Redis estiver vazio, usar dados do Payment (incluindo pageview_event_id)
         if not tracking_data:
             tracking_data = {
                 "fbp": getattr(payment, "fbp", None),
@@ -7195,7 +7196,15 @@ def send_meta_pixel_purchase_event(payment):
                 "client_ip": getattr(payment, "client_ip", None),
                 "client_user_agent": getattr(payment, "client_user_agent", None),
                 "pageview_ts": getattr(payment, "pageview_ts", None),
+                "pageview_event_id": getattr(payment, "pageview_event_id", None),  # ✅ CRÍTICO: Fallback do Payment
             }
+            if tracking_data.get("pageview_event_id"):
+                logger.info(f"✅ pageview_event_id recuperado do Payment (fallback): {tracking_data['pageview_event_id']}")
+        
+        # ✅ CRÍTICO: Se tracking_data não tem pageview_event_id mas Payment tem, usar do Payment
+        if not tracking_data.get("pageview_event_id") and getattr(payment, "pageview_event_id", None):
+            tracking_data["pageview_event_id"] = payment.pageview_event_id
+            logger.info(f"✅ pageview_event_id recuperado do Payment (fallback final): {payment.pageview_event_id}")
 
         pageview_ts_value = tracking_data.get('pageview_ts')
         pageview_ts_int = None

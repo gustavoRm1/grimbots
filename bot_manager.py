@@ -4295,7 +4295,9 @@ Seu pagamento ainda não foi confirmado.
                         # Usar campaign_code do bot_user (grim), não external_id (que agora é fbclid)
                         campaign_code=getattr(bot_user, 'campaign_code', None) if bot_user else None,
                         # ✅ QI 500: TRACKING_TOKEN V4
-                        tracking_token=tracking_token
+                        tracking_token=tracking_token,
+                        # ✅ CRÍTICO: pageview_event_id para deduplicação Meta Pixel (fallback se Redis expirar)
+                        pageview_event_id=pageview_event_id if pageview_event_id else None
                     )
                     db.session.add(payment)
                     db.session.flush()  # ✅ Flush para obter payment.id antes do commit
