@@ -4021,17 +4021,31 @@ def public_redirect(slug):
     fbp_cookie = request.cookies.get('_fbp')
     fbc_cookie = request.cookies.get('_fbc')
 
+    # ✅ LOG DIAGNÓSTICO: Verificar cookies iniciais
+    logger.info(f"🔍 Redirect - Cookies iniciais: _fbp={'✅' if fbp_cookie else '❌'}, _fbc={'✅' if fbc_cookie else '❌'}, fbclid={'✅' if fbclid else '❌'}, is_crawler={is_crawler_request}")
+
     if not fbp_cookie and not is_crawler_request:
         try:
             fbp_cookie = TrackingService.generate_fbp()
-        except Exception:
+            logger.info(f"✅ Redirect - fbp gerado: {fbp_cookie[:30]}...")
+        except Exception as e:
+            logger.warning(f"⚠️ Redirect - Erro ao gerar fbp: {e}")
             fbp_cookie = None
 
+    # ✅ CRÍTICO: Gerar fbc SEMPRE que houver fbclid, mesmo sem cookie _fbc
     if not fbc_cookie and fbclid and not is_crawler_request:
         try:
             fbc_cookie = TrackingService.generate_fbc(fbclid)
-        except Exception:
+            logger.info(f"✅ Redirect - fbc gerado a partir do fbclid: {fbc_cookie[:50]}... (len={len(fbc_cookie)})")
+        except Exception as e:
+            logger.warning(f"⚠️ Redirect - Erro ao gerar fbc: {e}")
             fbc_cookie = None
+    elif fbc_cookie:
+        logger.info(f"✅ Redirect - fbc capturado do cookie: {fbc_cookie[:50]}... (len={len(fbc_cookie)})")
+    elif not fbclid:
+        logger.warning(f"⚠️ Redirect - fbc não gerado: fbclid ausente")
+    elif is_crawler_request:
+        logger.warning(f"⚠️ Redirect - fbc não gerado: is_crawler_request=True")
 
     if not is_crawler_request:
         utms = {
@@ -4050,11 +4064,11 @@ def public_redirect(slug):
             if len(fbclid_to_save) > 255:
                 logger.warning(f"⚠️ Redirect - fbclid excede 255 chars ({len(fbclid_to_save)}), mas será salvo completo no Redis (sem truncar)")
         
+        # ✅ CRÍTICO: Montar tracking_payload com fbc apenas se for válido (não None)
         tracking_payload = {
             'tracking_token': tracking_token,
             'fbclid': fbclid_to_save,  # ✅ fbclid completo (até 255 chars) - NUNCA truncar aqui!
             'fbp': fbp_cookie,
-            'fbc': fbc_cookie,
             'pageview_event_id': pageview_event_id,
             'pageview_ts': pageview_ts,
             'client_ip': user_ip,
@@ -4064,11 +4078,12 @@ def public_redirect(slug):
             **{k: v for k, v in utms.items() if v}
         }
         
-        # ✅ LOG DIAGNÓSTICO: Verificar se fbc está sendo salvo
+        # ✅ CRÍTICO: Incluir fbc apenas se for válido (não None, não vazio)
         if fbc_cookie:
+            tracking_payload['fbc'] = fbc_cookie
             logger.info(f"✅ Redirect - fbc será salvo no Redis: {fbc_cookie[:50]}... (len={len(fbc_cookie)})")
         else:
-            logger.warning(f"⚠️ Redirect - fbc_cookie está vazio! Não será salvo no Redis. fbclid={'✅' if fbclid else '❌'}")
+            logger.warning(f"⚠️ Redirect - fbc_cookie está vazio! NÃO será incluído no tracking_payload. fbclid={'✅' if fbclid else '❌'}")
 
         try:
             logger.info(f"✅ Redirect - Salvando tracking_payload inicial com pageview_event_id: {tracking_payload.get('pageview_event_id', 'N/A')}")

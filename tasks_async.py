@@ -260,6 +260,12 @@ def process_start_async(
                                 utm_data_from_start['campaign_code'] = tracking_data['campaign_code']
                             if tracking_data.get('grim'):
                                 utm_data_from_start['campaign_code'] = tracking_data['grim']
+                            # ✅ CRÍTICO: Extrair fbp e fbc do tracking_data para salvar no BotUser
+                            if tracking_data.get('fbp'):
+                                utm_data_from_start['_fbp_from_tracking'] = tracking_data['fbp']
+                            if tracking_data.get('fbc'):
+                                utm_data_from_start['_fbc_from_tracking'] = tracking_data['fbc']
+                                logger.info(f"✅ process_start_async - fbc encontrado no tracking_data: {tracking_data['fbc'][:50]}...")
                             logger.info(f"✅ Dados de tracking recuperados do Redis para token {tracking_token_from_start}")
                     except Exception as e:
                         logger.warning(f"⚠️ Erro ao recuperar tracking data do Redis: {e}")
@@ -343,16 +349,34 @@ def process_start_async(
                     utm_campaign=utm_data_from_start.get('utm_campaign'),
                     campaign_code=utm_data_from_start.get('campaign_code'),
                     fbclid=utm_data_from_start.get('fbclid'),
-                    tracking_session_id=tracking_token_from_start
+                    tracking_session_id=tracking_token_from_start,
+                    # ✅ CRÍTICO: Salvar fbp e fbc do tracking_data (recuperado via tracking_token)
+                    fbp=utm_data_from_start.get('_fbp_from_tracking'),
+                    fbc=utm_data_from_start.get('_fbc_from_tracking')
                 )
                 is_new_user = True
+                if utm_data_from_start.get('_fbc_from_tracking'):
+                    logger.info(f"✅ process_start_async - fbc salvo no BotUser (novo): {utm_data_from_start.get('_fbc_from_tracking')[:50]}...")
                 
                 # Tracking Elite - buscar do Redis
-                if utm_data_from_start.get('fbclid'):
+                # ✅ CORREÇÃO: Priorizar tracking_token se disponível (chave correta)
+                tracking_json = None
+                if tracking_token_from_start:
+                    try:
+                        r = redis.Redis(host='localhost', port=6379, decode_responses=True)
+                        tracking_key = f"tracking:{tracking_token_from_start}"  # ✅ CORRETO: Chave do redirect
+                        tracking_json = r.get(tracking_key)
+                        logger.info(f"✅ process_start_async - Buscando tracking_elite na chave correta: {tracking_key}")
+                    except Exception as e:
+                        logger.warning(f"⚠️ Erro ao buscar tracking via tracking_token: {e}")
+                        tracking_json = None
+                
+                # ✅ FALLBACK: Se não encontrou via tracking_token, tentar via fbclid (chave antiga)
+                if not tracking_json and utm_data_from_start.get('fbclid'):
                     try:
                         r = redis.Redis(host='localhost', port=6379, decode_responses=True)
                         fbclid_value = utm_data_from_start['fbclid']
-                        tracking_key = f"tracking:{fbclid_value}"
+                        tracking_key = f"tracking:{fbclid_value}"  # Fallback para chave antiga
                         tracking_json = r.get(tracking_key)
                         
                         if not tracking_json and len(fbclid_value) <= 12:
@@ -488,14 +512,22 @@ def process_start_async(
                 if tracking_token_from_start and bot_user.tracking_session_id != tracking_token_from_start:
                     bot_user.tracking_session_id = tracking_token_from_start
 
+                # ✅ CRÍTICO: Se fbc foi recuperado do tracking_data mas não foi salvo no BotUser, salvar agora
+                if not bot_user.fbc and utm_data_from_start.get('_fbc_from_tracking'):
+                    bot_user.fbc = utm_data_from_start.get('_fbc_from_tracking')
+                    logger.info(f"✅ process_start_async - fbc recuperado do tracking_data e salvo no bot_user (atualizado): {bot_user.fbc[:50]}...")
+                if not bot_user.fbp and utm_data_from_start.get('_fbp_from_tracking'):
+                    bot_user.fbp = utm_data_from_start.get('_fbp_from_tracking')
+                    logger.info(f"✅ process_start_async - fbp recuperado do tracking_data e salvo no bot_user (atualizado): {bot_user.fbp[:30]}...")
+
                 if tracking_token_from_start:
                     payload = {
                         "tracking_token": tracking_token_from_start,
                         "bot_id": bot_id,
                         "customer_user_id": telegram_user_id,
                         "fbclid": bot_user.fbclid or utm_data_from_start.get('fbclid'),
-                        "fbp": getattr(bot_user, 'fbp', None),  # ✅ Incluir fbp no payload
-                        "fbc": getattr(bot_user, 'fbc', None),  # ✅ Incluir fbc no payload
+                        "fbp": getattr(bot_user, 'fbp', None) or utm_data_from_start.get('_fbp_from_tracking'),  # ✅ Priorizar bot_user, fallback para tracking_data
+                        "fbc": getattr(bot_user, 'fbc', None) or utm_data_from_start.get('_fbc_from_tracking'),  # ✅ Priorizar bot_user, fallback para tracking_data
                         "utm_source": bot_user.utm_source,
                         "utm_campaign": bot_user.utm_campaign,
                         "utm_medium": getattr(bot_user, 'utm_medium', None),

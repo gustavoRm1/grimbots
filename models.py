@@ -882,6 +882,9 @@ class Payment(db.Model):
     tracking_token = db.Column(db.String(200), nullable=True, index=True)  # Tracking V4 - QI 500 (aumentado para 200 para garantir compatibilidade)
     # ✅ CRÍTICO: pageview_event_id para deduplicação Meta Pixel (fallback se Redis expirar)
     pageview_event_id = db.Column(db.String(256), nullable=True, index=True)  # Event ID do PageView para reutilizar no Purchase
+    # ✅ META PIXEL COOKIES (para fallback no Purchase se Redis expirar)
+    fbp = db.Column(db.String(255), nullable=True)  # Facebook Browser ID (_fbp cookie)
+    fbc = db.Column(db.String(255), nullable=True)  # Facebook Click ID (_fbc cookie)
     
     # ✅ DEMOGRAPHIC DATA (Para Analytics Avançado)
     customer_age = db.Column(db.Integer, nullable=True)

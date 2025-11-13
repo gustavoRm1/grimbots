@@ -4341,7 +4341,10 @@ Seu pagamento ainda não foi confirmado.
                         # ✅ QI 500: TRACKING_TOKEN V4
                         tracking_token=tracking_token,
                         # ✅ CRÍTICO: pageview_event_id para deduplicação Meta Pixel (fallback se Redis expirar)
-                        pageview_event_id=pageview_event_id if pageview_event_id else None
+                        pageview_event_id=pageview_event_id if pageview_event_id else None,
+                        # ✅ CRÍTICO: fbp e fbc para fallback no Purchase se Redis expirar
+                        fbp=fbp if fbp else None,
+                        fbc=fbc if fbc else None
                     )
                     db.session.add(payment)
                     db.session.flush()  # ✅ Flush para obter payment.id antes do commit
