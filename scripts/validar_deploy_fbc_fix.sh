@@ -92,15 +92,23 @@ echo ""
 
 echo "6️⃣ VALIDAR BOT_USERS COM fbc SALVO (amostra)"
 echo "----------------------------------------"
-BOT_USERS_WITH_FBC=$(psql -U grimbots -d grimbots -t -c "SELECT COUNT(*) FROM bot_users WHERE fbc IS NOT NULL;")
-if [ "$BOT_USERS_WITH_FBC" -gt 0 ]; then
-    echo -e "${GREEN}✅ Encontrados $BOT_USERS_WITH_FBC bot_users com fbc salvo${NC}"
-    echo "Amostra (últimos 3):"
-    psql -U grimbots -d grimbots -c "SELECT telegram_user_id, LEFT(fbp, 30) as fbp_preview, LEFT(fbc, 50) as fbc_preview FROM bot_users WHERE fbc IS NOT NULL ORDER BY id DESC LIMIT 3;"
-    SUCCESS=$((SUCCESS + 1))
+# Verificar se as colunas existem antes de consultar
+COLUMNS_EXIST=$(psql -U grimbots -d grimbots -t -c "SELECT COUNT(*) FROM information_schema.columns WHERE table_name = 'bot_users' AND column_name IN ('fbp', 'fbc');" | tr -d ' ')
+if [ "$COLUMNS_EXIST" = "2" ]; then
+    BOT_USERS_WITH_FBC=$(psql -U grimbots -d grimbots -t -c "SELECT COUNT(*) FROM bot_users WHERE fbc IS NOT NULL;" 2>/dev/null | tr -d ' ')
+    if [ -n "$BOT_USERS_WITH_FBC" ] && [ "$BOT_USERS_WITH_FBC" -gt 0 ] 2>/dev/null; then
+        echo -e "${GREEN}✅ Encontrados $BOT_USERS_WITH_FBC bot_users com fbc salvo${NC}"
+        echo "Amostra (últimos 3):"
+        psql -U grimbots -d grimbots -c "SELECT telegram_user_id, LEFT(fbp, 30) as fbp_preview, LEFT(fbc, 50) as fbc_preview FROM bot_users WHERE fbc IS NOT NULL ORDER BY id DESC LIMIT 3;"
+        SUCCESS=$((SUCCESS + 1))
+    else
+        echo -e "${YELLOW}⚠️ Nenhum bot_user com fbc salvo ainda${NC}"
+        echo "💡 Isso é normal se nenhum /start foi processado após o deploy"
+    fi
 else
-    echo -e "${YELLOW}⚠️ Nenhum bot_user com fbc salvo ainda${NC}"
-    echo "💡 Isso é normal se nenhum /start foi processado após o deploy"
+    echo -e "${RED}❌ Colunas fbp/fbc NÃO existem no banco. Execute a migração primeiro:${NC}"
+    echo "   psql -U grimbots -d grimbots -f scripts/migration_add_fbp_fbc_bot_users.sql"
+    FAIL=$((FAIL + 1))
 fi
 echo ""
 
