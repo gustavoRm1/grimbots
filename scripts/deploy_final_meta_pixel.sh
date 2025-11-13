@@ -146,6 +146,8 @@ read -p "⚠️  Deseja reiniciar os serviços agora? (s/N): " -n 1 -r
 echo
 if [[ $REPLY =~ ^[Ss]$ ]]; then
     if [ -f "./restart-app.sh" ]; then
+        info "Dando permissão de execução ao restart-app.sh..."
+        chmod +x ./restart-app.sh
         info "Executando restart-app.sh..."
         ./restart-app.sh
         success "Serviços reiniciados"
