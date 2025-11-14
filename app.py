@@ -4185,9 +4185,10 @@ def public_redirect(slug):
     pageview_ts = int(time.time())
     TRACKING_TOKEN_TTL = TrackingServiceV4.TRACKING_TOKEN_TTL_SECONDS
 
-    # ✅ PATCH 1: Capturar FBC do cookie ou gerar do fbclid (formato oficial Meta)
-    fbp_cookie = request.cookies.get('_fbp')
-    fbc_cookie = request.cookies.get('_fbc')
+    # ✅ CRÍTICO V4.1: Capturar FBC do cookie OU dos params (JS pode ter enviado)
+    # Prioridade: cookie > params (cookie é mais confiável)
+    fbp_cookie = request.cookies.get('_fbp') or request.args.get('_fbp_cookie')
+    fbc_cookie = request.cookies.get('_fbc') or request.args.get('_fbc_cookie')
     fbclid_param = request.args.get('fbclid')
 
     # ✅ LOG DIAGNÓSTICO: Verificar cookies iniciais
@@ -4201,24 +4202,26 @@ def public_redirect(slug):
             logger.warning(f"[META PIXEL] Redirect - Erro ao gerar fbp: {e}")
             fbp_cookie = None
 
-    # ✅ PATCH 1: Normalização da Meta (fbc = fbclid → click id)
-    # Formato oficial da Meta: fb.1.<timestamp>.<fbclid>
-    # Se não tiver cookie _fbc mas tiver fbclid, gerar no formato oficial
+    # ✅ CRÍTICO V4.1: NUNCA gerar fbc sintético - Meta detecta e ignora para atribuição
+    # Se não tiver cookie _fbc, deixar None (Meta aceita, mas atribuição será reduzida)
+    # fbclid será usado apenas como external_id (hasheado) - NÃO como fbc
+    fbc_value = None
+    fbc_origin = None
+    
     if fbc_cookie:
         fbc_value = fbc_cookie.strip()
-        logger.info(f"[META PIXEL] Redirect - fbc capturado do cookie: {fbc_value[:50]}... (len={len(fbc_value)})")
-    elif fbclid_param and not is_crawler_request:
-        # ✅ GERAR FBC NO FORMATO OFICIAL DA META (apenas no redirect quando houver fbclid)
-        fbc_value = f"fb.1.{int(time.time())}.{fbclid_param}"
-        logger.info(f"[META PIXEL] Redirect - fbc gerado do fbclid (formato oficial Meta): {fbc_value[:50]}...")
+        fbc_origin = 'cookie'  # ✅ ORIGEM REAL - Meta confia e atribui
+        logger.info(f"[META REDIRECT] Redirect - fbc capturado do cookie (ORIGEM REAL): {fbc_value[:50]}... (len={len(fbc_value)})")
     else:
         fbc_value = None
+        fbc_origin = None
         if fbclid and not is_crawler_request:
-            logger.warning(f"[META PIXEL] Redirect - fbc não encontrado no cookie e fbclid ausente na URL - Meta pode ter atribuição reduzida")
+            logger.warning(f"[META REDIRECT] Redirect - fbc NÃO encontrado no cookie - Meta terá atribuição reduzida (sem fbc)")
+            logger.warning(f"   fbclid presente será usado APENAS como external_id (hasheado) - NÃO como fbc")
         elif not fbclid:
-            logger.warning(f"[META PIXEL] Redirect - fbc não gerado: fbclid ausente")
+            logger.warning(f"[META REDIRECT] Redirect - fbc ausente: cookie ausente e fbclid ausente")
         elif is_crawler_request:
-            logger.warning(f"[META PIXEL] Redirect - fbc não gerado: is_crawler_request=True")
+            logger.warning(f"[META REDIRECT] Redirect - fbc não capturado: is_crawler_request=True")
     
     # Usar fbc_value como fbc_cookie para compatibilidade com código existente
     fbc_cookie = fbc_value
@@ -4254,12 +4257,15 @@ def public_redirect(slug):
             **{k: v for k, v in utms.items() if v}
         }
         
-        # ✅ PATCH 1: Incluir fbc sempre que disponível (garantir salvamento no Redis)
-        if fbc_cookie:
+        # ✅ CRÍTICO V4.1: Salvar fbc APENAS se veio do cookie (fbc_origin = 'cookie')
+        # Se fbc_origin = None, NÃO salvar fbc (evita poluir Redis com fbc ausente)
+        if fbc_cookie and fbc_origin == 'cookie':
             tracking_payload['fbc'] = fbc_cookie
-            logger.info(f"[META PIXEL] Redirect - fbc será salvo no Redis: {fbc_cookie[:50]}... (len={len(fbc_cookie)})")
+            tracking_payload['fbc_origin'] = 'cookie'  # ✅ Rastrear origem para Purchase validar
+            logger.info(f"[META REDIRECT] Redirect - fbc REAL será salvo no Redis (origem: cookie): {fbc_cookie[:50]}... (len={len(fbc_cookie)})")
         else:
-            logger.warning(f"[META PIXEL] Redirect - fbc_cookie está vazio! NÃO será incluído no tracking_payload. fbclid={'✅' if fbclid else '❌'}")
+            # ✅ NÃO salvar fbc se não veio do cookie (evita usar fbc sintético no Purchase)
+            logger.warning(f"[META REDIRECT] Redirect - fbc NÃO será salvo (origem: {fbc_origin or 'ausente'}) - Purchase usará apenas external_id")
 
         try:
             logger.info(f"[META PIXEL] Redirect - Salvando tracking_payload inicial com pageview_event_id: {tracking_payload.get('pageview_event_id', 'N/A')}")
@@ -4269,11 +4275,12 @@ def public_redirect(slug):
                 tracking_service_v4.save_tracking_token(tracking_token, tracking_payload, ttl=TRACKING_TOKEN_TTL)
             else:
                 logger.info(f"[META PIXEL] Redirect - tracking_token salvo no Redis com fbclid completo (len={len(fbclid_to_save) if fbclid_to_save else 0}) e pageview_event_id: {tracking_payload.get('pageview_event_id', 'N/A')}")
-            # ✅ PATCH 1: Compatibilidade com tracking V3 - garantir que fbc seja salvo
+            # ✅ CRÍTICO V4.1: Salvar fbc APENAS se veio do cookie (V3 compat)
+            # Se fbc_origin != 'cookie', passar None (não salvar fbc sintético)
             TrackingService.save_tracking_data(
                 fbclid=fbclid,
                 fbp=fbp_cookie,
-                fbc=fbc_cookie,  # ✅ CRÍTICO: Salvar fbc no Redis (V3)
+                fbc=fbc_cookie if fbc_origin == 'cookie' else None,  # ✅ APENAS fbc real do cookie
                 ip_address=user_ip,
                 user_agent=user_agent,
                 grim=grim_param,
@@ -7434,22 +7441,36 @@ def send_meta_pixel_purchase_event(payment):
         ip_value = tracking_data.get('client_ip') or tracking_data.get('ip')
         user_agent_value = tracking_data.get('client_user_agent') or tracking_data.get('ua')
         
-        # ✅ PATCH 3: Recuperação mais forte possível de fbc (tracking_data → BotUser → Payment)
-        # ✅ CRÍTICO: NÃO GERAR SINTÉTICO (Meta proíbe) → Apenas logar se ausente
-        fbc_value = (
-            tracking_data.get('fbc')
-            or (bot_user.fbc if bot_user and getattr(bot_user, 'fbc', None) else None)
-            or (payment.fbc if getattr(payment, 'fbc', None) else None)
-        )
+        # ✅ CRÍTICO V4.1: Recuperar fbc APENAS se fbc_origin = 'cookie' (fbc real)
+        # Se fbc_origin = 'synthetic' ou None, IGNORAR (não usar fbc sintético)
+        fbc_value = None
+        fbc_origin = tracking_data.get('fbc_origin')
         
-        # ✅ PATCH 3: Log de confirmação ou aviso
+        # ✅ PRIORIDADE 1: tracking_data com fbc_origin = 'cookie' (MAIS CONFIÁVEL)
+        if tracking_data.get('fbc') and fbc_origin == 'cookie':
+            fbc_value = tracking_data.get('fbc')
+            logger.info(f"[META PURCHASE] Purchase - fbc REAL recuperado do tracking_data (origem: cookie): {fbc_value[:50]}...")
+        # ✅ PRIORIDADE 2: BotUser (se foi salvo de cookie anteriormente)
+        elif bot_user and getattr(bot_user, 'fbc', None):
+            # ✅ ASSUMIR que BotUser.fbc veio de cookie (se foi salvo via process_start_async)
+            fbc_value = bot_user.fbc
+            logger.info(f"[META PURCHASE] Purchase - fbc recuperado do BotUser (assumido como real): {fbc_value[:50]}...")
+        # ✅ PRIORIDADE 3: Payment (fallback final)
+        elif getattr(payment, 'fbc', None):
+            fbc_value = payment.fbc
+            logger.info(f"[META PURCHASE] Purchase - fbc recuperado do Payment (fallback): {fbc_value[:50]}...")
+        
+        # ✅ CRÍTICO V4.1: Se fbc_origin = 'synthetic', IGNORAR (não usar)
+        if fbc_origin == 'synthetic':
+            logger.warning(f"[META PURCHASE] Purchase - fbc IGNORADO (origem: synthetic) - Meta não atribui com fbc sintético")
+            fbc_value = None
+        
+        # ✅ Log de confirmação ou aviso
         if not fbc_value:
-            logger.warning(f"[META PURCHASE] Purchase - fbc ausente. Match Quality será prejudicada.")
-            logger.warning(f"   tracking_data tem fbc: {bool(tracking_data.get('fbc'))}")
-            logger.warning(f"   bot_user tem fbc: {bool(bot_user and getattr(bot_user, 'fbc', None))}")
-            logger.warning(f"   payment tem fbc: {bool(getattr(payment, 'fbc', None))}")
+            logger.warning(f"[META PURCHASE] Purchase - fbc ausente ou ignorado. Match Quality será prejudicada.")
+            logger.warning(f"   Usando APENAS external_id (fbclid hasheado) + ip + user_agent para matching")
         else:
-            logger.info(f"[META PURCHASE] Purchase - fbc aplicado: {fbc_value[:50]}...")
+            logger.info(f"[META PURCHASE] Purchase - fbc REAL aplicado: {fbc_value[:50]}...")
         
         # ✅ LOG DIAGNÓSTICO: Verificar o que foi recuperado do tracking_data
         logger.info(f"[META PURCHASE] Purchase - tracking_data recuperado: fbp={'✅' if fbp_value else '❌'}, fbc={'✅' if fbc_value else '❌'}, fbclid={'✅' if external_id_value else '❌'}")

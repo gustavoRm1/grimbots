@@ -126,21 +126,31 @@ class TrackingServiceV4:
                             # Se ambos têm valor, usar o novo (mais recente)
                             logger.debug(f"✅ Usando pageview_event_id do novo payload: {new_pageview_event_id}")
                         
-                        # ✅ CRÍTICO: Preservar fbc do payload anterior se o novo não tiver ou for None/vazio
+                        # ✅ CRÍTICO V4.1: Preservar fbc APENAS se fbc_origin = 'cookie' (fbc real)
+                        # Se novo payload tem fbc com fbc_origin = 'cookie', usar (substituir qualquer fbc anterior)
+                        # Se novo payload não tem fbc mas anterior tem fbc com fbc_origin = 'cookie', preservar
+                        # Se anterior tem fbc_origin = 'synthetic', NÃO preservar (ignorar fbc sintético)
                         preserved_fbc = previous.get('fbc')
+                        preserved_fbc_origin = previous.get('fbc_origin')
                         new_fbc = payload.get('fbc')
-                        if preserved_fbc and (not new_fbc or new_fbc == 'None' or new_fbc == ''):
+                        new_fbc_origin = payload.get('fbc_origin')
+                        
+                        # ✅ PRIORIDADE 1: Novo payload tem fbc REAL (cookie) → usar
+                        if new_fbc and new_fbc_origin == 'cookie':
+                            # Manter fbc do novo payload (é real)
+                            logger.debug(f"✅ Usando fbc REAL do novo payload: {new_fbc[:50]}...")
+                        # ✅ PRIORIDADE 2: Novo não tem fbc, mas anterior tem fbc REAL → preservar
+                        elif preserved_fbc and preserved_fbc_origin == 'cookie' and (not new_fbc or new_fbc_origin != 'cookie'):
                             payload['fbc'] = preserved_fbc
-                            logger.debug(f"✅ Preservando fbc do payload anterior: {preserved_fbc[:50]}...")
-                        # ✅ CRÍTICO: Não sobrescrever fbc válido com None ou vazio
-                        elif preserved_fbc and new_fbc:
-                            # Se ambos têm valor, usar o novo (mais recente) - mas só se for válido
-                            if new_fbc and new_fbc != 'None' and new_fbc != '':
-                                logger.debug(f"✅ Usando fbc do novo payload: {new_fbc[:50]}...")
-                            else:
-                                # Se o novo não é válido, preservar o anterior
-                                payload['fbc'] = preserved_fbc
-                                logger.debug(f"✅ Preservando fbc anterior (novo inválido): {preserved_fbc[:50]}...")
+                            payload['fbc_origin'] = 'cookie'  # Preservar origem também
+                            logger.debug(f"✅ Preservando fbc REAL do payload anterior: {preserved_fbc[:50]}...")
+                        # ✅ PRIORIDADE 3: Novo não tem fbc e anterior não tem fbc real → deixar None
+                        else:
+                            # Não preservar fbc sintético ou ausente
+                            if preserved_fbc_origin == 'synthetic':
+                                logger.debug(f"⚠️ Ignorando fbc sintético do payload anterior (não será preservado)")
+                            payload['fbc'] = None
+                            payload['fbc_origin'] = None
                         
                         previous.update(payload)
                         payload = previous
