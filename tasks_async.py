@@ -798,6 +798,50 @@ def process_webhook_async(gateway_type: str, data: Dict[str, Any]):
                     was_pending = payment.status == 'pending'
                     status_antigo = payment.status
                     
+                    # ✅ CRÍTICO: Validação anti-fraude - Rejeitar webhook 'paid' recebido muito rápido após criação
+                    # Se payment foi criado há menos de 10 segundos e webhook vem como 'paid', é suspeito
+                    if status == 'paid' and payment.created_at:
+                        try:
+                            from datetime import timedelta
+                            tempo_desde_criacao = (get_brazil_time() - payment.created_at).total_seconds()
+                            
+                            if tempo_desde_criacao < 10:  # Menos de 10 segundos
+                                logger.error(
+                                    f"🚨 [WEBHOOK {gateway_type.upper()}] BLOQUEADO: Webhook 'paid' recebido muito rápido após criação!"
+                                )
+                                logger.error(
+                                    f"   Payment ID: {payment.payment_id}"
+                                )
+                                logger.error(
+                                    f"   Tempo desde criação: {tempo_desde_criacao:.2f} segundos"
+                                )
+                                logger.error(
+                                    f"   Status do webhook: {status}"
+                                )
+                                logger.error(
+                                    f"   ⚠️ Isso é SUSPEITO - UmbrellaPay não confirma pagamento em menos de 10 segundos!"
+                                )
+                                logger.error(
+                                    f"   🔒 REJEITANDO webhook e mantendo status como 'pending'"
+                                )
+                                
+                                # ✅ Registrar webhook rejeitado para auditoria
+                                try:
+                                    _persist_webhook_event(
+                                        gateway_type=gateway_type,
+                                        result={'status': 'pending', 'gateway_transaction_id': gateway_transaction_id},  # Forçar pending
+                                        raw_payload=data
+                                    )
+                                except:
+                                    pass
+                                
+                                return {
+                                    'status': 'rejected_too_fast',
+                                    'message': f'Webhook paid rejeitado - recebido {tempo_desde_criacao:.2f}s após criação (mínimo: 10s)'
+                                }
+                        except Exception as time_error:
+                            logger.warning(f"⚠️ [WEBHOOK {gateway_type.upper()}] Erro ao calcular tempo desde criação: {time_error}")
+                    
                     # ✅ LOGS DETALHADOS: Estado atual do payment
                     logger.info(f"🔍 [WEBHOOK {gateway_type.upper()}] Payment encontrado: {payment.payment_id}")
                     logger.info(f"   Status atual no sistema: {status_antigo}")

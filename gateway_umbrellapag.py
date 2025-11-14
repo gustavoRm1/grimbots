@@ -1082,7 +1082,17 @@ class UmbrellaPagGateway(PaymentGateway):
                 return None
             
             # ✅ CORREÇÃO CRÍTICA: UmbrellaPag envia dados dentro de 'data' (wrapper)
-            # Formato esperado: {"data": {"id": "...", "status": "PAID", ...}}
+            # Formato oficial conforme documentação:
+            # {
+            #   "objectId": "txn_1234567890",  # ✅ NO ROOT
+            #   "data": {
+            #     "status": "paid",  # ✅ minúsculo
+            #     "endToEndId": "...",
+            #     "paidAt": "...",
+            #     "type": "transaction"
+            #   }
+            # }
+            # ✅ CORREÇÃO: Pode ter estrutura aninhada dupla: {"data": {"data": {...}}}
             # Verificar se existe wrapper 'data'
             webhook_data = data.get('data', {})
             if not webhook_data:
@@ -1092,9 +1102,19 @@ class UmbrellaPagGateway(PaymentGateway):
             else:
                 logger.info(f"🔍 [{self.get_gateway_name()}] Webhook com wrapper 'data' encontrado")
                 logger.debug(f"   Dados dentro de 'data': {list(webhook_data.keys())}")
+                # ✅ CORREÇÃO: Se webhook_data também tem 'data', usar o mais interno
+                if isinstance(webhook_data, dict) and 'data' in webhook_data:
+                    inner_data = webhook_data.get('data', {})
+                    if inner_data:
+                        webhook_data = inner_data
+                        logger.info(f"🔍 [{self.get_gateway_name()}] Webhook com estrutura aninhada dupla detectada, usando data.data")
+                        logger.debug(f"   Dados dentro de data.data: {list(webhook_data.keys())}")
             
-            # ✅ Extrair transaction_id (prioridade: id > transactionId > transaction_id)
+            # ✅ Extrair transaction_id (prioridade: objectId no root > id > transactionId > transaction_id)
+            # ✅ CORREÇÃO: Documentação oficial mostra objectId no root, não dentro de data
             transaction_id = (
+                data.get('objectId') or  # ✅ PRIORIDADE 1: objectId no root (formato oficial)
+                data.get('object_id') or
                 webhook_data.get('id') or 
                 webhook_data.get('transactionId') or 
                 webhook_data.get('transaction_id') or
@@ -1103,10 +1123,11 @@ class UmbrellaPagGateway(PaymentGateway):
                 data.get('transaction_id')
             )
             
-            # ✅ Extrair status (UmbrellaPag usa: PAID, WAITING_PAYMENT, REFUSED, etc.)
+            # ✅ Extrair status (UmbrellaPag usa: paid, waiting_payment, refused, etc.)
+            # ✅ CORREÇÃO: Documentação oficial mostra status em minúsculo dentro de data.status
             # ✅ CRÍTICO: Status pode estar em webhook_data['status'] ou data['status']
             status_raw = (
-                webhook_data.get('status') or  # Prioridade 1: dentro de 'data'
+                webhook_data.get('status') or  # Prioridade 1: dentro de 'data' (formato oficial)
                 webhook_data.get('paymentStatus') or 
                 webhook_data.get('payment_status') or
                 data.get('status') or  # Fallback para root
@@ -1118,17 +1139,22 @@ class UmbrellaPagGateway(PaymentGateway):
             # ✅ Log detalhado do status encontrado
             logger.info(f"🔍 [{self.get_gateway_name()}] Status bruto encontrado: {status_raw}")
             logger.debug(f"   Tentativas: webhook_data.status={webhook_data.get('status')}, data.status={data.get('status')}")
+            logger.debug(f"   objectId (root): {data.get('objectId')}")
             
             # ✅ Converter para string e normalizar (uppercase para comparação)
+            # ✅ NOTA: Documentação mostra status em minúsculo ("paid"), mas normalizamos para uppercase para compatibilidade
             status_str = str(status_raw).strip().upper() if status_raw else ''
             logger.info(f"🔍 [{self.get_gateway_name()}] Status normalizado (uppercase): {status_str}")
             
             # ✅ Mapear status do UmbrellaPag para status interno
-            # UmbrellaPag usa: PAID, WAITING_PAYMENT, REFUSED, CANCELLED, REFUNDED
-            # ✅ CRÍTICO: Status 'PAID' deve ser mapeado para 'paid' (liberar entregável)
+            # UmbrellaPag usa: PAID, AUTHORIZED, WAITING_PAYMENT, REFUSED, CANCELLED, REFUNDED
+            # ✅ CRÍTICO: Status 'PAID' e 'AUTHORIZED' devem ser mapeados para 'paid' (liberar entregável)
+            # ✅ CORREÇÃO: AUTHORIZED significa pagamento autorizado/confirmado no UmbrellaPay
             status_map = {
                 'PAID': 'paid',  # ✅ PAGO - liberar entregável e enviar Meta Pixel
                 'paid': 'paid',
+                'AUTHORIZED': 'paid',  # ✅ CORREÇÃO CRÍTICA: Autorizado = pago (UmbrellaPay)
+                'authorized': 'paid',  # ✅ CORREÇÃO CRÍTICA: Autorizado = pago (UmbrellaPay)
                 'APPROVED': 'paid',  # ✅ APROVADO - tratar como pago
                 'approved': 'paid',
                 'CONFIRMED': 'paid',  # ✅ CONFIRMADO - tratar como pago
@@ -1159,9 +1185,12 @@ class UmbrellaPagGateway(PaymentGateway):
             # ✅ Normalizar status (default: pending se não encontrado)
             normalized_status = status_map.get(status_str, 'pending')
             
-            # ✅ LOG CRÍTICO: Status PAID deve ser claramente identificado
+            # ✅ LOG CRÍTICO: Status PAID/AUTHORIZED deve ser claramente identificado
             if normalized_status == 'paid':
-                logger.info(f"💰 [{self.get_gateway_name()}] ⚠️ STATUS PAID DETECTADO - Webhook vai liberar entregável e enviar Meta Pixel!")
+                if status_str == 'AUTHORIZED':
+                    logger.info(f"💰 [{self.get_gateway_name()}] ⚠️ STATUS AUTHORIZED DETECTADO (tratado como PAID) - Webhook vai liberar entregável e enviar Meta Pixel!")
+                else:
+                    logger.info(f"💰 [{self.get_gateway_name()}] ⚠️ STATUS PAID DETECTADO - Webhook vai liberar entregável e enviar Meta Pixel!")
             elif normalized_status == 'pending':
                 logger.info(f"⏳ [{self.get_gateway_name()}] Status PENDING - Aguardando pagamento")
             else:
@@ -1232,9 +1261,10 @@ class UmbrellaPagGateway(PaymentGateway):
                 else:
                     payer_document = customer_doc or customer.get('cpf') or customer.get('cnpj')
             
-            # ✅ Extrair end_to_end_id (E2E do BC) - pode estar no pix
+            # ✅ Extrair end_to_end_id (E2E do BC) - conforme documentação oficial está em data.endToEndId
+            # ✅ CORREÇÃO: Documentação oficial mostra endToEndId dentro de data
             end_to_end_id = (
-                webhook_data.get('endToEndId') or 
+                webhook_data.get('endToEndId') or  # ✅ PRIORIDADE 1: dentro de 'data' (formato oficial)
                 webhook_data.get('end_to_end_id') or 
                 webhook_data.get('e2eId') or 
                 webhook_data.get('e2e_id') or
@@ -1270,9 +1300,12 @@ class UmbrellaPagGateway(PaymentGateway):
             logger.info(f"   Payer Document: {payer_document}")
             logger.info(f"   End-to-End ID: {end_to_end_id}")
             
-            # ✅ LOG CRÍTICO: Status PAID deve disparar entregável e Meta Pixel
+            # ✅ LOG CRÍTICO: Status PAID/AUTHORIZED deve disparar entregável e Meta Pixel
             if normalized_status == 'paid':
-                logger.info(f"💰 [{self.get_gateway_name()}] ⚠️ STATUS PAID CONFIRMADO - Sistema vai:")
+                if status_str == 'AUTHORIZED':
+                    logger.info(f"💰 [{self.get_gateway_name()}] ⚠️ STATUS AUTHORIZED CONFIRMADO (tratado como PAID) - Sistema vai:")
+                else:
+                    logger.info(f"💰 [{self.get_gateway_name()}] ⚠️ STATUS PAID CONFIRMADO - Sistema vai:")
                 logger.info(f"   1️⃣ Atualizar pagamento para 'paid'")
                 logger.info(f"   2️⃣ Enviar entregável ao cliente")
                 logger.info(f"   3️⃣ Disparar evento Meta Pixel Purchase")
@@ -1347,6 +1380,17 @@ class UmbrellaPagGateway(PaymentGateway):
                         if not data or not isinstance(data, dict):
                             logger.error(f"❌ [UMBRELLAPAY API] Resposta inválida (não é dict): {data}")
                             return None
+                        
+                        # ✅ CORREÇÃO: Tratar estrutura aninhada dupla (data.data)
+                        # UmbrellaPay pode retornar {"data": {"data": {...}}}
+                        if isinstance(data, dict) and 'data' in data:
+                            inner_data = data.get('data', {})
+                            # Se inner_data também tem 'data', usar o mais interno
+                            if isinstance(inner_data, dict) and 'data' in inner_data:
+                                data = inner_data.get('data', {})
+                                logger.debug(f"🔍 [UMBRELLAPAY API] Estrutura aninhada dupla detectada, usando data.data")
+                            else:
+                                data = inner_data
                         
                         # Processar como webhook
                         result = self.process_webhook(data)
