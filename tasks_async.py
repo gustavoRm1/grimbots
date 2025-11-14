@@ -1000,6 +1000,24 @@ def process_webhook_async(gateway_type: str, data: Dict[str, Any]):
                     else:
                         logger.info(f"✅ [WEBHOOK {gateway_type.upper()}] Validação pós-update: Status confirmado como '{payment.status}'")
                     
+                    # ✅ Enviar notificação WebSocket APENAS para o dono do bot (após atualizar status para 'paid')
+                    if status == 'paid' and payment and payment.bot:
+                        try:
+                            from app import socketio
+                            if payment.bot.user_id:
+                                socketio.emit('payment_update', {
+                                    'payment_id': payment.payment_id,
+                                    'status': status,
+                                    'bot_id': payment.bot_id,
+                                    'amount': payment.amount,
+                                    'customer_name': payment.customer_name
+                                }, room=f'user_{payment.bot.user_id}')
+                                logger.info(f"✅ [WEBHOOK {gateway_type.upper()}] Notificação WebSocket enviada para user_{payment.bot.user_id} (payment {payment.id})")
+                            else:
+                                logger.warning(f"⚠️ [WEBHOOK {gateway_type.upper()}] Payment {payment.id} não tem bot.user_id - não enviando notificação WebSocket")
+                        except Exception as e:
+                            logger.error(f"❌ [WEBHOOK {gateway_type.upper()}] Erro ao emitir notificação WebSocket para payment {payment.id}: {e}")
+                    
                     logger.info(f"✅ [WEBHOOK {gateway_type.upper()}] Webhook processado com sucesso: {payment.payment_id} -> {status}")
                     return {'status': 'success', 'payment_id': payment.payment_id}
                 else:

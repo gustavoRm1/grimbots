@@ -515,16 +515,20 @@ def reconcile_paradise_payments():
                         except Exception as e:
                             logger.error(f"❌ Erro ao enviar entregável via reconciliação: {e}")
                         
-                        # Emitir evento em tempo real
+                        # ✅ Emitir evento em tempo real APENAS para o dono do bot
                         try:
-                            socketio.emit('payment_update', {
-                                'payment_id': p.id,
-                                'status': 'paid',
-                                'amount': float(p.amount),
-                                'bot_id': p.bot_id,
-                            })
-                        except Exception:
-                            pass
+                            # ✅ CRÍTICO: Validar user_id antes de emitir (já validado acima, mas garantir)
+                            if p.bot and p.bot.user_id:
+                                socketio.emit('payment_update', {
+                                    'payment_id': p.id,
+                                    'status': 'paid',
+                                    'amount': float(p.amount),
+                                    'bot_id': p.bot_id,
+                                }, room=f'user_{p.bot.user_id}')
+                            else:
+                                logger.warning(f"⚠️ Payment {p.id} não tem bot.user_id - não enviando notificação WebSocket")
+                        except Exception as e:
+                            logger.error(f"❌ Erro ao emitir notificação WebSocket para payment {p.id}: {e}")
                 except Exception as e:
                     logger.error(f"❌ Erro ao reconciliar payment {p.id} ({p.payment_id}): {e}", exc_info=True)
                     continue
@@ -636,16 +640,20 @@ def reconcile_pushynpay_payments():
                         except Exception as e:
                             logger.error(f"❌ Erro ao enviar entregável via reconciliação PushynPay: {e}")
                         
-                        # Emitir evento em tempo real
+                        # ✅ Emitir evento em tempo real APENAS para o dono do bot
                         try:
-                            socketio.emit('payment_update', {
-                                'payment_id': p.id,
-                                'status': 'paid',
-                                'amount': float(p.amount),
-                                'bot_id': p.bot_id,
-                            })
-                        except Exception:
-                            pass
+                            # ✅ CRÍTICO: Validar user_id antes de emitir (já validado acima, mas garantir)
+                            if p.bot and p.bot.user_id:
+                                socketio.emit('payment_update', {
+                                    'payment_id': p.id,
+                                    'status': 'paid',
+                                    'amount': float(p.amount),
+                                    'bot_id': p.bot_id,
+                                }, room=f'user_{p.bot.user_id}')
+                            else:
+                                logger.warning(f"⚠️ Payment {p.id} não tem bot.user_id - não enviando notificação WebSocket")
+                        except Exception as e:
+                            logger.error(f"❌ Erro ao emitir notificação WebSocket para payment {p.id}: {e}")
                     else:
                         continue
 
