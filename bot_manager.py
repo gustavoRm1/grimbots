@@ -3474,7 +3474,64 @@ Desculpe, não foi possível processar seu pagamento.
                     bot = payment.bot
                     bot_config = self.active_bots.get(bot_id, {}).get('config', {})
                     custom_pending_message = bot_config.get('pending_message', '').strip()
+                    
+                    # ✅ CORREÇÃO: Buscar PIX code do product_description (onde é salvo)
                     pix_code = payment.product_description or 'Aguardando...'
+                    
+                    # ✅ FALLBACK: Se PIX code não está salvo, tentar buscar do gateway (apenas para UmbrellaPay)
+                    if (pix_code == 'Aguardando...' or not pix_code or len(pix_code) < 20) and payment.gateway_type == 'umbrellapag':
+                        try:
+                            # Buscar gateway e tentar obter PIX code novamente
+                            gateway = Gateway.query.filter_by(
+                                user_id=bot.user_id,
+                                gateway_type='umbrellapag',
+                                is_verified=True
+                            ).first()
+                            
+                            if gateway and payment.gateway_transaction_id:
+                                credentials = {
+                                    'api_key': gateway.api_key,
+                                    'product_hash': gateway.product_hash
+                                }
+                                payment_gateway = GatewayFactory.create_gateway(
+                                    gateway_type='umbrellapag',
+                                    credentials=credentials
+                                )
+                                
+                                if payment_gateway:
+                                    # ✅ Tentar buscar PIX code diretamente da API (GET /user/transactions/{id})
+                                    # A resposta da API inclui o PIX code em data.pix.qrCode
+                                    try:
+                                        # Fazer requisição direta para obter PIX code
+                                        response = payment_gateway._make_request('GET', f'/user/transactions/{payment.gateway_transaction_id}')
+                                        if response and response.status_code == 200:
+                                            api_data = response.json()
+                                            
+                                            # ✅ Tratar estrutura aninhada (data.data)
+                                            inner_data = api_data
+                                            if isinstance(api_data, dict) and 'data' in api_data:
+                                                inner_data = api_data.get('data', {})
+                                                if isinstance(inner_data, dict) and 'data' in inner_data:
+                                                    inner_data = inner_data.get('data', {})
+                                            
+                                            # ✅ Extrair PIX code
+                                            if isinstance(inner_data, dict):
+                                                pix_obj = inner_data.get('pix', {})
+                                                if isinstance(pix_obj, dict):
+                                                    fallback_pix = (
+                                                        pix_obj.get('qrCode') or
+                                                        pix_obj.get('qr_code') or
+                                                        pix_obj.get('code') or
+                                                        None
+                                                    )
+                                                    if fallback_pix and len(fallback_pix) > 20:
+                                                        pix_code = fallback_pix
+                                                        logger.info(f"✅ [VERIFY] PIX code recuperado do gateway via API para {payment.payment_id}")
+                                    except Exception as api_error:
+                                        logger.debug(f"🔍 [VERIFY] Não foi possível buscar PIX code via API (não crítico): {api_error}")
+                        except Exception as e:
+                            logger.warning(f"⚠️ [VERIFY] Erro ao buscar PIX code do gateway (fallback): {e}")
+                            # Continuar com pix_code atual (pode ser 'Aguardando...')
                     
                     # Usar mensagem personalizada ou padrão
                     if custom_pending_message:
@@ -3498,6 +3555,23 @@ Seu pagamento está sendo processado.
 
 ⏱️ <b>Confirmação automática:</b>
 Se você já pagou, o sistema confirmará automaticamente em até 2 minutos via webhook.
+
+✅ Você será notificado assim que o pagamento for confirmado!"""
+                        elif payment.gateway_type == 'umbrellapag':
+                            # ✅ CORREÇÃO: Mensagem específica para UmbrellaPay (similar ao Paradise)
+                            pending_message = f"""⏳ <b>Aguardando confirmação</b>
+
+Seu pagamento está sendo processado.
+
+📱 <b>PIX Copia e Cola:</b>
+<code>{pix_code}</code>
+
+<i>👆 Toque no código acima para copiar</i>
+
+⏱️ <b>Confirmação automática:</b>
+Se você já pagou, o sistema confirmará automaticamente em até 5 minutos via webhook ou job de sincronização.
+
+💡 <b>Dica:</b> Você pode clicar novamente em "Verificar Pagamento" para consultar o status manualmente.
 
 ✅ Você será notificado assim que o pagamento for confirmado!"""
                         else:
