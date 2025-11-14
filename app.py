@@ -4250,10 +4250,11 @@ def public_redirect(slug):
             'fbp': fbp_cookie,
             'pageview_event_id': pageview_event_id,
             'pageview_ts': pageview_ts,
-            'client_ip': user_ip,
-            'client_ua': user_agent,
+            'client_ip': user_ip,  # ✅ Nome correto (Purchase busca por 'client_ip' ou 'ip')
+            'client_user_agent': user_agent,  # ✅ CORRIGIDO: Purchase busca por 'client_user_agent' ou 'ua'
             'grim': grim_param or None,
-            'event_source_url': request.url,
+            'event_source_url': request.url or f'https://{request.host}/go/{pool.slug}',
+            'first_page': request.url or f'https://{request.host}/go/{pool.slug}',  # ✅ ADICIONAR para fallback no Purchase
             **{k: v for k, v in utms.items() if v}
         }
         
@@ -4268,12 +4269,15 @@ def public_redirect(slug):
             logger.warning(f"[META REDIRECT] Redirect - fbc NÃO será salvo (origem: {fbc_origin or 'ausente'}) - Purchase usará apenas external_id")
 
         try:
+            # ✅ LOG DETALHADO: Mostrar o que está sendo salvo
+            logger.info(f"[META PIXEL] Redirect - tracking_payload completo: fbclid={'✅' if tracking_payload.get('fbclid') else '❌'}, fbp={'✅' if tracking_payload.get('fbp') else '❌'}, ip={'✅' if tracking_payload.get('client_ip') else '❌'}, ua={'✅' if tracking_payload.get('client_user_agent') else '❌'}")
             logger.info(f"[META PIXEL] Redirect - Salvando tracking_payload inicial com pageview_event_id: {tracking_payload.get('pageview_event_id', 'N/A')}")
             ok = tracking_service_v4.save_tracking_token(tracking_token, tracking_payload, ttl=TRACKING_TOKEN_TTL)
             if not ok:
                 logger.warning("[META PIXEL] Redirect - Retry saving tracking_token once (redirect)")
                 tracking_service_v4.save_tracking_token(tracking_token, tracking_payload, ttl=TRACKING_TOKEN_TTL)
             else:
+                logger.info(f"[META PIXEL] Redirect - tracking_token salvo: {tracking_token[:20]}... | Campos: fbclid={'✅' if tracking_payload.get('fbclid') else '❌'}, fbp={'✅' if tracking_payload.get('fbp') else '❌'}, ip={'✅' if tracking_payload.get('client_ip') else '❌'}, ua={'✅' if tracking_payload.get('client_user_agent') else '❌'}")
                 logger.info(f"[META PIXEL] Redirect - tracking_token salvo no Redis com fbclid completo (len={len(fbclid_to_save) if fbclid_to_save else 0}) e pageview_event_id: {tracking_payload.get('pageview_event_id', 'N/A')}")
             # ✅ CRÍTICO V4.1: Salvar fbc APENAS se veio do cookie (V3 compat)
             # Se fbc_origin != 'cookie', passar None (não salvar fbc sintético)
@@ -7465,8 +7469,11 @@ def send_meta_pixel_purchase_event(payment):
         external_id_value = tracking_data.get('fbclid')
         fbp_value = tracking_data.get('fbp')
         fbc_value = tracking_data.get('fbc')
-        ip_value = tracking_data.get('client_ip') or tracking_data.get('ip')
-        user_agent_value = tracking_data.get('client_user_agent') or tracking_data.get('ua')
+        ip_value = tracking_data.get('client_ip') or tracking_data.get('ip') or tracking_data.get('client_ip_address')
+        user_agent_value = tracking_data.get('client_user_agent') or tracking_data.get('ua') or tracking_data.get('client_ua')
+        
+        # ✅ LOG DETALHADO: Mostrar o que foi recuperado
+        logger.info(f"[META PURCHASE] Purchase - tracking_data recuperado do Redis: fbclid={'✅' if tracking_data.get('fbclid') else '❌'}, fbp={'✅' if tracking_data.get('fbp') else '❌'}, fbc={'✅' if tracking_data.get('fbc') else '❌'}, ip={'✅' if ip_value else '❌'}, ua={'✅' if user_agent_value else '❌'}")
         
         # ✅ CRÍTICO V4.1: Recuperar fbc APENAS se fbc_origin = 'cookie' (fbc real)
         # Se fbc_origin = 'synthetic' ou None, IGNORAR (não usar fbc sintético)
