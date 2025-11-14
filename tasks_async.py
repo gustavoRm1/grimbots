@@ -534,12 +534,17 @@ def process_start_async(
                     bot_user.tracking_session_id = tracking_token_from_start
 
                 # ✅ CRÍTICO: Se fbc foi recuperado do tracking_data mas não foi salvo no BotUser, salvar agora
-                if not bot_user.fbc and utm_data_from_start.get('_fbc_from_tracking'):
-                    bot_user.fbc = utm_data_from_start.get('_fbc_from_tracking')
-                    logger.info(f"✅ process_start_async - fbc recuperado do tracking_data e salvo no bot_user (atualizado): {bot_user.fbc[:50]}...")
-                if not bot_user.fbp and utm_data_from_start.get('_fbp_from_tracking'):
-                    bot_user.fbp = utm_data_from_start.get('_fbp_from_tracking')
-                    logger.info(f"✅ process_start_async - fbp recuperado do tracking_data e salvo no bot_user (atualizado): {bot_user.fbp[:30]}...")
+                # ✅ PATCH 4: Salvar fbc no BotUser se disponível (garantir persistência)
+                fbc_from_tracking = utm_data_from_start.get('_fbc_from_tracking')
+                if fbc_from_tracking and not bot_user.fbc:
+                    bot_user.fbc = fbc_from_tracking
+                    logger.info(f"[META PIXEL] process_start_async - fbc recuperado do tracking_data e salvo no bot_user: {bot_user.fbc[:50]}...")
+                
+                # ✅ PATCH 4: Salvar fbp no BotUser se disponível
+                fbp_from_tracking = utm_data_from_start.get('_fbp_from_tracking')
+                if fbp_from_tracking and not bot_user.fbp:
+                    bot_user.fbp = fbp_from_tracking
+                    logger.info(f"[META PIXEL] process_start_async - fbp recuperado do tracking_data e salvo no bot_user: {bot_user.fbp[:30]}...")
 
                 if tracking_token_from_start:
                     payload = {
