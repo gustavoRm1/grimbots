@@ -60,22 +60,23 @@ GATEWAY_IDS_ALTERNATIVOS = {
     "f0212d7f-269e-49dd-aeea-212a521d2fe1": ["f0212d7f-269e-49dd-aeea-212a521d2e1"]
 }
 
-# Carregar ENCRYPTION_KEY do .env se não estiver no ambiente
-if not os.environ.get('ENCRYPTION_KEY'):
-    print("⚠️  ENCRYPTION_KEY não configurada, tentando carregar do .env...")
-    env_path = Path(__file__).parent.parent / '.env'
-    if env_path.exists():
-        with open(env_path, 'r', encoding='utf-8') as f:
-            for line in f:
-                line = line.strip()
-                if line.startswith('ENCRYPTION_KEY='):
-                    key = line.split('=', 1)[1].strip()
-                    # Remover aspas se houver
-                    key = key.strip('"').strip("'")
-                    if key:
-                        os.environ['ENCRYPTION_KEY'] = key
-                        print(f"✅ ENCRYPTION_KEY carregada do .env (tamanho: {len(key)} chars)")
-                        break
+# Carregar ENCRYPTION_KEY do .env (sempre, para garantir que está correta)
+env_path = Path(__file__).parent.parent / '.env'
+if env_path.exists():
+    with open(env_path, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if line.startswith('ENCRYPTION_KEY='):
+                key = line.split('=', 1)[1].strip()
+                # Remover aspas se houver
+                key = key.strip('"').strip("'")
+                if key:
+                    # Sempre sobrescrever com a chave do .env (garantir que está completa)
+                    os.environ['ENCRYPTION_KEY'] = key
+                    print(f"✅ ENCRYPTION_KEY carregada do .env (tamanho: {len(key)} chars)")
+                    break
+else:
+    print("⚠️  Arquivo .env não encontrado!")
 
 # Validar ENCRYPTION_KEY antes de importar app
 encryption_key = os.environ.get('ENCRYPTION_KEY')
