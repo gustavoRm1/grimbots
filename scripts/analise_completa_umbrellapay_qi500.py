@@ -60,22 +60,51 @@ GATEWAY_IDS_ALTERNATIVOS = {
     "f0212d7f-269e-49dd-aeea-212a521d2fe1": ["f0212d7f-269e-49dd-aeea-212a521d2e1"]
 }
 
+# Carregar ENCRYPTION_KEY do .env se não estiver no ambiente
 if not os.environ.get('ENCRYPTION_KEY'):
     print("⚠️  ENCRYPTION_KEY não configurada, tentando carregar do .env...")
     env_path = Path(__file__).parent.parent / '.env'
     if env_path.exists():
-        with open(env_path, 'r') as f:
+        with open(env_path, 'r', encoding='utf-8') as f:
             for line in f:
+                line = line.strip()
                 if line.startswith('ENCRYPTION_KEY='):
                     key = line.split('=', 1)[1].strip()
-                    os.environ['ENCRYPTION_KEY'] = key
-                    break
+                    # Remover aspas se houver
+                    key = key.strip('"').strip("'")
+                    if key:
+                        os.environ['ENCRYPTION_KEY'] = key
+                        print(f"✅ ENCRYPTION_KEY carregada do .env (tamanho: {len(key)} chars)")
+                        break
+
+# Validar ENCRYPTION_KEY antes de importar app
+encryption_key = os.environ.get('ENCRYPTION_KEY')
+if not encryption_key:
+    print("❌ ERRO CRÍTICO: ENCRYPTION_KEY não configurada!")
+    print("\nSolução:")
+    print("1. Verificar se .env existe e tem ENCRYPTION_KEY")
+    print("2. Ou executar: export ENCRYPTION_KEY=$(grep ENCRYPTION_KEY .env | cut -d '=' -f2)")
+    sys.exit(1)
+
+# Validar formato da chave
+try:
+    from cryptography.fernet import Fernet
+    # Tentar criar um objeto Fernet para validar a chave
+    Fernet(encryption_key.encode())
+    print(f"✅ ENCRYPTION_KEY válida (tamanho: {len(encryption_key)} chars)")
+except Exception as e:
+    print(f"❌ ERRO CRÍTICO: ENCRYPTION_KEY inválida!")
+    print(f"Erro: {e}")
+    print("\nGere uma nova:")
+    print('  python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"')
+    sys.exit(1)
 
 try:
     from app import app, db
     from models import Payment
 except ImportError as e:
     print(f"❌ Erro ao importar módulos: {e}")
+    print("\nCertifique-se de estar executando do diretório raiz do projeto")
     sys.exit(1)
 except RuntimeError as e:
     if 'ENCRYPTION_KEY' in str(e):
