@@ -10,6 +10,31 @@ Protege: API Keys, Client Secrets, Tokens de gateway de pagamento
 from cryptography.fernet import Fernet
 import os
 import sys
+from pathlib import Path
+
+# ============================================================================
+# CARREGAR .env ANTES DE VALIDAR ENCRYPTION_KEY
+# ============================================================================
+
+# ✅ CRÍTICO: Carregar .env diretamente aqui para garantir que ENCRYPTION_KEY
+# seja lida corretamente, mesmo se este módulo for importado antes de load_dotenv()
+# no app.py. Isso resolve o problema de chaves que terminam com '=' sendo cortadas.
+if not os.environ.get('ENCRYPTION_KEY'):
+    # Tentar carregar do .env manualmente
+    env_path = Path(__file__).parent.parent / '.env'
+    if env_path.exists():
+        try:
+            with open(env_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith('#') and '=' in line:
+                        key, value = line.split('=', 1)  # ✅ split('=', 1) preserva '=' no valor
+                        if key.strip() == 'ENCRYPTION_KEY':
+                            os.environ['ENCRYPTION_KEY'] = value.strip()
+                            break
+        except Exception as e:
+            # Se falhar, continuar e deixar validação abaixo tratar
+            pass
 
 # ============================================================================
 # VALIDAÇÃO: ENCRYPTION_KEY OBRIGATÓRIA

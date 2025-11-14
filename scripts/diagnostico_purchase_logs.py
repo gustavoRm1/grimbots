@@ -5,7 +5,21 @@ Script de diagnóstico para verificar por que Purchase não aparece nos logs
 
 import sys
 import os
+from pathlib import Path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# ✅ CRÍTICO: Carregar .env ANTES de importar app (para ENCRYPTION_KEY)
+env_path = Path(__file__).parent.parent / '.env'
+if env_path.exists():
+    try:
+        with open(env_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, value = line.split('=', 1)  # ✅ split('=', 1) preserva '=' no valor
+                    os.environ[key.strip()] = value.strip()
+    except Exception as e:
+        print(f"⚠️  Erro ao carregar .env: {e}")
 
 from app import app, db
 from models import Payment, PoolBot, Pool
