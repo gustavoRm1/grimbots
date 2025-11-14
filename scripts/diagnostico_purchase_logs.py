@@ -22,7 +22,7 @@ if env_path.exists():
         print(f"⚠️  Erro ao carregar .env: {e}")
 
 from app import app, db
-from models import Payment, PoolBot, Pool
+from models import Payment, PoolBot, RedirectPool
 from datetime import datetime, timedelta
 import json
 
