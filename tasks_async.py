@@ -809,12 +809,21 @@ def process_webhook_async(gateway_type: str, data: Dict[str, Any]):
                         logger.info(f"♻️ [WEBHOOK {gateway_type.upper()}] Payment já está PAID - Webhook duplicado")
                         logger.info(f"   Tentando reenviar entregável e garantir Meta Purchase...")
                         
-                        # Tentar reenviar entregável e garantir Meta Purchase
-                        try:
-                            send_payment_delivery(payment, bot_manager)
-                            logger.info(f"✅ [WEBHOOK {gateway_type.upper()}] Entregável reenviado")
-                        except Exception as e:
-                            logger.error(f"❌ [WEBHOOK {gateway_type.upper()}] Erro ao reenviar entregável (duplicado): {e}")
+                        # ✅ CRÍTICO: Refresh antes de validar status
+                        db.session.refresh(payment)
+                        
+                        # ✅ CRÍTICO: Validar status ANTES de chamar send_payment_delivery
+                        if payment.status == 'paid':
+                            try:
+                                send_payment_delivery(payment, bot_manager)
+                                logger.info(f"✅ [WEBHOOK {gateway_type.upper()}] Entregável reenviado")
+                            except Exception as e:
+                                logger.error(f"❌ [WEBHOOK {gateway_type.upper()}] Erro ao reenviar entregável (duplicado): {e}")
+                        else:
+                            logger.error(
+                                f"❌ ERRO GRAVE: send_payment_delivery chamado com payment.status != 'paid' "
+                                f"(status atual: {payment.status}, payment_id: {payment.payment_id})"
+                            )
                         
                         if not payment.meta_purchase_sent:
                             try:
@@ -902,12 +911,22 @@ def process_webhook_async(gateway_type: str, data: Dict[str, Any]):
                             logger.warning(f"Erro ao enviar Meta Pixel Purchase: {e}")
                     
                     if deve_enviar_entregavel:
-                        try:
-                            logger.info(f"📦 [WEBHOOK {gateway_type.upper()}] Enviando entregável...")
-                            send_payment_delivery(payment, bot_manager)
-                            logger.info(f"✅ [WEBHOOK {gateway_type.upper()}] Entregável enviado com sucesso")
-                        except Exception as e:
-                            logger.error(f"❌ [WEBHOOK {gateway_type.upper()}] Erro ao enviar entregável: {e}", exc_info=True)
+                        # ✅ CRÍTICO: Refresh antes de validar status
+                        db.session.refresh(payment)
+                        
+                        # ✅ CRÍTICO: Validar status ANTES de chamar send_payment_delivery
+                        if payment.status == 'paid':
+                            try:
+                                logger.info(f"📦 [WEBHOOK {gateway_type.upper()}] Enviando entregável...")
+                                send_payment_delivery(payment, bot_manager)
+                                logger.info(f"✅ [WEBHOOK {gateway_type.upper()}] Entregável enviado com sucesso")
+                            except Exception as e:
+                                logger.error(f"❌ [WEBHOOK {gateway_type.upper()}] Erro ao enviar entregável: {e}", exc_info=True)
+                        else:
+                            logger.error(
+                                f"❌ ERRO GRAVE: send_payment_delivery chamado com payment.status != 'paid' "
+                                f"(status atual: {payment.status}, payment_id: {payment.payment_id})"
+                            )
                     
                     # ✅ COMMIT: Salvar todas as alterações
                     try:

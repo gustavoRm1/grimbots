@@ -333,6 +333,19 @@ def send_payment_delivery(payment, bot_manager):
             logger.warning(f"⚠️ Payment ou bot inválido para envio de entregável: payment={payment}")
             return False
         
+        # ✅ CRÍTICO: Não enviar entregável se pagamento não estiver 'paid'
+        allowed_status = ['paid']
+        if payment.status not in allowed_status:
+            logger.error(
+                f"❌ BLOQUEADO: tentativa de envio de acesso com status inválido "
+                f"({payment.status}). Apenas 'paid' é permitido. Payment ID: {payment.payment_id if payment else 'None'}"
+            )
+            logger.error(
+                f"❌ ERRO GRAVE: send_payment_delivery chamado com payment.status != 'paid' "
+                f"(status atual: {payment.status}, payment_id: {payment.payment_id if payment else 'None'})"
+            )
+            return False
+        
         if not payment.bot.token:
             logger.error(f"❌ Bot {payment.bot_id} não tem token configurado - não é possível enviar entregável")
             return False
@@ -515,7 +528,17 @@ def reconcile_paradise_payments():
                             from models import Payment
                             payment_obj = Payment.query.get(p.id)
                             if payment_obj:
-                                send_payment_delivery(payment_obj, bot_manager)
+                                # ✅ CRÍTICO: Refresh antes de validar status
+                                db.session.refresh(payment_obj)
+                                
+                                # ✅ CRÍTICO: Validar status ANTES de chamar send_payment_delivery
+                                if payment_obj.status == 'paid':
+                                    send_payment_delivery(payment_obj, bot_manager)
+                                else:
+                                    logger.error(
+                                        f"❌ ERRO GRAVE: send_payment_delivery chamado com payment.status != 'paid' "
+                                        f"(status atual: {payment_obj.status}, payment_id: {payment_obj.payment_id})"
+                                    )
                         except Exception as e:
                             logger.error(f"❌ Erro ao enviar entregável via reconciliação: {e}")
                         
@@ -626,7 +649,17 @@ def reconcile_pushynpay_payments():
                             from models import Payment
                             payment_obj = Payment.query.get(p.id)
                             if payment_obj:
-                                send_payment_delivery(payment_obj, bot_manager)
+                                # ✅ CRÍTICO: Refresh antes de validar status
+                                db.session.refresh(payment_obj)
+                                
+                                # ✅ CRÍTICO: Validar status ANTES de chamar send_payment_delivery
+                                if payment_obj.status == 'paid':
+                                    send_payment_delivery(payment_obj, bot_manager)
+                                else:
+                                    logger.error(
+                                        f"❌ ERRO GRAVE: send_payment_delivery chamado com payment.status != 'paid' "
+                                        f"(status atual: {payment_obj.status}, payment_id: {payment_obj.payment_id})"
+                                    )
                         except Exception as e:
                             logger.error(f"❌ Erro ao enviar entregável via reconciliação PushynPay: {e}")
                         
@@ -8111,12 +8144,23 @@ def payment_webhook(gateway_type):
                     # Verificar se entregável já foi enviado (via campo adicional ou log)
                     # Por ora, vamos tentar enviar novamente se falhou antes (idempotente)
                     # Mas retornar sucesso para não duplicar estatísticas
-                    try:
-                        resultado = send_payment_delivery(payment, bot_manager)
-                        if resultado:
-                            logger.info(f"✅ Entregável reenviado com sucesso (webhook duplicado)")
-                    except:
-                        pass
+                    
+                    # ✅ CRÍTICO: Refresh antes de validar status
+                    db.session.refresh(payment)
+                    
+                    # ✅ CRÍTICO: Validar status ANTES de chamar send_payment_delivery
+                    if payment.status == 'paid':
+                        try:
+                            resultado = send_payment_delivery(payment, bot_manager)
+                            if resultado:
+                                logger.info(f"✅ Entregável reenviado com sucesso (webhook duplicado)")
+                        except:
+                            pass
+                    else:
+                        logger.error(
+                            f"❌ ERRO GRAVE: send_payment_delivery chamado com payment.status != 'paid' "
+                            f"(status atual: {payment.status}, payment_id: {payment.payment_id})"
+                        )
                     return jsonify({'status': 'already_processed'}), 200
                 
                 # ✅ ATUALIZA STATUS DO PAGAMENTO APENAS SE NÃO ERA PAID (SEM COMMIT AINDA!)
@@ -8223,15 +8267,25 @@ def payment_webhook(gateway_type):
                 # ✅ ENVIAR ENTREGÁVEL E META PIXEL SEMPRE QUE STATUS VIRA 'paid' (CRÍTICO!)
                 # Isso garante que mesmo se estatísticas já foram processadas, o entregável e Meta Pixel são enviados
                 if deve_enviar_entregavel:
-                    logger.info(f"📦 Enviando entregável para payment {payment.payment_id} (status: {payment.status})")
-                    try:
-                        resultado = send_payment_delivery(payment, bot_manager)
-                        if resultado:
-                            logger.info(f"✅ Entregável enviado com sucesso para {payment.payment_id}")
-                        else:
-                            logger.warning(f"⚠️ Falha ao enviar entregável para payment {payment.payment_id}")
-                    except Exception as delivery_error:
-                        logger.exception(f"❌ Erro ao enviar entregável: {delivery_error}")
+                    # ✅ CRÍTICO: Refresh antes de validar status
+                    db.session.refresh(payment)
+                    
+                    # ✅ CRÍTICO: Validar status ANTES de chamar send_payment_delivery
+                    if payment.status == 'paid':
+                        logger.info(f"📦 Enviando entregável para payment {payment.payment_id} (status: {payment.status})")
+                        try:
+                            resultado = send_payment_delivery(payment, bot_manager)
+                            if resultado:
+                                logger.info(f"✅ Entregável enviado com sucesso para {payment.payment_id}")
+                            else:
+                                logger.warning(f"⚠️ Falha ao enviar entregável para payment {payment.payment_id}")
+                        except Exception as delivery_error:
+                            logger.exception(f"❌ Erro ao enviar entregável: {delivery_error}")
+                    else:
+                        logger.error(
+                            f"❌ ERRO GRAVE: send_payment_delivery chamado com payment.status != 'paid' "
+                            f"(status atual: {payment.status}, payment_id: {payment.payment_id})"
+                        )
                     
                     # ============================================================================
                     # ✅ META PIXEL: ENVIAR PURCHASE EVENT (SEMPRE quando status é 'paid')

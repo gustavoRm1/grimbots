@@ -206,15 +206,25 @@ def _force_finalize_payment(payment: Payment) -> None:
 
         db.session.commit()
 
+        # ✅ CRÍTICO: Refresh antes de validar status
+        db.session.refresh(payment)
+
         try:
             send_meta_pixel_purchase_event(payment)
         except Exception as e:
             print(f"⚠️ Forçando meta purchase falhou: {e}")
 
-        try:
-            send_payment_delivery(payment, bot_manager)
-        except Exception as e:
-            print(f"⚠️ Forçando entregável falhou: {e}")
+        # ✅ CRÍTICO: Validar status ANTES de chamar send_payment_delivery
+        if payment.status == 'paid':
+            try:
+                send_payment_delivery(payment, bot_manager)
+            except Exception as e:
+                print(f"⚠️ Forçando entregável falhou: {e}")
+        else:
+            print(
+                f"❌ ERRO GRAVE: send_payment_delivery chamado com payment.status != 'paid' "
+                f"(status atual: {payment.status}, payment_id: {payment.payment_id})"
+            )
 
         print(f"✅ Payment {payment.payment_id} marcado como paid via fallback.")
     except Exception as exc:
