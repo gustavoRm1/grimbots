@@ -154,9 +154,77 @@ def send_meta_pixel_viewcontent_event(bot, bot_user, message, pool_id=None):
             logger.error(f"Erro ao descriptografar access_token do pool {pool.id}: {e}")
             return
         
-        # ✅ USAR UTM E EXTERNAL_ID SALVOS NO BOTUSER (QI 540 - FIX CRÍTICO)
-        # Dados foram salvos quando usuário acessou /go/<slug>
-        # ✅ Agora eventos ViewContent e Purchase têm origem correta!
+        # ✅ CRÍTICO V4.1: RECUPERAR DADOS COMPLETOS DO REDIS (MESMO DO PAGEVIEW!)
+        # ViewContent DEVE usar os MESMOS dados do PageView para garantir matching perfeito!
+        from utils.tracking_service import TrackingServiceV4
+        from utils.meta_pixel import MetaPixelAPI
+        from utils.encryption import decrypt
+        
+        tracking_service_v4 = TrackingServiceV4()
+        tracking_data = {}
+        
+        # ✅ PRIORIDADE 1: Recuperar do tracking_token (se disponível)
+        if hasattr(bot_user, 'tracking_session_id') and bot_user.tracking_session_id:
+            tracking_data = tracking_service_v4.recover_tracking_data(bot_user.tracking_session_id) or {}
+            logger.info(f"✅ ViewContent - tracking_data recuperado do Redis: {len(tracking_data)} campos")
+        
+        # ✅ PRIORIDADE 2: Se não tem tracking_token, usar dados do BotUser (fallback)
+        if not tracking_data:
+            tracking_data = {
+                'fbclid': getattr(bot_user, 'fbclid', None),
+                'fbp': getattr(bot_user, 'fbp', None),
+                'fbc': getattr(bot_user, 'fbc', None),
+                'client_ip': getattr(bot_user, 'ip_address', None),
+                'client_user_agent': getattr(bot_user, 'user_agent', None),
+                'utm_source': getattr(bot_user, 'utm_source', None),
+                'utm_campaign': getattr(bot_user, 'utm_campaign', None),
+                'campaign_code': getattr(bot_user, 'campaign_code', None)
+            }
+            logger.info(f"✅ ViewContent - usando dados do BotUser (fallback)")
+        
+        # ✅ CRÍTICO: Construir user_data usando MetaPixelAPI._build_user_data() (MESMO DO PAGEVIEW!)
+        # Isso garante que external_id seja hashado corretamente e fbp/fbc sejam incluídos
+        external_id_value = tracking_data.get('fbclid') or getattr(bot_user, 'fbclid', None)
+        fbp_value = tracking_data.get('fbp') or getattr(bot_user, 'fbp', None)
+        fbc_value = tracking_data.get('fbc') or getattr(bot_user, 'fbc', None)
+        ip_value = tracking_data.get('client_ip') or getattr(bot_user, 'ip_address', None)
+        ua_value = tracking_data.get('client_user_agent') or getattr(bot_user, 'user_agent', None)
+        
+        # ✅ Usar _build_user_data para garantir formato correto (hash SHA256, array external_id, etc)
+        user_data = MetaPixelAPI._build_user_data(
+            customer_user_id=str(bot_user.telegram_user_id),  # ✅ Telegram ID
+            external_id=external_id_value,  # ✅ fbclid (será hashado)
+            email=None,  # BotUser não tem email
+            phone=None,  # BotUser não tem phone
+            client_ip=ip_value,
+            client_user_agent=ua_value,
+            fbp=fbp_value,  # ✅ CRÍTICO: FBP do PageView
+            fbc=fbc_value  # ✅ CRÍTICO: FBC do PageView
+        )
+        
+        # ✅ Construir custom_data (filtrar None/vazios)
+        custom_data = {
+            'content_type': 'product'
+        }
+        if pool.id:
+            custom_data['content_ids'] = [str(pool.id)]
+        if pool.name:
+            custom_data['content_name'] = pool.name
+        if bot.id:
+            custom_data['bot_id'] = bot.id
+        if bot.username:
+            custom_data['bot_username'] = bot.username
+        if tracking_data.get('utm_source') or getattr(bot_user, 'utm_source', None):
+            custom_data['utm_source'] = tracking_data.get('utm_source') or getattr(bot_user, 'utm_source', None)
+        if tracking_data.get('utm_campaign') or getattr(bot_user, 'utm_campaign', None):
+            custom_data['utm_campaign'] = tracking_data.get('utm_campaign') or getattr(bot_user, 'utm_campaign', None)
+        if tracking_data.get('campaign_code') or getattr(bot_user, 'campaign_code', None):
+            custom_data['campaign_code'] = tracking_data.get('campaign_code') or getattr(bot_user, 'campaign_code', None)
+        
+        # ✅ CRÍTICO: event_source_url (mesmo do PageView)
+        event_source_url = tracking_data.get('event_source_url') or tracking_data.get('first_page')
+        if not event_source_url and pool.slug:
+            event_source_url = f'https://app.grimbots.online/go/{pool.slug}'
         
         # ============================================================================
         # ✅ ENFILEIRAR EVENTO VIEWCONTENT (ASSÍNCRONO - MVP DIA 2)
@@ -169,22 +237,28 @@ def send_meta_pixel_viewcontent_event(bot, bot_user, message, pool_id=None):
             'event_time': int(time.time()),
             'event_id': event_id,
             'action_source': 'website',
-            'user_data': {
-                'external_id': bot_user.external_id or f'user_{bot_user.telegram_user_id}',
-                # 🎯 TRACKING ELITE: Usar IP/UA capturados no redirect
-                'client_ip_address': bot_user.ip_address if hasattr(bot_user, 'ip_address') and bot_user.ip_address else None,
-                'client_user_agent': bot_user.user_agent if hasattr(bot_user, 'user_agent') and bot_user.user_agent else None
-            },
-            'custom_data': {
-                'content_id': str(pool.id),
-                'content_name': pool.name,
-                'bot_id': bot.id,
-                'bot_username': bot.username,
-                'utm_source': bot_user.utm_source,
-                'utm_campaign': bot_user.utm_campaign,
-                'campaign_code': bot_user.campaign_code
-            }
+            'event_source_url': event_source_url,  # ✅ ADICIONAR
+            'user_data': user_data,  # ✅ AGORA COMPLETO (fbp, fbc, external_id hashado, ip, ua)
+            'custom_data': custom_data  # ✅ Sempre dict (nunca None)
         }
+        
+        # ✅ LOG: Verificar dados enviados
+        external_ids = user_data.get('external_id', [])
+        attributes_count = sum([
+            1 if external_ids else 0,
+            1 if user_data.get('em') else 0,
+            1 if user_data.get('ph') else 0,
+            1 if user_data.get('client_ip_address') else 0,
+            1 if user_data.get('client_user_agent') else 0,
+            1 if user_data.get('fbp') else 0,
+            1 if user_data.get('fbc') else 0
+        ])
+        logger.info(f"[META VIEWCONTENT] ViewContent - User Data: {attributes_count}/7 atributos | " +
+                   f"external_id={'✅' if external_ids else '❌'} | " +
+                   f"fbp={'✅' if user_data.get('fbp') else '❌'} | " +
+                   f"fbc={'✅' if user_data.get('fbc') else '❌'} | " +
+                   f"ip={'✅' if user_data.get('client_ip_address') else '❌'} | " +
+                   f"ua={'✅' if user_data.get('client_user_agent') else '❌'}")
         
         # ✅ ENFILEIRAR COM PRIORIDADE MÉDIA
         task = send_meta_event.apply_async(

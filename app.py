@@ -7030,10 +7030,21 @@ def send_meta_pixel_pageview_event(pool, request, pageview_event_id=None, tracki
         from utils.tracking_service import TrackingService, TrackingServiceV4
         tracking_service_v4 = TrackingServiceV4()
         
+        # ✅ GARANTIR que tracking_data está SEMPRE inicializado (evita NameError)
         tracking_data = {}
         if tracking_token:
-            tracking_data = tracking_service_v4.recover_tracking_data(tracking_token) or {}
-            logger.info(f"✅ PageView - tracking_data recuperado do Redis: {len(tracking_data)} campos")
+            try:
+                tracking_data = tracking_service_v4.recover_tracking_data(tracking_token) or {}
+                if tracking_data:
+                    logger.info(f"✅ PageView - tracking_data recuperado do Redis: {len(tracking_data)} campos")
+            except Exception as e:
+                logger.warning(f"⚠️ Erro ao recuperar tracking_data do Redis: {e}")
+                tracking_data = {}  # ✅ Garantir que está definido mesmo em caso de erro
+        
+        # ✅ VALIDAÇÃO: Garantir que tracking_data está no escopo (debug)
+        if 'tracking_data' not in locals():
+            logger.error(f"❌ CRÍTICO: tracking_data não está no escopo local!")
+            tracking_data = {}  # ✅ Forçar inicialização
         
         # ✅ PATCH 2: RECUPERAR _fbp e _fbc (Prioridade: tracking_data → BotUser → cookie)
         from utils.tracking_service import TrackingService
@@ -7050,12 +7061,8 @@ def send_meta_pixel_pageview_event(pool, request, pageview_event_id=None, tracki
             if fbc_value:
                 logger.info(f"[META PAGEVIEW] PageView - fbc recuperado do tracking_data (Redis): {fbc_value[:20]}...")
         
-        # ✅ PATCH 2: Prioridade 2 - BotUser (se disponível)
-        if not fbc_value and bot_user and getattr(bot_user, 'fbc', None):
-            fbc_value = bot_user.fbc
-            logger.info(f"[META PAGEVIEW] PageView - fbc recuperado do BotUser: {fbc_value[:20]}...")
-        
-        # ✅ PATCH 2: Prioridade 3 - Cookie do browser (fallback)
+        # ✅ PATCH 2: Prioridade 2 - Cookie do browser (fallback)
+        # ✅ NOTA: BotUser não existe no PageView (usuário ainda não deu /start)
         if not fbc_value:
             fbc_value = request.cookies.get('_fbc', '') or None
             if fbc_value:
