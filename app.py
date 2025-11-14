@@ -4199,14 +4199,15 @@ def public_redirect(slug):
             logger.warning(f"⚠️ Redirect - Erro ao gerar fbp: {e}")
             fbp_cookie = None
 
-    # ✅ CRÍTICO: Gerar fbc SEMPRE que houver fbclid, mesmo sem cookie _fbc
+    # ✅ CRÍTICO: NUNCA gerar fbc sintético - sempre usar o valor capturado do cookie do browser
+    # Se não tiver cookie _fbc, deixar None (Meta aceita sem fbc, mas com fbc é melhor para atribuição)
+    # Gerar um novo fbc com timestamp atual quebra a atribuição porque o Meta espera o timestamp do clique original
     if not fbc_cookie and fbclid and not is_crawler_request:
-        try:
-            fbc_cookie = TrackingService.generate_fbc(fbclid)
-            logger.info(f"✅ Redirect - fbc gerado a partir do fbclid: {fbc_cookie[:50]}... (len={len(fbc_cookie)})")
-        except Exception as e:
-            logger.warning(f"⚠️ Redirect - Erro ao gerar fbc: {e}")
-            fbc_cookie = None
+        logger.warning(f"⚠️ Redirect - fbc não encontrado no cookie, mas fbclid presente: {fbclid[:30]}...")
+        logger.warning(f"   Meta pode ter atribuição reduzida (sem fbc)")
+        # ❌ REMOVIDO: Não gerar fbc sintético (causa erro de atribuição no Meta)
+        # fbc_cookie = TrackingService.generate_fbc(fbclid)  # ❌ ERRADO
+        fbc_cookie = None  # ✅ CORRETO: Deixar None se não tiver cookie
     elif fbc_cookie:
         logger.info(f"✅ Redirect - fbc capturado do cookie: {fbc_cookie[:50]}... (len={len(fbc_cookie)})")
     elif not fbclid:
@@ -7074,14 +7075,20 @@ def send_meta_pixel_pageview_event(pool, request, pageview_event_id=None, tracki
             fbp_value = TrackingService.generate_fbp()
             logger.info(f"🔑 PageView - fbp gerado no servidor (fallback): {fbp_value[:20]}...")
         
-        # ✅ PRIORIDADE 4: Gerar _fbc se não existir mas tiver fbclid
+        # ✅ PRIORIDADE 4: NUNCA gerar fbc sintético no PageView
+        # Se não tiver fbc, deixar None (Meta aceita sem fbc, mas com fbc é melhor para atribuição)
+        # Gerar um novo fbc com timestamp atual quebra a atribuição porque o Meta espera o timestamp do clique original
         if not fbc_value and external_id and external_id.startswith('PAZ'):
-            fbc_value = TrackingService.generate_fbc(external_id)
-            if fbc_value:
-                logger.info(f"🔑 PageView - _fbc gerado automaticamente: {fbc_value[:50]}...")
+            logger.warning(f"⚠️ PageView - fbc não encontrado, mas fbclid presente: {external_id[:30]}...")
+            logger.warning(f"   Meta pode ter atribuição reduzida (sem fbc)")
+            # ❌ REMOVIDO: Não gerar fbc sintético (causa erro de atribuição no Meta)
+            # fbc_value = TrackingService.generate_fbc(external_id)  # ❌ ERRADO
+            fbc_value = None  # ✅ CORRETO: Deixar None se não tiver cookie
         
         # ✅ CRÍTICO: Se fbp veio do cookie do browser, atualizar Redis (browser gerou!)
         # Isso garante que o Purchase terá o fbp correto
+        # ✅ NOTA: event_source_url será salvo via pageview_context (TrackingServiceV4)
+        # TrackingService.save_tracking_data() é legado e não aceita event_source_url
         if fbp_value and external_id and external_id.startswith('PAZ'):
             try:
                 TrackingService.save_tracking_data(
@@ -7249,12 +7256,17 @@ def send_meta_pixel_pageview_event(pool, request, pageview_event_id=None, tracki
         
         logger.info(f"📤 PageView enfileirado: Pool {pool.id} | Event ID: {event_id} | Task: {task.id}")
         
+        # ✅ CRÍTICO: Capturar event_source_url para Purchase
+        event_source_url = request.url or f'https://app.grimbots.online/go/{pool.slug}'
+        
         pageview_context = {
             'pageview_event_id': event_id,
             'fbp': fbp_value,
             'fbc': fbc_value,
             'client_ip': request.remote_addr,
             'client_user_agent': request.headers.get('User-Agent', ''),
+            'event_source_url': event_source_url,  # ✅ NOVO: URL da página onde usuário clicou
+            'first_page': event_source_url,  # ✅ NOVO: Fallback para Purchase
             'tracking_token': tracking_token,
             'task_id': task.id if task else None
         }
@@ -7501,20 +7513,48 @@ def send_meta_pixel_purchase_event(payment):
             logger.info(f"✅ Purchase - fbclid salvo no bot_user: {bot_user.fbclid[:50]}... (len={len(bot_user.fbclid)})")
 
         # ✅ FALLBACK: Tentar recuperar fbp/fbc do bot_user se não estiver no tracking_data
+        fbp_source = None
+        fbc_source = None
+        
         if not fbp_value and bot_user and getattr(bot_user, 'fbp', None):
             fbp_value = bot_user.fbp
+            fbp_source = 'BotUser'
             logger.info(f"✅ Purchase - fbp recuperado do bot_user: {fbp_value[:30]}...")
         if not fbc_value and bot_user and getattr(bot_user, 'fbc', None):
             fbc_value = bot_user.fbc
+            fbc_source = 'BotUser'
             logger.info(f"✅ Purchase - fbc recuperado do bot_user: {fbc_value[:50]}...")
         
         # ✅ FALLBACK FINAL: Tentar recuperar do payment (se foi salvo anteriormente)
         if not fbp_value and getattr(payment, 'fbp', None):
             fbp_value = payment.fbp
+            fbp_source = 'Payment'
             logger.info(f"✅ Purchase - fbp recuperado do payment: {fbp_value[:30]}...")
         if not fbc_value and getattr(payment, 'fbc', None):
             fbc_value = payment.fbc
+            fbc_source = 'Payment'
             logger.info(f"✅ Purchase - fbc recuperado do payment: {fbc_value[:50]}...")
+        
+        # ✅ LOG CRÍTICO: Rastrear origem de fbp e fbc
+        if fbp_value:
+            if not fbp_source:
+                if tracking_data.get('fbp') == fbp_value:
+                    fbp_source = 'Redis (tracking_data)'
+                else:
+                    fbp_source = 'Desconhecida'
+            logger.info(f"✅ Purchase - fbp recuperado de: {fbp_source} | Valor: {fbp_value[:30]}...")
+        else:
+            logger.warning(f"⚠️ Purchase - fbp NÃO encontrado em nenhuma fonte! Meta pode ter atribuição reduzida.")
+        
+        if fbc_value:
+            if not fbc_source:
+                if tracking_data.get('fbc') == fbc_value:
+                    fbc_source = 'Redis (tracking_data)'
+                else:
+                    fbc_source = 'Desconhecida'
+            logger.info(f"✅ Purchase - fbc recuperado de: {fbc_source} | Valor: {fbc_value[:50]}...")
+        else:
+            logger.warning(f"⚠️ Purchase - fbc NÃO encontrado em nenhuma fonte! Meta pode ter atribuição reduzida.")
         
         # ✅ CRÍTICO: NUNCA gerar fbc sintético - sempre usar o valor capturado do cookie do browser
         # Se não tiver fbc, deixar None (Meta aceita sem fbc, mas com fbc é melhor para atribuição)
@@ -7736,12 +7776,26 @@ def send_meta_pixel_purchase_event(payment):
         # ✅ LOG CRÍTICO: Mostrar custom_data completo
         logger.info(f"📊 Meta Purchase - Custom Data: {json.dumps(custom_data, ensure_ascii=False)}")
         
-        # Construir event_data completo
-        event_source_url = (
-            tracking_data.get('event_source_url')
-            or tracking_data.get('landing_url')
-            or (f'https://app.grimbots.online/go/{payment.pool.slug}' if getattr(payment, 'pool', None) and getattr(payment.pool, 'slug', None) else f'https://t.me/{payment.bot.username}')
-        )
+        # ✅ CRÍTICO: Construir event_source_url com múltiplos fallbacks
+        # PRIORIDADE 1: event_source_url do Redis (tracking_data) - MAIS CONFIÁVEL
+        event_source_url = tracking_data.get('event_source_url')
+        
+        # PRIORIDADE 2: first_page do Redis (fallback)
+        if not event_source_url:
+            event_source_url = tracking_data.get('first_page')
+        
+        # PRIORIDADE 3: landing_url do Redis (fallback legado)
+        if not event_source_url:
+            event_source_url = tracking_data.get('landing_url')
+        
+        # PRIORIDADE 4: URL do pool (fallback final)
+        if not event_source_url:
+            if getattr(payment, 'pool', None) and getattr(payment.pool, 'slug', None):
+                event_source_url = f'https://app.grimbots.online/go/{payment.pool.slug}'
+            else:
+                event_source_url = f'https://t.me/{payment.bot.username}'
+        
+        logger.info(f"✅ Purchase - event_source_url recuperado: {event_source_url}")
 
         # ✅ CRÍTICO: creation_time REMOVIDO - Meta está rejeitando (erro 2804019)
         # Se necessário adicionar no futuro, usar: 'creation_time': event_time (sempre igual a event_time, em segundos)
@@ -7756,6 +7810,55 @@ def send_meta_pixel_purchase_event(payment):
             'custom_data': custom_data
             # ✅ creation_time não incluído (opcional e estava causando erro)
         }
+        
+        # ✅ VALIDAÇÃO FINAL: Garantir que todos os campos obrigatórios estão presentes
+        required_fields = {
+            'event_name': event_data.get('event_name'),
+            'event_time': event_data.get('event_time'),
+            'event_id': event_data.get('event_id'),
+            'action_source': event_data.get('action_source'),
+            'event_source_url': event_data.get('event_source_url'),
+            'user_data': event_data.get('user_data'),
+        }
+        
+        missing_fields = [k for k, v in required_fields.items() if not v]
+        if missing_fields:
+            logger.error(f"❌ Purchase - Campos obrigatórios ausentes: {missing_fields}")
+            logger.error(f"   Meta pode rejeitar evento ou reduzir match quality")
+            logger.error(f"   Payment ID: {payment.payment_id} | Pool: {pool.name}")
+            # ❌ NÃO enviar evento sem campos obrigatórios
+            return  # ✅ Retornar sem enviar (evita erro silencioso)
+        
+        # ✅ VALIDAÇÃO: user_data deve ter pelo menos external_id ou client_ip_address
+        if not user_data.get('external_id') and not user_data.get('client_ip_address'):
+            logger.error(f"❌ Purchase - user_data deve ter pelo menos external_id ou client_ip_address")
+            logger.error(f"   Meta rejeita eventos sem user_data válido")
+            logger.error(f"   Payment ID: {payment.payment_id} | Pool: {pool.name}")
+            # ❌ NÃO enviar evento sem user_data válido
+            return  # ✅ Retornar sem enviar (evita erro silencioso)
+        
+        # ✅ VALIDAÇÃO: external_id não pode ser None
+        if not user_data.get('external_id'):
+            logger.error(f"❌ Purchase - external_id AUSENTE! Meta rejeita evento sem external_id.")
+            logger.error(f"   Payment ID: {payment.payment_id} | Pool: {pool.name}")
+            return  # ✅ Retornar sem enviar (evita erro silencioso)
+        
+        # ✅ VALIDAÇÃO: client_ip_address e client_user_agent são obrigatórios para eventos web
+        if event_data.get('action_source') == 'website':
+            if not user_data.get('client_ip_address'):
+                logger.error(f"❌ Purchase - client_ip_address AUSENTE! Meta rejeita eventos web sem IP.")
+                logger.error(f"   Payment ID: {payment.payment_id} | Pool: {pool.name}")
+                logger.error(f"   tracking_data tem ip: {bool(tracking_data.get('client_ip'))}")
+                logger.error(f"   payment tem client_ip: {bool(getattr(payment, 'client_ip', None))}")
+                logger.error(f"   bot_user tem ip_address: {bool(bot_user and getattr(bot_user, 'ip_address', None))}")
+                return  # ✅ Retornar sem enviar (evita erro silencioso)
+            if not user_data.get('client_user_agent'):
+                logger.error(f"❌ Purchase - client_user_agent AUSENTE! Meta rejeita eventos web sem User-Agent.")
+                logger.error(f"   Payment ID: {payment.payment_id} | Pool: {pool.name}")
+                logger.error(f"   tracking_data tem ua: {bool(tracking_data.get('client_user_agent'))}")
+                logger.error(f"   payment tem client_user_agent: {bool(getattr(payment, 'client_user_agent', None))}")
+                logger.error(f"   bot_user tem user_agent: {bool(bot_user and getattr(bot_user, 'user_agent', None))}")
+                return  # ✅ Retornar sem enviar (evita erro silencioso)
         
         # ✅ ENFILEIRAR COM PRIORIDADE ALTA (Purchase é crítico!)
         try:
