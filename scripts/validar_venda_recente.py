@@ -64,16 +64,28 @@ def validar_venda_recente():
     print()
     
     with app.app_context():
-        # Buscar venda mais recente (últimas 2 horas)
-        cutoff = datetime.utcnow() - timedelta(hours=2)
-        payment = Payment.query.filter(
+        # Buscar vendas recentes (últimas 24 horas)
+        cutoff = datetime.utcnow() - timedelta(hours=24)
+        payments = Payment.query.filter(
             Payment.created_at >= cutoff
-        ).order_by(Payment.created_at.desc()).first()
+        ).order_by(Payment.created_at.desc()).limit(10).all()
         
-        if not payment:
-            print("❌ Nenhuma venda encontrada nas últimas 2 horas")
-            print("   Tente fazer uma nova venda ou ajustar o período")
+        if not payments:
+            print("❌ Nenhuma venda encontrada nas últimas 24 horas")
+            print("   Tente fazer uma nova venda")
             return 1
+        
+        # Se houver múltiplas vendas, mostrar lista
+        if len(payments) > 1:
+            print(f"✅ Encontradas {len(payments)} vendas nas últimas 24 horas:")
+            print()
+            for i, p in enumerate(payments, 1):
+                print(f"   {i}. Payment ID: {p.payment_id} | Status: {p.status} | Valor: R$ {p.amount:.2f} | Criado: {p.created_at}")
+            print()
+            print("   Validando a venda MAIS RECENTE...")
+            print()
+        
+        payment = payments[0]
         
         print(f"✅ Venda encontrada:")
         print(f"   Payment ID: {payment.payment_id}")
