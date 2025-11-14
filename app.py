@@ -7162,12 +7162,16 @@ def send_meta_pixel_pageview_event(pool, request, pageview_event_id=None, tracki
         
         # ✅ CRÍTICO: Usar _build_user_data com external_id string (será hashado internamente)
         # Isso garante que PageView e Purchase usem EXATAMENTE o mesmo formato
+        # ✅ CORREÇÃO: Usar mesma lógica de captura de IP do public_redirect
+        # Prioridade: X-Forwarded-For > remote_addr (para funcionar com proxy reverso)
+        client_ip = request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0].strip()
+        
         user_data = MetaPixelAPI._build_user_data(
             customer_user_id=None,  # Não temos telegram_user_id no PageView
             external_id=external_id_for_hash,  # ✅ fbclid será hashado pelo _build_user_data
             email=None,
             phone=None,
-            client_ip=request.remote_addr,
+            client_ip=client_ip,  # ✅ CORRIGIDO: Usa fallback para X-Forwarded-For (mesma lógica do public_redirect)
             client_user_agent=request.headers.get('User-Agent', ''),
             fbp=fbp_value,  # ✅ CRÍTICO: _fbp do cookie ou Redis
             fbc=fbc_value  # ✅ CRÍTICO: _fbc do cookie, Redis ou gerado
@@ -7416,11 +7420,33 @@ def send_meta_pixel_purchase_event(payment):
         tracking_service_v4 = TrackingServiceV4()
 
         tracking_data = {}
-        if getattr(payment, "tracking_token", None):
+        payment_tracking_token = getattr(payment, "tracking_token", None)
+        
+        # ✅ LOG DETALHADO: Mostrar tracking_token do Payment
+        if payment_tracking_token:
+            logger.info(f"[META PURCHASE] Purchase - payment.tracking_token: {payment_tracking_token[:30]}... (len={len(payment_tracking_token)})")
+            # Verificar se token existe no Redis
             try:
-                tracking_data = tracking_service_v4.recover_tracking_data(payment.tracking_token) or {}
-            except Exception:
-                logger.exception("Erro recovering tracking token")
+                exists = tracking_service_v4.redis.exists(f"tracking:{payment_tracking_token}")
+                logger.info(f"[META PURCHASE] Purchase - Token existe no Redis: {'✅' if exists else '❌'}")
+                if exists:
+                    ttl = tracking_service_v4.redis.ttl(f"tracking:{payment_tracking_token}")
+                    logger.info(f"[META PURCHASE] Purchase - TTL restante: {ttl} segundos ({'expirando' if ttl < 3600 else 'OK'})")
+            except Exception as e:
+                logger.warning(f"[META PURCHASE] Purchase - Erro ao verificar token no Redis: {e}")
+        else:
+            logger.warning(f"[META PURCHASE] Purchase - payment.tracking_token AUSENTE! Payment ID: {payment.payment_id}")
+            logger.warning(f"[META PURCHASE] Purchase - Isso indica que o usuário NÃO veio do redirect ou token não foi salvo")
+        
+        if payment_tracking_token:
+            try:
+                tracking_data = tracking_service_v4.recover_tracking_data(payment_tracking_token) or {}
+                if tracking_data:
+                    logger.info(f"[META PURCHASE] Purchase - tracking_data recuperado do Redis (usando payment.tracking_token): {len(tracking_data)} campos")
+                else:
+                    logger.warning(f"[META PURCHASE] Purchase - tracking_data VAZIO no Redis para token: {payment_tracking_token[:30]}...")
+            except Exception as e:
+                logger.exception(f"[META PURCHASE] Purchase - Erro ao recuperar tracking_token do Redis: {e}")
 
         if not tracking_data:
             try:
@@ -7508,10 +7534,31 @@ def send_meta_pixel_purchase_event(payment):
         
         # ✅ LOG DIAGNÓSTICO: Verificar o que foi recuperado do tracking_data
         logger.info(f"[META PURCHASE] Purchase - tracking_data recuperado: fbp={'✅' if fbp_value else '❌'}, fbc={'✅' if fbc_value else '❌'}, fbclid={'✅' if external_id_value else '❌'}")
+        
+        # ✅ LOG CRÍTICO: Mostrar origem dos dados (para identificar remarketing vs campanha nova)
+        if external_id_value:
+            logger.info(f"[META PURCHASE] Purchase - ORIGEM: Campanha NOVA (fbclid presente no tracking_data)")
+        elif getattr(payment, 'fbclid', None):
+            logger.info(f"[META PURCHASE] Purchase - ORIGEM: Campanha NOVA (fbclid no Payment, mas não no Redis)")
+        else:
+            logger.warning(f"[META PURCHASE] Purchase - ORIGEM: REMARKETING ou Tráfego DIRETO (sem fbclid)")
+        
+        # ✅ LOG CRÍTICO: Mostrar campos do Payment e BotUser
+        logger.info(f"[META PURCHASE] Purchase - Payment fields: fbp={bool(getattr(payment, 'fbp', None))}, fbc={bool(getattr(payment, 'fbc', None))}, fbclid={bool(getattr(payment, 'fbclid', None))}")
+        logger.info(f"[META PURCHASE] Purchase - BotUser fields: ip_address={bool(bot_user and getattr(bot_user, 'ip_address', None))}, user_agent={bool(bot_user and getattr(bot_user, 'user_agent', None))}")
+        # ✅ FALLBACK: Recuperar IP e UA do Payment (se existirem - mas Payment não tem esses campos)
         if not ip_value and getattr(payment, 'client_ip', None):
             ip_value = payment.client_ip
         if not user_agent_value and getattr(payment, 'client_user_agent', None):
             user_agent_value = payment.client_user_agent
+        
+        # ✅ FALLBACK CRÍTICO: Recuperar IP e UA do BotUser (campos existem: ip_address e user_agent)
+        if not ip_value and bot_user and getattr(bot_user, 'ip_address', None):
+            ip_value = bot_user.ip_address
+            logger.info(f"[META PURCHASE] Purchase - IP recuperado do BotUser (fallback): {ip_value}")
+        if not user_agent_value and bot_user and getattr(bot_user, 'user_agent', None):
+            user_agent_value = bot_user.user_agent
+            logger.info(f"[META PURCHASE] Purchase - User Agent recuperado do BotUser (fallback): {user_agent_value[:50]}...")
         
         # ✅ CRÍTICO: Recuperar pageview_event_id para deduplicação (prioridade: tracking_data > payment)
         if not event_id:
