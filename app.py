@@ -7443,6 +7443,13 @@ def send_meta_pixel_purchase_event(payment):
                 tracking_data = tracking_service_v4.recover_tracking_data(payment_tracking_token) or {}
                 if tracking_data:
                     logger.info(f"[META PURCHASE] Purchase - tracking_data recuperado do Redis (usando payment.tracking_token): {len(tracking_data)} campos")
+                    # ✅ LOG CRÍTICO: Mostrar TODOS os campos para identificar o problema
+                    logger.info(f"[META PURCHASE] Purchase - Campos no tracking_data: {list(tracking_data.keys())}")
+                    for key, value in tracking_data.items():
+                        if value:
+                            logger.info(f"[META PURCHASE] Purchase - {key}: {str(value)[:50]}...")
+                        else:
+                            logger.warning(f"[META PURCHASE] Purchase - {key}: None/Empty")
                 else:
                     logger.warning(f"[META PURCHASE] Purchase - tracking_data VAZIO no Redis para token: {payment_tracking_token[:30]}...")
             except Exception as e:

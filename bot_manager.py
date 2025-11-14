@@ -4522,11 +4522,23 @@ Seu pagamento ainda não foi confirmado.
                             utm_campaign=utm_campaign
                         )
                         logger.warning("⚠️ Token de tracking ausente - gerado novo %s para BotUser %s (customer_user_id: %s)", tracking_token, bot_user.id if bot_user else 'N/A', customer_user_id)
+                        
+                        # ✅ CRÍTICO: Incluir fbp, fbc, ip, ua do BotUser no seed_payload
+                        # Isso garante que mesmo quando novo token é gerado, dados de tracking estejam disponíveis
+                        fbp_from_botuser = getattr(bot_user, 'fbp', None) if bot_user else None
+                        fbc_from_botuser = getattr(bot_user, 'fbc', None) if bot_user else None
+                        ip_from_botuser = getattr(bot_user, 'ip_address', None) if bot_user else None
+                        ua_from_botuser = getattr(bot_user, 'user_agent', None) if bot_user else None
+                        
                         seed_payload = {
                             "tracking_token": tracking_token,
                             "bot_id": bot_id,
                             "customer_user_id": customer_user_id,
                             "fbclid": fbclid,
+                            "fbp": fbp_from_botuser,  # ✅ CRÍTICO: Incluir fbp do BotUser
+                            "fbc": fbc_from_botuser,  # ✅ CRÍTICO: Incluir fbc do BotUser
+                            "client_ip": ip_from_botuser,  # ✅ CRÍTICO: Incluir IP do BotUser
+                            "client_user_agent": ua_from_botuser,  # ✅ CRÍTICO: Incluir UA do BotUser
                             "utm_source": utm_source,
                             "utm_medium": utm_medium,
                             "utm_campaign": utm_campaign,
@@ -4536,6 +4548,7 @@ Seu pagamento ainda não foi confirmado.
                             "created_from": "generate_pix_payment",
                         }
                         tracking_service.save_tracking_token(tracking_token, {k: v for k, v in seed_payload.items() if v})
+                        logger.info(f"✅ Seed payload salvo com {len([k for k, v in seed_payload.items() if v])} campos: fbp={'✅' if fbp_from_botuser else '❌'}, fbc={'✅' if fbc_from_botuser else '❌'}, ip={'✅' if ip_from_botuser else '❌'}, ua={'✅' if ua_from_botuser else '❌'}")
                         if bot_user:
                             bot_user.tracking_session_id = tracking_token
                     if not tracking_data_v4:
