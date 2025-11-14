@@ -11,6 +11,22 @@ from pathlib import Path
 # Adicionar diretório raiz ao path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+# ✅ CRÍTICO: Carregar variáveis de ambiente ANTES de importar app
+from dotenv import load_dotenv
+load_dotenv()
+
+# Verificar se ENCRYPTION_KEY está configurada
+if not os.environ.get('ENCRYPTION_KEY'):
+    print("⚠️  ENCRYPTION_KEY não configurada, tentando carregar do .env...")
+    env_path = Path(__file__).parent.parent / '.env'
+    if env_path.exists():
+        with open(env_path, 'r') as f:
+            for line in f:
+                if line.startswith('ENCRYPTION_KEY='):
+                    key = line.split('=', 1)[1].strip()
+                    os.environ['ENCRYPTION_KEY'] = key
+                    break
+
 try:
     from app import app, db
     from models import Payment
@@ -18,6 +34,14 @@ except ImportError as e:
     print(f"❌ Erro ao importar módulos: {e}")
     print("Certifique-se de estar executando do diretório raiz do projeto")
     sys.exit(1)
+except RuntimeError as e:
+    if 'ENCRYPTION_KEY' in str(e):
+        print(f"❌ Erro: {e}")
+        print("\nSolução:")
+        print("1. Verificar se .env existe e tem ENCRYPTION_KEY")
+        print("2. Ou executar: export ENCRYPTION_KEY=$(grep ENCRYPTION_KEY .env | cut -d '=' -f2)")
+        sys.exit(1)
+    raise
 
 # IDs das transações fornecidas pelo gateway
 TRANSACOES_GATEWAY = [
