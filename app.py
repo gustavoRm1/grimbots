@@ -7119,13 +7119,21 @@ def send_meta_pixel_pageview_event(pool, request, pageview_event_id=None, tracki
         fbc_value = None
         
         # ✅ PATCH 2: Prioridade 1 - tracking_data (Redis) - MAIS CONFIÁVEL
+        fbc_origin = None
         if tracking_data:
             fbp_value = tracking_data.get('fbp') or None
             fbc_value = tracking_data.get('fbc') or None
+            fbc_origin = tracking_data.get('fbc_origin')
             if fbp_value:
                 logger.info(f"[META PAGEVIEW] PageView - fbp recuperado do tracking_data (Redis): {fbp_value[:20]}...")
             if fbc_value:
                 logger.info(f"[META PAGEVIEW] PageView - fbc recuperado do tracking_data (Redis): {fbc_value[:20]}...")
+        
+        # ✅ CRÍTICO V4.1: Validar fbc_origin para garantir que só enviamos fbc real (cookie)
+        # Se fbc_origin = 'synthetic' ou None, IGNORAR (não usar fbc sintético)
+        if fbc_value and fbc_origin == 'synthetic':
+            logger.warning(f"[META PAGEVIEW] PageView - fbc IGNORADO (origem: synthetic) - Meta não atribui com fbc sintético")
+            fbc_value = None
         
         # ✅ PATCH 2: Prioridade 2 - Cookie do browser (fallback)
         # ✅ NOTA: BotUser não existe no PageView (usuário ainda não deu /start)
@@ -7138,7 +7146,10 @@ def send_meta_pixel_pageview_event(pool, request, pageview_event_id=None, tracki
         if not fbc_value:
             logger.warning(f"[META PAGEVIEW] PageView - fbc ausente no Redis, BotUser e cookie - Meta pode ter atribuição reduzida")
         else:
-            logger.info(f"[META PAGEVIEW] PageView - fbc confirmado: {fbc_value[:50]}...")
+            if fbc_origin == 'cookie':
+                logger.info(f"[META PAGEVIEW] PageView - fbc REAL confirmado (origem: cookie): {fbc_value[:50]}...")
+            else:
+                logger.info(f"[META PAGEVIEW] PageView - fbc confirmado (origem: cookie do browser): {fbc_value[:50]}...")
         
         # ✅ FBP: Prioridade similar (tracking_data → cookie → gerar)
         if not fbp_value:
