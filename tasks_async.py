@@ -447,12 +447,17 @@ def process_start_async(
                             fbclid_completo_redis = tracking_elite.get('fbclid')
                             
                             # ✅ CRÍTICO: Salvar fbp e fbc no bot_user para uso posterior no Purchase
-                            if tracking_elite.get('fbp'):
+                            # ✅ CORREÇÃO SÊNIOR: Preservar FBP do Redis, não atualizar com cookie novo
+                            if tracking_elite.get('fbp') and not bot_user.fbp:
                                 bot_user.fbp = tracking_elite.get('fbp')
                                 logger.info(f"✅ process_start_async - fbp salvo no bot_user: {bot_user.fbp[:30]}...")
-                            if tracking_elite.get('fbc'):
+                            elif tracking_elite.get('fbp') and bot_user.fbp:
+                                logger.info(f"✅ process_start_async - fbp já existe no bot_user, preservando: {bot_user.fbp[:30]}... (não atualizando com {tracking_elite.get('fbp')[:30]}...)")
+                            if tracking_elite.get('fbc') and not bot_user.fbc:
                                 bot_user.fbc = tracking_elite.get('fbc')
                                 logger.info(f"✅ process_start_async - fbc salvo no bot_user: {bot_user.fbc[:50]}...")
+                            elif tracking_elite.get('fbc') and bot_user.fbc:
+                                logger.info(f"✅ process_start_async - fbc já existe no bot_user, preservando: {bot_user.fbc[:50]}... (não atualizando com {tracking_elite.get('fbc')[:50]}...)")
                             
                             if fbclid_completo_redis:
                                 bot_user.fbclid = fbclid_completo_redis
