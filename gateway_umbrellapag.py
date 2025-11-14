@@ -1260,11 +1260,15 @@ class UmbrellaPagGateway(PaymentGateway):
                 logger.error(f"   Estrutura recebida: {json.dumps(data, indent=2)[:500]}")
                 return None
             
+            # ✅ LOGS DETALHADOS: Webhook processado com sucesso
             logger.info(f"✅ [{self.get_gateway_name()}] Webhook processado com sucesso")
             logger.info(f"   Transaction ID: {transaction_id}")
             logger.info(f"   Status bruto: {status_str} → Status normalizado: {normalized_status}")
             logger.info(f"   Amount: R$ {amount:.2f}" if amount else "   Amount: N/A")
             logger.info(f"   Payment ID: {payment_id}")
+            logger.info(f"   Payer Name: {payer_name}")
+            logger.info(f"   Payer Document: {payer_document}")
+            logger.info(f"   End-to-End ID: {end_to_end_id}")
             
             # ✅ LOG CRÍTICO: Status PAID deve disparar entregável e Meta Pixel
             if normalized_status == 'paid':
@@ -1273,6 +1277,10 @@ class UmbrellaPagGateway(PaymentGateway):
                 logger.info(f"   2️⃣ Enviar entregável ao cliente")
                 logger.info(f"   3️⃣ Disparar evento Meta Pixel Purchase")
                 logger.info(f"   4️⃣ Atualizar estatísticas do bot e usuário")
+            elif normalized_status == 'pending':
+                logger.info(f"⏳ [{self.get_gateway_name()}] Status PENDING - Pagamento ainda aguardando confirmação")
+            else:
+                logger.warning(f"⚠️ [{self.get_gateway_name()}] Status {normalized_status} - Não será processado como pago")
             
             return {
                 'payment_id': payment_id,
@@ -1295,7 +1303,7 @@ class UmbrellaPagGateway(PaymentGateway):
     
     def get_payment_status(self, transaction_id: str) -> Optional[Dict[str, Any]]:
         """
-        Consulta status de um pagamento no UmbrellaPag
+        Consulta status de um pagamento no UmbrellaPag com retry automático
         
         Args:
             transaction_id: ID da transação no gateway
@@ -1303,31 +1311,105 @@ class UmbrellaPagGateway(PaymentGateway):
         Returns:
             Mesmo formato do process_webhook() ou None em caso de erro
         """
-        try:
-            logger.info(f"🔍 [{self.get_gateway_name()}] Consultando status: {transaction_id}")
-            
-            # Tentar buscar transação por ID
-            response = self._make_request('GET', f'/user/transactions/{transaction_id}')
-            
-            if not response:
-                logger.error(f"❌ [{self.get_gateway_name()}] Erro ao consultar status (sem resposta)")
-                return None
-            
-            if response.status_code == 200:
-                try:
-                    data = response.json()
-                    
-                    # Processar como webhook
-                    return self.process_webhook(data)
-                    
-                except json.JSONDecodeError as e:
-                    logger.error(f"❌ [{self.get_gateway_name()}] Erro ao decodificar JSON: {e}")
-                    return None
-            else:
-                logger.error(f"❌ [{self.get_gateway_name()}] Falha ao consultar status (status {response.status_code})")
-                return None
-                
-        except Exception as e:
-            logger.error(f"❌ [{self.get_gateway_name()}] Erro ao consultar status: {e}")
+        # ✅ VALIDAÇÃO: Verificar se transaction_id é válido
+        if not transaction_id or not transaction_id.strip():
+            logger.error(f"❌ [UMBRELLAPAY API] transaction_id inválido ou vazio")
             return None
+        
+        transaction_id = transaction_id.strip()
+        max_retries = 3
+        retry_delay = 1  # segundos (backoff exponencial)
+        
+        for attempt in range(1, max_retries + 1):
+            try:
+                logger.info(f"🔍 [UMBRELLAPAY API] Consultando status (tentativa {attempt}/{max_retries}): {transaction_id}")
+                
+                # Tentar buscar transação por ID
+                response = self._make_request('GET', f'/user/transactions/{transaction_id}')
+                
+                if not response:
+                    if attempt < max_retries:
+                        logger.warning(f"⚠️ [UMBRELLAPAY API] Sem resposta na tentativa {attempt}. Aguardando {retry_delay}s antes de retry...")
+                        time.sleep(retry_delay)
+                        retry_delay *= 2  # Backoff exponencial
+                        continue
+                    else:
+                        logger.error(f"❌ [UMBRELLAPAY API] Erro ao consultar status após {max_retries} tentativas (sem resposta)")
+                        logger.error(f"   Transaction ID: {transaction_id}")
+                        return None
+                
+                # ✅ VALIDAÇÃO: Verificar status code
+                if response.status_code == 200:
+                    try:
+                        data = response.json()
+                        
+                        # ✅ VALIDAÇÃO: Verificar se data é válido
+                        if not data or not isinstance(data, dict):
+                            logger.error(f"❌ [UMBRELLAPAY API] Resposta inválida (não é dict): {data}")
+                            return None
+                        
+                        # Processar como webhook
+                        result = self.process_webhook(data)
+                        
+                        if result:
+                            logger.info(f"✅ [UMBRELLAPAY API] Status consultado com sucesso: {result.get('status')}")
+                            logger.info(f"   Transaction ID: {transaction_id}")
+                        else:
+                            logger.warning(f"⚠️ [UMBRELLAPAY API] process_webhook retornou None para {transaction_id}")
+                        
+                        return result
+                        
+                    except json.JSONDecodeError as e:
+                        logger.error(f"❌ [UMBRELLAPAY API] Erro ao decodificar JSON: {e}")
+                        logger.error(f"   Transaction ID: {transaction_id}")
+                        logger.error(f"   Response text: {response.text[:500]}")
+                        return None
+                elif response.status_code == 404:
+                    logger.warning(f"⚠️ [UMBRELLAPAY API] Transação não encontrada (404): {transaction_id}")
+                    return None
+                elif response.status_code in [500, 502, 503, 504]:
+                    # Erro do servidor: tentar novamente
+                    if attempt < max_retries:
+                        logger.warning(f"⚠️ [UMBRELLAPAY API] Erro do servidor ({response.status_code}) na tentativa {attempt}. Aguardando {retry_delay}s antes de retry...")
+                        time.sleep(retry_delay)
+                        retry_delay *= 2
+                        continue
+                    else:
+                        logger.error(f"❌ [UMBRELLAPAY API] Erro do servidor após {max_retries} tentativas: {response.status_code}")
+                        logger.error(f"   Transaction ID: {transaction_id}")
+                        return None
+                else:
+                    logger.error(f"❌ [UMBRELLAPAY API] Falha ao consultar status (status {response.status_code})")
+                    logger.error(f"   Transaction ID: {transaction_id}")
+                    logger.error(f"   Response text: {response.text[:500]}")
+                    return None
+                    
+            except requests.exceptions.Timeout as e:
+                if attempt < max_retries:
+                    logger.warning(f"⚠️ [UMBRELLAPAY API] Timeout na tentativa {attempt}. Aguardando {retry_delay}s antes de retry...")
+                    time.sleep(retry_delay)
+                    retry_delay *= 2
+                    continue
+                else:
+                    logger.error(f"❌ [UMBRELLAPAY API] Timeout após {max_retries} tentativas: {e}")
+                    logger.error(f"   Transaction ID: {transaction_id}")
+                    return None
+            except requests.exceptions.ConnectionError as e:
+                if attempt < max_retries:
+                    logger.warning(f"⚠️ [UMBRELLAPAY API] Erro de conexão na tentativa {attempt}. Aguardando {retry_delay}s antes de retry...")
+                    time.sleep(retry_delay)
+                    retry_delay *= 2
+                    continue
+                else:
+                    logger.error(f"❌ [UMBRELLAPAY API] Erro de conexão após {max_retries} tentativas: {e}")
+                    logger.error(f"   Transaction ID: {transaction_id}")
+                    return None
+            except Exception as e:
+                logger.error(f"❌ [UMBRELLAPAY API] Erro inesperado ao consultar status: {e}", exc_info=True)
+                logger.error(f"   Transaction ID: {transaction_id}")
+                return None
+        
+        # Se chegou aqui, todas as tentativas falharam
+        logger.error(f"❌ [UMBRELLAPAY API] Todas as {max_retries} tentativas falharam para {transaction_id}")
+        return None
 

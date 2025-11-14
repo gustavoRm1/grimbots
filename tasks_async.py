@@ -89,30 +89,51 @@ def _persist_webhook_event(
         dedup_key = f"{gateway_type}:{get_brazil_time().timestamp()}"
 
     existing = WebhookEvent.query.filter_by(dedup_key=dedup_key).first()
+    
+    # ✅ CRÍTICO: Validar status antes de salvar (não sobrescrever com None)
+    new_status = result.get('status')
+    status_valido = new_status and new_status in ['paid', 'pending', 'failed', 'cancelled', 'refunded']
+    
     if existing:
-        existing.status = result.get('status')
+        # ✅ CRÍTICO: Só atualizar status se for válido e não None
+        if status_valido:
+            existing.status = new_status
+            logger.debug(f"✅ [_persist_webhook_event] Atualizando status existente: {existing.status} → {new_status}")
+        else:
+            logger.warning(f"⚠️ [_persist_webhook_event] Status inválido ou None: {new_status}. Preservando status existente: {existing.status}")
+        
         existing.transaction_id = transaction_id or existing.transaction_id
         existing.transaction_hash = transaction_hash or existing.transaction_hash
         existing.payload = raw_payload
         existing.received_at = get_brazil_time()
+        
         try:
             db.session.commit()
-        except IntegrityError:
+            logger.debug(f"✅ [_persist_webhook_event] WebhookEvent atualizado: dedup_key={dedup_key}, status={existing.status}")
+        except IntegrityError as e:
             db.session.rollback()
+            logger.error(f"❌ [_persist_webhook_event] Erro de integridade ao atualizar: {e}")
     else:
+        # ✅ CRÍTICO: Só criar se status for válido
+        if not status_valido:
+            logger.warning(f"⚠️ [_persist_webhook_event] Status inválido ou None: {new_status}. Não criando WebhookEvent")
+            return
+        
         event = WebhookEvent(
             gateway_type=gateway_type,
             dedup_key=dedup_key,
             transaction_id=transaction_id or None,
             transaction_hash=transaction_hash or None,
-            status=result.get('status'),
+            status=new_status,
             payload=raw_payload
         )
         db.session.add(event)
         try:
             db.session.commit()
-        except IntegrityError:
+            logger.debug(f"✅ [_persist_webhook_event] WebhookEvent criado: dedup_key={dedup_key}, status={new_status}")
+        except IntegrityError as e:
             db.session.rollback()
+            logger.error(f"❌ [_persist_webhook_event] Erro de integridade ao criar: {e}")
 
 
 def _enqueue_pending_match(
@@ -614,18 +635,55 @@ def process_webhook_async(gateway_type: str, data: Dict[str, Any]):
                 result = bot_manager.process_payment_webhook(gateway_type, data)
             
             if result:
-                # Registrar evento para auditoria (deduplicado por gateway/hash)
+                gateway_transaction_id = result.get('gateway_transaction_id')
+                status = result.get('status')
+                
+                # ✅ LOGS DETALHADOS: Webhook recebido e processado
+                logger.info(f"📥 [WEBHOOK {gateway_type.upper()}] Webhook recebido e processado")
+                logger.info(f"   Transaction ID: {gateway_transaction_id}")
+                logger.info(f"   Status normalizado: {status}")
+                logger.info(f"   Payment ID: {result.get('payment_id')}")
+                logger.info(f"   Amount: R$ {result.get('amount', 0):.2f}" if result.get('amount') else "   Amount: N/A")
+                
+                # ✅ IDEMPOTÊNCIA MELHORADA: Verificar se webhook já foi processado (independente do status)
+                from models import WebhookEvent
+                from datetime import timedelta
+                cinco_minutos_atras = get_brazil_time() - timedelta(minutes=5)
+                
+                # ✅ Verificar se webhook com mesmo transaction_id já foi processado recentemente
+                webhook_recente = WebhookEvent.query.filter(
+                    WebhookEvent.gateway_type == gateway_type,
+                    WebhookEvent.transaction_id == gateway_transaction_id,
+                    WebhookEvent.received_at >= cinco_minutos_atras
+                ).order_by(WebhookEvent.received_at.desc()).first()
+                
+                if webhook_recente:
+                    # ✅ Se status é o mesmo, é duplicado exato
+                    if webhook_recente.status == status:
+                        logger.info(f"♻️ [WEBHOOK {gateway_type.upper()}] Webhook duplicado detectado (mesmo status '{status}' nos últimos 5min)")
+                        logger.info(f"   Transaction ID: {gateway_transaction_id}")
+                        logger.info(f"   Webhook anterior recebido em: {webhook_recente.received_at}")
+                        logger.info(f"   Status: {webhook_recente.status}")
+                        logger.info(f"   Pulando processamento para evitar duplicação")
+                        return {'status': 'duplicate_webhook', 'message': f'Webhook duplicado (status: {status})'}
+                    else:
+                        # ✅ Status diferente: pode ser atualização (ex: pending → paid)
+                        logger.info(f"🔄 [WEBHOOK {gateway_type.upper()}] Webhook com status diferente detectado")
+                        logger.info(f"   Transaction ID: {gateway_transaction_id}")
+                        logger.info(f"   Status anterior: {webhook_recente.status} → Status novo: {status}")
+                        logger.info(f"   Webhook anterior recebido em: {webhook_recente.received_at}")
+                        logger.info(f"   Processando atualização de status...")
+                
+                # ✅ Registrar evento para auditoria (deduplicado por gateway/hash)
                 try:
                     _persist_webhook_event(
                         gateway_type=gateway_type,
                         result=result,
                         raw_payload=data
                     )
+                    logger.info(f"✅ [WEBHOOK {gateway_type.upper()}] Webhook registrado em webhook_events")
                 except Exception as log_error:
-                    logger.warning(f"⚠️ Falha ao registrar webhook em webhook_events: {log_error}")
-
-                gateway_transaction_id = result.get('gateway_transaction_id')
-                status = result.get('status')
+                    logger.warning(f"⚠️ [WEBHOOK {gateway_type.upper()}] Falha ao registrar webhook em webhook_events: {log_error}")
                 
                 # Buscar payment
                 payment_query = Payment.query
@@ -740,29 +798,55 @@ def process_webhook_async(gateway_type: str, data: Dict[str, Any]):
                     was_pending = payment.status == 'pending'
                     status_antigo = payment.status
                     
+                    # ✅ LOGS DETALHADOS: Estado atual do payment
+                    logger.info(f"🔍 [WEBHOOK {gateway_type.upper()}] Payment encontrado: {payment.payment_id}")
+                    logger.info(f"   Status atual no sistema: {status_antigo}")
+                    logger.info(f"   Status do webhook: {status}")
+                    logger.info(f"   Era pending: {was_pending}")
+                    
+                    # ✅ IDEMPOTÊNCIA: Se payment já está paid e webhook também é paid, não atualizar
                     if payment.status == 'paid' and status == 'paid':
-                        # Webhook duplicado - tentar reenviar entregável e garantir Meta Purchase
+                        logger.info(f"♻️ [WEBHOOK {gateway_type.upper()}] Payment já está PAID - Webhook duplicado")
+                        logger.info(f"   Tentando reenviar entregável e garantir Meta Purchase...")
+                        
+                        # Tentar reenviar entregável e garantir Meta Purchase
                         try:
                             send_payment_delivery(payment, bot_manager)
+                            logger.info(f"✅ [WEBHOOK {gateway_type.upper()}] Entregável reenviado")
                         except Exception as e:
-                            logger.error(f"Erro ao reenviar entregável (duplicado): {e}")
+                            logger.error(f"❌ [WEBHOOK {gateway_type.upper()}] Erro ao reenviar entregável (duplicado): {e}")
+                        
                         if not payment.meta_purchase_sent:
                             try:
-                                logger.info(f"♻️ Webhook duplicado para {payment.payment_id}, meta_purchase_sent ainda falso - reenfileirando Meta Purchase")
+                                logger.info(f"📊 [WEBHOOK {gateway_type.upper()}] meta_purchase_sent ainda falso - reenfileirando Meta Purchase")
                                 send_meta_pixel_purchase_event(payment)
+                                logger.info(f"✅ [WEBHOOK {gateway_type.upper()}] Meta Purchase reenfileirado")
                             except Exception as e:
-                                logger.warning(f"Erro ao reenfileirar Meta Pixel Purchase (duplicado): {e}")
+                                logger.warning(f"⚠️ [WEBHOOK {gateway_type.upper()}] Erro ao reenfileirar Meta Pixel Purchase (duplicado): {e}")
+                        
                         return {'status': 'already_processed'}
                     
-                    if payment.status != 'paid':
+                    # ✅ VALIDAÇÃO: Só atualizar se status mudou
+                    if payment.status != status:
+                        logger.info(f"🔄 [WEBHOOK {gateway_type.upper()}] Atualizando status: {status_antigo} → {status}")
                         payment.status = status
+                    else:
+                        logger.info(f"ℹ️ [WEBHOOK {gateway_type.upper()}] Status não mudou ({status}) - não atualizando")
 
                     status_is_paid = (status == 'paid')
                     deve_processar_estatisticas = status_is_paid and was_pending
                     deve_enviar_entregavel = status_is_paid
                     deve_enviar_meta_purchase = status_is_paid and not payment.meta_purchase_sent
+                    
+                    # ✅ LOGS DETALHADOS: Decisões de processamento
+                    logger.info(f"📊 [WEBHOOK {gateway_type.upper()}] Decisões de processamento:")
+                    logger.info(f"   Status é paid: {status_is_paid}")
+                    logger.info(f"   Deve processar estatísticas: {deve_processar_estatisticas}")
+                    logger.info(f"   Deve enviar entregável: {deve_enviar_entregavel}")
+                    logger.info(f"   Deve enviar Meta Purchase: {deve_enviar_meta_purchase}")
 
                     if deve_processar_estatisticas:
+                        logger.info(f"💰 [WEBHOOK {gateway_type.upper()}] Processando estatísticas e atualizando payment...")
                         payment.paid_at = get_brazil_time()
                         payment.bot.total_sales += 1
                         payment.bot.total_revenue += payment.amount
@@ -819,12 +903,16 @@ def process_webhook_async(gateway_type: str, data: Dict[str, Any]):
                     
                     if deve_enviar_entregavel:
                         try:
+                            logger.info(f"📦 [WEBHOOK {gateway_type.upper()}] Enviando entregável...")
                             send_payment_delivery(payment, bot_manager)
+                            logger.info(f"✅ [WEBHOOK {gateway_type.upper()}] Entregável enviado com sucesso")
                         except Exception as e:
-                            logger.error(f"Erro ao enviar entregável: {e}")
+                            logger.error(f"❌ [WEBHOOK {gateway_type.upper()}] Erro ao enviar entregável: {e}", exc_info=True)
                     
+                    # ✅ COMMIT: Salvar todas as alterações
                     try:
                         db.session.commit()
+                        logger.info(f"💾 [WEBHOOK {gateway_type.upper()}] Pagamento {payment.payment_id} atualizado para '{status}'")
                     except Exception:
                         db.session.rollback()
                         raise
@@ -834,7 +922,17 @@ def process_webhook_async(gateway_type: str, data: Dict[str, Any]):
                             transaction_id=event_id or event_tx,
                             transaction_hash=event_hash
                         )
-                    logger.info(f"✅ Webhook processado: {payment.payment_id} -> {status}")
+                    
+                    # ✅ VALIDAÇÃO PÓS-UPDATE: Refresh e assert
+                    db.session.refresh(payment)
+                    if payment.status != status:
+                        logger.error(f"🚨 [WEBHOOK {gateway_type.upper()}] ERRO CRÍTICO: Status não foi atualizado corretamente!")
+                        logger.error(f"   Esperado: {status}, Atual: {payment.status}")
+                        logger.error(f"   Payment ID: {payment.payment_id}")
+                    else:
+                        logger.info(f"✅ [WEBHOOK {gateway_type.upper()}] Validação pós-update: Status confirmado como '{payment.status}'")
+                    
+                    logger.info(f"✅ [WEBHOOK {gateway_type.upper()}] Webhook processado com sucesso: {payment.payment_id} -> {status}")
                     return {'status': 'success', 'payment_id': payment.payment_id}
                 else:
                     logger.warning(f"⚠️ Payment não encontrado para webhook: {gateway_transaction_id}")

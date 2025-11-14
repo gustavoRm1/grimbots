@@ -3087,8 +3087,218 @@ Desculpe, não foi possível processar seu pagamento.
                     if payment.gateway_type == 'paradise':
                         logger.info(f"📡 Paradise: Webhook será processado automaticamente pelo job")
                         logger.info(f"⏰ Se pagamento já está aprovado no painel Paradise, aguarde até 2 minutos")
+                    elif payment.gateway_type == 'umbrellapag':
+                        # ✅ CORREÇÃO CRÍTICA UMBRELLAPAY: Verificação dupla com intervalo
+                        logger.info(f"🔍 [VERIFY UMBRELLAPAY] Iniciando verificação dupla para payment_id={payment.payment_id}")
+                        logger.info(f"   Transaction ID: {payment.gateway_transaction_id}")
+                        logger.info(f"   Status atual: {payment.status}")
+                        
+                        # ✅ VALIDAÇÃO CRÍTICA: Verificar se gateway_transaction_id existe
+                        if not payment.gateway_transaction_id or not payment.gateway_transaction_id.strip():
+                            logger.error(f"❌ [VERIFY UMBRELLAPAY] gateway_transaction_id não encontrado para payment_id={payment.payment_id}")
+                            return
+                        
+                        # ✅ ETAPA 1: Verificar se existe webhook recente (<2 minutos)
+                        from models import WebhookEvent, get_brazil_time
+                        from datetime import timedelta
+                        import time
+                        
+                        dois_minutos_atras = get_brazil_time() - timedelta(minutes=2)
+                        try:
+                            webhook_recente = WebhookEvent.query.filter(
+                                WebhookEvent.gateway_type == 'umbrellapag',
+                                WebhookEvent.transaction_id == payment.gateway_transaction_id,
+                                WebhookEvent.received_at >= dois_minutos_atras
+                            ).order_by(WebhookEvent.received_at.desc()).first()
+                        except Exception as e:
+                            logger.error(f"❌ [VERIFY UMBRELLAPAY] Erro ao buscar webhook recente: {e}", exc_info=True)
+                            webhook_recente = None
+                        
+                        if webhook_recente:
+                            logger.info(f"⏳ [VERIFY UMBRELLAPAY] Webhook recente encontrado (recebido em {webhook_recente.received_at})")
+                            logger.info(f"   Transaction ID: {payment.gateway_transaction_id}")
+                            logger.info(f"   Status do webhook: {webhook_recente.status}")
+                            logger.info(f"   Aguardando processamento do webhook... Não atualizando manualmente")
+                            
+                            # Recarregar payment para ver se webhook já atualizou
+                            try:
+                                db.session.refresh(payment)
+                                if payment.status == 'paid':
+                                    logger.info(f"✅ [VERIFY UMBRELLAPAY] Webhook já atualizou o pagamento! Status: {payment.status}")
+                                else:
+                                    logger.info(f"⏳ [VERIFY UMBRELLAPAY] Webhook ainda não processou. Aguarde até 2 minutos.")
+                            except Exception as e:
+                                logger.error(f"❌ [VERIFY UMBRELLAPAY] Erro ao recarregar payment: {e}", exc_info=True)
+                            return  # Não fazer consulta manual se webhook recente existe
+                        
+                        # ✅ ETAPA 2: Verificação dupla com intervalo (3 segundos)
+                        try:
+                            bot = payment.bot
+                            if not bot:
+                                logger.error(f"❌ [VERIFY UMBRELLAPAY] Bot não encontrado para payment_id={payment.payment_id}")
+                                return
+                            
+                            gateway = Gateway.query.filter_by(
+                                user_id=bot.user_id,
+                                gateway_type=payment.gateway_type,
+                                is_verified=True
+                            ).first()
+                            
+                            if not gateway:
+                                logger.warning(f"⚠️ [VERIFY UMBRELLAPAY] Gateway não encontrado para gateway_type={payment.gateway_type}, user_id={bot.user_id}")
+                                return
+                            
+                            # ✅ RANKING V2.0: Usar commission_percentage do USUÁRIO diretamente
+                            user_commission = bot.owner.commission_percentage or gateway.split_percentage or 2.0
+                            
+                            credentials = {
+                                'api_key': gateway.api_key,
+                                'product_hash': gateway.product_hash
+                            }
+                            
+                            payment_gateway = GatewayFactory.create_gateway(
+                                gateway_type=payment.gateway_type,
+                                credentials=credentials
+                            )
+                            
+                            if not payment_gateway:
+                                logger.error(f"❌ [VERIFY UMBRELLAPAY] Não foi possível criar instância do gateway")
+                                return
+                            
+                            # ✅ CONSULTA 1 com retry e tratamento de erro
+                            logger.info(f"🔍 [VERIFY UMBRELLAPAY] Consulta 1/2: Verificando status na API...")
+                            logger.info(f"   Transaction ID: {payment.gateway_transaction_id}")
+                            
+                            try:
+                                api_status_1 = payment_gateway.get_payment_status(payment.gateway_transaction_id)
+                                status_1 = api_status_1.get('status') if api_status_1 else None
+                                logger.info(f"📊 [VERIFY UMBRELLAPAY] Consulta 1 retornou: status={status_1}")
+                            except Exception as e:
+                                logger.error(f"❌ [VERIFY UMBRELLAPAY] Erro na consulta 1: {e}", exc_info=True)
+                                logger.error(f"   Transaction ID: {payment.gateway_transaction_id}")
+                                return
+                            
+                            # ✅ VALIDAÇÃO: Não atualizar se payment já está paid
+                            try:
+                                db.session.refresh(payment)
+                                if not payment:  # Payment pode ter sido deletado
+                                    logger.warning(f"⚠️ [VERIFY UMBRELLAPAY] Payment não encontrado após refresh")
+                                    return
+                                
+                                if payment.status == 'paid':
+                                    logger.info(f"✅ [VERIFY UMBRELLAPAY] Pagamento já está PAID no sistema. Não atualizar.")
+                                    return
+                            except Exception as e:
+                                logger.error(f"❌ [VERIFY UMBRELLAPAY] Erro ao recarregar payment: {e}", exc_info=True)
+                                return
+                            
+                            # ✅ Aguardar 3 segundos
+                            logger.info(f"⏳ [VERIFY UMBRELLAPAY] Aguardando 3 segundos antes da consulta 2...")
+                            time.sleep(3)
+                            
+                            # ✅ CONSULTA 2 com retry e tratamento de erro
+                            logger.info(f"🔍 [VERIFY UMBRELLAPAY] Consulta 2/2: Verificando status na API novamente...")
+                            logger.info(f"   Transaction ID: {payment.gateway_transaction_id}")
+                            
+                            try:
+                                api_status_2 = payment_gateway.get_payment_status(payment.gateway_transaction_id)
+                                status_2 = api_status_2.get('status') if api_status_2 else None
+                                logger.info(f"📊 [VERIFY UMBRELLAPAY] Consulta 2 retornou: status={status_2}")
+                            except Exception as e:
+                                logger.error(f"❌ [VERIFY UMBRELLAPAY] Erro na consulta 2: {e}", exc_info=True)
+                                logger.error(f"   Transaction ID: {payment.gateway_transaction_id}")
+                                return
+                            
+                            # ✅ VALIDAÇÃO FINAL: Só atualizar se AMBAS as consultas retornarem 'paid'
+                            if status_1 == 'paid' and status_2 == 'paid':
+                                # ✅ Verificar novamente se payment ainda está pending (evitar race condition)
+                                try:
+                                    db.session.refresh(payment)
+                                    if not payment:  # Payment pode ter sido deletado
+                                        logger.warning(f"⚠️ [VERIFY UMBRELLAPAY] Payment não encontrado após refresh final")
+                                        return
+                                    
+                                    if payment.status == 'paid':
+                                        logger.info(f"✅ [VERIFY UMBRELLAPAY] Pagamento já foi atualizado por outro processo. Não atualizar novamente.")
+                                        return
+                                except Exception as e:
+                                    logger.error(f"❌ [VERIFY UMBRELLAPAY] Erro ao recarregar payment final: {e}", exc_info=True)
+                                    return
+                                
+                                logger.info(f"✅ [VERIFY UMBRELLAPAY] VERIFICAÇÃO DUPLA CONFIRMADA: Ambas consultas retornaram 'paid'")
+                                logger.info(f"   Payment ID: {payment.payment_id}")
+                                logger.info(f"   Transaction ID: {payment.gateway_transaction_id}")
+                                logger.info(f"   Atualizando pagamento para 'paid'...")
+                                
+                                try:
+                                    payment.status = 'paid'
+                                    payment.paid_at = get_brazil_time()
+                                    payment.bot.total_sales += 1
+                                    payment.bot.total_revenue += payment.amount
+                                    payment.bot.owner.total_sales += 1
+                                    payment.bot.owner.total_revenue += payment.amount
+                                    
+                                    # ✅ META PIXEL PURCHASE (ANTES DO COMMIT!)
+                                    try:
+                                        from app import send_meta_pixel_purchase_event
+                                        logger.info(f"📊 [VERIFY UMBRELLAPAY] Disparando Meta Pixel Purchase para {payment.payment_id}")
+                                        send_meta_pixel_purchase_event(payment)
+                                        logger.info(f"✅ [VERIFY UMBRELLAPAY] Meta Pixel Purchase enviado")
+                                    except Exception as e:
+                                        logger.error(f"❌ [VERIFY UMBRELLAPAY] Erro ao enviar Meta Purchase: {e}", exc_info=True)
+                                    
+                                    # ✅ COMMIT ATÔMICO com rollback em caso de erro
+                                    db.session.commit()
+                                    logger.info(f"💾 [VERIFY UMBRELLAPAY] Pagamento atualizado via verificação dupla")
+                                    
+                                    # ✅ CRÍTICO: Recarregar objeto do banco para garantir status atualizado
+                                    db.session.refresh(payment)
+                                    
+                                    # ✅ VALIDAÇÃO PÓS-UPDATE: Verificar se status foi atualizado corretamente
+                                    if payment.status == 'paid':
+                                        logger.info(f"✅ [VERIFY UMBRELLAPAY] Validação pós-update: Status confirmado como 'paid'")
+                                    else:
+                                        logger.error(f"🚨 [VERIFY UMBRELLAPAY] ERRO CRÍTICO: Status não foi atualizado corretamente!")
+                                        logger.error(f"   Esperado: 'paid', Atual: {payment.status}")
+                                        logger.error(f"   Payment ID: {payment.payment_id}")
+                                    
+                                    # ✅ VERIFICAR CONQUISTAS
+                                    try:
+                                        from app import check_and_unlock_achievements
+                                        new_achievements = check_and_unlock_achievements(payment.bot.owner)
+                                        if new_achievements:
+                                            logger.info(f"🏆 [VERIFY UMBRELLAPAY] {len(new_achievements)} conquista(s) desbloqueada(s)!")
+                                    except Exception as e:
+                                        logger.warning(f"⚠️ [VERIFY UMBRELLAPAY] Erro ao verificar conquistas: {e}", exc_info=True)
+                                        
+                                except Exception as e:
+                                    logger.error(f"❌ [VERIFY UMBRELLAPAY] Erro ao atualizar payment: {e}", exc_info=True)
+                                    db.session.rollback()
+                                    logger.error(f"   Rollback executado. Payment não foi atualizado.")
+                                    return
+                            
+                            elif status_1 == 'paid' and status_2 != 'paid':
+                                logger.warning(f"⚠️ [VERIFY UMBRELLAPAY] DISCREPÂNCIA DETECTADA: Consulta 1=paid, Consulta 2={status_2}")
+                                logger.warning(f"   Transaction ID: {payment.gateway_transaction_id}")
+                                logger.warning(f"   Não atualizando - inconsistência detectada. Aguardando webhook ou próxima verificação.")
+                            
+                            elif status_1 != 'paid' and status_2 == 'paid':
+                                logger.warning(f"⚠️ [VERIFY UMBRELLAPAY] DISCREPÂNCIA DETECTADA: Consulta 1={status_1}, Consulta 2=paid")
+                                logger.warning(f"   Transaction ID: {payment.gateway_transaction_id}")
+                                logger.warning(f"   Não atualizando - inconsistência detectada. Aguardando webhook ou próxima verificação.")
+                            
+                            else:
+                                logger.info(f"⏳ [VERIFY UMBRELLAPAY] Ambas consultas retornaram: {status_1} e {status_2} (não é 'paid')")
+                                logger.info(f"   Transaction ID: {payment.gateway_transaction_id}")
+                                logger.info(f"   Pagamento ainda pendente no gateway")
+                                
+                        except Exception as e:
+                            logger.error(f"❌ [VERIFY UMBRELLAPAY] Erro crítico na verificação: {e}", exc_info=True)
+                            logger.error(f"   Payment ID: {payment.payment_id}")
+                            logger.error(f"   Transaction ID: {payment.gateway_transaction_id}")
+                            return
                     else:
-                        # Outros gateways podem ter consulta manual
+                        # Outros gateways podem ter consulta manual (comportamento antigo)
                         logger.info(f"🔍 Gateway {payment.gateway_type}: Consultando status na API...")
                         
                         bot = payment.bot
@@ -3100,7 +3310,6 @@ Desculpe, não foi possível processar seu pagamento.
                         
                         if gateway:
                             # ✅ RANKING V2.0: Usar commission_percentage do USUÁRIO diretamente
-                            # Prioridade: user.commission_percentage > gateway.split_percentage > 2.0 (padrão)
                             user_commission = bot.owner.commission_percentage or gateway.split_percentage or 2.0
                             
                             credentials = {
@@ -3120,7 +3329,6 @@ Desculpe, não foi possível processar seu pagamento.
                             )
                             
                             if payment_gateway:
-                                # ✅ TODOS os gateways aceitam apenas 1 argumento (transaction_id)
                                 api_status = payment_gateway.get_payment_status(payment.gateway_transaction_id)
                                 
                                 if api_status and api_status.get('status') == 'paid':
@@ -3146,10 +3354,8 @@ Desculpe, não foi possível processar seu pagamento.
                                         db.session.commit()
                                         logger.info(f"💾 Pagamento atualizado via consulta ativa")
                                         
-                                        # ✅ CRÍTICO: Recarregar objeto do banco para garantir status atualizado
                                         db.session.refresh(payment)
                                         
-                                        # ✅ VERIFICAR CONQUISTAS
                                         try:
                                             from app import check_and_unlock_achievements
                                             new_achievements = check_and_unlock_achievements(payment.bot.owner)

@@ -678,6 +678,22 @@ if _scheduler_owner:
     scheduler.add_job(id='reconcile_pushynpay', func=enqueue_reconcile_pushynpay,
                       trigger='interval', seconds=60, replace_existing=True, max_instances=1)
     logger.info("✅ Job de reconciliação PushynPay agendado (60s, fila async)")
+
+# ✅ JOB PERIÓDICO: Sincronização UmbrellaPay (5 minutos)
+if _scheduler_owner:
+    try:
+        from jobs.sync_umbrellapay import sync_umbrellapay_payments
+        scheduler.add_job(
+            id='sync_umbrellapay',
+            func=sync_umbrellapay_payments,
+            trigger='interval',
+            seconds=300,  # 5 minutos
+            replace_existing=True,
+            max_instances=1
+        )
+        logger.info("✅ Job de sincronização UmbrellaPay agendado (5min)")
+    except ImportError as e:
+        logger.warning(f"⚠️ Não foi possível importar job de sincronização UmbrellaPay: {e}")
 # ✅ JOB PERIÓDICO: Verificar e sincronizar status dos bots (desativado)
 def sync_bots_status():
     """
