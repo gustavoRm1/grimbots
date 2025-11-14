@@ -3,7 +3,7 @@ SaaS Bot Manager - Aplicação Principal
 Sistema de gerenciamento de bots do Telegram com painel web
 """
 
-from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, abort, session, make_response
+from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, abort, session, make_response, send_file
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from flask_socketio import SocketIO, emit, join_room, leave_room
 from models import db, User, Bot, BotConfig, Gateway, Payment, AuditLog, Achievement, UserAchievement, BotUser, BotMessage, RedirectPool, PoolBot, RemarketingCampaign, RemarketingBlacklist, Commission, PushSubscription, NotificationSettings, get_brazil_time
@@ -2998,6 +2998,124 @@ def admin_revenue():
     return render_template('admin/revenue.html',
                          stats=stats,
                          revenue_by_user=revenue_list)
+
+@app.route('/admin/exports')
+@login_required
+@admin_required
+def admin_exports():
+    """Página de exportações e downloads de CSVs"""
+    from pathlib import Path
+    from datetime import datetime
+    
+    # Diretório de exports
+    exports_dir = Path("./exports")
+    exports_dir.mkdir(exist_ok=True)
+    
+    # Listar arquivos CSV disponíveis
+    csv_files = []
+    if exports_dir.exists():
+        for file in sorted(exports_dir.glob("*.csv"), key=lambda x: x.stat().st_mtime, reverse=True):
+            stat = file.stat()
+            csv_files.append({
+                'filename': file.name,
+                'size': stat.st_size,
+                'size_mb': round(stat.st_size / (1024 * 1024), 2),
+                'created_at': datetime.fromtimestamp(stat.st_mtime).strftime('%d/%m/%Y %H:%M:%S'),
+                'type': 'umbrella_todas' if 'umbrella_todas' in file.name else 'umbrella_pagas' if 'umbrella_pagas' in file.name else 'other'
+            })
+    
+    log_admin_action('view_exports', 'Acessou página de exportações')
+    
+    return render_template('admin/exports.html', csv_files=csv_files)
+
+@app.route('/admin/exports/download/<filename>')
+@login_required
+@admin_required
+def admin_download_csv(filename):
+    """Download de arquivo CSV"""
+    from pathlib import Path
+    
+    # Diretório de exports
+    exports_dir = Path("./exports")
+    
+    # Validar nome do arquivo (prevenir path traversal)
+    if '..' in filename or '/' in filename or '\\' in filename:
+        flash('Nome de arquivo inválido', 'error')
+        return redirect(url_for('admin_exports'))
+    
+    # Caminho completo do arquivo
+    file_path = exports_dir / filename
+    
+    # Verificar se o arquivo existe
+    if not file_path.exists() or not file_path.is_file():
+        flash('Arquivo não encontrado', 'error')
+        return redirect(url_for('admin_exports'))
+    
+    # Verificar se é um arquivo CSV
+    if not file_path.suffix == '.csv':
+        flash('Apenas arquivos CSV podem ser baixados', 'error')
+        return redirect(url_for('admin_exports'))
+    
+    log_admin_action('download_csv', f'Baixou arquivo: {filename}')
+    
+    # Enviar arquivo para download
+    return send_file(
+        str(file_path),
+        as_attachment=True,
+        download_name=filename,
+        mimetype='text/csv'
+    )
+
+@app.route('/admin/exports/generate', methods=['POST'])
+@login_required
+@admin_required
+def admin_generate_csv():
+    """Gerar novo CSV de vendas do UmbrellaPay"""
+    import subprocess
+    from pathlib import Path
+    
+    try:
+        # Diretório de exports
+        exports_dir = Path("./exports")
+        exports_dir.mkdir(exist_ok=True)
+        
+        # Gerar via Python diretamente (mais confiável)
+        try:
+            from scripts.extrair_vendas_umbrella_hoje import extrair_vendas_umbrella_hoje
+            extrair_vendas_umbrella_hoje()
+            flash('CSV gerado com sucesso!', 'success')
+            log_admin_action('generate_csv', 'Gerou novo CSV de vendas UmbrellaPay')
+        except ImportError:
+            # Fallback: Executar script shell se o módulo Python não estiver disponível
+            script_path = Path("./scripts/extrair_vendas_umbrella_hoje_csv.sh")
+            
+            if script_path.exists():
+                # Dar permissão de execução
+                os.chmod(script_path, 0o755)
+                
+                # Executar script
+                result = subprocess.run(
+                    ['bash', str(script_path)],
+                    capture_output=True,
+                    text=True,
+                    cwd=Path(".")
+                )
+                
+                if result.returncode == 0:
+                    flash('CSV gerado com sucesso!', 'success')
+                    log_admin_action('generate_csv', 'Gerou novo CSV de vendas UmbrellaPay')
+                else:
+                    flash(f'Erro ao gerar CSV: {result.stderr}', 'error')
+                    logger.error(f"❌ Erro ao gerar CSV: {result.stderr}")
+            else:
+                flash('Script de geração não encontrado', 'error')
+                logger.error("❌ Script de geração não encontrado")
+        
+    except Exception as e:
+        flash(f'Erro ao gerar CSV: {str(e)}', 'error')
+        logger.error(f"❌ Erro ao gerar CSV: {e}", exc_info=True)
+    
+    return redirect(url_for('admin_exports'))
 
 @app.route('/admin/analytics')
 @login_required

@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+
+{% block title %}Exportações - Admin - grimbots{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    
+    <!-- Header Admin -->
+    <div class="mb-8 flex justify-between items-center">
+        <div>
+            <h1 class="text-3xl font-bold text-textPrimary flex items-center gap-3">
+                <i class="fas fa-file-download text-accent500"></i>
+                Exportações e Downloads
+            </h1>
+            <p class="mt-1 text-sm text-textSecondary">Baixe relatórios em CSV das vendas do UmbrellaPay</p>
+        </div>
+        <div class="flex gap-3">
+            <a href="/admin" class="btn-secondary">
+                <i class="fas fa-arrow-left mr-2"></i> Voltar ao Admin
+            </a>
+        </div>
+    </div>
+    
+    <!-- Alert de Info -->
+    <div class="bg-gradient-to-r from-blue-500/10 to-blue-700/10 border-l-4 border-blue-500 p-4 mb-8 rounded-lg">
+        <div class="flex items-center gap-3">
+            <i class="fas fa-info-circle text-blue-500 text-xl"></i>
+            <div>
+                <p class="font-semibold text-blue-400">Exportações Disponíveis</p>
+                <p class="text-sm text-textSecondary">Arquivos CSV são gerados automaticamente e podem ser baixados aqui.</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Ações Rápidas -->
+    <div class="card !p-6 mb-8">
+        <h3 class="text-lg font-semibold text-textPrimary mb-4">⚡ Ações Rápidas</h3>
+        <div class="flex gap-4">
+            <form method="POST" action="{{ url_for('admin_generate_csv') }}" class="inline">
+                <button type="submit" class="btn-primary">
+                    <i class="fas fa-sync-alt mr-2"></i> Gerar Novo CSV (Hoje)
+                </button>
+            </form>
+            <a href="/admin" class="btn-secondary">
+                <i class="fas fa-chart-line mr-2"></i> Ver Dashboard
+            </a>
+        </div>
+    </div>
+    
+    <!-- Lista de Arquivos CSV -->
+    <div class="card !p-6">
+        <h3 class="text-lg font-semibold text-textPrimary mb-6">📁 Arquivos CSV Disponíveis</h3>
+        
+        {% if csv_files %}
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead>
+                    <tr class="border-b border-bg700">
+                        <th class="text-left py-3 px-4 text-sm font-semibold text-textSecondary">Nome do Arquivo</th>
+                        <th class="text-left py-3 px-4 text-sm font-semibold text-textSecondary">Tipo</th>
+                        <th class="text-left py-3 px-4 text-sm font-semibold text-textSecondary">Tamanho</th>
+                        <th class="text-left py-3 px-4 text-sm font-semibold text-textSecondary">Data de Criação</th>
+                        <th class="text-right py-3 px-4 text-sm font-semibold text-textSecondary">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for file in csv_files %}
+                    <tr class="border-b border-bg700 hover:bg-bg900 transition-colors">
+                        <td class="py-3 px-4">
+                            <div class="flex items-center gap-2">
+                                <i class="fas fa-file-csv text-accent500"></i>
+                                <span class="text-textPrimary font-medium">{{ file.filename }}</span>
+                            </div>
+                        </td>
+                        <td class="py-3 px-4">
+                            {% if file.type == 'umbrella_todas' %}
+                                <span class="px-2 py-1 bg-blue-500/20 text-blue-400 rounded text-xs font-semibold">Todas as Vendas</span>
+                            {% elif file.type == 'umbrella_pagas' %}
+                                <span class="px-2 py-1 bg-green-500/20 text-green-400 rounded text-xs font-semibold">Vendas Pagas</span>
+                            {% else %}
+                                <span class="px-2 py-1 bg-gray-500/20 text-gray-400 rounded text-xs font-semibold">Outro</span>
+                            {% endif %}
+                        </td>
+                        <td class="py-3 px-4 text-textSecondary">
+                            {{ file.size_mb }} MB
+                        </td>
+                        <td class="py-3 px-4 text-textSecondary">
+                            {{ file.created_at }}
+                        </td>
+                        <td class="py-3 px-4 text-right">
+                            <a href="{{ url_for('admin_download_csv', filename=file.filename) }}" 
+                               class="btn-primary btn-sm">
+                                <i class="fas fa-download mr-2"></i> Baixar
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-12">
+            <i class="fas fa-folder-open text-textSecondary text-4xl mb-4"></i>
+            <p class="text-textSecondary text-lg mb-2">Nenhum arquivo CSV disponível</p>
+            <p class="text-textSecondary text-sm mb-6">Clique em "Gerar Novo CSV" para criar um arquivo de exportação</p>
+            <form method="POST" action="{{ url_for('admin_generate_csv') }}" class="inline">
+                <button type="submit" class="btn-primary">
+                    <i class="fas fa-sync-alt mr-2"></i> Gerar Novo CSV
+                </button>
+            </form>
+        </div>
+        {% endif %}
+    </div>
+    
+    <!-- Informações Adicionais -->
+    <div class="card !p-6 mt-8">
+        <h3 class="text-lg font-semibold text-textPrimary mb-4">ℹ️ Informações</h3>
+        <div class="space-y-2 text-sm text-textSecondary">
+            <p><strong>Formato:</strong> CSV (Comma-Separated Values)</p>
+            <p><strong>Conteúdo:</strong> Vendas do UmbrellaPay de hoje</p>
+            <p><strong>Campos incluídos:</strong> ID, Payment ID, Status, Valor, Cliente, Tracking Token, FBP, FBC, FBClid, UTM, Campaign Code, Meta Purchase, etc.</p>
+            <p><strong>Atualização:</strong> Os arquivos são gerados manualmente ou automaticamente via script</p>
+        </div>
+    </div>
+    
+</div>
+{% endblock %}
+

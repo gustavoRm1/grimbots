@@ -86,6 +86,10 @@ backups/
 uploads/
 static/uploads/
 
+# Exports (CSVs gerados)
+exports/
+!exports/.gitkeep
+
 # Node (se usar)
 node_modules/
 package-lock.json
