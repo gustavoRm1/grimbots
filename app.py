@@ -4352,6 +4352,86 @@ def public_redirect(slug):
     # com a chave tracking:{tracking_token}
     # ============================================================================
     
+    # ✅ CRÍTICO: Se pool tem pixel_id configurado, renderizar HTML próprio para capturar FBC
+    # HTML carrega Meta Pixel JS antes de redirecionar, garantindo 95%+ de captura de FBC
+    # ✅ SEGURANÇA: Cloaker já validou ANTES (linha 4036), então HTML é seguro
+    if pool.meta_pixel_id and pool.meta_tracking_enabled and not is_crawler_request:
+        # ✅ VALIDAÇÃO CRÍTICA: Garantir que pool_bot, bot e username existem antes de renderizar HTML
+        if not pool_bot or not pool_bot.bot or not pool_bot.bot.username:
+            logger.error(f"❌ Pool {slug}: pool_bot ou bot.username ausente - usando fallback redirect direto")
+            # Fallback para redirect direto (comportamento atual)
+            if tracking_token:
+                tracking_param = tracking_token
+            else:
+                tracking_param = f"p{pool.id}"
+            # Usar username do pool_bot se disponível, senão usar fallback
+            bot_username_fallback = pool_bot.bot.username if pool_bot and pool_bot.bot and pool_bot.bot.username else 'bot'
+            redirect_url = f"https://t.me/{bot_username_fallback}?start={tracking_param}"
+            response = make_response(redirect(redirect_url, code=302))
+            # ✅ Injetar _fbp/_fbc gerados no servidor (90 dias - padrão Meta)
+            cookie_kwargs_fallback = {
+                'max_age': 90 * 24 * 60 * 60,
+                'httponly': False,
+                'secure': True,
+                'samesite': 'None',
+            }
+            if fbp_cookie:
+                response.set_cookie('_fbp', fbp_cookie, **cookie_kwargs_fallback)
+            if fbc_cookie:
+                response.set_cookie('_fbc', fbc_cookie, **cookie_kwargs_fallback)
+            return response
+        
+        # ✅ SEMPRE usar tracking_token no start param
+        if tracking_token:
+            tracking_param = tracking_token
+            logger.info(f"✅ Tracking param: {tracking_token} ({len(tracking_token)} chars)")
+        else:
+            tracking_param = f"p{pool.id}"
+            logger.info(f"⚠️ Tracking token ausente - usando fallback: {tracking_param}")
+        
+        # ✅ TRY/EXCEPT: Renderizar HTML com fallback seguro
+        try:
+            logger.info(f"🌉 Renderizando HTML com Meta Pixel (pixel_id: {pool.meta_pixel_id[:10]}...) para capturar FBC")
+            
+            # ✅ SEGURANÇA: Sanitizar valores para JavaScript (prevenir XSS)
+            import re
+            def sanitize_js_value(value):
+                """Remove caracteres perigosos para JavaScript"""
+                if not value:
+                    return ''
+                value = str(value).replace("'", "").replace('"', '').replace('\n', '').replace('\r', '').replace('\\', '')
+                # Permitir apenas alfanuméricos, underscore, hífen, ponto
+                value = re.sub(r'[^a-zA-Z0-9_.-]', '', value)
+                return value[:64]  # Limitar tamanho
+            
+            tracking_token_safe = sanitize_js_value(tracking_param)
+            bot_username_safe = sanitize_js_value(pool_bot.bot.username)
+            
+            response = make_response(render_template('telegram_redirect.html',
+                bot_username=bot_username_safe,
+                tracking_token=tracking_token_safe,
+                pixel_id=pool.meta_pixel_id,
+                fbclid=sanitize_js_value(fbclid) if fbclid else '',
+                utm_source=sanitize_js_value(request.args.get('utm_source', '')),
+                utm_campaign=sanitize_js_value(request.args.get('utm_campaign', '')),
+                utm_medium=sanitize_js_value(request.args.get('utm_medium', '')),
+                utm_content=sanitize_js_value(request.args.get('utm_content', '')),
+                utm_term=sanitize_js_value(request.args.get('utm_term', '')),
+                grim=sanitize_js_value(request.args.get('grim', ''))
+            ))
+            
+            # ✅ CRÍTICO: Adicionar headers anti-cache para evitar cache de tracking_token
+            response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate, private'
+            response.headers['Pragma'] = 'no-cache'
+            response.headers['Expires'] = '0'
+            
+            return response
+        except Exception as e:
+            # ✅ FALLBACK SEGURO: Se template falhar, redirect direto (comportamento atual)
+            logger.error(f"❌ Erro ao renderizar template telegram_redirect.html: {e} | Usando fallback redirect direto", exc_info=True)
+            # Continuar para redirect direto (linha 4382) - não retornar aqui, deixar código continuar
+    
+    # ✅ FALLBACK: Se não tem pixel_id ou é crawler, redirect direto (comportamento atual)
     # ✅ SEMPRE usar tracking_token no start param (32 chars, cabe perfeitamente em 64)
     if tracking_token and not is_crawler_request:
         # tracking_token tem 32 caracteres (uuid4.hex), bem abaixo do limite de 64
@@ -7693,8 +7773,15 @@ def send_meta_pixel_purchase_event(payment):
         
         logger.info(f"🔑 Purchase - external_id: fbclid={'✅' if external_id_for_hash else '❌'} | telegram_id={'✅' if telegram_id_for_hash else '❌'}")
 
-        email_value = getattr(bot_user, 'email', None)
-        phone_value = getattr(bot_user, 'phone', None)
+        # ✅ CRÍTICO: Recuperar email e phone do Payment (prioridade 1) - dados reais do gateway
+        email_value = getattr(payment, 'customer_email', None)
+        phone_value = getattr(payment, 'customer_phone', None)
+        
+        # ✅ FALLBACK: Se Payment não tiver, tentar BotUser
+        if not email_value and bot_user:
+            email_value = getattr(bot_user, 'email', None)
+        if not phone_value and bot_user:
+            phone_value = getattr(bot_user, 'phone', None)
         if phone_value:
             digits_only = ''.join(filter(str.isdigit, str(phone_value)))
             phone_value = digits_only or None

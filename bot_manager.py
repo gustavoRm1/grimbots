@@ -4427,16 +4427,18 @@ Seu pagamento ainda não foi confirmado.
                 
                 # Gerar PIX usando gateway isolado com DADOS REAIS DO CLIENTE
                 logger.info(f"💰 Gerando PIX: R$ {amount:.2f} | Descrição: {description}")
+                # ✅ CRÍTICO: Preparar customer_data ANTES de gerar PIX (para usar depois ao salvar Payment)
+                customer_data = {
+                    'name': customer_name or 'Cliente',
+                    'email': f"{customer_username}@telegram.user" if customer_username else f"user{customer_user_id}@telegram.user",
+                    'phone': customer_user_id,  # ✅ User ID do Telegram como identificador único
+                    'document': customer_user_id  # ✅ User ID do Telegram (gateways aceitam)
+                }
                 pix_result = payment_gateway.generate_pix(
                     amount=amount,
                     description=description,
                     payment_id=payment_id,
-                    customer_data={
-                        'name': customer_name or 'Cliente',
-                        'email': f"{customer_username}@telegram.user" if customer_username else f"user{customer_user_id}@telegram.user",
-                        'phone': customer_user_id,  # ✅ User ID do Telegram como identificador único
-                        'document': customer_user_id  # ✅ User ID do Telegram (gateways aceitam)
-                    }
+                    customer_data=customer_data
                 )
                 
                 logger.info(f"📊 Resultado do PIX: {pix_result}")
@@ -4739,6 +4741,10 @@ Seu pagamento ainda não foi confirmado.
                         customer_name=customer_name,
                         customer_username=customer_username,
                         customer_user_id=customer_user_id,
+                        # ✅ CRÍTICO: Salvar email, phone e document do customer_data (para Meta Pixel Purchase)
+                        customer_email=customer_data.get('email'),
+                        customer_phone=customer_data.get('phone'),
+                        customer_document=customer_data.get('document'),
                         product_name=description,
                         product_description=pix_result.get('pix_code'),  # Salvar código PIX para reenvio (None se recusado)
                         status=payment_status,  # ✅ 'failed' se recusado, 'pending' se não

@@ -844,6 +844,10 @@ class Payment(db.Model):
     customer_user_id = db.Column(db.String(255))
     customer_name = db.Column(db.String(255))
     customer_username = db.Column(db.String(255))
+    # ✅ CRÍTICO: Email, phone e document do cliente (para Meta Pixel Purchase)
+    customer_email = db.Column(db.String(255), nullable=True, index=True)
+    customer_phone = db.Column(db.String(50), nullable=True, index=True)
+    customer_document = db.Column(db.String(50), nullable=True)  # CPF/CNPJ
     
     # Produto
     product_name = db.Column(db.String(100))

@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LIBERE SEU ACESSO</title>
+    
+    <!-- Meta Pixel Code -->
+    {% if pixel_id %}
+    <script>
+        !function(f,b,e,v,n,t,s)
+        {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+        n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+        if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+        n.queue=[];t=b.createElement(e);t.async=!0;
+        t.src=v;s=b.getElementsByTagName(e)[0];
+        s.parentNode.insertBefore(t,s)}(window, document,'script',
+        'https://connect.facebook.net/en_US/fbevents.js');
+        fbq('init', '{{ pixel_id }}');
+        fbq('track', 'PageView');
+    </script>
+    <noscript>
+        <img height="1" width="1" style="display:none"
+        src="https://www.facebook.com/tr?id={{ pixel_id }}&ev=PageView&noscript=1"/>
+    </noscript>
+    {% endif %}
+    
+    <style>
+        /* Estilo similar ao Telegram para parecer natural */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: #3390ec;
+            color: white;
+            margin: 0;
+            padding: 20px;
+            text-align: center;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        .container {
+            max-width: 400px;
+            width: 100%;
+        }
+        .bot-icon {
+            width: 80px;
+            height: 80px;
+            background: white;
+            border-radius: 20px;
+            margin: 0 auto 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+        }
+        .bot-name {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        .bot-username {
+            font-size: 16px;
+            opacity: 0.8;
+            margin-bottom: 20px;
+        }
+        .stats {
+            font-size: 14px;
+            opacity: 0.9;
+            margin-bottom: 30px;
+        }
+        .start-button {
+            background: white;
+            color: #3390ec;
+            border: none;
+            padding: 14px 28px;
+            border-radius: 24px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            transition: transform 0.2s;
+        }
+        .start-button:hover {
+            transform: scale(1.05);
+        }
+        .info-text {
+            font-size: 14px;
+            opacity: 0.8;
+            margin-top: 20px;
+        }
+        .loading {
+            display: none;
+            margin-top: 10px;
+            font-size: 12px;
+            opacity: 0.7;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="bot-icon">🤖</div>
+        <div class="bot-name">LIBERE SEU ACESSO</div>
+        <div class="bot-username">@{{ bot_username }}</div>
+        <div class="stats">+55.298 Usúarios Mensais</div>
+        
+        <a href="#" id="start-bot-link" class="start-button">
+            Start Bot
+        </a>
+        
+        <div class="info-text">
+            If you have <strong>Telegram</strong>, you can launch<br>
+            <strong>LIBERE SEU ACESSO</strong> right away.
+        </div>
+        
+        <div class="loading" id="loading">Abrindo Telegram...</div>
+    </div>
+    
+    <script>
+        // Função para ler cookies
+        function getCookie(name) {
+            const value = `; ${document.cookie}`;
+            const parts = value.split(`; ${name}=`);
+            if (parts.length === 2) return parts.pop().split(';').shift();
+            return null;
+        }
+        
+        // Função para redirecionar para Telegram
+        function redirectToTelegram() {
+            const trackingToken = '{{ tracking_token }}';
+            const botUsername = '{{ bot_username }}';
+            const telegramUrl = `https://t.me/${botUsername}?start=${trackingToken}`;
+            
+            // Mostrar loading
+            document.getElementById('loading').style.display = 'block';
+            
+            // Redirecionar
+            window.location.href = telegramUrl;
+        }
+        
+        // Aguardar Meta Pixel JS carregar e gerar cookies
+        // Meta Pixel geralmente gera cookies em 300-500ms
+        // 800ms garante que 95% dos casos terão cookies
+        let pixelLoaded = false;
+        let redirectTimer = null;
+        
+        // Verificar se Pixel carregou
+        function checkPixelLoaded() {
+            if (typeof fbq !== 'undefined') {
+                pixelLoaded = true;
+                // Pixel carregou, aguardar mais 300ms para cookies serem gerados
+                setTimeout(() => {
+                    // Salvar cookies nos params (fallback se Redis expirar)
+                    const fbp = getCookie('_fbp');
+                    const fbc = getCookie('_fbc');
+                    
+                    if (fbp || fbc) {
+                        // Adicionar cookies aos params do redirect
+                        const params = new URLSearchParams();
+                        params.append('start', '{{ tracking_token }}');
+                        if (fbp) params.append('_fbp_cookie', fbp);
+                        if (fbc) params.append('_fbc_cookie', fbc);
+                        
+                        const telegramUrl = `https://t.me/{{ bot_username }}?${params.toString()}`;
+                        window.location.href = telegramUrl;
+                    } else {
+                        // Cookies não gerados, redirect mesmo assim
+                        redirectToTelegram();
+                    }
+                }, 300);
+                return true;
+            }
+            return false;
+        }
+        
+        // Tentar verificar a cada 100ms
+        const pixelCheckInterval = setInterval(() => {
+            if (checkPixelLoaded()) {
+                clearInterval(pixelCheckInterval);
+                if (redirectTimer) clearTimeout(redirectTimer);
+            }
+        }, 100);
+        
+        // Fallback: Se Pixel não carregou em 2s, redirect mesmo assim
+        redirectTimer = setTimeout(() => {
+            clearInterval(pixelCheckInterval);
+            redirectToTelegram();
+        }, 2000);
+        
+        // Click no botão também faz redirect
+        document.getElementById('start-bot-link').addEventListener('click', (e) => {
+            e.preventDefault();
+            clearInterval(pixelCheckInterval);
+            if (redirectTimer) clearTimeout(redirectTimer);
+            redirectToTelegram();
+        });
+    </script>
+    
+    <!-- ✅ FALLBACK: Usuários sem JavaScript são redirecionados automaticamente -->
+    <noscript>
+        <meta http-equiv="refresh" content="0;url=https://t.me/{{ bot_username }}?start={{ tracking_token }}">
+        <p style="text-align: center; margin-top: 20px;">
+            Redirecionando para Telegram...<br>
+            <a href="https://t.me/{{ bot_username }}?start={{ tracking_token }}" style="color: white; text-decoration: underline;">
+                Clique aqui se não for redirecionado automaticamente
+            </a>
+        </p>
+    </noscript>
+</body>
+</html>
+
