@@ -7026,6 +7026,15 @@ def send_meta_pixel_pageview_event(pool, request, pageview_event_id=None, tracki
         # Extrair UTM parameters
         utm_params = MetaPixelHelper.extract_utm_params(request)
         
+        # ✅ CRÍTICO V4.1: Recuperar tracking_data do Redis ANTES de usar
+        from utils.tracking_service import TrackingService, TrackingServiceV4
+        tracking_service_v4 = TrackingServiceV4()
+        
+        tracking_data = {}
+        if tracking_token:
+            tracking_data = tracking_service_v4.recover_tracking_data(tracking_token) or {}
+            logger.info(f"✅ PageView - tracking_data recuperado do Redis: {len(tracking_data)} campos")
+        
         # ✅ PATCH 2: RECUPERAR _fbp e _fbc (Prioridade: tracking_data → BotUser → cookie)
         from utils.tracking_service import TrackingService
         
@@ -7223,6 +7232,27 @@ def send_meta_pixel_pageview_event(pool, request, pageview_event_id=None, tracki
         # ✅ CRÍTICO: event_source_url deve apontar para URL do redirecionador
         event_source_url = request.url if request.url else f'https://{request.host}/go/{pool.slug}'
         
+        # ✅ CORREÇÃO V4.1: Filtrar valores None/vazios do custom_data
+        custom_data = {}
+        if pool.id:
+            custom_data['pool_id'] = pool.id
+        if pool.name:
+            custom_data['pool_name'] = pool.name
+        if utm_data.get('utm_source'):
+            custom_data['utm_source'] = utm_data['utm_source']
+        if utm_data.get('utm_campaign'):
+            custom_data['utm_campaign'] = utm_data['utm_campaign']
+        if utm_data.get('utm_content'):
+            custom_data['utm_content'] = utm_data['utm_content']
+        if utm_data.get('utm_medium'):
+            custom_data['utm_medium'] = utm_data['utm_medium']
+        if utm_data.get('utm_term'):
+            custom_data['utm_term'] = utm_data['utm_term']
+        if utm_data.get('fbclid'):
+            custom_data['fbclid'] = utm_data['fbclid']
+        if utm_data.get('campaign_code'):
+            custom_data['campaign_code'] = utm_data['campaign_code']
+        
         event_data = {
             'event_name': 'PageView',
             'event_time': int(time.time()),
@@ -7230,17 +7260,7 @@ def send_meta_pixel_pageview_event(pool, request, pageview_event_id=None, tracki
             'action_source': 'website',
             'event_source_url': event_source_url,  # ✅ URL do redirecionador (consistente)
             'user_data': user_data,  # ✅ Agora com external_id hashado corretamente + fbp + fbc
-            'custom_data': {
-                'pool_id': pool.id,
-                'pool_name': pool.name,
-                'utm_source': utm_data['utm_source'],
-                'utm_campaign': utm_data['utm_campaign'],
-                'utm_content': utm_data['utm_content'],
-                'utm_medium': utm_data['utm_medium'],
-                'utm_term': utm_data['utm_term'],
-                'fbclid': utm_data['fbclid'],
-                'campaign_code': utm_data['campaign_code']  # ✅ grim tem prioridade máxima
-            }
+            'custom_data': custom_data  # ✅ Sempre dict (pode ser vazio, nunca None)
         }
         
         # ✅ ENFILEIRAR (NÃO ESPERA RESPOSTA)
@@ -7816,11 +7836,26 @@ def send_meta_pixel_purchase_event(payment):
         
         missing_fields = [k for k, v in required_fields.items() if not v]
         if missing_fields:
-            logger.error(f"❌ Purchase - Campos obrigatórios ausentes: {missing_fields}")
-            logger.error(f"   Meta pode rejeitar evento ou reduzir match quality")
-            logger.error(f"   Payment ID: {payment.payment_id} | Pool: {pool.name}")
-            # ❌ NÃO enviar evento sem campos obrigatórios
-            return  # ✅ Retornar sem enviar (evita erro silencioso)
+            logger.warning(f"⚠️ Purchase - Campos ausentes: {missing_fields} - Tentando recuperar...")
+            
+            # ✅ CORREÇÃO V4.1: Tentar recuperar event_source_url antes de bloquear
+            if 'event_source_url' in missing_fields:
+                event_source_url = tracking_data.get('event_source_url') or tracking_data.get('first_page')
+                if event_source_url:
+                    event_data['event_source_url'] = event_source_url
+                    missing_fields.remove('event_source_url')
+                    logger.info(f"✅ Purchase - event_source_url recuperado: {event_source_url}")
+            
+            # Se ainda faltar campos críticos, bloquear
+            critical_fields = ['event_name', 'event_time', 'event_id', 'action_source', 'user_data']
+            critical_missing = [f for f in missing_fields if f in critical_fields]
+            if critical_missing:
+                logger.error(f"❌ Purchase - Campos críticos ausentes: {critical_missing}")
+                logger.error(f"   Payment ID: {payment.payment_id} | Pool: {pool.name}")
+                return  # ✅ Retornar sem enviar (evita erro silencioso)
+            else:
+                logger.warning(f"⚠️ Purchase - Campos não-críticos ausentes: {[f for f in missing_fields if f not in critical_fields]}")
+                # Continuar mesmo com campos não-críticos ausentes
         
         # ✅ VALIDAÇÃO: user_data deve ter pelo menos external_id ou client_ip_address
         if not user_data.get('external_id') and not user_data.get('client_ip_address'):
@@ -7830,11 +7865,14 @@ def send_meta_pixel_purchase_event(payment):
             # ❌ NÃO enviar evento sem user_data válido
             return  # ✅ Retornar sem enviar (evita erro silencioso)
         
-        # ✅ VALIDAÇÃO: external_id não pode ser None
-        if not user_data.get('external_id'):
-            logger.error(f"❌ Purchase - external_id AUSENTE! Meta rejeita evento sem external_id.")
+        # ✅ CORREÇÃO V4.1: Bloquear apenas se não tiver NENHUM identificador
+        if not user_data.get('external_id') and not user_data.get('fbp') and not user_data.get('fbc'):
+            logger.error(f"❌ Purchase - Nenhum identificador presente (external_id, fbp, fbc)")
+            logger.error(f"   Meta rejeita eventos sem identificadores")
             logger.error(f"   Payment ID: {payment.payment_id} | Pool: {pool.name}")
             return  # ✅ Retornar sem enviar (evita erro silencioso)
+        elif not user_data.get('external_id'):
+            logger.warning(f"⚠️ Purchase - external_id ausente, mas fbp/fbc presente - Meta pode aceitar")
         
         # ✅ VALIDAÇÃO: client_ip_address e client_user_agent são obrigatórios para eventos web
         if event_data.get('action_source') == 'website':

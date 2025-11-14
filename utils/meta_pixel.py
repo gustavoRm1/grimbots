@@ -237,7 +237,8 @@ class MetaPixelAPI:
         fbc: str = None,
         utm_source: str = None,
         utm_campaign: str = None,
-        campaign_code: str = None
+        campaign_code: str = None,
+        event_source_url: str = None  # ✅ NOVO: URL do redirect
     ) -> Dict:
         """
         Envia evento PageView para Meta
@@ -282,8 +283,9 @@ class MetaPixelAPI:
                 'event_time': int(time.time()),
                 'event_id': event_id,
                 'action_source': 'website',
+                'event_source_url': event_source_url if event_source_url else None,  # ✅ ADICIONAR
                 'user_data': user_data,
-                'custom_data': custom_data if custom_data else None
+                'custom_data': custom_data if custom_data else {}  # ✅ CORRIGIR: {} não None
             }],
             'access_token': access_token
         }

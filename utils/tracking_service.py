@@ -152,7 +152,11 @@ class TrackingServiceV4:
                             payload['fbc'] = None
                             payload['fbc_origin'] = None
                         
-                        previous.update(payload)
+                        # ✅ CORREÇÃO V4.1: Não sobrescrever com None
+                        for key, value in payload.items():
+                            if value is not None:  # ✅ Só atualizar se não for None
+                                previous[key] = value
+                            # Se value é None, manter valor anterior (se existir)
                         payload = previous
                 except Exception:
                     logger.exception("Falha ao mesclar payload existente; substituindo")

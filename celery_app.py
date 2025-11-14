@@ -121,6 +121,38 @@ def _send_token_alert(pixel_id: str, message: str):
 # TASKS
 # ============================================================================
 
+def _validate_event_data(event_data):
+    """Valida event_data antes de enviar para Meta"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    # Campos obrigatórios
+    required_fields = ['event_name', 'event_time', 'event_id', 'action_source']
+    missing = [f for f in required_fields if not event_data.get(f)]
+    if missing:
+        raise ValueError(f"Campos obrigatórios ausentes: {missing}")
+    
+    # Validar user_data
+    user_data = event_data.get('user_data', {})
+    if not isinstance(user_data, dict):
+        raise ValueError("user_data deve ser dict")
+    
+    # Validar custom_data (deve ser dict, não None)
+    custom_data = event_data.get('custom_data')
+    if custom_data is not None and not isinstance(custom_data, dict):
+        raise ValueError("custom_data deve ser dict ou None")
+    
+    # Se custom_data é None, converter para {}
+    if custom_data is None:
+        event_data['custom_data'] = {}
+        logger.warning(f"⚠️ custom_data era None, convertido para {{}}")
+    
+    # Validar event_source_url (opcional mas recomendado)
+    if not event_data.get('event_source_url'):
+        logger.warning(f"⚠️ event_source_url ausente - Meta recomenda incluir")
+    
+    return True
+
 @celery_app.task(bind=True, max_retries=10)
 def send_meta_event(self, pixel_id, access_token, event_data, test_code=None):
     """
@@ -138,6 +170,14 @@ def send_meta_event(self, pixel_id, access_token, event_data, test_code=None):
     import json
     
     logger = logging.getLogger(__name__)
+    
+    # ✅ VALIDAÇÃO DE EVENT_DATA ANTES DE ENVIAR
+    try:
+        _validate_event_data(event_data)
+    except ValueError as e:
+        logger.error(f"❌ Event data inválido: {e}")
+        logger.error(f"   Event: {event_data.get('event_name')} | ID: {event_data.get('event_id')}")
+        raise Exception(f"Event data inválido: {e}")
     
     # ✅ VALIDAÇÃO DE TOKEN ANTES DO ENVIO
     try:
