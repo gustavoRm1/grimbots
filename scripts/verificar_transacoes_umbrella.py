@@ -159,7 +159,8 @@ def verificar_transacoes():
                         'payment_cpf': payment.customer_user_id,
                         'payment_nome': payment.customer_name,
                         'payment_telefone': payment.customer_username,
-                        'payment_email': payment.customer_email if hasattr(payment, 'customer_email') else None,
+                        'payment_gateway_transaction_id': payment.gateway_transaction_id,
+                        'payment_gateway_transaction_hash': payment.gateway_transaction_hash,
                         'created_at': payment.created_at,
                         'paid_at': payment.paid_at,
                         'valor_diferenca': valor_diferenca
@@ -183,7 +184,8 @@ def verificar_transacoes():
                         'payment_cpf': payment.customer_user_id,
                         'payment_nome': payment.customer_name,
                         'payment_telefone': payment.customer_username,
-                        'payment_email': payment.customer_email if hasattr(payment, 'customer_email') else None,
+                        'payment_gateway_transaction_id': payment.gateway_transaction_id,
+                        'payment_gateway_transaction_hash': payment.gateway_transaction_hash,
                         'created_at': payment.created_at,
                         'paid_at': payment.paid_at,
                         'valor_diferenca': valor_diferenca
@@ -296,7 +298,7 @@ def verificar_transacoes():
         if encontradas_pagas:
             csv_file_pagas = output_dir / f"transacoes_pagas_{data_str}.csv"
             with open(csv_file_pagas, 'w', newline='', encoding='utf-8') as f:
-                fieldnames = ['gateway_id', 'payment_id', 'status', 'valor_gateway', 'valor_payment', 'diferenca', 'cpf', 'nome', 'telefone', 'email', 'created_at', 'paid_at']
+                fieldnames = ['gateway_id', 'payment_id', 'status', 'valor_gateway', 'valor_payment', 'diferenca', 'cpf', 'nome', 'telefone', 'created_at', 'paid_at', 'gateway_transaction_id', 'gateway_transaction_hash']
                 writer = csv.DictWriter(f, fieldnames=fieldnames)
                 writer.writeheader()
                 for trans in encontradas_pagas:
@@ -307,12 +309,13 @@ def verificar_transacoes():
                         'valor_gateway': trans['gateway_valor'],
                         'valor_payment': trans['payment_valor'],
                         'diferenca': trans['valor_diferenca'],
-                        'cpf': trans['payment_cpf'],
-                        'nome': trans['payment_nome'],
-                        'telefone': trans['payment_telefone'],
-                        'email': trans['payment_email'] or '',
+                        'cpf': trans['payment_cpf'] or '',
+                        'nome': trans['payment_nome'] or '',
+                        'telefone': trans['payment_telefone'] or '',
                         'created_at': trans['created_at'].isoformat() if trans['created_at'] else '',
-                        'paid_at': trans['paid_at'].isoformat() if trans['paid_at'] else ''
+                        'paid_at': trans['paid_at'].isoformat() if trans['paid_at'] else '',
+                        'gateway_transaction_id': trans['payment_gateway_transaction_id'] or '',
+                        'gateway_transaction_hash': trans['payment_gateway_transaction_hash'] or ''
                     })
             print(f"✅ CSV de transações pagas salvo: {csv_file_pagas}")
         
@@ -320,7 +323,7 @@ def verificar_transacoes():
         if encontradas_pendentes:
             csv_file_pendentes = output_dir / f"transacoes_pendentes_{data_str}.csv"
             with open(csv_file_pendentes, 'w', newline='', encoding='utf-8') as f:
-                fieldnames = ['gateway_id', 'payment_id', 'status', 'valor_gateway', 'valor_payment', 'diferenca', 'cpf', 'nome', 'telefone', 'email', 'created_at']
+                fieldnames = ['gateway_id', 'payment_id', 'status', 'valor_gateway', 'valor_payment', 'diferenca', 'cpf', 'nome', 'telefone', 'created_at', 'gateway_transaction_id', 'gateway_transaction_hash']
                 writer = csv.DictWriter(f, fieldnames=fieldnames)
                 writer.writeheader()
                 for trans in encontradas_pendentes:
@@ -331,11 +334,12 @@ def verificar_transacoes():
                         'valor_gateway': trans['gateway_valor'],
                         'valor_payment': trans['payment_valor'],
                         'diferenca': trans['valor_diferenca'],
-                        'cpf': trans['payment_cpf'],
-                        'nome': trans['payment_nome'],
-                        'telefone': trans['payment_telefone'],
-                        'email': trans['payment_email'] or '',
-                        'created_at': trans['created_at'].isoformat() if trans['created_at'] else ''
+                        'cpf': trans['payment_cpf'] or '',
+                        'nome': trans['payment_nome'] or '',
+                        'telefone': trans['payment_telefone'] or '',
+                        'created_at': trans['created_at'].isoformat() if trans['created_at'] else '',
+                        'gateway_transaction_id': trans['payment_gateway_transaction_id'] or '',
+                        'gateway_transaction_hash': trans['payment_gateway_transaction_hash'] or ''
                     })
             print(f"✅ CSV de transações pendentes salvo: {csv_file_pendentes}")
         
