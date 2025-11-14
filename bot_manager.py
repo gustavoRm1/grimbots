@@ -3370,7 +3370,19 @@ Desculpe, não foi possível processar seu pagamento.
                 db.session.refresh(payment)
                 logger.info(f"📊 Status FINAL do pagamento: {payment.status}")
                 
+                # ✅ CRÍTICO: Validação dupla - verificar status ANTES de qualquer ação
                 if payment.status == 'paid':
+                    # ✅ CRÍTICO: Refresh novamente para garantir que não há race condition
+                    db.session.refresh(payment)
+                    
+                    # ✅ CRÍTICO: Validação final antes de liberar acesso
+                    if payment.status != 'paid':
+                        logger.error(
+                            f"❌ ERRO GRAVE: Status mudou após refresh! Esperado: 'paid', Atual: {payment.status}"
+                        )
+                        logger.error(f"   Payment ID: {payment.payment_id}")
+                        return
+                    
                     # PAGAMENTO CONFIRMADO! Liberar acesso
                     logger.info(f"✅ PAGAMENTO CONFIRMADO! Liberando acesso...")
                     
@@ -3393,20 +3405,46 @@ Desculpe, não foi possível processar seu pagamento.
                     # Cancelar downsells agendados
                     self.cancel_downsells(payment.payment_id)
                     
-                    bot = payment.bot
-                    bot_config = self.active_bots.get(bot_id, {}).get('config', {})
-                    access_link = bot_config.get('access_link', '')
-                    custom_success_message = bot_config.get('success_message', '').strip()
-                    
-                    # Usar mensagem personalizada ou padrão
-                    if custom_success_message:
-                        # Substituir variáveis
-                        success_message = custom_success_message
-                        success_message = success_message.replace('{produto}', payment.product_name or 'Produto')
-                        success_message = success_message.replace('{valor}', f'R$ {payment.amount:.2f}')
-                        success_message = success_message.replace('{link}', access_link or 'Link não configurado')
-                    elif access_link:
-                        success_message = f"""
+                    # ✅ CRÍTICO: Usar send_payment_delivery para garantir validação consistente
+                    try:
+                        from app import send_payment_delivery
+                        logger.info(f"📦 [VERIFY] Enviando entregável via send_payment_delivery para {payment.payment_id}")
+                        
+                        # ✅ CRÍTICO: Refresh antes de chamar send_payment_delivery
+                        db.session.refresh(payment)
+                        
+                        # ✅ CRÍTICO: Validar status ANTES de chamar send_payment_delivery
+                        if payment.status == 'paid':
+                            resultado = send_payment_delivery(payment, self)
+                            if resultado:
+                                logger.info(f"✅ [VERIFY] Entregável enviado com sucesso via send_payment_delivery")
+                            else:
+                                logger.warning(f"⚠️ [VERIFY] send_payment_delivery retornou False para {payment.payment_id}")
+                        else:
+                            logger.error(
+                                f"❌ ERRO GRAVE: Tentativa de enviar entregável com status inválido "
+                                f"(status: {payment.status}, payment_id: {payment.payment_id})"
+                            )
+                    except Exception as e:
+                        logger.error(f"❌ [VERIFY] Erro ao enviar entregável via send_payment_delivery: {e}", exc_info=True)
+                        
+                        # ✅ FALLBACK: Se send_payment_delivery falhar, usar método antigo (mas com validação)
+                        logger.warning(f"⚠️ [VERIFY] Usando fallback para envio de mensagem (send_payment_delivery falhou)")
+                        
+                        bot = payment.bot
+                        bot_config = self.active_bots.get(bot_id, {}).get('config', {})
+                        access_link = bot_config.get('access_link', '')
+                        custom_success_message = bot_config.get('success_message', '').strip()
+                        
+                        # Usar mensagem personalizada ou padrão
+                        if custom_success_message:
+                            # Substituir variáveis
+                            success_message = custom_success_message
+                            success_message = success_message.replace('{produto}', payment.product_name or 'Produto')
+                            success_message = success_message.replace('{valor}', f'R$ {payment.amount:.2f}')
+                            success_message = success_message.replace('{link}', access_link or 'Link não configurado')
+                        elif access_link:
+                            success_message = f"""
 ✅ <b>PAGAMENTO CONFIRMADO!</b>
 
 🎉 <b>Parabéns!</b> Seu pagamento foi aprovado com sucesso!
@@ -3418,15 +3456,15 @@ Desculpe, não foi possível processar seu pagamento.
 {access_link}
 
 <b>Aproveite!</b> 🚀
-                        """
-                    else:
-                        success_message = "✅ Pagamento confirmado! Entre em contato com o suporte para receber seu acesso."
-                    
-                    self.send_telegram_message(
-                        token=token,
-                        chat_id=str(chat_id),
-                        message=success_message.strip()
-                    )
+                            """
+                        else:
+                            success_message = "✅ Pagamento confirmado! Entre em contato com o suporte para receber seu acesso."
+                        
+                        self.send_telegram_message(
+                            token=token,
+                            chat_id=str(chat_id),
+                            message=success_message.strip()
+                        )
                     
                     logger.info(f"✅ Acesso liberado para {user_info.get('first_name')}")
                 else:
