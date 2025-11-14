@@ -76,36 +76,9 @@ def sanitize_payload(payload: Any) -> Any:
     return payload
 
 
-def normalize_external_id(fbclid: str) -> str:
-    """
-    Normaliza external_id (fbclid) para garantir matching consistente entre PageView e Purchase.
-    
-    ✅ CRÍTICO: PageView e Purchase DEVEM usar o MESMO algoritmo de normalização!
-    
-    Regras:
-    - Se fbclid > 80 chars: retorna hash MD5 (32 chars) - mesmo critério usado no PageView
-    - Se fbclid <= 80 chars: retorna fbclid original
-    - Se fbclid é None/vazio: retorna None
-    
-    Isso garante que ambos os eventos usem o mesmo external_id, permitindo matching perfeito no Meta.
-    """
-    if not fbclid or not isinstance(fbclid, str):
-        return None
-    
-    fbclid = fbclid.strip()
-    if not fbclid:
-        return None
-    
-    # ✅ CRÍTICO: Mesmo critério usado no PageView (80 chars)
-    # Se fbclid > 80 chars, normalizar para hash MD5 (32 chars)
-    if len(fbclid) > 80:
-        import hashlib
-        normalized = hashlib.md5(fbclid.encode('utf-8')).hexdigest()
-        logger.debug(f"🔑 External ID normalizado (MD5): {normalized} (original len={len(fbclid)})")
-        return normalized
-    
-    # Se <= 80 chars, usar original
-    return fbclid
+# ✅ MOVIDO: normalize_external_id agora está em utils/meta_pixel.py para evitar import circular
+# Importar de lá para manter compatibilidade
+from utils.meta_pixel import normalize_external_id
 
 # ============================================================================
 # GAMIFICAÇÃO V2.0 - IMPORTS
@@ -7010,8 +6983,9 @@ def send_meta_pixel_pageview_event(pool, request, pageview_event_id=None, tracki
             external_id_raw = MetaPixelHelper.generate_external_id()
             logger.warning(f"⚠️ Sem grim nem fbclid, usando external_id sintético: {external_id_raw}")
         
-        # ✅ CRÍTICO: Normalizar external_id para garantir matching consistente com Purchase
-        # Se fbclid > 80 chars, normalizar para hash MD5 (32 chars) - MESMO algoritmo usado no Purchase
+        # ✅ CRÍTICO: Normalizar external_id para garantir matching consistente com Purchase/ViewContent
+        # Se fbclid > 80 chars, normalizar para hash MD5 (32 chars) - MESMO algoritmo usado em todos os eventos
+        from utils.meta_pixel import normalize_external_id
         external_id = normalize_external_id(external_id_raw)
         if external_id != external_id_raw:
             logger.info(f"✅ PageView - external_id normalizado: {external_id} (original len={len(external_id_raw)})")
@@ -7692,9 +7666,10 @@ def send_meta_pixel_purchase_event(payment):
             event_id = f"purchase_{payment.payment_id}_{event_time}"
             logger.warning(f"⚠️ Purchase - event_id não encontrado, gerado novo: {event_id} (deduplicação pode falhar)")
         
-        # ✅ CRÍTICO #2: external_id IMUTÁVEL e CONSISTENTE (SEMPRE MESMO FORMATO DO PAGEVIEW!)
-        # ✅ CORREÇÃO CIRÚRGICA: Normalizar external_id com MESMO algoritmo usado no PageView
+        # ✅ CRÍTICO #2: external_id IMUTÁVEL e CONSISTENTE (SEMPRE MESMO FORMATO DO PAGEVIEW/VIEWCONTENT!)
+        # ✅ CORREÇÃO CIRÚRGICA: Normalizar external_id com MESMO algoritmo usado em todos os eventos
         # Se fbclid > 80 chars, normalizar para hash MD5 (32 chars) - GARANTE MATCHING PERFEITO!
+        from utils.meta_pixel import normalize_external_id
         external_id_normalized = normalize_external_id(external_id_value) if external_id_value else None
         if external_id_normalized != external_id_value and external_id_value:
             logger.info(f"✅ Purchase - external_id normalizado: {external_id_normalized} (original len={len(external_id_value)})")

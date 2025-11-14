@@ -184,22 +184,49 @@ def send_meta_pixel_viewcontent_event(bot, bot_user, message, pool_id=None):
         
         # ✅ CRÍTICO: Construir user_data usando MetaPixelAPI._build_user_data() (MESMO DO PAGEVIEW!)
         # Isso garante que external_id seja hashado corretamente e fbp/fbc sejam incluídos
-        external_id_value = tracking_data.get('fbclid') or getattr(bot_user, 'fbclid', None)
+        
+        # ✅ CORREÇÃO CRÍTICA: Normalizar external_id para garantir matching consistente com PageView/Purchase
+        # Se fbclid > 80 chars, normalizar para hash MD5 (32 chars) - MESMO algoritmo usado em todos os eventos
+        from utils.meta_pixel import normalize_external_id
+        external_id_raw = tracking_data.get('fbclid') or getattr(bot_user, 'fbclid', None)
+        external_id_value = normalize_external_id(external_id_raw) if external_id_raw else None
+        if external_id_value != external_id_raw and external_id_raw:
+            logger.info(f"✅ ViewContent - external_id normalizado: {external_id_value} (original len={len(external_id_raw)})")
+            logger.info(f"✅ ViewContent - MATCH GARANTIDO com PageView/Purchase (mesmo algoritmo de normalização)")
+        elif external_id_value:
+            logger.info(f"✅ ViewContent - external_id usado original: {external_id_value[:30]}... (len={len(external_id_value)})")
+        
         fbp_value = tracking_data.get('fbp') or getattr(bot_user, 'fbp', None)
-        fbc_value = tracking_data.get('fbc') or getattr(bot_user, 'fbc', None)
+        
+        # ✅ CORREÇÃO CRÍTICA: Verificar fbc_origin para garantir que só enviamos fbc real (cookie)
+        # Se fbc_origin = 'synthetic' ou None, IGNORAR (não usar fbc sintético)
+        fbc_value = None
+        fbc_origin = tracking_data.get('fbc_origin')
+        
+        # ✅ PRIORIDADE 1: tracking_data com fbc_origin = 'cookie' (MAIS CONFIÁVEL)
+        if tracking_data.get('fbc') and fbc_origin == 'cookie':
+            fbc_value = tracking_data.get('fbc')
+            logger.info(f"[META VIEWCONTENT] ViewContent - fbc REAL recuperado do tracking_data (origem: cookie): {fbc_value[:50]}...")
+        # ✅ PRIORIDADE 2: BotUser (assumir que veio de cookie se foi salvo via process_start_async)
+        elif bot_user and getattr(bot_user, 'fbc', None):
+            fbc_value = bot_user.fbc
+            logger.info(f"[META VIEWCONTENT] ViewContent - fbc recuperado do BotUser (assumido como real): {fbc_value[:50]}...")
+        else:
+            logger.warning(f"[META VIEWCONTENT] ViewContent - fbc ausente ou ignorado (origem: {fbc_origin or 'ausente'}) - Meta terá atribuição reduzida")
+        
         ip_value = tracking_data.get('client_ip') or getattr(bot_user, 'ip_address', None)
         ua_value = tracking_data.get('client_user_agent') or getattr(bot_user, 'user_agent', None)
         
         # ✅ Usar _build_user_data para garantir formato correto (hash SHA256, array external_id, etc)
         user_data = MetaPixelAPI._build_user_data(
             customer_user_id=str(bot_user.telegram_user_id),  # ✅ Telegram ID
-            external_id=external_id_value,  # ✅ fbclid (será hashado)
+            external_id=external_id_value,  # ✅ fbclid normalizado (será hashado)
             email=None,  # BotUser não tem email
             phone=None,  # BotUser não tem phone
             client_ip=ip_value,
             client_user_agent=ua_value,
             fbp=fbp_value,  # ✅ CRÍTICO: FBP do PageView
-            fbc=fbc_value  # ✅ CRÍTICO: FBC do PageView
+            fbc=fbc_value  # ✅ CRÍTICO: FBC do PageView (apenas se real/cookie)
         )
         
         # ✅ Construir custom_data (filtrar None/vazios)

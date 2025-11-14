@@ -28,6 +28,37 @@ from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
+def normalize_external_id(fbclid: str) -> str:
+    """
+    Normaliza external_id (fbclid) para garantir matching consistente entre PageView, ViewContent e Purchase.
+    
+    ✅ CRÍTICO: Todos os eventos DEVEM usar o MESMO algoritmo de normalização!
+    
+    Regras:
+    - Se fbclid > 80 chars: retorna hash MD5 (32 chars) - mesmo critério usado em todos os eventos
+    - Se fbclid <= 80 chars: retorna fbclid original
+    - Se fbclid é None/vazio: retorna None
+    
+    Isso garante que todos os eventos usem o mesmo external_id, permitindo matching perfeito no Meta.
+    """
+    if not fbclid or not isinstance(fbclid, str):
+        return None
+    
+    fbclid = fbclid.strip()
+    if not fbclid:
+        return None
+    
+    # ✅ CRÍTICO: Mesmo critério usado em todos os eventos (80 chars)
+    # Se fbclid > 80 chars, normalizar para hash MD5 (32 chars)
+    if len(fbclid) > 80:
+        normalized = hashlib.md5(fbclid.encode('utf-8')).hexdigest()
+        logger.debug(f"🔑 External ID normalizado (MD5): {normalized} (original len={len(fbclid)})")
+        return normalized
+    
+    # Se <= 80 chars, usar original
+    return fbclid
+
+
 class MetaPixelAPI:
     """
     Client para Meta Conversions API (CAPI)
