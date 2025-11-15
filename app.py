@@ -4295,17 +4295,11 @@ def public_redirect(slug):
             else:
                 logger.info(f"[META PIXEL] Redirect - tracking_token salvo: {tracking_token[:20]}... | Campos: fbclid={'✅' if tracking_payload.get('fbclid') else '❌'}, fbp={'✅' if tracking_payload.get('fbp') else '❌'}, ip={'✅' if tracking_payload.get('client_ip') else '❌'}, ua={'✅' if tracking_payload.get('client_user_agent') else '❌'}")
                 logger.info(f"[META PIXEL] Redirect - tracking_token salvo no Redis com fbclid completo (len={len(fbclid_to_save) if fbclid_to_save else 0}) e pageview_event_id: {tracking_payload.get('pageview_event_id', 'N/A')}")
-            # ✅ CRÍTICO V4.1: Salvar fbc APENAS se veio do cookie (V3 compat)
-            # Se fbc_origin != 'cookie', passar None (não salvar fbc sintético)
-            TrackingService.save_tracking_data(
-                fbclid=fbclid,
-                fbp=fbp_cookie,
-                fbc=fbc_cookie if fbc_origin == 'cookie' else None,  # ✅ APENAS fbc real do cookie
-                ip_address=user_ip,
-                user_agent=user_agent,
-                grim=grim_param,
-                utms=utms
-            )
+            # ✅ CORREÇÃO SÊNIOR QI 500: REMOVER chamada duplicada de TrackingService.save_tracking_data()
+            # Isso causa CONFLITO porque TrackingServiceV4.save_tracking_token() já salva tracking:fbclid:{fbclid} com tracking_token (string)
+            # TrackingService.save_tracking_data() salva tracking:fbclid:{fbclid} com JSON payload, sobrescrevendo o tracking_token
+            # SOLUÇÃO: Remover chamada duplicada - TrackingServiceV4.save_tracking_token() já salva tudo que precisamos
+            # TrackingService.save_tracking_data() é legacy e não deve ser usado aqui
         except Exception as e:
             logger.error(f"⚠️ Erro ao persistir tracking_token {tracking_token}: {e}", exc_info=True)
     else:
@@ -7210,14 +7204,16 @@ def send_meta_pixel_pageview_event(pool, request, pageview_event_id=None, tracki
             fbp_value = TrackingService.generate_fbp()
             logger.info(f"[META PAGEVIEW] PageView - fbp gerado no servidor (fallback): {fbp_value[:20]}...")
         
+        # ✅ CORREÇÃO SÊNIOR QI 500: Salvar tracking no Redis SEMPRE se external_id existir (garante matching!)
+        # Remove filtro 'startswith('PAZ')' que quebra salvamento se external_id não começar com 'PAZ'
         # ✅ CRÍTICO: Se fbp veio do cookie do browser, atualizar Redis (browser gerou!)
         # Isso garante que o Purchase terá o fbp correto
         # ✅ NOTA: event_source_url será salvo via pageview_context (TrackingServiceV4)
         # TrackingService.save_tracking_data() é legado e não aceita event_source_url
-        if fbp_value and external_id and external_id.startswith('PAZ'):
+        if external_id:  # ✅ Salvar SEMPRE se external_id existir (garante matching com Purchase!)
             try:
                 TrackingService.save_tracking_data(
-                    fbclid=external_id,
+                    fbclid=external_id,  # ✅ external_id já está normalizado (linha 7106)
                     fbp=fbp_value,  # ✅ FBP do browser (prioridade máxima)
                     fbc=fbc_value,
                     ip_address=get_user_ip(request),
@@ -7225,21 +7221,10 @@ def send_meta_pixel_pageview_event(pool, request, pageview_event_id=None, tracki
                     grim=grim_param,
                     utms=utm_params
                 )
-                logger.info(f"✅ PageView - fbp do browser salvo no Redis para Purchase")
-            except Exception as e:
-                logger.warning(f"⚠️ Erro ao salvar fbp do browser no Redis: {e}")
-        elif external_id and external_id.startswith('PAZ'):
-            # Se não tem fbp mas tem external_id, salvar mesmo assim (fbc já está)
-            try:
-                TrackingService.save_tracking_data(
-                    fbclid=external_id,
-                    fbp=fbp_value,  # Pode ser vazio (browser ainda não gerou)
-                    fbc=fbc_value,
-                    ip_address=get_user_ip(request),
-                    user_agent=request.headers.get('User-Agent', ''),
-                    grim=grim_param,
-                    utms=utm_params
-                )
+                if fbp_value:
+                    logger.info(f"✅ PageView - fbp do browser salvo no Redis para Purchase: {fbp_value[:30]}...")
+                else:
+                    logger.info(f"✅ PageView - tracking salvo no Redis (fbp ausente, será gerado pelo browser)")
             except Exception as e:
                 logger.warning(f"⚠️ Erro ao salvar tracking no Redis: {e}")
         
@@ -7263,10 +7248,10 @@ def send_meta_pixel_pageview_event(pool, request, pageview_event_id=None, tracki
         from celery_app import send_meta_event
         from utils.meta_pixel import MetaPixelAPI
         
-        # ✅ CRÍTICO: Construir external_id array IMUTÁVEL (sempre mesmo formato)
-        # PageView: apenas fbclid (não temos telegram_user_id ainda)
-        # TrackingService retorna array de strings (não hasheadas), _build_user_data faz o hash
-        external_id_for_hash = external_id if external_id and external_id.startswith('PAZ') else None
+        # ✅ CORREÇÃO SÊNIOR QI 500: SEMPRE usar external_id normalizado (garante matching com Purchase!)
+        # Remove filtro 'startswith('PAZ')' que quebra matching se external_id não começar com 'PAZ'
+        # external_id já está normalizado (linha 7106) com normalize_external_id() (MD5 se > 80 chars, ou original se <= 80)
+        external_id_for_hash = external_id  # ✅ SEMPRE usar external_id normalizado (garante matching!)
         
         # ✅ CRÍTICO: Usar _build_user_data com external_id string (será hashado internamente)
         # Isso garante que PageView e Purchase usem EXATAMENTE o mesmo formato
@@ -7276,7 +7261,7 @@ def send_meta_pixel_pageview_event(pool, request, pageview_event_id=None, tracki
         
         user_data = MetaPixelAPI._build_user_data(
             customer_user_id=None,  # Não temos telegram_user_id no PageView
-            external_id=external_id_for_hash,  # ✅ fbclid será hashado pelo _build_user_data
+            external_id=external_id_for_hash,  # ✅ SEMPRE tem valor (garante matching com Purchase!)
             email=None,
             phone=None,
             client_ip=client_ip,  # ✅ CORRIGIDO: Usa get_user_ip() que prioriza Cloudflare headers
@@ -7286,24 +7271,24 @@ def send_meta_pixel_pageview_event(pool, request, pageview_event_id=None, tracki
         )
         
         # ✅ CRÍTICO: Garantir que external_id existe (obrigatório para Conversions API)
-        # ✅ CORREÇÃO: Se _build_user_data não retornou external_id, mas temos external_id normalizado, forçar inclusão
+        # ✅ VALIDAÇÃO: Se _build_user_data não retornou external_id, forçar (não deveria acontecer)
         if not user_data.get('external_id'):
             # ✅ PRIORIDADE 1: Usar fbclid normalizado se disponível (NUNCA usar fallback sintético se temos fbclid!)
             if external_id:
                 # fbclid normalizado (MD5 se > 80 chars, ou original se <= 80) - usar diretamente (será hashado SHA256 pelo _build_user_data)
                 user_data['external_id'] = [MetaPixelAPI._hash_data(external_id)]
-                logger.info(f"✅ PageView - external_id (fbclid normalizado) forçado no user_data: {external_id} (len={len(external_id)})")
+                logger.warning(f"⚠️ PageView - external_id forçado no user_data (não deveria acontecer): {external_id} (len={len(external_id)})")
                 logger.info(f"✅ PageView - MATCH GARANTIDO com Purchase (mesmo external_id normalizado)")
             # ✅ PRIORIDADE 2: Usar grim se disponível (melhor que sintético)
             elif grim_param:
                 user_data['external_id'] = [MetaPixelAPI._hash_data(grim_param)]
-                logger.info(f"✅ PageView - external_id (grim) forçado no user_data: {grim_param[:30]}...")
+                logger.warning(f"⚠️ PageView - external_id (grim) forçado no user_data: {grim_param[:30]}...")
             # ✅ ÚLTIMO RECURSO: Fallback sintético (só se realmente não tiver nenhum ID)
             else:
-                fallback_external_id = external_id if external_id else MetaPixelHelper.generate_external_id()
+                fallback_external_id = MetaPixelHelper.generate_external_id()
                 user_data['external_id'] = [MetaPixelAPI._hash_data(fallback_external_id)]
-                logger.warning(f"⚠️ PageView - External ID não encontrado, usando fallback: {fallback_external_id}")
-                logger.warning(f"⚠️ PageView - Isso pode quebrar matching com Purchase! Verifique se fbclid está sendo capturado corretamente.")
+                logger.error(f"❌ PageView - External ID não encontrado, usando fallback: {fallback_external_id}")
+                logger.error(f"❌ PageView - Isso quebra matching com Purchase! Verifique se fbclid está sendo capturado corretamente.")
         else:
             # ✅ VALIDAÇÃO: Verificar se o external_id retornado confere com o fbclid normalizado
             first_external_id_hash = user_data['external_id'][0] if user_data.get('external_id') else None
@@ -7313,10 +7298,11 @@ def send_meta_pixel_pageview_event(pool, request, pageview_event_id=None, tracki
                 if first_external_id_hash == expected_hash:
                     logger.info(f"✅ PageView - external_id[0] confere com fbclid normalizado (len={len(external_id)})")
                     logger.info(f"   Hash esperado: {expected_hash[:16]}... | Hash recebido: {first_external_id_hash[:16]}...")
+                    logger.info(f"✅ PageView - MATCH GARANTIDO com Purchase (mesmo external_id normalizado)")
                 else:
-                    logger.warning(f"⚠️ PageView - external_id[0] NÃO confere com fbclid normalizado! Isso pode quebrar matching!")
-                    logger.warning(f"   Esperado: {expected_hash[:16]}... | Recebido: {first_external_id_hash[:16]}...")
-                    logger.warning(f"   External ID normalizado: {external_id[:30]}...")
+                    logger.error(f"❌ PageView - external_id[0] NÃO confere com fbclid normalizado! Isso quebra matching!")
+                    logger.error(f"   Esperado: {expected_hash[:16]}... | Recebido: {first_external_id_hash[:16]}...")
+                    logger.error(f"   External ID normalizado: {external_id[:30]}...")
                     # ✅ CORREÇÃO AUTOMÁTICA: Substituir pelo hash correto
                     user_data['external_id'] = [expected_hash]
                     logger.info(f"✅ PageView - external_id corrigido automaticamente para garantir matching")

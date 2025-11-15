@@ -359,6 +359,13 @@ def process_start_async(
             
             is_new_user = False
             if not bot_user:
+                # ✅ CORREÇÃO SÊNIOR QI 500: Garantir que fbclid seja completo (até 255 chars)
+                # Isso garante que bot_user.fbclid seja exatamente igual ao fbclid salvo no Redis
+                fbclid_from_start = utm_data_from_start.get('fbclid')
+                if fbclid_from_start and len(fbclid_from_start) > 255:
+                    fbclid_from_start = fbclid_from_start[:255]
+                    logger.warning(f"⚠️ fbclid truncado para 255 chars: {fbclid_from_start[:50]}...")
+                
                 bot_user = BotUser(
                     bot_id=bot_id,
                     telegram_user_id=telegram_user_id,
@@ -369,12 +376,13 @@ def process_start_async(
                     utm_source=utm_data_from_start.get('utm_source'),
                     utm_campaign=utm_data_from_start.get('utm_campaign'),
                     campaign_code=utm_data_from_start.get('campaign_code'),
-                    fbclid=utm_data_from_start.get('fbclid'),
+                    fbclid=fbclid_from_start,  # ✅ CORREÇÃO SÊNIOR QI 500: fbclid completo (até 255 chars)
                     tracking_session_id=tracking_token_from_start,
                     # ✅ CRÍTICO: Salvar fbp e fbc do tracking_data (recuperado via tracking_token)
                     fbp=utm_data_from_start.get('_fbp_from_tracking'),
                     fbc=utm_data_from_start.get('_fbc_from_tracking')
                 )
+                logger.info(f"✅ BotUser criado com tracking_session_id: {tracking_token_from_start[:20] if tracking_token_from_start else 'N/A'}... e fbclid: {fbclid_from_start[:50] if fbclid_from_start else 'N/A'}... (len={len(fbclid_from_start) if fbclid_from_start else 0})")
                 is_new_user = True
                 if utm_data_from_start.get('_fbc_from_tracking'):
                     logger.info(f"✅ process_start_async - fbc salvo no BotUser (novo): {utm_data_from_start.get('_fbc_from_tracking')[:50]}...")
@@ -437,7 +445,13 @@ def process_start_async(
                             except Exception as e:
                                 logger.warning(f"Erro ao parsear device/geolocalização: {e}")
                             
-                            bot_user.tracking_session_id = tracking_elite.get('session_id')
+                            # ✅ CORREÇÃO SÊNIOR QI 500: Só salvar tracking_session_id de tracking_elite se não tiver tracking_token_from_start
+                            # Isso garante que tracking_token_from_start (do start_param) tenha prioridade sobre tracking_elite
+                            if not tracking_token_from_start and tracking_elite.get('session_id'):
+                                bot_user.tracking_session_id = tracking_elite.get('session_id')
+                                logger.info(f"✅ bot_user.tracking_session_id salvo de tracking_elite: {tracking_elite.get('session_id')[:20]}...")
+                            elif tracking_token_from_start:
+                                logger.info(f"✅ bot_user.tracking_session_id preservado (tracking_token_from_start tem prioridade): {tracking_token_from_start[:20]}...")
                             
                             if tracking_elite.get('timestamp'):
                                 from datetime import datetime
@@ -459,9 +473,13 @@ def process_start_async(
                             elif tracking_elite.get('fbc') and bot_user.fbc:
                                 logger.info(f"✅ process_start_async - fbc já existe no bot_user, preservando: {bot_user.fbc[:50]}... (não atualizando com {tracking_elite.get('fbc')[:50]}...)")
                             
+                            # ✅ CORREÇÃO SÊNIOR QI 500: Garantir que fbclid seja completo (até 255 chars)
+                            # Isso garante que bot_user.fbclid seja exatamente igual ao fbclid salvo no Redis
                             if fbclid_completo_redis:
-                                bot_user.fbclid = fbclid_completo_redis
-                                bot_user.external_id = fbclid_completo_redis
+                                # ✅ CRÍTICO: Salvar fbclid completo sem truncar (até 255 chars)
+                                bot_user.fbclid = fbclid_completo_redis[:255] if len(fbclid_completo_redis) > 255 else fbclid_completo_redis
+                                bot_user.external_id = bot_user.fbclid
+                                logger.info(f"✅ bot_user.fbclid salvo completo (len={len(bot_user.fbclid)}): {bot_user.fbclid[:50]}...")
                                 if grim_from_redis:
                                     bot_user.campaign_code = grim_from_redis
                             elif grim_from_redis:
@@ -480,28 +498,90 @@ def process_start_async(
                             if not bot_user.utm_term:
                                 bot_user.utm_term = tracking_elite.get('utm_term')
                             
-                            # Salvar tracking:chat:{chat_id} via TrackingService
+                            # ✅ CORREÇÃO SÊNIOR QI 500: Salvar tracking:chat:{chat_id} via TrackingServiceV4 com tracking_token
+                            # Isso garante que tracking:chat:{customer_user_id} tenha o tracking_token correto para _generate_pix_payment recuperar
                             try:
-                                TrackingServiceV4.save_tracking_data(
-                                    fbclid=fbclid_completo_redis or '',
-                                    fbp=tracking_elite.get('fbp', ''),
-                                    fbc=tracking_elite.get('fbc', ''),
-                                    ip_address=tracking_elite.get('ip', ''),
-                                    user_agent=tracking_elite.get('user_agent', ''),
-                                    grim=grim_from_redis or '',
-                                    telegram_user_id=str(chat_id),
-                                    utms={
-                                        'utm_source': tracking_elite.get('utm_source', ''),
-                                        'utm_campaign': tracking_elite.get('utm_campaign', ''),
-                                        'utm_medium': tracking_elite.get('utm_medium', ''),
-                                        'utm_content': tracking_elite.get('utm_content', ''),
-                                        'utm_term': tracking_elite.get('utm_term', '')
-                                    }
-                                )
+                                # ✅ CRÍTICO: PRIORIDADE 1 - Usar tracking_token_from_start se disponível (tem prioridade máxima)
+                                # PRIORIDADE 2 - Usar tracking_token de tracking_elite.get('session_id')
+                                # PRIORIDADE 3 - Usar tracking_token de bot_user.tracking_session_id
+                                # PRIORIDADE 4 - Recuperar do Redis via fbclid
+                                tracking_token_for_chat = None
+                                
+                                # ✅ PRIORIDADE 1: tracking_token_from_start (do start_param) - TEM PRIORIDADE MÁXIMA
+                                if tracking_token_from_start:
+                                    tracking_token_for_chat = tracking_token_from_start
+                                    logger.info(f"✅ Tracking token para tracking:chat:{chat_id} (prioridade 1 - start_param): {tracking_token_for_chat[:20]}...")
+                                # ✅ PRIORIDADE 2: tracking_elite.get('session_id')
+                                elif tracking_elite.get('session_id'):
+                                    tracking_token_for_chat = tracking_elite.get('session_id')
+                                    logger.info(f"✅ Tracking token para tracking:chat:{chat_id} (prioridade 2 - tracking_elite): {tracking_token_for_chat[:20]}...")
+                                # ✅ PRIORIDADE 3: bot_user.tracking_session_id
+                                elif bot_user and bot_user.tracking_session_id:
+                                    tracking_token_for_chat = bot_user.tracking_session_id
+                                    logger.info(f"✅ Tracking token para tracking:chat:{chat_id} (prioridade 3 - bot_user): {tracking_token_for_chat[:20]}...")
+                                # ✅ PRIORIDADE 4: Recuperar do Redis via fbclid
+                                elif fbclid_completo_redis:
+                                    try:
+                                        tracking_token_from_fbclid = tracking_service_v4.redis.get(f"tracking:fbclid:{fbclid_completo_redis}")
+                                        if tracking_token_from_fbclid:
+                                            tracking_token_for_chat = tracking_token_from_fbclid
+                                            logger.info(f"✅ Tracking token para tracking:chat:{chat_id} (prioridade 4 - fbclid): {tracking_token_for_chat[:20]}...")
+                                    except Exception as e:
+                                        logger.warning(f"⚠️ Erro ao recuperar tracking_token via fbclid: {e}")
+                                
+                                # ✅ Se tracking_token está disponível, salvar via TrackingServiceV4.save_tracking_data()
+                                if tracking_token_for_chat:
+                                    # ✅ CRÍTICO: Recuperar bot_id do bot_user ou config
+                                    bot_id_for_tracking = bot_user.bot_id if bot_user else bot_id
+                                    tracking_service_v4.save_tracking_data(
+                                        tracking_token=tracking_token_for_chat,  # ✅ GARANTIR que tracking_token seja salvo
+                                        bot_id=bot_id_for_tracking,
+                                        customer_user_id=str(chat_id),
+                                        fbclid=fbclid_completo_redis or '',
+                                        fbp=tracking_elite.get('fbp', ''),
+                                        fbc=tracking_elite.get('fbc', ''),
+                                        utm_source=tracking_elite.get('utm_source', ''),
+                                        utm_medium=tracking_elite.get('utm_medium', ''),
+                                        utm_campaign=tracking_elite.get('utm_campaign', '')
+                                    )
+                                    logger.info(f"✅ tracking:chat:{chat_id} salvo com tracking_token: {tracking_token_for_chat[:20]}...")
+                                else:
+                                    logger.warning(f"⚠️ tracking_token não encontrado para salvar em tracking:chat:{chat_id}")
                             except Exception as e:
                                 logger.warning(f"Erro ao salvar tracking:chat:{chat_id}: {e}")
                     except Exception as e:
                         logger.error(f"Erro ao buscar tracking elite: {e}")
+                
+                # ✅ CORREÇÃO SÊNIOR QI 500: Salvar tracking:chat:{chat_id} com tracking_token_from_start mesmo se tracking_elite não for encontrado
+                # Isso garante que tracking:chat:{customer_user_id} tenha o tracking_token correto para _generate_pix_payment recuperar
+                if tracking_token_from_start:
+                    try:
+                        # ✅ CRÍTICO: Recuperar dados do Redis via tracking_token_from_start
+                        tracking_data_from_token = tracking_service_v4.recover_tracking_data(tracking_token_from_start) or {}
+                        
+                        # ✅ Se tracking_data tem dados, usar eles; senão, usar dados de utm_data_from_start
+                        fbclid_for_chat = tracking_data_from_token.get('fbclid') or utm_data_from_start.get('fbclid') or ''
+                        fbp_for_chat = tracking_data_from_token.get('fbp') or utm_data_from_start.get('_fbp_from_tracking') or ''
+                        fbc_for_chat = tracking_data_from_token.get('fbc') or utm_data_from_start.get('_fbc_from_tracking') or ''
+                        utm_source_for_chat = tracking_data_from_token.get('utm_source') or utm_data_from_start.get('utm_source') or ''
+                        utm_medium_for_chat = tracking_data_from_token.get('utm_medium') or utm_data_from_start.get('utm_medium') or ''
+                        utm_campaign_for_chat = tracking_data_from_token.get('utm_campaign') or utm_data_from_start.get('utm_campaign') or ''
+                        
+                        # ✅ Salvar tracking:chat:{chat_id} com tracking_token_from_start
+                        tracking_service_v4.save_tracking_data(
+                            tracking_token=tracking_token_from_start,  # ✅ GARANTIR que tracking_token seja salvo
+                            bot_id=bot_id,
+                            customer_user_id=str(chat_id),
+                            fbclid=fbclid_for_chat,
+                            fbp=fbp_for_chat,
+                            fbc=fbc_for_chat,
+                            utm_source=utm_source_for_chat,
+                            utm_medium=utm_medium_for_chat,
+                            utm_campaign=utm_campaign_for_chat
+                        )
+                        logger.info(f"✅ tracking:chat:{chat_id} salvo com tracking_token_from_start: {tracking_token_from_start[:20]}... | fbclid={'✅' if fbclid_for_chat else '❌'}, fbp={'✅' if fbp_for_chat else '❌'}, fbc={'✅' if fbc_for_chat else '❌'}")
+                    except Exception as e:
+                        logger.warning(f"⚠️ Erro ao salvar tracking:chat:{chat_id} com tracking_token_from_start: {e}")
                 
                 try:
                     db.session.add(bot_user)
@@ -532,11 +612,29 @@ def process_start_async(
                     bot_user.utm_campaign = utm_data_from_start['utm_campaign']
                 if utm_data_from_start.get('campaign_code') and not bot_user.campaign_code:
                     bot_user.campaign_code = utm_data_from_start['campaign_code']
+                # ✅ CORREÇÃO SÊNIOR QI 500: Garantir que fbclid seja completo (até 255 chars)
+                # Isso garante que bot_user.fbclid seja exatamente igual ao fbclid salvo no Redis
                 if utm_data_from_start.get('fbclid') and not bot_user.fbclid:
-                    bot_user.fbclid = utm_data_from_start['fbclid']
+                    fbclid_from_start = utm_data_from_start['fbclid']
+                    # ✅ CRÍTICO: Salvar fbclid completo sem truncar (até 255 chars)
+                    bot_user.fbclid = fbclid_from_start[:255] if len(fbclid_from_start) > 255 else fbclid_from_start
+                    logger.info(f"✅ bot_user.fbclid salvo do start_param (len={len(bot_user.fbclid)}): {bot_user.fbclid[:50]}...")
 
-                if tracking_token_from_start and bot_user.tracking_session_id != tracking_token_from_start:
-                    bot_user.tracking_session_id = tracking_token_from_start
+                # ✅ CORREÇÃO SÊNIOR QI 500: SEMPRE salvar tracking_session_id quando tracking_token_from_start estiver disponível
+                # Isso garante que _generate_pix_payment sempre encontre o tracking_token correto
+                if tracking_token_from_start:
+                    if bot_user.tracking_session_id != tracking_token_from_start:
+                        bot_user.tracking_session_id = tracking_token_from_start
+                        logger.info(f"✅ bot_user.tracking_session_id atualizado: {tracking_token_from_start[:20]}...")
+                    else:
+                        logger.info(f"✅ bot_user.tracking_session_id já está correto: {tracking_token_from_start[:20]}...")
+                    # ✅ CRÍTICO: Garantir que seja commitado
+                    try:
+                        db.session.commit()
+                        logger.info(f"✅ bot_user.tracking_session_id commitado no banco")
+                    except Exception as e:
+                        logger.warning(f"⚠️ Erro ao commitar bot_user.tracking_session_id: {e}")
+                        db.session.rollback()
 
                 # ✅ CRÍTICO: Se fbc foi recuperado do tracking_data mas não foi salvo no BotUser, salvar agora
                 # ✅ PATCH 4: Salvar fbc no BotUser se disponível (garantir persistência)

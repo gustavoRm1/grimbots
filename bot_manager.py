@@ -4533,53 +4533,109 @@ Seu pagamento ainda não foi confirmado.
                             logger.warning(f"⚠️ Erro ao recuperar payload do bot_user.tracking_session_id: {e}")
                     
                     if not tracking_token:
-                        # ✅ ÚLTIMA TENTATIVA: Verificar se bot_user foi encontrado mas tracking_session_id está vazio
-                        if bot_user:
-                            logger.warning(f"⚠️ Tracking token não encontrado para BotUser {bot_user.id} (telegram_user_id: {customer_user_id})")
-                            logger.warning(f"   bot_user.tracking_session_id: {getattr(bot_user, 'tracking_session_id', None)}")
-                            logger.warning(f"   Tentando recuperar de tracking:last_token:user:{customer_user_id} e tracking:chat:{customer_user_id}")
-                        else:
-                            logger.warning(f"⚠️ BotUser não encontrado para customer_user_id: {customer_user_id}, bot_id: {bot_id}")
+                        # ✅ ESTRATÉGIA 1: Tentar recuperar tracking_token do Redis usando fbclid do BotUser
+                        # Isso recupera o token original do redirect mesmo se bot_user.tracking_session_id estiver vazio
+                        recovered_token_from_fbclid = None
+                        if bot_user and getattr(bot_user, 'fbclid', None):
+                            try:
+                                # ✅ CRÍTICO: Buscar tracking_token no Redis via fbclid (chave: tracking:fbclid:{fbclid})
+                                fbclid_from_botuser = bot_user.fbclid
+                                tracking_token_key = f"tracking:fbclid:{fbclid_from_botuser}"
+                                recovered_token_from_fbclid = tracking_service.redis.get(tracking_token_key)
+                                if recovered_token_from_fbclid:
+                                    # ✅ Token encontrado via fbclid - recuperar payload completo
+                                    tracking_token = recovered_token_from_fbclid
+                                    logger.info(f"✅ Tracking token recuperado do Redis via fbclid do BotUser: {tracking_token[:20]}...")
+                                    recovered_payload_from_fbclid = tracking_service.recover_tracking_data(tracking_token) or {}
+                                    if recovered_payload_from_fbclid:
+                                        tracking_data_v4 = recovered_payload_from_fbclid
+                                        logger.info(f"✅ Tracking payload recuperado via fbclid: fbp={'✅' if recovered_payload_from_fbclid.get('fbp') else '❌'}, fbc={'✅' if recovered_payload_from_fbclid.get('fbc') else '❌'}, ip={'✅' if recovered_payload_from_fbclid.get('client_ip') else '❌'}, ua={'✅' if recovered_payload_from_fbclid.get('client_user_agent') else '❌'}, pageview_event_id={'✅' if recovered_payload_from_fbclid.get('pageview_event_id') else '❌'}")
+                                        # ✅ Atualizar bot_user.tracking_session_id com o token recuperado
+                                        if bot_user:
+                                            bot_user.tracking_session_id = tracking_token
+                            except Exception as e:
+                                logger.warning(f"⚠️ Erro ao recuperar tracking_token via fbclid do BotUser: {e}")
                         
-                        tracking_token = tracking_service.generate_tracking_token(
-                            bot_id=bot_id,
-                            customer_user_id=customer_user_id,
-                            payment_id=None,
-                            fbclid=fbclid,
-                            utm_source=utm_source,
-                            utm_medium=utm_medium,
-                            utm_campaign=utm_campaign
-                        )
-                        logger.warning("⚠️ Token de tracking ausente - gerado novo %s para BotUser %s (customer_user_id: %s)", tracking_token, bot_user.id if bot_user else 'N/A', customer_user_id)
+                        # ✅ ESTRATÉGIA 2: Tentar recuperar de tracking:chat:{customer_user_id}
+                        if not tracking_token and bot_user:
+                            try:
+                                chat_key = f"tracking:chat:{customer_user_id}"
+                                chat_payload_raw = tracking_service.redis.get(chat_key)
+                                if chat_payload_raw:
+                                    try:
+                                        chat_payload = json.loads(chat_payload_raw)
+                                        recovered_token_from_chat = chat_payload.get('tracking_token')
+                                        if recovered_token_from_chat:
+                                            tracking_token = recovered_token_from_chat
+                                            logger.info(f"✅ Tracking token recuperado de tracking:chat:{customer_user_id}: {tracking_token[:20]}...")
+                                            recovered_payload_from_chat = tracking_service.recover_tracking_data(tracking_token) or {}
+                                            if recovered_payload_from_chat:
+                                                tracking_data_v4 = recovered_payload_from_chat
+                                                logger.info(f"✅ Tracking payload recuperado via chat: fbp={'✅' if recovered_payload_from_chat.get('fbp') else '❌'}, fbc={'✅' if recovered_payload_from_chat.get('fbc') else '❌'}, ip={'✅' if recovered_payload_from_chat.get('client_ip') else '❌'}, ua={'✅' if recovered_payload_from_chat.get('client_user_agent') else '❌'}, pageview_event_id={'✅' if recovered_payload_from_chat.get('pageview_event_id') else '❌'}")
+                                                if bot_user:
+                                                    bot_user.tracking_session_id = tracking_token
+                                    except Exception as e:
+                                        logger.warning(f"⚠️ Erro ao parsear chat_payload: {e}")
+                            except Exception as e:
+                                logger.warning(f"⚠️ Erro ao recuperar tracking_token de tracking:chat: {e}")
                         
-                        # ✅ CRÍTICO: Incluir fbp, fbc, ip, ua do BotUser no seed_payload
-                        # Isso garante que mesmo quando novo token é gerado, dados de tracking estejam disponíveis
-                        fbp_from_botuser = getattr(bot_user, 'fbp', None) if bot_user else None
-                        fbc_from_botuser = getattr(bot_user, 'fbc', None) if bot_user else None
-                        ip_from_botuser = getattr(bot_user, 'ip_address', None) if bot_user else None
-                        ua_from_botuser = getattr(bot_user, 'user_agent', None) if bot_user else None
-                        
-                        seed_payload = {
-                            "tracking_token": tracking_token,
-                            "bot_id": bot_id,
-                            "customer_user_id": customer_user_id,
-                            "fbclid": fbclid,
-                            "fbp": fbp_from_botuser,  # ✅ CRÍTICO: Incluir fbp do BotUser
-                            "fbc": fbc_from_botuser,  # ✅ CRÍTICO: Incluir fbc do BotUser
-                            "client_ip": ip_from_botuser,  # ✅ CRÍTICO: Incluir IP do BotUser
-                            "client_user_agent": ua_from_botuser,  # ✅ CRÍTICO: Incluir UA do BotUser
-                            "utm_source": utm_source,
-                            "utm_medium": utm_medium,
-                            "utm_campaign": utm_campaign,
-                            "utm_content": utm_content,
-                            "utm_term": utm_term,
-                            "pageview_ts": tracking_data_v4.get('pageview_ts'),
-                            "created_from": "generate_pix_payment",
-                        }
-                        tracking_service.save_tracking_token(tracking_token, {k: v for k, v in seed_payload.items() if v})
-                        logger.info(f"✅ Seed payload salvo com {len([k for k, v in seed_payload.items() if v])} campos: fbp={'✅' if fbp_from_botuser else '❌'}, fbc={'✅' if fbc_from_botuser else '❌'}, ip={'✅' if ip_from_botuser else '❌'}, ua={'✅' if ua_from_botuser else '❌'}")
-                        if bot_user:
-                            bot_user.tracking_session_id = tracking_token
+                        # ✅ ESTRATÉGIA 3: Se ainda não encontrou, gerar novo token (ÚLTIMA OPÇÃO)
+                        if not tracking_token:
+                            # ✅ ÚLTIMA TENTATIVA: Verificar se bot_user foi encontrado mas tracking_session_id está vazio
+                            if bot_user:
+                                logger.warning(f"⚠️ Tracking token não encontrado para BotUser {bot_user.id} (telegram_user_id: {customer_user_id})")
+                                logger.warning(f"   bot_user.tracking_session_id: {getattr(bot_user, 'tracking_session_id', None)}")
+                                logger.warning(f"   bot_user.fbclid: {getattr(bot_user, 'fbclid', None)}")
+                                logger.warning(f"   Tentando recuperar de tracking:last_token:user:{customer_user_id} e tracking:chat:{customer_user_id}")
+                            else:
+                                logger.warning(f"⚠️ BotUser não encontrado para customer_user_id: {customer_user_id}, bot_id: {bot_id}")
+                            
+                            tracking_token = tracking_service.generate_tracking_token(
+                                bot_id=bot_id,
+                                customer_user_id=customer_user_id,
+                                payment_id=None,
+                                fbclid=fbclid,
+                                utm_source=utm_source,
+                                utm_medium=utm_medium,
+                                utm_campaign=utm_campaign
+                            )
+                            logger.warning("⚠️ Token de tracking ausente - gerado novo %s para BotUser %s (customer_user_id: %s)", tracking_token, bot_user.id if bot_user else 'N/A', customer_user_id)
+                            
+                            # ✅ CRÍTICO: Incluir TODOS os dados do BotUser no seed_payload
+                            # Isso garante que mesmo quando novo token é gerado, dados de tracking estejam disponíveis
+                            fbp_from_botuser = getattr(bot_user, 'fbp', None) if bot_user else None
+                            fbc_from_botuser = getattr(bot_user, 'fbc', None) if bot_user else None
+                            ip_from_botuser = getattr(bot_user, 'ip_address', None) if bot_user else None
+                            ua_from_botuser = getattr(bot_user, 'user_agent', None) if bot_user else None
+                            fbclid_from_botuser = getattr(bot_user, 'fbclid', None) if bot_user else None
+                            pageview_event_id_from_botuser = None  # BotUser não tem pageview_event_id
+                            
+                            # ✅ CRÍTICO: Usar fbclid do BotUser se disponível (melhor que None)
+                            if not fbclid and fbclid_from_botuser:
+                                fbclid = fbclid_from_botuser
+                                logger.info(f"✅ fbclid recuperado do BotUser: {fbclid[:50]}...")
+                            
+                            seed_payload = {
+                                "tracking_token": tracking_token,
+                                "bot_id": bot_id,
+                                "customer_user_id": customer_user_id,
+                                "fbclid": fbclid or fbclid_from_botuser,  # ✅ Usar fbclid do BotUser se disponível
+                                "fbp": fbp_from_botuser,  # ✅ CRÍTICO: Incluir fbp do BotUser
+                                "fbc": fbc_from_botuser,  # ✅ CRÍTICO: Incluir fbc do BotUser
+                                "client_ip": ip_from_botuser,  # ✅ CRÍTICO: Incluir IP do BotUser
+                                "client_user_agent": ua_from_botuser,  # ✅ CRÍTICO: Incluir UA do BotUser
+                                "utm_source": utm_source,
+                                "utm_medium": utm_medium,
+                                "utm_campaign": utm_campaign,
+                                "utm_content": utm_content,
+                                "utm_term": utm_term,
+                                "pageview_ts": tracking_data_v4.get('pageview_ts'),
+                                "created_from": "generate_pix_payment",
+                            }
+                            tracking_service.save_tracking_token(tracking_token, {k: v for k, v in seed_payload.items() if v})
+                            logger.info(f"✅ Seed payload salvo com {len([k for k, v in seed_payload.items() if v])} campos: fbclid={'✅' if (fbclid or fbclid_from_botuser) else '❌'}, fbp={'✅' if fbp_from_botuser else '❌'}, fbc={'✅' if fbc_from_botuser else '❌'}, ip={'✅' if ip_from_botuser else '❌'}, ua={'✅' if ua_from_botuser else '❌'}")
+                            if bot_user:
+                                bot_user.tracking_session_id = tracking_token
                     if not tracking_data_v4:
                         tracking_data_v4 = tracking_service.recover_tracking_data(tracking_token) or {}
                     
