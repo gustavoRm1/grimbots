@@ -169,37 +169,55 @@
                     _fbc: fbc || null
                 });
                 
-                // ✅ Usar Beacon API (funciona mesmo após página fechar, não bloqueia redirect)
+                // ✅ CORREÇÃO: Usar Blob com sendBeacon para garantir Content-Type correto
+                // Beacon API não envia Content-Type automaticamente, então precisamos usar Blob
                 if (navigator.sendBeacon) {
-                    const sent = navigator.sendBeacon('/api/tracking/cookies', payload);
-                    if (sent) {
-                        cookiesSent = true;
-                        console.log('[META PIXEL] Cookies enviados para servidor via Beacon API:', {
-                            fbp: fbp ? fbp.substring(0, 30) + '...' : 'ausente',
-                            fbc: fbc ? fbc.substring(0, 50) + '...' : 'ausente'
-                        });
-                    } else {
-                        console.warn('[META PIXEL] Beacon API não conseguiu enviar cookies');
+                    try {
+                        // ✅ Criar Blob com Content-Type: application/json
+                        const blob = new Blob([payload], { type: 'application/json' });
+                        const sent = navigator.sendBeacon('/api/tracking/cookies', blob);
+                        if (sent) {
+                            cookiesSent = true;
+                            console.log('[META PIXEL] Cookies enviados para servidor via Beacon API:', {
+                                fbp: fbp ? fbp.substring(0, 30) + '...' : 'ausente',
+                                fbc: fbc ? fbc.substring(0, 50) + '...' : 'ausente'
+                            });
+                        } else {
+                            console.warn('[META PIXEL] Beacon API não conseguiu enviar cookies, tentando fetch...');
+                            // ✅ Fallback para fetch se Beacon falhar
+                            sendCookiesViaFetch(payload);
+                        }
+                    } catch (e) {
+                        console.error('[META PIXEL] Erro ao usar Beacon API:', e);
+                        // ✅ Fallback para fetch se Beacon lançar exceção
+                        sendCookiesViaFetch(payload);
                     }
                 } else {
                     // ✅ Fallback para fetch (não bloqueia, keepalive garante envio mesmo após redirect)
-                    fetch('/api/tracking/cookies', {
-                        method: 'POST',
-                        body: payload,
-                        headers: {'Content-Type': 'application/json'},
-                        keepalive: true
-                    }).then(response => {
-                        if (response.ok) {
-                            cookiesSent = true;
-                            console.log('[META PIXEL] Cookies enviados para servidor via fetch');
-                        }
-                    }).catch(err => {
-                        console.error('[META PIXEL] Erro ao enviar cookies:', err);
-                    });
+                    sendCookiesViaFetch(payload);
                 }
             } else {
                 console.log('[META PIXEL] Cookies não encontrados no browser');
             }
+        }
+        
+        // ✅ Função helper para enviar cookies via fetch (fallback)
+        function sendCookiesViaFetch(payload) {
+            fetch('/api/tracking/cookies', {
+                method: 'POST',
+                body: payload,
+                headers: {'Content-Type': 'application/json'},
+                keepalive: true
+            }).then(response => {
+                if (response.ok) {
+                    cookiesSent = true;
+                    console.log('[META PIXEL] Cookies enviados para servidor via fetch');
+                } else {
+                    console.error('[META PIXEL] Erro ao enviar cookies:', response.status, response.statusText);
+                }
+            }).catch(err => {
+                console.error('[META PIXEL] Erro ao enviar cookies:', err);
+            });
         }
         
         // ✅ Verificar se Pixel carregou e aguardar cookies serem gerados

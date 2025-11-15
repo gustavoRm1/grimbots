@@ -4510,11 +4510,45 @@ def capture_tracking_cookies():
     3. HTML Bridge envia cookies para este endpoint via Beacon API
     4. Endpoint salva cookies no Redis associados ao tracking_token
     5. Purchase event recupera cookies do Redis e envia para Meta CAPI
+    
+    ✅ CORREÇÃO: Beacon API não envia Content-Type header, então precisamos parsear manualmente
     """
     try:
-        data = request.json
+        # ✅ CORREÇÃO CRÍTICA: Beacon API não envia Content-Type: application/json
+        # Precisamos parsear manualmente usando request.get_data()
+        import json as json_lib
+        
+        # ✅ Tentar parsear como JSON primeiro (force=True ignora Content-Type)
+        data = None
+        try:
+            # ✅ Tentar com force=True (ignora Content-Type e tenta parsear como JSON)
+            data = request.get_json(force=True, silent=True)
+        except Exception:
+            pass
+        
+        # ✅ Fallback: Parsear manualmente do body (Beacon API envia como text/plain ou Blob)
         if not data:
-            return jsonify({'success': False, 'error': 'Invalid JSON'}), 400
+            try:
+                raw_data = request.get_data(as_text=True)
+                if raw_data:
+                    # ✅ Tentar parsear como JSON string
+                    data = json_lib.loads(raw_data)
+                    logger.debug(f"[META TRACKING] JSON parseado manualmente do body: {len(raw_data)} bytes")
+            except (json_lib.JSONDecodeError, ValueError) as e:
+                logger.warning(f"[META TRACKING] Erro ao parsear JSON do body: {e} | Raw data: {raw_data[:100] if 'raw_data' in locals() and raw_data else 'None'}")
+                # ✅ Último fallback: Tentar parsear como form data
+                if request.form:
+                    data = {
+                        'tracking_token': request.form.get('tracking_token'),
+                        '_fbp': request.form.get('_fbp'),
+                        '_fbc': request.form.get('_fbc')
+                    }
+                    logger.debug(f"[META TRACKING] Dados parseados como form data")
+        
+        if not data:
+            # ✅ Log detalhado para debug
+            logger.error(f"[META TRACKING] Nenhum dado recebido | Content-Type: {request.content_type} | Method: {request.method} | Headers: {dict(request.headers)}")
+            return jsonify({'success': False, 'error': 'No data received'}), 400
         
         tracking_token = data.get('tracking_token')
         fbp = data.get('_fbp')
@@ -4523,9 +4557,14 @@ def capture_tracking_cookies():
         if not tracking_token:
             return jsonify({'success': False, 'error': 'tracking_token required'}), 400
         
-        # ✅ Validar formato do tracking_token (deve ser UUID hex de 32 chars)
-        if len(tracking_token) != 32 or not all(c in '0123456789abcdef' for c in tracking_token):
-            logger.warning(f"[META TRACKING] tracking_token inválido: {tracking_token[:20]}...")
+        # ✅ Validar formato do tracking_token (pode ser UUID hex de 32 chars ou tracking_xxx)
+        # Formato 1: UUID hex de 32 chars (ex: 71ab1909f5d44c969241...)
+        # Formato 2: tracking_xxx (ex: tracking_0245156101f95efcb74b9...)
+        is_valid_uuid = len(tracking_token) == 32 and all(c in '0123456789abcdef' for c in tracking_token)
+        is_valid_tracking = tracking_token.startswith('tracking_') and len(tracking_token) > 9
+        
+        if not (is_valid_uuid or is_valid_tracking):
+            logger.warning(f"[META TRACKING] tracking_token inválido: {tracking_token[:30]}... (len={len(tracking_token)})")
             return jsonify({'success': False, 'error': 'Invalid tracking_token format'}), 400
         
         # ✅ Importar TrackingServiceV4
