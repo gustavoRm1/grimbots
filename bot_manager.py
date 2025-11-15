@@ -4475,9 +4475,26 @@ Seu pagamento ainda não foi confirmado.
                     redis_tracking_payload: Dict[str, Any] = {}
                     tracking_token = None
 
-                    # ✅ CORREÇÃO: Recuperar tracking_token ANTES de gerar valores sintéticos
-                    # Prioridade: tracking:last_token > tracking:chat > bot_user.tracking_session_id
-                    if customer_user_id:
+                    # ✅ CORREÇÃO CRÍTICA QI 1000+: PRIORIDADE MÁXIMA para bot_user.tracking_session_id
+                    # Isso garante que o token do public_redirect seja SEMPRE usado (tem todos os dados: client_ip, client_user_agent, pageview_event_id)
+                    # PROBLEMA IDENTIFICADO: Verificação estava DEPOIS de tracking:last_token e tracking:chat
+                    # SOLUÇÃO: Verificar bot_user.tracking_session_id PRIMEIRO (antes de tudo)
+                    if bot_user and bot_user.tracking_session_id:
+                        tracking_token = bot_user.tracking_session_id
+                        logger.info(f"✅ Tracking token recuperado de bot_user.tracking_session_id (PRIORIDADE MÁXIMA): {tracking_token[:20]}...")
+                        # ✅ Tentar recuperar payload completo do Redis
+                        try:
+                            recovered_payload = tracking_service.recover_tracking_data(tracking_token) or {}
+                            if recovered_payload:
+                                redis_tracking_payload = recovered_payload
+                                logger.info(f"✅ Tracking payload recuperado do bot_user.tracking_session_id: fbp={'✅' if recovered_payload.get('fbp') else '❌'}, fbc={'✅' if recovered_payload.get('fbc') else '❌'}, ip={'✅' if recovered_payload.get('client_ip') else '❌'}, ua={'✅' if recovered_payload.get('client_user_agent') else '❌'}, pageview_event_id={'✅' if recovered_payload.get('pageview_event_id') else '❌'}")
+                        except Exception as e:
+                            logger.warning(f"⚠️ Erro ao recuperar payload do bot_user.tracking_session_id: {e}")
+                    elif bot_user:
+                        logger.warning(f"⚠️ BotUser {bot_user.id} encontrado mas tracking_session_id está vazio (telegram_user_id: {customer_user_id})")
+
+                    # ✅ FALLBACK 1: tracking:last_token (se bot_user.tracking_session_id não existir)
+                    if not tracking_token and customer_user_id:
                         try:
                             cached_token = tracking_service.redis.get(f"tracking:last_token:user:{customer_user_id}")
                             if cached_token:
@@ -4485,25 +4502,18 @@ Seu pagamento ainda não foi confirmado.
                                 logger.info(f"✅ Tracking token recuperado de tracking:last_token:user:{customer_user_id}: {tracking_token[:20]}...")
                         except Exception:
                             logger.exception("Falha ao recuperar tracking:last_token do Redis")
-                        if not tracking_token:
-                            try:
-                                cached_payload = tracking_service.redis.get(f"tracking:chat:{customer_user_id}")
-                                if cached_payload:
-                                    redis_tracking_payload = json.loads(cached_payload)
-                                    tracking_token = redis_tracking_payload.get("tracking_token") or tracking_token
-                                    if tracking_token:
-                                        logger.info(f"✅ Tracking token recuperado de tracking:chat:{customer_user_id}: {tracking_token[:20]}...")
-                            except Exception:
-                                logger.exception("Falha ao recuperar tracking:chat do Redis")
-
-                    # ✅ CRÍTICO: Verificar bot_user.tracking_session_id ANTES de tentar Redis
-                    # Isso garante que o token do public_redirect seja sempre usado
-                    if not tracking_token and bot_user:
-                        tracking_token = getattr(bot_user, 'tracking_session_id', None)
-                        if tracking_token:
-                            logger.info(f"✅ Tracking token recuperado de bot_user.tracking_session_id: {tracking_token[:20]}...")
-                        else:
-                            logger.warning(f"⚠️ BotUser {bot_user.id} encontrado mas tracking_session_id está vazio (telegram_user_id: {customer_user_id})")
+                    
+                    # ✅ FALLBACK 2: tracking:chat (se bot_user.tracking_session_id não existir)
+                    if not tracking_token and customer_user_id:
+                        try:
+                            cached_payload = tracking_service.redis.get(f"tracking:chat:{customer_user_id}")
+                            if cached_payload:
+                                redis_tracking_payload = json.loads(cached_payload)
+                                tracking_token = redis_tracking_payload.get("tracking_token") or tracking_token
+                                if tracking_token:
+                                    logger.info(f"✅ Tracking token recuperado de tracking:chat:{customer_user_id}: {tracking_token[:20]}...")
+                        except Exception:
+                            logger.exception("Falha ao recuperar tracking:chat do Redis")
 
                     tracking_data_v4: Dict[str, Any] = redis_tracking_payload if isinstance(redis_tracking_payload, dict) else {}
 
@@ -4518,19 +4528,8 @@ Seu pagamento ainda não foi confirmado.
                         if bot_user and getattr(bot_user, 'tracking_session_id', None) != tracking_token:
                             bot_user.tracking_session_id = tracking_token
 
-                    # ✅ CRÍTICO: NUNCA gerar novo token se bot_user.tracking_session_id existir
-                    # Isso garante que o token do public_redirect seja sempre reutilizado
-                    if not tracking_token and bot_user and bot_user.tracking_session_id:
-                        tracking_token = bot_user.tracking_session_id
-                        logger.info(f"✅ Tracking token recuperado de bot_user.tracking_session_id (fallback final): {tracking_token[:20]}...")
-                        # Tentar recuperar payload do Redis com este token
-                        try:
-                            recovered_payload = tracking_service.recover_tracking_data(tracking_token) or {}
-                            if recovered_payload:
-                                tracking_data_v4 = recovered_payload
-                                logger.info(f"✅ Tracking payload recuperado do bot_user.tracking_session_id: {tracking_token[:20]}... | fbp={'ok' if recovered_payload.get('fbp') else 'missing'} | fbc={'ok' if recovered_payload.get('fbc') else 'missing'} | pageview_event_id={'ok' if recovered_payload.get('pageview_event_id') else 'missing'}")
-                        except Exception as e:
-                            logger.warning(f"⚠️ Erro ao recuperar payload do bot_user.tracking_session_id: {e}")
+                    # ✅ NOTA: bot_user.tracking_session_id já foi verificado no início (prioridade máxima)
+                    # Não precisa verificar novamente aqui
                     
                     if not tracking_token:
                         # ✅ ESTRATÉGIA 1: Tentar recuperar tracking_token do Redis usando fbclid do BotUser
@@ -4590,6 +4589,17 @@ Seu pagamento ainda não foi confirmado.
                             else:
                                 logger.warning(f"⚠️ BotUser não encontrado para customer_user_id: {customer_user_id}, bot_id: {bot_id}")
                             
+                            # ✅ CORREÇÃO CRÍTICA QI 1000+: ANTES de gerar novo token, tentar recuperar dados do token do redirect
+                            # Isso garante que mesmo quando novo token é gerado, dados de tracking do redirect sejam copiados
+                            redirect_token_data = {}
+                            if bot_user and bot_user.tracking_session_id:
+                                try:
+                                    redirect_token_data = tracking_service.recover_tracking_data(bot_user.tracking_session_id) or {}
+                                    if redirect_token_data:
+                                        logger.info(f"✅ Dados do token do redirect recuperados ANTES de gerar novo token: fbp={'✅' if redirect_token_data.get('fbp') else '❌'}, fbc={'✅' if redirect_token_data.get('fbc') else '❌'}, ip={'✅' if redirect_token_data.get('client_ip') else '❌'}, ua={'✅' if redirect_token_data.get('client_user_agent') else '❌'}, pageview_event_id={'✅' if redirect_token_data.get('pageview_event_id') else '❌'}")
+                                except Exception as e:
+                                    logger.warning(f"⚠️ Erro ao recuperar dados do token do redirect: {e}")
+                            
                             tracking_token = tracking_service.generate_tracking_token(
                                 bot_id=bot_id,
                                 customer_user_id=customer_user_id,
@@ -4608,32 +4618,36 @@ Seu pagamento ainda não foi confirmado.
                             ip_from_botuser = getattr(bot_user, 'ip_address', None) if bot_user else None
                             ua_from_botuser = getattr(bot_user, 'user_agent', None) if bot_user else None
                             fbclid_from_botuser = getattr(bot_user, 'fbclid', None) if bot_user else None
-                            pageview_event_id_from_botuser = None  # BotUser não tem pageview_event_id
                             
                             # ✅ CRÍTICO: Usar fbclid do BotUser se disponível (melhor que None)
                             if not fbclid and fbclid_from_botuser:
                                 fbclid = fbclid_from_botuser
                                 logger.info(f"✅ fbclid recuperado do BotUser: {fbclid[:50]}...")
                             
+                            # ✅ CORREÇÃO CRÍTICA QI 1000+: COPIAR dados do token do redirect para o novo token
+                            # PRIORIDADE: token do redirect > BotUser > None
                             seed_payload = {
                                 "tracking_token": tracking_token,
                                 "bot_id": bot_id,
                                 "customer_user_id": customer_user_id,
-                                "fbclid": fbclid or fbclid_from_botuser,  # ✅ Usar fbclid do BotUser se disponível
-                                "fbp": fbp_from_botuser,  # ✅ CRÍTICO: Incluir fbp do BotUser
-                                "fbc": fbc_from_botuser,  # ✅ CRÍTICO: Incluir fbc do BotUser
-                                "client_ip": ip_from_botuser,  # ✅ CRÍTICO: Incluir IP do BotUser
-                                "client_user_agent": ua_from_botuser,  # ✅ CRÍTICO: Incluir UA do BotUser
-                                "utm_source": utm_source,
-                                "utm_medium": utm_medium,
-                                "utm_campaign": utm_campaign,
-                                "utm_content": utm_content,
-                                "utm_term": utm_term,
-                                "pageview_ts": tracking_data_v4.get('pageview_ts'),
+                                "fbclid": fbclid or redirect_token_data.get('fbclid') or fbclid_from_botuser,  # ✅ PRIORIDADE: redirect > BotUser
+                                "fbp": redirect_token_data.get('fbp') or fbp_from_botuser,  # ✅ PRIORIDADE: redirect > BotUser
+                                "fbc": redirect_token_data.get('fbc') or fbc_from_botuser,  # ✅ PRIORIDADE: redirect > BotUser
+                                "client_ip": redirect_token_data.get('client_ip') or ip_from_botuser,  # ✅ PRIORIDADE: redirect > BotUser (CRÍTICO!)
+                                "client_user_agent": redirect_token_data.get('client_user_agent') or ua_from_botuser,  # ✅ PRIORIDADE: redirect > BotUser (CRÍTICO!)
+                                "pageview_event_id": redirect_token_data.get('pageview_event_id'),  # ✅ CRÍTICO: copiar do redirect (BotUser não tem)
+                                "pageview_ts": redirect_token_data.get('pageview_ts') or tracking_data_v4.get('pageview_ts'),
+                                "utm_source": utm_source or redirect_token_data.get('utm_source'),
+                                "utm_medium": utm_medium or redirect_token_data.get('utm_medium'),
+                                "utm_campaign": utm_campaign or redirect_token_data.get('utm_campaign'),
+                                "utm_content": utm_content or redirect_token_data.get('utm_content'),
+                                "utm_term": utm_term or redirect_token_data.get('utm_term'),
+                                "event_source_url": redirect_token_data.get('event_source_url'),
+                                "first_page": redirect_token_data.get('first_page'),
                                 "created_from": "generate_pix_payment",
                             }
                             tracking_service.save_tracking_token(tracking_token, {k: v for k, v in seed_payload.items() if v})
-                            logger.info(f"✅ Seed payload salvo com {len([k for k, v in seed_payload.items() if v])} campos: fbclid={'✅' if (fbclid or fbclid_from_botuser) else '❌'}, fbp={'✅' if fbp_from_botuser else '❌'}, fbc={'✅' if fbc_from_botuser else '❌'}, ip={'✅' if ip_from_botuser else '❌'}, ua={'✅' if ua_from_botuser else '❌'}")
+                            logger.info(f"✅ Seed payload salvo com {len([k for k, v in seed_payload.items() if v])} campos: fbclid={'✅' if (fbclid or redirect_token_data.get('fbclid') or fbclid_from_botuser) else '❌'}, fbp={'✅' if (redirect_token_data.get('fbp') or fbp_from_botuser) else '❌'}, fbc={'✅' if (redirect_token_data.get('fbc') or fbc_from_botuser) else '❌'}, ip={'✅' if (redirect_token_data.get('client_ip') or ip_from_botuser) else '❌'}, ua={'✅' if (redirect_token_data.get('client_user_agent') or ua_from_botuser) else '❌'}, pageview_event_id={'✅' if redirect_token_data.get('pageview_event_id') else '❌'}")
                             if bot_user:
                                 bot_user.tracking_session_id = tracking_token
                     if not tracking_data_v4:
