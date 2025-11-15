@@ -7624,12 +7624,41 @@ def send_meta_pixel_purchase_event(payment):
         from utils.tracking_service import TrackingService, TrackingServiceV4
         tracking_service_v4 = TrackingServiceV4()
 
+        # ✅ CORREÇÃO CRÍTICA QI 1000+: Priorizar tracking_session_id do BotUser (token do redirect)
+        # PROBLEMA IDENTIFICADO: payment.tracking_token é gerado em generate_pix_payment (tracking_xxx)
+        # MAS dados de tracking foram salvos no token do redirect (bot_user.tracking_session_id)
+        # SOLUÇÃO: Priorizar bot_user.tracking_session_id para recuperar tracking_data completo
         tracking_data = {}
         payment_tracking_token = getattr(payment, "tracking_token", None)
+        tracking_token_used = None
         
-        # ✅ LOG DETALHADO: Mostrar tracking_token do Payment
-        if payment_tracking_token:
-            logger.info(f"[META PURCHASE] Purchase - payment.tracking_token: {payment_tracking_token[:30]}... (len={len(payment_tracking_token)})")
+        # ✅ PRIORIDADE 1: tracking_session_id do BotUser (token do redirect - MAIS CONFIÁVEL)
+        if bot_user and bot_user.tracking_session_id:
+            try:
+                tracking_data = tracking_service_v4.recover_tracking_data(bot_user.tracking_session_id) or {}
+                if tracking_data:
+                    tracking_token_used = bot_user.tracking_session_id
+                    logger.info(f"[META PURCHASE] Purchase - tracking_data recuperado usando bot_user.tracking_session_id (PRIORIDADE 1): {len(tracking_data)} campos")
+                    logger.info(f"[META PURCHASE] Purchase - Tracking Token (BotUser): {bot_user.tracking_session_id[:30]}... (len={len(bot_user.tracking_session_id)})")
+                    # ✅ LOG CRÍTICO: Mostrar TODOS os campos para identificar o problema
+                    logger.info(f"[META PURCHASE] Purchase - Campos no tracking_data: {list(tracking_data.keys())}")
+                    for key, value in tracking_data.items():
+                        if value:
+                            logger.info(f"[META PURCHASE] Purchase - {key}: {str(value)[:50]}...")
+                        else:
+                            logger.warning(f"[META PURCHASE] Purchase - {key}: None/Empty")
+                    # ✅ CRÍTICO: Atualizar payment.tracking_token com o token correto (token do redirect)
+                    if payment.tracking_token != bot_user.tracking_session_id:
+                        payment.tracking_token = bot_user.tracking_session_id
+                        logger.info(f"✅ Purchase - payment.tracking_token atualizado com token do redirect: {bot_user.tracking_session_id[:30]}...")
+                else:
+                    logger.warning(f"[META PURCHASE] Purchase - tracking_data VAZIO no Redis para bot_user.tracking_session_id: {bot_user.tracking_session_id[:30]}...")
+            except Exception as e:
+                logger.warning(f"[META PURCHASE] Purchase - Erro ao recuperar tracking_data usando bot_user.tracking_session_id: {e}")
+        
+        # ✅ PRIORIDADE 2: payment.tracking_token (se não encontrou no BotUser)
+        if not tracking_data and payment_tracking_token:
+            logger.info(f"[META PURCHASE] Purchase - Tentando recuperar usando payment.tracking_token (PRIORIDADE 2): {payment_tracking_token[:30]}... (len={len(payment_tracking_token)})")
             # Verificar se token existe no Redis
             try:
                 exists = tracking_service_v4.redis.exists(f"tracking:{payment_tracking_token}")
@@ -7639,14 +7668,11 @@ def send_meta_pixel_purchase_event(payment):
                     logger.info(f"[META PURCHASE] Purchase - TTL restante: {ttl} segundos ({'expirando' if ttl < 3600 else 'OK'})")
             except Exception as e:
                 logger.warning(f"[META PURCHASE] Purchase - Erro ao verificar token no Redis: {e}")
-        else:
-            logger.warning(f"[META PURCHASE] Purchase - payment.tracking_token AUSENTE! Payment ID: {payment.payment_id}")
-            logger.warning(f"[META PURCHASE] Purchase - Isso indica que o usuário NÃO veio do redirect ou token não foi salvo")
-        
-        if payment_tracking_token:
+            
             try:
                 tracking_data = tracking_service_v4.recover_tracking_data(payment_tracking_token) or {}
                 if tracking_data:
+                    tracking_token_used = payment_tracking_token
                     logger.info(f"[META PURCHASE] Purchase - tracking_data recuperado do Redis (usando payment.tracking_token): {len(tracking_data)} campos")
                     # ✅ LOG CRÍTICO: Mostrar TODOS os campos para identificar o problema
                     logger.info(f"[META PURCHASE] Purchase - Campos no tracking_data: {list(tracking_data.keys())}")
@@ -7659,22 +7685,35 @@ def send_meta_pixel_purchase_event(payment):
                     logger.warning(f"[META PURCHASE] Purchase - tracking_data VAZIO no Redis para token: {payment_tracking_token[:30]}...")
             except Exception as e:
                 logger.exception(f"[META PURCHASE] Purchase - Erro ao recuperar tracking_token do Redis: {e}")
+        elif not payment_tracking_token:
+            logger.warning(f"[META PURCHASE] Purchase - payment.tracking_token AUSENTE! Payment ID: {payment.payment_id}")
+            logger.warning(f"[META PURCHASE] Purchase - Isso indica que o usuário NÃO veio do redirect ou token não foi salvo")
 
+        # ✅ PRIORIDADE 3: Recuperar via tracking:payment:{payment_id} (fallback)
         if not tracking_data:
             try:
                 raw = tracking_service_v4.redis.get(f"tracking:payment:{payment.payment_id}")
                 if raw:
                     tracking_data = json.loads(raw)
-            except Exception:
-                pass
+                    if tracking_data:
+                        logger.info(f"[META PURCHASE] Purchase - tracking_data recuperado via tracking:payment:{payment.payment_id}: {len(tracking_data)} campos")
+            except Exception as e:
+                logger.warning(f"[META PURCHASE] Purchase - Erro ao recuperar tracking:payment:{payment.payment_id}: {e}")
 
+        # ✅ PRIORIDADE 4: Recuperar via fbclid do Payment (fallback)
         if not tracking_data and getattr(payment, "fbclid", None):
             try:
                 token = tracking_service_v4.redis.get(f"tracking:fbclid:{payment.fbclid}")
                 if token:
                     tracking_data = tracking_service_v4.recover_tracking_data(token) or {}
-            except Exception:
-                pass
+                    if tracking_data:
+                        tracking_token_used = token
+                        logger.info(f"[META PURCHASE] Purchase - tracking_data recuperado via fbclid do Payment (PRIORIDADE 4): {len(tracking_data)} campos")
+                        # ✅ CRÍTICO: Atualizar payment.tracking_token com o token correto
+                        payment.tracking_token = token
+                        logger.info(f"✅ Purchase - payment.tracking_token atualizado via fbclid: {token[:30]}...")
+            except Exception as e:
+                logger.warning(f"[META PURCHASE] Purchase - Erro ao recuperar tracking_data via fbclid: {e}")
 
         # ✅ FALLBACK: Se Redis estiver vazio, usar dados do Payment (incluindo pageview_event_id)
         if not tracking_data:
@@ -8139,21 +8178,43 @@ def send_meta_pixel_purchase_event(payment):
                 # Continuar mesmo com campos não-críticos ausentes
         
         # ✅ VALIDAÇÃO: user_data deve ter pelo menos external_id ou client_ip_address
+        # ✅ CORREÇÃO QI 1000+: NÃO bloquear - usar fallbacks ANTES de desistir
         if not user_data.get('external_id') and not user_data.get('client_ip_address'):
-            logger.error(f"❌ Purchase - user_data deve ter pelo menos external_id ou client_ip_address")
-            logger.error(f"   Meta rejeita eventos sem user_data válido")
-            logger.error(f"   Payment ID: {payment.payment_id} | Pool: {pool.name}")
-            # ❌ NÃO enviar evento sem user_data válido
-            return  # ✅ Retornar sem enviar (evita erro silencioso)
+            logger.warning(f"⚠️ Purchase - user_data não tem external_id nem client_ip_address")
+            logger.warning(f"   Tentando recuperar de outras fontes...")
+            
+            # ✅ FALLBACK: Tentar recuperar external_id de outras fontes
+            if not user_data.get('external_id'):
+                # Tentar usar customer_user_id como fallback
+                if telegram_user_id:
+                    user_data['external_id'] = [MetaPixelAPI._hash_data(str(telegram_user_id))]
+                    logger.warning(f"⚠️ Purchase - external_id ausente, usando customer_user_id como fallback: {telegram_user_id}")
+            
+            # ✅ FALLBACK: Tentar recuperar IP de outras fontes
+            if not user_data.get('client_ip_address'):
+                # Tentar usar IP do BotUser
+                if bot_user and getattr(bot_user, 'ip_address', None):
+                    user_data['client_ip_address'] = bot_user.ip_address
+                    logger.warning(f"⚠️ Purchase - client_ip_address ausente, usando BotUser.ip_address como fallback: {bot_user.ip_address}")
+                else:
+                    # ✅ ÚLTIMO RECURSO: Usar IP genérico (melhor que não enviar)
+                    user_data['client_ip_address'] = '0.0.0.0'
+                    logger.warning(f"⚠️ Purchase - client_ip_address ausente, usando IP genérico como fallback: 0.0.0.0")
+            
+            # ✅ CRÍTICO: Atualizar event_data explicitamente
+            event_data['user_data'] = user_data
         
-        # ✅ CORREÇÃO V4.1: Bloquear apenas se não tiver NENHUM identificador
+        # ✅ CORREÇÃO QI 1000+: Bloquear apenas se não tiver NENHUM identificador após fallbacks
         if not user_data.get('external_id') and not user_data.get('fbp') and not user_data.get('fbc'):
-            logger.error(f"❌ Purchase - Nenhum identificador presente (external_id, fbp, fbc)")
+            logger.error(f"❌ Purchase - Nenhum identificador presente após fallbacks (external_id, fbp, fbc)")
             logger.error(f"   Meta rejeita eventos sem identificadores")
             logger.error(f"   Payment ID: {payment.payment_id} | Pool: {pool.name}")
+            logger.error(f"   user_data: {json.dumps(user_data, ensure_ascii=False)}")
             return  # ✅ Retornar sem enviar (evita erro silencioso)
         elif not user_data.get('external_id'):
             logger.warning(f"⚠️ Purchase - external_id ausente, mas fbp/fbc presente - Meta pode aceitar")
+        else:
+            logger.info(f"✅ Purchase - external_id presente: {user_data.get('external_id', [])[0][:16] if user_data.get('external_id') else 'N/A'}...")
         
         # ✅ VALIDAÇÃO: client_ip_address e client_user_agent são obrigatórios para eventos web
         # ✅ CORREÇÃO CRÍTICA: Usar fallbacks ANTES de bloquear (não silenciar erro)
@@ -8209,6 +8270,23 @@ def send_meta_pixel_purchase_event(payment):
             if not event_data['user_data'].get('client_user_agent'):
                 logger.error(f"❌ ERRO CRÍTICO: client_user_agent ainda ausente após fallbacks!")
                 logger.error(f"   Isso não deveria acontecer - verifique a lógica de fallback")
+        
+        # ✅ CRÍTICO: Garantir que fbp e fbc estão no user_data (mesmo que tenham vindo do payment)
+        # Isso garante que _build_user_data não tenha perdido esses valores
+        if fbp_value and not user_data.get('fbp'):
+            user_data['fbp'] = fbp_value
+            event_data['user_data'] = user_data
+            logger.warning(f"⚠️ Purchase - fbp forçado no user_data (não estava presente): {fbp_value[:30]}...")
+        
+        if fbc_value and fbc_value != 'None' and not user_data.get('fbc'):
+            user_data['fbc'] = fbc_value
+            event_data['user_data'] = user_data
+            logger.warning(f"⚠️ Purchase - fbc forçado no user_data (não estava presente): {fbc_value[:50]}...")
+        
+        # ✅ LOG DETALHADO ANTES DE ENFILEIRAR (para diagnóstico)
+        logger.info(f"🚀 [META PURCHASE] Purchase - INICIANDO ENFILEIRAMENTO: Payment {payment.payment_id} | Pool: {pool.name} | Pixel: {pool.meta_pixel_id}")
+        logger.info(f"🚀 [META PURCHASE] Purchase - Event Data: event_name={event_data.get('event_name')}, event_id={event_data.get('event_id')}, event_time={event_data.get('event_time')}")
+        logger.info(f"🚀 [META PURCHASE] Purchase - User Data: external_id={'✅' if user_data.get('external_id') else '❌'}, fbp={'✅' if user_data.get('fbp') else '❌'}, fbc={'✅' if user_data.get('fbc') else '❌'}, ip={'✅' if user_data.get('client_ip_address') else '❌'}, ua={'✅' if user_data.get('client_user_agent') else '❌'}")
         
         # ✅ ENFILEIRAR COM PRIORIDADE ALTA (Purchase é crítico!)
         try:
