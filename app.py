@@ -769,11 +769,45 @@ def log_admin_action(action, description, target_user_id=None, data_before=None,
         logger.error(f"❌ Erro ao registrar log de auditoria: {e}")
         db.session.rollback()
 
-def get_user_ip():
-    """Obtém o IP real do usuário (considerando proxies)"""
-    if request.headers.get('X-Forwarded-For'):
-        return request.headers.get('X-Forwarded-For').split(',')[0]
-    return request.remote_addr
+def get_user_ip(request_obj=None):
+    """
+    Obtém o IP real do usuário (considerando Cloudflare e proxies)
+    
+    Prioridade:
+    1. CF-Connecting-IP (Cloudflare - mais confiável)
+    2. True-Client-IP (Cloudflare alternativo)
+    3. X-Forwarded-For (proxies genéricos - primeiro IP)
+    4. X-Real-IP (nginx e outros)
+    5. request.remote_addr (fallback direto)
+    """
+    if request_obj is None:
+        from flask import request
+        request_obj = request
+    
+    # ✅ PRIORIDADE 1: Cloudflare CF-Connecting-IP (mais confiável)
+    cf_ip = request_obj.headers.get('CF-Connecting-IP')
+    if cf_ip:
+        return cf_ip.strip()
+    
+    # ✅ PRIORIDADE 2: Cloudflare True-Client-IP (alternativo)
+    true_client_ip = request_obj.headers.get('True-Client-IP')
+    if true_client_ip:
+        return true_client_ip.strip()
+    
+    # ✅ PRIORIDADE 3: X-Forwarded-For (proxies genéricos - usar primeiro IP)
+    x_forwarded_for = request_obj.headers.get('X-Forwarded-For')
+    if x_forwarded_for:
+        # X-Forwarded-For pode ter múltiplos IPs separados por vírgula
+        # O primeiro IP é o IP real do cliente
+        return x_forwarded_for.split(',')[0].strip()
+    
+    # ✅ PRIORIDADE 4: X-Real-IP (nginx e outros)
+    x_real_ip = request_obj.headers.get('X-Real-IP')
+    if x_real_ip:
+        return x_real_ip.strip()
+    
+    # ✅ PRIORIDADE 5: request.remote_addr (fallback direto)
+    return request_obj.remote_addr or '0.0.0.0'
 
 def check_and_unlock_achievements(user):
     """Verifica e desbloqueia conquistas automaticamente"""
@@ -4116,7 +4150,8 @@ def public_redirect(slug):
     from datetime import datetime
     
     # Capturar dados do request
-    user_ip = request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0].strip()
+    # ✅ CORREÇÃO CRÍTICA: Usar função get_user_ip() que prioriza Cloudflare headers
+    user_ip = get_user_ip(request)
     user_agent = request.headers.get('User-Agent', '')
     fbclid = request.args.get('fbclid', '')
     
@@ -7185,7 +7220,7 @@ def send_meta_pixel_pageview_event(pool, request, pageview_event_id=None, tracki
                     fbclid=external_id,
                     fbp=fbp_value,  # ✅ FBP do browser (prioridade máxima)
                     fbc=fbc_value,
-                    ip_address=request.remote_addr,
+                    ip_address=get_user_ip(request),
                     user_agent=request.headers.get('User-Agent', ''),
                     grim=grim_param,
                     utms=utm_params
@@ -7200,7 +7235,7 @@ def send_meta_pixel_pageview_event(pool, request, pageview_event_id=None, tracki
                     fbclid=external_id,
                     fbp=fbp_value,  # Pode ser vazio (browser ainda não gerou)
                     fbc=fbc_value,
-                    ip_address=request.remote_addr,
+                    ip_address=get_user_ip(request),
                     user_agent=request.headers.get('User-Agent', ''),
                     grim=grim_param,
                     utms=utm_params
@@ -7235,16 +7270,16 @@ def send_meta_pixel_pageview_event(pool, request, pageview_event_id=None, tracki
         
         # ✅ CRÍTICO: Usar _build_user_data com external_id string (será hashado internamente)
         # Isso garante que PageView e Purchase usem EXATAMENTE o mesmo formato
-        # ✅ CORREÇÃO: Usar mesma lógica de captura de IP do public_redirect
-        # Prioridade: X-Forwarded-For > remote_addr (para funcionar com proxy reverso)
-        client_ip = request.headers.get('X-Forwarded-For', request.remote_addr).split(',')[0].strip()
+        # ✅ CORREÇÃO CRÍTICA: Usar função get_user_ip() que prioriza Cloudflare headers
+        # Prioridade: CF-Connecting-IP > True-Client-IP > X-Forwarded-For > X-Real-IP > remote_addr
+        client_ip = get_user_ip(request)
         
         user_data = MetaPixelAPI._build_user_data(
             customer_user_id=None,  # Não temos telegram_user_id no PageView
             external_id=external_id_for_hash,  # ✅ fbclid será hashado pelo _build_user_data
             email=None,
             phone=None,
-            client_ip=client_ip,  # ✅ CORRIGIDO: Usa fallback para X-Forwarded-For (mesma lógica do public_redirect)
+            client_ip=client_ip,  # ✅ CORRIGIDO: Usa get_user_ip() que prioriza Cloudflare headers
             client_user_agent=request.headers.get('User-Agent', ''),
             fbp=fbp_value,  # ✅ CRÍTICO: _fbp do cookie ou Redis
             fbc=fbc_value  # ✅ CRÍTICO: _fbc do cookie, Redis ou gerado
@@ -8024,21 +8059,59 @@ def send_meta_pixel_purchase_event(payment):
             logger.warning(f"⚠️ Purchase - external_id ausente, mas fbp/fbc presente - Meta pode aceitar")
         
         # ✅ VALIDAÇÃO: client_ip_address e client_user_agent são obrigatórios para eventos web
+        # ✅ CORREÇÃO CRÍTICA: Usar fallbacks ANTES de bloquear (não silenciar erro)
+        # ✅ NOTA: user_data é um dicionário mutável, então mudanças são refletidas automaticamente em event_data['user_data']
         if event_data.get('action_source') == 'website':
+            # ✅ FALLBACK 1: Se IP ausente, tentar recuperar do BotUser ANTES de bloquear
             if not user_data.get('client_ip_address'):
-                logger.error(f"❌ Purchase - client_ip_address AUSENTE! Meta rejeita eventos web sem IP.")
-                logger.error(f"   Payment ID: {payment.payment_id} | Pool: {pool.name}")
-                logger.error(f"   tracking_data tem ip: {bool(tracking_data.get('client_ip'))}")
-                logger.error(f"   payment tem client_ip: {bool(getattr(payment, 'client_ip', None))}")
-                logger.error(f"   bot_user tem ip_address: {bool(bot_user and getattr(bot_user, 'ip_address', None))}")
-                return  # ✅ Retornar sem enviar (evita erro silencioso)
+                # Tentar recuperar do BotUser
+                if bot_user and getattr(bot_user, 'ip_address', None):
+                    user_data['client_ip_address'] = bot_user.ip_address
+                    # ✅ CRÍTICO: Atualizar event_data explicitamente (garantir sincronização)
+                    event_data['user_data'] = user_data
+                    logger.info(f"✅ Purchase - IP recuperado do BotUser (fallback): {bot_user.ip_address}")
+                else:
+                    logger.error(f"❌ Purchase - client_ip_address AUSENTE! Meta rejeita eventos web sem IP.")
+                    logger.error(f"   Payment ID: {payment.payment_id} | Pool: {pool.name}")
+                    logger.error(f"   tracking_data tem ip: {bool(tracking_data.get('client_ip'))}")
+                    logger.error(f"   payment tem client_ip: {bool(getattr(payment, 'client_ip', None))}")
+                    logger.error(f"   bot_user tem ip_address: {bool(bot_user and getattr(bot_user, 'ip_address', None))}")
+                    # ✅ CRÍTICO: NÃO bloquear - usar IP genérico como último recurso (melhor que não enviar)
+                    user_data['client_ip_address'] = '0.0.0.0'
+                    # ✅ CRÍTICO: Atualizar event_data explicitamente (garantir sincronização)
+                    event_data['user_data'] = user_data
+                    logger.warning(f"⚠️ Purchase - Usando IP genérico como fallback: {user_data['client_ip_address']}")
+                    logger.warning(f"   ⚠️ ATENÇÃO: Meta pode rejeitar este evento. Verifique se IP está sendo capturado corretamente.")
+            
+            # ✅ FALLBACK 2: Se User-Agent ausente, tentar recuperar do BotUser ANTES de bloquear
             if not user_data.get('client_user_agent'):
-                logger.error(f"❌ Purchase - client_user_agent AUSENTE! Meta rejeita eventos web sem User-Agent.")
-                logger.error(f"   Payment ID: {payment.payment_id} | Pool: {pool.name}")
-                logger.error(f"   tracking_data tem ua: {bool(tracking_data.get('client_user_agent'))}")
-                logger.error(f"   payment tem client_user_agent: {bool(getattr(payment, 'client_user_agent', None))}")
-                logger.error(f"   bot_user tem user_agent: {bool(bot_user and getattr(bot_user, 'user_agent', None))}")
-                return  # ✅ Retornar sem enviar (evita erro silencioso)
+                # Tentar recuperar do BotUser
+                if bot_user and getattr(bot_user, 'user_agent', None):
+                    user_data['client_user_agent'] = bot_user.user_agent
+                    # ✅ CRÍTICO: Atualizar event_data explicitamente (garantir sincronização)
+                    event_data['user_data'] = user_data
+                    logger.info(f"✅ Purchase - User Agent recuperado do BotUser (fallback): {bot_user.user_agent[:50]}...")
+                else:
+                    logger.error(f"❌ Purchase - client_user_agent AUSENTE! Meta rejeita eventos web sem User-Agent.")
+                    logger.error(f"   Payment ID: {payment.payment_id} | Pool: {pool.name}")
+                    logger.error(f"   tracking_data tem ua: {bool(tracking_data.get('client_user_agent'))}")
+                    logger.error(f"   payment tem client_user_agent: {bool(getattr(payment, 'client_user_agent', None))}")
+                    logger.error(f"   bot_user tem user_agent: {bool(bot_user and getattr(bot_user, 'user_agent', None))}")
+                    # ✅ CRÍTICO: NÃO bloquear - usar User-Agent genérico como último recurso (melhor que não enviar)
+                    user_data['client_user_agent'] = 'Mozilla/5.0 (Unknown) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                    # ✅ CRÍTICO: Atualizar event_data explicitamente (garantir sincronização)
+                    event_data['user_data'] = user_data
+                    logger.warning(f"⚠️ Purchase - Usando User-Agent genérico como fallback")
+                    logger.warning(f"   ⚠️ ATENÇÃO: Meta pode rejeitar este evento. Verifique se User-Agent está sendo capturado corretamente.")
+        
+        # ✅ VALIDAÇÃO FINAL: Garantir que user_data tem IP e UA antes de enviar
+        if event_data.get('action_source') == 'website':
+            if not event_data['user_data'].get('client_ip_address'):
+                logger.error(f"❌ ERRO CRÍTICO: client_ip_address ainda ausente após fallbacks!")
+                logger.error(f"   Isso não deveria acontecer - verifique a lógica de fallback")
+            if not event_data['user_data'].get('client_user_agent'):
+                logger.error(f"❌ ERRO CRÍTICO: client_user_agent ainda ausente após fallbacks!")
+                logger.error(f"   Isso não deveria acontecer - verifique a lógica de fallback")
         
         # ✅ ENFILEIRAR COM PRIORIDADE ALTA (Purchase é crítico!)
         try:

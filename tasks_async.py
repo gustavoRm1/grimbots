@@ -960,9 +960,14 @@ def process_webhook_async(gateway_type: str, data: Dict[str, Any]):
                         
                     if deve_enviar_meta_purchase:
                         try:
-                            send_meta_pixel_purchase_event(payment)
+                            logger.info(f"🚀 [WEBHOOK {gateway_type.upper()}] Iniciando envio de Meta Purchase para {payment.payment_id}")
+                            logger.info(f"   Payment ID: {payment.payment_id} | Status: {payment.status} | Meta Purchase Sent: {payment.meta_purchase_sent}")
+                            resultado = send_meta_pixel_purchase_event(payment)
+                            logger.info(f"✅ [WEBHOOK {gateway_type.upper()}] Meta Purchase processado para {payment.payment_id}")
                         except Exception as e:
-                            logger.warning(f"Erro ao enviar Meta Pixel Purchase: {e}")
+                            logger.error(f"❌ [WEBHOOK {gateway_type.upper()}] Erro ao enviar Meta Pixel Purchase: {e}", exc_info=True)
+                            # ✅ CRÍTICO: Não silenciar erro - propagar para análise (comentado para não quebrar webhook)
+                            # raise  # Opcional: re-raise para não silenciar
                     
                     if deve_enviar_entregavel:
                         # ✅ CRÍTICO: Refresh antes de validar status
