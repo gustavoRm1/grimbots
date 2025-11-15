@@ -905,6 +905,7 @@ class Payment(db.Model):
     
     # Datas
     created_at = db.Column(db.DateTime, default=get_brazil_time, index=True)
+    updated_at = db.Column(db.DateTime, default=get_brazil_time, onupdate=get_brazil_time)  # ✅ Campo para debounce no sync
     paid_at = db.Column(db.DateTime)
     
     def to_dict(self):

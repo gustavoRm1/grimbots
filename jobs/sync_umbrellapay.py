@@ -54,8 +54,17 @@ def sync_umbrellapay_payments():
             payments_para_processar = []
             for payment in payments_pendentes:
                 # ✅ Verificar se payment foi atualizado recentemente (debounce)
-                if payment.updated_at and payment.updated_at >= cinco_minutos_atras:
-                    logger.debug(f"⏭️ [SYNC UMBRELLAPAY] Pulando {payment.payment_id} - atualizado recentemente ({payment.updated_at})")
+                # ✅ FALLBACK: Se updated_at não existir, usar paid_at ou created_at
+                updated_time = None
+                if hasattr(payment, 'updated_at') and payment.updated_at:
+                    updated_time = payment.updated_at
+                elif payment.paid_at:
+                    updated_time = payment.paid_at
+                elif payment.created_at:
+                    updated_time = payment.created_at
+                
+                if updated_time and updated_time >= cinco_minutos_atras:
+                    logger.debug(f"⏭️ [SYNC UMBRELLAPAY] Pulando {payment.payment_id} - atualizado recentemente ({updated_time})")
                     continue
                 
                 # ✅ Verificar se existe webhook recente (<5 minutos) antes de consultar API
