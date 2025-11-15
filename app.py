@@ -5262,6 +5262,13 @@ def create_gateway():
             if api_key_value:
                 gateway.api_key = api_key_value  # Criptografia automática via setter
                 logger.info(f"✅ [OrionPay] api_key salvo (criptografado)")
+                
+                # ✅ FLUSH para garantir que api_key seja enviado ao banco antes da verificação
+                try:
+                    db.session.flush()
+                    logger.info(f"✅ [OrionPay] Flush realizado - api_key enviado ao banco")
+                except Exception as e:
+                    logger.error(f"❌ [OrionPay] Erro no flush: {e}")
             else:
                 logger.warning(f"⚠️ [OrionPay] api_key não fornecido")
         
@@ -5310,6 +5317,19 @@ def create_gateway():
                     logger.info(f"   api_token: {'SIM' if credentials.get('api_token') else 'NÃO'} ({len(credentials.get('api_token', ''))} chars)")
                     logger.info(f"   product_hash: {'SIM' if credentials.get('product_hash') else 'NÃO'} ({len(credentials.get('product_hash', ''))} chars)")
             
+            # ✅ ORIONPAY: Verificar se tem api_key (obrigatório)
+            if gateway_type == 'orionpay':
+                if not credentials.get('api_key'):
+                    logger.error(f"❌ [OrionPay] api_key não configurado - não será verificado")
+                    gateway.is_verified = False
+                    gateway.last_error = 'API Key não configurado'
+                    # Manter is_active = True mesmo se não verificado (usuário pode querer usar mesmo assim)
+                    db.session.commit()
+                    return jsonify(gateway.to_dict())
+                else:
+                    logger.info(f"🔍 [OrionPay] Verificando credenciais...")
+                    logger.info(f"   api_key: {'SIM' if credentials.get('api_key') else 'NÃO'} ({len(credentials.get('api_key', ''))} chars)")
+            
             is_valid = bot_manager.verify_gateway(gateway_type, credentials)
             
             logger.info(f"📊 [Gateway {gateway_type}] Resultado da verificação: {'VÁLIDO' if is_valid else 'INVÁLIDO'}")
@@ -5340,6 +5360,14 @@ def create_gateway():
             logger.info(f"   product_hash no banco: {'SIM' if gateway._product_hash else 'NÃO'}")
             logger.info(f"   is_active: {gateway.is_active}")
             logger.info(f"   is_verified: {gateway.is_verified}")
+        elif gateway_type == 'orionpay':
+            # Recarregar do banco para confirmar
+            db.session.refresh(gateway)
+            logger.info(f"📋 [OrionPay] Confirmação após commit:")
+            logger.info(f"   api_key no banco: {'SIM' if gateway._api_key else 'NÃO'}")
+            logger.info(f"   is_active: {gateway.is_active}")
+            logger.info(f"   is_verified: {gateway.is_verified}")
+            logger.info(f"   last_error: {gateway.last_error}")
         
         # 🔄 RECARREGAR CONFIGURAÇÃO DOS BOTS ATIVOS DO USUÁRIO
         _reload_user_bots_config(current_user.id)

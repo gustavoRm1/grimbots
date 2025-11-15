@@ -801,21 +801,21 @@ class Gateway(db.Model):
         if self.gateway_type == 'syncpay':
             result['client_id'] = self.client_id
             result['client_secret'] = self.client_secret
-        elif self.gateway_type in ['pushynpay', 'paradise', 'wiinpay']:
+        elif self.gateway_type in ['pushynpay', 'paradise', 'wiinpay', 'orionpay', 'umbrellapag']:
             result['api_key'] = self.api_key
             if self.gateway_type == 'paradise':
                 result['product_hash'] = self.product_hash
                 result['offer_hash'] = self.offer_hash
             elif self.gateway_type == 'wiinpay':
                 result['split_user_id'] = self.split_user_id
+            elif self.gateway_type == 'umbrellapag':
+                result['product_hash'] = self.product_hash
+            # OrionPay só precisa de api_key (sem campos adicionais)
         elif self.gateway_type == 'atomopay':
             result['api_token'] = self.api_key  # Átomo Pay usa api_token (mesmo valor de api_key)
             result['product_hash'] = self.product_hash
             # ✅ REMOVIDO: offer_hash não é mais necessário (ofertas são criadas dinamicamente)
             # result['offer_hash'] = self.offer_hash
-        elif self.gateway_type == 'umbrellapag':
-            result['api_key'] = self.api_key
-            result['product_hash'] = self.product_hash
         
         return result
 
