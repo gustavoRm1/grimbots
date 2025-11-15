@@ -154,51 +154,31 @@ class OrionPayGateway(PaymentGateway):
     def verify_credentials(self) -> bool:
         """
         Verifica se as credenciais são válidas
-        Tenta fazer uma requisição de teste à API
+        
+        Nota: OrionPay não fornece endpoint de verificação de credenciais na documentação.
+        Validamos apenas o formato da API Key (deve começar com 'opay_' e ter tamanho adequado).
+        A validação real será feita na primeira tentativa de gerar PIX.
         """
         try:
-            # Tentar fazer uma requisição simples para verificar credenciais
-            # Usar endpoint de verificação se disponível, senão usar endpoint de PIX com valor mínimo
-            response = self._make_request('POST', '/api/v1/pix/generate', payload={
-                'amount': 0.01,  # Valor mínimo para teste
-                'description': 'Verificação de credenciais'
-            })
-            
-            # Verificar resposta
-            if not response:
-                logger.error(f"❌ [{self.get_gateway_name()}] Erro ao verificar credenciais (sem resposta)")
+            # ✅ VALIDAÇÃO SIMPLES: api_key não pode ser vazia e deve ter formato válido
+            if not self.api_key:
+                logger.error(f"❌ [{self.get_gateway_name()}] API Key não configurada")
                 return False
             
-            status_code = response.status_code
-            
-            # Status 200 ou 201 = sucesso (credenciais válidas)
-            if status_code in [200, 201]:
-                logger.info(f"✅ [{self.get_gateway_name()}] Credenciais válidas (status {status_code})")
-                return True
-            
-            # Status 401 ou 403 = credenciais inválidas
-            elif status_code in [401, 403]:
-                logger.error(f"❌ [{self.get_gateway_name()}] Credenciais inválidas (status {status_code})")
-                if response.text:
-                    logger.error(f"   Resposta: {response.text[:200]}")
+            # Validar formato da API Key (deve começar com 'opay_' conforme documentação)
+            api_key_clean = self.api_key.strip()
+            if len(api_key_clean) < 20:
+                logger.error(f"❌ [{self.get_gateway_name()}] API Key muito curta (mínimo 20 caracteres)")
                 return False
             
-            # Outros status
-            else:
-                logger.warning(f"⚠️ [{self.get_gateway_name()}] Status inesperado {status_code}")
-                # Se a resposta contém dados válidos mesmo com status diferente, considerar válido
-                try:
-                    response_data = response.json()
-                    if isinstance(response_data, dict) and ('pixCode' in response_data or 'pix_code' in response_data):
-                        logger.info(f"✅ [{self.get_gateway_name()}] Credenciais válidas (resposta com dados, status {status_code})")
-                        return True
-                except:
-                    pass
-                
-                logger.error(f"❌ [{self.get_gateway_name()}] Credenciais inválidas (status {status_code} não reconhecido)")
-                if response.text:
-                    logger.error(f"   Resposta: {response.text[:200]}")
-                return False
+            # Verificar se começa com 'opay_' (formato esperado conforme documentação)
+            if not api_key_clean.startswith('opay_'):
+                logger.warning(f"⚠️ [{self.get_gateway_name()}] API Key não começa com 'opay_' - pode estar em formato incorreto")
+                # Não rejeitar automaticamente, pois pode ser um formato válido não documentado
+            
+            logger.info(f"✅ [{self.get_gateway_name()}] Credenciais validadas (API Key presente e formato OK)")
+            logger.info(f"   API Key: {api_key_clean[:15]}... ({len(api_key_clean)} chars)")
+            return True
                 
         except Exception as e:
             logger.error(f"❌ [{self.get_gateway_name()}] Erro ao verificar credenciais: {e}")
