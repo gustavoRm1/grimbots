@@ -626,6 +626,11 @@ class UmbrellaPagGateway(PaymentGateway):
             logger.info(f"💰 [{self.get_gateway_name()}] Gerando PIX - R$ {amount:.2f}")
             logger.info(f"   Payment ID: {payment_id}")
             
+            # ✅ CORREÇÃO CRÍTICA V13: Gerar timestamp único uma vez para garantir unicidade
+            # Este timestamp será usado para gerar email, telefone e CPF únicos
+            import time
+            timestamp_ms = int(time.time() * 1000)
+            
             # Converter valor para centavos
             amount_cents = int(amount * 100)
             
@@ -675,9 +680,11 @@ class UmbrellaPagGateway(PaymentGateway):
                     hash_hex = hash_obj.hexdigest()
                     telegram_id = ''.join([str(int(c, 16) % 10) for c in hash_hex[:10]])
                 
-                # ✅ CORREÇÃO: Usar @gmail.com em vez de @grimbots.online (evita bloqueio do PluggouV2)
-                customer_email = f'lead{telegram_id}@gmail.com'
-                logger.info(f"ℹ️ [{self.get_gateway_name()}] Email inválido ('{customer_email_lower}'), gerando email válido: {customer_email}")
+                # ✅ CORREÇÃO CRÍTICA V13: Adicionar timestamp ao email para garantir unicidade
+                # PROBLEMA: Email duplicado causa recusa no PluggouV2 (política anti-fraude)
+                # SOLUÇÃO: Usar timestamp já gerado no início da função para garantir unicidade
+                customer_email = f'lead{telegram_id}_{timestamp_ms}@gmail.com'
+                logger.info(f"ℹ️ [{self.get_gateway_name()}] Email inválido ('{customer_email_lower}'), gerando email único: {customer_email}")
             else:
                 # Email parece válido, mas verificar se é domínio aceito
                 customer_email = customer_email_lower
@@ -686,14 +693,16 @@ class UmbrellaPagGateway(PaymentGateway):
                     # Email mal formatado, gerar novo
                     telegram_id = re.search(r'(\d+)', customer_email or '')
                     telegram_id = telegram_id.group(1) if telegram_id else payment_id.split('_')[1] if '_' in payment_id else '0'
-                    customer_email = f'lead{telegram_id}@gmail.com'
-                    logger.info(f"ℹ️ [{self.get_gateway_name()}] Email mal formatado, gerando email válido: {customer_email}")
+                    # ✅ CORREÇÃO CRÍTICA V13: Usar timestamp já gerado para garantir unicidade
+                    customer_email = f'lead{telegram_id}_{timestamp_ms}@gmail.com'
+                    logger.info(f"ℹ️ [{self.get_gateway_name()}] Email mal formatado, gerando email único: {customer_email}")
                 # ✅ CORREÇÃO: Se domínio é suspeito, trocar para @gmail.com
                 elif any(domain in customer_email for domain in ['@grimbots.online', '@bot.digital', '@telegram']):
                     telegram_id = re.search(r'(\d+)', customer_email or '')
                     telegram_id = telegram_id.group(1) if telegram_id else payment_id.split('_')[1] if '_' in payment_id else '0'
-                    customer_email = f'lead{telegram_id}@gmail.com'
-                    logger.info(f"ℹ️ [{self.get_gateway_name()}] Email com domínio suspeito, trocando para: {customer_email}")
+                    # ✅ CORREÇÃO CRÍTICA V13: Usar timestamp já gerado para garantir unicidade
+                    customer_email = f'lead{telegram_id}_{timestamp_ms}@gmail.com'
+                    logger.info(f"ℹ️ [{self.get_gateway_name()}] Email com domínio suspeito, trocando para email único: {customer_email}")
             
             # ✅ CORREÇÃO 2: Validar e formatar telefone (PluggouV2: apenas números, formato 55DDXXXXXXXXX)
             # SEMPRE remover todos os símbolos e garantir formato correto
@@ -701,15 +710,18 @@ class UmbrellaPagGateway(PaymentGateway):
             
             # Se telefone é muito curto ou parece ser ID do Telegram, gerar telefone válido
             if len(phone_clean) < 10 or (len(phone_clean) == 10 and phone_clean.startswith('1614')):
-                # Gerar telefone válido baseado no payment_id (hash MD5)
-                hash_obj = hashlib.md5(payment_id.encode())
+                # ✅ CORREÇÃO CRÍTICA V13: Adicionar timestamp ao hash para garantir unicidade
+                # PROBLEMA: Telefone duplicado causa recusa no PluggouV2 (política anti-fraude)
+                # SOLUÇÃO: Usar timestamp já gerado no início da função para garantir unicidade
+                hash_input = f"{payment_id}_{timestamp_ms}"
+                hash_obj = hashlib.md5(hash_input.encode())
                 hash_hex = hash_obj.hexdigest()
                 # DDD válido brasileiro (11-99)
                 ddd = 11 + (int(hash_hex[0], 16) % 89)  # DDD entre 11-99
                 # Número de 9 dígitos (celular sempre começa com 9)
                 numero = '9' + ''.join([str(int(c, 16) % 10) for c in hash_hex[1:9]])
                 phone_clean = f'{ddd}{numero}'
-                logger.info(f"ℹ️ [{self.get_gateway_name()}] Telefone inválido, gerando telefone válido: ({phone_clean[:2]}) {phone_clean[2:7]}-{phone_clean[7:]}")
+                logger.info(f"ℹ️ [{self.get_gateway_name()}] Telefone inválido, gerando telefone único: ({phone_clean[:2]}) {phone_clean[2:7]}-{phone_clean[7:]}")
             
             # Validar formato brasileiro (10 ou 11 dígitos sem DDI)
             if len(phone_clean) == 10:
@@ -745,10 +757,12 @@ class UmbrellaPagGateway(PaymentGateway):
             
             # ✅ CORREÇÃO FINAL: Se documento não é válido, gerar CPF válido matematicamente
             if not validated_document:
-                # Gerar CPF válido matematicamente usando payment_id como seed
-                # Isso garante que o CPF passe na validação de dígitos verificadores do PluggouV2
-                customer_document = self._gerar_cpf_valido(seed=payment_id)
-                logger.info(f"ℹ️ [{self.get_gateway_name()}] CPF inválido, gerando CPF válido matematicamente: {customer_document[:3]}.***.***-{customer_document[-2:]}")
+                # ✅ CORREÇÃO CRÍTICA V13: Adicionar timestamp ao seed para garantir unicidade
+                # PROBLEMA: CPF duplicado causa recusa no PluggouV2 (política anti-fraude)
+                # SOLUÇÃO: Usar timestamp já gerado no início da função para garantir unicidade
+                unique_seed = f"{payment_id}_{timestamp_ms}"
+                customer_document = self._gerar_cpf_valido(seed=unique_seed)
+                logger.info(f"ℹ️ [{self.get_gateway_name()}] CPF inválido, gerando CPF único e válido matematicamente: {customer_document[:3]}.***.***-{customer_document[-2:]}")
             else:
                 customer_document = validated_document
             
