@@ -55,17 +55,30 @@ class TrackingServiceV4:
         utm_medium: Optional[str] = None,
         utm_campaign: Optional[str] = None,
     ) -> str:
-        seed = "|".join([
-            str(bot_id),
-            str(customer_user_id),
-            str(payment_id or ""),
-            fbclid or "",
-            utm_source or "",
-            utm_medium or "",
-            utm_campaign or "",
-            uuid.uuid4().hex,
-        ])
-        return f"tracking_{uuid.uuid5(uuid.NAMESPACE_URL, seed).hex[:24]}"
+        """
+        ⚠️ DEPRECATED - NÃO USAR!
+        
+        Este método NÃO DEVE ser usado para gerar tracking_token.
+        tracking_token DEVE ser criado APENAS em /go/{slug} (public_redirect).
+        
+        Se você está chamando este método, há um BUG no seu código.
+        
+        RAZÃO: tracking_token gerado aqui NÃO tem dados do redirect (client_ip, client_user_agent, pageview_event_id).
+        Isso quebra o fluxo PageView → ViewContent → Purchase e impede Meta de atribuir vendas.
+        """
+        import traceback
+        logger.error(f"❌ [DEPRECATED] generate_tracking_token() foi chamado - ISSO É UM BUG!")
+        logger.error(f"   tracking_token DEVE ser criado APENAS em /go/{{slug}} (public_redirect)")
+        logger.error(f"   Stack trace: {''.join(traceback.format_stack()[-5:-1])}")
+        logger.error(f"   Parâmetros: bot_id={bot_id}, customer_user_id={customer_user_id}, payment_id={payment_id}")
+        
+        # ✅ Lançar exceção para forçar correção do bug
+        raise DeprecationWarning(
+            "generate_tracking_token() está DEPRECATED. "
+            "tracking_token deve ser criado APENAS em /go/{slug} (public_redirect). "
+            "Se você está chamando este método, há um BUG no seu código. "
+            "SOLUÇÃO: Usar tracking_token do bot_user.tracking_session_id (vem do redirect)."
+        )
 
     def generate_fbp(self, telegram_user_id: str) -> str:
         timestamp = int(datetime.utcnow().timestamp())

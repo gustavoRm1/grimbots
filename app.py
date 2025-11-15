@@ -4475,14 +4475,27 @@ def public_redirect(slug):
     
     # ✅ FALLBACK: Se não tem pixel_id ou é crawler, redirect direto (comportamento atual)
     # ✅ SEMPRE usar tracking_token no start param (32 chars, cabe perfeitamente em 64)
+    # ✅ CORREÇÃO CRÍTICA V12: Validar que tracking_token não é None antes de usar fallback
+    # Fallback p{pool.id} não tem tracking_data no Redis - NUNCA usar se tracking_token deveria existir
     if tracking_token and not is_crawler_request:
         # tracking_token tem 32 caracteres (uuid4.hex), bem abaixo do limite de 64
         tracking_param = tracking_token
         logger.info(f"✅ Tracking param: {tracking_token} ({len(tracking_token)} chars)")
-    else:
-        # Fallback apenas para crawlers (sem tracking)
+    elif is_crawler_request:
+        # ✅ Crawler: usar fallback (não tem tracking mesmo)
         tracking_param = f"p{pool.id}"
-        logger.info(f"🤖 Crawler ou sem tracking - usando fallback: {tracking_param}")
+        logger.info(f"🤖 Crawler detectado - usando fallback: {tracking_param}")
+    else:
+        # ✅ ERRO CRÍTICO: tracking_token deveria existir mas está None
+        # Isso indica um BUG - tracking_token só é None se is_crawler_request = True
+        logger.error(f"❌ [REDIRECT] tracking_token é None mas não é crawler - ISSO É UM BUG!")
+        logger.error(f"   Pool: {pool.name} | Slug: {slug} | is_crawler_request: {is_crawler_request}")
+        logger.error(f"   tracking_token deveria ter sido gerado na linha 4199")
+        # ✅ FALHAR: Não usar fallback que não tem tracking_data (quebra Purchase)
+        raise ValueError(
+            f"tracking_token ausente - não pode usar fallback sem tracking_data. "
+            f"Pool: {pool.name} | Slug: {slug} | is_crawler_request: {is_crawler_request}"
+        )
     
     redirect_url = f"https://t.me/{pool_bot.bot.username}?start={tracking_param}"
     

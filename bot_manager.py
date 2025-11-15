@@ -4525,8 +4525,25 @@ Seu pagamento ainda não foi confirmado.
                             logger.info(f"✅ Tracking payload recuperado do Redis para token {tracking_token[:20]}... | fbp={'ok' if recovered_payload.get('fbp') else 'missing'} | fbc={'ok' if recovered_payload.get('fbc') else 'missing'} | pageview_event_id={'ok' if recovered_payload.get('pageview_event_id') else 'missing'}")
                         elif not tracking_data_v4:
                             logger.warning("⚠️ Tracking token %s sem payload no Redis - tentando reconstruir via BotUser", tracking_token)
-                        if bot_user and getattr(bot_user, 'tracking_session_id', None) != tracking_token:
-                            bot_user.tracking_session_id = tracking_token
+                        # ✅ CORREÇÃO CRÍTICA V12: VALIDAR antes de atualizar bot_user.tracking_session_id
+                        # NUNCA atualizar com token gerado (deve ser UUID de 32 chars do redirect)
+                        if bot_user and tracking_token:
+                            # ✅ VALIDAÇÃO: tracking_token deve ser UUID de 32 chars (não gerado)
+                            is_generated_token = tracking_token.startswith('tracking_')
+                            is_uuid_token = len(tracking_token) == 32 and all(c in '0123456789abcdef' for c in tracking_token.lower())
+                            
+                            if is_generated_token:
+                                logger.error(f"❌ [GENERATE PIX] Tentativa de atualizar bot_user.tracking_session_id com token GERADO: {tracking_token[:30]}...")
+                                logger.error(f"   Isso é um BUG - token gerado não deve ser salvo em bot_user.tracking_session_id")
+                                # ✅ NÃO atualizar - manter token original do redirect
+                            elif is_uuid_token:
+                                # ✅ Token é UUID (vem do redirect) - pode atualizar
+                                if bot_user.tracking_session_id != tracking_token:
+                                    bot_user.tracking_session_id = tracking_token
+                                    logger.info(f"✅ bot_user.tracking_session_id atualizado com token do redirect: {tracking_token[:20]}...")
+                            else:
+                                logger.warning(f"⚠️ [GENERATE PIX] tracking_token com formato inválido: {tracking_token[:30]}... (len={len(tracking_token)})")
+                                # ✅ NÃO atualizar - formato inválido
 
                     # ✅ NOTA: bot_user.tracking_session_id já foi verificado no início (prioridade máxima)
                     # Não precisa verificar novamente aqui
@@ -4549,9 +4566,20 @@ Seu pagamento ainda não foi confirmado.
                                     if recovered_payload_from_fbclid:
                                         tracking_data_v4 = recovered_payload_from_fbclid
                                         logger.info(f"✅ Tracking payload recuperado via fbclid: fbp={'✅' if recovered_payload_from_fbclid.get('fbp') else '❌'}, fbc={'✅' if recovered_payload_from_fbclid.get('fbc') else '❌'}, ip={'✅' if recovered_payload_from_fbclid.get('client_ip') else '❌'}, ua={'✅' if recovered_payload_from_fbclid.get('client_user_agent') else '❌'}, pageview_event_id={'✅' if recovered_payload_from_fbclid.get('pageview_event_id') else '❌'}")
-                                        # ✅ Atualizar bot_user.tracking_session_id com o token recuperado
-                                        if bot_user:
-                                            bot_user.tracking_session_id = tracking_token
+                                        # ✅ CORREÇÃO CRÍTICA V12: VALIDAR antes de atualizar bot_user.tracking_session_id
+                                        # Token recuperado via fbclid deve ser UUID (vem do redirect)
+                                        if bot_user and tracking_token:
+                                            is_generated_token = tracking_token.startswith('tracking_')
+                                            is_uuid_token = len(tracking_token) == 32 and all(c in '0123456789abcdef' for c in tracking_token.lower())
+                                            
+                                            if is_generated_token:
+                                                logger.error(f"❌ [GENERATE PIX] Token recuperado via fbclid é GERADO: {tracking_token[:30]}... - NÃO atualizar bot_user.tracking_session_id")
+                                            elif is_uuid_token:
+                                                if bot_user.tracking_session_id != tracking_token:
+                                                    bot_user.tracking_session_id = tracking_token
+                                                    logger.info(f"✅ bot_user.tracking_session_id atualizado com token recuperado via fbclid: {tracking_token[:20]}...")
+                                            else:
+                                                logger.warning(f"⚠️ [GENERATE PIX] Token recuperado via fbclid tem formato inválido: {tracking_token[:30]}... (len={len(tracking_token)})")
                             except Exception as e:
                                 logger.warning(f"⚠️ Erro ao recuperar tracking_token via fbclid do BotUser: {e}")
                         
@@ -4571,85 +4599,43 @@ Seu pagamento ainda não foi confirmado.
                                             if recovered_payload_from_chat:
                                                 tracking_data_v4 = recovered_payload_from_chat
                                                 logger.info(f"✅ Tracking payload recuperado via chat: fbp={'✅' if recovered_payload_from_chat.get('fbp') else '❌'}, fbc={'✅' if recovered_payload_from_chat.get('fbc') else '❌'}, ip={'✅' if recovered_payload_from_chat.get('client_ip') else '❌'}, ua={'✅' if recovered_payload_from_chat.get('client_user_agent') else '❌'}, pageview_event_id={'✅' if recovered_payload_from_chat.get('pageview_event_id') else '❌'}")
-                                                if bot_user:
-                                                    bot_user.tracking_session_id = tracking_token
+                                                # ✅ CORREÇÃO CRÍTICA V12: VALIDAR antes de atualizar bot_user.tracking_session_id
+                                                # Token recuperado via chat deve ser UUID (vem do redirect)
+                                                if bot_user and tracking_token:
+                                                    is_generated_token = tracking_token.startswith('tracking_')
+                                                    is_uuid_token = len(tracking_token) == 32 and all(c in '0123456789abcdef' for c in tracking_token.lower())
+                                                    
+                                                    if is_generated_token:
+                                                        logger.error(f"❌ [GENERATE PIX] Token recuperado via chat é GERADO: {tracking_token[:30]}... - NÃO atualizar bot_user.tracking_session_id")
+                                                    elif is_uuid_token:
+                                                        if bot_user.tracking_session_id != tracking_token:
+                                                            bot_user.tracking_session_id = tracking_token
+                                                            logger.info(f"✅ bot_user.tracking_session_id atualizado com token recuperado via chat: {tracking_token[:20]}...")
+                                                    else:
+                                                        logger.warning(f"⚠️ [GENERATE PIX] Token recuperado via chat tem formato inválido: {tracking_token[:30]}... (len={len(tracking_token)})")
                                     except Exception as e:
                                         logger.warning(f"⚠️ Erro ao parsear chat_payload: {e}")
                             except Exception as e:
                                 logger.warning(f"⚠️ Erro ao recuperar tracking_token de tracking:chat: {e}")
                         
-                        # ✅ ESTRATÉGIA 3: Se ainda não encontrou, gerar novo token (ÚLTIMA OPÇÃO)
+                        # ✅ CORREÇÃO CRÍTICA V12: NUNCA gerar novo token em generate_pix_payment
+                        # tracking_token DEVE vir do redirect (bot_user.tracking_session_id)
+                        # Se não encontrar, FALHAR com erro claro (não gerar token)
                         if not tracking_token:
-                            # ✅ ÚLTIMA TENTATIVA: Verificar se bot_user foi encontrado mas tracking_session_id está vazio
-                            if bot_user:
-                                logger.warning(f"⚠️ Tracking token não encontrado para BotUser {bot_user.id} (telegram_user_id: {customer_user_id})")
-                                logger.warning(f"   bot_user.tracking_session_id: {getattr(bot_user, 'tracking_session_id', None)}")
-                                logger.warning(f"   bot_user.fbclid: {getattr(bot_user, 'fbclid', None)}")
-                                logger.warning(f"   Tentando recuperar de tracking:last_token:user:{customer_user_id} e tracking:chat:{customer_user_id}")
-                            else:
-                                logger.warning(f"⚠️ BotUser não encontrado para customer_user_id: {customer_user_id}, bot_id: {bot_id}")
+                            error_msg = f"❌ [GENERATE PIX] tracking_token AUSENTE para BotUser {bot_user.id if bot_user else 'N/A'} (customer_user_id: {customer_user_id})"
+                            logger.error(error_msg)
+                            logger.error(f"   Isso indica que o usuário NÃO passou pelo redirect ou tracking_session_id não foi salvo")
+                            logger.error(f"   bot_user.tracking_session_id: {getattr(bot_user, 'tracking_session_id', None) if bot_user else 'N/A'}")
+                            logger.error(f"   bot_user.fbclid: {getattr(bot_user, 'fbclid', None) if bot_user else 'N/A'}")
+                            logger.error(f"   SOLUÇÃO: Usuário deve acessar link de redirect primeiro: /go/{{slug}}?grim=...&fbclid=...")
+                            logger.error(f"   Payment NÃO será criado sem tracking_token válido")
                             
-                            # ✅ CORREÇÃO CRÍTICA QI 1000+: ANTES de gerar novo token, tentar recuperar dados do token do redirect
-                            # Isso garante que mesmo quando novo token é gerado, dados de tracking do redirect sejam copiados
-                            redirect_token_data = {}
-                            if bot_user and bot_user.tracking_session_id:
-                                try:
-                                    redirect_token_data = tracking_service.recover_tracking_data(bot_user.tracking_session_id) or {}
-                                    if redirect_token_data:
-                                        logger.info(f"✅ Dados do token do redirect recuperados ANTES de gerar novo token: fbp={'✅' if redirect_token_data.get('fbp') else '❌'}, fbc={'✅' if redirect_token_data.get('fbc') else '❌'}, ip={'✅' if redirect_token_data.get('client_ip') else '❌'}, ua={'✅' if redirect_token_data.get('client_user_agent') else '❌'}, pageview_event_id={'✅' if redirect_token_data.get('pageview_event_id') else '❌'}")
-                                except Exception as e:
-                                    logger.warning(f"⚠️ Erro ao recuperar dados do token do redirect: {e}")
-                            
-                            tracking_token = tracking_service.generate_tracking_token(
-                                bot_id=bot_id,
-                                customer_user_id=customer_user_id,
-                                payment_id=None,
-                                fbclid=fbclid,
-                                utm_source=utm_source,
-                                utm_medium=utm_medium,
-                                utm_campaign=utm_campaign
+                            # ✅ FALHAR: Não gerar token, não criar Payment sem tracking_token válido
+                            raise ValueError(
+                                f"tracking_token ausente - usuário deve acessar link de redirect primeiro. "
+                                f"BotUser {bot_user.id if bot_user else 'N/A'} não tem tracking_session_id. "
+                                f"SOLUÇÃO: Acessar /go/{{slug}}?grim=...&fbclid=... antes de gerar PIX"
                             )
-                            logger.warning("⚠️ Token de tracking ausente - gerado novo %s para BotUser %s (customer_user_id: %s)", tracking_token, bot_user.id if bot_user else 'N/A', customer_user_id)
-                            
-                            # ✅ CRÍTICO: Incluir TODOS os dados do BotUser no seed_payload
-                            # Isso garante que mesmo quando novo token é gerado, dados de tracking estejam disponíveis
-                            fbp_from_botuser = getattr(bot_user, 'fbp', None) if bot_user else None
-                            fbc_from_botuser = getattr(bot_user, 'fbc', None) if bot_user else None
-                            ip_from_botuser = getattr(bot_user, 'ip_address', None) if bot_user else None
-                            ua_from_botuser = getattr(bot_user, 'user_agent', None) if bot_user else None
-                            fbclid_from_botuser = getattr(bot_user, 'fbclid', None) if bot_user else None
-                            
-                            # ✅ CRÍTICO: Usar fbclid do BotUser se disponível (melhor que None)
-                            if not fbclid and fbclid_from_botuser:
-                                fbclid = fbclid_from_botuser
-                                logger.info(f"✅ fbclid recuperado do BotUser: {fbclid[:50]}...")
-                            
-                            # ✅ CORREÇÃO CRÍTICA QI 1000+: COPIAR dados do token do redirect para o novo token
-                            # PRIORIDADE: token do redirect > BotUser > None
-                            seed_payload = {
-                                "tracking_token": tracking_token,
-                                "bot_id": bot_id,
-                                "customer_user_id": customer_user_id,
-                                "fbclid": fbclid or redirect_token_data.get('fbclid') or fbclid_from_botuser,  # ✅ PRIORIDADE: redirect > BotUser
-                                "fbp": redirect_token_data.get('fbp') or fbp_from_botuser,  # ✅ PRIORIDADE: redirect > BotUser
-                                "fbc": redirect_token_data.get('fbc') or fbc_from_botuser,  # ✅ PRIORIDADE: redirect > BotUser
-                                "client_ip": redirect_token_data.get('client_ip') or ip_from_botuser,  # ✅ PRIORIDADE: redirect > BotUser (CRÍTICO!)
-                                "client_user_agent": redirect_token_data.get('client_user_agent') or ua_from_botuser,  # ✅ PRIORIDADE: redirect > BotUser (CRÍTICO!)
-                                "pageview_event_id": redirect_token_data.get('pageview_event_id'),  # ✅ CRÍTICO: copiar do redirect (BotUser não tem)
-                                "pageview_ts": redirect_token_data.get('pageview_ts') or tracking_data_v4.get('pageview_ts'),
-                                "utm_source": utm_source or redirect_token_data.get('utm_source'),
-                                "utm_medium": utm_medium or redirect_token_data.get('utm_medium'),
-                                "utm_campaign": utm_campaign or redirect_token_data.get('utm_campaign'),
-                                "utm_content": utm_content or redirect_token_data.get('utm_content'),
-                                "utm_term": utm_term or redirect_token_data.get('utm_term'),
-                                "event_source_url": redirect_token_data.get('event_source_url'),
-                                "first_page": redirect_token_data.get('first_page'),
-                                "created_from": "generate_pix_payment",
-                            }
-                            tracking_service.save_tracking_token(tracking_token, {k: v for k, v in seed_payload.items() if v})
-                            logger.info(f"✅ Seed payload salvo com {len([k for k, v in seed_payload.items() if v])} campos: fbclid={'✅' if (fbclid or redirect_token_data.get('fbclid') or fbclid_from_botuser) else '❌'}, fbp={'✅' if (redirect_token_data.get('fbp') or fbp_from_botuser) else '❌'}, fbc={'✅' if (redirect_token_data.get('fbc') or fbc_from_botuser) else '❌'}, ip={'✅' if (redirect_token_data.get('client_ip') or ip_from_botuser) else '❌'}, ua={'✅' if (redirect_token_data.get('client_user_agent') or ua_from_botuser) else '❌'}, pageview_event_id={'✅' if redirect_token_data.get('pageview_event_id') else '❌'}")
-                            if bot_user:
-                                bot_user.tracking_session_id = tracking_token
                     if not tracking_data_v4:
                         tracking_data_v4 = tracking_service.recover_tracking_data(tracking_token) or {}
                     
@@ -4800,6 +4786,35 @@ Seu pagamento ainda não foi confirmado.
                     logger.info(f"   producer_hash: {producer_hash}")  # ✅ Para identificar conta do usuário
                     logger.info(f"   reference: {reference}")
                     
+                    # ✅ CORREÇÃO CRÍTICA V12: VALIDAR tracking_token antes de criar Payment
+                    # tracking_token DEVE ser UUID de 32 chars (não gerado, não None)
+                    if not tracking_token:
+                        error_msg = f"❌ [GENERATE PIX] tracking_token AUSENTE - Payment NÃO será criado"
+                        logger.error(error_msg)
+                        logger.error(f"   BotUser {bot_user.id if bot_user else 'N/A'} não tem tracking_session_id")
+                        logger.error(f"   SOLUÇÃO: Usuário deve acessar link de redirect primeiro: /go/{{slug}}?grim=...&fbclid=...")
+                        raise ValueError("tracking_token ausente - Payment não pode ser criado sem tracking_token válido")
+                    
+                    is_generated_token = tracking_token.startswith('tracking_')
+                    is_uuid_token = len(tracking_token) == 32 and all(c in '0123456789abcdef' for c in tracking_token.lower())
+                    
+                    if is_generated_token:
+                        error_msg = f"❌ [GENERATE PIX] tracking_token GERADO detectado: {tracking_token[:30]}..."
+                        logger.error(error_msg)
+                        logger.error(f"   Payment NÃO será criado com token gerado")
+                        logger.error(f"   tracking_token deve ser UUID de 32 chars (vem do redirect), não gerado")
+                        raise ValueError(f"tracking_token gerado inválido - Payment não pode ser criado com token gerado (deve ser UUID do redirect)")
+                    
+                    if not is_uuid_token:
+                        error_msg = f"❌ [GENERATE PIX] tracking_token com formato inválido: {tracking_token[:30]}... (len={len(tracking_token)})"
+                        logger.error(error_msg)
+                        logger.error(f"   Payment NÃO será criado com token inválido")
+                        logger.error(f"   tracking_token deve ser UUID de 32 chars (vem do redirect)")
+                        raise ValueError(f"tracking_token com formato inválido - deve ser UUID de 32 chars")
+                    
+                    # ✅ VALIDAÇÃO PASSOU - criar Payment
+                    logger.info(f"✅ [GENERATE PIX] tracking_token validado: {tracking_token[:20]}... (UUID do redirect)")
+                    
                     # Salvar pagamento no banco (incluindo código PIX para reenvio + analytics)
                     payment = Payment(
                         bot_id=bot_id,
@@ -4846,8 +4861,8 @@ Seu pagamento ainda não foi confirmado.
                         # ✅ CRÍTICO QI 600+: campaign_code (grim) para atribuição de campanha
                         # Usar campaign_code do bot_user (grim), não external_id (que agora é fbclid)
                         campaign_code=getattr(bot_user, 'campaign_code', None) if bot_user else None,
-                        # ✅ QI 500: TRACKING_TOKEN V4
-                        tracking_token=tracking_token,
+                        # ✅ QI 500: TRACKING_TOKEN V4 (VALIDADO - UUID do redirect)
+                        tracking_token=tracking_token,  # ✅ Token válido (UUID do redirect)
                         # ✅ CRÍTICO: pageview_event_id para deduplicação Meta Pixel (fallback se Redis expirar)
                         pageview_event_id=pageview_event_id if pageview_event_id else None,
                         # ✅ CRÍTICO: fbp e fbc para fallback no Purchase se Redis expirar
