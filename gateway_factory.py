@@ -12,6 +12,7 @@ from gateway_paradise import ParadisePaymentGateway
 from gateway_wiinpay import WiinPayGateway
 from gateway_atomopay import AtomPayGateway
 from gateway_umbrellapag import UmbrellaPagGateway
+from gateway_orionpay import OrionPayGateway
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,7 @@ class GatewayFactory:
         'wiinpay': WiinPayGateway,
         'atomopay': AtomPayGateway,  # ✅ Átomo Pay
         'umbrellapag': UmbrellaPagGateway,  # ✅ UmbrellaPag
+        'orionpay': OrionPayGateway,  # ✅ OrionPay
     }
     
     @classmethod
@@ -186,6 +188,24 @@ class GatewayFactory:
                 gateway = gateway_class(
                     api_key=api_key,
                     product_hash=product_hash if product_hash else None
+                )
+            
+            elif gateway_type == 'orionpay':
+                # ✅ OrionPay requer: api_key
+                # Opcional: environment (production ou sandbox, padrão: production)
+                # Opcional: webhook_secret (para validação de webhooks)
+                api_key = credentials.get('api_key')
+                environment = credentials.get('environment', 'production')
+                webhook_secret = credentials.get('webhook_secret', '')
+                
+                if not api_key:
+                    logger.error(f"❌ [Factory] OrionPay requer api_key")
+                    return None
+                
+                gateway = gateway_class(
+                    api_key=api_key,
+                    environment=environment,
+                    webhook_secret=webhook_secret if webhook_secret else None
                 )
             
             else:
