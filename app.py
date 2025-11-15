@@ -5165,7 +5165,7 @@ def create_gateway():
         gateway_type = data.get('gateway_type')
     
         # ✅ Validar tipo de gateway
-        if gateway_type not in ['syncpay', 'pushynpay', 'paradise', 'wiinpay', 'atomopay', 'umbrellapag']:
+        if gateway_type not in ['syncpay', 'pushynpay', 'paradise', 'wiinpay', 'atomopay', 'umbrellapag', 'orionpay']:
             logger.error(f"❌ Tipo de gateway inválido: {gateway_type}")
             return jsonify({'error': 'Tipo de gateway inválido'}), 400
         
@@ -5251,6 +5251,19 @@ def create_gateway():
                 logger.info(f"✅ [UmbrellaPag] product_hash salvo (criptografado)")
             else:
                 logger.info(f"ℹ️ [UmbrellaPag] product_hash não fornecido (será criado dinamicamente)")
+        
+        elif gateway_type == 'orionpay':
+            # ✅ ORIONPAY
+            api_key_value = data.get('api_key')
+            
+            logger.info(f"📦 [OrionPay] Dados recebidos:")
+            logger.info(f"   api_key: {'SIM' if api_key_value else 'NÃO'} ({len(api_key_value) if api_key_value else 0} chars)")
+            
+            if api_key_value:
+                gateway.api_key = api_key_value  # Criptografia automática via setter
+                logger.info(f"✅ [OrionPay] api_key salvo (criptografado)")
+            else:
+                logger.warning(f"⚠️ [OrionPay] api_key não fornecido")
         
         # ✅ Split percentage (comum a todos)
         gateway.split_percentage = float(data.get('split_percentage', 2.0))  # 2% PADRÃO

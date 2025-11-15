@@ -192,11 +192,8 @@ class GatewayFactory:
             
             elif gateway_type == 'orionpay':
                 # ✅ OrionPay requer: api_key
-                # Opcional: environment (production ou sandbox, padrão: production)
-                # Opcional: webhook_secret (para validação de webhooks)
+                # Sempre usa production como padrão
                 api_key = credentials.get('api_key')
-                environment = credentials.get('environment', 'production')
-                webhook_secret = credentials.get('webhook_secret', '')
                 
                 if not api_key:
                     logger.error(f"❌ [Factory] OrionPay requer api_key")
@@ -204,8 +201,7 @@ class GatewayFactory:
                 
                 gateway = gateway_class(
                     api_key=api_key,
-                    environment=environment,
-                    webhook_secret=webhook_secret if webhook_secret else None
+                    environment='production'  # Sempre production
                 )
             
             else:
