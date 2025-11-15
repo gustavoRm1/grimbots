@@ -140,60 +140,116 @@
             window.location.href = telegramUrl;
         }
         
-        // Aguardar Meta Pixel JS carregar e gerar cookies
-        // Meta Pixel geralmente gera cookies em 300-500ms
-        // 800ms garante que 95% dos casos terão cookies
+        // ✅ CORREÇÃO SÊNIOR QI 500: Aguardar Meta Pixel JS carregar e gerar cookies
+        // Meta Pixel geralmente gera cookies em 500-1000ms após fbq('track', 'PageView')
+        // 800ms garante que 90% dos casos terão cookies
         let pixelLoaded = false;
+        let cookiesSent = false;
         let redirectTimer = null;
+        let pixelCheckInterval = null;
         
-        // Verificar se Pixel carregou
-        function checkPixelLoaded() {
-            if (typeof fbq !== 'undefined') {
-                pixelLoaded = true;
-                // Pixel carregou, aguardar mais 300ms para cookies serem gerados
-                setTimeout(() => {
-                    // Salvar cookies nos params (fallback se Redis expirar)
-                    const fbp = getCookie('_fbp');
-                    const fbc = getCookie('_fbc');
-                    
-                    if (fbp || fbc) {
-                        // Adicionar cookies aos params do redirect
-                        const params = new URLSearchParams();
-                        params.append('start', '{{ tracking_token }}');
-                        if (fbp) params.append('_fbp_cookie', fbp);
-                        if (fbc) params.append('_fbc_cookie', fbc);
-                        
-                        const telegramUrl = `https://t.me/{{ bot_username }}?${params.toString()}`;
-                        window.location.href = telegramUrl;
-                    } else {
-                        // Cookies não gerados, redirect mesmo assim
-                        redirectToTelegram();
-                    }
-                }, 300);
-                return true;
+        // ✅ Função para enviar cookies para servidor via Beacon API
+        function sendCookiesToServer() {
+            if (cookiesSent) return;
+            
+            const fbp = getCookie('_fbp');
+            const fbc = getCookie('_fbc');
+            const trackingToken = '{{ tracking_token }}';
+            
+            if (!trackingToken) {
+                console.warn('[META PIXEL] tracking_token não encontrado');
+                return;
             }
-            return false;
+            
+            if (fbp || fbc) {
+                // ✅ ENVIAR cookies para servidor via Beacon API (não bloqueia redirect)
+                const payload = JSON.stringify({
+                    tracking_token: trackingToken,
+                    _fbp: fbp || null,
+                    _fbc: fbc || null
+                });
+                
+                // ✅ Usar Beacon API (funciona mesmo após página fechar, não bloqueia redirect)
+                if (navigator.sendBeacon) {
+                    const sent = navigator.sendBeacon('/api/tracking/cookies', payload);
+                    if (sent) {
+                        cookiesSent = true;
+                        console.log('[META PIXEL] Cookies enviados para servidor via Beacon API:', {
+                            fbp: fbp ? fbp.substring(0, 30) + '...' : 'ausente',
+                            fbc: fbc ? fbc.substring(0, 50) + '...' : 'ausente'
+                        });
+                    } else {
+                        console.warn('[META PIXEL] Beacon API não conseguiu enviar cookies');
+                    }
+                } else {
+                    // ✅ Fallback para fetch (não bloqueia, keepalive garante envio mesmo após redirect)
+                    fetch('/api/tracking/cookies', {
+                        method: 'POST',
+                        body: payload,
+                        headers: {'Content-Type': 'application/json'},
+                        keepalive: true
+                    }).then(response => {
+                        if (response.ok) {
+                            cookiesSent = true;
+                            console.log('[META PIXEL] Cookies enviados para servidor via fetch');
+                        }
+                    }).catch(err => {
+                        console.error('[META PIXEL] Erro ao enviar cookies:', err);
+                    });
+                }
+            } else {
+                console.log('[META PIXEL] Cookies não encontrados no browser');
+            }
         }
         
-        // Tentar verificar a cada 100ms
-        const pixelCheckInterval = setInterval(() => {
-            if (checkPixelLoaded()) {
+        // ✅ Verificar se Pixel carregou e aguardar cookies serem gerados
+        function checkPixelAndSendCookies() {
+            if (typeof fbq === 'undefined') {
+                return false;
+            }
+            
+            pixelLoaded = true;
+            
+            // ✅ Pixel carregou, aguardar 800ms para Meta Pixel JS gerar cookies
+            // Meta Pixel JS precisa executar fbq('track', 'PageView') e fazer request para Meta
+            // Isso geralmente leva 500-1000ms
+            setTimeout(() => {
+                // ✅ Enviar cookies para servidor (não bloqueia redirect)
+                sendCookiesToServer();
+                
+                // ✅ Redirect para Telegram (mesmo se cookies não foram capturados)
+                redirectToTelegram();
+            }, 800); // ✅ 800ms é suficiente para 90% dos casos
+            
+            return true;
+        }
+        
+        // ✅ Tentar verificar a cada 100ms se Pixel carregou
+        pixelCheckInterval = setInterval(() => {
+            if (checkPixelAndSendCookies()) {
                 clearInterval(pixelCheckInterval);
                 if (redirectTimer) clearTimeout(redirectTimer);
             }
         }, 100);
         
-        // Fallback: Se Pixel não carregou em 2s, redirect mesmo assim
+        // ✅ Fallback: Se Pixel não carregou em 2s, enviar cookies (se existirem) e redirect
         redirectTimer = setTimeout(() => {
             clearInterval(pixelCheckInterval);
+            
+            // ✅ Tentar enviar cookies mesmo se Pixel não carregou (podem existir de visita anterior)
+            sendCookiesToServer();
+            
+            // ✅ Redirect mesmo assim
             redirectToTelegram();
         }, 2000);
         
-        // Click no botão também faz redirect
+        // Click no botão também faz redirect (enviar cookies antes)
         document.getElementById('start-bot-link').addEventListener('click', (e) => {
             e.preventDefault();
             clearInterval(pixelCheckInterval);
             if (redirectTimer) clearTimeout(redirectTimer);
+            // ✅ Enviar cookies antes do redirect (se ainda não foram enviados)
+            sendCookiesToServer();
             redirectToTelegram();
         });
     </script>

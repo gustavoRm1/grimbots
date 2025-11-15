@@ -4495,6 +4495,78 @@ def public_redirect(slug):
     return response
 
 
+@app.route('/api/tracking/cookies', methods=['POST'])
+@csrf.exempt
+def capture_tracking_cookies():
+    """
+    ✅ ENDPOINT PARA CAPTURAR COOKIES _FBP E _FBC DO BROWSER
+    
+    Este endpoint é chamado via Beacon API pelo HTML Bridge após Meta Pixel JS carregar.
+    Isso garante que cookies sejam capturados mesmo após redirect para Telegram.
+    
+    Fluxo:
+    1. HTML Bridge carrega Meta Pixel JS
+    2. Meta Pixel JS gera cookies _fbp e _fbc (leva ~500-1000ms)
+    3. HTML Bridge envia cookies para este endpoint via Beacon API
+    4. Endpoint salva cookies no Redis associados ao tracking_token
+    5. Purchase event recupera cookies do Redis e envia para Meta CAPI
+    """
+    try:
+        data = request.json
+        if not data:
+            return jsonify({'success': False, 'error': 'Invalid JSON'}), 400
+        
+        tracking_token = data.get('tracking_token')
+        fbp = data.get('_fbp')
+        fbc = data.get('_fbc')
+        
+        if not tracking_token:
+            return jsonify({'success': False, 'error': 'tracking_token required'}), 400
+        
+        # ✅ Validar formato do tracking_token (deve ser UUID hex de 32 chars)
+        if len(tracking_token) != 32 or not all(c in '0123456789abcdef' for c in tracking_token):
+            logger.warning(f"[META TRACKING] tracking_token inválido: {tracking_token[:20]}...")
+            return jsonify({'success': False, 'error': 'Invalid tracking_token format'}), 400
+        
+        # ✅ Importar TrackingServiceV4
+        from utils.tracking_service import TrackingServiceV4
+        tracking_service_v4 = TrackingServiceV4()
+        
+        # ✅ Recuperar tracking_data existente do Redis
+        tracking_data = tracking_service_v4.recover_tracking_data(tracking_token) or {}
+        
+        # ✅ Atualizar tracking_data com cookies do browser
+        updated = False
+        if fbp and fbp != tracking_data.get('fbp'):
+            tracking_data['fbp'] = fbp
+            tracking_data['fbp_origin'] = 'cookie'
+            updated = True
+            logger.info(f"[META TRACKING] Cookie _fbp capturado do browser: {fbp[:30]}...")
+        
+        if fbc and fbc != tracking_data.get('fbc'):
+            tracking_data['fbc'] = fbc
+            tracking_data['fbc_origin'] = 'cookie'
+            updated = True
+            logger.info(f"[META TRACKING] Cookie _fbc capturado do browser: {fbc[:50]}...")
+        
+        # ✅ Salvar no Redis apenas se houver atualizações
+        if updated:
+            # ✅ Garantir que tracking_token existe no Redis (criar se não existir)
+            if not tracking_data.get('tracking_token'):
+                tracking_data['tracking_token'] = tracking_token
+            
+            # ✅ Salvar/atualizar no Redis
+            tracking_service_v4.save_tracking_token(tracking_token, tracking_data)
+            logger.info(f"[META TRACKING] Tracking token atualizado com cookies: {tracking_token[:20]}... | fbp={'✅' if fbp else '❌'}, fbc={'✅' if fbc else '❌'}")
+        else:
+            logger.debug(f"[META TRACKING] Tracking token já está atualizado: {tracking_token[:20]}...")
+        
+        return jsonify({'success': True, 'updated': updated})
+    except Exception as e:
+        logger.error(f"[META TRACKING] Erro ao capturar cookies: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @app.route('/redirect-pools')
 @login_required
 def redirect_pools_page():
