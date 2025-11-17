@@ -547,21 +547,33 @@ def process_start_async(
                                         logger.warning(f"⚠️ Erro ao recuperar tracking_token via fbclid: {e}")
                                 
                                 # ✅ Se tracking_token está disponível, salvar via TrackingServiceV4.save_tracking_data()
+                                # ✅ CORREÇÃO CRÍTICA V16: Validar token ANTES de salvar
                                 if tracking_token_for_chat:
-                                    # ✅ CRÍTICO: Recuperar bot_id do bot_user ou config
-                                    bot_id_for_tracking = bot_user.bot_id if bot_user else bot_id
-                                    tracking_service_v4.save_tracking_data(
-                                        tracking_token=tracking_token_for_chat,  # ✅ GARANTIR que tracking_token seja salvo
-                                        bot_id=bot_id_for_tracking,
-                                        customer_user_id=str(chat_id),
-                                        fbclid=fbclid_completo_redis or '',
-                                        fbp=tracking_elite.get('fbp', ''),
-                                        fbc=tracking_elite.get('fbc', ''),
-                                        utm_source=tracking_elite.get('utm_source', ''),
-                                        utm_medium=tracking_elite.get('utm_medium', ''),
-                                        utm_campaign=tracking_elite.get('utm_campaign', '')
-                                    )
-                                    logger.info(f"✅ tracking:chat:{chat_id} salvo com tracking_token: {tracking_token_for_chat[:20]}...")
+                                    # ✅ CORREÇÃO V16: Validar tracking_token ANTES de salvar em tracking:chat
+                                    is_generated_token = tracking_token_for_chat.startswith('tracking_')
+                                    is_uuid_token = len(tracking_token_for_chat) == 32 and all(c in '0123456789abcdef' for c in tracking_token_for_chat.lower())
+                                    
+                                    if is_generated_token:
+                                        logger.error(f"❌ [PROCESS_START] tracking_token_for_chat é GERADO: {tracking_token_for_chat[:30]}... - NÃO salvar em tracking:chat")
+                                        logger.error(f"   Token gerado não tem dados do redirect (client_ip, client_user_agent, pageview_event_id)")
+                                        # ✅ NÃO salvar token gerado
+                                    elif is_uuid_token:
+                                        # ✅ Token válido - pode salvar
+                                        bot_id_for_tracking = bot_user.bot_id if bot_user else bot_id
+                                        tracking_service_v4.save_tracking_data(
+                                            tracking_token=tracking_token_for_chat,  # ✅ GARANTIR que tracking_token seja salvo
+                                            bot_id=bot_id_for_tracking,
+                                            customer_user_id=str(chat_id),
+                                            fbclid=fbclid_completo_redis or '',
+                                            fbp=tracking_elite.get('fbp', ''),
+                                            fbc=tracking_elite.get('fbc', ''),
+                                            utm_source=tracking_elite.get('utm_source', ''),
+                                            utm_medium=tracking_elite.get('utm_medium', ''),
+                                            utm_campaign=tracking_elite.get('utm_campaign', '')
+                                        )
+                                        logger.info(f"✅ tracking:chat:{chat_id} salvo com tracking_token: {tracking_token_for_chat[:20]}...")
+                                    else:
+                                        logger.warning(f"⚠️ [PROCESS_START] tracking_token_for_chat tem formato inválido: {tracking_token_for_chat[:30]}... (len={len(tracking_token_for_chat)}) - NÃO salvar")
                                 else:
                                     logger.warning(f"⚠️ tracking_token não encontrado para salvar em tracking:chat:{chat_id}")
                             except Exception as e:
@@ -571,32 +583,45 @@ def process_start_async(
                 
                 # ✅ CORREÇÃO SÊNIOR QI 500: Salvar tracking:chat:{chat_id} com tracking_token_from_start mesmo se tracking_elite não for encontrado
                 # Isso garante que tracking:chat:{customer_user_id} tenha o tracking_token correto para _generate_pix_payment recuperar
+                # ✅ CORREÇÃO CRÍTICA V16: Validar token ANTES de salvar
                 if tracking_token_from_start:
                     try:
-                        # ✅ CRÍTICO: Recuperar dados do Redis via tracking_token_from_start
-                        tracking_data_from_token = tracking_service_v4.recover_tracking_data(tracking_token_from_start) or {}
+                        # ✅ CORREÇÃO V16: Validar tracking_token_from_start ANTES de salvar em tracking:chat
+                        is_generated_token = tracking_token_from_start.startswith('tracking_')
+                        is_uuid_token = len(tracking_token_from_start) == 32 and all(c in '0123456789abcdef' for c in tracking_token_from_start.lower())
                         
-                        # ✅ Se tracking_data tem dados, usar eles; senão, usar dados de utm_data_from_start
-                        fbclid_for_chat = tracking_data_from_token.get('fbclid') or utm_data_from_start.get('fbclid') or ''
-                        fbp_for_chat = tracking_data_from_token.get('fbp') or utm_data_from_start.get('_fbp_from_tracking') or ''
-                        fbc_for_chat = tracking_data_from_token.get('fbc') or utm_data_from_start.get('_fbc_from_tracking') or ''
-                        utm_source_for_chat = tracking_data_from_token.get('utm_source') or utm_data_from_start.get('utm_source') or ''
-                        utm_medium_for_chat = tracking_data_from_token.get('utm_medium') or utm_data_from_start.get('utm_medium') or ''
-                        utm_campaign_for_chat = tracking_data_from_token.get('utm_campaign') or utm_data_from_start.get('utm_campaign') or ''
-                        
-                        # ✅ Salvar tracking:chat:{chat_id} com tracking_token_from_start
-                        tracking_service_v4.save_tracking_data(
-                            tracking_token=tracking_token_from_start,  # ✅ GARANTIR que tracking_token seja salvo
-                            bot_id=bot_id,
-                            customer_user_id=str(chat_id),
-                            fbclid=fbclid_for_chat,
-                            fbp=fbp_for_chat,
-                            fbc=fbc_for_chat,
-                            utm_source=utm_source_for_chat,
-                            utm_medium=utm_medium_for_chat,
-                            utm_campaign=utm_campaign_for_chat
-                        )
-                        logger.info(f"✅ tracking:chat:{chat_id} salvo com tracking_token_from_start: {tracking_token_from_start[:20]}... | fbclid={'✅' if fbclid_for_chat else '❌'}, fbp={'✅' if fbp_for_chat else '❌'}, fbc={'✅' if fbc_for_chat else '❌'}")
+                        if is_generated_token:
+                            logger.error(f"❌ [PROCESS_START] tracking_token_from_start é GERADO: {tracking_token_from_start[:30]}... - NÃO salvar em tracking:chat")
+                            logger.error(f"   Token gerado não tem dados do redirect (client_ip, client_user_agent, pageview_event_id)")
+                            # ✅ NÃO salvar token gerado
+                        elif is_uuid_token:
+                            # ✅ Token válido - pode salvar
+                            # ✅ CRÍTICO: Recuperar dados do Redis via tracking_token_from_start
+                            tracking_data_from_token = tracking_service_v4.recover_tracking_data(tracking_token_from_start) or {}
+                            
+                            # ✅ Se tracking_data tem dados, usar eles; senão, usar dados de utm_data_from_start
+                            fbclid_for_chat = tracking_data_from_token.get('fbclid') or utm_data_from_start.get('fbclid') or ''
+                            fbp_for_chat = tracking_data_from_token.get('fbp') or utm_data_from_start.get('_fbp_from_tracking') or ''
+                            fbc_for_chat = tracking_data_from_token.get('fbc') or utm_data_from_start.get('_fbc_from_tracking') or ''
+                            utm_source_for_chat = tracking_data_from_token.get('utm_source') or utm_data_from_start.get('utm_source') or ''
+                            utm_medium_for_chat = tracking_data_from_token.get('utm_medium') or utm_data_from_start.get('utm_medium') or ''
+                            utm_campaign_for_chat = tracking_data_from_token.get('utm_campaign') or utm_data_from_start.get('utm_campaign') or ''
+                            
+                            # ✅ Salvar tracking:chat:{chat_id} com tracking_token_from_start
+                            tracking_service_v4.save_tracking_data(
+                                tracking_token=tracking_token_from_start,  # ✅ GARANTIR que tracking_token seja salvo
+                                bot_id=bot_id,
+                                customer_user_id=str(chat_id),
+                                fbclid=fbclid_for_chat,
+                                fbp=fbp_for_chat,
+                                fbc=fbc_for_chat,
+                                utm_source=utm_source_for_chat,
+                                utm_medium=utm_medium_for_chat,
+                                utm_campaign=utm_campaign_for_chat
+                            )
+                            logger.info(f"✅ tracking:chat:{chat_id} salvo com tracking_token_from_start: {tracking_token_from_start[:20]}... | fbclid={'✅' if fbclid_for_chat else '❌'}, fbp={'✅' if fbp_for_chat else '❌'}, fbc={'✅' if fbc_for_chat else '❌'}")
+                        else:
+                            logger.warning(f"⚠️ [PROCESS_START] tracking_token_from_start tem formato inválido: {tracking_token_from_start[:30]}... (len={len(tracking_token_from_start)}) - NÃO salvar")
                     except Exception as e:
                         logger.warning(f"⚠️ Erro ao salvar tracking:chat:{chat_id} com tracking_token_from_start: {e}")
                 

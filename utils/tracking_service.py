@@ -185,34 +185,58 @@ class TrackingServiceV4:
 
             fbclid = payload.get("fbclid")
             if fbclid:
-                try:
-                    self.redis.setex(f"tracking:fbclid:{fbclid}", ttl, tracking_token)
-                except Exception:
-                    logger.exception("Nao foi possivel indexar fbclid")
+                # ✅ CORREÇÃO CRÍTICA V16: Validar tracking_token ANTES de salvar em tracking:fbclid
+                is_generated_token = tracking_token.startswith('tracking_')
+                is_uuid_token = len(tracking_token) == 32 and all(c in '0123456789abcdef' for c in tracking_token.lower())
+                
+                if is_generated_token:
+                    logger.error(f"❌ [TRACKING SERVICE] tracking_token é GERADO: {tracking_token[:30]}... - NÃO salvar em tracking:fbclid")
+                    logger.error(f"   Token gerado não tem dados do redirect (client_ip, client_user_agent, pageview_event_id)")
+                    # ✅ NÃO salvar token gerado em tracking:fbclid
+                elif is_uuid_token:
+                    # ✅ Token válido - pode salvar
+                    try:
+                        self.redis.setex(f"tracking:fbclid:{fbclid}", ttl, tracking_token)
+                    except Exception:
+                        logger.exception("Nao foi possivel indexar fbclid")
+                else:
+                    logger.warning(f"⚠️ [TRACKING SERVICE] tracking_token tem formato inválido: {tracking_token[:30]}... (len={len(tracking_token)}) - NÃO salvar em tracking:fbclid")
 
             customer_user_id = payload.get("customer_user_id")
             if customer_user_id:
-                chat_key = f"tracking:chat:{customer_user_id}"
-                try:
-                    chat_payload = payload.copy()
-                    existing_chat = self.redis.get(chat_key)
-                    if existing_chat:
-                        try:
-                            existing_data = json.loads(existing_chat)
-                            if isinstance(existing_data, dict):
-                                existing_data.update(chat_payload)
-                                chat_payload = existing_data
-                        except Exception:
-                            logger.exception("Falha ao mesclar registro tracking:chat existente")
-                    chat_payload["tracking_token"] = tracking_token
-                    chat_payload_json = json.dumps(chat_payload, ensure_ascii=False)
-                    self.redis.setex(chat_key, ttl, chat_payload_json)
-                except Exception:
-                    logger.exception("Falha ao indexar tracking por chat_id")
-                try:
-                    self.redis.setex(f"tracking:last_token:user:{customer_user_id}", ttl, tracking_token)
-                except Exception:
-                    logger.exception("Falha ao indexar tracking last token por usuario")
+                # ✅ CORREÇÃO CRÍTICA V16: Validar tracking_token ANTES de salvar em tracking:chat e tracking:last_token
+                is_generated_token = tracking_token.startswith('tracking_')
+                is_uuid_token = len(tracking_token) == 32 and all(c in '0123456789abcdef' for c in tracking_token.lower())
+                
+                if is_generated_token:
+                    logger.error(f"❌ [TRACKING SERVICE] tracking_token é GERADO: {tracking_token[:30]}... - NÃO salvar em tracking:chat/tracking:last_token")
+                    logger.error(f"   Token gerado não tem dados do redirect (client_ip, client_user_agent, pageview_event_id)")
+                    # ✅ NÃO salvar token gerado em tracking:chat ou tracking:last_token
+                elif is_uuid_token:
+                    # ✅ Token válido - pode salvar
+                    chat_key = f"tracking:chat:{customer_user_id}"
+                    try:
+                        chat_payload = payload.copy()
+                        existing_chat = self.redis.get(chat_key)
+                        if existing_chat:
+                            try:
+                                existing_data = json.loads(existing_chat)
+                                if isinstance(existing_data, dict):
+                                    existing_data.update(chat_payload)
+                                    chat_payload = existing_data
+                            except Exception:
+                                logger.exception("Falha ao mesclar registro tracking:chat existente")
+                        chat_payload["tracking_token"] = tracking_token
+                        chat_payload_json = json.dumps(chat_payload, ensure_ascii=False)
+                        self.redis.setex(chat_key, ttl, chat_payload_json)
+                    except Exception:
+                        logger.exception("Falha ao indexar tracking por chat_id")
+                    try:
+                        self.redis.setex(f"tracking:last_token:user:{customer_user_id}", ttl, tracking_token)
+                    except Exception:
+                        logger.exception("Falha ao indexar tracking last token por usuario")
+                else:
+                    logger.warning(f"⚠️ [TRACKING SERVICE] tracking_token tem formato inválido: {tracking_token[:30]}... (len={len(tracking_token)}) - NÃO salvar em tracking:chat/tracking:last_token")
 
             payment_id = payload.get("payment_id")
             if payment_id:

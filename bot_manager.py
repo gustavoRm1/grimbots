@@ -4524,24 +4524,49 @@ Seu pagamento ainda não foi confirmado.
                         logger.warning(f"⚠️ BotUser {bot_user.id} encontrado mas tracking_session_id está vazio (telegram_user_id: {customer_user_id})")
 
                     # ✅ FALLBACK 1: tracking:last_token (se bot_user.tracking_session_id não existir)
+                    # ✅ CORREÇÃO CRÍTICA V16: Validar token ANTES de usar
                     if not tracking_token and customer_user_id:
                         try:
                             cached_token = tracking_service.redis.get(f"tracking:last_token:user:{customer_user_id}")
                             if cached_token:
-                                tracking_token = cached_token
-                                logger.info(f"✅ Tracking token recuperado de tracking:last_token:user:{customer_user_id}: {tracking_token[:20]}...")
+                                # ✅ CORREÇÃO V16: Validar token antes de usar
+                                is_generated_token = cached_token.startswith('tracking_')
+                                is_uuid_token = len(cached_token) == 32 and all(c in '0123456789abcdef' for c in cached_token.lower())
+                                
+                                if is_generated_token:
+                                    logger.error(f"❌ [GENERATE PIX] Token recuperado de tracking:last_token é GERADO: {cached_token[:30]}... - IGNORANDO")
+                                    logger.error(f"   Token gerado não tem dados do redirect (client_ip, client_user_agent, pageview_event_id)")
+                                    # ✅ NÃO usar token gerado
+                                elif is_uuid_token:
+                                    tracking_token = cached_token
+                                    logger.info(f"✅ Tracking token recuperado de tracking:last_token:user:{customer_user_id}: {tracking_token[:20]}...")
+                                else:
+                                    logger.warning(f"⚠️ [GENERATE PIX] Token recuperado de tracking:last_token tem formato inválido: {cached_token[:30]}... (len={len(cached_token)}) - IGNORANDO")
                         except Exception:
                             logger.exception("Falha ao recuperar tracking:last_token do Redis")
                     
                     # ✅ FALLBACK 2: tracking:chat (se bot_user.tracking_session_id não existir)
+                    # ✅ CORREÇÃO CRÍTICA V16: Validar token ANTES de usar
                     if not tracking_token and customer_user_id:
                         try:
                             cached_payload = tracking_service.redis.get(f"tracking:chat:{customer_user_id}")
                             if cached_payload:
                                 redis_tracking_payload = json.loads(cached_payload)
-                                tracking_token = redis_tracking_payload.get("tracking_token") or tracking_token
-                                if tracking_token:
-                                    logger.info(f"✅ Tracking token recuperado de tracking:chat:{customer_user_id}: {tracking_token[:20]}...")
+                                recovered_token_from_chat = redis_tracking_payload.get("tracking_token")
+                                if recovered_token_from_chat:
+                                    # ✅ CORREÇÃO V16: Validar token antes de usar
+                                    is_generated_token = recovered_token_from_chat.startswith('tracking_')
+                                    is_uuid_token = len(recovered_token_from_chat) == 32 and all(c in '0123456789abcdef' for c in recovered_token_from_chat.lower())
+                                    
+                                    if is_generated_token:
+                                        logger.error(f"❌ [GENERATE PIX] Token recuperado de tracking:chat é GERADO: {recovered_token_from_chat[:30]}... - IGNORANDO")
+                                        logger.error(f"   Token gerado não tem dados do redirect (client_ip, client_user_agent, pageview_event_id)")
+                                        # ✅ NÃO usar token gerado
+                                    elif is_uuid_token:
+                                        tracking_token = recovered_token_from_chat
+                                        logger.info(f"✅ Tracking token recuperado de tracking:chat:{customer_user_id}: {tracking_token[:20]}...")
+                                    else:
+                                        logger.warning(f"⚠️ [GENERATE PIX] Token recuperado de tracking:chat tem formato inválido: {recovered_token_from_chat[:30]}... (len={len(recovered_token_from_chat)}) - IGNORANDO")
                         except Exception:
                             logger.exception("Falha ao recuperar tracking:chat do Redis")
 
