@@ -4527,7 +4527,9 @@ Seu pagamento ainda não foi confirmado.
                                     recovered_token_from_fbclid = tracking_service.redis.get(tracking_token_key)
                                     if recovered_token_from_fbclid:
                                         # ✅ Validar que token recuperado é UUID (não gerado)
-                                        is_recovered_uuid = len(recovered_token_from_fbclid) == 32 and all(c in '0123456789abcdef' for c in recovered_token_from_fbclid.lower())
+                                        # ✅ CORREÇÃO: Aceitar UUID com ou sem hífens
+                                        normalized_recovered = recovered_token_from_fbclid.replace('-', '').lower()
+                                        is_recovered_uuid = len(normalized_recovered) == 32 and all(c in '0123456789abcdef' for c in normalized_recovered)
                                         if is_recovered_uuid:
                                             tracking_token = recovered_token_from_fbclid
                                             logger.info(f"✅ [GENERATE PIX] Token UUID correto recuperado via fbclid: {tracking_token[:20]}...")
@@ -4559,7 +4561,9 @@ Seu pagamento ainda não foi confirmado.
                             if cached_token:
                                 # ✅ CORREÇÃO V16: Validar token antes de usar
                                 is_generated_token = cached_token.startswith('tracking_')
-                                is_uuid_token = len(cached_token) == 32 and all(c in '0123456789abcdef' for c in cached_token.lower())
+                                # ✅ CORREÇÃO: Aceitar UUID com ou sem hífens
+                                normalized_cached = cached_token.replace('-', '').lower()
+                                is_uuid_token = len(normalized_cached) == 32 and all(c in '0123456789abcdef' for c in normalized_cached)
                                 
                                 if is_generated_token:
                                     logger.error(f"❌ [GENERATE PIX] Token recuperado de tracking:last_token é GERADO: {cached_token[:30]}... - IGNORANDO")
@@ -4584,7 +4588,9 @@ Seu pagamento ainda não foi confirmado.
                                 if recovered_token_from_chat:
                                     # ✅ CORREÇÃO V16: Validar token antes de usar
                                     is_generated_token = recovered_token_from_chat.startswith('tracking_')
-                                    is_uuid_token = len(recovered_token_from_chat) == 32 and all(c in '0123456789abcdef' for c in recovered_token_from_chat.lower())
+                                    # ✅ CORREÇÃO: Aceitar UUID com ou sem hífens
+                                    normalized_chat = recovered_token_from_chat.replace('-', '').lower()
+                                    is_uuid_token = len(normalized_chat) == 32 and all(c in '0123456789abcdef' for c in normalized_chat)
                                     
                                     if is_generated_token:
                                         logger.error(f"❌ [GENERATE PIX] Token recuperado de tracking:chat é GERADO: {recovered_token_from_chat[:30]}... - IGNORANDO")
@@ -4611,9 +4617,11 @@ Seu pagamento ainda não foi confirmado.
                         # ✅ CORREÇÃO CRÍTICA V12: VALIDAR antes de atualizar bot_user.tracking_session_id
                         # NUNCA atualizar com token gerado (deve ser UUID de 32 chars do redirect)
                         if bot_user and tracking_token:
-                            # ✅ VALIDAÇÃO: tracking_token deve ser UUID de 32 chars (não gerado)
+                            # ✅ VALIDAÇÃO: tracking_token deve ser UUID (32 ou 36 chars, com ou sem hífens)
                             is_generated_token = tracking_token.startswith('tracking_')
-                            is_uuid_token = len(tracking_token) == 32 and all(c in '0123456789abcdef' for c in tracking_token.lower())
+                            # ✅ CORREÇÃO: Aceitar UUID com ou sem hífens
+                            normalized_token_check = tracking_token.replace('-', '').lower()
+                            is_uuid_token = len(normalized_token_check) == 32 and all(c in '0123456789abcdef' for c in normalized_token_check)
                             
                             if is_generated_token:
                                 logger.error(f"❌ [GENERATE PIX] Tentativa de atualizar bot_user.tracking_session_id com token GERADO: {tracking_token[:30]}...")
@@ -4653,7 +4661,9 @@ Seu pagamento ainda não foi confirmado.
                                         # Token recuperado via fbclid deve ser UUID (vem do redirect)
                                         if bot_user and tracking_token:
                                             is_generated_token = tracking_token.startswith('tracking_')
-                                            is_uuid_token = len(tracking_token) == 32 and all(c in '0123456789abcdef' for c in tracking_token.lower())
+                                            # ✅ CORREÇÃO: Aceitar UUID com ou sem hífens
+                                            normalized_token_check2 = tracking_token.replace('-', '').lower()
+                                            is_uuid_token = len(normalized_token_check2) == 32 and all(c in '0123456789abcdef' for c in normalized_token_check2)
                                             
                                             if is_generated_token:
                                                 logger.error(f"❌ [GENERATE PIX] Token recuperado via fbclid é GERADO: {tracking_token[:30]}... - NÃO atualizar bot_user.tracking_session_id")
@@ -4686,7 +4696,9 @@ Seu pagamento ainda não foi confirmado.
                                                 # Token recuperado via chat deve ser UUID (vem do redirect)
                                                 if bot_user and tracking_token:
                                                     is_generated_token = tracking_token.startswith('tracking_')
-                                                    is_uuid_token = len(tracking_token) == 32 and all(c in '0123456789abcdef' for c in tracking_token.lower())
+                                                    # ✅ CORREÇÃO: Aceitar UUID com ou sem hífens
+                                                    normalized_token_check3 = tracking_token.replace('-', '').lower()
+                                                    is_uuid_token = len(normalized_token_check3) == 32 and all(c in '0123456789abcdef' for c in normalized_token_check3)
                                                     
                                                     if is_generated_token:
                                                         logger.error(f"❌ [GENERATE PIX] Token recuperado via chat é GERADO: {tracking_token[:30]}... - NÃO atualizar bot_user.tracking_session_id")
@@ -4904,12 +4916,19 @@ Seu pagamento ainda não foi confirmado.
                             raise ValueError("tracking_token ausente e PIX não gerado - Payment não pode ser criado sem tracking_token válido e sem PIX")
                     
                     # ✅ CORREÇÃO V17: Validar tracking_token apenas se não for None
+                    # ✅ CORREÇÃO CRÍTICA: Aceitar UUID com hífens (36 chars) OU sem hífens (32 chars)
                     is_generated_token = False
                     is_uuid_token = False
                     
                     if tracking_token:
                         is_generated_token = tracking_token.startswith('tracking_')
-                        is_uuid_token = len(tracking_token) == 32 and all(c in '0123456789abcdef' for c in tracking_token.lower())
+                        
+                        # ✅ CORREÇÃO: Normalizar UUID removendo hífens para validação
+                        # UUIDs podem vir em dois formatos:
+                        # 1. Com hífens: faeac7b2-d4eb-4968-bf3b-87cad1b2bd5a (36 chars)
+                        # 2. Sem hífens: faeac7b2d4eb4968bf3b87cad1b2bd5a (32 chars)
+                        normalized_token = tracking_token.replace('-', '').lower()
+                        is_uuid_token = len(normalized_token) == 32 and all(c in '0123456789abcdef' for c in normalized_token)
                         
                         # ✅ CORREÇÃO V14: Se PIX foi gerado com sucesso, permitir criar Payment mesmo com token gerado
                         # Isso evita perder vendas quando o gateway gera PIX mas o tracking_token não é ideal
@@ -4925,12 +4944,12 @@ Seu pagamento ainda não foi confirmado.
                             error_msg = f"❌ [GENERATE PIX] tracking_token com formato inválido: {tracking_token[:30]}... (len={len(tracking_token)})"
                             logger.error(error_msg)
                             logger.error(f"   Payment NÃO será criado com token inválido")
-                            logger.error(f"   tracking_token deve ser UUID de 32 chars (vem do redirect) ou gerado (tracking_*)")
-                            raise ValueError(f"tracking_token com formato inválido - deve ser UUID de 32 chars ou gerado (tracking_*)")
+                            logger.error(f"   tracking_token deve ser UUID (32 ou 36 chars, com ou sem hífens) ou gerado (tracking_*)")
+                            raise ValueError(f"tracking_token com formato inválido - deve ser UUID (32 ou 36 chars) ou gerado (tracking_*)")
                         
                         # ✅ VALIDAÇÃO PASSOU - criar Payment
                         if is_uuid_token:
-                            logger.info(f"✅ [TOKEN UUID] tracking_token validado: {tracking_token[:20]}... (UUID do redirect)")
+                            logger.info(f"✅ [TOKEN UUID] tracking_token validado: {tracking_token[:20]}... (UUID do redirect, len={len(tracking_token)})")
                         else:
                             logger.info(f"⚠️ [TOKEN LEGADO] tracking_token legado: {tracking_token[:20]}... (será usado mesmo assim)")
                     else:

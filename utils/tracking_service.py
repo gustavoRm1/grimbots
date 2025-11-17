@@ -214,7 +214,9 @@ class TrackingServiceV4:
             if customer_user_id:
                 # ✅ CORREÇÃO CRÍTICA V16: Validar tracking_token ANTES de salvar em tracking:chat e tracking:last_token
                 is_generated_token = tracking_token.startswith('tracking_')
-                is_uuid_token = len(tracking_token) == 32 and all(c in '0123456789abcdef' for c in tracking_token.lower())
+                # ✅ CORREÇÃO: Aceitar UUID com ou sem hífens
+                normalized_token = tracking_token.replace('-', '').lower()
+                is_uuid_token = len(normalized_token) == 32 and all(c in '0123456789abcdef' for c in normalized_token)
                 
                 if is_generated_token:
                     logger.error(f"❌ [TRACKING SERVICE] tracking_token é GERADO: {tracking_token[:30]}... - NÃO salvar em tracking:chat/tracking:last_token")
