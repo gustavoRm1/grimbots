@@ -447,9 +447,26 @@ def process_start_async(
                             
                             # ✅ CORREÇÃO SÊNIOR QI 500: Só salvar tracking_session_id de tracking_elite se não tiver tracking_token_from_start
                             # Isso garante que tracking_token_from_start (do start_param) tenha prioridade sobre tracking_elite
+                            # ✅ CORREÇÃO CRÍTICA V15: Validar tracking_elite.session_id antes de salvar
+                            # NUNCA salvar token gerado (com prefixo tracking_) em bot_user.tracking_session_id
                             if not tracking_token_from_start and tracking_elite.get('session_id'):
-                                bot_user.tracking_session_id = tracking_elite.get('session_id')
-                                logger.info(f"✅ bot_user.tracking_session_id salvo de tracking_elite: {tracking_elite.get('session_id')[:20]}...")
+                                session_id_from_elite = tracking_elite.get('session_id')
+                                # ✅ VALIDAÇÃO: session_id deve ser UUID de 32 chars (não gerado)
+                                is_generated_token = session_id_from_elite.startswith('tracking_')
+                                is_uuid_token = len(session_id_from_elite) == 32 and all(c in '0123456789abcdef' for c in session_id_from_elite.lower())
+                                
+                                if is_generated_token:
+                                    logger.error(f"❌ [PROCESS_START] tracking_elite.session_id é GERADO: {session_id_from_elite[:30]}... - NÃO salvar em bot_user.tracking_session_id")
+                                    logger.error(f"   Isso quebra o link entre PageView e Purchase")
+                                    logger.error(f"   Token gerado não tem dados do redirect (client_ip, client_user_agent, pageview_event_id)")
+                                    # ✅ NÃO salvar - manter token original do redirect (se existir)
+                                elif is_uuid_token:
+                                    # ✅ Token é UUID (vem do redirect) - pode salvar
+                                    bot_user.tracking_session_id = session_id_from_elite
+                                    logger.info(f"✅ bot_user.tracking_session_id salvo de tracking_elite: {session_id_from_elite[:20]}...")
+                                else:
+                                    logger.warning(f"⚠️ [PROCESS_START] tracking_elite.session_id tem formato inválido: {session_id_from_elite[:30]}... (len={len(session_id_from_elite)})")
+                                    # ✅ NÃO salvar - formato inválido
                             elif tracking_token_from_start:
                                 logger.info(f"✅ bot_user.tracking_session_id preservado (tracking_token_from_start tem prioridade): {tracking_token_from_start[:20]}...")
                             

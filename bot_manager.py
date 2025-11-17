@@ -4479,9 +4479,39 @@ Seu pagamento ainda não foi confirmado.
                     # Isso garante que o token do public_redirect seja SEMPRE usado (tem todos os dados: client_ip, client_user_agent, pageview_event_id)
                     # PROBLEMA IDENTIFICADO: Verificação estava DEPOIS de tracking:last_token e tracking:chat
                     # SOLUÇÃO: Verificar bot_user.tracking_session_id PRIMEIRO (antes de tudo)
+                    # ✅ CORREÇÃO CRÍTICA V15: Se token gerado detectado, tentar recuperar token UUID correto via fbclid
                     if bot_user and bot_user.tracking_session_id:
                         tracking_token = bot_user.tracking_session_id
                         logger.info(f"✅ Tracking token recuperado de bot_user.tracking_session_id (PRIORIDADE MÁXIMA): {tracking_token[:20]}...")
+                        
+                        # ✅ CORREÇÃO CRÍTICA V15: Validar se token é gerado e tentar recuperar token UUID correto
+                        is_generated_token = tracking_token.startswith('tracking_')
+                        if is_generated_token:
+                            logger.error(f"❌ [GENERATE PIX] bot_user.tracking_session_id contém token GERADO: {tracking_token[:30]}...")
+                            logger.error(f"   Token gerado não tem dados do redirect (client_ip, client_user_agent, pageview_event_id)")
+                            logger.error(f"   Tentando recuperar token UUID correto via fbclid...")
+                            
+                            # ✅ ESTRATÉGIA DE RECUPERAÇÃO: Tentar recuperar token UUID via fbclid
+                            if bot_user and getattr(bot_user, 'fbclid', None):
+                                try:
+                                    fbclid_from_botuser = bot_user.fbclid
+                                    tracking_token_key = f"tracking:fbclid:{fbclid_from_botuser}"
+                                    recovered_token_from_fbclid = tracking_service.redis.get(tracking_token_key)
+                                    if recovered_token_from_fbclid:
+                                        # ✅ Validar que token recuperado é UUID (não gerado)
+                                        is_recovered_uuid = len(recovered_token_from_fbclid) == 32 and all(c in '0123456789abcdef' for c in recovered_token_from_fbclid.lower())
+                                        if is_recovered_uuid:
+                                            tracking_token = recovered_token_from_fbclid
+                                            logger.info(f"✅ [GENERATE PIX] Token UUID correto recuperado via fbclid: {tracking_token[:20]}...")
+                                            logger.info(f"   Atualizando bot_user.tracking_session_id com token UUID correto")
+                                            bot_user.tracking_session_id = tracking_token
+                                        else:
+                                            logger.warning(f"⚠️ [GENERATE PIX] Token recuperado via fbclid também é gerado: {recovered_token_from_fbclid[:30]}...")
+                                except Exception as e:
+                                    logger.warning(f"⚠️ Erro ao recuperar token UUID via fbclid: {e}")
+                            else:
+                                logger.warning(f"⚠️ [GENERATE PIX] bot_user.fbclid ausente - não é possível recuperar token UUID correto")
+                        
                         # ✅ Tentar recuperar payload completo do Redis
                         try:
                             recovered_payload = tracking_service.recover_tracking_data(tracking_token) or {}
