@@ -4673,24 +4673,37 @@ Seu pagamento ainda não foi confirmado.
                             except Exception as e:
                                 logger.warning(f"⚠️ Erro ao recuperar tracking_token de tracking:chat: {e}")
                         
-                        # ✅ CORREÇÃO CRÍTICA V12: NUNCA gerar novo token em generate_pix_payment
-                        # tracking_token DEVE vir do redirect (bot_user.tracking_session_id)
-                        # Se não encontrar, FALHAR com erro claro (não gerar token)
+                        # ✅ CORREÇÃO CRÍTICA V17: Se PIX foi gerado com sucesso, SEMPRE criar Payment
+                        # tracking_token ausente não deve bloquear criação de Payment se PIX já foi gerado
+                        # Isso evita perder vendas quando gateway gera PIX mas tracking_token não está disponível
                         if not tracking_token:
-                            error_msg = f"❌ [GENERATE PIX] tracking_token AUSENTE para BotUser {bot_user.id if bot_user else 'N/A'} (customer_user_id: {customer_user_id})"
-                            logger.error(error_msg)
-                            logger.error(f"   Isso indica que o usuário NÃO passou pelo redirect ou tracking_session_id não foi salvo")
-                            logger.error(f"   bot_user.tracking_session_id: {getattr(bot_user, 'tracking_session_id', None) if bot_user else 'N/A'}")
-                            logger.error(f"   bot_user.fbclid: {getattr(bot_user, 'fbclid', None) if bot_user else 'N/A'}")
-                            logger.error(f"   SOLUÇÃO: Usuário deve acessar link de redirect primeiro: /go/{{slug}}?grim=...&fbclid=...")
-                            logger.error(f"   Payment NÃO será criado sem tracking_token válido")
-                            
-                            # ✅ FALHAR: Não gerar token, não criar Payment sem tracking_token válido
-                            raise ValueError(
-                                f"tracking_token ausente - usuário deve acessar link de redirect primeiro. "
-                                f"BotUser {bot_user.id if bot_user else 'N/A'} não tem tracking_session_id. "
-                                f"SOLUÇÃO: Acessar /go/{{slug}}?grim=...&fbclid=... antes de gerar PIX"
-                            )
+                            # ✅ Verificar se PIX foi gerado com sucesso (pix_result existe e tem transaction_id)
+                            if pix_result and pix_result.get('transaction_id'):
+                                gateway_transaction_id_temp = pix_result.get('transaction_id')
+                                logger.warning(f"⚠️ [TOKEN AUSENTE] tracking_token AUSENTE - PIX já foi gerado (transaction_id: {gateway_transaction_id_temp})")
+                                logger.warning(f"   Isso indica que o usuário NÃO passou pelo redirect ou tracking_session_id não foi salvo")
+                                logger.warning(f"   bot_user.tracking_session_id: {getattr(bot_user, 'tracking_session_id', None) if bot_user else 'N/A'}")
+                                logger.warning(f"   bot_user.fbclid: {getattr(bot_user, 'fbclid', None) if bot_user else 'N/A'}")
+                                logger.warning(f"   Payment será criado mesmo sem tracking_token para evitar perder venda")
+                                logger.warning(f"   Meta Pixel Purchase terá atribuição reduzida (sem pageview_event_id)")
+                                # ✅ NÃO bloquear - permitir criar Payment para que webhook possa processar
+                                # tracking_token será None no Payment
+                            else:
+                                # ✅ PIX não foi gerado - pode falhar normalmente
+                                error_msg = f"❌ [TOKEN AUSENTE] tracking_token AUSENTE e PIX não foi gerado para BotUser {bot_user.id if bot_user else 'N/A'} (customer_user_id: {customer_user_id})"
+                                logger.error(error_msg)
+                                logger.error(f"   Isso indica que o usuário NÃO passou pelo redirect ou tracking_session_id não foi salvo")
+                                logger.error(f"   bot_user.tracking_session_id: {getattr(bot_user, 'tracking_session_id', None) if bot_user else 'N/A'}")
+                                logger.error(f"   bot_user.fbclid: {getattr(bot_user, 'fbclid', None) if bot_user else 'N/A'}")
+                                logger.error(f"   SOLUÇÃO: Usuário deve acessar link de redirect primeiro: /go/{{slug}}?grim=...&fbclid=...")
+                                logger.error(f"   Payment NÃO será criado sem tracking_token válido e sem PIX gerado")
+                                
+                                # ✅ FALHAR: Não gerar token, não criar Payment sem tracking_token válido E sem PIX
+                                raise ValueError(
+                                    f"tracking_token ausente e PIX não gerado - usuário deve acessar link de redirect primeiro. "
+                                    f"BotUser {bot_user.id if bot_user else 'N/A'} não tem tracking_session_id. "
+                                    f"SOLUÇÃO: Acessar /go/{{slug}}?grim=...&fbclid=... antes de gerar PIX"
+                                )
                     if not tracking_data_v4:
                         tracking_data_v4 = tracking_service.recover_tracking_data(tracking_token) or {}
                     
@@ -4841,41 +4854,60 @@ Seu pagamento ainda não foi confirmado.
                     logger.info(f"   producer_hash: {producer_hash}")  # ✅ Para identificar conta do usuário
                     logger.info(f"   reference: {reference}")
                     
-                    # ✅ CORREÇÃO CRÍTICA V14: VALIDAR tracking_token antes de criar Payment
-                    # Se PIX foi gerado com sucesso, permitir criar Payment mesmo com token gerado (com warning)
-                    # Isso evita perder vendas quando o gateway gera PIX mas o tracking_token não é ideal
+                    # ✅ CORREÇÃO CRÍTICA V17: VALIDAR tracking_token antes de criar Payment
+                    # Se PIX foi gerado com sucesso, SEMPRE criar Payment (mesmo sem tracking_token)
+                    # Isso evita perder vendas quando gateway gera PIX mas tracking_token não está disponível
                     if not tracking_token:
-                        error_msg = f"❌ [GENERATE PIX] tracking_token AUSENTE - Payment NÃO será criado"
-                        logger.error(error_msg)
-                        logger.error(f"   BotUser {bot_user.id if bot_user else 'N/A'} não tem tracking_session_id")
-                        logger.error(f"   SOLUÇÃO: Usuário deve acessar link de redirect primeiro: /go/{{slug}}?grim=...&fbclid=...")
-                        raise ValueError("tracking_token ausente - Payment não pode ser criado sem tracking_token válido")
+                        # ✅ Verificar se PIX foi gerado com sucesso (pix_result existe e tem transaction_id)
+                        transaction_id_from_result = pix_result.get('transaction_id') if pix_result else None
+                        if pix_result and transaction_id_from_result:
+                            logger.warning(f"⚠️ [TOKEN AUSENTE] tracking_token AUSENTE - PIX já foi gerado (transaction_id: {transaction_id_from_result})")
+                            logger.warning(f"   BotUser {bot_user.id if bot_user else 'N/A'} não tem tracking_session_id")
+                            logger.warning(f"   Payment será criado mesmo sem tracking_token para evitar perder venda")
+                            logger.warning(f"   Meta Pixel Purchase terá atribuição reduzida (sem pageview_event_id)")
+                            # ✅ NÃO bloquear - permitir criar Payment para que webhook possa processar
+                            # tracking_token será None no Payment
+                        else:
+                            # ✅ PIX não foi gerado - pode falhar normalmente
+                            error_msg = f"❌ [TOKEN AUSENTE] tracking_token AUSENTE e PIX não foi gerado - Payment NÃO será criado"
+                            logger.error(error_msg)
+                            logger.error(f"   BotUser {bot_user.id if bot_user else 'N/A'} não tem tracking_session_id")
+                            logger.error(f"   SOLUÇÃO: Usuário deve acessar link de redirect primeiro: /go/{{slug}}?grim=...&fbclid=...")
+                            raise ValueError("tracking_token ausente e PIX não gerado - Payment não pode ser criado sem tracking_token válido e sem PIX")
                     
-                    is_generated_token = tracking_token.startswith('tracking_')
-                    is_uuid_token = len(tracking_token) == 32 and all(c in '0123456789abcdef' for c in tracking_token.lower())
+                    # ✅ CORREÇÃO V17: Validar tracking_token apenas se não for None
+                    is_generated_token = False
+                    is_uuid_token = False
                     
-                    # ✅ CORREÇÃO V14: Se PIX foi gerado com sucesso, permitir criar Payment mesmo com token gerado
-                    # Isso evita perder vendas quando o gateway gera PIX mas o tracking_token não é ideal
-                    # O warning será logado mas o Payment será criado para que o webhook possa processar
-                    if is_generated_token:
-                        logger.warning(f"⚠️ [GENERATE PIX] tracking_token GERADO detectado: {tracking_token[:30]}...")
-                        logger.warning(f"   PIX foi gerado com sucesso (transaction_id: {gateway_transaction_id})")
-                        logger.warning(f"   Payment será criado mesmo com token gerado para evitar perder venda")
-                        logger.warning(f"   Meta Pixel Purchase pode ter atribuição reduzida (sem pageview_event_id)")
-                        # ✅ NÃO bloquear - permitir criar Payment para que webhook possa processar
-                    
-                    if not is_uuid_token and not is_generated_token:
-                        error_msg = f"❌ [GENERATE PIX] tracking_token com formato inválido: {tracking_token[:30]}... (len={len(tracking_token)})"
-                        logger.error(error_msg)
-                        logger.error(f"   Payment NÃO será criado com token inválido")
-                        logger.error(f"   tracking_token deve ser UUID de 32 chars (vem do redirect) ou gerado (tracking_*)")
-                        raise ValueError(f"tracking_token com formato inválido - deve ser UUID de 32 chars ou gerado (tracking_*)")
-                    
-                    # ✅ VALIDAÇÃO PASSOU - criar Payment
-                    if is_uuid_token:
-                        logger.info(f"✅ [GENERATE PIX] tracking_token validado: {tracking_token[:20]}... (UUID do redirect)")
+                    if tracking_token:
+                        is_generated_token = tracking_token.startswith('tracking_')
+                        is_uuid_token = len(tracking_token) == 32 and all(c in '0123456789abcdef' for c in tracking_token.lower())
+                        
+                        # ✅ CORREÇÃO V14: Se PIX foi gerado com sucesso, permitir criar Payment mesmo com token gerado
+                        # Isso evita perder vendas quando o gateway gera PIX mas o tracking_token não é ideal
+                        # O warning será logado mas o Payment será criado para que o webhook possa processar
+                        if is_generated_token:
+                            logger.warning(f"⚠️ [TOKEN LEGADO] tracking_token LEGADO detectado: {tracking_token[:30]}...")
+                            logger.warning(f"   PIX foi gerado com sucesso (transaction_id: {gateway_transaction_id})")
+                            logger.warning(f"   Payment será criado mesmo com token legado para evitar perder venda")
+                            logger.warning(f"   Meta Pixel Purchase pode ter atribuição reduzida (sem pageview_event_id)")
+                            # ✅ NÃO bloquear - permitir criar Payment para que webhook possa processar
+                        
+                        if not is_uuid_token and not is_generated_token:
+                            error_msg = f"❌ [GENERATE PIX] tracking_token com formato inválido: {tracking_token[:30]}... (len={len(tracking_token)})"
+                            logger.error(error_msg)
+                            logger.error(f"   Payment NÃO será criado com token inválido")
+                            logger.error(f"   tracking_token deve ser UUID de 32 chars (vem do redirect) ou gerado (tracking_*)")
+                            raise ValueError(f"tracking_token com formato inválido - deve ser UUID de 32 chars ou gerado (tracking_*)")
+                        
+                        # ✅ VALIDAÇÃO PASSOU - criar Payment
+                        if is_uuid_token:
+                            logger.info(f"✅ [TOKEN UUID] tracking_token validado: {tracking_token[:20]}... (UUID do redirect)")
+                        else:
+                            logger.info(f"⚠️ [TOKEN LEGADO] tracking_token legado: {tracking_token[:20]}... (será usado mesmo assim)")
                     else:
-                        logger.info(f"⚠️ [GENERATE PIX] tracking_token gerado: {tracking_token[:20]}... (será usado mesmo assim)")
+                        # ✅ tracking_token é None - já foi logado como warning acima
+                        logger.info(f"⚠️ [TOKEN AUSENTE] Payment será criado sem tracking_token (PIX já foi gerado)")
                     
                     # Salvar pagamento no banco (incluindo código PIX para reenvio + analytics)
                     payment = Payment(
@@ -4923,8 +4955,8 @@ Seu pagamento ainda não foi confirmado.
                         # ✅ CRÍTICO QI 600+: campaign_code (grim) para atribuição de campanha
                         # Usar campaign_code do bot_user (grim), não external_id (que agora é fbclid)
                         campaign_code=getattr(bot_user, 'campaign_code', None) if bot_user else None,
-                        # ✅ QI 500: TRACKING_TOKEN V4 (VALIDADO - UUID do redirect)
-                        tracking_token=tracking_token,  # ✅ Token válido (UUID do redirect)
+                        # ✅ QI 500: TRACKING_TOKEN V4 (pode ser None se PIX foi gerado sem tracking_token)
+                        tracking_token=tracking_token,  # ✅ Token válido (UUID do redirect) ou None se ausente
                         # ✅ CRÍTICO: pageview_event_id para deduplicação Meta Pixel (fallback se Redis expirar)
                         pageview_event_id=pageview_event_id if pageview_event_id else None,
                         # ✅ CRÍTICO: fbp e fbc para fallback no Purchase se Redis expirar
@@ -4935,19 +4967,23 @@ Seu pagamento ainda não foi confirmado.
                     db.session.flush()  # ✅ Flush para obter payment.id antes do commit
                     
                     # ✅ QI 500: Salvar tracking data no Redis (após criar payment para ter payment.id)
-                    tracking_service.save_tracking_data(
-                        tracking_token=tracking_token,
-                        bot_id=bot_id,
-                        customer_user_id=customer_user_id,
-                        payment_id=payment.id,
-                        fbclid=fbclid,
-                        fbp=fbp,
-                        fbc=fbc,
-                        utm_source=utm_source,
-                        utm_medium=utm_medium,
-                        utm_campaign=utm_campaign,
-                        external_ids=external_ids
-                    )
+                    # ✅ CORREÇÃO V17: Só salvar se tracking_token não for None
+                    if tracking_token:
+                        tracking_service.save_tracking_data(
+                            tracking_token=tracking_token,
+                            bot_id=bot_id,
+                            customer_user_id=customer_user_id,
+                            payment_id=payment.id,
+                            fbclid=fbclid,
+                            fbp=fbp,
+                            fbc=fbc,
+                            utm_source=utm_source,
+                            utm_medium=utm_medium,
+                            utm_campaign=utm_campaign,
+                            external_ids=external_ids
+                        )
+                    else:
+                        logger.warning(f"⚠️ [TOKEN AUSENTE] Não salvando tracking data no Redis (tracking_token é None)")
                     
                     # ✅ ATUALIZAR CONTADOR DE TRANSAÇÕES DO GATEWAY
                     gateway.total_transactions += 1
