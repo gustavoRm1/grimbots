@@ -3,7 +3,7 @@ Gateway OrionPay
 Baseado na documentação oficial: https://payapi.orion.moe
 
 Fluxo de criação de pagamento:
-1. POST /api/v1/pix/generate → retorna dados do PIX
+1. POST /api/v1/pix/personal → retorna dados do PIX
 
 Autenticação:
 - Header: X-API-Key (API Key)
@@ -194,21 +194,27 @@ class OrionPayGateway(PaymentGateway):
         customer_data: Optional[Dict[str, Any]] = None
     ) -> Optional[Dict[str, Any]]:
         """
-        Gera PIX via OrionPay usando endpoint /api/v1/pix/generate
+        Gera PIX via OrionPay usando endpoint /api/v1/pix/personal
+        
+        Baseado na documentação oficial:
+        - Endpoint: POST https://payapi.orion.moe/api/v1/pix/personal
+        - Headers: X-API-Key (obrigatório), Content-Type: application/json
+        - Parâmetros obrigatórios: amount, name, email
+        - Parâmetros opcionais: description, cpf, phone
         
         Args:
-            amount: Valor em reais (ex: 10.50)
+            amount: Valor em reais (mínimo R$ 5,00)
             description: Descrição do produto/serviço
             payment_id: ID único do pagamento no sistema
-            customer_data: Dados opcionais do cliente
+            customer_data: Dados do cliente (name, email, cpf, phone)
         
         Returns:
             Dict com dados do PIX gerado ou None em caso de erro
         """
         try:
-            # Validar valor
-            if not isinstance(amount, (int, float)) or amount <= 0:
-                logger.error(f"❌ [{self.get_gateway_name()}] Valor inválido: {amount}")
+            # Validar valor (mínimo R$ 5,00 conforme documentação)
+            if not isinstance(amount, (int, float)) or amount < 5.0:
+                logger.error(f"❌ [{self.get_gateway_name()}] Valor inválido: R$ {amount:.2f} (mínimo R$ 5,00)")
                 return None
             
             if amount > 1000000:  # R$ 1.000.000 máximo
@@ -218,25 +224,61 @@ class OrionPayGateway(PaymentGateway):
             logger.info(f"💰 [{self.get_gateway_name()}] Gerando PIX - R$ {amount:.2f}")
             logger.info(f"   Payment ID: {payment_id}")
             
-            # Preparar payload conforme documentação
-            # Formato esperado: { "amount": 100.00, "description": "Pagamento teste" }
+            # Preparar dados do cliente
+            if not customer_data:
+                customer_data = {}
+            
+            # ✅ Nome (obrigatório conforme documentação)
+            customer_name = customer_data.get('name') or customer_data.get('customer_name') or 'Cliente'
+            if not customer_name or customer_name.strip() == '':
+                customer_name = 'Cliente'
+            
+            # ✅ Email (obrigatório conforme documentação)
+            customer_email = customer_data.get('email') or customer_data.get('customer_email')
+            if not customer_email:
+                # Gerar email temporário baseado no payment_id
+                customer_email = f'pix{payment_id.replace("-", "").replace("_", "")[:10]}@telegram.user'
+                logger.warning(f"⚠️ [{self.get_gateway_name()}] Email não fornecido, usando temporário: {customer_email}")
+            
+            # ✅ CPF (opcional)
+            customer_cpf = customer_data.get('cpf') or customer_data.get('document') or customer_data.get('customer_document')
+            if customer_cpf:
+                # Remover caracteres não numéricos
+                customer_cpf = ''.join(filter(str.isdigit, str(customer_cpf)))
+                if len(customer_cpf) != 11:
+                    customer_cpf = None  # CPF inválido, não enviar
+            
+            # ✅ Telefone (opcional)
+            customer_phone = customer_data.get('phone') or customer_data.get('telephone') or customer_data.get('customer_phone')
+            
+            # ✅ Preparar payload conforme documentação EXATA
+            # Documentação: { "amount": 5, "name": "João da Silva", "email": "teste@example.com", "description": "Depósito pessoal", "cpf": "103.188.066-65", "phone": "(32) 99966-1111" }
             payload = {
                 'amount': float(amount),
-                'description': description[:200] if description else f'Pagamento {payment_id}'
+                'name': customer_name,
+                'email': customer_email
             }
             
-            # Adicionar dados do cliente se disponíveis (metadata opcional)
-            if customer_data:
-                customer_email = customer_data.get('email')
-                if customer_email:
-                    payload['userEmail'] = customer_email
+            # Adicionar campos opcionais
+            if description:
+                payload['description'] = description[:200]
             
-            logger.info(f"💳 [{self.get_gateway_name()}] Criando PIX via /api/v1/pix/generate")
+            if customer_cpf:
+                # Formatar CPF: 103.188.066-65
+                formatted_cpf = f"{customer_cpf[:3]}.{customer_cpf[3:6]}.{customer_cpf[6:9]}-{customer_cpf[9:11]}"
+                payload['cpf'] = formatted_cpf
+            
+            if customer_phone:
+                payload['phone'] = customer_phone
+            
+            logger.info(f"💳 [{self.get_gateway_name()}] Criando PIX via /api/v1/pix/personal")
             logger.info(f"   Valor: R$ {amount:.2f}")
-            logger.info(f"   Description: {payload['description']}")
+            logger.info(f"   Nome: {customer_name}")
+            logger.info(f"   Email: {customer_email}")
+            logger.debug(f"   Payload: {json.dumps(payload, indent=2)}")
             
-            # Fazer requisição para gerar PIX
-            response = self._make_request('POST', '/api/v1/pix/generate', payload=payload)
+            # ✅ Fazer requisição para gerar PIX (endpoint correto)
+            response = self._make_request('POST', '/api/v1/pix/personal', payload=payload)
             
             if not response:
                 logger.error(f"❌ [{self.get_gateway_name()}] Erro ao gerar PIX (sem resposta)")
@@ -244,35 +286,34 @@ class OrionPayGateway(PaymentGateway):
             
             logger.info(f"📥 [{self.get_gateway_name()}] Resposta recebida: Status {response.status_code}")
             
-            # Status 200 ou 201 = sucesso
-            if response.status_code in [200, 201]:
+            # Status 200 = sucesso (conforme documentação)
+            if response.status_code == 200:
                 try:
-                    data = response.json()
-                    logger.debug(f"📥 [{self.get_gateway_name()}] Resposta completa: {json.dumps(data, indent=2)[:500]}")
+                    response_data = response.json()
+                    logger.debug(f"📥 [{self.get_gateway_name()}] Resposta completa: {json.dumps(response_data, indent=2)[:500]}")
                     
-                    # Extrair dados do PIX conforme documentação
-                    # Formato esperado: { "pixCode": "00020126...", "qrCode": "data:image/png;base64...", "expiresAt": "2025-09-30T23:00:00Z" }
+                    # ✅ Verificar se success = true
+                    if not response_data.get('success', False):
+                        logger.error(f"❌ [{self.get_gateway_name()}] Resposta com success=false")
+                        logger.error(f"   Resposta: {json.dumps(response_data, indent=2)}")
+                        return None
+                    
+                    # ✅ Extrair dados do PIX conforme documentação EXATA
+                    # Formato: { "success": true, "data": { "transactionId": 2531, "id": "019a9383781b759c9be83e9cb2ad91df", "pixCode": "...", "qrCode": "...", "amount": 5, "description": "...", "expiresAt": "2025-11-17T21:30:59.063Z", "status": "created" } }
+                    data = response_data.get('data', {})
+                    
                     pix_code = data.get('pixCode') or data.get('pix_code')
-                    qr_code_base64 = data.get('qrCode') or data.get('qr_code') or data.get('qrCodeBase64') or data.get('qr_code_base64')
+                    qr_code_url = data.get('qrCode') or data.get('qr_code')
                     expires_at_str = data.get('expiresAt') or data.get('expires_at')
                     transaction_id = data.get('transactionId') or data.get('transaction_id') or data.get('id')
                     
                     if not pix_code:
-                        logger.error(f"❌ [{self.get_gateway_name()}] pix_code não encontrado na resposta")
-                        logger.error(f"   Resposta completa: {json.dumps(data, indent=2)}")
+                        logger.error(f"❌ [{self.get_gateway_name()}] pixCode não encontrado na resposta")
+                        logger.error(f"   Resposta completa: {json.dumps(response_data, indent=2)}")
                         return None
                     
-                    # Gerar QR Code URL se não fornecido
-                    qr_code_url = None
-                    if qr_code_base64:
-                        # Se é base64, usar diretamente
-                        if qr_code_base64.startswith('data:image'):
-                            qr_code_url = qr_code_base64
-                        else:
-                            # Se não tem prefixo, adicionar
-                            qr_code_url = f'data:image/png;base64,{qr_code_base64}'
-                    else:
-                        # Gerar URL externa como fallback
+                    # Se não tem qrCode, gerar URL externa como fallback
+                    if not qr_code_url:
                         import urllib.parse
                         qr_code_url = f'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={urllib.parse.quote(pix_code)}'
                     
@@ -292,11 +333,12 @@ class OrionPayGateway(PaymentGateway):
                     logger.info(f"✅ [{self.get_gateway_name()}] PIX gerado com sucesso")
                     logger.info(f"   Transaction ID: {transaction_id}")
                     logger.info(f"   PIX Code: {pix_code[:50]}...")
+                    logger.info(f"   Status: {data.get('status', 'N/A')}")
                     
                     return {
                         'pix_code': pix_code,
                         'qr_code_url': qr_code_url,
-                        'qr_code_base64': qr_code_base64,
+                        'qr_code_base64': None,  # OrionPay retorna URL, não base64
                         'transaction_id': str(transaction_id),
                         'payment_id': payment_id,
                         'gateway_transaction_id': str(transaction_id),
