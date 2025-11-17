@@ -578,18 +578,152 @@ class OrionPayGateway(PaymentGateway):
         """
         Consulta status de um pagamento no OrionPay
         
-        Nota: OrionPay não fornece endpoint de consulta de status na documentação.
-        Este método retorna None e deve ser usado apenas para compatibilidade.
-        A recomendação é usar webhooks para atualizar status.
+        Baseado na documentação oficial:
+        - Endpoint: GET https://payapi.orion.moe/api/v1/card/status/:paymentId
+        - Para PIX, pode usar o mesmo endpoint ou /api/v1/pix/status/:paymentId
+        - Headers: X-API-Key (obrigatório), Content-Type: application/json
         
         Args:
-            transaction_id: ID da transação no gateway
+            transaction_id: ID da transação no gateway (transactionId ou id retornado na criação)
         
         Returns:
-            None (endpoint não disponível)
+            Dict com dados do pagamento ou None em caso de erro
         """
-        logger.warning(f"⚠️ [{self.get_gateway_name()}] Consulta de status não disponível na API OrionPay")
-        logger.info(f"   Recomendação: Use webhooks para atualizar status de pagamentos")
-        logger.info(f"   Transaction ID: {transaction_id}")
-        return None
+        try:
+            if not transaction_id:
+                logger.error(f"❌ [{self.get_gateway_name()}] transaction_id vazio na consulta de status")
+                return None
+            
+            logger.info(f"🔍 [{self.get_gateway_name()}] Consultando status do pagamento {transaction_id}...")
+            
+            # ✅ Tentar primeiro endpoint para PIX (se disponível)
+            # Se não funcionar, tentar endpoint de cartão (genérico)
+            endpoints_to_try = [
+                f'/api/v1/pix/status/{transaction_id}',
+                f'/api/v1/card/status/{transaction_id}',
+                f'/api/v1/payment/status/{transaction_id}'
+            ]
+            
+            for endpoint in endpoints_to_try:
+                logger.debug(f"🔍 [{self.get_gateway_name()}] Tentando endpoint: {endpoint}")
+                
+                # Fazer requisição GET
+                response = self._make_request('GET', endpoint)
+                
+                if not response:
+                    logger.debug(f"⚠️ [{self.get_gateway_name()}] Sem resposta do endpoint: {endpoint}")
+                    continue
+                
+                # Status 200 = sucesso
+                if response.status_code == 200:
+                    try:
+                        response_data = response.json()
+                        logger.debug(f"📥 [{self.get_gateway_name()}] Resposta completa: {json.dumps(response_data, indent=2)[:500]}")
+                        
+                        # ✅ Verificar se success = true
+                        if not response_data.get('success', False):
+                            logger.warning(f"⚠️ [{self.get_gateway_name()}] Resposta com success=false")
+                            logger.warning(f"   Resposta: {json.dumps(response_data, indent=2)}")
+                            continue
+                        
+                        # ✅ Extrair dados conforme documentação EXATA
+                        # Formato: { "success": true, "data": { "id": "12345", "status": "pending", "amount": 5.00, "pixCode": "...", "qrCode": "...", "expiresAt": "2025-11-17T12:00:00Z" } }
+                        data = response_data.get('data', {})
+                        
+                        # Extrair status
+                        status_raw = data.get('status', '').lower()
+                        
+                        # Mapear status do OrionPay para status padrão
+                        status_map = {
+                            'paid': 'paid',
+                            'pago': 'paid',
+                            'approved': 'paid',
+                            'aprovado': 'paid',
+                            'completed': 'paid',
+                            'concluido': 'paid',
+                            'pending': 'pending',
+                            'pendente': 'pending',
+                            'waiting': 'pending',
+                            'aguardando': 'pending',
+                            'created': 'pending',
+                            'criado': 'pending',
+                            'failed': 'failed',
+                            'falhou': 'failed',
+                            'refused': 'failed',
+                            'recusado': 'failed',
+                            'expired': 'failed',
+                            'expirado': 'failed',
+                            'cancelled': 'failed',
+                            'cancelado': 'failed'
+                        }
+                        
+                        normalized_status = status_map.get(status_raw, 'pending')
+                        
+                        # Extrair outros dados
+                        amount = data.get('amount')
+                        if amount:
+                            try:
+                                amount = float(amount)
+                            except (ValueError, TypeError):
+                                amount = None
+                        
+                        pix_code = data.get('pixCode') or data.get('pix_code')
+                        qr_code = data.get('qrCode') or data.get('qr_code')
+                        expires_at_str = data.get('expiresAt') or data.get('expires_at')
+                        transaction_id_from_response = data.get('id') or data.get('transactionId') or transaction_id
+                        
+                        # Converter expires_at para datetime se fornecido
+                        expires_at = None
+                        if expires_at_str:
+                            try:
+                                from dateutil.parser import parse as parse_date
+                                expires_at = parse_date(expires_at_str)
+                            except:
+                                logger.warning(f"⚠️ [{self.get_gateway_name()}] Erro ao parsear expiresAt: {expires_at_str}")
+                        
+                        logger.info(f"✅ [{self.get_gateway_name()}] Status consultado com sucesso")
+                        logger.info(f"   Transaction ID: {transaction_id_from_response}")
+                        logger.info(f"   Status: {status_raw} → {normalized_status}")
+                        logger.info(f"   Amount: R$ {amount:.2f}" if amount else "   Amount: N/A")
+                        
+                        return {
+                            'gateway_transaction_id': str(transaction_id_from_response),
+                            'status': normalized_status,
+                            'amount': amount,
+                            'pix_code': pix_code,
+                            'qr_code': qr_code,
+                            'expires_at': expires_at,
+                            'raw_status': status_raw,
+                            'raw_data': data
+                        }
+                        
+                    except json.JSONDecodeError as e:
+                        logger.error(f"❌ [{self.get_gateway_name()}] Erro ao decodificar JSON: {e}")
+                        logger.error(f"   Resposta: {response.text[:500]}")
+                        continue
+                elif response.status_code == 404:
+                    # Endpoint não encontrado, tentar próximo
+                    logger.debug(f"⚠️ [{self.get_gateway_name()}] Endpoint não encontrado (404): {endpoint}")
+                    continue
+                elif response.status_code == 401:
+                    # Não autorizado - credenciais inválidas
+                    logger.error(f"❌ [{self.get_gateway_name()}] Credenciais inválidas (401)")
+                    return None
+                else:
+                    # Outro erro, tentar próximo endpoint
+                    logger.debug(f"⚠️ [{self.get_gateway_name()}] Status {response.status_code} no endpoint: {endpoint}")
+                    if response.text:
+                        logger.debug(f"   Resposta: {response.text[:200]}")
+                    continue
+            
+            # Se nenhum endpoint funcionou
+            logger.warning(f"⚠️ [{self.get_gateway_name()}] Nenhum endpoint de consulta funcionou para transaction_id: {transaction_id}")
+            logger.info(f"   Recomendação: Use webhooks para atualizar status de pagamentos")
+            return None
+            
+        except Exception as e:
+            logger.error(f"❌ [{self.get_gateway_name()}] Erro ao consultar status: {e}")
+            import traceback
+            logger.error(f"📋 Traceback: {traceback.format_exc()}")
+            return None
 
