@@ -81,7 +81,15 @@ class TrackingServiceV4:
         )
 
     def generate_fbp(self, telegram_user_id: str) -> str:
-        timestamp = int(datetime.utcnow().timestamp())
+        """
+        Gera _fbp cookie conforme documentação Meta (TrackingServiceV4):
+        Formato: fb.{subdomainIndex}.{creationTime}.{randomNumber}
+        - subdomainIndex: 1 (para app.grimbots.online)
+        - creationTime: tempo UNIX em MILISSEGUNDOS (não segundos!)
+        - randomNumber: hash do telegram_user_id (garante unicidade)
+        """
+        import time
+        timestamp = int(time.time() * 1000)  # ✅ CRÍTICO: MILISSEGUNDOS (não segundos!)
         random_part = abs(hash(telegram_user_id)) % 10_000_000_000
         return f"fb.1.{timestamp}.{random_part}"
 
@@ -329,15 +337,34 @@ class TrackingService:
 
     @staticmethod
     def generate_fbp() -> str:
-        timestamp = int(datetime.utcnow().timestamp())
+        """
+        Gera _fbp cookie conforme documentação Meta:
+        Formato: fb.{subdomainIndex}.{creationTime}.{randomNumber}
+        - subdomainIndex: 1 (para app.grimbots.online)
+        - creationTime: tempo UNIX em MILISSEGUNDOS (não segundos!)
+        - randomNumber: número aleatório de 10 dígitos
+        """
+        import time
+        timestamp = int(time.time() * 1000)  # ✅ CRÍTICO: MILISSEGUNDOS (não segundos!)
         random_part = random.randint(1000000000, 9999999999)
         return f"fb.1.{timestamp}.{random_part}"
 
     @staticmethod
     def generate_fbc(fbclid: Optional[str]) -> Optional[str]:
+        """
+        Gera _fbc cookie conforme documentação Meta:
+        Formato: fb.{subdomainIndex}.{creationTime}.{fbclid}
+        - subdomainIndex: 1 (para app.grimbots.online)
+        - creationTime: tempo UNIX em MILISSEGUNDOS (não segundos!)
+        - fbclid: valor do parâmetro fbclid da URL (case-sensitive, não alterar)
+        
+        IMPORTANTE: Meta recomenda usar o valor do cookie _fbc do browser quando disponível.
+        Este método deve ser usado apenas quando o cookie não existe e temos fbclid da URL.
+        """
         if not fbclid:
             return None
-        timestamp = int(datetime.utcnow().timestamp())
+        import time
+        timestamp = int(time.time() * 1000)  # ✅ CRÍTICO: MILISSEGUNDOS (não segundos!)
         return f"fb.1.{timestamp}.{fbclid}"
 
     @staticmethod

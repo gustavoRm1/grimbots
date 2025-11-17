@@ -199,14 +199,16 @@ def send_meta_pixel_viewcontent_event(bot, bot_user, message, pool_id=None):
         fbp_value = tracking_data.get('fbp') or getattr(bot_user, 'fbp', None)
         
         # ✅ CORREÇÃO CRÍTICA: Verificar fbc_origin para garantir que só enviamos fbc real (cookie)
-        # Se fbc_origin = 'synthetic' ou None, IGNORAR (não usar fbc sintético)
+        # ✅ CRÍTICO: Aceitar fbc se veio do cookie OU foi gerado conforme documentação Meta
+        # Meta aceita _fbc gerado quando fbclid está presente na URL (conforme documentação oficial)
         fbc_value = None
         fbc_origin = tracking_data.get('fbc_origin')
         
-        # ✅ PRIORIDADE 1: tracking_data com fbc_origin = 'cookie' (MAIS CONFIÁVEL)
-        if tracking_data.get('fbc') and fbc_origin == 'cookie':
+        # ✅ PRIORIDADE 1: tracking_data com fbc (cookie OU generated_from_fbclid)
+        # Meta aceita ambos conforme documentação oficial
+        if tracking_data.get('fbc') and fbc_origin in ('cookie', 'generated_from_fbclid'):
             fbc_value = tracking_data.get('fbc')
-            logger.info(f"[META VIEWCONTENT] ViewContent - fbc REAL recuperado do tracking_data (origem: cookie): {fbc_value[:50]}...")
+            logger.info(f"[META VIEWCONTENT] ViewContent - fbc recuperado do tracking_data (origem: {fbc_origin}): {fbc_value[:50]}...")
         # ✅ PRIORIDADE 2: BotUser (assumir que veio de cookie se foi salvo via process_start_async)
         elif bot_user and getattr(bot_user, 'fbc', None):
             fbc_value = bot_user.fbc
