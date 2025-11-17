@@ -4255,6 +4255,7 @@ Seu pagamento ainda não foi confirmado.
             # Importar models dentro da função para evitar circular import
             from models import Bot, Gateway, Payment, db
             from app import app
+            from sqlalchemy.exc import IntegrityError
             
             with app.app_context():
                 # Buscar bot e gateway
@@ -4442,6 +4443,31 @@ Seu pagamento ainda não foi confirmado.
                 )
                 
                 logger.info(f"📊 Resultado do PIX: {pix_result}")
+                
+                # ✅ CORREÇÃO ROBUSTA: Se Payment foi criado mas gateway retornou None, marcar como 'pending_verification'
+                if not pix_result:
+                    # ✅ Verificar se Payment foi criado antes de retornar None
+                    if 'payment' in locals() and payment:
+                        try:
+                            logger.warning(f"⚠️ [GATEWAY RETORNOU NONE] Gateway {gateway.gateway_type} retornou None")
+                            logger.warning(f"   Bot: {bot_id}, Valor: R$ {amount:.2f}, Payment ID: {payment.payment_id}")
+                            logger.warning(f"   Payment será marcado como 'pending_verification' para não perder venda")
+                            
+                            payment.status = 'pending_verification'
+                            payment.gateway_transaction_id = None
+                            payment.product_description = None
+                            db.session.commit()
+                            
+                            logger.warning(f"⚠️ Payment {payment.id} marcado como 'pending_verification' (gateway retornou None)")
+                            return {'status': 'pending_verification', 'payment_id': payment.payment_id, 'error': 'Gateway retornou None'}
+                        except Exception as commit_error:
+                            logger.error(f"❌ Erro ao commitar Payment após gateway retornar None: {commit_error}", exc_info=True)
+                            db.session.rollback()
+                            return None
+                    else:
+                        # ✅ Payment não foi criado - retornar None normalmente
+                        logger.error(f"❌ Gateway retornou None e Payment não foi criado")
+                        return None
                 
                 if pix_result:
                     # ✅ CRÍTICO: Verificar se transação foi recusada
@@ -4968,27 +4994,48 @@ Seu pagamento ainda não foi confirmado.
                     
                     # ✅ QI 500: Salvar tracking data no Redis (após criar payment para ter payment.id)
                     # ✅ CORREÇÃO V17: Só salvar se tracking_token não for None
+                    # ✅ CORREÇÃO ROBUSTA: Não bloquear se Redis falhar
                     if tracking_token:
-                        tracking_service.save_tracking_data(
-                            tracking_token=tracking_token,
-                            bot_id=bot_id,
-                            customer_user_id=customer_user_id,
-                            payment_id=payment.id,
-                            fbclid=fbclid,
-                            fbp=fbp,
-                            fbc=fbc,
-                            utm_source=utm_source,
-                            utm_medium=utm_medium,
-                            utm_campaign=utm_campaign,
-                            external_ids=external_ids
-                        )
+                        try:
+                            tracking_service.save_tracking_data(
+                                tracking_token=tracking_token,
+                                bot_id=bot_id,
+                                customer_user_id=customer_user_id,
+                                payment_id=payment.id,
+                                fbclid=fbclid,
+                                fbp=fbp,
+                                fbc=fbc,
+                                utm_source=utm_source,
+                                utm_medium=utm_medium,
+                                utm_campaign=utm_campaign,
+                                external_ids=external_ids
+                            )
+                            logger.info(f"✅ Tracking data salvo no Redis para payment {payment.id}")
+                        except Exception as redis_error:
+                            logger.warning(f"⚠️ [REDIS INDISPONÍVEL] Erro ao salvar tracking data no Redis: {redis_error}")
+                            logger.warning(f"   Payment {payment.id} foi criado mesmo assim (tracking data é opcional)")
+                            # ✅ NÃO bloquear - continuar mesmo se Redis falhar
                     else:
                         logger.warning(f"⚠️ [TOKEN AUSENTE] Não salvando tracking data no Redis (tracking_token é None)")
                     
                     # ✅ ATUALIZAR CONTADOR DE TRANSAÇÕES DO GATEWAY
                     gateway.total_transactions += 1
                     
-                    db.session.commit()
+                    # ✅ CORREÇÃO ROBUSTA: Validação de integridade antes de commit
+                    try:
+                        db.session.commit()
+                        logger.info(f"✅ Payment {payment.id} commitado com sucesso")
+                    except IntegrityError as integrity_error:
+                        db.session.rollback()
+                        logger.error(f"❌ [ERRO DE INTEGRIDADE] Erro ao commitar Payment: {integrity_error}", exc_info=True)
+                        logger.error(f"   Payment ID: {payment.id}, payment_id: {payment.payment_id}")
+                        logger.error(f"   Gateway Transaction ID: {gateway_transaction_id}")
+                        return None
+                    except Exception as commit_error:
+                        db.session.rollback()
+                        logger.error(f"❌ [ERRO AO COMMITAR] Erro ao commitar Payment: {commit_error}", exc_info=True)
+                        logger.error(f"   Payment ID: {payment.id}, payment_id: {payment.payment_id}")
+                        return None
                     
                     logger.info(f"✅ Pagamento registrado | Nosso ID: {payment_id} | SyncPay ID: {pix_result.get('transaction_id')}")
                     
@@ -5040,10 +5087,86 @@ Seu pagamento ainda não foi confirmado.
                     
                     return None
                     
+        except requests.exceptions.Timeout as timeout_error:
+            # ✅ CORREÇÃO ROBUSTA: Gateway timeout - verificar se PIX foi gerado
+            logger.warning(f"⚠️ [GATEWAY TIMEOUT] Gateway timeout ao gerar PIX")
+            logger.warning(f"   Bot: {bot_id}, Valor: R$ {amount:.2f}")
+            
+            # ✅ Tentar encontrar Payment criado antes do timeout
+            try:
+                from models import db, Payment
+                from app import app
+                with app.app_context():
+                    # Tentar encontrar Payment criado antes do timeout
+                    payment = Payment.query.filter_by(
+                        bot_id=bot_id,
+                        customer_user_id=customer_user_id,
+                        amount=amount,
+                        status='pending'
+                    ).order_by(Payment.id.desc()).first()
+                    
+                    if payment:
+                        payment.status = 'pending_verification'
+                        payment.gateway_transaction_id = None
+                        db.session.commit()
+                        logger.warning(f"⚠️ Payment {payment.id} marcado como 'pending_verification' (timeout)")
+                        return {'status': 'pending_verification', 'payment_id': payment.payment_id, 'error': 'Gateway timeout'}
+            except Exception as commit_error:
+                logger.error(f"❌ Erro ao processar timeout: {commit_error}", exc_info=True)
+            
+            logger.error(f"❌ Payment não foi criado antes do timeout - venda não iniciada")
+            return None
+                
         except Exception as e:
-            logger.error(f"❌ Erro ao gerar PIX: {e}")
+            # ✅ CORREÇÃO ROBUSTA: Verificar se gateway gerou PIX antes de fazer rollback
+            logger.error(f"❌ [ERRO GATEWAY] Erro ao gerar PIX: {e}", exc_info=True)
             import traceback
             traceback.print_exc()
+            
+            # ✅ Verificar se gateway gerou PIX (pode estar em exception ou response)
+            gateway_may_have_generated_pix = False
+            transaction_id_from_error = None
+            
+            # ✅ ESTRATÉGIA 1: Verificar se exception tem transaction_id
+            if hasattr(e, 'transaction_id') and e.transaction_id:
+                gateway_may_have_generated_pix = True
+                transaction_id_from_error = e.transaction_id
+                logger.warning(f"⚠️ Exception contém transaction_id: {transaction_id_from_error}")
+            
+            # ✅ ESTRATÉGIA 2: Verificar se mensagem de erro contém transaction_id
+            error_message = str(e).lower()
+            if 'transaction_id' in error_message or 'transaction' in error_message:
+                # Tentar extrair transaction_id da mensagem
+                import re
+                tx_match = re.search(r'transaction[_\s]?id[:\s]+([a-z0-9\-]+)', error_message, re.IGNORECASE)
+                if tx_match:
+                    gateway_may_have_generated_pix = True
+                    transaction_id_from_error = tx_match.group(1)
+                    logger.warning(f"⚠️ transaction_id extraído da mensagem de erro: {transaction_id_from_error}")
+            
+            # ✅ Se gateway pode ter gerado PIX, tentar encontrar Payment e marcar como 'pending_verification'
+            if gateway_may_have_generated_pix:
+                try:
+                    from models import db, Payment
+                    from app import app
+                    with app.app_context():
+                        # Tentar encontrar Payment criado antes do erro
+                        payment = Payment.query.filter_by(
+                            bot_id=bot_id,
+                            customer_user_id=customer_user_id,
+                            amount=amount
+                        ).order_by(Payment.id.desc()).first()
+                        
+                        if payment:
+                            payment.status = 'pending_verification'
+                            if transaction_id_from_error:
+                                payment.gateway_transaction_id = transaction_id_from_error
+                            db.session.commit()
+                            logger.warning(f"⚠️ Payment {payment.id} marcado como 'pending_verification' (gateway pode ter gerado PIX)")
+                            return {'status': 'pending_verification', 'payment_id': payment.payment_id, 'error': str(e)}
+                except Exception as commit_error:
+                    logger.error(f"❌ Erro ao processar erro do gateway: {commit_error}", exc_info=True)
+            
             return None
     
     def _generate_syncpay_bearer_token(self, client_id: str, client_secret: str) -> Optional[str]:
