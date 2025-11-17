@@ -4786,8 +4786,9 @@ Seu pagamento ainda não foi confirmado.
                     logger.info(f"   producer_hash: {producer_hash}")  # ✅ Para identificar conta do usuário
                     logger.info(f"   reference: {reference}")
                     
-                    # ✅ CORREÇÃO CRÍTICA V12: VALIDAR tracking_token antes de criar Payment
-                    # tracking_token DEVE ser UUID de 32 chars (não gerado, não None)
+                    # ✅ CORREÇÃO CRÍTICA V14: VALIDAR tracking_token antes de criar Payment
+                    # Se PIX foi gerado com sucesso, permitir criar Payment mesmo com token gerado (com warning)
+                    # Isso evita perder vendas quando o gateway gera PIX mas o tracking_token não é ideal
                     if not tracking_token:
                         error_msg = f"❌ [GENERATE PIX] tracking_token AUSENTE - Payment NÃO será criado"
                         logger.error(error_msg)
@@ -4798,22 +4799,28 @@ Seu pagamento ainda não foi confirmado.
                     is_generated_token = tracking_token.startswith('tracking_')
                     is_uuid_token = len(tracking_token) == 32 and all(c in '0123456789abcdef' for c in tracking_token.lower())
                     
+                    # ✅ CORREÇÃO V14: Se PIX foi gerado com sucesso, permitir criar Payment mesmo com token gerado
+                    # Isso evita perder vendas quando o gateway gera PIX mas o tracking_token não é ideal
+                    # O warning será logado mas o Payment será criado para que o webhook possa processar
                     if is_generated_token:
-                        error_msg = f"❌ [GENERATE PIX] tracking_token GERADO detectado: {tracking_token[:30]}..."
-                        logger.error(error_msg)
-                        logger.error(f"   Payment NÃO será criado com token gerado")
-                        logger.error(f"   tracking_token deve ser UUID de 32 chars (vem do redirect), não gerado")
-                        raise ValueError(f"tracking_token gerado inválido - Payment não pode ser criado com token gerado (deve ser UUID do redirect)")
+                        logger.warning(f"⚠️ [GENERATE PIX] tracking_token GERADO detectado: {tracking_token[:30]}...")
+                        logger.warning(f"   PIX foi gerado com sucesso (transaction_id: {gateway_transaction_id})")
+                        logger.warning(f"   Payment será criado mesmo com token gerado para evitar perder venda")
+                        logger.warning(f"   Meta Pixel Purchase pode ter atribuição reduzida (sem pageview_event_id)")
+                        # ✅ NÃO bloquear - permitir criar Payment para que webhook possa processar
                     
-                    if not is_uuid_token:
+                    if not is_uuid_token and not is_generated_token:
                         error_msg = f"❌ [GENERATE PIX] tracking_token com formato inválido: {tracking_token[:30]}... (len={len(tracking_token)})"
                         logger.error(error_msg)
                         logger.error(f"   Payment NÃO será criado com token inválido")
-                        logger.error(f"   tracking_token deve ser UUID de 32 chars (vem do redirect)")
-                        raise ValueError(f"tracking_token com formato inválido - deve ser UUID de 32 chars")
+                        logger.error(f"   tracking_token deve ser UUID de 32 chars (vem do redirect) ou gerado (tracking_*)")
+                        raise ValueError(f"tracking_token com formato inválido - deve ser UUID de 32 chars ou gerado (tracking_*)")
                     
                     # ✅ VALIDAÇÃO PASSOU - criar Payment
-                    logger.info(f"✅ [GENERATE PIX] tracking_token validado: {tracking_token[:20]}... (UUID do redirect)")
+                    if is_uuid_token:
+                        logger.info(f"✅ [GENERATE PIX] tracking_token validado: {tracking_token[:20]}... (UUID do redirect)")
+                    else:
+                        logger.info(f"⚠️ [GENERATE PIX] tracking_token gerado: {tracking_token[:20]}... (será usado mesmo assim)")
                     
                     # Salvar pagamento no banco (incluindo código PIX para reenvio + analytics)
                     payment = Payment(
