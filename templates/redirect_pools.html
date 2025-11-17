@@ -520,74 +520,84 @@
                     <!-- Cloaker -->
                     <div class="border-t border-gray-700 pt-4">
                         <div class="flex items-center justify-between p-4 rounded-lg border border-gray-700 bg-gray-800 mb-3">
-                            <div>
+                            <div class="flex-1">
                                 <label class="text-sm font-bold text-white">Cloaker + AntiClone</label>
-                                <p class="text-xs text-gray-400 mt-1">Proteção contra clonagem e biblioteca de anúncios</p>
+                                <p class="text-xs text-gray-400 mt-1">Bloqueia acesso direto e protege sua campanha</p>
                             </div>
                             <label class="relative inline-flex items-center cursor-pointer">
                                 <input type="checkbox" 
                                        x-model="metaPixelConfig.meta_cloaker_enabled"
-                                       :disabled="!metaPixelConfig.meta_tracking_enabled"
                                        class="sr-only peer">
                                 <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                             </label>
                         </div>
 
-                        <div x-show="metaPixelConfig.meta_cloaker_enabled" class="space-y-3">
+                        <div x-show="metaPixelConfig.meta_cloaker_enabled" class="space-y-4">
+                            <!-- Explicação simples -->
+                            <div class="p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                                <p class="text-xs text-gray-300 leading-relaxed">
+                                    <strong class="text-blue-400">Como funciona:</strong> Apenas quem acessar com o parâmetro correto será redirecionado. 
+                                    Acesso direto sem o parâmetro será bloqueado.
+                                </p>
+                            </div>
+
                             <div>
-                                <label class="block text-sm font-medium text-gray-300 mb-2">Parâmetro</label>
+                                <label class="block text-sm font-medium text-gray-300 mb-2">
+                                    Parâmetro
+                                    <span class="text-xs text-gray-500 font-normal ml-1">(fixo)</span>
+                                </label>
                                 <input type="text"
                                        value="grim"
                                        readonly
                                        disabled
                                        class="w-full px-4 py-2 bg-gray-900 border border-gray-600 rounded-lg text-gray-400 cursor-not-allowed"
                                        style="opacity: 0.7;">
-                                <p class="text-xs text-gray-500 mt-1">O parâmetro sempre será "grim"</p>
                             </div>
+                            
                             <div>
-                                <label class="block text-sm font-medium text-gray-300 mb-2">Valor</label>
+                                <label class="block text-sm font-medium text-gray-300 mb-2">
+                                    Valor do Parâmetro
+                                    <span class="text-xs text-gray-500 font-normal ml-1">(gerar ou criar um único)</span>
+                                </label>
                                 <div class="flex gap-2">
                                     <input type="text" 
                                            x-model="metaPixelConfig.meta_cloaker_param_value"
-                                           placeholder="xyz123abc"
+                                           placeholder="Digite um valor único ou clique em Gerar"
                                            class="flex-1 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none">
                                     <button type="button"
                                             @click="metaPixelConfig.meta_cloaker_param_value = Math.random().toString(36).substring(2, 12)"
-                                            class="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg text-sm font-bold transition">
-                                        <i class="fas fa-random"></i> Gerar
+                                            class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition">
+                                        Gerar
                                     </button>
                                 </div>
+                                <p class="text-xs text-gray-500 mt-1">Use este valor na URL do seu anúncio</p>
                             </div>
                             
-                            <!-- URL COMPLETA PRONTA PARA FACEBOOK ADS -->
-                            <div class="p-4 rounded-xl border-2" style="background: linear-gradient(135deg, rgba(34, 197, 94, 0.15), rgba(22, 163, 74, 0.1)); border-color: rgba(34, 197, 94, 0.4);">
-                                <div class="flex items-center justify-between mb-3">
-                                    <label class="text-sm font-black text-green-400">
-                                        <i class="fab fa-facebook mr-2"></i>
-                                        URL PRONTA PARA FACEBOOK ADS
+                            <!-- URL para usar no anúncio -->
+                            <div class="p-4 bg-gray-800 border border-gray-700 rounded-lg">
+                                <div class="flex items-center justify-between mb-2">
+                                    <label class="text-sm font-medium text-gray-300">
+                                        URL para usar no Facebook Ads
                                     </label>
                                     <button type="button"
                                             @click="copyToClipboard(`${window.location.origin}/go/${currentEditingPoolSlug}?grim=${metaPixelConfig.meta_cloaker_param_value}`)"
-                                            class="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-bold transition">
-                                        <i class="fas fa-copy"></i> Copiar
+                                            class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium transition">
+                                        <i class="fas fa-copy mr-1"></i> Copiar
                                     </button>
                                 </div>
-                                <div class="p-3 bg-black bg-opacity-40 rounded-lg border border-green-500/20">
+                                <div class="p-3 bg-gray-900 rounded border border-gray-600">
                                     <input type="text"
                                            :value="`${window.location.origin}/go/${currentEditingPoolSlug}?grim=${metaPixelConfig.meta_cloaker_param_value}`"
                                            readonly
                                            @click="$event.target.select()"
-                                           class="w-full bg-transparent border-none text-green-300 font-mono text-sm focus:outline-none cursor-pointer">
+                                           class="w-full bg-transparent border-none text-gray-300 font-mono text-xs focus:outline-none cursor-pointer">
                                 </div>
-                                <div class="mt-3 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
-                                    <p class="text-xs text-yellow-300 font-bold mb-2">
-                                        <i class="fas fa-exclamation-triangle mr-1"></i> IMPORTANTE:
-                                    </p>
-                                    <ol class="text-xs text-gray-300 space-y-1 ml-4">
-                                        <li>1. Copie a URL completa acima</li>
-                                        <li>2. Cole no campo "URL de Destino" do anúncio do Facebook</li>
-                                        <li>3. NÃO modifique nada - cole exatamente como está</li>
-                                        <li>4. Salve o anúncio e pronto! 🎉</li>
+                                <div class="mt-3 pt-3 border-t border-gray-700">
+                                    <p class="text-xs text-gray-400 mb-2"><strong>Instruções:</strong></p>
+                                    <ol class="text-xs text-gray-400 space-y-1 ml-4 list-decimal">
+                                        <li>Copie a URL acima</li>
+                                        <li>Cole no campo "URL de Destino" do seu anúncio no Facebook</li>
+                                        <li>Use exatamente como está (não modifique)</li>
                                     </ol>
                                 </div>
                             </div>

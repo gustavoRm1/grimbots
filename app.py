@@ -4066,6 +4066,12 @@ def public_redirect(slug):
     # ============================================================================
     # ✅ CLOAKER + ANTICLONE: VALIDAÇÃO MULTICAMADAS (PATCH_001 APLICADO)
     # ============================================================================
+    # ✅ IMPORTANTE: O Cloaker funciona 100% INDEPENDENTE do Meta Pixel
+    # - Pode ser usado sem pixel vinculado
+    # - Validação acontece ANTES de qualquer verificação de pixel
+    # - Não há dependência de meta_pixel_id, meta_tracking_enabled ou meta_access_token
+    # - Se bloqueado, retorna template estático (não depende de pixel)
+    # - Se autorizado, continua fluxo normalmente (com ou sem pixel)
     
     if pool.meta_cloaker_enabled:
         # Validação multicamadas
