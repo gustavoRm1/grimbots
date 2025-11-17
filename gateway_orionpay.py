@@ -371,23 +371,34 @@ class OrionPayGateway(PaymentGateway):
         """
         Processa webhook recebido do OrionPay
         
-        Formato esperado do webhook OrionPay:
+        Baseado na documentação oficial:
+        Formato do webhook OrionPay:
         {
             "event": "payment.success" | "purchase.created" | "access.granted" | "webhook.test",
+            "productId": null,
+            "productTitle": "...",
+            "webhookName": "GRIM",
+            "timestamp": "2025-10-01T...",
             "data": {
-                "purchaseId": 17,
-                "transactionId": "0199a1b1a335713591928b06376b1c82",
-                "productId": 8,
+                "purchaseId": 999,
+                "transactionId": "mock_...",
+                "productId": null,
                 "pixCode": "00020101...",
-                "buyerEmail": "cliente@email.com",
-                "buyerName": "Nome do Cliente",
-                "accessToken": "token_de_acesso_unico",
+                "buyerEmail": "teste@exemplo.com",
+                "buyerName": "Cliente Teste",
+                "accessToken": "mock_token_...",
                 "price": 100.00,
                 "netAmount": 90.00,
                 "platformFee": 10.00,
-                ...
+                "distributions": [...]
             }
         }
+        
+        Eventos:
+        - payment.success: Pagamento confirmado (compra paga) → status: 'paid'
+        - purchase.created: Nova compra criada (antes do pagamento) → status: 'pending'
+        - access.granted: Acesso liberado ao comprador → status: 'paid'
+        - webhook.test: Teste genérico de webhook → ignorado
         
         Args:
             data: Dados brutos do webhook (JSON do gateway)
@@ -400,14 +411,20 @@ class OrionPayGateway(PaymentGateway):
             logger.debug(f"   Estrutura recebida: {list(data.keys()) if isinstance(data, dict) else 'Não é dict'}")
             logger.debug(f"   Payload completo: {json.dumps(data, indent=2)[:1000]}")
             
-            # Verificar formato da resposta
+            # ✅ Verificar formato da resposta
             if not isinstance(data, dict):
                 logger.error(f"❌ [{self.get_gateway_name()}] Webhook com formato inválido (não é dict)")
                 return None
             
-            # Extrair evento e dados
+            # ✅ Extrair evento e dados conforme documentação EXATA
             event = data.get('event', '')
             webhook_data = data.get('data', {})
+            
+            # ✅ Extrair campos adicionais do root (conforme documentação)
+            product_id = data.get('productId')
+            product_title = data.get('productTitle')
+            webhook_name = data.get('webhookName')
+            timestamp = data.get('timestamp')
             
             # Se não tem 'data', usar o próprio data como webhook_data
             if not webhook_data:
@@ -416,11 +433,16 @@ class OrionPayGateway(PaymentGateway):
             else:
                 logger.info(f"🔍 [{self.get_gateway_name()}] Webhook com wrapper 'data' encontrado")
                 logger.debug(f"   Evento: {event}")
+                logger.debug(f"   Webhook Name: {webhook_name}")
+                logger.debug(f"   Timestamp: {timestamp}")
+                logger.debug(f"   Product ID: {product_id}")
+                logger.debug(f"   Product Title: {product_title}")
                 logger.debug(f"   Dados dentro de 'data': {list(webhook_data.keys())}")
             
-            # Ignorar eventos de teste
+            # ✅ Ignorar eventos de teste
             if event == 'webhook.test':
                 logger.info(f"ℹ️ [{self.get_gateway_name()}] Webhook de teste recebido (ignorado)")
+                logger.info(f"   Webhook Name: {webhook_name}")
                 return {
                     'payment_id': None,
                     'status': 'pending',
@@ -429,7 +451,7 @@ class OrionPayGateway(PaymentGateway):
                     'is_test': True
                 }
             
-            # Extrair transaction_id
+            # ✅ Extrair transaction_id (prioridade conforme documentação)
             transaction_id = (
                 webhook_data.get('transactionId') or 
                 webhook_data.get('transaction_id') or 
@@ -438,29 +460,31 @@ class OrionPayGateway(PaymentGateway):
                 webhook_data.get('purchase_id')
             )
             
-            # Extrair status baseado no evento
-            # payment.success = pagamento concluído (paid)
-            # purchase.created = compra criada (pending)
-            # access.granted = acesso liberado (pode ser paid ou pending dependendo do contexto)
+            # ✅ Extrair status baseado no evento (conforme documentação)
+            # payment.success = Pagamento confirmado (compra paga) → paid
+            # purchase.created = Nova compra criada (antes do pagamento) → pending
+            # access.granted = Acesso liberado ao comprador → paid
             status_map = {
-                'payment.success': 'paid',
+                'payment.success': 'paid',  # ✅ Pagamento confirmado
                 'payment_success': 'paid',
                 'purchase.completed': 'paid',
                 'purchase_completed': 'paid',
-                'access.granted': 'paid',  # Acesso liberado geralmente significa que foi pago
+                'access.granted': 'paid',  # ✅ Acesso liberado = pago
                 'access_granted': 'paid',
-                'purchase.created': 'pending',
+                'purchase.created': 'pending',  # ✅ Nova compra criada (antes do pagamento)
                 'purchase_created': 'pending'
             }
             
             normalized_status = status_map.get(event, 'pending')
             
-            # Log detalhado do status
+            # ✅ Log detalhado do status
             logger.info(f"🔍 [{self.get_gateway_name()}] Evento: {event} → Status: {normalized_status}")
+            logger.info(f"   Webhook Name: {webhook_name}")
+            logger.info(f"   Timestamp: {timestamp}")
             
-            # Extrair amount
+            # ✅ Extrair amount (prioridade: price > amount > netAmount)
             amount = (
-                webhook_data.get('price') or 
+                webhook_data.get('price') or  # ✅ Campo principal conforme documentação
                 webhook_data.get('amount') or 
                 webhook_data.get('netAmount') or
                 webhook_data.get('net_amount') or
@@ -478,9 +502,9 @@ class OrionPayGateway(PaymentGateway):
             else:
                 amount = None
             
-            # Extrair payment_id (pode vir de vários campos)
+            # ✅ Extrair payment_id (pode vir de purchaseId conforme documentação)
             payment_id = (
-                webhook_data.get('purchaseId') or 
+                webhook_data.get('purchaseId') or  # ✅ Campo principal conforme documentação
                 webhook_data.get('purchase_id') or
                 webhook_data.get('externalRef') or
                 webhook_data.get('external_ref') or
@@ -488,30 +512,47 @@ class OrionPayGateway(PaymentGateway):
                 transaction_id
             )
             
-            # Extrair dados do pagador
+            # ✅ Extrair dados do pagador (conforme documentação)
             payer_name = webhook_data.get('buyerName') or webhook_data.get('buyer_name') or webhook_data.get('payer_name')
             payer_email = webhook_data.get('buyerEmail') or webhook_data.get('buyer_email') or webhook_data.get('payer_email')
+            access_token = webhook_data.get('accessToken') or webhook_data.get('access_token')
             
-            # Extrair end_to_end_id se disponível
+            # ✅ Extrair dados financeiros (conforme documentação)
+            net_amount = webhook_data.get('netAmount') or webhook_data.get('net_amount')
+            platform_fee = webhook_data.get('platformFee') or webhook_data.get('platform_fee')
+            distributions = webhook_data.get('distributions', [])
+            
+            # ✅ Extrair pixCode (conforme documentação)
+            pix_code = webhook_data.get('pixCode') or webhook_data.get('pix_code')
+            
+            # ✅ Extrair end_to_end_id se disponível
             end_to_end_id = webhook_data.get('endToEndId') or webhook_data.get('end_to_end_id') or webhook_data.get('e2eId') or webhook_data.get('e2e_id')
             
-            # VALIDAÇÃO: transaction_id é obrigatório
+            # ✅ VALIDAÇÃO: transaction_id é obrigatório
             if not transaction_id:
                 logger.error(f"❌ [{self.get_gateway_name()}] transaction_id não encontrado no webhook")
                 logger.error(f"   Estrutura recebida: {json.dumps(data, indent=2)[:500]}")
                 return None
             
-            # LOGS DETALHADOS: Webhook processado com sucesso
+            # ✅ LOGS DETALHADOS: Webhook processado com sucesso
             logger.info(f"✅ [{self.get_gateway_name()}] Webhook processado com sucesso")
+            logger.info(f"   Evento: {event}")
+            logger.info(f"   Webhook Name: {webhook_name}")
+            logger.info(f"   Timestamp: {timestamp}")
             logger.info(f"   Transaction ID: {transaction_id}")
-            logger.info(f"   Evento: {event} → Status: {normalized_status}")
+            logger.info(f"   Purchase ID: {payment_id}")
+            logger.info(f"   Status: {normalized_status}")
             logger.info(f"   Amount: R$ {amount:.2f}" if amount else "   Amount: N/A")
-            logger.info(f"   Payment ID: {payment_id}")
+            logger.info(f"   Net Amount: R$ {net_amount:.2f}" if net_amount else "   Net Amount: N/A")
+            logger.info(f"   Platform Fee: R$ {platform_fee:.2f}" if platform_fee else "   Platform Fee: N/A")
             logger.info(f"   Payer Name: {payer_name}")
             logger.info(f"   Payer Email: {payer_email}")
+            logger.info(f"   Product ID: {product_id}")
+            logger.info(f"   Product Title: {product_title}")
+            logger.info(f"   PIX Code: {pix_code[:50] + '...' if pix_code else 'N/A'}")
             logger.info(f"   End-to-End ID: {end_to_end_id}")
             
-            # LOG CRÍTICO: Status PAID deve disparar entregável e Meta Pixel
+            # ✅ LOG CRÍTICO: Status PAID deve disparar entregável e Meta Pixel
             if normalized_status == 'paid':
                 logger.info(f"💰 [{self.get_gateway_name()}] ⚠️ STATUS PAID CONFIRMADO - Sistema vai:")
                 logger.info(f"   1️⃣ Atualizar pagamento para 'paid'")
@@ -534,8 +575,16 @@ class OrionPayGateway(PaymentGateway):
                 'payer_document': None,  # OrionPay não fornece documento no webhook
                 'end_to_end_id': end_to_end_id,
                 'external_reference': str(payment_id) if payment_id else None,
+                'pix_code': pix_code,
+                'access_token': access_token,
+                'net_amount': float(net_amount) if net_amount else None,
+                'platform_fee': float(platform_fee) if platform_fee else None,
+                'product_id': product_id,
+                'product_title': product_title,
                 'raw_data': webhook_data,
-                'event': event
+                'event': event,
+                'webhook_name': webhook_name,
+                'timestamp': timestamp
             }
             
         except Exception as e:
