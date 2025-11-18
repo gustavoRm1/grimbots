@@ -29,10 +29,12 @@ def migrate():
             
             # Adicionar coluna
             print("🔄 Adicionando campo utmify_pixel_id na tabela redirect_pools...")
-            db.session.execute("""
+            from sqlalchemy import text
+            # Usar text() para compatibilidade PostgreSQL/SQLite
+            db.session.execute(text("""
                 ALTER TABLE redirect_pools 
-                ADD COLUMN utmify_pixel_id VARCHAR(100) NULL
-            """)
+                ADD COLUMN utmify_pixel_id VARCHAR(100)
+            """))
             db.session.commit()
             
             print("✅ Campo utmify_pixel_id adicionado com sucesso!")
