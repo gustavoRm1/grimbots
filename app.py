@@ -5200,10 +5200,10 @@ def update_pool_meta_pixel_config(pool_id):
                 logger.info(f"✅ [Meta Pixel Save] Conexão testada com sucesso - criptografando token...")
                 # Criptografar antes de salvar
                 pool.meta_access_token = encrypt(access_token)
-            else:
-                # ✅ CORREÇÃO: String vazia = limpar campo
-                logger.info(f"🧹 [Meta Pixel Save] Token vazio - limpando campo")
-                pool.meta_access_token = None
+        elif 'meta_access_token' in data:
+            # ✅ CORREÇÃO: String vazia = limpar campo (se campo foi enviado mas está vazio)
+            logger.info(f"🧹 [Meta Pixel Save] Token vazio - limpando campo")
+            pool.meta_access_token = None
         
         # ✅ CRÍTICO: Atualizar pixel_id só se estiver no payload (permite atualização parcial)
         if 'meta_pixel_id' in data:
