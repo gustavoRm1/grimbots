@@ -4,36 +4,12 @@ Migration: Adicionar flow_enabled, flow_steps ao BotConfig e flow_step_id ao Pay
 """
 import sys
 import os
-from pathlib import Path
 
-# Adicionar diretório atual ao path
-BASE_DIR = Path(__file__).parent.parent
-sys.path.insert(0, str(BASE_DIR))
+# Adicionar diretório raiz ao path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# ✅ Criar app mínimo para evitar dependências pesadas (SocketIO, etc)
-from flask import Flask
-from flask_sqlalchemy import SQLAlchemy
-
-app = Flask(__name__)
-
-# ✅ Usar mesmo padrão do app.py para detectar banco
-DB_PATH = BASE_DIR / 'instance' / 'saas_bot_manager.db'
-database_uri = os.environ.get('DATABASE_URL', f'sqlite:///{DB_PATH}')
-
-app.config['SQLALCHEMY_DATABASE_URI'] = database_uri
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
-# Ajuste para SQLite
-connect_args = {'check_same_thread': False} if database_uri.startswith('sqlite') else {}
-
-app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
-    'pool_pre_ping': True,
-    'pool_recycle': 3600,
-    'connect_args': connect_args
-}
-
-db = SQLAlchemy(app)
-
+# ✅ Importar do app.py para usar mesma configuração de banco (incluindo .env)
+from app import app, db
 from sqlalchemy import inspect, text
 
 def migrate():
@@ -42,7 +18,9 @@ def migrate():
         try:
             inspector = inspect(db.engine)
             dialect_name = db.engine.dialect.name
+            database_uri = app.config['SQLALCHEMY_DATABASE_URI']
             print(f"🔄 Database detectado: {dialect_name}")
+            print(f"🔄 URI: {database_uri.split('@')[-1] if '@' in database_uri else database_uri.split('///')[-1]}")
             
             # ✅ Adicionar flow_enabled ao BotConfig
             print("\n🔄 Verificando campos em bot_configs...")
