@@ -613,13 +613,6 @@
                                     </div>
                                 </div>
                                 <div class="flex items-center gap-2">
-                                    <!-- Botão "Definir como Inicial" -->
-                                    <button x-show="config.flow_start_step_id !== step.id" 
-                                            @click="setFlowStartStep(step.id)"
-                                            class="px-3 py-1.5 bg-yellow-600 hover:bg-yellow-700 text-white rounded text-xs font-medium transition"
-                                            title="Definir como step inicial do fluxo">
-                                        <i class="fas fa-play mr-1"></i>Inicial
-                                    </button>
                                     <button @click="editFlowStep(step.id)" 
                                             class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded text-xs font-medium transition">
                                         <i class="fas fa-edit mr-1"></i>Editar
