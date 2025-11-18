@@ -5112,14 +5112,34 @@ def update_pool_meta_pixel_config(pool_id):
             pool.meta_cloaker_param_value = cloaker_value
         
         # ✅ Utmify Pixel ID
+        # ✅ CORREÇÃO: Verificar utmify_enabled primeiro para manter estado do checkbox
+        utmify_enabled = data.get('utmify_enabled', False)
+        
         if 'utmify_pixel_id' in data:
             utmify_pixel_id = data['utmify_pixel_id'].strip() if data['utmify_pixel_id'] else None
+            
             # ✅ Se toggle utmify_enabled estiver desativado, limpar pixel_id
-            utmify_enabled = data.get('utmify_enabled', False)
             if not utmify_enabled:
                 pool.utmify_pixel_id = None
+                logger.info(f"💾 [Meta Pixel Save] Utmify desabilitado - pixel_id limpo")
             else:
-                pool.utmify_pixel_id = utmify_pixel_id if utmify_pixel_id else None
+                # ✅ Se está ativado, salvar pixel_id (mesmo que vazio - usuário pode preencher depois)
+                if utmify_pixel_id:
+                    pool.utmify_pixel_id = utmify_pixel_id
+                    logger.info(f"💾 [Meta Pixel Save] Utmify pixel_id salvo: {utmify_pixel_id[:20]}...")
+                else:
+                    # ✅ Se checkbox está ativo mas pixel_id está vazio, manter o existente (não limpar)
+                    # Isso permite que usuário ative o checkbox e preencha depois
+                    if not pool.utmify_pixel_id:
+                        pool.utmify_pixel_id = None
+                        logger.info(f"💾 [Meta Pixel Save] Utmify ativado mas pixel_id vazio - mantendo None")
+                    else:
+                        logger.info(f"💾 [Meta Pixel Save] Utmify ativado mas pixel_id vazio - mantendo existente: {pool.utmify_pixel_id[:20]}...")
+        else:
+            # ✅ Se utmify_enabled não está no payload mas existe no frontend, verificar estado atual
+            if not utmify_enabled and pool.utmify_pixel_id:
+                pool.utmify_pixel_id = None
+                logger.info(f"💾 [Meta Pixel Save] Utmify desabilitado (payload sem pixel_id) - pixel_id limpo")
         
         try:
             db.session.commit()

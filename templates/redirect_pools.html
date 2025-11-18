@@ -999,7 +999,17 @@ function poolsApp() {
                         meta_cloaker_enabled: data.meta_cloaker_enabled === true,
                         meta_cloaker_param_name: 'grim',  // Sempre fixo como "grim" (ignorar valor do servidor)
                         meta_cloaker_param_value: (data.meta_cloaker_param_value && data.meta_cloaker_param_value !== null) ? data.meta_cloaker_param_value : '',
-                        utmify_enabled: (data.utmify_pixel_id && data.utmify_pixel_id !== null && data.utmify_pixel_id !== '') ? true : false,  // ✅ Ativar se pixel_id existe
+                        // ✅ CORREÇÃO: utmify_enabled é determinado pela existência de pixel_id OU se foi ativado anteriormente
+                        // Usar localStorage para persistir estado do checkbox entre recarregamentos
+                        utmify_enabled: (() => {
+                            const storageKey = `utmify_enabled_${pool.id}`;
+                            const savedState = localStorage.getItem(storageKey);
+                            if (savedState !== null) {
+                                return savedState === 'true';
+                            }
+                            // Fallback: verificar se pixel_id existe
+                            return (data.utmify_pixel_id && data.utmify_pixel_id !== null && data.utmify_pixel_id !== '');
+                        })(),
                         utmify_pixel_id: (data.utmify_pixel_id && data.utmify_pixel_id !== null) ? data.utmify_pixel_id : ''
                     };
                     // ✅ CRÍTICO: Salvar token original para detectar se foi alterado
@@ -1047,6 +1057,12 @@ function poolsApp() {
                 if (!this.metaPixelConfig.meta_tracking_enabled) {
                     this.metaPixelConfig.meta_pixel_id = '';
                     this.metaPixelConfig.meta_access_token = '';
+                }
+                
+                // ✅ CORREÇÃO: Salvar estado do checkbox Utmify no localStorage antes de enviar
+                if (this.selectedPool) {
+                    const storageKey = `utmify_enabled_${this.selectedPool.id}`;
+                    localStorage.setItem(storageKey, this.metaPixelConfig.utmify_enabled.toString());
                 }
                 
                 // ✅ CORREÇÃO: Se Utmify está desabilitado, limpar pixel_id antes de enviar
