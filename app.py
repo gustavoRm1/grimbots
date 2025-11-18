@@ -4205,202 +4205,210 @@ def public_redirect(slug):
     import json
     from utils.tracking_service import TrackingService, TrackingServiceV4
 
-    tracking_service_v4 = TrackingServiceV4()
-    tracking_token = uuid.uuid4().hex
-    pageview_event_id = f"pageview_{uuid.uuid4().hex}"
-    pageview_ts = int(time.time())
-    TRACKING_TOKEN_TTL = TrackingServiceV4.TRACKING_TOKEN_TTL_SECONDS
-
-    # ✅ CRÍTICO V4.1: Capturar FBC do cookie OU dos params (JS pode ter enviado)
-    # Prioridade: cookie > params (cookie é mais confiável)
-    fbp_cookie = request.cookies.get('_fbp') or request.args.get('_fbp_cookie')
-    fbc_cookie = request.cookies.get('_fbc') or request.args.get('_fbc_cookie')
-    fbclid_param = request.args.get('fbclid')
-
-    # ✅ LOG DIAGNÓSTICO: Verificar cookies iniciais
-    logger.info(f"[META PIXEL] Redirect - Cookies iniciais: _fbp={'✅' if fbp_cookie else '❌'}, _fbc={'✅' if fbc_cookie else '❌'}, fbclid={'✅' if fbclid else '❌'}, is_crawler={is_crawler_request}")
-
-    if not fbp_cookie and not is_crawler_request:
-        try:
-            fbp_cookie = TrackingService.generate_fbp()
-            logger.info(f"[META PIXEL] Redirect - fbp gerado: {fbp_cookie[:30]}...")
-        except Exception as e:
-            logger.warning(f"[META PIXEL] Redirect - Erro ao gerar fbp: {e}")
-            fbp_cookie = None
-
-    # ✅ CRÍTICO V4.1: Priorizar cookie _fbc do browser (MAIS CONFIÁVEL)
-    # Se não tiver cookie, gerar _fbc baseado em fbclid conforme documentação Meta
-    # Meta aceita _fbc gerado se fbclid estiver presente na URL
-    fbc_value = None
-    fbc_origin = None
-    
-    if fbc_cookie:
-        # ✅ PRIORIDADE 1: Cookie do browser (MAIS CONFIÁVEL - Meta confia 100%)
-        fbc_value = fbc_cookie.strip()
-        fbc_origin = 'cookie'  # ✅ ORIGEM REAL - Meta confia e atribui
-        logger.info(f"[META REDIRECT] Redirect - fbc capturado do cookie (ORIGEM REAL): {fbc_value[:50]}... (len={len(fbc_value)})")
-    elif fbclid and not is_crawler_request:
-        # ✅ PRIORIDADE 2: Gerar _fbc baseado em fbclid conforme documentação Meta
-        # Formato: fb.1.{creationTime_ms}.{fbclid}
-        # Meta aceita este formato quando fbclid está presente na URL
-        try:
-            fbc_value = TrackingService.generate_fbc(fbclid)
-            fbc_origin = 'generated_from_fbclid'  # ✅ Gerado conforme documentação Meta
-            logger.info(f"[META REDIRECT] Redirect - fbc gerado baseado em fbclid (conforme doc Meta): {fbc_value[:50]}... (len={len(fbc_value)})")
-            logger.info(f"   Meta aceita _fbc gerado quando fbclid está presente na URL")
-        except Exception as e:
-            logger.warning(f"[META REDIRECT] Redirect - Erro ao gerar fbc: {e}")
-            fbc_value = None
-            fbc_origin = None
-    else:
-        fbc_value = None
-        fbc_origin = None
-        if not fbclid:
-            logger.warning(f"[META REDIRECT] Redirect - fbc ausente: cookie ausente e fbclid ausente")
-        elif is_crawler_request:
-            logger.warning(f"[META REDIRECT] Redirect - fbc não capturado: is_crawler_request=True")
-    
-    # Usar fbc_value como fbc_cookie para compatibilidade com código existente
-    fbc_cookie = fbc_value
-
-    if not is_crawler_request:
-        utms = {
-            'utm_source': request.args.get('utm_source', ''),
-            'utm_campaign': request.args.get('utm_campaign', ''),
-            'utm_medium': request.args.get('utm_medium', ''),
-            'utm_content': request.args.get('utm_content', ''),
-            'utm_term': request.args.get('utm_term', ''),
-            'utm_id': request.args.get('utm_id', '')
-        }
-
-        # ✅ CRÍTICO: Garantir que fbclid completo (até 255 chars) seja salvo - NUNCA truncar antes de salvar no Redis!
-        fbclid_to_save = fbclid or None
-        if fbclid_to_save:
-            logger.info(f"✅ Redirect - Salvando fbclid completo no Redis: {fbclid_to_save[:50]}... (len={len(fbclid_to_save)})")
-            if len(fbclid_to_save) > 255:
-                logger.warning(f"⚠️ Redirect - fbclid excede 255 chars ({len(fbclid_to_save)}), mas será salvo completo no Redis (sem truncar)")
-        
-        # ✅ CRÍTICO: Montar tracking_payload com fbc apenas se for válido (não None)
-        tracking_payload = {
-            'tracking_token': tracking_token,
-            'fbclid': fbclid_to_save,  # ✅ fbclid completo (até 255 chars) - NUNCA truncar aqui!
-            'fbp': fbp_cookie,
-            'pageview_event_id': pageview_event_id,
-            'pageview_ts': pageview_ts,
-            'client_ip': user_ip,  # ✅ Nome correto (Purchase busca por 'client_ip' ou 'ip')
-            'client_user_agent': user_agent,  # ✅ CORRIGIDO: Purchase busca por 'client_user_agent' ou 'ua'
-            'grim': grim_param or None,
-            'event_source_url': request.url or f'https://{request.host}/go/{pool.slug}',
-            'first_page': request.url or f'https://{request.host}/go/{pool.slug}',  # ✅ ADICIONAR para fallback no Purchase
-            **{k: v for k, v in utms.items() if v}
-        }
-        
-        # ✅ CRÍTICO V4.1: Salvar fbc se veio do cookie OU foi gerado conforme documentação Meta
-        # Meta aceita _fbc gerado quando fbclid está presente na URL (conforme documentação oficial)
-        if fbc_cookie and fbc_origin:
-            tracking_payload['fbc'] = fbc_cookie
-            tracking_payload['fbc_origin'] = fbc_origin  # ✅ Rastrear origem: 'cookie' ou 'generated_from_fbclid'
-            if fbc_origin == 'cookie':
-                logger.info(f"[META REDIRECT] Redirect - fbc REAL será salvo no Redis (origem: cookie): {fbc_cookie[:50]}... (len={len(fbc_cookie)})")
-            elif fbc_origin == 'generated_from_fbclid':
-                logger.info(f"[META REDIRECT] Redirect - fbc GERADO será salvo no Redis (origem: generated_from_fbclid, conforme doc Meta): {fbc_cookie[:50]}... (len={len(fbc_cookie)})")
-        else:
-            # ✅ NÃO salvar fbc se não veio do cookie nem foi gerado (evita usar fbc inválido no Purchase)
-            logger.warning(f"[META REDIRECT] Redirect - fbc NÃO será salvo (origem: {fbc_origin or 'ausente'}) - Purchase usará apenas external_id")
-
-        try:
-            # ✅ LOG DETALHADO: Mostrar o que está sendo salvo
-            logger.info(f"[META PIXEL] Redirect - tracking_payload completo: fbclid={'✅' if tracking_payload.get('fbclid') else '❌'}, fbp={'✅' if tracking_payload.get('fbp') else '❌'}, ip={'✅' if tracking_payload.get('client_ip') else '❌'}, ua={'✅' if tracking_payload.get('client_user_agent') else '❌'}")
-            logger.info(f"[META PIXEL] Redirect - Salvando tracking_payload inicial com pageview_event_id: {tracking_payload.get('pageview_event_id', 'N/A')}")
-            ok = tracking_service_v4.save_tracking_token(tracking_token, tracking_payload, ttl=TRACKING_TOKEN_TTL)
-            if not ok:
-                logger.warning("[META PIXEL] Redirect - Retry saving tracking_token once (redirect)")
-                tracking_service_v4.save_tracking_token(tracking_token, tracking_payload, ttl=TRACKING_TOKEN_TTL)
-            else:
-                logger.info(f"[META PIXEL] Redirect - tracking_token salvo: {tracking_token[:20]}... | Campos: fbclid={'✅' if tracking_payload.get('fbclid') else '❌'}, fbp={'✅' if tracking_payload.get('fbp') else '❌'}, ip={'✅' if tracking_payload.get('client_ip') else '❌'}, ua={'✅' if tracking_payload.get('client_user_agent') else '❌'}")
-                logger.info(f"[META PIXEL] Redirect - tracking_token salvo no Redis com fbclid completo (len={len(fbclid_to_save) if fbclid_to_save else 0}) e pageview_event_id: {tracking_payload.get('pageview_event_id', 'N/A')}")
-            # ✅ CORREÇÃO SÊNIOR QI 500: REMOVER chamada duplicada de TrackingService.save_tracking_data()
-            # Isso causa CONFLITO porque TrackingServiceV4.save_tracking_token() já salva tracking:fbclid:{fbclid} com tracking_token (string)
-            # TrackingService.save_tracking_data() salva tracking:fbclid:{fbclid} com JSON payload, sobrescrevendo o tracking_token
-            # SOLUÇÃO: Remover chamada duplicada - TrackingServiceV4.save_tracking_token() já salva tudo que precisamos
-            # TrackingService.save_tracking_data() é legacy e não deve ser usado aqui
-        except Exception as e:
-            logger.error(f"⚠️ Erro ao persistir tracking_token {tracking_token}: {e}", exc_info=True)
-    else:
-        tracking_token = None
-        logger.info(f"🤖 Crawler detectado - Tracking NÃO salvo (evita poluição do Redis)")
-    
-    # ============================================================================
-    # ✅ META PIXEL: PAGEVIEW TRACKING + UTM CAPTURE (NÍVEL DE POOL)
-    # ============================================================================
-    # CRÍTICO: Captura UTM e External ID para vincular eventos posteriores
-    # ============================================================================
+    # ✅ CORREÇÃO CRÍTICA: Só executar lógica de Meta Pixel se meta_tracking_enabled estiver ativo
+    tracking_token = None
+    pageview_event_id = None
+    pageview_context = {}
     external_id = None
     utm_data = {}
     
-    try:
-        external_id, utm_data, pageview_context = send_meta_pixel_pageview_event(
-            pool,
-            request,
-            pageview_event_id=pageview_event_id if not is_crawler_request else None,
-            tracking_token=tracking_token
-        )
-    except Exception as e:
-        logger.error(f"Erro ao enviar PageView para Meta Pixel: {e}")
-        # Não impedir o redirect se Meta falhar
-        pageview_context = {}
-    else:
-        # ✅ CRÍTICO: Sempre salvar pageview_context, mesmo se vazio, para garantir que pageview_event_id seja preservado
-        # ✅ CORREÇÃO CRÍTICA QI 1000+: MERGE pageview_context com tracking_payload inicial
-        # Isso garante que client_ip e client_user_agent sejam preservados (não sobrescritos)
-        if tracking_token:
+    if pool.meta_tracking_enabled and pool.meta_pixel_id and pool.meta_access_token:
+        tracking_service_v4 = TrackingServiceV4()
+        tracking_token = uuid.uuid4().hex
+        pageview_event_id = f"pageview_{uuid.uuid4().hex}"
+        pageview_ts = int(time.time())
+        TRACKING_TOKEN_TTL = TrackingServiceV4.TRACKING_TOKEN_TTL_SECONDS
+
+        # ✅ CRÍTICO V4.1: Capturar FBC do cookie OU dos params (JS pode ter enviado)
+        # Prioridade: cookie > params (cookie é mais confiável)
+        fbp_cookie = request.cookies.get('_fbp') or request.args.get('_fbp_cookie')
+        fbc_cookie = request.cookies.get('_fbc') or request.args.get('_fbc_cookie')
+        fbclid_param = request.args.get('fbclid')
+
+        # ✅ LOG DIAGNÓSTICO: Verificar cookies iniciais
+        logger.info(f"[META PIXEL] Redirect - Cookies iniciais: _fbp={'✅' if fbp_cookie else '❌'}, _fbc={'✅' if fbc_cookie else '❌'}, fbclid={'✅' if fbclid_param else '❌'}, is_crawler={is_crawler_request}")
+
+        if not fbp_cookie and not is_crawler_request:
             try:
-                # ✅ CORREÇÃO CRÍTICA: MERGE pageview_context com tracking_payload inicial
-                # PROBLEMA IDENTIFICADO: pageview_context estava sobrescrevendo tracking_payload inicial
-                # Isso fazia com que client_ip e client_user_agent fossem perdidos
-                # SOLUÇÃO: Fazer merge (não sobrescrever)
-                if pageview_context:
-                    # ✅ MERGE: Combinar dados iniciais com dados do PageView
-                    merged_context = {
-                        **tracking_payload,  # ✅ Dados iniciais (client_ip, client_user_agent, fbclid, fbp, etc.)
-                        **pageview_context   # ✅ Dados do PageView (pageview_event_id, event_source_url, etc.)
-                    }
-                    # ✅ GARANTIR que client_ip e client_user_agent sejam preservados (prioridade: tracking_payload > pageview_context)
-                    if tracking_payload.get('client_ip') and not merged_context.get('client_ip'):
-                        merged_context['client_ip'] = tracking_payload['client_ip']
-                    if tracking_payload.get('client_user_agent') and not merged_context.get('client_user_agent'):
-                        merged_context['client_user_agent'] = tracking_payload['client_user_agent']
-                    # ✅ GARANTIR que pageview_event_id seja preservado (prioridade: pageview_context > tracking_payload)
-                    if not merged_context.get('pageview_event_id') and tracking_payload.get('pageview_event_id'):
-                        merged_context['pageview_event_id'] = tracking_payload['pageview_event_id']
-                        logger.info(f"✅ Preservando pageview_event_id do tracking_payload inicial: {tracking_payload['pageview_event_id']}")
-                    
-                    logger.info(f"✅ Merge realizado: client_ip={'✅' if merged_context.get('client_ip') else '❌'}, client_user_agent={'✅' if merged_context.get('client_user_agent') else '❌'}, pageview_event_id={'✅' if merged_context.get('pageview_event_id') else '❌'}")
-                    
-                    ok = tracking_service_v4.save_tracking_token(
-                        tracking_token,
-                        merged_context,  # ✅ Dados completos (não sobrescreve)
-                        ttl=TRACKING_TOKEN_TTL
-                    )
-                else:
-                    # Se pageview_context está vazio, salvar apenas o tracking_payload inicial (já tem tudo)
-                    logger.warning(f"⚠️ pageview_context vazio - preservando tracking_payload inicial completo")
-                    ok = tracking_service_v4.save_tracking_token(
-                        tracking_token,
-                        tracking_payload,  # ✅ Dados iniciais completos (client_ip, client_user_agent, pageview_event_id, etc.)
-                        ttl=TRACKING_TOKEN_TTL
-                    )
-                
-                if not ok:
-                    logger.warning("Retry saving merged context once (redirect)")
-                    retry_context = merged_context if pageview_context else tracking_payload
-                    tracking_service_v4.save_tracking_token(
-                        tracking_token,
-                        retry_context,
-                        ttl=TRACKING_TOKEN_TTL
-                    )
+                fbp_cookie = TrackingService.generate_fbp()
+                logger.info(f"[META PIXEL] Redirect - fbp gerado: {fbp_cookie[:30]}...")
             except Exception as e:
-                logger.warning(f"⚠️ Erro ao atualizar tracking_token {tracking_token} com merged context: {e}")
+                logger.warning(f"[META PIXEL] Redirect - Erro ao gerar fbp: {e}")
+                fbp_cookie = None
+
+        # ✅ CRÍTICO V4.1: Priorizar cookie _fbc do browser (MAIS CONFIÁVEL)
+        # Se não tiver cookie, gerar _fbc baseado em fbclid conforme documentação Meta
+        # Meta aceita _fbc gerado se fbclid estiver presente na URL
+        fbc_value = None
+        fbc_origin = None
+        
+        if fbc_cookie:
+            # ✅ PRIORIDADE 1: Cookie do browser (MAIS CONFIÁVEL - Meta confia 100%)
+            fbc_value = fbc_cookie.strip()
+            fbc_origin = 'cookie'  # ✅ ORIGEM REAL - Meta confia e atribui
+            logger.info(f"[META REDIRECT] Redirect - fbc capturado do cookie (ORIGEM REAL): {fbc_value[:50]}... (len={len(fbc_value)})")
+        elif fbclid_param and not is_crawler_request:
+            # ✅ PRIORIDADE 2: Gerar _fbc baseado em fbclid conforme documentação Meta
+            # Formato: fb.1.{creationTime_ms}.{fbclid}
+            # Meta aceita este formato quando fbclid está presente na URL
+            try:
+                fbc_value = TrackingService.generate_fbc(fbclid_param)
+                fbc_origin = 'generated_from_fbclid'  # ✅ Gerado conforme documentação Meta
+                logger.info(f"[META REDIRECT] Redirect - fbc gerado baseado em fbclid (conforme doc Meta): {fbc_value[:50]}... (len={len(fbc_value)})")
+                logger.info(f"   Meta aceita _fbc gerado quando fbclid está presente na URL")
+            except Exception as e:
+                logger.warning(f"[META REDIRECT] Redirect - Erro ao gerar fbc: {e}")
+                fbc_value = None
+                fbc_origin = None
+        else:
+            fbc_value = None
+            fbc_origin = None
+            if not fbclid_param:
+                logger.warning(f"[META REDIRECT] Redirect - fbc ausente: cookie ausente e fbclid ausente")
+            elif is_crawler_request:
+                logger.warning(f"[META REDIRECT] Redirect - fbc não capturado: is_crawler_request=True")
+        
+        # Usar fbc_value como fbc_cookie para compatibilidade com código existente
+        fbc_cookie = fbc_value
+
+        if not is_crawler_request:
+            utms = {
+                'utm_source': request.args.get('utm_source', ''),
+                'utm_campaign': request.args.get('utm_campaign', ''),
+                'utm_medium': request.args.get('utm_medium', ''),
+                'utm_content': request.args.get('utm_content', ''),
+                'utm_term': request.args.get('utm_term', ''),
+                'utm_id': request.args.get('utm_id', '')
+            }
+
+            # ✅ CRÍTICO: Garantir que fbclid completo (até 255 chars) seja salvo - NUNCA truncar antes de salvar no Redis!
+            fbclid_to_save = fbclid_param or None
+            if fbclid_to_save:
+                logger.info(f"✅ Redirect - Salvando fbclid completo no Redis: {fbclid_to_save[:50]}... (len={len(fbclid_to_save)})")
+                if len(fbclid_to_save) > 255:
+                    logger.warning(f"⚠️ Redirect - fbclid excede 255 chars ({len(fbclid_to_save)}), mas será salvo completo no Redis (sem truncar)")
+            
+            # ✅ CRÍTICO: Montar tracking_payload com fbc apenas se for válido (não None)
+            tracking_payload = {
+                'tracking_token': tracking_token,
+                'fbclid': fbclid_to_save,  # ✅ fbclid completo (até 255 chars) - NUNCA truncar aqui!
+                'fbp': fbp_cookie,
+                'pageview_event_id': pageview_event_id,
+                'pageview_ts': pageview_ts,
+                'client_ip': user_ip,  # ✅ Nome correto (Purchase busca por 'client_ip' ou 'ip')
+                'client_user_agent': user_agent,  # ✅ CORRIGIDO: Purchase busca por 'client_user_agent' ou 'ua'
+                'grim': grim_param or None,
+                'event_source_url': request.url or f'https://{request.host}/go/{pool.slug}',
+                'first_page': request.url or f'https://{request.host}/go/{pool.slug}',  # ✅ ADICIONAR para fallback no Purchase
+                **{k: v for k, v in utms.items() if v}
+            }
+            
+            # ✅ CRÍTICO V4.1: Salvar fbc se veio do cookie OU foi gerado conforme documentação Meta
+            # Meta aceita _fbc gerado quando fbclid está presente na URL (conforme documentação oficial)
+            if fbc_cookie and fbc_origin:
+                tracking_payload['fbc'] = fbc_cookie
+                tracking_payload['fbc_origin'] = fbc_origin  # ✅ Rastrear origem: 'cookie' ou 'generated_from_fbclid'
+                if fbc_origin == 'cookie':
+                    logger.info(f"[META REDIRECT] Redirect - fbc REAL será salvo no Redis (origem: cookie): {fbc_cookie[:50]}... (len={len(fbc_cookie)})")
+                elif fbc_origin == 'generated_from_fbclid':
+                    logger.info(f"[META REDIRECT] Redirect - fbc GERADO será salvo no Redis (origem: generated_from_fbclid, conforme doc Meta): {fbc_cookie[:50]}... (len={len(fbc_cookie)})")
+            else:
+                # ✅ NÃO salvar fbc se não veio do cookie nem foi gerado (evita usar fbc inválido no Purchase)
+                logger.warning(f"[META REDIRECT] Redirect - fbc NÃO será salvo (origem: {fbc_origin or 'ausente'}) - Purchase usará apenas external_id")
+
+            try:
+                # ✅ LOG DETALHADO: Mostrar o que está sendo salvo
+                logger.info(f"[META PIXEL] Redirect - tracking_payload completo: fbclid={'✅' if tracking_payload.get('fbclid') else '❌'}, fbp={'✅' if tracking_payload.get('fbp') else '❌'}, ip={'✅' if tracking_payload.get('client_ip') else '❌'}, ua={'✅' if tracking_payload.get('client_user_agent') else '❌'}")
+                logger.info(f"[META PIXEL] Redirect - Salvando tracking_payload inicial com pageview_event_id: {tracking_payload.get('pageview_event_id', 'N/A')}")
+                ok = tracking_service_v4.save_tracking_token(tracking_token, tracking_payload, ttl=TRACKING_TOKEN_TTL)
+                if not ok:
+                    logger.warning("[META PIXEL] Redirect - Retry saving tracking_token once (redirect)")
+                    tracking_service_v4.save_tracking_token(tracking_token, tracking_payload, ttl=TRACKING_TOKEN_TTL)
+                else:
+                    logger.info(f"[META PIXEL] Redirect - tracking_token salvo: {tracking_token[:20]}... | Campos: fbclid={'✅' if tracking_payload.get('fbclid') else '❌'}, fbp={'✅' if tracking_payload.get('fbp') else '❌'}, ip={'✅' if tracking_payload.get('client_ip') else '❌'}, ua={'✅' if tracking_payload.get('client_user_agent') else '❌'}")
+                    logger.info(f"[META PIXEL] Redirect - tracking_token salvo no Redis com fbclid completo (len={len(fbclid_to_save) if fbclid_to_save else 0}) e pageview_event_id: {tracking_payload.get('pageview_event_id', 'N/A')}")
+                # ✅ CORREÇÃO SÊNIOR QI 500: REMOVER chamada duplicada de TrackingService.save_tracking_data()
+                # Isso causa CONFLITO porque TrackingServiceV4.save_tracking_token() já salva tracking:fbclid:{fbclid} com tracking_token (string)
+                # TrackingService.save_tracking_data() salva tracking:fbclid:{fbclid} com JSON payload, sobrescrevendo o tracking_token
+                # SOLUÇÃO: Remover chamada duplicada - TrackingServiceV4.save_tracking_token() já salva tudo que precisamos
+                # TrackingService.save_tracking_data() é legacy e não deve ser usado aqui
+            except Exception as e:
+                logger.error(f"⚠️ Erro ao persistir tracking_token {tracking_token}: {e}", exc_info=True)
+        else:
+            tracking_token = None
+            logger.info(f"🤖 Crawler detectado - Tracking NÃO salvo (evita poluição do Redis)")
+        
+        # ============================================================================
+        # ✅ META PIXEL: PAGEVIEW TRACKING + UTM CAPTURE (NÍVEL DE POOL)
+        # ============================================================================
+        # CRÍTICO: Captura UTM e External ID para vincular eventos posteriores
+        # ============================================================================
+        try:
+            external_id, utm_data, pageview_context = send_meta_pixel_pageview_event(
+                pool,
+                request,
+                pageview_event_id=pageview_event_id if not is_crawler_request else None,
+                tracking_token=tracking_token
+            )
+        except Exception as e:
+            logger.error(f"Erro ao enviar PageView para Meta Pixel: {e}")
+            # Não impedir o redirect se Meta falhar
+            pageview_context = {}
+        else:
+            # ✅ CRÍTICO: Sempre salvar pageview_context, mesmo se vazio, para garantir que pageview_event_id seja preservado
+            # ✅ CORREÇÃO CRÍTICA QI 1000+: MERGE pageview_context com tracking_payload inicial
+            # Isso garante que client_ip e client_user_agent sejam preservados (não sobrescritos)
+            if tracking_token:
+                try:
+                    # ✅ CORREÇÃO CRÍTICA: MERGE pageview_context com tracking_payload inicial
+                    # PROBLEMA IDENTIFICADO: pageview_context estava sobrescrevendo tracking_payload inicial
+                    # Isso fazia com que client_ip e client_user_agent fossem perdidos
+                    # SOLUÇÃO: Fazer merge (não sobrescrever)
+                    if pageview_context:
+                        # ✅ MERGE: Combinar dados iniciais com dados do PageView
+                        merged_context = {
+                            **tracking_payload,  # ✅ Dados iniciais (client_ip, client_user_agent, fbclid, fbp, etc.)
+                            **pageview_context   # ✅ Dados do PageView (pageview_event_id, event_source_url, etc.)
+                        }
+                        # ✅ GARANTIR que client_ip e client_user_agent sejam preservados (prioridade: tracking_payload > pageview_context)
+                        if tracking_payload.get('client_ip') and not merged_context.get('client_ip'):
+                            merged_context['client_ip'] = tracking_payload['client_ip']
+                        if tracking_payload.get('client_user_agent') and not merged_context.get('client_user_agent'):
+                            merged_context['client_user_agent'] = tracking_payload['client_user_agent']
+                        # ✅ GARANTIR que pageview_event_id seja preservado (prioridade: pageview_context > tracking_payload)
+                        if not merged_context.get('pageview_event_id') and tracking_payload.get('pageview_event_id'):
+                            merged_context['pageview_event_id'] = tracking_payload['pageview_event_id']
+                            logger.info(f"✅ Preservando pageview_event_id do tracking_payload inicial: {tracking_payload['pageview_event_id']}")
+                        
+                        logger.info(f"✅ Merge realizado: client_ip={'✅' if merged_context.get('client_ip') else '❌'}, client_user_agent={'✅' if merged_context.get('client_user_agent') else '❌'}, pageview_event_id={'✅' if merged_context.get('pageview_event_id') else '❌'}")
+                        
+                        ok = tracking_service_v4.save_tracking_token(
+                            tracking_token,
+                            merged_context,  # ✅ Dados completos (não sobrescreve)
+                            ttl=TRACKING_TOKEN_TTL
+                        )
+                    else:
+                        # Se pageview_context está vazio, salvar apenas o tracking_payload inicial (já tem tudo)
+                        logger.warning(f"⚠️ pageview_context vazio - preservando tracking_payload inicial completo")
+                        ok = tracking_service_v4.save_tracking_token(
+                            tracking_token,
+                            tracking_payload,  # ✅ Dados iniciais completos (client_ip, client_user_agent, pageview_event_id, etc.)
+                            ttl=TRACKING_TOKEN_TTL
+                        )
+                    
+                    if not ok:
+                        logger.warning("Retry saving merged context once (redirect)")
+                        retry_context = merged_context if pageview_context else tracking_payload
+                        tracking_service_v4.save_tracking_token(
+                            tracking_token,
+                            retry_context,
+                            ttl=TRACKING_TOKEN_TTL
+                        )
+                except Exception as e:
+                    logger.warning(f"⚠️ Erro ao atualizar tracking_token {tracking_token} com merged context: {e}")
+    else:
+        # ✅ Meta Pixel desabilitado - nenhum tracking será executado
+        logger.info(f"⚠️ [META PIXEL] Tracking desabilitado para pool {pool.name} - pulando todo processamento de Meta Pixel")
     
     # Emitir evento WebSocket para o dono do pool
     socketio.emit('pool_redirect', {
