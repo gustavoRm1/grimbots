@@ -5130,10 +5130,12 @@ def update_pool_meta_pixel_config(pool_id):
     
     try:
         # ✅ CORREÇÃO: Verificar se tracking está sendo desabilitado
-        meta_tracking_enabled = data.get('meta_tracking_enabled', False)
+        # ✅ IMPORTANTE: Se meta_tracking_enabled não estiver no payload, não fazer nada (permite atualização parcial)
+        meta_tracking_enabled = data.get('meta_tracking_enabled')
         
-        # Se está desabilitando, limpar todos os campos
-        if not meta_tracking_enabled:
+        # Se está desabilitando Meta Pixel explicitamente, limpar todos os campos Meta Pixel
+        # ✅ IMPORTANTE: Só limpar se meta_tracking_enabled for False explicitamente (não se não estiver no payload)
+        if meta_tracking_enabled is not None and not meta_tracking_enabled:
             pool.meta_pixel_id = None
             pool.meta_access_token = None
             pool.meta_tracking_enabled = False
@@ -5145,17 +5147,22 @@ def update_pool_meta_pixel_config(pool_id):
                 'meta_tracking_enabled': False
             })
         
-        # Validar Pixel ID
-        pixel_id = data.get('meta_pixel_id', '').strip()
-        if pixel_id:
-            if not MetaPixelHelper.is_valid_pixel_id(pixel_id):
-                return jsonify({'error': 'Pixel ID inválido (deve ter 15-16 dígitos numéricos)'}), 400
-        else:
-            # ✅ CORREÇÃO: String vazia = limpar campo
-            pixel_id = None
+        # ✅ Validar Pixel ID (só se estiver no payload - permite atualização parcial)
+        pixel_id = None
+        if 'meta_pixel_id' in data:
+            pixel_id = data.get('meta_pixel_id', '').strip()
+            if pixel_id:
+                if not MetaPixelHelper.is_valid_pixel_id(pixel_id):
+                    return jsonify({'error': 'Pixel ID inválido (deve ter 15-16 dígitos numéricos)'}), 400
+            else:
+                # ✅ CORREÇÃO: String vazia = limpar campo
+                pixel_id = None
         
-        # Validar Access Token
-        access_token = data.get('meta_access_token', '').strip()
+        # ✅ Validar Access Token (só se estiver no payload - permite atualização parcial)
+        access_token = None
+        if 'meta_access_token' in data:
+            access_token = data.get('meta_access_token', '').strip()
+        
         logger.info(f"🔍 [Meta Pixel Save] User: {current_user.email} | Pool: {pool.name} | Token recebido: {'SIM' if access_token else 'NÃO'} | Tamanho: {len(access_token) if access_token else 0}")
         
         if access_token:
@@ -5193,15 +5200,15 @@ def update_pool_meta_pixel_config(pool_id):
                 logger.info(f"✅ [Meta Pixel Save] Conexão testada com sucesso - criptografando token...")
                 # Criptografar antes de salvar
                 pool.meta_access_token = encrypt(access_token)
-        else:
-            # ✅ CORREÇÃO: String vazia = limpar campo
-            logger.info(f"🧹 [Meta Pixel Save] Token vazio - limpando campo")
-            pool.meta_access_token = None
+            else:
+                # ✅ CORREÇÃO: String vazia = limpar campo
+                logger.info(f"🧹 [Meta Pixel Save] Token vazio - limpando campo")
+                pool.meta_access_token = None
         
-        # ✅ CRÍTICO: Atualizar pixel_id SEMPRE (independente do access_token)
-        # Isso garante que mesmo quando o token não é alterado, o pixel_id é salvo
-        pool.meta_pixel_id = pixel_id
-        logger.info(f"💾 [Meta Pixel Save] Pixel ID salvo: {pixel_id[:10] if pixel_id else 'None'}...")
+        # ✅ CRÍTICO: Atualizar pixel_id só se estiver no payload (permite atualização parcial)
+        if 'meta_pixel_id' in data:
+            pool.meta_pixel_id = pixel_id
+            logger.info(f"💾 [Meta Pixel Save] Pixel ID salvo: {pixel_id[:10] if pixel_id else 'None'}...")
         
         if 'meta_tracking_enabled' in data:
             pool.meta_tracking_enabled = bool(data['meta_tracking_enabled'])

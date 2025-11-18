@@ -289,6 +289,12 @@
                             title="Configurar Meta Pixel">
                         <i class="fab fa-facebook"></i>
                     </button>
+                    <button @click="openUtmifyModal(pool)" 
+                            class="py-2 px-4 rounded-lg text-sm font-bold transition-all"
+                            style="background: rgba(34, 197, 94, 0.1); color: #22C55E; border: 1px solid rgba(34, 197, 94, 0.3);"
+                            title="Configurar Utmify">
+                        <i class="fas fa-chart-line"></i>
+                    </button>
                     <button @click="deletePool(pool)" 
                             class="py-2 px-4 rounded-lg text-sm font-bold transition-all"
                             style="background: rgba(239, 68, 68, 0.1); color: #EF4444; border: 1px solid rgba(239, 68, 68, 0.3);">
@@ -604,80 +610,6 @@
                         </div>
                     </div>
 
-                    <!-- Utmify Configuration -->
-                    <div class="border-t border-gray-700 pt-6">
-                        <!-- Header com Toggle -->
-                        <div class="flex items-center justify-between p-4 rounded-lg border border-gray-700 bg-gray-800 mb-4">
-                            <div class="flex-1">
-                                <div class="flex items-center gap-3 mb-1">
-                                    <i class="fas fa-chart-line text-green-500 text-xl"></i>
-                                    <label class="text-sm font-bold text-white">Rastreamento Utmify</label>
-                                </div>
-                                <p class="text-xs text-gray-400">Capture UTMs automaticamente e rastreie vendas na Utmify</p>
-                            </div>
-                            <label class="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" 
-                                       x-model="metaPixelConfig.utmify_enabled"
-                                       @change="if (!metaPixelConfig.utmify_enabled) metaPixelConfig.utmify_pixel_id = ''"
-                                       class="sr-only peer">
-                                <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
-                            </label>
-                        </div>
-
-                        <!-- Configuração do Pixel ID -->
-                        <div x-show="metaPixelConfig.utmify_enabled" class="space-y-4">
-                            <div class="p-4 bg-green-500/10 border border-green-500/30 rounded-lg">
-                                <p class="text-xs text-gray-300 leading-relaxed">
-                                    <i class="fas fa-info-circle text-green-400 mr-1"></i>
-                                    <strong class="text-green-400">O que é Utmify?</strong> Plataforma que captura UTMs automaticamente e atribui vendas às suas campanhas do Facebook Ads.
-                                </p>
-                            </div>
-
-                            <div>
-                                <label class="block text-sm font-bold text-white mb-2">
-                                    <i class="fas fa-fingerprint mr-2 text-green-500"></i>
-                                    Pixel ID Utmify
-                                </label>
-                                <input type="text"
-                                       x-model="metaPixelConfig.utmify_pixel_id"
-                                       placeholder="691bc5809f9c6deaf4ecbff6"
-                                       class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:border-green-500 focus:outline-none transition"
-                                       :disabled="!metaPixelConfig.utmify_enabled">
-                                <div class="mt-2 space-y-1">
-                                    <p class="text-xs text-gray-400">
-                                        <i class="fas fa-check-circle text-green-500 mr-1"></i>
-                                        Obtido ao criar um pixel na <a href="https://utmify.com.br" target="_blank" class="text-green-400 hover:underline">Utmify</a>
-                                    </p>
-                                    <p class="text-xs text-gray-500">
-                                        Os scripts serão incluídos automaticamente na página de redirecionamento
-                                    </p>
-                                </div>
-                            </div>
-
-                            <!-- Parâmetros de URL Utmify -->
-                            <div class="p-4 bg-gray-800 border border-gray-700 rounded-lg">
-                                <div class="flex items-center justify-between mb-2">
-                                    <label class="text-sm font-medium text-gray-300">
-                                        Parâmetros de URL (Utmify)
-                                    </label>
-                                    <button type="button"
-                                            @click="copyToClipboard('utm_source=FB&utm_campaign={{ '{{' }}campaign.name{{ '}}' }}|{{ '{{' }}campaign.id{{ '}}' }}&utm_medium={{ '{{' }}adset.name{{ '}}' }}|{{ '{{' }}adset.id{{ '}}' }}&utm_content={{ '{{' }}ad.name{{ '}}' }}|{{ '{{' }}ad.id{{ '}}' }}&utm_term={{ '{{' }}placement{{ '}}' }}'); showNotification('✅ Parâmetros copiados!', 'success')"
-                                            class="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-medium transition">
-                                        <i class="fas fa-copy mr-1"></i> Copiar
-                                    </button>
-                                </div>
-                                <div class="p-3 bg-gray-900 rounded border border-gray-600">
-                                    <textarea readonly
-                                              @click="$event.target.select()"
-                                              rows="2"
-                                              class="w-full bg-transparent border-none text-gray-300 font-mono text-xs focus:outline-none cursor-pointer resize-none">{% raw %}utm_source=FB&utm_campaign={{campaign.name}}|{{campaign.id}}&utm_medium={{adset.name}}|{{adset.id}}&utm_content={{ad.name}}|{{ad.id}}&utm_term={{placement}}{% endraw %}</textarea>
-                                </div>
-                                <p class="text-xs text-gray-500 mt-2">
-                                    Cole este código no campo <strong>"Parâmetros de URL"</strong> do Facebook Ads Manager
-                                </p>
-                            </div>
-                        </div>
-                    </div>
 
                 </div>
 
@@ -696,6 +628,126 @@
                             :class="loading ? 'bg-gray-700 text-gray-400 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'">
                         <i class="fas fa-save mr-2" :class="{'fa-spin fa-spinner': loading}"></i>
                         <span x-text="loading ? 'Salvando...' : 'Salvar Configuração'"></span>
+                    </button>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Utmify Configuration -->
+    <div x-show="showUtmifyModal" 
+         x-cloak
+         class="fixed inset-0 z-50 overflow-y-auto"
+         style="background: rgba(0, 0, 0, 0.9); backdrop-filter: blur(8px);">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-gray-900 rounded-xl shadow-2xl w-full max-w-2xl border border-gray-700"
+                 @click.away="showUtmifyModal = false">
+                
+                <!-- Header -->
+                <div class="p-6 border-b border-gray-700">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h2 class="text-2xl font-bold text-white flex items-center gap-3">
+                                <i class="fas fa-chart-line text-green-500"></i>
+                                Utmify Configuration
+                            </h2>
+                            <p class="text-sm text-gray-400 mt-1" x-text="selectedPool ? selectedPool.name : ''"></p>
+                        </div>
+                        <button @click="showUtmifyModal = false" 
+                                class="text-gray-400 hover:text-white transition">
+                            <i class="fas fa-times text-xl"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Content -->
+                <div class="p-6 space-y-6">
+                    <!-- Header com Toggle -->
+                    <div class="flex items-center justify-between p-4 rounded-lg border border-gray-700 bg-gray-800">
+                        <div class="flex-1">
+                            <div class="flex items-center gap-3 mb-1">
+                                <i class="fas fa-chart-line text-green-500 text-xl"></i>
+                                <label class="text-sm font-bold text-white">Rastreamento Utmify</label>
+                            </div>
+                            <p class="text-xs text-gray-400">Capture UTMs automaticamente e rastreie vendas na Utmify</p>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" 
+                                   x-model="utmifyConfig.utmify_enabled"
+                                   @change="if (!utmifyConfig.utmify_enabled) utmifyConfig.utmify_pixel_id = ''"
+                                   class="sr-only peer">
+                            <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
+                        </label>
+                    </div>
+
+                    <!-- Configuração do Pixel ID -->
+                    <div x-show="utmifyConfig.utmify_enabled" class="space-y-4">
+                        <div class="p-4 bg-green-500/10 border border-green-500/30 rounded-lg">
+                            <p class="text-xs text-gray-300 leading-relaxed">
+                                <i class="fas fa-info-circle text-green-400 mr-1"></i>
+                                <strong class="text-green-400">O que é Utmify?</strong> Plataforma que captura UTMs automaticamente e atribui vendas às suas campanhas do Facebook Ads.
+                            </p>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-bold text-white mb-2">
+                                <i class="fas fa-fingerprint mr-2 text-green-500"></i>
+                                Pixel ID Utmify
+                            </label>
+                            <input type="text"
+                                   x-model="utmifyConfig.utmify_pixel_id"
+                                   placeholder="691bc5809f9c6deaf4ecbff6"
+                                   class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:border-green-500 focus:outline-none transition"
+                                   :disabled="!utmifyConfig.utmify_enabled">
+                            <div class="mt-2 space-y-1">
+                                <p class="text-xs text-gray-400">
+                                    <i class="fas fa-check-circle text-green-500 mr-1"></i>
+                                    Obtido ao criar um pixel na <a href="https://utmify.com.br" target="_blank" class="text-green-400 hover:underline">Utmify</a>
+                                </p>
+                                <p class="text-xs text-gray-500">
+                                    Os scripts serão incluídos automaticamente na página de redirecionamento
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Parâmetros de URL Utmify -->
+                        <div class="p-4 bg-gray-800 border border-gray-700 rounded-lg">
+                            <div class="flex items-center justify-between mb-2">
+                                <label class="text-sm font-medium text-gray-300">
+                                    Parâmetros de URL (Utmify)
+                                </label>
+                                <button type="button"
+                                        @click="copyToClipboard('utm_source=FB&utm_campaign={{ '{{' }}campaign.name{{ '}}' }}|{{ '{{' }}campaign.id{{ '}}' }}&utm_medium={{ '{{' }}adset.name{{ '}}' }}|{{ '{{' }}adset.id{{ '}}' }}&utm_content={{ '{{' }}ad.name{{ '}}' }}|{{ '{{' }}ad.id{{ '}}' }}&utm_term={{ '{{' }}placement{{ '}}' }}'); showNotification('✅ Parâmetros copiados!', 'success')"
+                                        class="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-medium transition">
+                                    <i class="fas fa-copy mr-1"></i> Copiar
+                                </button>
+                            </div>
+                            <div class="p-3 bg-gray-900 rounded border border-gray-600">
+                                <textarea readonly
+                                          @click="$event.target.select()"
+                                          rows="2"
+                                          class="w-full bg-transparent border-none text-gray-300 font-mono text-xs focus:outline-none cursor-pointer resize-none">{% raw %}utm_source=FB&utm_campaign={{campaign.name}}|{{campaign.id}}&utm_medium={{adset.name}}|{{adset.id}}&utm_content={{ad.name}}|{{ad.id}}&utm_term={{placement}}{% endraw %}</textarea>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-2">
+                                Cole este código no campo <strong>"Parâmetros de URL"</strong> do Facebook Ads Manager
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Footer -->
+                <div class="p-6 border-t border-gray-700 flex gap-3">
+                    <button @click="saveUtmifyConfig()" 
+                            :disabled="loading"
+                            class="flex-1 py-3 px-4 rounded-lg text-sm font-bold transition-all"
+                            :class="loading ? 'bg-gray-700 text-gray-400 cursor-not-allowed' : 'bg-green-600 text-white hover:bg-green-700'">
+                        <i class="fas fa-save mr-2" :class="{'fa-spin fa-spinner': loading}"></i>
+                        <span x-text="loading ? 'Salvando...' : 'Salvar Configuração'"></span>
+                    </button>
+                    <button @click="showUtmifyModal = false" 
+                            class="px-4 py-3 rounded-lg text-sm font-bold transition-all bg-gray-700 text-gray-300 hover:bg-gray-600">
+                        Cancelar
                     </button>
                 </div>
 
@@ -814,6 +866,7 @@ function poolsApp() {
         showCreatePoolModal: false,
         showManageBotsModal: false,
         showMetaPixelModal: false,
+        showUtmifyModal: false,
         
         pools: [],
         allBots: [],
@@ -839,10 +892,14 @@ function poolsApp() {
             meta_events_purchase: true,
             meta_cloaker_enabled: false,
             meta_cloaker_param_name: 'grim',  // Sempre fixo como "grim"
-            meta_cloaker_param_value: '',
-            utmify_pixel_id: ''  // ✅ Pixel ID da Utmify
+            meta_cloaker_param_value: ''
         },
         originalMetaAccessToken: null,  // ✅ CRÍTICO: Salvar token original para detectar alterações
+        
+        utmifyConfig: {
+            utmify_enabled: false,
+            utmify_pixel_id: ''
+        },
 
         async init() {
             await this.loadPools();
@@ -1022,18 +1079,6 @@ function poolsApp() {
                         meta_cloaker_enabled: data.meta_cloaker_enabled === true,
                         meta_cloaker_param_name: 'grim',  // Sempre fixo como "grim" (ignorar valor do servidor)
                         meta_cloaker_param_value: (data.meta_cloaker_param_value && data.meta_cloaker_param_value !== null) ? data.meta_cloaker_param_value : '',
-                        // ✅ CORREÇÃO: utmify_enabled é determinado pela existência de pixel_id OU se foi ativado anteriormente
-                        // Usar localStorage para persistir estado do checkbox entre recarregamentos
-                        utmify_enabled: (() => {
-                            const storageKey = `utmify_enabled_${pool.id}`;
-                            const savedState = localStorage.getItem(storageKey);
-                            if (savedState !== null) {
-                                return savedState === 'true';
-                            }
-                            // Fallback: verificar se pixel_id existe
-                            return (data.utmify_pixel_id && data.utmify_pixel_id !== null && data.utmify_pixel_id !== '');
-                        })(),
-                        utmify_pixel_id: (data.utmify_pixel_id && data.utmify_pixel_id !== null) ? data.utmify_pixel_id : ''
                     };
                     // ✅ CRÍTICO: Salvar token original para detectar se foi alterado
                     this.originalMetaAccessToken = accessToken;
@@ -1080,17 +1125,6 @@ function poolsApp() {
                 if (!this.metaPixelConfig.meta_tracking_enabled) {
                     this.metaPixelConfig.meta_pixel_id = '';
                     this.metaPixelConfig.meta_access_token = '';
-                }
-                
-                // ✅ CORREÇÃO: Salvar estado do checkbox Utmify no localStorage antes de enviar
-                if (this.selectedPool) {
-                    const storageKey = `utmify_enabled_${this.selectedPool.id}`;
-                    localStorage.setItem(storageKey, this.metaPixelConfig.utmify_enabled.toString());
-                }
-                
-                // ✅ CORREÇÃO: Se Utmify está desabilitado, limpar pixel_id antes de enviar
-                if (!this.metaPixelConfig.utmify_enabled) {
-                    this.metaPixelConfig.utmify_pixel_id = '';
                 }
                 
                 // ✅ CRÍTICO: Detectar se access_token foi alterado
@@ -1140,6 +1174,79 @@ function poolsApp() {
                     this.showMetaPixelModal = false;
                     await this.loadPools();
                     this.showNotification('✅ Meta Pixel configurado com sucesso!');
+                } else {
+                    alert('❌ Erro: ' + (data.error || 'Erro desconhecido'));
+                }
+            } catch (error) {
+                alert('Erro: ' + error.message);
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async openUtmifyModal(pool) {
+            this.selectedPool = pool;
+            this.currentEditingPoolSlug = pool.slug;
+            this.loading = true;
+            
+            try {
+                const response = await fetch(`/api/redirect-pools/${pool.id}/meta-pixel`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    // ✅ Carregar configuração da Utmify
+                    const storageKey = `utmify_enabled_${pool.id}`;
+                    const savedState = localStorage.getItem(storageKey);
+                    
+                    this.utmifyConfig = {
+                        utmify_enabled: savedState !== null 
+                            ? savedState === 'true' 
+                            : (data.utmify_pixel_id && data.utmify_pixel_id !== null && data.utmify_pixel_id !== ''),
+                        utmify_pixel_id: (data.utmify_pixel_id && data.utmify_pixel_id !== null) ? data.utmify_pixel_id : ''
+                    };
+                    
+                    this.showUtmifyModal = true;
+                } else {
+                    alert('Erro ao carregar configuração Utmify');
+                }
+            } catch (error) {
+                alert('Erro: ' + error.message);
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async saveUtmifyConfig() {
+            this.loading = true;
+            try {
+                // ✅ Salvar estado do checkbox Utmify no localStorage
+                if (this.selectedPool) {
+                    const storageKey = `utmify_enabled_${this.selectedPool.id}`;
+                    localStorage.setItem(storageKey, this.utmifyConfig.utmify_enabled.toString());
+                }
+                
+                // ✅ Se Utmify está desabilitado, limpar pixel_id antes de enviar
+                if (!this.utmifyConfig.utmify_enabled) {
+                    this.utmifyConfig.utmify_pixel_id = '';
+                }
+                
+                // ✅ Enviar apenas campos da Utmify (backend aceita campos parciais)
+                const configToSend = {
+                    utmify_enabled: this.utmifyConfig.utmify_enabled,
+                    utmify_pixel_id: this.utmifyConfig.utmify_pixel_id || ''
+                };
+                
+                const response = await fetch(`/api/redirect-pools/${this.selectedPool.id}/meta-pixel`, {
+                    method: 'PUT',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(configToSend)
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    this.showUtmifyModal = false;
+                    await this.loadPools();
+                    this.showNotification('✅ Utmify configurado com sucesso!');
                 } else {
                     alert('❌ Erro: ' + (data.error || 'Erro desconhecido'));
                 }
