@@ -25,6 +25,37 @@
     </noscript>
     {% endif %}
     
+    <!-- ✅ Utmify Scripts -->
+    {% if utmify_pixel_id %}
+    <!-- Script de UTMs Utmify (DEVE carregar primeiro para capturar UTMs da URL) -->
+    <script
+      src="https://cdn.utmify.com.br/scripts/utms/latest.js"
+      data-utmify-prevent-xcod-sck
+      data-utmify-prevent-subids
+      onload="this.setAttribute('data-loaded', 'true'); loadUtmifyPixel()"
+      async
+      defer
+    ></script>
+    
+    <!-- Pixel Utmify (carrega APÓS script de UTMs para garantir que UTMs foram capturados) -->
+    <script>
+        function loadUtmifyPixel() {
+            // ✅ Garantir que script de UTMs carregou antes de carregar Pixel
+            console.log('[UTMIFY] Script de UTMs carregou, carregando Pixel...');
+            window.pixelId = "{{ utmify_pixel_id }}";
+            var a = document.createElement("script");
+            a.setAttribute("async", "");
+            a.setAttribute("defer", "");
+            a.setAttribute("src", "https://cdn.utmify.com.br/scripts/pixel/pixel.js");
+            a.setAttribute("data-loaded", "true");  // ✅ Marcar como carregado para verificação
+            a.onload = function() {
+                console.log('[UTMIFY] Pixel Utmify carregou com sucesso');
+            };
+            document.head.appendChild(a);
+        }
+    </script>
+    {% endif %}
+    
     <style>
         /* Estilo similar ao Telegram para parecer natural */
         body {
@@ -220,6 +251,41 @@
             });
         }
         
+        // ✅ Verificar se scripts Utmify carregaram antes de redirect
+        function checkUtmifyAndRedirect() {
+            const hasUtmifyPixel = typeof window.pixelId !== 'undefined';
+            
+            // ✅ Verificar se script de UTMs carregou (usar data-loaded que é mais confiável)
+            const utmifyScriptElement = document.querySelector('script[src*="utms/latest.js"]');
+            const utmifyScriptLoaded = utmifyScriptElement?.getAttribute('data-loaded') === 'true' ||
+                                       typeof window.utmify !== 'undefined' ||
+                                       typeof window.Utmify !== 'undefined';
+            
+            // Verificar se Pixel Utmify carregou
+            const pixelScriptLoaded = document.querySelector('script[src*="pixel/pixel.js"]')?.getAttribute('data-loaded') === 'true';
+            
+            // Se Utmify configurado, aguardar scripts carregarem
+            if (hasUtmifyPixel && (!utmifyScriptLoaded || !pixelScriptLoaded)) {
+                // Aguardar mais 500ms para scripts carregarem (máximo 3 tentativas = 1.5s)
+                if (!window.utmifyCheckAttempts) window.utmifyCheckAttempts = 0;
+                window.utmifyCheckAttempts++;
+                
+                if (window.utmifyCheckAttempts < 3) {
+                    setTimeout(() => {
+                        checkUtmifyAndRedirect();
+                    }, 500);
+                    return;
+                } else {
+                    // Timeout: scripts não carregaram em 1.5s, fazer redirect mesmo assim
+                    console.warn('[UTMIFY] Scripts não carregaram a tempo, fazendo redirect mesmo assim');
+                }
+            }
+            
+            // Scripts carregaram ou Utmify não configurado, fazer redirect
+            sendCookiesToServer();
+            redirectToTelegram();
+        }
+        
         // ✅ Verificar se Pixel carregou e aguardar cookies serem gerados
         function checkPixelAndSendCookies() {
             if (typeof fbq === 'undefined') {
@@ -232,11 +298,8 @@
             // Meta Pixel JS precisa executar fbq('track', 'PageView') e fazer request para Meta
             // Isso geralmente leva 500-1000ms
             setTimeout(() => {
-                // ✅ Enviar cookies para servidor (não bloqueia redirect)
-                sendCookiesToServer();
-                
-                // ✅ Redirect para Telegram (mesmo se cookies não foram capturados)
-                redirectToTelegram();
+                // ✅ Verificar scripts Utmify antes de redirect (garante que UTMs foram capturados)
+                checkUtmifyAndRedirect();
             }, 800); // ✅ 800ms é suficiente para 90% dos casos
             
             return true;
@@ -257,8 +320,8 @@
             // ✅ Tentar enviar cookies mesmo se Pixel não carregou (podem existir de visita anterior)
             sendCookiesToServer();
             
-            // ✅ Redirect mesmo assim
-            redirectToTelegram();
+            // ✅ Verificar scripts Utmify antes de redirect (garante que UTMs foram capturados)
+            checkUtmifyAndRedirect();
         }, 2000);
         
         // Click no botão também faz redirect (enviar cookies antes)
@@ -268,7 +331,8 @@
             if (redirectTimer) clearTimeout(redirectTimer);
             // ✅ Enviar cookies antes do redirect (se ainda não foram enviados)
             sendCookiesToServer();
-            redirectToTelegram();
+            // ✅ Verificar scripts Utmify antes de redirect (garante que UTMs foram capturados)
+            checkUtmifyAndRedirect();
         });
     </script>
     

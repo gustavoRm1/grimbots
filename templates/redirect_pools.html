@@ -604,6 +604,259 @@
                         </div>
                     </div>
 
+                    <!-- Utmify Configuration -->
+                    <div class="border-t border-gray-700 pt-6">
+                        <!-- Header com Toggle -->
+                        <div class="flex items-center justify-between p-4 rounded-lg border border-gray-700 bg-gray-800 mb-4">
+                            <div class="flex-1">
+                                <div class="flex items-center gap-3 mb-1">
+                                    <i class="fas fa-chart-line text-green-500 text-xl"></i>
+                                    <label class="text-sm font-bold text-white">Rastreamento Utmify</label>
+                                </div>
+                                <p class="text-xs text-gray-400">Capture UTMs automaticamente e rastreie vendas na Utmify</p>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" 
+                                       x-model="metaPixelConfig.utmify_enabled"
+                                       @change="if (!metaPixelConfig.utmify_enabled) metaPixelConfig.utmify_pixel_id = ''"
+                                       class="sr-only peer">
+                                <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
+                            </label>
+                        </div>
+
+                        <!-- Configuração do Pixel ID -->
+                        <div x-show="metaPixelConfig.utmify_enabled" class="space-y-4">
+                            <div class="p-4 bg-green-500/10 border border-green-500/30 rounded-lg">
+                                <p class="text-xs text-gray-300 leading-relaxed">
+                                    <i class="fas fa-info-circle text-green-400 mr-1"></i>
+                                    <strong class="text-green-400">O que é Utmify?</strong> Plataforma que captura UTMs automaticamente e atribui vendas às suas campanhas do Facebook Ads.
+                                </p>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-bold text-white mb-2">
+                                    <i class="fas fa-fingerprint mr-2 text-green-500"></i>
+                                    Pixel ID Utmify
+                                </label>
+                                <input type="text"
+                                       x-model="metaPixelConfig.utmify_pixel_id"
+                                       placeholder="691bc5809f9c6deaf4ecbff6"
+                                       class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:border-green-500 focus:outline-none transition"
+                                       :disabled="!metaPixelConfig.utmify_enabled">
+                                <div class="mt-2 space-y-1">
+                                    <p class="text-xs text-gray-400">
+                                        <i class="fas fa-check-circle text-green-500 mr-1"></i>
+                                        Obtido ao criar um pixel na <a href="https://utmify.com.br" target="_blank" class="text-green-400 hover:underline">Utmify</a>
+                                    </p>
+                                    <p class="text-xs text-gray-500">
+                                        Os scripts serão incluídos automaticamente na página de redirecionamento
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Utmify UTMs Generator -->
+                    <div class="border-t border-gray-700 pt-6">
+                        <!-- Header -->
+                        <div class="mb-6">
+                            <div class="flex items-center gap-3 mb-2">
+                                <i class="fas fa-magic text-blue-500 text-xl"></i>
+                                <h3 class="text-lg font-bold text-white">Gerador de UTMs</h3>
+                            </div>
+                            <p class="text-xs text-gray-400">
+                                Gere códigos de UTMs formatados para usar no Facebook Ads Manager
+                            </p>
+                        </div>
+
+                        <!-- Seleção de Modelo - Cards Visuais -->
+                        <div class="mb-6">
+                            <label class="block text-sm font-bold text-white mb-3">
+                                <i class="fas fa-store mr-2 text-blue-500"></i>
+                                Selecione sua Plataforma de Vendas
+                            </label>
+                            <div class="grid grid-cols-3 gap-3">
+                                <!-- Hotmart -->
+                                <button type="button"
+                                        @click="utmifyModel = 'hotmart'"
+                                        :class="utmifyModel === 'hotmart' ? 'bg-blue-600 border-blue-500 shadow-lg scale-105' : 'bg-gray-800 border-gray-700 hover:border-blue-500'"
+                                        class="p-4 rounded-lg border-2 transition-all cursor-pointer group">
+                                    <div class="flex flex-col items-center text-center">
+                                        <i class="fas fa-shopping-cart text-2xl mb-2" :class="utmifyModel === 'hotmart' ? 'text-white' : 'text-gray-400 group-hover:text-blue-400'"></i>
+                                        <span class="text-sm font-bold" :class="utmifyModel === 'hotmart' ? 'text-white' : 'text-gray-300'">Hotmart</span>
+                                        <span class="text-xs mt-1" :class="utmifyModel === 'hotmart' ? 'text-blue-100' : 'text-gray-500'">Requer XCOD</span>
+                                    </div>
+                                </button>
+                                
+                                <!-- Cartpanda -->
+                                <button type="button"
+                                        @click="utmifyModel = 'cartpanda'"
+                                        :class="utmifyModel === 'cartpanda' ? 'bg-blue-600 border-blue-500 shadow-lg scale-105' : 'bg-gray-800 border-gray-700 hover:border-blue-500'"
+                                        class="p-4 rounded-lg border-2 transition-all cursor-pointer group">
+                                    <div class="flex flex-col items-center text-center">
+                                        <i class="fas fa-shopping-bag text-2xl mb-2" :class="utmifyModel === 'cartpanda' ? 'text-white' : 'text-gray-400 group-hover:text-blue-400'"></i>
+                                        <span class="text-sm font-bold" :class="utmifyModel === 'cartpanda' ? 'text-white' : 'text-gray-300'">Cartpanda</span>
+                                        <span class="text-xs mt-1" :class="utmifyModel === 'cartpanda' ? 'text-blue-100' : 'text-gray-500'">Requer CID</span>
+                                    </div>
+                                </button>
+                                
+                                <!-- Outra -->
+                                <button type="button"
+                                        @click="utmifyModel = 'standard'"
+                                        :class="utmifyModel === 'standard' ? 'bg-blue-600 border-blue-500 shadow-lg scale-105' : 'bg-gray-800 border-gray-700 hover:border-blue-500'"
+                                        class="p-4 rounded-lg border-2 transition-all cursor-pointer group">
+                                    <div class="flex flex-col items-center text-center">
+                                        <i class="fas fa-globe text-2xl mb-2" :class="utmifyModel === 'standard' ? 'text-white' : 'text-gray-400 group-hover:text-blue-400'"></i>
+                                        <span class="text-sm font-bold" :class="utmifyModel === 'standard' ? 'text-white' : 'text-gray-300'">Outra</span>
+                                        <span class="text-xs mt-1" :class="utmifyModel === 'standard' ? 'text-blue-100' : 'text-gray-500'">Padrão</span>
+                                    </div>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Campos específicos por modelo -->
+                        <div x-show="utmifyModel === 'hotmart'" class="mb-6">
+                            <div class="p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                                <label class="block text-sm font-bold text-white mb-2">
+                                    <i class="fas fa-key mr-2 text-blue-400"></i>
+                                    Código XCOD da Hotmart
+                                </label>
+                                <input type="text"
+                                       x-model="utmifyXcod"
+                                       placeholder="FBhQwK21wXxR"
+                                       class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none transition">
+                                <p class="text-xs text-gray-400 mt-2">
+                                    <i class="fas fa-info-circle mr-1"></i>
+                                    Encontre seu código XCOD no painel da Hotmart
+                                </p>
+                            </div>
+                        </div>
+
+                        <div x-show="utmifyModel === 'cartpanda'" class="mb-6">
+                            <div class="p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                                <label class="block text-sm font-bold text-white mb-2">
+                                    <i class="fas fa-key mr-2 text-blue-400"></i>
+                                    Código CID da Cartpanda
+                                </label>
+                                <input type="text"
+                                       x-model="utmifyCid"
+                                       placeholder="77407015180"
+                                       class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none transition">
+                                <p class="text-xs text-gray-400 mt-2">
+                                    <i class="fas fa-info-circle mr-1"></i>
+                                    Encontre seu código CID no painel da Cartpanda
+                                </p>
+                            </div>
+                        </div>
+
+                        <!-- Aviso sobre Cloaker -->
+                        <div x-show="metaPixelConfig.meta_cloaker_enabled" class="mb-6 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                            <div class="flex items-start gap-2">
+                                <i class="fas fa-shield-alt text-blue-400 mt-0.5"></i>
+                                <div>
+                                    <p class="text-xs font-bold text-blue-400 mb-1">Cloaker Ativo</p>
+                                    <p class="text-xs text-gray-300 leading-relaxed">
+                                        O parâmetro <code class="bg-gray-900 px-1.5 py-0.5 rounded text-blue-300">grim</code> será automaticamente incluído nos UTMs gerados.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Botão Gerar -->
+                        <button type="button"
+                                @click="generateUtmifyUTMs()"
+                                :disabled="loading || (utmifyModel === 'hotmart' && !utmifyXcod) || (utmifyModel === 'cartpanda' && !utmifyCid)"
+                                class="w-full py-4 px-6 rounded-lg text-sm font-bold transition-all mb-6 shadow-lg"
+                                :class="loading || (utmifyModel === 'hotmart' && !utmifyXcod) || (utmifyModel === 'cartpanda' && !utmifyCid) ? 'bg-gray-700 text-gray-400 cursor-not-allowed' : 'bg-gradient-to-r from-green-600 to-green-700 text-white hover:from-green-700 hover:to-green-800 hover:shadow-xl'">
+                            <i class="fas fa-magic mr-2" :class="{'fa-spin fa-spinner': loading}"></i>
+                            <span x-text="loading ? 'Gerando UTMs...' : 'Gerar Códigos de UTMs'"></span>
+                        </button>
+
+                        <!-- Resultado -->
+                        <div x-show="utmifyResult" 
+                             x-transition:enter="transition ease-out duration-300"
+                             x-transition:enter-start="opacity-0 transform scale-95"
+                             x-transition:enter-end="opacity-100 transform scale-100"
+                             class="space-y-4">
+                            
+                            <!-- Card de Sucesso -->
+                            <div class="p-4 bg-green-500/10 border border-green-500/30 rounded-lg">
+                                <div class="flex items-center gap-2">
+                                    <i class="fas fa-check-circle text-green-400 text-lg"></i>
+                                    <p class="text-sm font-bold text-green-400">UTMs gerados com sucesso!</p>
+                                </div>
+                                <p class="text-xs text-gray-300 mt-1">Copie os códigos abaixo e use no Facebook Ads Manager</p>
+                            </div>
+
+                            <!-- URL do Site -->
+                            <div class="p-5 bg-gray-800 border-2 border-gray-700 rounded-lg hover:border-blue-500 transition">
+                                <div class="flex items-center justify-between mb-3">
+                                    <div class="flex items-center gap-2">
+                                        <i class="fas fa-link text-blue-400"></i>
+                                        <label class="text-sm font-bold text-white">URL do Site</label>
+                                    </div>
+                                    <button type="button"
+                                            @click="copyToClipboard(utmifyResult.website_url); showNotification('✅ URL copiada!', 'success')"
+                                            class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition shadow-md hover:shadow-lg">
+                                        <i class="fas fa-copy mr-1"></i> Copiar
+                                    </button>
+                                </div>
+                                <div class="p-4 bg-gray-900 rounded-lg border border-gray-600">
+                                    <input type="text"
+                                           :value="utmifyResult.website_url"
+                                           readonly
+                                           @click="$event.target.select()"
+                                           class="w-full bg-transparent border-none text-gray-300 font-mono text-sm focus:outline-none cursor-pointer">
+                                </div>
+                                <p class="text-xs text-gray-400 mt-2 flex items-center gap-1">
+                                    <i class="fas fa-info-circle"></i>
+                                    Cole no campo <strong>"URL de Destino"</strong> do Facebook Ads (apenas a URL, sem parâmetros)
+                                </p>
+                            </div>
+
+                            <!-- Parâmetros de URL -->
+                            <div class="p-5 bg-gray-800 border-2 border-gray-700 rounded-lg hover:border-blue-500 transition">
+                                <div class="flex items-center justify-between mb-3">
+                                    <div class="flex items-center gap-2">
+                                        <i class="fas fa-code text-blue-400"></i>
+                                        <label class="text-sm font-bold text-white">Parâmetros de URL</label>
+                                    </div>
+                                    <button type="button"
+                                            @click="copyToClipboard(utmifyResult.url_params); showNotification('✅ Parâmetros copiados!', 'success')"
+                                            class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition shadow-md hover:shadow-lg">
+                                        <i class="fas fa-copy mr-1"></i> Copiar
+                                    </button>
+                                </div>
+                                <div class="p-4 bg-gray-900 rounded-lg border border-gray-600">
+                                    <textarea :value="utmifyResult.url_params"
+                                              readonly
+                                              @click="$event.target.select()"
+                                              rows="4"
+                                              class="w-full bg-transparent border-none text-gray-300 font-mono text-xs focus:outline-none cursor-pointer resize-none"></textarea>
+                                </div>
+                                <div class="mt-3 pt-3 border-t border-gray-700">
+                                    <p class="text-xs font-bold text-gray-300 mb-2">
+                                        <i class="fas fa-list-ol mr-1 text-blue-400"></i>
+                                        Como usar no Facebook Ads:
+                                    </p>
+                                    <ol class="text-xs text-gray-400 space-y-1.5 ml-4 list-decimal">
+                                        <li>Abra o <strong>Facebook Ads Manager</strong></li>
+                                        <li>Vá em <strong>"Criar Anúncio"</strong> ou edite um existente</li>
+                                        <li>Na aba <strong>"Link"</strong>, no campo <strong>"URL de Destino"</strong>, cole: <code class="bg-gray-900 px-1.5 py-0.5 rounded text-blue-300">https://app.grimbots.online/go/red1</code></li>
+                                        <li>No campo <strong>"Parâmetros de URL"</strong>, cole os parâmetros acima (inclui UTMs + grim)</li>
+                                        <li>Salve e publique seu anúncio</li>
+                                    </ol>
+                                    <div class="mt-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                                        <p class="text-xs text-gray-300">
+                                            <i class="fas fa-lightbulb text-blue-400 mr-1"></i>
+                                            <strong>Importante:</strong> A URL de Destino deve ser <strong>apenas</strong> a URL base (sem parâmetros). Todos os parâmetros (UTMs + grim) vão no campo "Parâmetros de URL".
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
 
                 <!-- Footer -->
@@ -744,6 +997,10 @@ function poolsApp() {
         allBots: [],
         selectedPool: null,
         currentEditingPoolSlug: '',  // ✅ Slug do pool sendo editado
+        utmifyModel: 'standard',  // Modelo Utmify: 'hotmart', 'cartpanda', 'standard'
+        utmifyXcod: '',  // Código XCOD para Hotmart
+        utmifyCid: '',  // Código CID para Cartpanda
+        utmifyResult: null,  // Resultado da geração de UTMs
         poolBots: [],
         availableBots: [],
         
@@ -764,7 +1021,8 @@ function poolsApp() {
             meta_events_purchase: true,
             meta_cloaker_enabled: false,
             meta_cloaker_param_name: 'grim',  // Sempre fixo como "grim"
-            meta_cloaker_param_value: ''
+            meta_cloaker_param_value: '',
+            utmify_pixel_id: ''  // ✅ Pixel ID da Utmify
         },
         originalMetaAccessToken: null,  // ✅ CRÍTICO: Salvar token original para detectar alterações
 
@@ -945,10 +1203,17 @@ function poolsApp() {
                         meta_events_purchase: data.meta_events_purchase !== false,
                         meta_cloaker_enabled: data.meta_cloaker_enabled === true,
                         meta_cloaker_param_name: 'grim',  // Sempre fixo como "grim" (ignorar valor do servidor)
-                        meta_cloaker_param_value: (data.meta_cloaker_param_value && data.meta_cloaker_param_value !== null) ? data.meta_cloaker_param_value : ''
+                        meta_cloaker_param_value: (data.meta_cloaker_param_value && data.meta_cloaker_param_value !== null) ? data.meta_cloaker_param_value : '',
+                        utmify_enabled: (data.utmify_pixel_id && data.utmify_pixel_id !== null && data.utmify_pixel_id !== '') ? true : false,  // ✅ Ativar se pixel_id existe
+                        utmify_pixel_id: (data.utmify_pixel_id && data.utmify_pixel_id !== null) ? data.utmify_pixel_id : ''
                     };
                     // ✅ CRÍTICO: Salvar token original para detectar se foi alterado
                     this.originalMetaAccessToken = accessToken;
+                    // Resetar variáveis do Utmify
+                    this.utmifyModel = 'standard';
+                    this.utmifyXcod = '';
+                    this.utmifyCid = '';
+                    this.utmifyResult = null;
                     this.showMetaPixelModal = true;
                 } else {
                     alert('Erro ao carregar configuração Meta Pixel');
@@ -985,6 +1250,52 @@ function poolsApp() {
             }
         },
 
+        async generateUtmifyUTMs() {
+            if (!this.selectedPool) return;
+            
+            this.loading = true;
+            try {
+                const payload = {
+                    model: this.utmifyModel,
+                    base_url: `${window.location.origin}/go/${this.currentEditingPoolSlug}`
+                };
+                
+                if (this.utmifyModel === 'hotmart' && this.utmifyXcod) {
+                    payload.xcod = this.utmifyXcod;
+                } else if (this.utmifyModel === 'cartpanda' && this.utmifyCid) {
+                    payload.cid = this.utmifyCid;
+                }
+                
+                const response = await fetch(`/api/redirect-pools/${this.selectedPool.id}/generate-utmify-utms`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': this.getCsrfToken()
+                    },
+                    body: JSON.stringify(payload)
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || 'Erro ao gerar UTMs');
+                }
+                
+                // ✅ Validar campos obrigatórios antes de exibir
+                if (!data.website_url || !data.url_params) {
+                    throw new Error('Resposta inválida: campos obrigatórios ausentes');
+                }
+                
+                this.utmifyResult = data;
+                this.showNotification('✅ UTMs gerados com sucesso!');
+            } catch (error) {
+                console.error('Erro ao gerar UTMs:', error);
+                this.showNotification(`❌ Erro: ${error.message}`, 'error');
+            } finally {
+                this.loading = false;
+            }
+        },
+
         async saveMetaPixelConfig() {
             this.loading = true;
             try {
@@ -992,6 +1303,11 @@ function poolsApp() {
                 if (!this.metaPixelConfig.meta_tracking_enabled) {
                     this.metaPixelConfig.meta_pixel_id = '';
                     this.metaPixelConfig.meta_access_token = '';
+                }
+                
+                // ✅ CORREÇÃO: Se Utmify está desabilitado, limpar pixel_id antes de enviar
+                if (!this.metaPixelConfig.utmify_enabled) {
+                    this.metaPixelConfig.utmify_pixel_id = '';
                 }
                 
                 // ✅ CRÍTICO: Detectar se access_token foi alterado

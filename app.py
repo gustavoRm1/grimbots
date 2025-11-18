@@ -4473,6 +4473,7 @@ def public_redirect(slug):
                 bot_username=bot_username_safe,
                 tracking_token=tracking_token_safe,
                 pixel_id=pool.meta_pixel_id,
+                utmify_pixel_id=pool.utmify_pixel_id,  # ✅ Pixel ID da Utmify
                 fbclid=sanitize_js_value(fbclid) if fbclid else '',
                 utm_source=sanitize_js_value(request.args.get('utm_source', '')),
                 utm_campaign=sanitize_js_value(request.args.get('utm_campaign', '')),
@@ -4981,7 +4982,8 @@ def get_pool_meta_pixel_config(pool_id):
         'meta_events_purchase': pool.meta_events_purchase,
         'meta_cloaker_enabled': pool.meta_cloaker_enabled,
         'meta_cloaker_param_name': 'grim',  # Sempre fixo como "grim"
-        'meta_cloaker_param_value': pool.meta_cloaker_param_value if pool.meta_cloaker_param_value else None
+        'meta_cloaker_param_value': pool.meta_cloaker_param_value if pool.meta_cloaker_param_value else None,
+        'utmify_pixel_id': pool.utmify_pixel_id if pool.utmify_pixel_id else None
     })
 @app.route('/api/redirect-pools/<int:pool_id>/meta-pixel', methods=['PUT'])
 @login_required
@@ -5109,6 +5111,16 @@ def update_pool_meta_pixel_config(pool_id):
                     cloaker_value = None
             pool.meta_cloaker_param_value = cloaker_value
         
+        # ✅ Utmify Pixel ID
+        if 'utmify_pixel_id' in data:
+            utmify_pixel_id = data['utmify_pixel_id'].strip() if data['utmify_pixel_id'] else None
+            # ✅ Se toggle utmify_enabled estiver desativado, limpar pixel_id
+            utmify_enabled = data.get('utmify_enabled', False)
+            if not utmify_enabled:
+                pool.utmify_pixel_id = None
+            else:
+                pool.utmify_pixel_id = utmify_pixel_id if utmify_pixel_id else None
+        
         try:
             db.session.commit()
             logger.info(f"✅ [Meta Pixel Save] CONFIGURAÇÃO SALVA COM SUCESSO!")
@@ -5118,6 +5130,7 @@ def update_pool_meta_pixel_config(pool_id):
             logger.info(f"   Access Token: {'✅ Presente' if pool.meta_access_token else '❌ Ausente'}")
             logger.info(f"   Tracking Enabled: {pool.meta_tracking_enabled}")
             logger.info(f"   Events - PageView: {pool.meta_events_pageview}, ViewContent: {pool.meta_events_viewcontent}, Purchase: {pool.meta_events_purchase}")
+            logger.info(f"   Utmify Pixel ID: {pool.utmify_pixel_id[:20] if pool.utmify_pixel_id else 'None'}...")
         except Exception as commit_error:
             db.session.rollback()
             logger.error(f"❌ [Meta Pixel Save] ERRO AO COMMITAR: {commit_error}", exc_info=True)
@@ -5133,6 +5146,107 @@ def update_pool_meta_pixel_config(pool_id):
         db.session.rollback()
         logger.error(f"Erro ao configurar Meta Pixel: {e}")
         return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/redirect-pools/<int:pool_id>/generate-utmify-utms', methods=['POST'])
+@login_required
+# ✅ Remover @csrf.exempt para habilitar validação CSRF (segurança)
+def generate_utmify_utms(pool_id):
+    """
+    Gera códigos de UTMs Utmify para Meta Ads
+    
+    Modelos suportados:
+    - standard: Padrão Utmify (outras plataformas)
+    - hotmart: Para usuários Hotmart (inclui xcod)
+    - cartpanda: Para usuários Cartpanda (inclui cid)
+    - custom: UTMs personalizados (não dinâmicos)
+    
+    Inclui automaticamente o parâmetro `grim` se o cloaker estiver ativo.
+    """
+    pool = RedirectPool.query.filter_by(id=pool_id, user_id=current_user.id).first_or_404()
+    
+    data = request.get_json()
+    model = data.get('model', 'standard')
+    base_url = data.get('base_url', f"{request.scheme}://{request.host}/go/{pool.slug}")
+    
+    # ✅ GARANTIR: base_url não deve conter parâmetros (limpar se houver)
+    # Remover qualquer query string que possa ter sido enviada por engano
+    if '?' in base_url:
+        base_url = base_url.split('?')[0]
+    
+    # ✅ Obter valor do grim se cloaker estiver ativo
+    grim_value = None
+    if pool.meta_cloaker_enabled and pool.meta_cloaker_param_value:
+        grim_value = pool.meta_cloaker_param_value
+    
+    # Base dos UTMs (formato Utmify)
+    base_utms = (
+        "utm_source=FB"
+        "&utm_campaign={{campaign.name}}|{{campaign.id}}"
+        "&utm_medium={{adset.name}}|{{adset.id}}"
+        "&utm_content={{ad.name}}|{{ad.id}}"
+        "&utm_term={{placement}}"
+    )
+    
+    utm_params = base_utms
+    
+    # Modelos específicos
+    if model == "hotmart":
+        xcod = data.get('xcod', '').strip()
+        if not xcod:
+            return jsonify({'error': 'xcod é obrigatório para modelo Hotmart'}), 400
+        # Formato Hotmart: xcod com placeholders
+        xcod_param = f"&xcod={xcod}{{campaign.name}}|{{campaign.id}}{xcod}{{adset.name}}|{{adset.id}}{xcod}{{ad.name}}|{{ad.id}}{xcod}{{placement}}"
+        utm_params = f"{base_utms}{xcod_param}"
+    elif model == "cartpanda":
+        cid = data.get('cid', '').strip()
+        if not cid:
+            return jsonify({'error': 'cid é obrigatório para modelo Cartpanda'}), 400
+        utm_params = f"{base_utms}&cid={cid}"
+    elif model == "custom":
+        # UTMs personalizados (não dinâmicos)
+        utm_source = data.get('utm_source', 'FB').strip()
+        utm_campaign = data.get('utm_campaign', '').strip()
+        utm_medium = data.get('utm_medium', '').strip()
+        utm_content = data.get('utm_content', '').strip()
+        utm_term = data.get('utm_term', '').strip()
+        utm_id = data.get('utm_id', '').strip()
+        
+        utm_parts = [f"utm_source={utm_source}"]
+        if utm_campaign:
+            utm_parts.append(f"utm_campaign={utm_campaign}")
+        if utm_medium:
+            utm_parts.append(f"utm_medium={utm_medium}")
+        if utm_content:
+            utm_parts.append(f"utm_content={utm_content}")
+        if utm_term:
+            utm_parts.append(f"utm_term={utm_term}")
+        if utm_id:
+            utm_parts.append(f"utm_id={utm_id}")
+        
+        utm_params = "&".join(utm_parts)
+    
+    # ✅ Adicionar grim se cloaker estiver ativo (APENAS nos parâmetros de URL, NÃO na URL base)
+    if grim_value:
+        utm_params = f"{utm_params}&grim={grim_value}"
+    
+    # ✅ CRÍTICO: Formatar para Meta Ads
+    # website_url deve ser APENAS a URL base (sem parâmetros)
+    # url_params deve conter TODOS os parâmetros (UTMs + grim)
+    website_url = base_url  # ✅ URL limpa, sem parâmetros
+    url_params = utm_params  # ✅ Parâmetros completos (UTMs + grim)
+    
+    return jsonify({
+        'success': True,
+        'model': model,
+        'base_url': base_url,
+        'website_url': website_url,
+        'url_params': url_params,
+        'utm_params': utm_params,
+        'grim': grim_value,
+        'xcod': data.get('xcod') if model == 'hotmart' else None,
+        'cid': data.get('cid') if model == 'cartpanda' else None
+    })
 
 
 @app.route('/api/redirect-pools/<int:pool_id>/meta-pixel/test', methods=['POST'])

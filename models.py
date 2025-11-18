@@ -453,6 +453,9 @@ class RedirectPool(db.Model):
     meta_cloaker_param_name = db.Column(db.String(20), default='grim')
     meta_cloaker_param_value = db.Column(db.String(50), nullable=True)
     
+    # ✅ Utmify Integration
+    utmify_pixel_id = db.Column(db.String(100), nullable=True)  # Pixel ID da Utmify
+    
     # Relacionamentos
     pool_bots = db.relationship('PoolBot', backref='pool', lazy='dynamic', cascade='all, delete-orphan')
     
@@ -546,7 +549,8 @@ class RedirectPool(db.Model):
             'meta_events_purchase': self.meta_events_purchase,
             'meta_cloaker_enabled': self.meta_cloaker_enabled,
             'meta_cloaker_param_name': self.meta_cloaker_param_name,
-            'meta_cloaker_param_value': self.meta_cloaker_param_value
+            'meta_cloaker_param_value': self.meta_cloaker_param_value,
+            'utmify_pixel_id': self.utmify_pixel_id
         }
 
 
