@@ -297,6 +297,7 @@ class BotConfig(db.Model):
     # ✅ FLUXO VISUAL (Editor de Fluxograma)
     flow_enabled = db.Column(db.Boolean, default=False, index=True)  # Ativar fluxo visual
     flow_steps = db.Column(db.Text, nullable=True)  # JSON array de steps do fluxo
+    flow_start_step_id = db.Column(db.String(50), nullable=True, index=True)  # ID do step inicial do fluxo (/start inicia aqui)
     
     # Datas
     updated_at = db.Column(db.DateTime, default=get_brazil_time, onupdate=get_brazil_time)
@@ -403,7 +404,8 @@ class BotConfig(db.Model):
                 'success_message': getattr(self, 'success_message', None) or '',
                 'pending_message': getattr(self, 'pending_message', None) or '',
                 'flow_enabled': self.flow_enabled or False,
-                'flow_steps': self.get_flow_steps()
+                'flow_steps': self.get_flow_steps(),
+                'flow_start_step_id': self.flow_start_step_id or None
             }
         except Exception as e:
             logger.error(f"❌ Erro ao serializar BotConfig: {e}")
@@ -425,7 +427,8 @@ class BotConfig(db.Model):
                 'success_message': '',
                 'pending_message': '',
                 'flow_enabled': False,
-                'flow_steps': []
+                'flow_steps': [],
+                'flow_start_step_id': None
             }
 
 

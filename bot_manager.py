@@ -1913,6 +1913,7 @@ class BotManager:
         
         ✅ SEGURO: Fallback para welcome_message se fluxo inválido
         ✅ HÍBRIDO: Síncrono até payment, assíncrono após callback
+        ✅ INTELIGENTE: Usa flow_start_step_id ou fallback automático (order=1 ou primeiro step)
         """
         try:
             flow_steps = config.get('flow_steps', [])
@@ -1920,13 +1921,42 @@ class BotManager:
                 logger.warning("⚠️ Fluxo vazio - usando welcome_message")
                 raise ValueError("Fluxo vazio")
             
-            # Ordenar steps por order
-            sorted_steps = sorted(flow_steps, key=lambda x: x.get('order', 0))
-            start_step = sorted_steps[0]
+            # ✅ IDENTIFICAR STEP INICIAL (QI 500: Prioridade inteligente)
+            start_step_id = config.get('flow_start_step_id')
+            start_step = None
             
-            # Executar recursivamente até encontrar payment
-            logger.info(f"🎯 Iniciando fluxo recursivo a partir de {start_step.get('id')}")
-            self._execute_flow_recursive(bot_id, token, config, chat_id, telegram_user_id, start_step['id'])
+            if start_step_id:
+                # Buscar step específico marcado como inicial
+                start_step = self._find_step_by_id(flow_steps, start_step_id)
+                if start_step:
+                    logger.info(f"🎯 Usando step inicial definido: {start_step_id}")
+                else:
+                    logger.warning(f"⚠️ Step inicial {start_step_id} não encontrado - usando fallback")
+                    start_step_id = None
+            
+            if not start_step:
+                # FALLBACK 1: Buscar step com order=1
+                sorted_steps = sorted(flow_steps, key=lambda x: x.get('order', 0))
+                for step in sorted_steps:
+                    if step.get('order') == 1:
+                        start_step = step
+                        start_step_id = step.get('id')
+                        logger.info(f"🎯 Usando step com order=1: {start_step_id}")
+                        break
+                
+                # FALLBACK 2: Se não encontrou order=1, usar primeiro step (menor order)
+                if not start_step:
+                    if sorted_steps:
+                        start_step = sorted_steps[0]
+                        start_step_id = start_step.get('id')
+                        logger.info(f"🎯 Usando primeiro step (order={start_step.get('order', 0)}): {start_step_id}")
+                    else:
+                        logger.error(f"❌ Nenhum step encontrado no fluxo")
+                        raise ValueError("Nenhum step disponível")
+            
+            # Executar recursivamente a partir do step inicial
+            logger.info(f"🚀 Iniciando fluxo a partir do step inicial: {start_step_id} (order={start_step.get('order', 0)})")
+            self._execute_flow_recursive(bot_id, token, config, chat_id, telegram_user_id, start_step_id)
             
         except Exception as e:
             logger.error(f"❌ Erro ao executar fluxo: {e}", exc_info=True)

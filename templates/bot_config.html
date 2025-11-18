@@ -526,6 +526,46 @@
 
             <!-- Lista Visual de Steps (Padrão) -->
             <div x-show="config.flow_enabled" x-cloak class="mt-6">
+                <!-- ⚠️ Aviso se não houver step inicial -->
+                <div x-show="config.flow_steps && config.flow_steps.length > 0 && !config.flow_start_step_id" 
+                     x-cloak
+                     class="mb-4 p-4 bg-yellow-500 bg-opacity-10 border-2 border-yellow-500 rounded-xl">
+                    <div class="flex items-start gap-3">
+                        <i class="fas fa-exclamation-triangle text-yellow-500 text-xl mt-1"></i>
+                        <div class="flex-1">
+                            <div class="text-yellow-400 font-bold mb-1">⚠️ Step Inicial Não Definido</div>
+                            <div class="text-sm text-gray-300">
+                                O fluxo precisa de um step inicial para começar quando o lead enviar <code class="px-1 py-0.5 bg-gray-800 rounded">/start</code>.
+                                <br>
+                                <span class="text-xs text-gray-400 mt-1 block">
+                                    Clique no botão "Inicial" em qualquer step para defini-lo como inicial, ou o primeiro step será usado automaticamente.
+                                </span>
+                            </div>
+                            <button @click="setFlowStartStep(sortedFlowSteps[0]?.id)" 
+                                    x-show="sortedFlowSteps.length > 0"
+                                    class="mt-3 px-4 py-2 bg-yellow-500 bg-opacity-25 border border-yellow-400 rounded-lg text-sm font-bold text-yellow-300 hover:bg-yellow-500 hover:bg-opacity-50 transition-all">
+                                <i class="fas fa-play mr-2"></i>
+                                Definir Primeiro Step como Inicial
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- ✅ Info do step inicial definido -->
+                <div x-show="config.flow_start_step_id" 
+                     x-cloak
+                     class="mb-4 p-4 bg-green-500 bg-opacity-10 border-2 border-green-500 rounded-xl">
+                    <div class="flex items-center gap-3">
+                        <i class="fas fa-check-circle text-green-500 text-xl"></i>
+                        <div class="flex-1">
+                            <div class="text-green-400 font-bold mb-1">✅ Step Inicial Definido</div>
+                            <div class="text-sm text-gray-300">
+                                O fluxo iniciará no step marcado com <span class="text-yellow-400 font-bold">⭐ Inicial</span> quando o lead enviar <code class="px-1 py-0.5 bg-gray-800 rounded">/start</code>.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
                 <div class="flex items-center justify-between mb-4">
                     <h3 class="text-lg font-bold text-white">Steps do Fluxo</h3>
                     <button @click="addFlowStep()" 
@@ -539,18 +579,40 @@
                     <template x-for="(step, index) in sortedFlowSteps" :key="step.id">
                         <div class="bg-gray-800 border border-gray-700 rounded-lg p-4">
                             <div class="flex items-start justify-between mb-3">
-                                <div class="flex items-center gap-3">
-                                    <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-sm"
-                                         x-text="step.order || index + 1"></div>
-                                    <div>
+                                <div class="flex items-center gap-3 flex-1">
+                                    <div class="relative">
+                                        <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-sm"
+                                             x-text="step.order || index + 1"></div>
+                                        <!-- Badge "Inicial" -->
+                                        <div x-show="config.flow_start_step_id === step.id" 
+                                             x-cloak
+                                             class="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-yellow-500 flex items-center justify-center shadow-lg border-2 border-gray-900"
+                                             title="⭐ Este é o step inicial do fluxo (/start inicia aqui)">
+                                            <i class="fas fa-star text-xs text-yellow-900"></i>
+                                        </div>
+                                    </div>
+                                    <div class="flex-1">
                                         <div class="flex items-center gap-2">
                                             <span class="text-xl" x-text="getStepIcon(step.type)"></span>
                                             <span class="text-white font-semibold" x-text="getStepTitle(step.type)"></span>
+                                            <!-- Badge "Inicial" (texto) -->
+                                            <span x-show="config.flow_start_step_id === step.id" 
+                                                  x-cloak
+                                                  class="px-2 py-0.5 bg-yellow-500 bg-opacity-20 border border-yellow-500 rounded text-xs text-yellow-400 font-bold">
+                                                ⭐ Inicial
+                                            </span>
                                         </div>
                                         <div class="text-xs text-gray-400 mt-1" x-text="step.id"></div>
                                     </div>
                                 </div>
                                 <div class="flex items-center gap-2">
+                                    <!-- Botão "Definir como Inicial" -->
+                                    <button x-show="config.flow_start_step_id !== step.id" 
+                                            @click="setFlowStartStep(step.id)"
+                                            class="px-3 py-1.5 bg-yellow-600 hover:bg-yellow-700 text-white rounded text-xs font-medium transition"
+                                            title="Definir como step inicial do fluxo">
+                                        <i class="fas fa-play mr-1"></i>Inicial
+                                    </button>
                                     <button @click="editFlowStep(step.id)" 
                                             class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded text-xs font-medium transition">
                                         <i class="fas fa-edit mr-1"></i>Editar
@@ -2190,7 +2252,8 @@ function botConfigApp() {
             has_meta_pixel: false,  // ✅ Se bot está associado a pool com Meta Pixel ativo
             pool_name: null,          // ✅ Nome do pool (se houver)
             flow_enabled: false,      // ✅ Ativar fluxo visual
-            flow_steps: []            // ✅ Steps do fluxo
+            flow_steps: [],           // ✅ Steps do fluxo
+            flow_start_step_id: null  // ✅ ID do step inicial do fluxo (/start inicia aqui)
         },
         
         async init() {
@@ -2318,6 +2381,7 @@ function botConfigApp() {
                     if (!this.config.hasOwnProperty('flow_enabled')) this.config.flow_enabled = false;
                     if (!this.config.hasOwnProperty('flow_steps')) this.config.flow_steps = [];
                     if (!Array.isArray(this.config.flow_steps)) this.config.flow_steps = [];
+                    if (!this.config.hasOwnProperty('flow_start_step_id')) this.config.flow_start_step_id = null;
                     
                     // ✅ Inicializar steps do fluxo
                     if (Array.isArray(this.config.flow_steps)) {
@@ -2329,6 +2393,27 @@ function botConfigApp() {
                             if (!step.hasOwnProperty('connections')) step.connections = {};
                             if (!step.hasOwnProperty('delay_seconds')) step.delay_seconds = 0;
                         });
+                        
+                        // ✅ Auto-definir step inicial se não existe e fluxo está ativo
+                        if (this.config.flow_enabled && this.config.flow_steps.length > 0 && !this.config.flow_start_step_id) {
+                            const sortedSteps = [...this.config.flow_steps].sort((a, b) => (a.order || 0) - (b.order || 0));
+                            let startStep = null;
+                            // Buscar step com order=1 primeiro
+                            for (const step of sortedSteps) {
+                                if (step.order === 1) {
+                                    startStep = step;
+                                    break;
+                                }
+                            }
+                            // Se não encontrou order=1, usar primeiro step
+                            if (!startStep && sortedSteps.length > 0) {
+                                startStep = sortedSteps[0];
+                            }
+                            if (startStep) {
+                                this.config.flow_start_step_id = startStep.id;
+                                console.log(`✅ Step inicial auto-definido: ${startStep.id} (order=${startStep.order || 0})`);
+                            }
+                        }
                     }
                     
                     console.log('✅ Config final carregado com sucesso!');
@@ -2663,7 +2748,47 @@ function botConfigApp() {
                         return;
                     }
                 }
+                
+                // ✅ AUTO-DEFINIR STEP INICIAL quando fluxo é ativado
+                if (this.config.flow_steps && this.config.flow_steps.length > 0 && !this.config.flow_start_step_id) {
+                    const sortedSteps = [...this.config.flow_steps].sort((a, b) => (a.order || 0) - (b.order || 0));
+                    let startStep = null;
+                    // Buscar step com order=1 primeiro
+                    for (const step of sortedSteps) {
+                        if (step.order === 1) {
+                            startStep = step;
+                            break;
+                        }
+                    }
+                    // Se não encontrou order=1, usar primeiro step
+                    if (!startStep && sortedSteps.length > 0) {
+                        startStep = sortedSteps[0];
+                    }
+                    if (startStep) {
+                        this.config.flow_start_step_id = startStep.id;
+                        this.showNotification(`✅ Step inicial definido automaticamente: ${this.getStepTitle(startStep.type)} (order=${startStep.order || 0})`, 'success');
+                    }
+                }
             }
+        },
+        
+        // ✅ Definir step como inicial
+        setFlowStartStep(stepId) {
+            const step = this.config.flow_steps.find(s => s.id === stepId);
+            if (!step) {
+                this.showNotification('❌ Step não encontrado', 'error');
+                return;
+            }
+            
+            // Validar se step não é do tipo 'access' (não faz sentido ser inicial)
+            if (step.type === 'access') {
+                if (!confirm('⚠️ Step do tipo "Acesso" não deve ser inicial (ele libera acesso e finaliza o fluxo).\n\nDeseja continuar mesmo assim?')) {
+                    return;
+                }
+            }
+            
+            this.config.flow_start_step_id = stepId;
+            this.showNotification(`✅ Step inicial definido: ${this.getStepTitle(step.type)} (order=${step.order || 0})`, 'success');
         },
         
         get sortedFlowSteps() {
@@ -2684,15 +2809,31 @@ function botConfigApp() {
         addFlowStep() {
             const stepId = `step_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
             const maxOrder = this.sortedFlowSteps.length > 0 ? Math.max(...this.sortedFlowSteps.map(s => s.order || 0)) : 0;
+            const newOrder = maxOrder + 1;
+            
             this.config.flow_steps.push({
                 id: stepId,
                 type: 'content',
-                order: maxOrder + 1,
+                order: newOrder,
                 config: { message: '', media_url: '', media_type: 'video', buttons: [] },
                 connections: {},
                 delay_seconds: 0
             });
-            this.showNotification('✅ Step adicionado!', 'success');
+            
+            // ✅ Auto-definir como inicial se:
+            // 1. É o primeiro step (sem steps anteriores)
+            // 2. Ou não há step inicial definido e este tem order=1
+            if (!this.config.flow_start_step_id) {
+                if (this.config.flow_steps.length === 1 || newOrder === 1) {
+                    this.config.flow_start_step_id = stepId;
+                    this.showNotification(`✅ Step adicionado e definido como inicial automaticamente!`, 'success');
+                } else {
+                    this.showNotification('✅ Step adicionado!', 'success');
+                }
+            } else {
+                this.showNotification('✅ Step adicionado!', 'success');
+            }
+            
             setTimeout(() => this.editFlowStep(stepId), 100);
         },
         
@@ -3162,7 +3303,13 @@ function botConfigApp() {
         
         removeFlowStep(stepId) {
             if (!confirm('⚠️ Remover este step? Isso pode quebrar conexões de outros steps.')) return;
+            
+            // ✅ Se este step é o inicial, limpar e auto-definir novo
+            const wasStartStep = this.config.flow_start_step_id === stepId;
+            
             this.config.flow_steps = this.config.flow_steps.filter(s => s.id !== stepId);
+            
+            // Limpar conexões que apontavam para este step
             this.config.flow_steps.forEach(step => {
                 if (step.connections) {
                     if (step.connections.next === stepId) step.connections.next = '';
@@ -3170,7 +3317,37 @@ function botConfigApp() {
                     if (step.connections.retry === stepId) step.connections.retry = '';
                 }
             });
-            this.showNotification('✅ Step removido!', 'success');
+            
+            // ✅ Auto-definir novo step inicial se o removido era o inicial
+            if (wasStartStep) {
+                this.config.flow_start_step_id = null;
+                if (this.config.flow_steps.length > 0) {
+                    // Buscar step com order=1 primeiro
+                    const sortedSteps = [...this.config.flow_steps].sort((a, b) => (a.order || 0) - (b.order || 0));
+                    let newStartStep = null;
+                    for (const step of sortedSteps) {
+                        if (step.order === 1) {
+                            newStartStep = step;
+                            break;
+                        }
+                    }
+                    // Se não encontrou order=1, usar primeiro step
+                    if (!newStartStep && sortedSteps.length > 0) {
+                        newStartStep = sortedSteps[0];
+                    }
+                    if (newStartStep) {
+                        this.config.flow_start_step_id = newStartStep.id;
+                        this.showNotification(`✅ Step removido! Novo step inicial definido automaticamente: ${this.getStepTitle(newStartStep.type)} (order=${newStartStep.order || 0})`, 'success');
+                    } else {
+                        this.showNotification('✅ Step removido! ⚠️ Defina um step inicial.', 'success');
+                    }
+                } else {
+                    this.config.flow_start_step_id = null;
+                    this.showNotification('✅ Step removido!', 'success');
+                }
+            } else {
+                this.showNotification('✅ Step removido!', 'success');
+            }
         },
         
         showNotification(message, type = 'success') {

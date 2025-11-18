@@ -3999,8 +3999,40 @@ def update_bot_config(bot_id):
                 config.flow_steps = None
                 logger.info(f"⚠️ flow_steps não é array - limpando campo")
         
-        # ✅ CRÍTICO: Se flow_enabled=True, desabilitar welcome_message automaticamente
+        # ✅ STEP INICIAL DO FLUXO
+        if 'flow_start_step_id' in data:
+            flow_start_step_id = data.get('flow_start_step_id')
+            if flow_start_step_id:
+                # Validar se step existe
+                flow_steps = config.get_flow_steps()
+                step_exists = any(step.get('id') == flow_start_step_id for step in flow_steps) if flow_steps else False
+                if step_exists:
+                    config.flow_start_step_id = flow_start_step_id
+                    logger.info(f"✅ flow_start_step_id salvo: {flow_start_step_id}")
+                else:
+                    logger.warning(f"⚠️ Step inicial {flow_start_step_id} não existe nos steps - limpando")
+                    config.flow_start_step_id = None
+            else:
+                config.flow_start_step_id = None
+                logger.info(f"⚠️ flow_start_step_id limpo")
+        
+        # ✅ CRÍTICO: Se flow_enabled=True e não tem start_step_id, auto-definir
         if config.flow_enabled and config.flow_steps and len(config.get_flow_steps()) > 0:
+            flow_steps = config.get_flow_steps()
+            if not config.flow_start_step_id:
+                # Auto-definir: primeiro step com order=1, ou primeiro step da lista
+                sorted_steps = sorted(flow_steps, key=lambda x: x.get('order', 0))
+                start_step = None
+                for step in sorted_steps:
+                    if step.get('order') == 1:
+                        start_step = step
+                        break
+                if not start_step and sorted_steps:
+                    start_step = sorted_steps[0]
+                if start_step:
+                    config.flow_start_step_id = start_step.get('id')
+                    logger.info(f"✅ Step inicial auto-definido: {config.flow_start_step_id} (order={start_step.get('order', 0)})")
+            
             logger.info("✅ Fluxo ativo - welcome_message será ignorado no /start (mas mantido como fallback)")
         
         logger.info(f"💾 Fazendo commit no banco de dados...")
