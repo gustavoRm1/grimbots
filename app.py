@@ -3956,11 +3956,14 @@ def validate_cloaker_access(request, pool, slug):
     
     REGRAS DE SEGURANÇA:
     1. Parâmetro grim obrigatório e válido
-    2. fbclid OBRIGATÓRIO - só libera se tiver ID do Facebook
-    3. Aceita qualquer ordem de parâmetros
-    4. SEM validação de User-Agent (Facebook pode usar qualquer UA)
+    2. fbclid OBRIGATÓRIO se tiver UTMs (tráfego de campanha = precisa de ID do Facebook)
+    3. Permite testes diretos sem fbclid (se não tiver UTMs)
+    4. Aceita qualquer ordem de parâmetros
+    5. SEM validação de User-Agent (Facebook pode usar qualquer UA)
     
-    ✅ PROTEÇÃO CRÍTICA: Sem fbclid = tráfego não é do Facebook = BLOQUEADO
+    ✅ PROTEÇÃO CRÍTICA:
+    - Tráfego com UTMs SEM fbclid = BLOQUEADO (campanha sem ID do Facebook)
+    - Teste direto sem UTMs = PERMITIDO (para facilitar testes)
     
     Retorna score 100 se OK, 0 se bloqueado
     """
@@ -3991,9 +3994,13 @@ def validate_cloaker_access(request, pool, slug):
     # ✅ Sem fbclid = tráfego não é do Facebook = BLOQUEADO
     fbclid = request.args.get('fbclid', '').strip()
     
+    # Verificar se há parâmetros UTM (indicam tráfego de campanha)
+    utm_params = ['utm_source', 'utm_campaign', 'utm_medium', 'utm_content', 'utm_term']
+    has_utm_params = any(request.args.get(param) for param in utm_params)
+    
     # Log estruturado para auditoria
     all_params = dict(request.args)
-    logger.info(f"🔍 CLOAKER V2.0 | Slug: {slug} | Grim: {actual_value} | Expected: {expected_value} | fbclid={'✅' if fbclid else '❌'} | All params: {list(all_params.keys())}")
+    logger.info(f"🔍 CLOAKER V2.0 | Slug: {slug} | Grim: {actual_value} | Expected: {expected_value} | fbclid={'✅' if fbclid else '❌'} | UTMs={'✅' if has_utm_params else '❌'} | All params: {list(all_params.keys())}")
     
     # VALIDAÇÃO CRÍTICA 1: grim deve estar presente e correto
     if actual_value != expected_value:
@@ -4002,26 +4009,35 @@ def validate_cloaker_access(request, pool, slug):
             'expected': expected_value,
             'actual': actual_value,
             'fbclid_present': bool(fbclid),
+            'has_utm_params': has_utm_params,
             'all_params': list(all_params.keys())
         }}
     
-    # VALIDAÇÃO CRÍTICA 2: fbclid OBRIGATÓRIO - só libera se tiver ID do Facebook
-    if not fbclid:
-        logger.warning(f"🛡️ CLOAKER | Bloqueado: grim válido mas SEM fbclid (tráfego não é do Facebook) | Slug: {slug}")
-        return {'allowed': False, 'reason': 'missing_fbclid', 'score': 0, 'details': {
+    # VALIDAÇÃO CRÍTICA 2: fbclid OBRIGATÓRIO se tiver UTMs (tráfego de campanha)
+    # ✅ Se tiver UTMs = tráfego de campanha = precisa de fbclid (proteção)
+    # ✅ Se NÃO tiver UTMs = teste direto = permite sem fbclid (testes)
+    if has_utm_params and not fbclid:
+        logger.warning(f"🛡️ CLOAKER | Bloqueado: grim válido + UTMs presentes mas SEM fbclid (tráfego de campanha sem ID do Facebook) | Slug: {slug}")
+        return {'allowed': False, 'reason': 'missing_fbclid_with_utm', 'score': 0, 'details': {
             'param_match': True,
             'grim_value': actual_value,
             'fbclid_present': False,
-            'reason_detail': 'grim válido mas sem fbclid - tráfego não é do Facebook',
+            'has_utm_params': True,
+            'reason_detail': 'grim válido + UTMs presentes mas sem fbclid - tráfego de campanha deve ter ID do Facebook',
             'all_params': list(all_params.keys())
         }}
     
-    # ✅ SUCESSO: grim válido E fbclid presente = tráfego legítimo do Facebook
-    return {'allowed': True, 'reason': 'grim_valid_and_fbclid_present', 'score': 100, 'details': {
+    # ✅ SUCESSO: grim válido + (fbclid presente OU sem UTMs para testes)
+    reason = 'grim_valid_and_fbclid_present' if fbclid else 'grim_valid_test_access'
+    if not fbclid and not has_utm_params:
+        logger.info(f"✅ CLOAKER | Permitido: grim válido sem UTMs (teste direto permitido) | Slug: {slug}")
+    
+    return {'allowed': True, 'reason': reason, 'score': 100, 'details': {
         'param_match': True, 
         'grim_value': actual_value,
-        'fbclid_present': True,
-        'fbclid_length': len(fbclid),
+        'fbclid_present': bool(fbclid),
+        'has_utm_params': has_utm_params,
+        'fbclid_length': len(fbclid) if fbclid else 0,
         'total_params': len(all_params)
     }}
 
