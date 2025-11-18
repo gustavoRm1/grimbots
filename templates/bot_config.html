@@ -2905,14 +2905,29 @@ function botConfigApp() {
                 return `<option value="${s.id}">${s.order || 0} - ${stepLabel}</option>`;
             }).join('');
             
+            // ✅ Prevenir scroll no body quando modal abrir
+            document.body.style.overflow = 'hidden';
+            
             const modal = document.createElement('div');
             modal.className = 'fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50';
             modal.id = `flow-step-modal-${stepId}`;
+            
+            // ✅ Restaurar scroll quando modal fechar (click fora ou X)
+            const restoreScroll = () => {
+                document.body.style.overflow = '';
+            };
+            
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    restoreScroll();
+                }
+            });
+            
             modal.innerHTML = `
                 <div class="bg-gray-900 rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto border-2 border-gray-700">
                     <div class="flex items-center justify-between mb-6">
                         <h3 class="text-2xl font-bold text-white"><i class="fas fa-edit mr-2 text-blue-500"></i>Editar Step</h3>
-                        <button onclick="document.getElementById('flow-step-modal-${stepId}').remove()" class="text-gray-400 hover:text-white text-2xl">&times;</button>
+                        <button onclick="document.body.style.overflow = ''; document.getElementById('flow-step-modal-${stepId}').remove()" class="text-gray-400 hover:text-white text-2xl">&times;</button>
                     </div>
                     <form onsubmit="event.preventDefault(); if(window.flowStepEditor['saveStep_${stepId}']) window.flowStepEditor['saveStep_${stepId}']();">
                         <div class="mb-4">
@@ -3197,9 +3212,9 @@ function botConfigApp() {
                         
                         <!-- ✅ SISTEMA DE CONDIÇÕES (para todos os steps exceto 'access') -->
                         ${step.type !== 'access' ? `
-                            <div class="mb-4 p-4 bg-blue-900 bg-opacity-20 border-2 border-blue-500 rounded-lg">
+                            <div class="mb-4 p-4 bg-blue-900 bg-opacity-30 border-2 border-blue-500 rounded-lg">
                                 <div class="flex items-center justify-between mb-3">
-                                    <label class="block text-sm font-bold text-blue-300">
+                                    <label class="block text-sm font-bold text-blue-200">
                                         <i class="fas fa-code-branch mr-2"></i>Condições (Decisões do Lead)
                                     </label>
                                     <button type="button" 
@@ -3208,15 +3223,15 @@ function botConfigApp() {
                                         <i class="fas fa-plus mr-1"></i>Adicionar
                                     </button>
                                 </div>
-                                <p class="text-xs text-blue-200 mb-3">
+                                <p class="text-xs text-blue-100 mb-3">
                                     Configure condições para que o lead tome decisões e siga caminhos diferentes no funil.
-                                    <br><span class="text-blue-300">💡 Exemplo: Se email válido → Step A, Se inválido → Step B</span>
+                                    <br><span class="text-blue-200 font-medium">💡 Exemplo: Se email válido → Step A, Se inválido → Step B</span>
                                 </p>
                                 <div id="conditions-list-${stepId}" class="space-y-2">
                                     ${(() => {
                                         const conditions = (step.conditions && step.conditions.length > 0) ? step.conditions : [];
                                         if (conditions.length === 0) {
-                                            return '<div class="text-xs text-gray-500 italic text-center py-2">Nenhuma condição configurada. Adicione condições para criar fluxos condicionais.</div>';
+                                            return '<div class="text-xs text-blue-300 italic text-center py-2">Nenhuma condição configurada. Adicione condições para criar fluxos condicionais.</div>';
                                         }
                                         const self = this;
                                         function escapeHtml(text) {
@@ -3261,10 +3276,10 @@ function botConfigApp() {
                                                         <div class="flex-1">
                                                             <div class="flex items-center gap-2 mb-1">
                                                                 <span class="px-2 py-0.5 bg-blue-600 text-white rounded text-xs font-bold">${idx + 1}</span>
-                                                                <span class="text-sm font-semibold text-blue-300">${escapeHtml(condLabel)}</span>
+                                                                <span class="text-sm font-semibold text-blue-200">${escapeHtml(condLabel)}</span>
                                                             </div>
-                                                            <div class="text-xs text-gray-400">
-                                                                → <span class="text-blue-300 font-medium">${escapeHtml(targetStepName)}</span>
+                                                            <div class="text-xs text-blue-300">
+                                                                → <span class="text-blue-200 font-bold">${escapeHtml(targetStepName)}</span>
                                                             </div>
                                                         </div>
                                                         <button type="button" 
@@ -3286,7 +3301,7 @@ function botConfigApp() {
                             </div>
                         ` : ''}
                         <div class="flex justify-end gap-3 mt-6">
-                            <button type="button" onclick="document.getElementById('flow-step-modal-${stepId}').remove()" 
+                            <button type="button" onclick="document.body.style.overflow = ''; document.getElementById('flow-step-modal-${stepId}').remove()" 
                                     class="px-6 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg">Cancelar</button>
                             <button type="submit" class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold">
                                 <i class="fas fa-save mr-2"></i>Salvar
@@ -3746,6 +3761,7 @@ function botConfigApp() {
                     step.conditions = conditions.length > 0 ? conditions : null;
                 }
                 
+                document.body.style.overflow = '';
                 document.getElementById(`flow-step-modal-${stepId}`).remove();
                 self.showNotification('✅ Step salvo!', 'success');
             };
@@ -4006,11 +4022,20 @@ function botConfigApp() {
             const currentCondType = condition ? condition.type : (availableConditionTypes[0] ? availableConditionTypes[0].value : 'text_validation');
             const configHtml = renderConditionConfig(currentCondType, condition);
             
+            // ✅ Modal de condição é sobreposto ao modal de step (não precisa prevenir scroll - já está hidden)
             const modal = document.createElement('div');
-            modal.className = 'fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50';
+            modal.className = 'fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-[60]';
             modal.id = `condition-modal-${stepId}-${condIndex}`;
+            
+            // ✅ Click fora do modal para fechar (mas não restaurar scroll - modal de step ainda está aberto)
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.remove();
+                }
+            });
+            
             modal.innerHTML = `
-                <div class="bg-gray-900 rounded-lg p-6 max-w-lg w-full mx-4 border-2 border-blue-500">
+                <div class="bg-gray-900 rounded-lg p-6 max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto border-2 border-blue-500">
                     <div class="flex items-center justify-between mb-4">
                         <h3 class="text-xl font-bold text-blue-300">
                             <i class="fas fa-code-branch mr-2"></i>${isNew ? 'Nova' : 'Editar'} Condição
@@ -4041,7 +4066,8 @@ function botConfigApp() {
                         <div class="flex justify-end gap-3 mt-6">
                             <button type="button" 
                                     onclick="document.getElementById('condition-modal-${stepId}-${condIndex}').remove()" 
-                                    class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg">Cancelar</button>
+                                    class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg"
+                                    style="z-index: 61;">Cancelar</button>
                             <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold">
                                 <i class="fas fa-save mr-2"></i>Salvar Condição
                             </button>
@@ -4065,6 +4091,7 @@ function botConfigApp() {
             // Recarregar modal do step para atualizar lista
             const stepModal = document.getElementById(`flow-step-modal-${stepId}`);
             if (stepModal) {
+                // Manter overflow hidden (modal será recriado)
                 stepModal.remove();
                 setTimeout(() => this.editFlowStep(stepId), 100);
             }
@@ -4124,12 +4151,18 @@ function botConfigApp() {
                 c.order = idx + 1;
             });
             
-            // Fechar modal e recarregar modal do step
+            // Fechar modal de condição (modal de step ainda está aberto)
             modal.remove();
+            
+            // Recarregar modal do step para atualizar lista de condições
             const stepModal = document.getElementById(`flow-step-modal-${stepId}`);
             if (stepModal) {
+                // Manter overflow hidden (modal será recriado)
                 stepModal.remove();
                 setTimeout(() => self.editFlowStep(stepId), 100);
+            } else {
+                // Se modal de step não existe mais, restaurar scroll
+                document.body.style.overflow = '';
             }
         },
         
