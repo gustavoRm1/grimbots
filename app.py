@@ -4225,10 +4225,10 @@ def public_redirect(slug):
         # Prioridade: cookie > params (cookie é mais confiável)
         fbp_cookie = request.cookies.get('_fbp') or request.args.get('_fbp_cookie')
         fbc_cookie = request.cookies.get('_fbc') or request.args.get('_fbc_cookie')
-        fbclid_param = request.args.get('fbclid')
+        # ✅ Usar variável fbclid já capturada anteriormente (linha 4166)
 
         # ✅ LOG DIAGNÓSTICO: Verificar cookies iniciais
-        logger.info(f"[META PIXEL] Redirect - Cookies iniciais: _fbp={'✅' if fbp_cookie else '❌'}, _fbc={'✅' if fbc_cookie else '❌'}, fbclid={'✅' if fbclid_param else '❌'}, is_crawler={is_crawler_request}")
+        logger.info(f"[META PIXEL] Redirect - Cookies iniciais: _fbp={'✅' if fbp_cookie else '❌'}, _fbc={'✅' if fbc_cookie else '❌'}, fbclid={'✅' if fbclid else '❌'}, is_crawler={is_crawler_request}")
 
         if not fbp_cookie and not is_crawler_request:
             try:
@@ -4249,12 +4249,12 @@ def public_redirect(slug):
             fbc_value = fbc_cookie.strip()
             fbc_origin = 'cookie'  # ✅ ORIGEM REAL - Meta confia e atribui
             logger.info(f"[META REDIRECT] Redirect - fbc capturado do cookie (ORIGEM REAL): {fbc_value[:50]}... (len={len(fbc_value)})")
-        elif fbclid_param and not is_crawler_request:
+        elif fbclid and not is_crawler_request:
             # ✅ PRIORIDADE 2: Gerar _fbc baseado em fbclid conforme documentação Meta
             # Formato: fb.1.{creationTime_ms}.{fbclid}
             # Meta aceita este formato quando fbclid está presente na URL
             try:
-                fbc_value = TrackingService.generate_fbc(fbclid_param)
+                fbc_value = TrackingService.generate_fbc(fbclid)
                 fbc_origin = 'generated_from_fbclid'  # ✅ Gerado conforme documentação Meta
                 logger.info(f"[META REDIRECT] Redirect - fbc gerado baseado em fbclid (conforme doc Meta): {fbc_value[:50]}... (len={len(fbc_value)})")
                 logger.info(f"   Meta aceita _fbc gerado quando fbclid está presente na URL")
@@ -4265,7 +4265,7 @@ def public_redirect(slug):
         else:
             fbc_value = None
             fbc_origin = None
-            if not fbclid_param:
+            if not fbclid:
                 logger.warning(f"[META REDIRECT] Redirect - fbc ausente: cookie ausente e fbclid ausente")
             elif is_crawler_request:
                 logger.warning(f"[META REDIRECT] Redirect - fbc não capturado: is_crawler_request=True")
@@ -4284,7 +4284,7 @@ def public_redirect(slug):
             }
 
             # ✅ CRÍTICO: Garantir que fbclid completo (até 255 chars) seja salvo - NUNCA truncar antes de salvar no Redis!
-            fbclid_to_save = fbclid_param or None
+            fbclid_to_save = fbclid or None
             if fbclid_to_save:
                 logger.info(f"✅ Redirect - Salvando fbclid completo no Redis: {fbclid_to_save[:50]}... (len={len(fbclid_to_save)})")
                 if len(fbclid_to_save) > 255:
@@ -4428,10 +4428,14 @@ def public_redirect(slug):
     # com a chave tracking:{tracking_token}
     # ============================================================================
     
-    # ✅ CRÍTICO: Se pool tem pixel_id configurado, renderizar HTML próprio para capturar FBC
-    # HTML carrega Meta Pixel JS antes de redirecionar, garantindo 95%+ de captura de FBC
-    # ✅ SEGURANÇA: Cloaker já validou ANTES (linha 4036), então HTML é seguro
-    if pool.meta_pixel_id and pool.meta_tracking_enabled and not is_crawler_request:
+    # ✅ CRÍTICO: Renderizar HTML próprio se Meta Pixel OU Utmify estiver configurado
+    # HTML carrega Meta Pixel JS (se habilitado) e scripts Utmify (se configurado) antes de redirecionar
+    # ✅ SEGURANÇA: Cloaker já validou ANTES (linha 4080), então HTML é seguro
+    # ✅ CORREÇÃO: Renderizar HTML também se Utmify está configurado (mesmo sem Meta Pixel)
+    has_meta_pixel = pool.meta_pixel_id and pool.meta_tracking_enabled
+    has_utmify = pool.utmify_pixel_id and pool.utmify_pixel_id.strip()
+    
+    if (has_meta_pixel or has_utmify) and not is_crawler_request:
         # ✅ VALIDAÇÃO CRÍTICA: Garantir que pool_bot, bot e username existem antes de renderizar HTML
         if not pool_bot or not pool_bot.bot or not pool_bot.bot.username:
             logger.error(f"❌ Pool {slug}: pool_bot ou bot.username ausente - usando fallback redirect direto")
@@ -4467,7 +4471,14 @@ def public_redirect(slug):
         
         # ✅ TRY/EXCEPT: Renderizar HTML com fallback seguro
         try:
-            logger.info(f"🌉 Renderizando HTML com Meta Pixel (pixel_id: {pool.meta_pixel_id[:10]}...) para capturar FBC")
+            # ✅ Log detalhado do que será renderizado
+            tracking_services = []
+            if has_meta_pixel:
+                tracking_services.append(f"Meta Pixel ({pool.meta_pixel_id[:10]}...)")
+            if has_utmify:
+                tracking_services.append(f"Utmify ({pool.utmify_pixel_id[:10]}...)")
+            
+            logger.info(f"🌉 Renderizando HTML com tracking: {', '.join(tracking_services)}")
             
             # ✅ SEGURANÇA: Sanitizar valores para JavaScript (prevenir XSS)
             import re
@@ -4483,11 +4494,15 @@ def public_redirect(slug):
             tracking_token_safe = sanitize_js_value(tracking_param)
             bot_username_safe = sanitize_js_value(pool_bot.bot.username)
             
+            # ✅ CORREÇÃO: Passar pixel_id apenas se Meta Pixel está habilitado
+            pixel_id_to_template = pool.meta_pixel_id if has_meta_pixel else None
+            utmify_pixel_id_to_template = pool.utmify_pixel_id if has_utmify else None
+            
             response = make_response(render_template('telegram_redirect.html',
                 bot_username=bot_username_safe,
                 tracking_token=tracking_token_safe,
-                pixel_id=pool.meta_pixel_id,
-                utmify_pixel_id=pool.utmify_pixel_id,  # ✅ Pixel ID da Utmify
+                pixel_id=pixel_id_to_template,  # ✅ None se Meta Pixel desabilitado
+                utmify_pixel_id=utmify_pixel_id_to_template,  # ✅ Pixel ID da Utmify (pode estar sem Meta Pixel)
                 fbclid=sanitize_js_value(fbclid) if fbclid else '',
                 utm_source=sanitize_js_value(request.args.get('utm_source', '')),
                 utm_campaign=sanitize_js_value(request.args.get('utm_campaign', '')),
