@@ -4464,14 +4464,15 @@ def public_redirect(slug):
     # com a chave tracking:{tracking_token}
     # ============================================================================
     
-    # ✅ CRÍTICO: Renderizar HTML próprio se Meta Pixel OU Utmify estiver configurado
+    # ✅ CRÍTICO: Renderizar HTML próprio SEMPRE após cloaker validar
     # HTML carrega Meta Pixel JS (se habilitado) e scripts Utmify (se configurado) antes de redirecionar
-    # ✅ SEGURANÇA: Cloaker já validou ANTES (linha 4080), então HTML é seguro
-    # ✅ CORREÇÃO: Renderizar HTML também se Utmify está configurado (mesmo sem Meta Pixel)
+    # ✅ SEGURANÇA: Cloaker já validou ANTES (linha 4116), então HTML é seguro
+    # ✅ CORREÇÃO: Renderizar HTML sempre (mesmo sem Meta Pixel ou Utmify) para consistência e segurança
     has_meta_pixel = pool.meta_pixel_id and pool.meta_tracking_enabled
     has_utmify = pool.utmify_pixel_id and pool.utmify_pixel_id.strip()
     
-    if (has_meta_pixel or has_utmify) and not is_crawler_request:
+    # ✅ SEMPRE renderizar HTML se não for crawler (após cloaker passar)
+    if not is_crawler_request:
         # ✅ VALIDAÇÃO CRÍTICA: Garantir que pool_bot, bot e username existem antes de renderizar HTML
         if not pool_bot or not pool_bot.bot or not pool_bot.bot.username:
             logger.error(f"❌ Pool {slug}: pool_bot ou bot.username ausente - usando fallback redirect direto")
@@ -4514,7 +4515,10 @@ def public_redirect(slug):
             if has_utmify:
                 tracking_services.append(f"Utmify ({pool.utmify_pixel_id[:10]}...)")
             
-            logger.info(f"🌉 Renderizando HTML com tracking: {', '.join(tracking_services)}")
+            if tracking_services:
+                logger.info(f"🌉 Renderizando HTML com tracking: {', '.join(tracking_services)}")
+            else:
+                logger.info(f"🌉 Renderizando HTML (sem tracking configurado, apenas redirect)")
             
             # ✅ SEGURANÇA: Sanitizar valores para JavaScript (prevenir XSS)
             import re
