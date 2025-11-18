@@ -4538,6 +4538,10 @@ def public_redirect(slug):
             pixel_id_to_template = pool.meta_pixel_id if has_meta_pixel else None
             utmify_pixel_id_to_template = pool.utmify_pixel_id if has_utmify else None
             
+            # ✅ LOG DIAGNÓSTICO: Verificar valores passados para template
+            logger.info(f"📊 Template params - has_utmify: {has_utmify}, utmify_pixel_id_to_template: {'✅' if utmify_pixel_id_to_template else '❌'} ({utmify_pixel_id_to_template[:20] + '...' if utmify_pixel_id_to_template else 'None'})")
+            logger.info(f"📊 Template params - has_meta_pixel: {has_meta_pixel}, pixel_id_to_template: {'✅' if pixel_id_to_template else '❌'}")
+            
             response = make_response(render_template('telegram_redirect.html',
                 bot_username=bot_username_safe,
                 tracking_token=tracking_token_safe,
