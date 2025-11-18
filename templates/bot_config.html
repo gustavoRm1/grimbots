@@ -613,6 +613,11 @@
                                     </div>
                                 </div>
                                 <div class="flex items-center gap-2">
+                                    <button @click="duplicateFlowStep(step.id)" 
+                                            class="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded text-xs font-medium transition"
+                                            title="Duplicar este step">
+                                        <i class="fas fa-copy mr-1"></i>Duplicar
+                                    </button>
                                     <button @click="editFlowStep(step.id)" 
                                             class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded text-xs font-medium transition">
                                         <i class="fas fa-edit mr-1"></i>Editar
@@ -630,56 +635,91 @@
                                     <template x-if="step.connections && step.connections.next">
                                         <div class="flex items-center gap-2 px-3 py-1.5 bg-green-900 bg-opacity-30 border border-green-700 rounded text-xs">
                                             <i class="fas fa-arrow-right text-green-400"></i>
-                                            <span class="text-green-300">Se pago:</span>
-                                            <span class="text-green-400 font-mono" x-text="step.connections.next"></span>
+                                            <span class="text-green-300" x-show="step.type === 'payment'">Se pago:</span>
+                                            <span class="text-green-300" x-show="step.type !== 'payment'">Próximo:</span>
+                                            <span class="text-green-400 font-semibold" 
+                                                  x-text="(() => { const nextStep = config.flow_steps.find(s => s.id === step.connections.next); return nextStep ? (nextStep.name || getStepTitle(nextStep.type) + ' (' + (nextStep.order || 0) + ')') : step.connections.next.substring(0, 8) + '...'; })()"></span>
                                         </div>
                                     </template>
                                     <template x-if="step.connections && step.connections.pending">
                                         <div class="flex items-center gap-2 px-3 py-1.5 bg-red-900 bg-opacity-30 border border-red-700 rounded text-xs">
                                             <i class="fas fa-arrow-right text-red-400"></i>
                                             <span class="text-red-300">Se não pago:</span>
-                                            <span class="text-red-400 font-mono" x-text="step.connections.pending"></span>
+                                            <span class="text-red-400 font-semibold" 
+                                                  x-text="(() => { const pendingStep = config.flow_steps.find(s => s.id === step.connections.pending); return pendingStep ? (pendingStep.name || getStepTitle(pendingStep.type) + ' (' + (pendingStep.order || 0) + ')') : step.connections.pending.substring(0, 8) + '...'; })()"></span>
                                         </div>
                                     </template>
                                     <template x-if="step.connections && step.connections.retry">
                                         <div class="flex items-center gap-2 px-3 py-1.5 bg-yellow-900 bg-opacity-30 border border-yellow-700 rounded text-xs">
                                             <i class="fas fa-redo text-yellow-400"></i>
                                             <span class="text-yellow-300">Retry:</span>
-                                            <span class="text-yellow-400 font-mono" x-text="step.connections.retry"></span>
+                                            <span class="text-yellow-400 font-semibold" 
+                                                  x-text="(() => { const retryStep = config.flow_steps.find(s => s.id === step.connections.retry); return retryStep ? (retryStep.name || getStepTitle(retryStep.type) + ' (' + (retryStep.order || 0) + ')') : step.connections.retry.substring(0, 8) + '...'; })()"></span>
                                         </div>
                                     </template>
                                     <template x-if="!step.connections || (!step.connections.next && !step.connections.pending && !step.connections.retry)">
-                                        <div class="text-xs text-gray-500 italic">Sem conexões</div>
+                                        <div class="flex items-center gap-2 text-xs" x-bind:class="step.type === 'access' ? 'text-gray-400 italic' : 'text-yellow-400'">
+                                            <i class="fas" x-bind:class="step.type === 'access' ? 'fa-check-circle' : 'fa-exclamation-triangle'"></i>
+                                            <span x-show="step.type === 'access'">Final do fluxo (sem conexões)</span>
+                                            <span x-show="step.type !== 'access'">⚠️ Sem conexões (fluxo pode parar aqui)</span>
+                                        </div>
                                     </template>
                                 </div>
                             </div>
 
                             <!-- Preview do Step -->
-                            <div class="mt-3 text-sm text-gray-400">
+                            <div class="mt-3 text-sm text-gray-400 space-y-1">
                                 <template x-if="step.type === 'content'">
-                                    <div>
-                                        <span class="text-gray-500">Mensagem:</span>
-                                        <span class="ml-2" x-text="(step.config && step.config.message) ? step.config.message.substring(0, 50) + '...' : 'Sem mensagem'"></span>
+                                    <div class="space-y-1">
+                                        <div>
+                                            <span class="text-gray-500">Mensagem:</span>
+                                            <span class="ml-2" x-text="(step.config && step.config.message) ? step.config.message.substring(0, 50) + '...' : '⚠️ Sem mensagem'"></span>
+                                        </div>
+                                        <div x-show="step.config && step.config.media_url">
+                                            <span class="text-gray-500">Mídia:</span>
+                                            <span class="ml-2 text-xs font-mono truncate block" x-text="step.config.media_url.substring(0, 60) + '...'"></span>
+                                        </div>
                                     </div>
                                 </template>
                                 <template x-if="step.type === 'payment'">
                                     <div>
                                         <span class="text-gray-500">Valor:</span>
-                                        <span class="ml-2" x-text="(step.config && step.config.amount) ? 'R$ ' + parseFloat(step.config.amount).toFixed(2) : 'Usar do botão principal'"></span>
+                                        <span class="ml-2" x-text="(step.config && step.config.amount) ? 'R$ ' + parseFloat(step.config.amount).toFixed(2) : '💰 Usar do botão principal'"></span>
                                     </div>
                                 </template>
                                 <template x-if="step.type === 'message'">
                                     <div>
                                         <span class="text-gray-500">Mensagem:</span>
-                                        <span class="ml-2" x-text="(step.config && step.config.message) ? step.config.message.substring(0, 50) + '...' : 'Sem mensagem'"></span>
+                                        <span class="ml-2" x-text="(step.config && step.config.message) ? step.config.message.substring(0, 50) + '...' : '⚠️ Sem mensagem'"></span>
+                                    </div>
+                                </template>
+                                <template x-if="step.type === 'audio'">
+                                    <div>
+                                        <span class="text-gray-500">Áudio:</span>
+                                        <span class="ml-2 text-xs font-mono truncate block" x-text="(step.config && step.config.media_url) ? step.config.media_url.substring(0, 60) + '...' : '⚠️ Sem URL de áudio'"></span>
+                                    </div>
+                                </template>
+                                <template x-if="step.type === 'video'">
+                                    <div>
+                                        <span class="text-gray-500">Vídeo:</span>
+                                        <span class="ml-2 text-xs font-mono truncate block" x-text="(step.config && step.config.media_url) ? step.config.media_url.substring(0, 60) + '...' : '⚠️ Sem URL de vídeo'"></span>
+                                    </div>
+                                </template>
+                                <template x-if="step.type === 'buttons'">
+                                    <div>
+                                        <span class="text-gray-500">Botões:</span>
+                                        <span class="ml-2" x-text="(step.config && step.config.selected_buttons && step.config.selected_buttons.length > 0) ? step.config.selected_buttons.length + ' botão(ões) selecionado(s)' : '⚠️ Nenhum botão selecionado'"></span>
                                     </div>
                                 </template>
                                 <template x-if="step.type === 'access'">
                                     <div>
                                         <span class="text-gray-500">Link:</span>
-                                        <span class="ml-2" x-text="(step.config && step.config.link) ? step.config.link.substring(0, 50) + '...' : 'Usar access_link'"></span>
+                                        <span class="ml-2 text-xs font-mono truncate block" x-text="(step.config && step.config.link) ? step.config.link.substring(0, 60) + '...' : '🔗 Usar access_link do bot'"></span>
                                     </div>
                                 </template>
+                                <div x-show="step.delay_seconds > 0" class="text-xs text-gray-500">
+                                    <i class="fas fa-clock mr-1"></i>Delay: <span x-text="step.delay_seconds"></span>s
+                                </div>
                             </div>
                         </div>
                     </template>
@@ -2886,10 +2926,28 @@ function botConfigApp() {
                             <p class="text-xs text-gray-500 mt-1">Nome para identificar este step no fluxo (opcional, mas recomendado)</p>
                         </div>
                         <div class="mb-4">
-                            <label class="block text-sm font-medium text-gray-300 mb-2">Tipo</label>
+                            <label class="block text-sm font-medium text-gray-300 mb-2">
+                                <i class="fas fa-cog mr-2 text-blue-400"></i>Tipo de Step
+                                <i class="fas fa-question-circle ml-2 text-gray-500 text-xs cursor-help" 
+                                   title="📸 Conteúdo: Envia mensagem com mídia (foto/vídeo) e pode incluir botões\n💬 Mensagem: Apenas texto simples\n🎵 Áudio: Envia áudio do Telegram\n🎥 Vídeo: Envia vídeo do Telegram\n🔘 Botões: Envia botões cadastrados (pagamento ou links)\n💰 Pagamento: Gera PIX e para o fluxo até pagamento\n✅ Acesso: Libera acesso e finaliza o fluxo"></i>
+                            </label>
                             <select id="step-type-${stepId}" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white">
                                 ${stepTypes.map(t => `<option value="${t.value}" ${step.type === t.value ? 'selected' : ''}>${t.label} - ${t.desc}</option>`).join('')}
                             </select>
+                            <div class="mt-2 p-3 bg-blue-500 bg-opacity-10 border border-blue-500 rounded-lg text-xs text-blue-300" id="step-type-help-${stepId}">
+                                ${(() => {
+                                    const helps = {
+                                        'content': '📸 <strong>Conteúdo:</strong> Ideal para apresentação. Envia mensagem com foto/vídeo e pode incluir botões.',
+                                        'message': '💬 <strong>Mensagem:</strong> Texto simples. Usado para instruções ou comunicação direta.',
+                                        'audio': '🎵 <strong>Áudio:</strong> Envia áudio do Telegram. Ideal para criar conexão pessoal.',
+                                        'video': '🎥 <strong>Vídeo:</strong> Envia vídeo do Telegram. Perfeito para explicações detalhadas.',
+                                        'buttons': '🔘 <strong>Botões:</strong> Exibe botões cadastrados (pagamento ou links). Lead escolhe opção.',
+                                        'payment': '💰 <strong>Pagamento:</strong> Gera PIX e <strong>pausa o fluxo</strong> até verificação. Exige conexões "Se pago" e/ou "Se não pago".',
+                                        'access': '✅ <strong>Acesso:</strong> Libera acesso final e <strong>encerra o fluxo</strong>. Não deve ter conexões.'
+                                    };
+                                    return helps[step.type] || 'Selecione um tipo de step';
+                                })()}
+                            </div>
                         </div>
                         <div class="mb-4">
                             <label class="block text-sm font-medium text-gray-300 mb-2">Ordem</label>
@@ -3262,6 +3320,22 @@ function botConfigApp() {
                     const stepIndex = self.config.flow_steps.findIndex(s => s.id === stepId);
                     if (stepIndex === -1) return;
                     const currentStep = self.config.flow_steps[stepIndex];
+                    
+                    // Atualizar help explicativo
+                    const helpDiv = document.getElementById(`step-type-help-${stepId}`);
+                    if (helpDiv) {
+                        const helps = {
+                            'content': '📸 <strong>Conteúdo:</strong> Ideal para apresentação. Envia mensagem com foto/vídeo e pode incluir botões.',
+                            'message': '💬 <strong>Mensagem:</strong> Texto simples. Usado para instruções ou comunicação direta.',
+                            'audio': '🎵 <strong>Áudio:</strong> Envia áudio do Telegram. Ideal para criar conexão pessoal.',
+                            'video': '🎥 <strong>Vídeo:</strong> Envia vídeo do Telegram. Perfeito para explicações detalhadas.',
+                            'buttons': '🔘 <strong>Botões:</strong> Exibe botões cadastrados (pagamento ou links). Lead escolhe opção.',
+                            'payment': '💰 <strong>Pagamento:</strong> Gera PIX e <strong>pausa o fluxo</strong> até verificação. Exige conexões "Se pago" e/ou "Se não pago".',
+                            'access': '✅ <strong>Acesso:</strong> Libera acesso final e <strong>encerra o fluxo</strong>. Não deve ter conexões.'
+                        };
+                        helpDiv.innerHTML = helps[this.value] || 'Selecione um tipo de step';
+                    }
+                    
                     updateConfigContent(stepId, this.value, currentStep);
                 });
             }
@@ -3275,9 +3349,96 @@ function botConfigApp() {
                 step.order = parseInt(document.getElementById(`step-order-${stepId}`).value) || 1;
                 step.delay_seconds = parseFloat(document.getElementById(`step-delay-${stepId}`).value) || 0;
                 
+                // ✅ VALIDAÇÕES DE UX
+                let warnings = [];
+                
                 if (step.type === 'content' || step.type === 'message') {
                     step.config.message = document.getElementById(`step-message-${stepId}`)?.value || '';
+                    if (!step.config.message || step.config.message.trim() === '') {
+                        warnings.push('⚠️ Mensagem vazia - este step não enviará nenhum texto ao lead');
+                    }
                 }
+                
+                // Validar conexões faltantes (exceto 'access')
+                if (step.type !== 'access') {
+                    const nextSelect = document.getElementById(`step-next-${stepId}`);
+                    const pendingSelect = document.getElementById(`step-pending-${stepId}`);
+                    const retrySelect = document.getElementById(`step-retry-${stepId}`);
+                    
+                    const hasNext = nextSelect && nextSelect.value;
+                    const hasPending = pendingSelect && pendingSelect.value;
+                    const hasRetry = retrySelect && retrySelect.value;
+                    
+                    // ✅ Validar loops circulares (prevenir recursão infinita)
+                    function checkCircularConnection(fromStepId, toStepId, visited = new Set(), depth = 0) {
+                        if (depth > 20) return true; // Loop detectado (limite de segurança)
+                        if (fromStepId === toStepId) return true; // Auto-referência direta
+                        if (visited.has(toStepId)) return true; // Loop circular - voltou ao step já visitado
+                        
+                        visited.add(fromStepId);
+                        const targetStep = self.config.flow_steps.find(s => s.id === toStepId);
+                        if (!targetStep || !targetStep.connections) return false;
+                        
+                        // Se o step de destino conecta de volta ao step original, é um loop
+                        if (targetStep.connections.next === fromStepId || 
+                            targetStep.connections.pending === fromStepId || 
+                            targetStep.connections.retry === fromStepId) {
+                            return true;
+                        }
+                        
+                        // Verificar conexões do step de destino recursivamente
+                        if (targetStep.connections.next && checkCircularConnection(fromStepId, targetStep.connections.next, new Set(visited), depth + 1)) {
+                            return true;
+                        }
+                        if (targetStep.connections.pending && checkCircularConnection(fromStepId, targetStep.connections.pending, new Set(visited), depth + 1)) {
+                            return true;
+                        }
+                        if (targetStep.connections.retry && checkCircularConnection(fromStepId, targetStep.connections.retry, new Set(visited), depth + 1)) {
+                            return true;
+                        }
+                        return false;
+                    }
+                    
+                    if (hasNext && checkCircularConnection(stepId, hasNext)) {
+                        warnings.push('⚠️ Loop circular detectado na conexão "Próximo"! Esta conexão pode causar recursão infinita. O fluxo pode ficar preso em loop.');
+                    }
+                    if (hasPending && checkCircularConnection(stepId, hasPending)) {
+                        warnings.push('⚠️ Loop circular detectado na conexão "Se não pago"! Pode causar recursão infinita.');
+                    }
+                    if (hasRetry && checkCircularConnection(stepId, hasRetry)) {
+                        warnings.push('⚠️ Loop circular detectado na conexão "Retry"! Pode causar recursão infinita.');
+                    }
+                    
+                    if (step.type === 'payment') {
+                        if (!hasNext && !hasPending) {
+                            warnings.push('⚠️ Step de pagamento sem conexões - defina "Se pago" e/ou "Se não pago"');
+                        }
+                    } else if (step.type === 'message') {
+                        // Message pode ter retry ou next
+                        if (!hasRetry && !hasNext) {
+                            warnings.push('⚠️ Step sem conexões - o fluxo pode parar aqui. Adicione uma conexão "Próximo" ou "Retry"');
+                        }
+                    } else if (!hasNext) {
+                        warnings.push('⚠️ Step sem conexão "Próximo" - o fluxo pode parar aqui. Adicione uma conexão para continuar');
+                    }
+                }
+                
+                // Mostrar avisos (não bloquear, apenas alertar)
+                if (warnings.length > 0) {
+                    if (!confirm(warnings.join('\n') + '\n\nDeseja salvar mesmo assim?')) {
+                        return; // Usuário cancelou
+                    }
+                }
+                
+                // ✅ Auto-numerar ordem sequencial após salvar (garantir sequência 1, 2, 3, 4...)
+                const sortedSteps = [...self.config.flow_steps].sort((a, b) => (a.order || 0) - (b.order || 0));
+                sortedSteps.forEach((s, index) => {
+                    const newOrder = index + 1;
+                    if (s.order !== newOrder) {
+                        s.order = newOrder;
+                    }
+                });
+                
                 if (step.type === 'content' || step.type === 'video') {
                     step.config.media_url = document.getElementById(`step-media-url-${stepId}`)?.value || '';
                     step.config.media_type = step.config.media_type || 'video';
@@ -3330,6 +3491,31 @@ function botConfigApp() {
                 document.getElementById(`flow-step-modal-${stepId}`).remove();
                 self.showNotification('✅ Step salvo!', 'success');
             };
+        },
+        
+        duplicateFlowStep(stepId) {
+            const step = this.config.flow_steps.find(s => s.id === stepId);
+            if (!step) {
+                this.showNotification('❌ Step não encontrado', 'error');
+                return;
+            }
+            
+            // Criar cópia do step
+            const newStepId = `step_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            const maxOrder = this.sortedFlowSteps.length > 0 ? Math.max(...this.sortedFlowSteps.map(s => s.order || 0)) : 0;
+            
+            const duplicatedStep = {
+                id: newStepId,
+                name: step.name ? `${step.name} (Cópia)` : null,
+                type: step.type,
+                order: maxOrder + 1,
+                config: JSON.parse(JSON.stringify(step.config || {})),
+                connections: {},  // Não copiar conexões (evitar confusão)
+                delay_seconds: step.delay_seconds || 0
+            };
+            
+            this.config.flow_steps.push(duplicatedStep);
+            this.showNotification(`✅ Step duplicado! Edite o novo step para configurar conexões.`, 'success');
         },
         
         removeFlowStep(stepId) {
