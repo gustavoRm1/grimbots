@@ -554,12 +554,12 @@
                 <!-- ✅ Info do step inicial definido -->
                 <div x-show="config.flow_start_step_id" 
                      x-cloak
-                     class="mb-4 p-4 bg-green-500 bg-opacity-10 border-2 border-green-500 rounded-xl">
+                     class="mb-4 p-4 bg-green-500 bg-opacity-25 border-2 border-green-500 rounded-xl">
                     <div class="flex items-center gap-3">
                         <i class="fas fa-check-circle text-green-500 text-xl"></i>
                         <div class="flex-1">
                             <div class="text-green-400 font-bold mb-1">✅ Step Inicial Definido</div>
-                            <div class="text-sm text-gray-300">
+                            <div class="text-sm text-gray-200">
                                 O fluxo iniciará no step marcado com <span class="text-yellow-400 font-bold">⭐ Inicial</span> quando o lead enviar <code class="px-1 py-0.5 bg-gray-800 rounded">/start</code>.
                             </div>
                         </div>
@@ -580,21 +580,22 @@
                         <div class="bg-gray-800 border border-gray-700 rounded-lg p-4">
                             <div class="flex items-start justify-between mb-3">
                                 <div class="flex items-center gap-3 flex-1">
-                                    <div class="relative">
+                                    <div class="relative flex flex-col items-center">
                                         <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-sm"
                                              x-text="step.order || index + 1"></div>
-                                        <!-- Badge "Inicial" -->
+                                        <!-- Badge "Inicial" (estrela acima do círculo) -->
                                         <div x-show="config.flow_start_step_id === step.id" 
                                              x-cloak
-                                             class="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-yellow-500 flex items-center justify-center shadow-lg border-2 border-gray-900"
+                                             class="absolute -top-3 w-6 h-6 rounded-full bg-yellow-500 flex items-center justify-center shadow-lg border-2 border-gray-900"
                                              title="⭐ Este é o step inicial do fluxo (/start inicia aqui)">
                                             <i class="fas fa-star text-xs text-yellow-900"></i>
                                         </div>
                                     </div>
                                     <div class="flex-1">
-                                        <div class="flex items-center gap-2">
+                                        <div class="flex items-center gap-2 flex-wrap">
                                             <span class="text-xl" x-text="getStepIcon(step.type)"></span>
-                                            <span class="text-white font-semibold" x-text="getStepTitle(step.type)"></span>
+                                            <!-- Mostrar nome se existir, senão mostrar tipo -->
+                                            <span class="text-white font-semibold" x-text="step.name || getStepTitle(step.type)"></span>
                                             <!-- Badge "Inicial" (texto) -->
                                             <span x-show="config.flow_start_step_id === step.id" 
                                                   x-cloak
@@ -602,7 +603,13 @@
                                                 ⭐ Inicial
                                             </span>
                                         </div>
-                                        <div class="text-xs text-gray-400 mt-1" x-text="step.id"></div>
+                                        <div class="text-xs text-gray-400 mt-1">
+                                            <span x-show="step.name" x-cloak>
+                                                <span class="text-gray-500">Tipo:</span> <span x-text="getStepTitle(step.type)"></span>
+                                                <span class="mx-2">•</span>
+                                            </span>
+                                            <span class="text-gray-500">ID:</span> <span class="font-mono" x-text="step.id.substring(0, 12) + '...'"></span>
+                                        </div>
                                     </div>
                                 </div>
                                 <div class="flex items-center gap-2">
@@ -2387,6 +2394,7 @@ function botConfigApp() {
                     if (Array.isArray(this.config.flow_steps)) {
                         this.config.flow_steps.forEach(step => {
                             if (!step.hasOwnProperty('id')) step.id = `step_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                            if (!step.hasOwnProperty('name')) step.name = null;
                             if (!step.hasOwnProperty('type')) step.type = 'content';
                             if (!step.hasOwnProperty('order')) step.order = 0;
                             if (!step.hasOwnProperty('config')) step.config = {};
@@ -2813,6 +2821,7 @@ function botConfigApp() {
             
             this.config.flow_steps.push({
                 id: stepId,
+                name: null,  // Nome será definido pelo usuário no modal
                 type: 'content',
                 order: newOrder,
                 config: { message: '', media_url: '', media_type: 'video', buttons: [] },
@@ -2858,9 +2867,10 @@ function botConfigApp() {
             ];
             
             const availableSteps = this.config.flow_steps.filter(s => s.id !== stepId);
-            const stepOptions = availableSteps.map(s => 
-                `<option value="${s.id}">${s.order || 0} - ${this.getStepTitle(s.type)} (${s.id.substring(0, 8)}...)</option>`
-            ).join('');
+            const stepOptions = availableSteps.map(s => {
+                const stepLabel = s.name ? s.name : this.getStepTitle(s.type);
+                return `<option value="${s.id}">${s.order || 0} - ${stepLabel}</option>`;
+            }).join('');
             
             const modal = document.createElement('div');
             modal.className = 'fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50';
@@ -2873,6 +2883,16 @@ function botConfigApp() {
                     </div>
                     <form onsubmit="event.preventDefault(); if(window.flowStepEditor['saveStep_${stepId}']) window.flowStepEditor['saveStep_${stepId}']();">
                         <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-300 mb-2">
+                                <i class="fas fa-tag mr-2 text-blue-400"></i>Nome do Step
+                            </label>
+                            <input type="text" id="step-name-${stepId}" value="${(step.name || '').replace(/"/g, '&quot;')}" 
+                                   placeholder="Ex: Boas-vindas, Apresentação, Pagamento..."
+                                   class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white placeholder-gray-500"
+                                   maxlength="50">
+                            <p class="text-xs text-gray-500 mt-1">Nome para identificar este step no fluxo (opcional, mas recomendado)</p>
+                        </div>
+                        <div class="mb-4">
                             <label class="block text-sm font-medium text-gray-300 mb-2">Tipo</label>
                             <select id="step-type-${stepId}" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white">
                                 ${stepTypes.map(t => `<option value="${t.value}" ${step.type === t.value ? 'selected' : ''}>${t.label} - ${t.desc}</option>`).join('')}
@@ -2881,7 +2901,21 @@ function botConfigApp() {
                         <div class="mb-4">
                             <label class="block text-sm font-medium text-gray-300 mb-2">Ordem</label>
                             <input type="number" id="step-order-${stepId}" value="${step.order || 0}" min="1" 
-                                   class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white">
+                                   class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white"
+                                   oninput="document.getElementById('order-warning-${stepId}').style.display = (this.value == 1) ? 'block' : 'none'">
+                            <!-- Aviso quando ordem = 1 -->
+                            <div id="order-warning-${stepId}" 
+                                 style="display: ${(step.order || 0) == 1 ? 'block' : 'none'}"
+                                 class="mt-2 p-3 bg-yellow-500 bg-opacity-10 border border-yellow-500 rounded-lg">
+                                <div class="flex items-start gap-2">
+                                    <i class="fas fa-star text-yellow-400 text-sm mt-0.5"></i>
+                                    <div class="text-xs text-yellow-300">
+                                        <strong>⭐ Step Inicial do Funil</strong>
+                                        <br>
+                                        <span class="text-yellow-400">Este step será o primeiro a ser executado quando o lead enviar <code class="px-1 py-0.5 bg-gray-800 rounded">/start</code>.</span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                         <div class="mb-4">
                             <label class="block text-sm font-medium text-gray-300 mb-2">Delay (segundos)</label>
@@ -3150,7 +3184,10 @@ function botConfigApp() {
                 if (form) {
                     const stepOptions = self.config.flow_steps
                         .filter(s => s.id !== stepId)
-                        .map(s => `<option value="${s.id}">${s.order || 0} - ${self.getStepTitle(s.type)} (${s.id.substring(0, 8)}...)</option>`)
+                        .map(s => {
+                            const stepLabel = s.name ? s.name : self.getStepTitle(s.type);
+                            return `<option value="${s.id}">${s.order || 0} - ${stepLabel}</option>`;
+                        })
                         .join('');
                     
                     // Remover conexões existentes
@@ -3240,6 +3277,7 @@ function botConfigApp() {
                 if (stepIndex === -1) return;
                 
                 const step = self.config.flow_steps[stepIndex];
+                step.name = (document.getElementById(`step-name-${stepId}`)?.value || '').trim() || null;
                 step.type = document.getElementById(`step-type-${stepId}`).value;
                 step.order = parseInt(document.getElementById(`step-order-${stepId}`).value) || 1;
                 step.delay_seconds = parseFloat(document.getElementById(`step-delay-${stepId}`).value) || 0;
