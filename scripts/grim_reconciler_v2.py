@@ -209,10 +209,10 @@ def _force_finalize_payment(payment: Payment) -> None:
         # ✅ CRÍTICO: Refresh antes de validar status
         db.session.refresh(payment)
 
-        try:
-            send_meta_pixel_purchase_event(payment)
-        except Exception as e:
-            print(f"⚠️ Forçando meta purchase falhou: {e}")
+        # ✅ NOVA ARQUITETURA: Purchase NÃO é disparado quando pagamento é confirmado
+        # ✅ Purchase é disparado APENAS quando lead acessa link de entrega (/delivery/<token>)
+        # ✅ Este script NÃO deve disparar Purchase - Purchase será disparado na página de entrega
+        print(f"✅ Purchase será disparado apenas quando lead acessar link de entrega: /delivery/<token>")
 
         # ✅ CRÍTICO: Validar status ANTES de chamar send_payment_delivery
         if payment.status == 'paid':

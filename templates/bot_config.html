@@ -1326,14 +1326,39 @@
                         <i class="fas fa-link mr-2 text-blue-500"></i>
                         Link de Acesso
                     </label>
+                    
+                    <!-- ✅ Mensagem quando Meta Pixel está ativo -->
+                    <div x-show="config.has_meta_pixel" 
+                         x-cloak
+                         class="mb-3 p-4 bg-blue-900 bg-opacity-20 border border-blue-500 rounded-lg">
+                        <div class="flex items-start gap-3">
+                            <i class="fas fa-info-circle text-blue-400 mt-1"></i>
+                            <div class="flex-1">
+                                <p class="text-sm font-semibold text-blue-300 mb-1">
+                                    Meta Pixel Ativo (Pool: <span x-text="config.pool_name || 'N/A'"></span>)
+                                </p>
+                                <p class="text-xs text-gray-300 leading-relaxed">
+                                    ✅ O link de entrega será gerado automaticamente quando o pagamento for confirmado.<br>
+                                    ✅ Este campo será usado como <strong>redirecionamento final</strong> após o Purchase disparar.<br>
+                                    ✅ Configure aqui o link para onde o lead será redirecionado após acessar o entregável.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <input type="url" 
                            x-model="config.access_link" 
                            class="form-input"
-                           placeholder="https://t.me/+seugrupo">
+                           :class="{'bg-opacity-50': config.has_meta_pixel}"
+                           :placeholder="config.has_meta_pixel ? 'https://t.me/+seugrupo (Link final após Purchase)' : 'https://t.me/+seugrupo'">
                     <div class="info-box mt-2">
-                        <p class="text-sm text-gray-300">
+                        <p class="text-sm text-gray-300" x-show="!config.has_meta_pixel">
                             <i class="fas fa-info-circle mr-2 text-blue-500"></i>
                             Pode ser grupo/canal do Telegram, área de membros, etc.
+                        </p>
+                        <p class="text-sm text-gray-300" x-show="config.has_meta_pixel" x-cloak>
+                            <i class="fas fa-info-circle mr-2 text-blue-500"></i>
+                            Este será o link final. O sistema gerará automaticamente um link de entrega (<code class="px-1 py-0.5 bg-gray-900 rounded text-yellow-400 text-xs">/delivery/&lt;token&gt;</code>) que dispara o Purchase e depois redireciona para este link.
                         </p>
                     </div>
                 </div>
@@ -1989,7 +2014,9 @@ function botConfigApp() {
             upsells: [],
             access_link: '',
             success_message: '',
-            pending_message: ''
+            pending_message: '',
+            has_meta_pixel: false,  // ✅ Se bot está associado a pool com Meta Pixel ativo
+            pool_name: null          // ✅ Nome do pool (se houver)
         },
         
         async init() {

@@ -1019,13 +1019,9 @@ def process_webhook_async(gateway_type: str, data: Dict[str, Any]):
                                 f"(status atual: {payment.status}, payment_id: {payment.payment_id})"
                             )
                         
-                        if not payment.meta_purchase_sent:
-                            try:
-                                logger.info(f"📊 [WEBHOOK {gateway_type.upper()}] meta_purchase_sent ainda falso - reenfileirando Meta Purchase")
-                                send_meta_pixel_purchase_event(payment)
-                                logger.info(f"✅ [WEBHOOK {gateway_type.upper()}] Meta Purchase reenfileirado")
-                            except Exception as e:
-                                logger.warning(f"⚠️ [WEBHOOK {gateway_type.upper()}] Erro ao reenfileirar Meta Pixel Purchase (duplicado): {e}")
+                        # ✅ NOVA ARQUITETURA: Purchase NÃO é disparado quando pagamento é confirmado
+                        # ✅ Purchase é disparado APENAS quando lead acessa link de entrega (/delivery/<token>)
+                        logger.info(f"✅ [WEBHOOK {gateway_type.upper()}] Purchase será disparado apenas quando lead acessar link de entrega: /delivery/<token>")
                         
                         return {'status': 'already_processed'}
                     
@@ -1039,14 +1035,16 @@ def process_webhook_async(gateway_type: str, data: Dict[str, Any]):
                     status_is_paid = (status == 'paid')
                     deve_processar_estatisticas = status_is_paid and was_pending
                     deve_enviar_entregavel = status_is_paid
-                    deve_enviar_meta_purchase = status_is_paid and not payment.meta_purchase_sent
+                    # ✅ NOVA ARQUITETURA: Purchase NÃO é disparado quando pagamento é confirmado
+                    # ✅ Purchase é disparado APENAS quando lead acessa link de entrega (/delivery/<token>)
+                    deve_enviar_meta_purchase = False  # ❌ Sempre False - Purchase apenas na página de entrega
                     
                     # ✅ LOGS DETALHADOS: Decisões de processamento
                     logger.info(f"📊 [WEBHOOK {gateway_type.upper()}] Decisões de processamento:")
                     logger.info(f"   Status é paid: {status_is_paid}")
                     logger.info(f"   Deve processar estatísticas: {deve_processar_estatisticas}")
                     logger.info(f"   Deve enviar entregável: {deve_enviar_entregavel}")
-                    logger.info(f"   Deve enviar Meta Purchase: {deve_enviar_meta_purchase}")
+                    logger.info(f"   Deve enviar Meta Purchase: {deve_enviar_meta_purchase} (sempre False - Purchase apenas na página de entrega)")
 
                     if deve_processar_estatisticas:
                         logger.info(f"💰 [WEBHOOK {gateway_type.upper()}] Processando estatísticas e atualizando payment...")
@@ -1098,16 +1096,10 @@ def process_webhook_async(gateway_type: str, data: Dict[str, Any]):
                         except Exception as e:
                             logger.warning(f"Erro em gamificação: {e}")
                         
-                    if deve_enviar_meta_purchase:
-                        try:
-                            logger.info(f"🚀 [WEBHOOK {gateway_type.upper()}] Iniciando envio de Meta Purchase para {payment.payment_id}")
-                            logger.info(f"   Payment ID: {payment.payment_id} | Status: {payment.status} | Meta Purchase Sent: {payment.meta_purchase_sent}")
-                            resultado = send_meta_pixel_purchase_event(payment)
-                            logger.info(f"✅ [WEBHOOK {gateway_type.upper()}] Meta Purchase processado para {payment.payment_id}")
-                        except Exception as e:
-                            logger.error(f"❌ [WEBHOOK {gateway_type.upper()}] Erro ao enviar Meta Pixel Purchase: {e}", exc_info=True)
-                            # ✅ CRÍTICO: Não silenciar erro - propagar para análise (comentado para não quebrar webhook)
-                            # raise  # Opcional: re-raise para não silenciar
+                    # ✅ NOVA ARQUITETURA: Purchase NÃO é disparado quando pagamento é confirmado
+                    # ✅ Purchase é disparado APENAS quando lead acessa link de entrega (/delivery/<token>)
+                    # ✅ Não disparar Purchase quando pagamento é confirmado (via webhook async)
+                    logger.info(f"✅ [WEBHOOK {gateway_type.upper()}] Purchase será disparado apenas quando lead acessar link de entrega: /delivery/<token>")
                     
                     if deve_enviar_entregavel:
                         # ✅ CRÍTICO: Refresh antes de validar status

@@ -877,6 +877,10 @@ class Payment(db.Model):
     meta_event_id = db.Column(db.String(100), nullable=True)
     meta_viewcontent_sent = db.Column(db.Boolean, default=False)
     meta_viewcontent_sent_at = db.Column(db.DateTime, nullable=True)
+    
+    # ✅ DELIVERY TRACKING - Purchase disparado na página de entrega
+    delivery_token = db.Column(db.String(64), unique=True, nullable=True, index=True)  # Token único para acesso à página de entrega
+    purchase_sent_from_delivery = db.Column(db.Boolean, default=False)  # Flag se Purchase foi disparado da página de entrega
     # ✅ UTM TRACKING
     utm_source = db.Column(db.String(255), nullable=True)
     utm_campaign = db.Column(db.String(255), nullable=True)

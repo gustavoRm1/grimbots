@@ -294,6 +294,11 @@ def send_payment_delivery(payment, bot_manager):
     """
     Envia entregável (link de acesso ou confirmação) ao cliente após pagamento confirmado
     
+    ✅ NOVA ARQUITETURA: Purchase disparado na página de entrega
+    - Gera delivery_token único
+    - Envia link /delivery/<token>
+    - Purchase é disparado quando cliente acessa (matching perfeito)
+    
     Args:
         payment: Objeto Payment com status='paid'
         bot_manager: Instância do BotManager para enviar mensagem
@@ -328,12 +333,55 @@ def send_payment_delivery(payment, bot_manager):
             logger.error(f"❌ Payment {payment.id} não tem customer_user_id válido ({payment.customer_user_id}) - não é possível enviar")
             return False
         
-        # Verificar se bot tem config e access_link
-        has_access_link = payment.bot.config and payment.bot.config.access_link
+        # ✅ GERAR delivery_token se não existir (único por payment)
+        if not payment.delivery_token:
+            import uuid
+            import hashlib
+            import time
+            
+            # Gerar token único: hash de payment_id + timestamp + secret
+            timestamp = int(time.time())
+            secret = f"{payment.id}_{payment.payment_id}_{timestamp}"
+            delivery_token = hashlib.sha256(secret.encode()).hexdigest()[:64]
+            
+            payment.delivery_token = delivery_token
+            db.session.commit()
+            logger.info(f"✅ delivery_token gerado para payment {payment.id}: {delivery_token[:20]}...")
         
-        if has_access_link:
-            access_link = payment.bot.config.access_link
-            # Mensagem completa com link
+        # ✅ Buscar pool para configurar pixel (se habilitado)
+        from models import PoolBot
+        pool_bot = PoolBot.query.filter_by(bot_id=payment.bot_id).first()
+        pool = pool_bot.pool if pool_bot else None
+        has_meta_pixel = pool and pool.meta_tracking_enabled and pool.meta_pixel_id
+        
+        # ✅ URL de entrega (Purchase disparado aqui)
+        from flask import url_for
+        try:
+            delivery_url = url_for('delivery_page', delivery_token=payment.delivery_token, _external=True)
+        except:
+            delivery_url = f"https://app.grimbots.online/delivery/{payment.delivery_token}"
+        
+        # Verificar se bot tem config e access_link (link final após Purchase)
+        has_access_link = payment.bot.config and payment.bot.config.access_link
+        final_link = payment.bot.config.access_link if has_access_link else None
+        
+        if has_access_link and has_meta_pixel:
+            # ✅ NOVA ARQUITETURA: Link de entrega com Purchase tracking
+            access_message = f"""
+✅ <b>Pagamento Confirmado!</b>
+
+🎉 Parabéns! Seu pagamento foi aprovado!
+
+🎯 <b>Produto:</b> {payment.product_name}
+💰 <b>Valor:</b> R$ {payment.amount:.2f}
+
+🔗 <b>Clique aqui para acessar:</b>
+{delivery_url}
+
+Aproveite! 🚀
+            """
+        elif has_access_link:
+            # ✅ Link direto (sem pixel configurado)
             access_message = f"""
 ✅ <b>Pagamento Confirmado!</b>
 
@@ -343,7 +391,7 @@ def send_payment_delivery(payment, bot_manager):
 💰 <b>Valor:</b> R$ {payment.amount:.2f}
 
 🔗 <b>Seu acesso:</b>
-{access_link}
+{final_link}
 
 Aproveite! 🚀
             """
@@ -368,7 +416,7 @@ Aproveite! 🚀
                 chat_id=str(payment.customer_user_id),
                 message=access_message.strip()
             )
-            logger.info(f"✅ Entregável enviado para {payment.customer_name} (payment_id: {payment.id}, bot_id: {payment.bot_id})")
+            logger.info(f"✅ Entregável enviado para {payment.customer_name} (payment_id: {payment.id}, bot_id: {payment.bot_id}, delivery_token: {payment.delivery_token[:20]}...)")
             return True
         except Exception as send_error:
             # Erro ao enviar mensagem (bot bloqueado, chat_id inválido, etc)
@@ -477,24 +525,10 @@ def reconcile_paradise_payments():
                         # ✅ REFRESH payment após commit para garantir que está atualizado
                         db.session.refresh(p)
                         
-                        # ✅ ENVIAR META PIXEL PURCHASE EVENT (CORREÇÃO CRÍTICA)
-                        try:
-                            send_meta_pixel_purchase_event(p)
-                            logger.info(f"📊 Meta Pixel Purchase disparado para {p.payment_id} via reconciliador Paradise")
-                        except Exception as e:
-                            logger.error(f"❌ Erro ao disparar Meta Pixel via reconciliação Paradise: {e}", exc_info=True)
-                            # ✅ LOG DETALHADO para debug
-                            logger.error(f"   Payment ID: {p.payment_id} | Bot ID: {p.bot_id} | Status: {p.status}")
-                            if p.bot:
-                                from models import PoolBot
-                                pool_bot = PoolBot.query.filter_by(bot_id=p.bot_id).first()
-                                if pool_bot:
-                                    pool = pool_bot.pool
-                                    logger.error(f"   Pool: {pool.name} | Tracking: {pool.meta_tracking_enabled} | Purchase Event: {pool.meta_events_purchase}")
-                                else:
-                                    logger.error(f"   ❌ Bot não está associado a nenhum pool!")
-                            else:
-                                logger.error(f"   ❌ Bot não encontrado!")
+                        # ✅ NOVA ARQUITETURA: Purchase NÃO é disparado quando pagamento é confirmado
+                        # ✅ Purchase é disparado APENAS quando lead acessa link de entrega (/delivery/<token>)
+                        # ✅ Isso garante que Purchase dispara no momento certo (quando lead RECEBE entregável no Telegram)
+                        logger.info(f"✅ Purchase será disparado apenas quando lead acessar link de entrega: /delivery/<token>")
                         
                         # ✅ ENVIAR ENTREGÁVEL AO CLIENTE (CORREÇÃO CRÍTICA)
                         try:
@@ -614,12 +648,10 @@ def reconcile_pushynpay_payments():
                         db.session.commit()
                         logger.info(f"✅ PushynPay: Payment {p.id} atualizado para paid via reconciliação")
                         
-                        # ✅ ENVIAR META PIXEL PURCHASE EVENT (CORREÇÃO CRÍTICA)
-                        try:
-                            send_meta_pixel_purchase_event(p)
-                            logger.info(f"📊 Meta Pixel Purchase disparado para {p.payment_id} via reconciliador PushynPay")
-                        except Exception as e:
-                            logger.error(f"❌ Erro ao disparar Meta Pixel via reconciliação PushynPay: {e}", exc_info=True)
+                        # ✅ NOVA ARQUITETURA: Purchase NÃO é disparado quando pagamento é confirmado
+                        # ✅ Purchase é disparado APENAS quando lead acessa link de entrega (/delivery/<token>)
+                        # ✅ Isso garante que Purchase dispara no momento certo (quando lead RECEBE entregável no Telegram)
+                        logger.info(f"✅ Purchase será disparado apenas quando lead acessar link de entrega: /delivery/<token>")
                         
                         # ✅ ENVIAR ENTREGÁVEL AO CLIENTE (CORREÇÃO CRÍTICA)
                         try:
@@ -3816,6 +3848,21 @@ def get_bot_config(bot_id):
         logger.info(f"   - main_buttons: {len(config_dict.get('main_buttons', []))} botões")
         logger.info(f"   - downsells: {len(config_dict.get('downsells', []))} downsells")
         logger.info(f"   - upsells: {len(config_dict.get('upsells', []))} upsells")
+        
+        # ✅ NOVA ARQUITETURA: Verificar se bot está associado a pool com Meta Pixel ativado
+        from models import PoolBot
+        pool_bot = PoolBot.query.filter_by(bot_id=bot.id).first()
+        has_meta_pixel = False
+        pool_name = None
+        if pool_bot and pool_bot.pool:
+            pool = pool_bot.pool
+            has_meta_pixel = pool.meta_tracking_enabled and pool.meta_pixel_id and pool.meta_access_token
+            pool_name = pool.name
+        
+        config_dict['has_meta_pixel'] = has_meta_pixel
+        config_dict['pool_name'] = pool_name
+        
+        logger.info(f"   - Meta Pixel ativo: {'✅ Sim' if has_meta_pixel else '❌ Não'} (Pool: {pool_name or 'N/A'})")
         
         return jsonify(config_dict)
     except Exception as e:
@@ -7223,6 +7270,139 @@ def get_chat_media(bot_id, file_id):
         logger.error(f"❌ Erro ao obter mídia: {e}", exc_info=True)
         return jsonify({'error': str(e)}), 500
 
+@app.route('/delivery/<delivery_token>')
+def delivery_page(delivery_token):
+    """
+    ✅ PÁGINA DE ENTREGA COM PURCHASE TRACKING
+    
+    Fluxo:
+    1. Lead passa pelo cloaker → PageView disparado → tracking_token salvo no Redis
+    2. Lead compra → webhook confirma → delivery_token gerado → link enviado
+    3. Lead acessa esta página → Purchase disparado com matching perfeito
+    4. Redireciona para link final configurado pelo usuário
+    
+    ✅ MATCHING 100%:
+    - Usa mesmo event_id do PageView (deduplicação perfeita)
+    - Usa cookies frescos do browser (_fbp, _fbc)
+    - Usa tracking_data do Redis (fbclid, IP, UA)
+    - Matching garantido mesmo se cookies expirarem
+    """
+    try:
+        from models import Payment, PoolBot, BotUser
+        from utils.tracking_service import TrackingServiceV4
+        import time
+        from datetime import datetime
+        
+        # ✅ VALIDAÇÃO: Buscar payment pelo delivery_token
+        payment = Payment.query.filter_by(
+            delivery_token=delivery_token,
+            status='paid'
+        ).first_or_404()
+        
+        # ✅ Buscar pool para configurar pixel
+        pool_bot = PoolBot.query.filter_by(bot_id=payment.bot_id).first()
+        if not pool_bot:
+            logger.error(f"❌ Payment {payment.id}: Bot não está associado a nenhum pool")
+            return render_template('delivery_error.html', error="Configuração inválida"), 500
+        
+        pool = pool_bot.pool
+        has_meta_pixel = pool and pool.meta_tracking_enabled and pool.meta_pixel_id and pool.meta_access_token
+        
+        # ✅ Link final para redirecionar (configurado pelo usuário)
+        redirect_url = payment.bot.config.access_link if payment.bot.config and payment.bot.config.access_link else None
+        
+        # ✅ RECUPERAR tracking_data do Redis (para matching perfeito)
+        tracking_data = {}
+        tracking_service_v4 = TrackingServiceV4()
+        
+        # Prioridade 1: bot_user.tracking_session_id (token do redirect)
+        telegram_user_id = payment.customer_user_id.replace('user_', '') if payment.customer_user_id and payment.customer_user_id.startswith('user_') else payment.customer_user_id
+        bot_user = BotUser.query.filter_by(
+            bot_id=payment.bot_id,
+            telegram_user_id=str(telegram_user_id)
+        ).first()
+        
+        if bot_user and bot_user.tracking_session_id:
+            tracking_data = tracking_service_v4.recover_tracking_data(bot_user.tracking_session_id) or {}
+            logger.info(f"✅ Delivery - tracking_data recuperado via bot_user.tracking_session_id: {len(tracking_data)} campos")
+        
+        # Prioridade 2: payment.tracking_token
+        if not tracking_data and payment.tracking_token:
+            tracking_data = tracking_service_v4.recover_tracking_data(payment.tracking_token) or {}
+            if tracking_data:
+                logger.info(f"✅ Delivery - tracking_data recuperado via payment.tracking_token: {len(tracking_data)} campos")
+        
+        # ✅ PREPARAR DADOS PARA PURCHASE
+        pageview_event_id = tracking_data.get('pageview_event_id') or payment.pageview_event_id
+        external_id = tracking_data.get('fbclid') or payment.fbclid
+        
+        # ✅ Sanitizar valores para JavaScript
+        def sanitize_js_value(value):
+            if not value:
+                return ''
+            import re
+            value = str(value).replace("'", "\\'").replace('"', '\\"').replace('\n', '').replace('\r', '')
+            value = re.sub(r'[^a-zA-Z0-9_.-]', '', value)
+            return value[:255]
+        
+        # ✅ Renderizar página com Purchase tracking
+        pixel_config = {
+            'pixel_id': pool.meta_pixel_id if has_meta_pixel else None,
+            'event_id': pageview_event_id or f"purchase_{payment.id}_{int(time.time())}",
+            'external_id': external_id or '',
+            'value': float(payment.amount),
+            'currency': 'BRL',
+            'content_id': str(payment.id),
+            'content_name': payment.product_name or 'Produto',
+            'redirect_url': redirect_url or ''
+        }
+        
+        logger.info(f"✅ Delivery - Renderizando página para payment {payment.id} | Pixel: {'✅' if has_meta_pixel else '❌'} | event_id: {pixel_config['event_id'][:30]}...")
+        
+        return render_template('delivery.html',
+            payment=payment,
+            pixel_config=pixel_config,
+            has_meta_pixel=has_meta_pixel,
+            redirect_url=redirect_url
+        )
+        
+    except Exception as e:
+        logger.error(f"❌ Erro na página de delivery: {e}", exc_info=True)
+        return render_template('delivery_error.html', error=str(e)), 500
+
+@app.route('/api/tracking/mark-purchase-sent', methods=['POST'])
+@csrf.exempt
+def mark_purchase_sent():
+    """Marca Purchase como enviado (anti-duplicação)"""
+    try:
+        from models import Payment
+        import json
+        
+        data = request.get_json() or {}
+        payment_id = data.get('payment_id')
+        
+        if not payment_id:
+            return jsonify({'error': 'payment_id obrigatório'}), 400
+        
+        payment = Payment.query.filter_by(id=int(payment_id)).first_or_404()
+        
+        # Marcar como enviado
+        payment.purchase_sent_from_delivery = True
+        if not payment.meta_purchase_sent:
+            payment.meta_purchase_sent = True
+            from models import get_brazil_time
+            payment.meta_purchase_sent_at = get_brazil_time()
+        
+        db.session.commit()
+        
+        logger.info(f"✅ Purchase marcado como enviado (delivery) para payment {payment.id}")
+        return jsonify({'success': True})
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"❌ Erro ao marcar Purchase como enviado: {e}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/settings')
 @login_required
 def settings():
@@ -9159,18 +9339,13 @@ def payment_webhook(gateway_type):
                         )
                     
                     # ============================================================================
-                    # ✅ META PIXEL: ENVIAR PURCHASE EVENT (SEMPRE quando status é 'paid')
+                    # ✅ META PIXEL: Purchase NÃO é disparado aqui (webhook/reconciliador)
                     # ============================================================================
-                    # ✅ CORREÇÃO CRÍTICA: Sempre enviar Meta Pixel quando status é 'paid',
-                    # independente de se estatísticas foram processadas ou não
-                    # Isso garante que mesmo se reconciliador atualizar antes do webhook,
-                    # o Meta Pixel será enviado via webhook também (idempotente)
-                    try:
-                        logger.info(f"✅ Enviando Meta Purchase para {payment.payment_id}")
-                        send_meta_pixel_purchase_event(payment)
-                        logger.info(f"📊 Meta Pixel Purchase disparado para {payment.payment_id} via webhook {gateway_type}")
-                    except Exception as e:
-                        logger.exception(f"❌ Erro ao disparar Meta Pixel via webhook {gateway_type}: {e}")
+                    # ✅ NOVA ARQUITETURA: Purchase é disparado APENAS quando lead acessa link de entrega
+                    # ✅ Purchase NÃO dispara quando pagamento é confirmado (PIX pago)
+                    # ✅ Purchase dispara quando lead RECEBE entregável no Telegram e clica no link (/delivery/<token>)
+                    # ✅ Isso garante tracking 100% preciso: Purchase = conversão REAL (lead acessou produto)
+                    logger.info(f"✅ Purchase será disparado apenas quando lead acessar link de entrega: /delivery/<token>")
                     
                     # ============================================================================
                     # ✅ UPSELLS AUTOMÁTICOS - APÓS COMPRA APROVADA (só se estatísticas foram processadas)
@@ -9787,9 +9962,10 @@ def simulate_payment(payment_id):
                 payment.bot.owner.total_commission_paid += commission_amount
             
             # ============================================================================
-            # ✅ META PIXEL: ENVIAR PURCHASE EVENT (SIMULAÇÃO)
-            # ============================================================================
-            send_meta_pixel_purchase_event(payment)
+            # ✅ META PIXEL: Purchase NÃO é disparado aqui (apenas simulação/teste)
+            # ✅ NOVA ARQUITETURA: Purchase é disparado APENAS quando lead acessa link de entrega (/delivery/<token>)
+            # ⚠️ ATENÇÃO: Esta é uma simulação/teste - em produção, Purchase só dispara na página de entrega
+            # send_meta_pixel_purchase_event(payment)  # ❌ DESABILITADO - Purchase apenas na página de entrega
             
             # ============================================================================
             # GAMIFICAÇÃO V2.0 - SIMULAR PAGAMENTO

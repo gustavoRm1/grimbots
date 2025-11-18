@@ -184,14 +184,9 @@ def sync_umbrellapay_payments():
                             payment.bot.owner.total_sales += 1
                             payment.bot.owner.total_revenue += payment.amount
                             
-                            # ✅ Reenviar Meta Pixel Purchase se necessário
-                            if not payment.meta_purchase_sent:
-                                try:
-                                    logger.info(f"📊 [SYNC UMBRELLAPAY] Enviando Meta Pixel Purchase para {payment.payment_id}")
-                                    send_meta_pixel_purchase_event(payment)
-                                    logger.info(f"✅ [SYNC UMBRELLAPAY] Meta Pixel Purchase enviado")
-                                except Exception as e:
-                                    logger.error(f"❌ [SYNC UMBRELLAPAY] Erro ao enviar Meta Purchase: {e}", exc_info=True)
+                            # ✅ NOVA ARQUITETURA: Purchase NÃO é disparado quando pagamento é confirmado
+                            # ✅ Purchase é disparado APENAS quando lead acessa link de entrega (/delivery/<token>)
+                            logger.info(f"✅ [SYNC UMBRELLAPAY] Purchase será disparado apenas quando lead acessar link de entrega: /delivery/<token>")
                             
                             # ✅ COMMIT ATÔMICO com rollback em caso de erro
                             db.session.commit()

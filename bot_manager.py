@@ -3341,14 +3341,9 @@ Desculpe, não foi possível processar seu pagamento.
                                     payment.bot.owner.total_sales += 1
                                     payment.bot.owner.total_revenue += payment.amount
                                     
-                                    # ✅ META PIXEL PURCHASE (ANTES DO COMMIT!)
-                                    try:
-                                        from app import send_meta_pixel_purchase_event
-                                        logger.info(f"📊 [VERIFY UMBRELLAPAY] Disparando Meta Pixel Purchase para {payment.payment_id}")
-                                        send_meta_pixel_purchase_event(payment)
-                                        logger.info(f"✅ [VERIFY UMBRELLAPAY] Meta Pixel Purchase enviado")
-                                    except Exception as e:
-                                        logger.error(f"❌ [VERIFY UMBRELLAPAY] Erro ao enviar Meta Purchase: {e}", exc_info=True)
+                                    # ✅ NOVA ARQUITETURA: Purchase NÃO é disparado quando pagamento é confirmado
+                                    # ✅ Purchase é disparado APENAS quando lead acessa link de entrega (/delivery/<token>)
+                                    logger.info(f"✅ [VERIFY UMBRELLAPAY] Purchase será disparado apenas quando lead acessar link de entrega: /delivery/<token>")
                                     
                                     # ✅ COMMIT ATÔMICO com rollback em caso de erro
                                     db.session.commit()
@@ -3445,14 +3440,9 @@ Desculpe, não foi possível processar seu pagamento.
                                         payment.bot.owner.total_sales += 1
                                         payment.bot.owner.total_revenue += payment.amount
                                         
-                                        # ✅ META PIXEL PURCHASE (ANTES DO COMMIT!)
-                                        try:
-                                            from app import send_meta_pixel_purchase_event
-                                            logger.info(f"📊 Disparando Meta Pixel Purchase para {payment.payment_id}")
-                                            send_meta_pixel_purchase_event(payment)
-                                            logger.info(f"✅ Meta Pixel Purchase enviado")
-                                        except Exception as e:
-                                            logger.error(f"❌ Erro ao enviar Meta Purchase: {e}")
+                                        # ✅ NOVA ARQUITETURA: Purchase NÃO é disparado quando pagamento é confirmado
+                                        # ✅ Purchase é disparado APENAS quando lead acessa link de entrega (/delivery/<token>)
+                                        logger.info(f"✅ Purchase será disparado apenas quando lead acessar link de entrega: /delivery/<token>")
                                         
                                         db.session.commit()
                                         logger.info(f"💾 Pagamento atualizado via consulta ativa")
@@ -3490,20 +3480,11 @@ Desculpe, não foi possível processar seu pagamento.
                     logger.info(f"✅ PAGAMENTO CONFIRMADO! Liberando acesso...")
                     
                     # ============================================================================
-                    # ✅ META PIXEL PURCHASE: Disparar se ainda não foi enviado
+                    # ✅ NOVA ARQUITETURA: Purchase NÃO é disparado via botão verify
                     # ============================================================================
-                    # CRÍTICO: Se pagamento foi confirmado via webhook ANTES do botão verify,
-                    # o Meta Pixel pode não ter sido disparado. Verificar e disparar se necessário.
-                    if not payment.meta_purchase_sent:
-                        try:
-                            from app import send_meta_pixel_purchase_event
-                            logger.info(f"📊 Disparando Meta Pixel Purchase para {payment.payment_id} (via botão verify)")
-                            send_meta_pixel_purchase_event(payment)
-                            logger.info(f"✅ Meta Pixel Purchase enviado via botão verify")
-                        except Exception as e:
-                            logger.error(f"❌ Erro ao enviar Meta Purchase via botão verify: {e}", exc_info=True)
-                    else:
-                        logger.info(f"ℹ️ Meta Pixel Purchase já foi enviado anteriormente (meta_purchase_sent=True)")
+                    # ✅ Purchase é disparado APENAS quando lead acessa link de entrega (/delivery/<token>)
+                    # ✅ Não disparar Purchase quando pagamento é confirmado (via webhook ou botão verify)
+                    logger.info(f"✅ Purchase será disparado apenas quando lead acessar link de entrega: /delivery/<token>")
                     
                     # Cancelar downsells agendados
                     self.cancel_downsells(payment.payment_id)

@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Entrega - Acesso Liberado</title>
+    
+    <!-- Meta Pixel Code -->
+    {% if has_meta_pixel and pixel_config.pixel_id %}
+    <script>
+        !function(f,b,e,v,n,t,s)
+        {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+        n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+        if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+        n.queue=[];t=b.createElement(e);t.async=!0;
+        t.src=v;s=b.getElementsByTagName(e)[0];
+        s.parentNode.insertBefore(t,s)}(window, document,'script',
+        'https://connect.facebook.net/en_US/fbevents.js');
+        fbq('init', '{{ pixel_config.pixel_id }}');
+        
+        // ✅ PURCHASE com matching perfeito
+        fbq('track', 'Purchase', {
+            value: {{ pixel_config.value }},
+            currency: '{{ pixel_config.currency }}',
+            eventID: '{{ pixel_config.event_id }}',  // ✅ MESMO event_id do PageView (matching garantido)
+            content_ids: ['{{ pixel_config.content_id }}'],
+            content_name: '{{ pixel_config.content_name|replace("'", "\\'") }}',
+            content_type: 'product',
+            num_items: 1
+            {% if pixel_config.external_id %}
+            // ✅ external_id será enviado via CAPI (não suportado no browser-side)
+            // Mas event_id garante matching mesmo sem external_id
+            {% endif %}
+        });
+        
+        console.log('[META PIXEL] Purchase disparado com eventID: {{ pixel_config.event_id }}');
+    </script>
+    <noscript>
+        <img height="1" width="1" style="display:none"
+        src="https://www.facebook.com/tr?id={{ pixel_config.pixel_id }}&ev=Purchase&noscript=1"/>
+    </noscript>
+    {% endif %}
+    
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            margin: 0;
+            padding: 20px;
+            text-align: center;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        .container {
+            max-width: 500px;
+            width: 100%;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        .success-icon {
+            font-size: 80px;
+            margin-bottom: 20px;
+        }
+        h1 {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+        .product-name {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 10px;
+            opacity: 0.9;
+        }
+        .amount {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 30px;
+            color: #4ade80;
+        }
+        .redirect-button {
+            background: white;
+            color: #667eea;
+            border: none;
+            padding: 16px 32px;
+            border-radius: 12px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin-top: 20px;
+        }
+        .redirect-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+        }
+        .loading {
+            display: none;
+            margin-top: 20px;
+            font-size: 14px;
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="success-icon">✅</div>
+        <h1>Acesso Liberado!</h1>
+        <div class="product-name">{{ pixel_config.content_name }}</div>
+        <div class="amount">R$ {{ "%.2f"|format(pixel_config.value) }}</div>
+        
+        {% if redirect_url %}
+        <a href="{{ redirect_url }}" id="redirect-link" class="redirect-button">
+            Acessar Agora
+        </a>
+        <div class="loading" id="loading">Redirecionando...</div>
+        {% else %}
+        <p>Seu acesso foi liberado com sucesso!</p>
+        {% endif %}
+    </div>
+    
+    <script>
+        // ✅ Marcar Purchase como enviado (anti-duplicação)
+        {% if has_meta_pixel %}
+        fetch('/api/tracking/mark-purchase-sent', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ payment_id: {{ payment.id }} })
+        }).then(response => {
+            if (response.ok) {
+                console.log('[TRACKING] Purchase marcado como enviado');
+            }
+        }).catch(err => {
+            console.error('[TRACKING] Erro ao marcar Purchase:', err);
+        });
+        {% endif %}
+        
+        // ✅ Auto-redirect após Purchase ser disparado
+        {% if redirect_url %}
+        setTimeout(() => {
+            document.getElementById('loading').style.display = 'block';
+            window.location.href = '{{ redirect_url }}';
+        }, 1500);  // Aguardar 1.5s para garantir que Purchase foi disparado
+        {% endif %}
+    </script>
+</body>
+</html>
+
