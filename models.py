@@ -294,6 +294,10 @@ class BotConfig(db.Model):
     success_message = db.Column(db.Text)  # Mensagem quando pagamento é aprovado
     pending_message = db.Column(db.Text)  # Mensagem quando pagamento está pendente
     
+    # ✅ FLUXO VISUAL (Editor de Fluxograma)
+    flow_enabled = db.Column(db.Boolean, default=False, index=True)  # Ativar fluxo visual
+    flow_steps = db.Column(db.Text, nullable=True)  # JSON array de steps do fluxo
+    
     # Datas
     updated_at = db.Column(db.DateTime, default=get_brazil_time, onupdate=get_brazil_time)
     
@@ -358,6 +362,27 @@ class BotConfig(db.Model):
         """Define botões de redirecionamento"""
         self.redirect_buttons = json.dumps(buttons)
     
+    def get_flow_steps(self):
+        """Retorna flow_steps parseados"""
+        if self.flow_steps:
+            try:
+                return json.loads(self.flow_steps)
+            except (json.JSONDecodeError, ValueError, TypeError) as e:
+                logger.warning(f"Erro ao parsear flow_steps: {e}")
+                return []
+        return []
+    
+    def set_flow_steps(self, steps):
+        """Define flow_steps"""
+        try:
+            if steps:
+                self.flow_steps = json.dumps(steps, ensure_ascii=False)
+            else:
+                self.flow_steps = None
+        except (TypeError, ValueError) as e:
+            logger.error(f"Erro ao serializar flow_steps: {e}")
+            raise ValueError(f"Erro ao salvar flow_steps: {e}")
+    
     def to_dict(self):
         """Retorna configuração em formato dict"""
         try:
@@ -376,7 +401,9 @@ class BotConfig(db.Model):
                 'upsells': self.get_upsells(),
                 'access_link': self.access_link or '',
                 'success_message': getattr(self, 'success_message', None) or '',
-                'pending_message': getattr(self, 'pending_message', None) or ''
+                'pending_message': getattr(self, 'pending_message', None) or '',
+                'flow_enabled': self.flow_enabled or False,
+                'flow_steps': self.get_flow_steps()
             }
         except Exception as e:
             logger.error(f"❌ Erro ao serializar BotConfig: {e}")
@@ -396,7 +423,9 @@ class BotConfig(db.Model):
                 'upsells': [],
                 'access_link': '',
                 'success_message': '',
-                'pending_message': ''
+                'pending_message': '',
+                'flow_enabled': False,
+                'flow_steps': []
             }
 
 
@@ -881,6 +910,9 @@ class Payment(db.Model):
     # ✅ DELIVERY TRACKING - Purchase disparado na página de entrega
     delivery_token = db.Column(db.String(64), unique=True, nullable=True, index=True)  # Token único para acesso à página de entrega
     purchase_sent_from_delivery = db.Column(db.Boolean, default=False)  # Flag se Purchase foi disparado da página de entrega
+    
+    # ✅ FLUXO VISUAL - Rastreamento de step atual
+    flow_step_id = db.Column(db.String(50), nullable=True, index=True)  # ID do step do fluxo que gerou este payment
     # ✅ UTM TRACKING
     utm_source = db.Column(db.String(255), nullable=True)
     utm_campaign = db.Column(db.String(255), nullable=True)

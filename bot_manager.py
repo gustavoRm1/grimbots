@@ -1813,6 +1813,265 @@ class BotManager:
                 except Exception as e:
                     logger.debug(f"⚠️ Erro ao liberar lock (não crítico, expira automaticamente em 15s): {e}")
     
+    def _find_step_by_id(self, flow_steps: list, step_id: str) -> Dict[str, Any]:
+        """Busca step por ID no fluxo"""
+        for step in flow_steps:
+            if step.get('id') == step_id:
+                return step
+        return None
+    
+    def _execute_step(self, step: Dict[str, Any], token: str, chat_id: int, delay: float = 0):
+        """Executa um step do fluxo"""
+        import time
+        step_type = step.get('type')
+        step_config = step.get('config', {})
+        
+        if step_type == 'content':
+            self.send_funnel_step_sequential(
+                token=token,
+                chat_id=str(chat_id),
+                text=step_config.get('message', ''),
+                media_url=step_config.get('media_url'),
+                media_type=step_config.get('media_type', 'video'),
+                buttons=step_config.get('buttons', []),
+                delay_between=delay
+            )
+        elif step_type == 'message':
+            self.send_telegram_message(
+                token=token,
+                chat_id=str(chat_id),
+                message=step_config.get('message', ''),
+                buttons=step_config.get('buttons', [])
+            )
+        elif step_type == 'audio':
+            self.send_telegram_message(
+                token=token,
+                chat_id=str(chat_id),
+                message='',
+                media_url=step_config.get('audio_url'),
+                media_type='audio',
+                buttons=None
+            )
+        elif step_type == 'video':
+            self.send_telegram_message(
+                token=token,
+                chat_id=str(chat_id),
+                message=step_config.get('message', ''),
+                media_url=step_config.get('media_url'),
+                media_type='video',
+                buttons=step_config.get('buttons', [])
+            )
+        elif step_type == 'buttons':
+            if step_config.get('buttons'):
+                self.send_telegram_message(
+                    token=token,
+                    chat_id=str(chat_id),
+                    message=step_config.get('message', '⬇️ Escolha uma opção'),
+                    buttons=step_config.get('buttons', [])
+                )
+        
+        # Delay antes do próximo step
+        if delay > 0:
+            time.sleep(delay)
+    
+    def _execute_flow(self, bot_id: int, token: str, config: Dict[str, Any], 
+                      chat_id: int, telegram_user_id: str):
+        """
+        Executa fluxo visual configurado - RECURSIVO
+        
+        ✅ SEGURO: Fallback para welcome_message se fluxo inválido
+        ✅ HÍBRIDO: Síncrono até payment, assíncrono após callback
+        """
+        try:
+            flow_steps = config.get('flow_steps', [])
+            if not flow_steps or len(flow_steps) == 0:
+                logger.warning("⚠️ Fluxo vazio - usando welcome_message")
+                raise ValueError("Fluxo vazio")
+            
+            # Ordenar steps por order
+            sorted_steps = sorted(flow_steps, key=lambda x: x.get('order', 0))
+            start_step = sorted_steps[0]
+            
+            # Executar recursivamente até encontrar payment
+            logger.info(f"🎯 Iniciando fluxo recursivo a partir de {start_step.get('id')}")
+            self._execute_flow_recursive(bot_id, token, config, chat_id, telegram_user_id, start_step['id'])
+            
+        except Exception as e:
+            logger.error(f"❌ Erro ao executar fluxo: {e}", exc_info=True)
+            raise  # Re-raise para caller decidir fallback
+    
+    def _execute_flow_recursive(self, bot_id: int, token: str, config: Dict[str, Any],
+                                chat_id: int, telegram_user_id: str, step_id: str):
+        """
+        Executa step recursivamente - para em payment ou access
+        
+        ✅ RECURSÃO LIMITADA: Máximo 50 steps (proteção contra loops infinitos)
+        """
+        import time
+        from app import app, db
+        from models import Payment
+        
+        # ✅ Proteção contra loops infinitos
+        recursion_depth = getattr(self, '_flow_recursion_depth', 0)
+        if recursion_depth >= 50:
+            logger.error(f"❌ Profundidade de recursão máxima atingida (50 steps)")
+            return
+        self._flow_recursion_depth = recursion_depth + 1
+        
+        try:
+            flow_steps = config.get('flow_steps', [])
+            step = self._find_step_by_id(flow_steps, step_id)
+            
+            if not step:
+                logger.warning(f"⚠️ Step {step_id} não encontrado no fluxo")
+                return
+            
+            step_type = step.get('type')
+            step_config = step.get('config', {})
+            delay = step.get('delay_seconds', 0)
+            connections = step.get('connections', {})
+            
+            logger.info(f"🎯 Executando step {step_id} (tipo: {step_type}, ordem: {step.get('order', 0)})")
+            
+            # ✅ Payment para aqui (aguarda callback verify_)
+            if step_type == 'payment':
+                logger.info(f"💰 Step payment detectado - gerando PIX e parando fluxo")
+                
+                # Buscar dados do botão principal (primeiro main_button) para gerar PIX
+                main_buttons = config.get('main_buttons', [])
+                amount = 0.0
+                description = 'Produto'
+                button_index = 0
+                
+                if main_buttons and len(main_buttons) > 0:
+                    first_button = main_buttons[0]
+                    amount = float(first_button.get('price', 0))
+                    description = first_button.get('description', 'Produto') or first_button.get('text', 'Produto')
+                    button_index = 0
+                
+                # Usar valores do step se especificados
+                if step_config.get('amount'):
+                    amount = float(step_config.get('amount'))
+                if step_config.get('description'):
+                    description = step_config.get('description')
+                
+                # Gerar PIX
+                pix_data = self._generate_pix_payment(
+                    bot_id=bot_id,
+                    amount=amount,
+                    description=description,
+                    customer_name='Cliente',
+                    customer_username='',
+                    customer_user_id=telegram_user_id,
+                    order_bump_shown=False,
+                    order_bump_accepted=False,
+                    order_bump_value=0.0
+                )
+                
+                if pix_data and pix_data.get('pix_code'):
+                    # Salvar flow_step_id no payment
+                    with app.app_context():
+                        payment = Payment.query.filter_by(payment_id=pix_data.get('payment_id')).first()
+                        if payment:
+                            payment.flow_step_id = step_id
+                            db.session.commit()
+                            logger.info(f"✅ Payment {payment.payment_id} associado ao step {step_id}")
+                    
+                    # Enviar mensagem de PIX
+                    payment_message = f"""🎯 <b>Produto:</b> {description}
+💰 <b>Valor:</b> R$ {amount:.2f}
+
+📱 <b>PIX Copia e Cola:</b>
+<code>{pix_data.get('pix_code')}</code>
+
+<i>👆 Toque no código acima para copiar</i>
+
+⏰ <b>Válido por:</b> 30 minutos
+
+💡 <b>Após pagar, clique no botão abaixo para verificar e receber seu acesso!</b>"""
+                    
+                    buttons = [{
+                        'text': '✅ Verificar Pagamento',
+                        'callback_data': f'verify_{pix_data.get("payment_id")}'
+                    }]
+                    
+                    self.send_telegram_message(
+                        token=token,
+                        chat_id=str(chat_id),
+                        message=payment_message.strip(),
+                        buttons=buttons
+                    )
+                    
+                    logger.info(f"✅ PIX gerado - fluxo pausado aguardando callback verify_")
+                else:
+                    logger.error(f"❌ Erro ao gerar PIX no fluxo")
+                
+                return  # Para aqui, aguarda callback
+            
+            # ✅ Access finaliza fluxo
+            elif step_type == 'access':
+                logger.info(f"✅ Step access detectado - finalizando fluxo")
+                
+                link = step_config.get('link') or config.get('access_link', '')
+                message = step_config.get('message', 'Acesso liberado!')
+                
+                buttons = []
+                if link:
+                    buttons.append({
+                        'text': '✅ Acessar',
+                        'url': link
+                    })
+                
+                self.send_telegram_message(
+                    token=token,
+                    chat_id=str(chat_id),
+                    message=message,
+                    buttons=buttons if buttons else None
+                )
+                
+                return  # Fim do fluxo
+            
+            # ✅ Executar step normalmente (content, message, audio, video, buttons)
+            else:
+                self._execute_step(step, token, chat_id, delay)
+                
+                # Próximo step (seguindo connections.next)
+                next_step_id = connections.get('next')
+                if next_step_id:
+                    self._execute_flow_recursive(bot_id, token, config, chat_id, telegram_user_id, next_step_id)
+                else:
+                    # Sem próximo step - fim do fluxo
+                    logger.info(f"✅ Fluxo finalizado - sem próximo step")
+        
+        finally:
+            # Restaurar profundidade de recursão
+            self._flow_recursion_depth = recursion_depth
+    
+    def _execute_flow_step_async(self, bot_id: int, token: str, config: Dict[str, Any],
+                                  chat_id: int, telegram_user_id: str, step_id: str):
+        """
+        Executa step do fluxo de forma assíncrona (via RQ)
+        
+        ✅ ASSÍNCRONO: Pode ser pesado (access pode enviar múltiplas mensagens)
+        """
+        try:
+            from app import app, db
+            
+            with app.app_context():
+                # Buscar bot e config atualizada
+                from models import Bot
+                bot = Bot.query.get(bot_id)
+                if bot and bot.config:
+                    config = bot.config.to_dict()
+                
+                # Executar step recursivamente
+                self._execute_flow_recursive(bot_id, token, config, chat_id, telegram_user_id, step_id)
+                
+                logger.info(f"✅ Step {step_id} executado com sucesso (assíncrono)")
+        
+        except Exception as e:
+            logger.error(f"❌ Erro ao executar step {step_id} (assíncrono): {e}", exc_info=True)
+    
     def _reset_user_funnel(self, bot_id: int, chat_id: int, telegram_user_id: str, db_session=None):
         """
         ✅ QI 500: RESET ABSOLUTO DO FUNIL
@@ -2016,6 +2275,40 @@ class BotManager:
                         )
                 except Exception as e:
                     logger.warning(f"Erro ao enfileirar task async: {e}")
+            
+            # ============================================================================
+            # ✅ FLUXO VISUAL: Verificar se fluxo está ativo
+            # ============================================================================
+            flow_enabled = config.get('flow_enabled', False)
+            flow_steps = config.get('flow_steps', [])
+            
+            if flow_enabled and flow_steps and len(flow_steps) > 0:
+                # ✅ NOVO: Executar fluxo visual
+                logger.info(f"🎯 Executando fluxo visual ({len(flow_steps)} steps)")
+                try:
+                    self._execute_flow(bot_id, token, config, chat_id, telegram_user_id)
+                    # Marcar welcome_sent após fluxo iniciar
+                    with app.app_context():
+                        try:
+                            bot_user_update = BotUser.query.filter_by(
+                                bot_id=bot_id,
+                                telegram_user_id=telegram_user_id
+                            ).first()
+                            if bot_user_update:
+                                bot_user_update.welcome_sent = True
+                                from models import get_brazil_time
+                                bot_user_update.welcome_sent_at = get_brazil_time()
+                                db.session.commit()
+                                logger.info(f"✅ Fluxo iniciado - welcome_sent=True")
+                        except Exception as e:
+                            logger.error(f"Erro ao marcar welcome_sent: {e}")
+                except Exception as e:
+                    logger.error(f"❌ Erro ao executar fluxo: {e}", exc_info=True)
+                    # ✅ FALLBACK: Usar welcome_message se fluxo falhar
+                    should_send_welcome = True
+                else:
+                    # Fluxo executado com sucesso, não enviar welcome
+                    should_send_welcome = False
             
             # ============================================================================
             # ✅ QI 200: ENVIAR MENSAGEM IMEDIATAMENTE (<50ms)
@@ -3480,55 +3773,98 @@ Desculpe, não foi possível processar seu pagamento.
                     logger.info(f"✅ PAGAMENTO CONFIRMADO! Liberando acesso...")
                     
                     # ============================================================================
-                    # ✅ NOVA ARQUITETURA: Purchase NÃO é disparado via botão verify
+                    # ✅ FLUXO VISUAL: Verificar se fluxo está ativo e processar próximo step
                     # ============================================================================
-                    # ✅ Purchase é disparado APENAS quando lead acessa link de entrega (/delivery/<token>)
-                    # ✅ Não disparar Purchase quando pagamento é confirmado (via webhook ou botão verify)
-                    logger.info(f"✅ Purchase será disparado apenas quando lead acessar link de entrega: /delivery/<token>")
+                    flow_processed = False
+                    if payment.flow_step_id:
+                        bot_flow = Bot.query.get(bot_id)
+                        if bot_flow and bot_flow.config:
+                            flow_config = bot_flow.config.to_dict()
+                            flow_enabled = flow_config.get('flow_enabled', False)
+                            flow_steps = flow_config.get('flow_steps', [])
+                            
+                            if flow_enabled and flow_steps:
+                                # Buscar step atual do fluxo
+                                current_step = self._find_step_by_id(flow_steps, payment.flow_step_id)
+                                
+                                if current_step:
+                                    # Determinar próximo step baseado em payment.status (stateless)
+                                    connections = current_step.get('connections', {})
+                                    next_step_id = connections.get('next')  # Se pago
+                                    
+                                    if next_step_id:
+                                        logger.info(f"🎯 Fluxo ativo - executando próximo step: {next_step_id}")
+                                        
+                                        # Executar próximo step ASSÍNCRONO (pode ser pesado)
+                                        try:
+                                            from tasks_async import task_queue
+                                            if task_queue:
+                                                task_queue.enqueue(
+                                                    self._execute_flow_step_async,
+                                                    bot_id=bot_id,
+                                                    token=token,
+                                                    config=flow_config,
+                                                    chat_id=chat_id,
+                                                    telegram_user_id=user_info.get('id'),
+                                                    step_id=next_step_id
+                                                )
+                                                flow_processed = True
+                                                logger.info(f"✅ Próximo step do fluxo enfileirado: {next_step_id}")
+                                        except Exception as e:
+                                            logger.error(f"❌ Erro ao enfileirar próximo step do fluxo: {e}", exc_info=True)
                     
-                    # Cancelar downsells agendados
-                    self.cancel_downsells(payment.payment_id)
+                    # Se fluxo não processou, usar comportamento padrão
+                    if not flow_processed:
+                        # ============================================================================
+                        # ✅ NOVA ARQUITETURA: Purchase NÃO é disparado via botão verify
+                        # ============================================================================
+                        # ✅ Purchase é disparado APENAS quando lead acessa link de entrega (/delivery/<token>)
+                        # ✅ Não disparar Purchase quando pagamento é confirmado (via webhook ou botão verify)
+                        logger.info(f"✅ Purchase será disparado apenas quando lead acessar link de entrega: /delivery/<token>")
+                        
+                        # Cancelar downsells agendados
+                        self.cancel_downsells(payment.payment_id)
                     
-                    # ✅ CRÍTICO: Usar send_payment_delivery para garantir validação consistente
-                    try:
-                        from app import send_payment_delivery
-                        logger.info(f"📦 [VERIFY] Enviando entregável via send_payment_delivery para {payment.payment_id}")
-                        
-                        # ✅ CRÍTICO: Refresh antes de chamar send_payment_delivery
-                        db.session.refresh(payment)
-                        
-                        # ✅ CRÍTICO: Validar status ANTES de chamar send_payment_delivery
-                        if payment.status == 'paid':
-                            resultado = send_payment_delivery(payment, self)
-                            if resultado:
-                                logger.info(f"✅ [VERIFY] Entregável enviado com sucesso via send_payment_delivery")
+                        # ✅ CRÍTICO: Usar send_payment_delivery para garantir validação consistente
+                        try:
+                            from app import send_payment_delivery
+                            logger.info(f"📦 [VERIFY] Enviando entregável via send_payment_delivery para {payment.payment_id}")
+                            
+                            # ✅ CRÍTICO: Refresh antes de chamar send_payment_delivery
+                            db.session.refresh(payment)
+                            
+                            # ✅ CRÍTICO: Validar status ANTES de chamar send_payment_delivery
+                            if payment.status == 'paid':
+                                resultado = send_payment_delivery(payment, self)
+                                if resultado:
+                                    logger.info(f"✅ [VERIFY] Entregável enviado com sucesso via send_payment_delivery")
+                                else:
+                                    logger.warning(f"⚠️ [VERIFY] send_payment_delivery retornou False para {payment.payment_id}")
                             else:
-                                logger.warning(f"⚠️ [VERIFY] send_payment_delivery retornou False para {payment.payment_id}")
-                        else:
-                            logger.error(
-                                f"❌ ERRO GRAVE: Tentativa de enviar entregável com status inválido "
-                                f"(status: {payment.status}, payment_id: {payment.payment_id})"
-                            )
-                    except Exception as e:
-                        logger.error(f"❌ [VERIFY] Erro ao enviar entregável via send_payment_delivery: {e}", exc_info=True)
-                        
-                        # ✅ FALLBACK: Se send_payment_delivery falhar, usar método antigo (mas com validação)
-                        logger.warning(f"⚠️ [VERIFY] Usando fallback para envio de mensagem (send_payment_delivery falhou)")
-                        
-                        bot = payment.bot
-                        bot_config = self.active_bots.get(bot_id, {}).get('config', {})
-                        access_link = bot_config.get('access_link', '')
-                        custom_success_message = bot_config.get('success_message', '').strip()
-                        
-                        # Usar mensagem personalizada ou padrão
-                        if custom_success_message:
-                            # Substituir variáveis
-                            success_message = custom_success_message
-                            success_message = success_message.replace('{produto}', payment.product_name or 'Produto')
-                            success_message = success_message.replace('{valor}', f'R$ {payment.amount:.2f}')
-                            success_message = success_message.replace('{link}', access_link or 'Link não configurado')
-                        elif access_link:
-                            success_message = f"""
+                                logger.error(
+                                    f"❌ ERRO GRAVE: Tentativa de enviar entregável com status inválido "
+                                    f"(status: {payment.status}, payment_id: {payment.payment_id})"
+                                )
+                        except Exception as e:
+                            logger.error(f"❌ [VERIFY] Erro ao enviar entregável via send_payment_delivery: {e}", exc_info=True)
+                            
+                            # ✅ FALLBACK: Se send_payment_delivery falhar, usar método antigo (mas com validação)
+                            logger.warning(f"⚠️ [VERIFY] Usando fallback para envio de mensagem (send_payment_delivery falhou)")
+                            
+                            bot = payment.bot
+                            bot_config = self.active_bots.get(bot_id, {}).get('config', {})
+                            access_link = bot_config.get('access_link', '')
+                            custom_success_message = bot_config.get('success_message', '').strip()
+                            
+                            # Usar mensagem personalizada ou padrão
+                            if custom_success_message:
+                                # Substituir variáveis
+                                success_message = custom_success_message
+                                success_message = success_message.replace('{produto}', payment.product_name or 'Produto')
+                                success_message = success_message.replace('{valor}', f'R$ {payment.amount:.2f}')
+                                success_message = success_message.replace('{link}', access_link or 'Link não configurado')
+                            elif access_link:
+                                success_message = f"""
 ✅ <b>PAGAMENTO CONFIRMADO!</b>
 
 🎉 <b>Parabéns!</b> Seu pagamento foi aprovado com sucesso!
@@ -3540,24 +3876,67 @@ Desculpe, não foi possível processar seu pagamento.
 {access_link}
 
 <b>Aproveite!</b> 🚀
-                            """
-                        else:
-                            success_message = "✅ Pagamento confirmado! Entre em contato com o suporte para receber seu acesso."
+                                """
+                            else:
+                                success_message = "✅ Pagamento confirmado! Entre em contato com o suporte para receber seu acesso."
+                            
+                            self.send_telegram_message(
+                                token=token,
+                                chat_id=str(chat_id),
+                                message=success_message.strip()
+                            )
                         
-                        self.send_telegram_message(
-                            token=token,
-                            chat_id=str(chat_id),
-                            message=success_message.strip()
-                        )
-                    
-                    logger.info(f"✅ Acesso liberado para {user_info.get('first_name')}")
+                        logger.info(f"✅ Acesso liberado para {user_info.get('first_name')}")
                 else:
                     # PAGAMENTO AINDA PENDENTE
                     logger.info(f"⏳ Pagamento ainda pendente...")
                     
-                    bot = payment.bot
-                    bot_config = self.active_bots.get(bot_id, {}).get('config', {})
-                    custom_pending_message = bot_config.get('pending_message', '').strip()
+                    # ============================================================================
+                    # ✅ FLUXO VISUAL: Verificar se fluxo está ativo e processar pending step
+                    # ============================================================================
+                    flow_processed = False
+                    if payment.flow_step_id:
+                        bot_flow = Bot.query.get(bot_id)
+                        if bot_flow and bot_flow.config:
+                            flow_config = bot_flow.config.to_dict()
+                            flow_enabled = flow_config.get('flow_enabled', False)
+                            flow_steps = flow_config.get('flow_steps', [])
+                            
+                            if flow_enabled and flow_steps:
+                                # Buscar step atual do fluxo
+                                current_step = self._find_step_by_id(flow_steps, payment.flow_step_id)
+                                
+                                if current_step:
+                                    # Determinar próximo step baseado em payment.status (stateless)
+                                    connections = current_step.get('connections', {})
+                                    pending_step_id = connections.get('pending')  # Se não pago
+                                    
+                                    if pending_step_id:
+                                        logger.info(f"🎯 Fluxo ativo - executando pending step: {pending_step_id}")
+                                        
+                                        # Executar pending step ASSÍNCRONO
+                                        try:
+                                            from tasks_async import task_queue
+                                            if task_queue:
+                                                task_queue.enqueue(
+                                                    self._execute_flow_step_async,
+                                                    bot_id=bot_id,
+                                                    token=token,
+                                                    config=flow_config,
+                                                    chat_id=chat_id,
+                                                    telegram_user_id=user_info.get('id'),
+                                                    step_id=pending_step_id
+                                                )
+                                                flow_processed = True
+                                                logger.info(f"✅ Pending step do fluxo enfileirado: {pending_step_id}")
+                                        except Exception as e:
+                                            logger.error(f"❌ Erro ao enfileirar pending step do fluxo: {e}", exc_info=True)
+                    
+                    # Se fluxo não processou, usar comportamento padrão
+                    if not flow_processed:
+                        bot = payment.bot
+                        bot_config = self.active_bots.get(bot_id, {}).get('config', {})
+                        custom_pending_message = bot_config.get('pending_message', '').strip()
                     
                     # ✅ CORREÇÃO: Buscar PIX code do product_description (onde é salvo)
                     pix_code = payment.product_description or 'Aguardando...'

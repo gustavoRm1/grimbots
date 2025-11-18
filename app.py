@@ -3979,6 +3979,30 @@ def update_bot_config(bot_id):
         if 'pending_message' in data:
             config.pending_message = data['pending_message']
         
+        # ✅ FLUXO VISUAL
+        if 'flow_enabled' in data:
+            config.flow_enabled = bool(data['flow_enabled'])
+            logger.info(f"✅ flow_enabled salvo: {config.flow_enabled}")
+        
+        if 'flow_steps' in data:
+            flow_steps = data['flow_steps']
+            # ✅ Validação básica
+            if isinstance(flow_steps, list):
+                # Validar estrutura mínima
+                for step in flow_steps:
+                    if not step.get('id') or not step.get('type'):
+                        logger.warning(f"⚠️ Step inválido (sem id ou type): {step}")
+                        continue
+                config.set_flow_steps(flow_steps)
+                logger.info(f"✅ flow_steps salvo: {len(flow_steps)} steps")
+            else:
+                config.flow_steps = None
+                logger.info(f"⚠️ flow_steps não é array - limpando campo")
+        
+        # ✅ CRÍTICO: Se flow_enabled=True, desabilitar welcome_message automaticamente
+        if config.flow_enabled and config.flow_steps and len(config.get_flow_steps()) > 0:
+            logger.info("✅ Fluxo ativo - welcome_message será ignorado no /start (mas mantido como fallback)")
+        
         logger.info(f"💾 Fazendo commit no banco de dados...")
         db.session.commit()
         logger.info(f"✅ Commit realizado com sucesso")

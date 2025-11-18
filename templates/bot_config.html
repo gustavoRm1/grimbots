@@ -340,6 +340,11 @@
                 class="tab-button">
             <i class="fas fa-home mr-2"></i>Boas-vindas
         </button>
+        <button @click="activeTab = 'flow'" 
+                :class="{'active': activeTab === 'flow'}"
+                class="tab-button">
+            <i class="fas fa-project-diagram mr-2"></i>Fluxo
+        </button>
         <button @click="activeTab = 'buttons'" 
                 :class="{'active': activeTab === 'buttons'}"
                 class="tab-button">
@@ -460,6 +465,146 @@
                                placeholder="https://t.me/canal/789">
                         <p class="text-xs text-gray-500 mt-2">Link do áudio no Telegram (será enviado após a mídia principal)</p>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab Content: Flow -->
+    <div x-show="activeTab === 'flow'" x-cloak>
+        <div class="config-section">
+            <div class="config-section-header">
+                <i class="fas fa-project-diagram text-2xl" style="color: var(--brand-gold-500);"></i>
+                <div>
+                    <div class="config-section-title">Editor de Fluxograma Visual</div>
+                    <div class="config-section-description">Crie fluxos personalizados com blocos conectados</div>
+                </div>
+            </div>
+
+            <!-- Toggle Ativar Fluxo -->
+            <div class="form-group">
+                <label class="flex items-center gap-2">
+                    <input type="checkbox" 
+                           x-model="config.flow_enabled"
+                           @change="onFlowToggle()"
+                           class="w-4 h-4 bg-gray-700 border-gray-600 rounded focus:ring-blue-500"
+                           style="accent-color: #3B82F6;">
+                    <i class="fas fa-toggle-on mr-1 text-blue-500"></i>
+                    <span class="text-white font-medium">Ativar Fluxo Visual</span>
+                </label>
+                <p class="text-xs text-gray-500 mt-1">
+                    Quando ativado, desativa automaticamente Boas-vindas. O fluxo será executado ao invés de welcome_message.
+                </p>
+            </div>
+
+            <!-- Lista Visual de Steps (Padrão) -->
+            <div x-show="config.flow_enabled" x-cloak class="mt-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-bold text-white">Steps do Fluxo</h3>
+                    <button @click="addFlowStep()" 
+                            class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition">
+                        <i class="fas fa-plus mr-2"></i>Adicionar Step
+                    </button>
+                </div>
+
+                <!-- Lista de Steps -->
+                <div class="space-y-4" x-show="config.flow_steps && config.flow_steps.length > 0">
+                    <template x-for="(step, index) in sortedFlowSteps" :key="step.id">
+                        <div class="bg-gray-800 border border-gray-700 rounded-lg p-4">
+                            <div class="flex items-start justify-between mb-3">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-sm"
+                                         x-text="step.order || index + 1"></div>
+                                    <div>
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-xl" x-text="getStepIcon(step.type)"></span>
+                                            <span class="text-white font-semibold" x-text="getStepTitle(step.type)"></span>
+                                        </div>
+                                        <div class="text-xs text-gray-400 mt-1" x-text="step.id"></div>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <button @click="editFlowStep(step.id)" 
+                                            class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded text-xs font-medium transition">
+                                        <i class="fas fa-edit mr-1"></i>Editar
+                                    </button>
+                                    <button @click="removeFlowStep(step.id)" 
+                                            class="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-medium transition">
+                                        <i class="fas fa-trash mr-1"></i>Remover
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Conexões -->
+                            <div class="mt-3 pt-3 border-t border-gray-700">
+                                <div class="flex flex-wrap gap-2">
+                                    <template x-if="step.connections && step.connections.next">
+                                        <div class="flex items-center gap-2 px-3 py-1.5 bg-green-900 bg-opacity-30 border border-green-700 rounded text-xs">
+                                            <i class="fas fa-arrow-right text-green-400"></i>
+                                            <span class="text-green-300">Se pago:</span>
+                                            <span class="text-green-400 font-mono" x-text="step.connections.next"></span>
+                                        </div>
+                                    </template>
+                                    <template x-if="step.connections && step.connections.pending">
+                                        <div class="flex items-center gap-2 px-3 py-1.5 bg-red-900 bg-opacity-30 border border-red-700 rounded text-xs">
+                                            <i class="fas fa-arrow-right text-red-400"></i>
+                                            <span class="text-red-300">Se não pago:</span>
+                                            <span class="text-red-400 font-mono" x-text="step.connections.pending"></span>
+                                        </div>
+                                    </template>
+                                    <template x-if="step.connections && step.connections.retry">
+                                        <div class="flex items-center gap-2 px-3 py-1.5 bg-yellow-900 bg-opacity-30 border border-yellow-700 rounded text-xs">
+                                            <i class="fas fa-redo text-yellow-400"></i>
+                                            <span class="text-yellow-300">Retry:</span>
+                                            <span class="text-yellow-400 font-mono" x-text="step.connections.retry"></span>
+                                        </div>
+                                    </template>
+                                    <template x-if="!step.connections || (!step.connections.next && !step.connections.pending && !step.connections.retry)">
+                                        <div class="text-xs text-gray-500 italic">Sem conexões</div>
+                                    </template>
+                                </div>
+                            </div>
+
+                            <!-- Preview do Step -->
+                            <div class="mt-3 text-sm text-gray-400">
+                                <template x-if="step.type === 'content'">
+                                    <div>
+                                        <span class="text-gray-500">Mensagem:</span>
+                                        <span class="ml-2" x-text="(step.config && step.config.message) ? step.config.message.substring(0, 50) + '...' : 'Sem mensagem'"></span>
+                                    </div>
+                                </template>
+                                <template x-if="step.type === 'payment'">
+                                    <div>
+                                        <span class="text-gray-500">Valor:</span>
+                                        <span class="ml-2" x-text="(step.config && step.config.amount) ? 'R$ ' + parseFloat(step.config.amount).toFixed(2) : 'Usar do botão principal'"></span>
+                                    </div>
+                                </template>
+                                <template x-if="step.type === 'message'">
+                                    <div>
+                                        <span class="text-gray-500">Mensagem:</span>
+                                        <span class="ml-2" x-text="(step.config && step.config.message) ? step.config.message.substring(0, 50) + '...' : 'Sem mensagem'"></span>
+                                    </div>
+                                </template>
+                                <template x-if="step.type === 'access'">
+                                    <div>
+                                        <span class="text-gray-500">Link:</span>
+                                        <span class="ml-2" x-text="(step.config && step.config.link) ? step.config.link.substring(0, 50) + '...' : 'Usar access_link'"></span>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- Mensagem quando não há steps -->
+                <div x-show="!config.flow_steps || config.flow_steps.length === 0" 
+                     class="text-center py-12 bg-gray-800 border border-gray-700 rounded-lg">
+                    <i class="fas fa-project-diagram text-4xl text-gray-600 mb-4"></i>
+                    <p class="text-gray-400 mb-4">Nenhum step configurado</p>
+                    <button @click="addFlowStep()" 
+                            class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition">
+                        <i class="fas fa-plus mr-2"></i>Adicionar Primeiro Step
+                    </button>
                 </div>
             </div>
         </div>
@@ -2016,7 +2161,9 @@ function botConfigApp() {
             success_message: '',
             pending_message: '',
             has_meta_pixel: false,  // ✅ Se bot está associado a pool com Meta Pixel ativo
-            pool_name: null          // ✅ Nome do pool (se houver)
+            pool_name: null,          // ✅ Nome do pool (se houver)
+            flow_enabled: false,      // ✅ Ativar fluxo visual
+            flow_steps: []            // ✅ Steps do fluxo
         },
         
         async init() {
@@ -2137,6 +2284,23 @@ function botConfigApp() {
                             if (!upsell.hasOwnProperty('media_type')) upsell.media_type = 'video';
                             if (!upsell.hasOwnProperty('audio_enabled')) upsell.audio_enabled = false;
                             if (!upsell.hasOwnProperty('audio_url')) upsell.audio_url = '';
+                        });
+                    }
+                    
+                    // ✅ Garantir campos de fluxo existem (compatibilidade)
+                    if (!this.config.hasOwnProperty('flow_enabled')) this.config.flow_enabled = false;
+                    if (!this.config.hasOwnProperty('flow_steps')) this.config.flow_steps = [];
+                    if (!Array.isArray(this.config.flow_steps)) this.config.flow_steps = [];
+                    
+                    // ✅ Inicializar steps do fluxo
+                    if (Array.isArray(this.config.flow_steps)) {
+                        this.config.flow_steps.forEach(step => {
+                            if (!step.hasOwnProperty('id')) step.id = `step_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                            if (!step.hasOwnProperty('type')) step.type = 'content';
+                            if (!step.hasOwnProperty('order')) step.order = 0;
+                            if (!step.hasOwnProperty('config')) step.config = {};
+                            if (!step.hasOwnProperty('connections')) step.connections = {};
+                            if (!step.hasOwnProperty('delay_seconds')) step.delay_seconds = 0;
                         });
                     }
                     
@@ -2452,6 +2616,225 @@ function botConfigApp() {
             } finally {
                 this.loading = false;
             }
+        },
+        
+        // ✅ FLUXO VISUAL - Funções de gerenciamento
+        onFlowToggle() {
+            if (!this.config.flow_enabled) {
+                if (this.config.flow_steps && this.config.flow_steps.length > 0) {
+                    if (!confirm('⚠️ Ao desativar o fluxo, os steps não serão removidos, mas não serão executados.\n\nDeseja continuar?')) {
+                        this.config.flow_enabled = true;
+                        return;
+                    }
+                }
+            } else {
+                if (!this.config.flow_steps || this.config.flow_steps.length === 0) {
+                    if (confirm('📝 Você ainda não tem steps configurados. Deseja adicionar o primeiro step agora?')) {
+                        this.addFlowStep();
+                    } else {
+                        this.config.flow_enabled = false;
+                        return;
+                    }
+                }
+            }
+        },
+        
+        get sortedFlowSteps() {
+            if (!this.config.flow_steps || !Array.isArray(this.config.flow_steps)) return [];
+            return [...this.config.flow_steps].sort((a, b) => (a.order || 0) - (b.order || 0));
+        },
+        
+        getStepIcon(type) {
+            const icons = {'content': '📸', 'payment': '💰', 'message': '💬', 'audio': '🎵', 'video': '🎥', 'buttons': '🔘', 'access': '✅'};
+            return icons[type] || '📦';
+        },
+        
+        getStepTitle(type) {
+            const titles = {'content': 'Conteúdo', 'payment': 'Pagamento', 'message': 'Mensagem', 'audio': 'Áudio', 'video': 'Vídeo', 'buttons': 'Botões', 'access': 'Acesso'};
+            return titles[type] || 'Desconhecido';
+        },
+        
+        addFlowStep() {
+            const stepId = `step_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            const maxOrder = this.sortedFlowSteps.length > 0 ? Math.max(...this.sortedFlowSteps.map(s => s.order || 0)) : 0;
+            this.config.flow_steps.push({
+                id: stepId,
+                type: 'content',
+                order: maxOrder + 1,
+                config: { message: '', media_url: '', media_type: 'video', buttons: [] },
+                connections: {},
+                delay_seconds: 0
+            });
+            this.showNotification('✅ Step adicionado!', 'success');
+            setTimeout(() => this.editFlowStep(stepId), 100);
+        },
+        
+        editFlowStep(stepId) {
+            const step = this.config.flow_steps.find(s => s.id === stepId);
+            if (!step) {
+                this.showNotification('❌ Step não encontrado', 'error');
+                return;
+            }
+            
+            const stepJson = JSON.stringify(step).replace(/"/g, '&quot;');
+            const availableStepsJson = JSON.stringify(this.config.flow_steps.filter(s => s.id !== stepId)).replace(/"/g, '&quot;');
+            
+            const stepTypes = [
+                { value: 'content', label: '📸 Conteúdo', desc: 'Mensagem com mídia e botões' },
+                { value: 'message', label: '💬 Mensagem', desc: 'Mensagem simples de texto' },
+                { value: 'audio', label: '🎵 Áudio', desc: 'Enviar áudio' },
+                { value: 'video', label: '🎥 Vídeo', desc: 'Enviar vídeo' },
+                { value: 'payment', label: '💰 Pagamento', desc: 'Gerar PIX (condicional)' },
+                { value: 'access', label: '✅ Acesso', desc: 'Liberar acesso (fim do fluxo)' }
+            ];
+            
+            const availableSteps = this.config.flow_steps.filter(s => s.id !== stepId);
+            const stepOptions = availableSteps.map(s => 
+                `<option value="${s.id}">${s.order || 0} - ${this.getStepTitle(s.type)} (${s.id.substring(0, 8)}...)</option>`
+            ).join('');
+            
+            const modal = document.createElement('div');
+            modal.className = 'fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50';
+            modal.id = `flow-step-modal-${stepId}`;
+            modal.innerHTML = `
+                <div class="bg-gray-900 rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto border-2 border-gray-700">
+                    <div class="flex items-center justify-between mb-6">
+                        <h3 class="text-2xl font-bold text-white"><i class="fas fa-edit mr-2 text-blue-500"></i>Editar Step</h3>
+                        <button onclick="document.getElementById('flow-step-modal-${stepId}').remove()" class="text-gray-400 hover:text-white text-2xl">&times;</button>
+                    </div>
+                    <form onsubmit="event.preventDefault(); if(window.flowStepEditor['saveStep_${stepId}']) window.flowStepEditor['saveStep_${stepId}']();">
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-300 mb-2">Tipo</label>
+                            <select id="step-type-${stepId}" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white">
+                                ${stepTypes.map(t => `<option value="${t.value}" ${step.type === t.value ? 'selected' : ''}>${t.label} - ${t.desc}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-300 mb-2">Ordem</label>
+                            <input type="number" id="step-order-${stepId}" value="${step.order || 0}" min="1" 
+                                   class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white">
+                        </div>
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-300 mb-2">Delay (segundos)</label>
+                            <input type="number" id="step-delay-${stepId}" value="${step.delay_seconds || 0}" min="0" step="0.1"
+                                   class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white">
+                        </div>
+                        <div class="mb-4" id="config-content-${stepId}">
+                            ${step.type === 'content' || step.type === 'message' ? `
+                                <label class="block text-sm font-medium text-gray-300 mb-2">Mensagem</label>
+                                <textarea id="step-message-${stepId}" rows="4"
+                                          class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white">${(step.config && step.config.message) || ''}</textarea>
+                            ` : ''}
+                            ${step.type === 'content' || step.type === 'video' ? `
+                                <label class="block text-sm font-medium text-gray-300 mb-2 mt-4">URL da Mídia</label>
+                                <input type="url" id="step-media-url-${stepId}" value="${(step.config && step.config.media_url) || ''}"
+                                       class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white">
+                            ` : ''}
+                            ${step.type === 'payment' ? `
+                                <label class="block text-sm font-medium text-gray-300 mb-2">Valor (opcional)</label>
+                                <input type="number" id="step-amount-${stepId}" value="${(step.config && step.config.amount) || ''}" min="0" step="0.01"
+                                       class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white">
+                            ` : ''}
+                            ${step.type === 'access' ? `
+                                <label class="block text-sm font-medium text-gray-300 mb-2">Link de Acesso (opcional)</label>
+                                <input type="url" id="step-link-${stepId}" value="${(step.config && step.config.link) || ''}"
+                                       class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white">
+                            ` : ''}
+                        </div>
+                        ${step.type === 'payment' ? `
+                            <div class="mb-4 p-4 bg-gray-800 rounded-lg">
+                                <label class="block text-sm font-medium text-gray-300 mb-2">Se pago → Step:</label>
+                                <select id="step-next-${stepId}" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white">
+                                    <option value="">Nenhum</option>${stepOptions}
+                                </select>
+                                <label class="block text-sm font-medium text-gray-300 mb-2 mt-4">Se não pago → Step:</label>
+                                <select id="step-pending-${stepId}" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white">
+                                    <option value="">Nenhum</option>${stepOptions}
+                                </select>
+                            </div>
+                        ` : step.type === 'message' ? `
+                            <div class="mb-4 p-4 bg-gray-800 rounded-lg">
+                                <label class="block text-sm font-medium text-gray-300 mb-2">Verificar novamente → Step:</label>
+                                <select id="step-retry-${stepId}" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white">
+                                    <option value="">Nenhum</option>${stepOptions}
+                                </select>
+                            </div>
+                        ` : step.type !== 'access' ? `
+                            <div class="mb-4 p-4 bg-gray-800 rounded-lg">
+                                <label class="block text-sm font-medium text-gray-300 mb-2">Próximo → Step:</label>
+                                <select id="step-next-${stepId}" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white">
+                                    <option value="">Nenhum</option>${stepOptions}
+                                </select>
+                            </div>
+                        ` : ''}
+                        <div class="flex justify-end gap-3 mt-6">
+                            <button type="button" onclick="document.getElementById('flow-step-modal-${stepId}').remove()" 
+                                    class="px-6 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg">Cancelar</button>
+                            <button type="submit" class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold">
+                                <i class="fas fa-save mr-2"></i>Salvar
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            
+            // Inicializar editor (bind this)
+            const self = this;
+            if (!window.flowStepEditor) {
+                window.flowStepEditor = {};
+            }
+            window.flowStepEditor['saveStep_' + stepId] = function() {
+                const stepIndex = self.config.flow_steps.findIndex(s => s.id === stepId);
+                if (stepIndex === -1) return;
+                
+                const step = self.config.flow_steps[stepIndex];
+                step.type = document.getElementById(`step-type-${stepId}`).value;
+                step.order = parseInt(document.getElementById(`step-order-${stepId}`).value) || 1;
+                step.delay_seconds = parseFloat(document.getElementById(`step-delay-${stepId}`).value) || 0;
+                
+                if (step.type === 'content' || step.type === 'message') {
+                    step.config.message = document.getElementById(`step-message-${stepId}`)?.value || '';
+                }
+                if (step.type === 'content' || step.type === 'video') {
+                    step.config.media_url = document.getElementById(`step-media-url-${stepId}`)?.value || '';
+                    step.config.media_type = step.config.media_type || 'video';
+                }
+                if (step.type === 'payment') {
+                    const amount = document.getElementById(`step-amount-${stepId}`)?.value;
+                    step.config.amount = amount ? parseFloat(amount) : null;
+                }
+                if (step.type === 'access') {
+                    step.config.link = document.getElementById(`step-link-${stepId}`)?.value || '';
+                    step.config.message = step.config.message || 'Acesso liberado!';
+                }
+                
+                if (step.type === 'payment') {
+                    step.connections.next = document.getElementById(`step-next-${stepId}`)?.value || '';
+                    step.connections.pending = document.getElementById(`step-pending-${stepId}`)?.value || '';
+                } else if (step.type === 'message') {
+                    step.connections.retry = document.getElementById(`step-retry-${stepId}`)?.value || '';
+                    step.connections.next = document.getElementById(`step-next-${stepId}`)?.value || '';
+                } else if (step.type !== 'access') {
+                    step.connections.next = document.getElementById(`step-next-${stepId}`)?.value || '';
+                }
+                
+                document.getElementById(`flow-step-modal-${stepId}`).remove();
+                self.showNotification('✅ Step salvo!', 'success');
+            };
+        },
+        
+        removeFlowStep(stepId) {
+            if (!confirm('⚠️ Remover este step? Isso pode quebrar conexões de outros steps.')) return;
+            this.config.flow_steps = this.config.flow_steps.filter(s => s.id !== stepId);
+            this.config.flow_steps.forEach(step => {
+                if (step.connections) {
+                    if (step.connections.next === stepId) step.connections.next = '';
+                    if (step.connections.pending === stepId) step.connections.pending = '';
+                    if (step.connections.retry === stepId) step.connections.retry = '';
+                }
+            });
+            this.showNotification('✅ Step removido!', 'success');
         },
         
         showNotification(message, type = 'success') {
