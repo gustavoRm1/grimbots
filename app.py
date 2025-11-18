@@ -3952,19 +3952,21 @@ def update_bot_config(bot_id):
 # ==================== LOAD BALANCER / REDIRECT POOLS ====================
 def validate_cloaker_access(request, pool, slug):
     """
-    🔐 CLOAKER V2.0 - À PROVA DE BURRICE HUMANA
+    🔐 CLOAKER V2.0 - À PROVA DE BURRICE HUMANA + PROTEÇÃO FACEBOOK
     
-    REGRAS SIMPLES:
+    REGRAS DE SEGURANÇA:
     1. Parâmetro grim obrigatório e válido
-    2. Aceita qualquer ordem de parâmetros
-    3. Ignora fbclid, utm_source, etc.
+    2. fbclid OBRIGATÓRIO - só libera se tiver ID do Facebook
+    3. Aceita qualquer ordem de parâmetros
     4. SEM validação de User-Agent (Facebook pode usar qualquer UA)
+    
+    ✅ PROTEÇÃO CRÍTICA: Sem fbclid = tráfego não é do Facebook = BLOQUEADO
     
     Retorna score 100 se OK, 0 se bloqueado
     """
     details = {}
     
-    # VALIDAÇÃO ÚNICA: Parâmetro grim obrigatório
+    # VALIDAÇÃO 1: Parâmetro grim obrigatório
     # ✅ IMPORTANTE: Parâmetro sempre será "grim", nunca pode ser alterado
     param_name = 'grim'
     expected_value = pool.meta_cloaker_param_value
@@ -3985,23 +3987,41 @@ def validate_cloaker_access(request, pool, slug):
             actual_value = expected_value
             logger.info(f"✅ CLOAKER V2.0 | Facebook format detected: ?{expected_value}")
     
+    # VALIDAÇÃO 2: fbclid OBRIGATÓRIO - PROTEÇÃO CRÍTICA
+    # ✅ Sem fbclid = tráfego não é do Facebook = BLOQUEADO
+    fbclid = request.args.get('fbclid', '').strip()
+    
     # Log estruturado para auditoria
     all_params = dict(request.args)
-    logger.info(f"🔍 CLOAKER V2.0 | Slug: {slug} | Grim: {actual_value} | Expected: {expected_value} | All params: {list(all_params.keys())}")
+    logger.info(f"🔍 CLOAKER V2.0 | Slug: {slug} | Grim: {actual_value} | Expected: {expected_value} | fbclid={'✅' if fbclid else '❌'} | All params: {list(all_params.keys())}")
     
-    # VALIDAÇÃO CRÍTICA: grim deve estar presente e correto
+    # VALIDAÇÃO CRÍTICA 1: grim deve estar presente e correto
     if actual_value != expected_value:
         return {'allowed': False, 'reason': 'invalid_grim', 'score': 0, 'details': {
             'param_match': False, 
             'expected': expected_value,
             'actual': actual_value,
+            'fbclid_present': bool(fbclid),
             'all_params': list(all_params.keys())
         }}
     
-    # ✅ SUCESSO: grim válido encontrado
-    return {'allowed': True, 'reason': 'grim_valid', 'score': 100, 'details': {
+    # VALIDAÇÃO CRÍTICA 2: fbclid OBRIGATÓRIO - só libera se tiver ID do Facebook
+    if not fbclid:
+        logger.warning(f"🛡️ CLOAKER | Bloqueado: grim válido mas SEM fbclid (tráfego não é do Facebook) | Slug: {slug}")
+        return {'allowed': False, 'reason': 'missing_fbclid', 'score': 0, 'details': {
+            'param_match': True,
+            'grim_value': actual_value,
+            'fbclid_present': False,
+            'reason_detail': 'grim válido mas sem fbclid - tráfego não é do Facebook',
+            'all_params': list(all_params.keys())
+        }}
+    
+    # ✅ SUCESSO: grim válido E fbclid presente = tráfego legítimo do Facebook
+    return {'allowed': True, 'reason': 'grim_valid_and_fbclid_present', 'score': 100, 'details': {
         'param_match': True, 
         'grim_value': actual_value,
+        'fbclid_present': True,
+        'fbclid_length': len(fbclid),
         'total_params': len(all_params)
     }}
 
