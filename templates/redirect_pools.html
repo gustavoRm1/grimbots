@@ -601,29 +601,6 @@
                                     </ol>
                                 </div>
                             </div>
-                            
-                            <!-- Parâmetros de URL Utmify -->
-                            <div class="p-4 bg-gray-800 border border-gray-700 rounded-lg">
-                                <div class="flex items-center justify-between mb-2">
-                                    <label class="text-sm font-medium text-gray-300">
-                                        Parâmetros de URL (Utmify)
-                                    </label>
-                                    <button type="button"
-                                            @click="copyToClipboard('utm_source=FB&utm_campaign={{ '{{' }}campaign.name{{ '}}' }}|{{ '{{' }}campaign.id{{ '}}' }}&utm_medium={{ '{{' }}adset.name{{ '}}' }}|{{ '{{' }}adset.id{{ '}}' }}&utm_content={{ '{{' }}ad.name{{ '}}' }}|{{ '{{' }}ad.id{{ '}}' }}&utm_term={{ '{{' }}placement{{ '}}' }}'); showNotification('✅ Parâmetros copiados!', 'success')"
-                                            class="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-medium transition">
-                                        <i class="fas fa-copy mr-1"></i> Copiar
-                                    </button>
-                                </div>
-                                <div class="p-3 bg-gray-900 rounded border border-gray-600">
-                                    <textarea readonly
-                                              @click="$event.target.select()"
-                                              rows="2"
-                                              class="w-full bg-transparent border-none text-gray-300 font-mono text-xs focus:outline-none cursor-pointer resize-none">{% raw %}utm_source=FB&utm_campaign={{campaign.name}}|{{campaign.id}}&utm_medium={{adset.name}}|{{adset.id}}&utm_content={{ad.name}}|{{ad.id}}&utm_term={{placement}}{% endraw %}</textarea>
-                                </div>
-                                <p class="text-xs text-gray-500 mt-2">
-                                    Cole este código no campo <strong>"Parâmetros de URL"</strong> do Facebook Ads Manager
-                                </p>
-                            </div>
                         </div>
                     </div>
 
@@ -675,6 +652,29 @@
                                         Os scripts serão incluídos automaticamente na página de redirecionamento
                                     </p>
                                 </div>
+                            </div>
+
+                            <!-- Parâmetros de URL Utmify -->
+                            <div class="p-4 bg-gray-800 border border-gray-700 rounded-lg">
+                                <div class="flex items-center justify-between mb-2">
+                                    <label class="text-sm font-medium text-gray-300">
+                                        Parâmetros de URL (Utmify)
+                                    </label>
+                                    <button type="button"
+                                            @click="copyToClipboard('utm_source=FB&utm_campaign={{ '{{' }}campaign.name{{ '}}' }}|{{ '{{' }}campaign.id{{ '}}' }}&utm_medium={{ '{{' }}adset.name{{ '}}' }}|{{ '{{' }}adset.id{{ '}}' }}&utm_content={{ '{{' }}ad.name{{ '}}' }}|{{ '{{' }}ad.id{{ '}}' }}&utm_term={{ '{{' }}placement{{ '}}' }}'); showNotification('✅ Parâmetros copiados!', 'success')"
+                                            class="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-medium transition">
+                                        <i class="fas fa-copy mr-1"></i> Copiar
+                                    </button>
+                                </div>
+                                <div class="p-3 bg-gray-900 rounded border border-gray-600">
+                                    <textarea readonly
+                                              @click="$event.target.select()"
+                                              rows="2"
+                                              class="w-full bg-transparent border-none text-gray-300 font-mono text-xs focus:outline-none cursor-pointer resize-none">{% raw %}utm_source=FB&utm_campaign={{campaign.name}}|{{campaign.id}}&utm_medium={{adset.name}}|{{adset.id}}&utm_content={{ad.name}}|{{ad.id}}&utm_term={{placement}}{% endraw %}</textarea>
+                                </div>
+                                <p class="text-xs text-gray-500 mt-2">
+                                    Cole este código no campo <strong>"Parâmetros de URL"</strong> do Facebook Ads Manager
+                                </p>
                             </div>
                         </div>
                     </div>
