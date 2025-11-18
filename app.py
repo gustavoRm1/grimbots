@@ -4211,6 +4211,8 @@ def public_redirect(slug):
     pageview_context = {}
     external_id = None
     utm_data = {}
+    fbp_cookie = None  # ✅ Inicializar para usar depois mesmo se Meta Pixel desabilitado
+    fbc_cookie = None  # ✅ Inicializar para usar depois mesmo se Meta Pixel desabilitado
     
     if pool.meta_tracking_enabled and pool.meta_pixel_id and pool.meta_access_token:
         tracking_service_v4 = TrackingServiceV4()
@@ -4506,10 +4508,8 @@ def public_redirect(slug):
             logger.error(f"❌ Erro ao renderizar template telegram_redirect.html: {e} | Usando fallback redirect direto", exc_info=True)
             # Continuar para redirect direto (linha 4382) - não retornar aqui, deixar código continuar
     
-    # ✅ FALLBACK: Se não tem pixel_id ou é crawler, redirect direto (comportamento atual)
-    # ✅ SEMPRE usar tracking_token no start param (32 chars, cabe perfeitamente em 64)
-    # ✅ CORREÇÃO CRÍTICA V12: Validar que tracking_token não é None antes de usar fallback
-    # Fallback p{pool.id} não tem tracking_data no Redis - NUNCA usar se tracking_token deveria existir
+    # ✅ FALLBACK: Se não tem pixel_id ou é crawler ou Meta Pixel está desabilitado, usar fallback simples
+    # ✅ CORREÇÃO: tracking_token pode ser None se Meta Pixel está desabilitado (comportamento esperado)
     if tracking_token and not is_crawler_request:
         # tracking_token tem 32 caracteres (uuid4.hex), bem abaixo do limite de 64
         tracking_param = tracking_token
@@ -4518,38 +4518,44 @@ def public_redirect(slug):
         # ✅ Crawler: usar fallback (não tem tracking mesmo)
         tracking_param = f"p{pool.id}"
         logger.info(f"🤖 Crawler detectado - usando fallback: {tracking_param}")
+    elif not pool.meta_tracking_enabled:
+        # ✅ Meta Pixel desabilitado: usar fallback (não há tracking para fazer)
+        tracking_param = f"p{pool.id}"
+        logger.info(f"⚠️ Meta Pixel desabilitado - usando fallback: {tracking_param}")
     else:
         # ✅ ERRO CRÍTICO: tracking_token deveria existir mas está None
-        # Isso indica um BUG - tracking_token só é None se is_crawler_request = True
-        logger.error(f"❌ [REDIRECT] tracking_token é None mas não é crawler - ISSO É UM BUG!")
-        logger.error(f"   Pool: {pool.name} | Slug: {slug} | is_crawler_request: {is_crawler_request}")
-        logger.error(f"   tracking_token deveria ter sido gerado na linha 4199")
+        # Isso indica um BUG - tracking_token só é None se is_crawler_request = True OU meta_tracking_enabled = False
+        logger.error(f"❌ [REDIRECT] tracking_token é None mas não é crawler e Meta Pixel está habilitado - ISSO É UM BUG!")
+        logger.error(f"   Pool: {pool.name} | Slug: {slug} | is_crawler_request: {is_crawler_request} | meta_tracking_enabled: {pool.meta_tracking_enabled}")
+        logger.error(f"   tracking_token deveria ter sido gerado quando meta_tracking_enabled=True")
         # ✅ FALHAR: Não usar fallback que não tem tracking_data (quebra Purchase)
         raise ValueError(
             f"tracking_token ausente - não pode usar fallback sem tracking_data. "
-            f"Pool: {pool.name} | Slug: {slug} | is_crawler_request: {is_crawler_request}"
+            f"Pool: {pool.name} | Slug: {slug} | is_crawler_request: {is_crawler_request} | meta_tracking_enabled: {pool.meta_tracking_enabled}"
         )
     
     redirect_url = f"https://t.me/{pool_bot.bot.username}?start={tracking_param}"
     
-    # ✅ CRÍTICO: Injetar cookies _fbp e _fbc no redirect response
+    # ✅ CRÍTICO: Injetar cookies _fbp e _fbc no redirect response (apenas se Meta Pixel está habilitado)
     # Isso sincroniza o FBP gerado no servidor com o browser
     # Meta Pixel JS usará o mesmo FBP, garantindo matching perfeito
     response = make_response(redirect(redirect_url, code=302))
     
-    # ✅ Injetar _fbp/_fbc gerados no servidor (90 dias - padrão Meta)
-    cookie_kwargs = {
-        'max_age': 90 * 24 * 60 * 60,
-        'httponly': False,
-        'secure': True,
-        'samesite': 'None',
-    }
-    if fbp_cookie:
-        response.set_cookie('_fbp', fbp_cookie, **cookie_kwargs)
-        logger.info(f"✅ Cookie _fbp injetado: {fbp_cookie[:30]}...")
-    if fbc_cookie:
-        response.set_cookie('_fbc', fbc_cookie, **cookie_kwargs)
-        logger.info(f"✅ Cookie _fbc injetado: {fbc_cookie[:30]}...")
+    # ✅ CORREÇÃO: Só injetar cookies se Meta Pixel está habilitado (fbp_cookie e fbc_cookie só são definidos nesse caso)
+    if pool.meta_tracking_enabled and (fbp_cookie or fbc_cookie):
+        # ✅ Injetar _fbp/_fbc gerados no servidor (90 dias - padrão Meta)
+        cookie_kwargs = {
+            'max_age': 90 * 24 * 60 * 60,
+            'httponly': False,
+            'secure': True,
+            'samesite': 'None',
+        }
+        if fbp_cookie:
+            response.set_cookie('_fbp', fbp_cookie, **cookie_kwargs)
+            logger.info(f"✅ Cookie _fbp injetado: {fbp_cookie[:30]}...")
+        if fbc_cookie:
+            response.set_cookie('_fbc', fbc_cookie, **cookie_kwargs)
+            logger.info(f"✅ Cookie _fbc injetado: {fbc_cookie[:30]}...")
     
     return response
 
