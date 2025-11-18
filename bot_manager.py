@@ -1820,11 +1820,13 @@ class BotManager:
                 return step
         return None
     
-    def _execute_step(self, step: Dict[str, Any], token: str, chat_id: int, delay: float = 0):
+    def _execute_step(self, step: Dict[str, Any], token: str, chat_id: int, delay: float = 0, config: Dict[str, Any] = None):
         """Executa um step do fluxo"""
         import time
         step_type = step.get('type')
         step_config = step.get('config', {})
+        if config is None:
+            config = {}
         
         if step_type == 'content':
             self.send_funnel_step_sequential(
@@ -1862,12 +1864,42 @@ class BotManager:
                 buttons=step_config.get('buttons', [])
             )
         elif step_type == 'buttons':
-            if step_config.get('buttons'):
+            # ✅ Buscar botões cadastrados baseado em selected_buttons
+            selected_buttons = step_config.get('selected_buttons', [])
+            buttons = []
+            
+            # Buscar botões do config completo (main_buttons e redirect_buttons)
+            main_buttons = config.get('main_buttons', []) if config else []
+            redirect_buttons = config.get('redirect_buttons', []) if config else []
+            
+            # Construir lista de botões baseada nos selecionados
+            for selected in selected_buttons:
+                btn_type = selected.get('type')
+                btn_index = selected.get('index')
+                
+                if btn_type == 'main' and btn_index is not None:
+                    if btn_index < len(main_buttons):
+                        btn = main_buttons[btn_index]
+                        if btn.get('text') and btn.get('price'):
+                            buttons.append({
+                                'text': btn['text'],
+                                'callback_data': f"buy_{btn_index}"
+                            })
+                elif btn_type == 'redirect' and btn_index is not None:
+                    if btn_index < len(redirect_buttons):
+                        btn = redirect_buttons[btn_index]
+                        if btn.get('text') and btn.get('url'):
+                            buttons.append({
+                                'text': btn['text'],
+                                'url': btn['url']
+                            })
+            
+            if buttons:
                 self.send_telegram_message(
                     token=token,
                     chat_id=str(chat_id),
                     message=step_config.get('message', '⬇️ Escolha uma opção'),
-                    buttons=step_config.get('buttons', [])
+                    buttons=buttons
                 )
         
         # Delay antes do próximo step
@@ -2033,7 +2065,7 @@ class BotManager:
             
             # ✅ Executar step normalmente (content, message, audio, video, buttons)
             else:
-                self._execute_step(step, token, chat_id, delay)
+                self._execute_step(step, token, chat_id, delay, config=config)
                 
                 # Próximo step (seguindo connections.next)
                 next_step_id = connections.get('next')
