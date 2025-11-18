@@ -54,3 +54,4 @@ if __name__ == '__main__':
         print("\n❌ MIGRATION FALHOU!")
         sys.exit(1)
 
+
