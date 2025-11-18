@@ -1302,8 +1302,15 @@ class BotManager:
                             current_step = self._find_step_by_id(flow_steps, current_step_id)
                             
                             if current_step:
-                                # Avaliar condições do step
-                                next_step_id = self._evaluate_conditions(current_step, user_input=text, context={})
+                                # ✅ QI 500: Avaliar condições do step com parâmetros completos
+                                next_step_id = self._evaluate_conditions(
+                                    current_step, 
+                                    user_input=text, 
+                                    context={},
+                                    bot_id=bot_id,
+                                    telegram_user_id=telegram_user_id,
+                                    step_id=current_step_id
+                                )
                                 
                                 if next_step_id:
                                     logger.info(f"✅ Condição matchou! Continuando para step: {next_step_id}")
@@ -1314,7 +1321,16 @@ class BotManager:
                                     return
                                 else:
                                     logger.info(f"⚠️ Nenhuma condição matchou para texto: '{text[:50]}...'")
-                                    # Se não matchou, verificar se há conexão retry (comportamento antigo)
+                                    
+                                    # ✅ QI 500: Verificar se há step de erro definido
+                                    error_step_id = current_step.get('error_step_id')
+                                    if error_step_id:
+                                        logger.info(f"🔄 Usando step de erro: {error_step_id}")
+                                        redis_conn.delete(current_step_key)
+                                        self._execute_flow_recursive(bot_id, token, config, chat_id, telegram_user_id, error_step_id)
+                                        return
+                                    
+                                    # ✅ QI 500: Verificar se há conexão retry (comportamento antigo)
                                     connections = current_step.get('connections', {})
                                     retry_step_id = connections.get('retry')
                                     if retry_step_id:
@@ -1322,6 +1338,18 @@ class BotManager:
                                         redis_conn.delete(current_step_key)
                                         self._execute_flow_recursive(bot_id, token, config, chat_id, telegram_user_id, retry_step_id)
                                         return
+                                    
+                                    # ✅ QI 500: Fallback padrão - enviar mensagem de erro e manter step ativo
+                                    error_message = current_step.get('config', {}).get('error_message') or "⚠️ Resposta não reconhecida. Por favor, tente novamente."
+                                    self.send_telegram_message(
+                                        token=token,
+                                        chat_id=str(chat_id),
+                                        message=error_message,
+                                        buttons=None
+                                    )
+                                    logger.info(f"💬 Mensagem de erro enviada - mantendo step ativo para retry")
+                                    # Não limpar Redis - permite nova tentativa
+                                    return
                         else:
                             logger.debug(f"💬 Nenhum step ativo - mensagem será apenas salva")
                     except Exception as e:
@@ -1862,14 +1890,21 @@ class BotManager:
         return None
     
     def _evaluate_conditions(self, step: Dict[str, Any], user_input: str = None, 
-                            context: Dict[str, Any] = None) -> Optional[str]:
+                            context: Dict[str, Any] = None, bot_id: int = None, 
+                            telegram_user_id: str = None, step_id: str = None) -> Optional[str]:
         """
-        ✅ NOVO: Avalia condições do step e retorna próximo step_id
+        ✅ QI 500: Avalia condições do step e retorna próximo step_id
+        
+        ✅ NOVO: Validação de max_attempts com fallback
+        ✅ NOVO: Suporte a step de erro padrão
         
         Args:
             step: Step atual com condições
             user_input: Input do usuário (texto, callback_data, etc.)
             context: Contexto adicional (payment_status, etc.)
+            bot_id: ID do bot (para Redis)
+            telegram_user_id: ID do usuário (para Redis)
+            step_id: ID do step atual (para Redis)
         
         Returns:
             step_id do próximo step ou None se nenhuma condição matchou
@@ -1884,24 +1919,84 @@ class BotManager:
         # Ordenar por ordem (order)
         sorted_conditions = sorted(conditions, key=lambda c: c.get('order', 0))
         
+        # ✅ NOVO: Verificar max_attempts antes de avaliar
+        try:
+            import redis
+            redis_conn = get_redis_connection()
+        except:
+            redis_conn = None
+        
         for condition in sorted_conditions:
             condition_type = condition.get('type')
+            condition_id = condition.get('id', f"cond_{sorted_conditions.index(condition)}")
+            
+            # ✅ NOVO: Verificar max_attempts (apenas para condições de texto/button)
+            if condition_type in ('text_validation', 'button_click') and redis_conn and bot_id and telegram_user_id and step_id:
+                max_attempts = condition.get('max_attempts')
+                if max_attempts and max_attempts > 0:
+                    attempt_key = f"flow_attempts:{bot_id}:{telegram_user_id}:{step_id}:{condition_id}"
+                    try:
+                        attempts = redis_conn.get(attempt_key)
+                        attempts = int(attempts) if attempts else 0
+                        
+                        if attempts >= max_attempts:
+                            logger.warning(f"⚠️ Máximo de tentativas ({max_attempts}) atingido para condição {condition_id}")
+                            # Retornar fallback_step se definido
+                            fallback_step = condition.get('fallback_step')
+                            if fallback_step:
+                                logger.info(f"🔄 Usando fallback_step: {fallback_step}")
+                                return fallback_step
+                            # Se não tem fallback, continuar para próxima condição
+                            continue
+                    except Exception as e:
+                        logger.warning(f"⚠️ Erro ao verificar max_attempts: {e}")
+            
+            # Avaliar condição
+            matched = False
             
             if condition_type == 'text_validation':
                 if user_input and self._match_text_validation(condition, user_input):
-                    return condition.get('target_step')
+                    matched = True
+                    # ✅ NOVO: Resetar tentativas quando matcha
+                    if redis_conn and bot_id and telegram_user_id and step_id:
+                        attempt_key = f"flow_attempts:{bot_id}:{telegram_user_id}:{step_id}:{condition_id}"
+                        try:
+                            redis_conn.delete(attempt_key)
+                        except:
+                            pass
             
             elif condition_type == 'button_click':
                 if user_input and self._match_button_click(condition, user_input):
-                    return condition.get('target_step')
+                    matched = True
+                    # ✅ NOVO: Resetar tentativas quando matcha
+                    if redis_conn and bot_id and telegram_user_id and step_id:
+                        attempt_key = f"flow_attempts:{bot_id}:{telegram_user_id}:{step_id}:{condition_id}"
+                        try:
+                            redis_conn.delete(attempt_key)
+                        except:
+                            pass
             
             elif condition_type == 'payment_status':
                 if context and self._match_payment_status(condition, context):
-                    return condition.get('target_step')
+                    matched = True
             
             elif condition_type == 'time_elapsed':
                 if context and self._match_time_elapsed(condition, context):
-                    return condition.get('target_step')
+                    matched = True
+            
+            if matched:
+                return condition.get('target_step')
+            
+            # ✅ NOVO: Incrementar tentativas se não matchou (apenas para condições de texto/button)
+            if condition_type in ('text_validation', 'button_click') and redis_conn and bot_id and telegram_user_id and step_id:
+                max_attempts = condition.get('max_attempts')
+                if max_attempts and max_attempts > 0:
+                    attempt_key = f"flow_attempts:{bot_id}:{telegram_user_id}:{step_id}:{condition_id}"
+                    try:
+                        redis_conn.incr(attempt_key)
+                        redis_conn.expire(attempt_key, 3600)  # Expira em 1 hora
+                    except:
+                        pass
         
         return None  # Nenhuma condição matchou
     
@@ -1925,10 +2020,7 @@ class BotManager:
             return bool(re.match(phone_pattern, user_input_clean))
         
         elif validation == 'cpf':
-            import re
-            # Validação básica de CPF (11 dígitos)
-            cpf = re.sub(r'\D', '', user_input_clean)
-            return len(cpf) == 11
+            return self._validate_cpf(user_input_clean)
         
         elif validation == 'contains':
             keyword = condition.get('value', '').lower()
@@ -1969,6 +2061,50 @@ class BotManager:
         elapsed_minutes = context.get('elapsed_minutes', 0)
         
         return elapsed_minutes >= required_minutes
+    
+    def _validate_cpf(self, cpf: str) -> bool:
+        """
+        ✅ QI 500: Valida CPF com dígitos verificadores
+        
+        Args:
+            cpf: CPF a ser validado (pode conter formatação)
+        
+        Returns:
+            True se CPF é válido, False caso contrário
+        """
+        import re
+        
+        # Remover formatação
+        cpf = re.sub(r'\D', '', cpf)
+        
+        # Verificar tamanho
+        if len(cpf) != 11:
+            return False
+        
+        # CPFs conhecidos como inválidos (todos dígitos iguais)
+        if cpf == cpf[0] * 11:
+            return False
+        
+        # Validar dígitos verificadores
+        def calculate_digit(cpf: str, weights: list) -> int:
+            """Calcula dígito verificador"""
+            total = sum(int(cpf[i]) * weights[i] for i in range(len(weights)))
+            remainder = total % 11
+            return 0 if remainder < 2 else 11 - remainder
+        
+        # Validar primeiro dígito
+        weights_1 = [10, 9, 8, 7, 6, 5, 4, 3, 2]
+        digit_1 = calculate_digit(cpf, weights_1)
+        if int(cpf[9]) != digit_1:
+            return False
+        
+        # Validar segundo dígito
+        weights_2 = [11, 10, 9, 8, 7, 6, 5, 4, 3, 2]
+        digit_2 = calculate_digit(cpf, weights_2)
+        if int(cpf[10]) != digit_2:
+            return False
+        
+        return True
     
     def _execute_step(self, step: Dict[str, Any], token: str, chat_id: int, delay: float = 0, config: Dict[str, Any] = None):
         """Executa um step do fluxo"""
@@ -2714,7 +2850,39 @@ class BotManager:
                     source_step = self._find_step_by_id(flow_steps, source_step_id)
                     
                     if source_step:
-                        # Buscar botão correspondente no step
+                        telegram_user_id = str(user_info.get('id', ''))
+                        
+                        # ✅ QI 500: Avaliar condições de button_click ANTES de usar target_step do botão
+                        conditions = source_step.get('conditions', [])
+                        if conditions and len(conditions) > 0:
+                            try:
+                                redis_conn = get_redis_connection()
+                                current_step_key = f"flow_current_step:{bot_id}:{telegram_user_id}"
+                                
+                                # Avaliar condições com parâmetros completos
+                                next_step_id = self._evaluate_conditions(
+                                    source_step,
+                                    user_input=callback_data,
+                                    context={},
+                                    bot_id=bot_id,
+                                    telegram_user_id=telegram_user_id,
+                                    step_id=source_step_id
+                                )
+                                
+                                if next_step_id:
+                                    logger.info(f"✅ Condição de button_click matchou! Continuando para step: {next_step_id}")
+                                    # Limpar step atual do Redis
+                                    redis_conn.delete(current_step_key)
+                                    # Continuar fluxo no step da condição (sobrescreve target_step do botão)
+                                    self._execute_flow_recursive(bot_id, token, config, chat_id, telegram_user_id, next_step_id)
+                                    return
+                                else:
+                                    logger.info(f"⚠️ Nenhuma condição de button_click matchou para callback: {callback_data}")
+                                    # Fallback: usar target_step do botão (comportamento antigo)
+                            except Exception as e:
+                                logger.warning(f"⚠️ Erro ao avaliar condições de button_click: {e} - usando target_step do botão")
+                        
+                        # ✅ Fallback: Buscar botão correspondente no step (comportamento antigo)
                         step_config = source_step.get('config', {})
                         custom_buttons = step_config.get('custom_buttons', [])
                         
@@ -2729,9 +2897,8 @@ class BotManager:
                         if btn_idx is not None and btn_idx < len(custom_buttons):
                             target_step_id = custom_buttons[btn_idx].get('target_step')
                             if target_step_id:
-                                logger.info(f"✅ Continuando fluxo para step: {target_step_id}")
+                                logger.info(f"✅ Continuando fluxo para step: {target_step_id} (target_step do botão)")
                                 # Limpar step atual do Redis
-                                telegram_user_id = str(user_info.get('id', ''))
                                 try:
                                     redis_conn = get_redis_connection()
                                     current_step_key = f"flow_current_step:{bot_id}:{telegram_user_id}"

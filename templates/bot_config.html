@@ -602,6 +602,13 @@
                                                   class="px-2 py-0.5 bg-yellow-500 bg-opacity-20 border border-yellow-500 rounded text-xs text-yellow-400 font-bold">
                                                 ⭐ Inicial
                                             </span>
+                                            <!-- ✅ Badge "Condições" (novo) -->
+                                            <span x-show="step.conditions && step.conditions.length > 0" 
+                                                  x-cloak
+                                                  class="px-2 py-0.5 bg-blue-500 bg-opacity-20 border border-blue-500 rounded text-xs text-blue-400 font-bold"
+                                                  x-bind:title="`${step.conditions.length} condição(ões) configurada(s)`">
+                                                🔀 <span x-text="step.conditions.length"></span> condição(ões)
+                                            </span>
                                         </div>
                                         <div class="text-xs text-gray-400 mt-1">
                                             <span x-show="step.name" x-cloak>
@@ -3281,6 +3288,18 @@ function botConfigApp() {
                                                             <div class="text-xs text-blue-300">
                                                                 → <span class="text-blue-200 font-bold">${escapeHtml(targetStepName)}</span>
                                                             </div>
+                                                            ${cond.max_attempts && cond.max_attempts > 0 ? `
+                                                                <div class="text-xs text-yellow-400 mt-1 flex items-center gap-1">
+                                                                    <i class="fas fa-exclamation-triangle"></i>
+                                                                    <span>Máximo: ${cond.max_attempts} tentativa(s)</span>
+                                                                </div>
+                                                            ` : ''}
+                                                            ${cond.fallback_step ? `
+                                                                <div class="text-xs text-purple-400 mt-1 flex items-center gap-1">
+                                                                    <i class="fas fa-undo"></i>
+                                                                    <span>Fallback: ${self.config.flow_steps.find(s => s.id === cond.fallback_step)?.name || cond.fallback_step.substring(0, 12)}</span>
+                                                                </div>
+                                                            ` : ''}
                                                         </div>
                                                         <button type="button" 
                                                                 onclick="removeCondition('${stepId}', ${idx})"
@@ -3298,6 +3317,23 @@ function botConfigApp() {
                                         }).join('');
                                     })()}
                                 </div>
+                            </div>
+                        ` : ''}
+                        <!-- ✅ MENSAGEM DE ERRO PERSONALIZADA (para steps com condições) -->
+                        ${step.type !== 'access' && step.conditions && step.conditions.length > 0 ? `
+                            <div class="mb-4 p-4 bg-orange-900 bg-opacity-20 border border-orange-500 rounded-lg">
+                                <label class="block text-sm font-medium text-orange-300 mb-2">
+                                    <i class="fas fa-exclamation-triangle mr-2"></i>Mensagem de Erro (opcional)
+                                </label>
+                                <input type="text" 
+                                       id="step-error-message-${stepId}" 
+                                       value="${(step.config && step.config.error_message ? step.config.error_message : '⚠️ Resposta não reconhecida. Por favor, tente novamente.').replace(/"/g, '&quot;')}" 
+                                       placeholder="⚠️ Resposta não reconhecida. Por favor, tente novamente."
+                                       class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white placeholder-gray-500"
+                                       maxlength="200">
+                                <p class="text-xs text-orange-200 mt-1">
+                                    Mensagem enviada quando nenhuma condição matchar. Deixe vazio para usar mensagem padrão.
+                                </p>
                             </div>
                         ` : ''}
                         <div class="flex justify-end gap-3 mt-6">
@@ -3723,6 +3759,23 @@ function botConfigApp() {
                     step.connections.next = document.getElementById(`step-next-${stepId}`)?.value || '';
                 }
                 
+                // ✅ SALVAR MENSAGEM DE ERRO PERSONALIZADA
+                if (step.conditions && step.conditions.length > 0) {
+                    const errorMessageInput = document.getElementById(`step-error-message-${stepId}`);
+                    if (errorMessageInput) {
+                        const errorMessage = errorMessageInput.value.trim();
+                        if (errorMessage) {
+                            if (!step.config) step.config = {};
+                            step.config.error_message = errorMessage;
+                        } else {
+                            // Se vazio, usar padrão (será definido no backend)
+                            if (step.config) {
+                                delete step.config.error_message;
+                            }
+                        }
+                    }
+                }
+                
                 // ✅ SALVAR CONDIÇÕES
                 const conditionsList = document.getElementById(`conditions-list-${stepId}`);
                 if (conditionsList) {
@@ -3977,6 +4030,9 @@ function botConfigApp() {
                                    min="1" max="10"
                                    placeholder="Deixe vazio para ilimitado"
                                    class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm">
+                            <p class="text-xs text-yellow-300 mt-1">
+                                Quando atingir este limite, usará "Fallback Step" (se configurado)
+                            </p>
                         </div>
                     `;
                 } else if (condType === 'button_click') {
@@ -3988,6 +4044,18 @@ function botConfigApp() {
                                    value="${cond && cond.button_text ? cond.button_text.replace(/"/g, '&quot;') : ''}"
                                    placeholder="Ex: Sim, quero!"
                                    class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm">
+                        </div>
+                        <div class="mb-3">
+                            <label class="block text-xs font-medium text-gray-300 mb-1">Máximo de tentativas (opcional):</label>
+                            <input type="number" 
+                                   name="condition-max-attempts-${stepId}-${condIndex}" 
+                                   value="${cond && cond.max_attempts ? cond.max_attempts : ''}"
+                                   min="1" max="10"
+                                   placeholder="Deixe vazio para ilimitado"
+                                   class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm">
+                            <p class="text-xs text-yellow-300 mt-1">
+                                Quando atingir este limite, usará "Fallback Step" (se configurado)
+                            </p>
                         </div>
                     `;
                 } else if (condType === 'payment_status') {
@@ -4057,11 +4125,33 @@ function botConfigApp() {
                             ${configHtml}
                         </div>
                         <div class="mb-4">
-                            <label class="block text-sm font-medium text-gray-300 mb-2">Ir para Step:</label>
+                            <label class="block text-sm font-medium text-gray-300 mb-2">Ir para Step (quando condição matchar):</label>
                             <select name="condition-target-${stepId}-${condIndex}" 
                                     class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white">
-                                <option value="">Selecione um step...</option>${stepOptions}
+                                <option value="">Selecione um step...</option>${stepOptions.map(opt => {
+                                    const match = opt.match(/value="([^"]+)"/);
+                                    const value = match ? match[1] : '';
+                                    const selected = (condition && condition.target_step === value) ? 'selected' : '';
+                                    return opt.replace(/<option/, `<option ${selected}`);
+                                }).join('')}
                             </select>
+                        </div>
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-300 mb-2">
+                                <i class="fas fa-undo mr-2 text-purple-400"></i>Fallback Step (opcional)
+                            </label>
+                            <select name="condition-fallback-${stepId}-${condIndex}" 
+                                    class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white">
+                                <option value="">Nenhum (continuar para próxima condição)</option>${stepOptions.map(opt => {
+                                    const match = opt.match(/value="([^"]+)"/);
+                                    const value = match ? match[1] : '';
+                                    const selected = (condition && condition.fallback_step === value) ? 'selected' : '';
+                                    return opt.replace(/<option/, `<option ${selected}`);
+                                }).join('')}
+                            </select>
+                            <p class="text-xs text-purple-300 mt-1">
+                                Step usado quando max_attempts atingir (apenas para condições de texto/botão)
+                            </p>
                         </div>
                         <div class="flex justify-end gap-3 mt-6">
                             <button type="button" 
@@ -4121,6 +4211,12 @@ function botConfigApp() {
                 order: isNew ? ((step.conditions && step.conditions.length) || 0) + 1 : condIndex + 1
             };
             
+            // ✅ NOVO: Salvar fallback_step (opcional)
+            const fallbackStep = modal.querySelector(`select[name="condition-fallback-${stepId}-${condIndex}"]`)?.value || '';
+            if (fallbackStep) {
+                condition.fallback_step = fallbackStep;
+            }
+            
             // Configurações específicas por tipo
             if (condType === 'text_validation') {
                 condition.validation = modal.querySelector(`select[name="condition-validation-${stepId}-${condIndex}"]`)?.value || 'any';
@@ -4131,6 +4227,8 @@ function botConfigApp() {
                 condition.max_attempts = maxAttempts ? parseInt(maxAttempts) : null;
             } else if (condType === 'button_click') {
                 condition.button_text = modal.querySelector(`input[name="condition-button-text-${stepId}-${condIndex}"]`)?.value || '';
+                const maxAttempts = modal.querySelector(`input[name="condition-max-attempts-${stepId}-${condIndex}"]`)?.value;
+                condition.max_attempts = maxAttempts ? parseInt(maxAttempts) : null;
             } else if (condType === 'payment_status') {
                 condition.status = modal.querySelector(`select[name="condition-payment-status-${stepId}-${condIndex}"]`)?.value || 'paid';
             } else if (condType === 'time_elapsed') {
