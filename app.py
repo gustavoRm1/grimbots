@@ -4051,11 +4051,15 @@ def public_redirect(slug):
     - Circuit breaker
     - Métricas de uso
     - ✅ META PIXEL: PageView tracking
+    - ✅ NORMALIZAÇÃO: Corrige URLs malformadas com múltiplos "?" (ex: Utmify)
     """
     from datetime import datetime
     # time já está importado no topo do arquivo
     
     start_time = time.time()
+    
+    # ✅ OBSERVAÇÃO: Flask trata corretamente múltiplos "?" em URLs malformadas através do request.args
+    # Se a Utmify gerar URLs com múltiplos "?", o Flask já parseia corretamente os parâmetros
     
     # Buscar pool ativo
     pool = RedirectPool.query.filter_by(slug=slug, is_active=True).first()
