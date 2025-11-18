@@ -1283,8 +1283,49 @@ class BotManager:
                 has_active_conversation = recent_bot_message or (recent_interaction and bot_user.welcome_sent)
                 
                 if has_active_conversation:
-                    # ✅ CONVERSA ATIVA: Apenas salvar mensagem, NÃO reiniciar funil
-                    logger.info(f"💬 Mensagem recebida em conversa ativa: '{message.get('text', '')[:50]}...' (última msg bot: {last_bot_message.created_at.strftime('%H:%M:%S') if last_bot_message else 'N/A'}, interação recente: {recent_interaction})")
+                    # ✅ CONVERSA ATIVA: Verificar se há step com condições aguardando resposta
+                    text = message.get('text', '').strip()
+                    
+                    # Buscar step atual do usuário no fluxo (armazenado no Redis)
+                    try:
+                        import redis
+                        redis_conn = get_redis_connection()
+                        current_step_key = f"flow_current_step:{bot_id}:{telegram_user_id}"
+                        current_step_id = redis_conn.get(current_step_key)
+                        
+                        if current_step_id:
+                            current_step_id = current_step_id.decode('utf-8') if isinstance(current_step_id, bytes) else current_step_id
+                            logger.info(f"🔍 Step ativo encontrado: {current_step_id} - processando condições")
+                            
+                            # Buscar step no fluxo
+                            flow_steps = config.get('flow_steps', [])
+                            current_step = self._find_step_by_id(flow_steps, current_step_id)
+                            
+                            if current_step:
+                                # Avaliar condições do step
+                                next_step_id = self._evaluate_conditions(current_step, user_input=text, context={})
+                                
+                                if next_step_id:
+                                    logger.info(f"✅ Condição matchou! Continuando para step: {next_step_id}")
+                                    # Limpar step atual
+                                    redis_conn.delete(current_step_key)
+                                    # Continuar fluxo no próximo step
+                                    self._execute_flow_recursive(bot_id, token, config, chat_id, telegram_user_id, next_step_id)
+                                    return
+                                else:
+                                    logger.info(f"⚠️ Nenhuma condição matchou para texto: '{text[:50]}...'")
+                                    # Se não matchou, verificar se há conexão retry (comportamento antigo)
+                                    connections = current_step.get('connections', {})
+                                    retry_step_id = connections.get('retry')
+                                    if retry_step_id:
+                                        logger.info(f"🔄 Usando conexão retry: {retry_step_id}")
+                                        redis_conn.delete(current_step_key)
+                                        self._execute_flow_recursive(bot_id, token, config, chat_id, telegram_user_id, retry_step_id)
+                                        return
+                        else:
+                            logger.debug(f"💬 Nenhum step ativo - mensagem será apenas salva")
+                    except Exception as e:
+                        logger.error(f"❌ Erro ao processar condições: {e}", exc_info=True)
                     
                     # Atualizar última interação
                     bot_user.last_interaction = now
@@ -1820,6 +1861,115 @@ class BotManager:
                 return step
         return None
     
+    def _evaluate_conditions(self, step: Dict[str, Any], user_input: str = None, 
+                            context: Dict[str, Any] = None) -> Optional[str]:
+        """
+        ✅ NOVO: Avalia condições do step e retorna próximo step_id
+        
+        Args:
+            step: Step atual com condições
+            user_input: Input do usuário (texto, callback_data, etc.)
+            context: Contexto adicional (payment_status, etc.)
+        
+        Returns:
+            step_id do próximo step ou None se nenhuma condição matchou
+        """
+        if not step:
+            return None
+        
+        conditions = step.get('conditions', [])
+        if not conditions or len(conditions) == 0:
+            return None
+        
+        # Ordenar por ordem (order)
+        sorted_conditions = sorted(conditions, key=lambda c: c.get('order', 0))
+        
+        for condition in sorted_conditions:
+            condition_type = condition.get('type')
+            
+            if condition_type == 'text_validation':
+                if user_input and self._match_text_validation(condition, user_input):
+                    return condition.get('target_step')
+            
+            elif condition_type == 'button_click':
+                if user_input and self._match_button_click(condition, user_input):
+                    return condition.get('target_step')
+            
+            elif condition_type == 'payment_status':
+                if context and self._match_payment_status(condition, context):
+                    return condition.get('target_step')
+            
+            elif condition_type == 'time_elapsed':
+                if context and self._match_time_elapsed(condition, context):
+                    return condition.get('target_step')
+        
+        return None  # Nenhuma condição matchou
+    
+    def _match_text_validation(self, condition: Dict[str, Any], user_input: str) -> bool:
+        """Valida texto do usuário baseado na condição"""
+        if not user_input or not user_input.strip():
+            return False
+        
+        validation = condition.get('validation', 'any')
+        user_input_clean = user_input.strip()
+        
+        if validation == 'email':
+            import re
+            email_pattern = r'^[\w\.-]+@[\w\.-]+\.\w+$'
+            return bool(re.match(email_pattern, user_input_clean))
+        
+        elif validation == 'phone':
+            import re
+            # Telefone brasileiro: (XX) XXXXX-XXXX ou XXXXXXXXXXX
+            phone_pattern = r'^(\+55\s?)?(\(?\d{2}\)?\s?)?\d{4,5}-?\d{4}$'
+            return bool(re.match(phone_pattern, user_input_clean))
+        
+        elif validation == 'cpf':
+            import re
+            # Validação básica de CPF (11 dígitos)
+            cpf = re.sub(r'\D', '', user_input_clean)
+            return len(cpf) == 11
+        
+        elif validation == 'contains':
+            keyword = condition.get('value', '').lower()
+            return keyword in user_input_clean.lower()
+        
+        elif validation == 'equals':
+            value = condition.get('value', '').strip().lower()
+            return user_input_clean.lower() == value
+        
+        elif validation == 'any':
+            return bool(user_input_clean)
+        
+        return False
+    
+    def _match_button_click(self, condition: Dict[str, Any], callback_data: str) -> bool:
+        """Verifica se callback_data corresponde ao botão da condição"""
+        if not callback_data:
+            return False
+        
+        button_text = condition.get('button_text', '')
+        if not button_text:
+            return False
+        
+        # Verificar se callback_data contém o texto do botão ou é do formato flow_step_{step_id}_{action}
+        # Por enquanto, verificação simples - pode ser expandida
+        return button_text.lower() in callback_data.lower() or callback_data.startswith('flow_step_')
+    
+    def _match_payment_status(self, condition: Dict[str, Any], context: Dict[str, Any]) -> bool:
+        """Verifica se status de pagamento corresponde à condição"""
+        expected_status = condition.get('status', 'paid')
+        actual_status = context.get('payment_status')
+        
+        return actual_status == expected_status
+    
+    def _match_time_elapsed(self, condition: Dict[str, Any], context: Dict[str, Any]) -> bool:
+        """Verifica se tempo decorrido corresponde à condição"""
+        required_minutes = condition.get('minutes', 5)
+        elapsed_minutes = context.get('elapsed_minutes', 0)
+        
+        return elapsed_minutes >= required_minutes
+    
     def _execute_step(self, step: Dict[str, Any], token: str, chat_id: int, delay: float = 0, config: Dict[str, Any] = None):
         """Executa um step do fluxo"""
         import time
@@ -1864,35 +2014,57 @@ class BotManager:
                 buttons=step_config.get('buttons', [])
             )
         elif step_type == 'buttons':
-            # ✅ Buscar botões cadastrados baseado em selected_buttons
-            selected_buttons = step_config.get('selected_buttons', [])
+            # ✅ NOVO: Verificar se usa botões contextuais ou globais
+            use_custom_buttons = step_config.get('use_custom_buttons', False)
             buttons = []
             
-            # Buscar botões do config completo (main_buttons e redirect_buttons)
-            main_buttons = config.get('main_buttons', []) if config else []
-            redirect_buttons = config.get('redirect_buttons', []) if config else []
-            
-            # Construir lista de botões baseada nos selecionados
-            for selected in selected_buttons:
-                btn_type = selected.get('type')
-                btn_index = selected.get('index')
+            if use_custom_buttons:
+                # ✅ Botões contextuais (específicos do step)
+                custom_buttons = step_config.get('custom_buttons', [])
+                step_id = step.get('id', '')
                 
-                if btn_type == 'main' and btn_index is not None:
-                    if btn_index < len(main_buttons):
-                        btn = main_buttons[btn_index]
-                        if btn.get('text') and btn.get('price'):
-                            buttons.append({
-                                'text': btn['text'],
-                                'callback_data': f"buy_{btn_index}"
-                            })
-                elif btn_type == 'redirect' and btn_index is not None:
-                    if btn_index < len(redirect_buttons):
-                        btn = redirect_buttons[btn_index]
-                        if btn.get('text') and btn.get('url'):
-                            buttons.append({
-                                'text': btn['text'],
-                                'url': btn['url']
-                            })
+                for idx, custom_btn in enumerate(custom_buttons):
+                    btn_text = custom_btn.get('text', '')
+                    target_step = custom_btn.get('target_step', '')
+                    
+                    if btn_text and target_step:
+                        # Criar callback_data no formato: flow_step_{step_id}_{action}
+                        action = f"btn_{idx}"
+                        callback_data = f"flow_step_{step_id}_{action}"
+                        buttons.append({
+                            'text': btn_text,
+                            'callback_data': callback_data
+                        })
+                        logger.info(f"🔘 Botão contextual criado: '{btn_text}' → {target_step} (callback: {callback_data})")
+            else:
+                # ✅ Botões globais (comportamento antigo)
+                selected_buttons = step_config.get('selected_buttons', [])
+                
+                # Buscar botões do config completo (main_buttons e redirect_buttons)
+                main_buttons = config.get('main_buttons', []) if config else []
+                redirect_buttons = config.get('redirect_buttons', []) if config else []
+                
+                # Construir lista de botões baseada nos selecionados
+                for selected in selected_buttons:
+                    btn_type = selected.get('type')
+                    btn_index = selected.get('index')
+                    
+                    if btn_type == 'main' and btn_index is not None:
+                        if btn_index < len(main_buttons):
+                            btn = main_buttons[btn_index]
+                            if btn.get('text') and btn.get('price'):
+                                buttons.append({
+                                    'text': btn['text'],
+                                    'callback_data': f"buy_{btn_index}"
+                                })
+                    elif btn_type == 'redirect' and btn_index is not None:
+                        if btn_index < len(redirect_buttons):
+                            btn = redirect_buttons[btn_index]
+                            if btn.get('text') and btn.get('url'):
+                                buttons.append({
+                                    'text': btn['text'],
+                                    'url': btn['url']
+                                })
             
             if buttons:
                 self.send_telegram_message(
@@ -2097,7 +2269,24 @@ class BotManager:
             else:
                 self._execute_step(step, token, chat_id, delay, config=config)
                 
-                # Próximo step (seguindo connections.next)
+                # ✅ NOVO: Priorizar condições sobre conexões diretas
+                # Se step tem condições, aguardar input do usuário (não continuar automaticamente)
+                conditions = step.get('conditions', [])
+                if conditions and len(conditions) > 0:
+                    logger.info(f"⏸️ Step {step_id} tem {len(conditions)} condição(ões) - aguardando input do usuário")
+                    # Salvar step atual no Redis para processar condições quando usuário responder
+                    try:
+                        import redis
+                        redis_conn = get_redis_connection()
+                        current_step_key = f"flow_current_step:{bot_id}:{telegram_user_id}"
+                        redis_conn.set(current_step_key, step_id, ex=3600)  # Expira em 1 hora
+                        logger.info(f"💾 Step atual salvo no Redis: {step_id}")
+                    except Exception as e:
+                        logger.error(f"❌ Erro ao salvar step atual no Redis: {e}")
+                    # Fluxo pausa aqui - será continuado quando usuário enviar mensagem/clicar botão
+                    return
+                
+                # Fallback: usar conexões diretas (comportamento antigo)
                 next_step_id = connections.get('next')
                 if next_step_id:
                     self._execute_flow_recursive(bot_id, token, config, chat_id, telegram_user_id, next_step_id)
@@ -2502,6 +2691,64 @@ class BotManager:
             
             callback_id = callback['id']
             url = f"https://api.telegram.org/bot{token}/answerCallbackQuery"
+            
+            # ✅ NOVO: Botão contextual do fluxo (formato: flow_step_{step_id}_{action})
+            if callback_data.startswith('flow_step_'):
+                # Responder callback
+                requests.post(url, json={
+                    'callback_query_id': callback_id,
+                    'text': '⏳ Processando...'
+                }, timeout=3)
+                
+                # Extrair step_id e action do callback_data
+                # Formato: flow_step_{step_id}_{action}
+                parts = callback_data.replace('flow_step_', '').split('_', 1)
+                if len(parts) >= 1:
+                    source_step_id = parts[0]
+                    action = parts[1] if len(parts) > 1 else ''
+                    
+                    logger.info(f"🔘 Botão contextual clicado: step={source_step_id}, action={action}")
+                    
+                    # Buscar step no fluxo
+                    flow_steps = config.get('flow_steps', [])
+                    source_step = self._find_step_by_id(flow_steps, source_step_id)
+                    
+                    if source_step:
+                        # Buscar botão correspondente no step
+                        step_config = source_step.get('config', {})
+                        custom_buttons = step_config.get('custom_buttons', [])
+                        
+                        # Extrair índice do botão do action (formato: btn_{idx})
+                        btn_idx = None
+                        if action.startswith('btn_'):
+                            try:
+                                btn_idx = int(action.replace('btn_', ''))
+                            except:
+                                pass
+                        
+                        if btn_idx is not None and btn_idx < len(custom_buttons):
+                            target_step_id = custom_buttons[btn_idx].get('target_step')
+                            if target_step_id:
+                                logger.info(f"✅ Continuando fluxo para step: {target_step_id}")
+                                # Limpar step atual do Redis
+                                telegram_user_id = str(user_info.get('id', ''))
+                                try:
+                                    redis_conn = get_redis_connection()
+                                    current_step_key = f"flow_current_step:{bot_id}:{telegram_user_id}"
+                                    redis_conn.delete(current_step_key)
+                                except:
+                                    pass
+                                # Continuar fluxo no step de destino
+                                self._execute_flow_recursive(bot_id, token, config, chat_id, telegram_user_id, target_step_id)
+                                return
+                            else:
+                                logger.warning(f"⚠️ Botão contextual sem target_step definido")
+                        else:
+                            logger.warning(f"⚠️ Índice de botão inválido: {btn_idx}")
+                    else:
+                        logger.warning(f"⚠️ Step não encontrado: {source_step_id}")
+                
+                return
             
             # Botão de VERIFICAR PAGAMENTO
             if callback_data.startswith('verify_'):

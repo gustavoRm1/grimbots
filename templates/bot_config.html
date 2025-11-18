@@ -652,7 +652,7 @@
                                     <template x-if="step.connections && step.connections.retry">
                                         <div class="flex items-center gap-2 px-3 py-1.5 bg-yellow-900 bg-opacity-30 border border-yellow-700 rounded text-xs">
                                             <i class="fas fa-redo text-yellow-400"></i>
-                                            <span class="text-yellow-300">Retry:</span>
+                                            <span class="text-yellow-300">Quando responder:</span>
                                             <span class="text-yellow-400 font-semibold" 
                                                   x-text="(() => { const retryStep = config.flow_steps.find(s => s.id === step.connections.retry); return retryStep ? (retryStep.name || getStepTitle(retryStep.type) + ' (' + (retryStep.order || 0) + ')') : step.connections.retry.substring(0, 8) + '...'; })()"></span>
                                         </div>
@@ -2934,11 +2934,11 @@ function botConfigApp() {
                             <select id="step-type-${stepId}" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white">
                                 ${stepTypes.map(t => `<option value="${t.value}" ${step.type === t.value ? 'selected' : ''}>${t.label} - ${t.desc}</option>`).join('')}
                             </select>
-                            <div class="mt-2 p-3 bg-blue-500 bg-opacity-10 border border-blue-500 rounded-lg text-xs text-blue-300" id="step-type-help-${stepId}">
+                            <div class="mt-2 p-3 bg-blue-500 bg-opacity-25 border border-blue-500 rounded-lg text-xs text-blue-200" id="step-type-help-${stepId}">
                                 ${(() => {
                                     const helps = {
                                         'content': '📸 <strong>Conteúdo:</strong> Ideal para apresentação. Envia mensagem com foto/vídeo e pode incluir botões.',
-                                        'message': '💬 <strong>Mensagem:</strong> Texto simples. Usado para instruções ou comunicação direta.',
+                                        'message': '💬 <strong>Mensagem:</strong> Texto simples. Quando o lead responder, você pode configurar um step de verificação para processar a resposta.',
                                         'audio': '🎵 <strong>Áudio:</strong> Envia áudio do Telegram. Ideal para criar conexão pessoal.',
                                         'video': '🎥 <strong>Vídeo:</strong> Envia vídeo do Telegram. Perfeito para explicações detalhadas.',
                                         'buttons': '🔘 <strong>Botões:</strong> Exibe botões cadastrados (pagamento ou links). Lead escolhe opção.',
@@ -3078,18 +3078,113 @@ function botConfigApp() {
                                 </select>
                             </div>
                         ` : step.type === 'message' ? `
-                            <div class="mb-4 p-4 bg-gray-800 rounded-lg">
-                                <label class="block text-sm font-medium text-gray-300 mb-2">Verificar novamente → Step:</label>
-                                <select id="step-retry-${stepId}" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white">
-                                    <option value="">Nenhum</option>${stepOptions}
+                            <div class="mb-4 p-4 bg-gray-800 rounded-lg border border-yellow-700">
+                                <label class="block text-sm font-medium text-yellow-300 mb-2">
+                                    <i class="fas fa-redo mr-2"></i>Quando lead enviar mensagem → Ir para Step:
+                                </label>
+                                <select id="step-retry-${stepId}" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white mb-2">
+                                    <option value="">Nenhum (fluxo para aqui)</option>${stepOptions}
                                 </select>
+                                <div class="mt-2 p-2 bg-yellow-500 bg-opacity-20 border border-yellow-500 rounded text-xs text-yellow-200">
+                                    <i class="fas fa-info-circle mr-1"></i>
+                                    <strong>Como funciona:</strong> Após enviar esta mensagem, quando o lead responder com <strong>qualquer texto</strong>, o fluxo automaticamente irá para o step selecionado acima. 
+                                    <br><span class="text-yellow-300 mt-1 block">💡 Útil para: verificar mensagens, processar respostas, criar loops de validação.</span>
+                                </div>
                             </div>
                         ` : step.type === 'buttons' ? `
-                            <div class="mb-4 p-4 bg-gray-800 rounded-lg">
-                                <label class="block text-sm font-medium text-gray-300 mb-2">Próximo → Step:</label>
-                                <select id="step-next-${stepId}" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white">
-                                    <option value="">Nenhum</option>${stepOptions}
-                                </select>
+                            <div class="mb-4 p-4 bg-gray-800 rounded-lg border border-purple-700">
+                                <label class="block text-sm font-medium text-purple-300 mb-3">
+                                    <i class="fas fa-toggle-on mr-2"></i>Tipo de Botões
+                                </label>
+                                <div class="mb-4">
+                                    <label class="flex items-center gap-2 mb-2">
+                                        <input type="radio" 
+                                               name="button-type-${stepId}" 
+                                               value="global" 
+                                               ${(!step.config || !step.config.use_custom_buttons) ? 'checked' : ''}
+                                               class="w-4 h-4 bg-gray-700 border-gray-600 rounded focus:ring-purple-500"
+                                               onchange="document.getElementById('button-global-${stepId}').style.display = 'block'; document.getElementById('button-custom-${stepId}').style.display = 'none';"
+                                               style="accent-color: #A855F7;">
+                                        <span class="text-white">🌐 Botões Globais (da aba "Botões")</span>
+                                    </label>
+                                    <label class="flex items-center gap-2">
+                                        <input type="radio" 
+                                               name="button-type-${stepId}" 
+                                               value="custom" 
+                                               ${(step.config && step.config.use_custom_buttons) ? 'checked' : ''}
+                                               class="w-4 h-4 bg-gray-700 border-gray-600 rounded focus:ring-purple-500"
+                                               onchange="document.getElementById('button-global-${stepId}').style.display = 'none'; document.getElementById('button-custom-${stepId}').style.display = 'block';"
+                                               style="accent-color: #A855F7;">
+                                        <span class="text-white">✨ Botões Contextuais (específicos deste step)</span>
+                                    </label>
+                                </div>
+                                
+                                <!-- Botões Globais -->
+                                <div id="button-global-${stepId}" style="display: ${(step.config && step.config.use_custom_buttons) ? 'none' : 'block'};">
+                                    <p class="text-xs text-gray-400 mb-2">Selecione os botões cadastrados na aba "Botões":</p>
+                                </div>
+                                
+                                <!-- Botões Contextuais -->
+                                <div id="button-custom-${stepId}" style="display: ${(step.config && step.config.use_custom_buttons) ? 'block' : 'none'};">
+                                    <div class="mb-3">
+                                        <label class="block text-xs font-medium text-gray-300 mb-2">
+                                            <i class="fas fa-plus-circle mr-1 text-purple-400"></i>Botões Contextuais
+                                        </label>
+                                        <div id="custom-buttons-list-${stepId}" class="space-y-2 mb-3">
+                                            ${(() => {
+                                                const customButtons = (step.config && step.config.custom_buttons) || [];
+                                                if (customButtons.length === 0) {
+                                                    return '<div class="text-xs text-gray-500 italic">Nenhum botão contextual adicionado. Clique em "Adicionar Botão Contextual" para criar um.</div>';
+                                                }
+                                                const availableSteps = self.config.flow_steps.filter(s => s.id !== stepId);
+                                                const stepOptions = availableSteps.map(s => {
+                                                    const stepLabel = s.name ? s.name : self.getStepTitle(s.type);
+                                                    return `<option value="${s.id}" ${btn.target_step === s.id ? 'selected' : ''}>${s.order || 0} - ${stepLabel}</option>`;
+                                                }).join('');
+                                                return customButtons.map((btn, idx) => `
+                                                    <div data-custom-button class="p-3 bg-gray-900 rounded-lg border border-purple-600 mb-2">
+                                                        <div class="grid grid-cols-1 md:grid-cols-3 gap-2 mb-2">
+                                                            <div class="md:col-span-2">
+                                                                <label class="block text-xs font-medium text-gray-300 mb-1">Texto do Botão</label>
+                                                                <input type="text" 
+                                                                       name="custom-btn-text-${stepId}-${idx}" 
+                                                                       value="${escapeHtml(btn.text || '')}"
+                                                                       placeholder="Ex: Sim, quero!"
+                                                                       class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm"
+                                                                       maxlength="64">
+                                                            </div>
+                                                            <div>
+                                                                <label class="block text-xs font-medium text-gray-300 mb-1">Ir para Step</label>
+                                                                <select name="custom-btn-target-${stepId}-${idx}" 
+                                                                        class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm">
+                                                                    <option value="">Nenhum</option>${stepOptions}
+                                                                </select>
+                                                            </div>
+                                                        </div>
+                                                        <button type="button" 
+                                                                onclick="removeCustomButton('${stepId}', ${idx})"
+                                                                class="w-full px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-medium transition">
+                                                            <i class="fas fa-times mr-1"></i>Remover
+                                                        </button>
+                                                    </div>
+                                                `).join('');
+                                            })()}
+                                        </div>
+                                        <button type="button" 
+                                                onclick="addCustomButton('${stepId}')"
+                                                class="w-full px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded text-sm font-medium transition">
+                                            <i class="fas fa-plus mr-2"></i>Adicionar Botão Contextual
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <!-- Próximo Step (só para botões globais) -->
+                                <div id="step-next-global-${stepId}" style="display: ${(step.config && step.config.use_custom_buttons) ? 'none' : 'block'};" class="mt-4">
+                                    <label class="block text-sm font-medium text-gray-300 mb-2">Próximo → Step:</label>
+                                    <select id="step-next-${stepId}" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white">
+                                        <option value="">Nenhum</option>${stepOptions}
+                                    </select>
+                                </div>
                             </div>
                         ` : step.type !== 'access' ? `
                             <div class="mb-4 p-4 bg-gray-800 rounded-lg">
@@ -3097,6 +3192,97 @@ function botConfigApp() {
                                 <select id="step-next-${stepId}" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white">
                                     <option value="">Nenhum</option>${stepOptions}
                                 </select>
+                            </div>
+                        ` : ''}
+                        
+                        <!-- ✅ SISTEMA DE CONDIÇÕES (para todos os steps exceto 'access') -->
+                        ${step.type !== 'access' ? `
+                            <div class="mb-4 p-4 bg-blue-900 bg-opacity-20 border-2 border-blue-500 rounded-lg">
+                                <div class="flex items-center justify-between mb-3">
+                                    <label class="block text-sm font-bold text-blue-300">
+                                        <i class="fas fa-code-branch mr-2"></i>Condições (Decisões do Lead)
+                                    </label>
+                                    <button type="button" 
+                                            onclick="addCondition('${stepId}')"
+                                            class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium transition">
+                                        <i class="fas fa-plus mr-1"></i>Adicionar
+                                    </button>
+                                </div>
+                                <p class="text-xs text-blue-200 mb-3">
+                                    Configure condições para que o lead tome decisões e siga caminhos diferentes no funil.
+                                    <br><span class="text-blue-300">💡 Exemplo: Se email válido → Step A, Se inválido → Step B</span>
+                                </p>
+                                <div id="conditions-list-${stepId}" class="space-y-2">
+                                    ${(() => {
+                                        const conditions = (step.conditions && step.conditions.length > 0) ? step.conditions : [];
+                                        if (conditions.length === 0) {
+                                            return '<div class="text-xs text-gray-500 italic text-center py-2">Nenhuma condição configurada. Adicione condições para criar fluxos condicionais.</div>';
+                                        }
+                                        const self = this;
+                                        function escapeHtml(text) {
+                                            const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+                                            return String(text).replace(/[&<>"']/g, m => map[m]);
+                                        }
+                                        return conditions.map((cond, idx) => {
+                                            // Gerar label da condição inline (não depender de função externa)
+                                            let condLabel = 'Condição';
+                                            if (cond.type === 'text_validation') {
+                                                const validation = cond.validation || 'any';
+                                                const labels = {
+                                                    'email': 'Se email válido',
+                                                    'phone': 'Se telefone válido',
+                                                    'cpf': 'Se CPF válido',
+                                                    'contains': `Se texto contém "${cond.value || ''}"`,
+                                                    'equals': `Se texto igual a "${cond.value || ''}"`,
+                                                    'any': 'Se qualquer texto'
+                                                };
+                                                condLabel = labels[validation] || 'Se texto válido';
+                                            } else if (cond.type === 'button_click') {
+                                                condLabel = `Se botão "${cond.button_text || ''}" clicado`;
+                                            } else if (cond.type === 'payment_status') {
+                                                const status = cond.status || 'paid';
+                                                const labels = {
+                                                    'paid': 'Se pagamento confirmado',
+                                                    'pending': 'Se pagamento pendente',
+                                                    'failed': 'Se pagamento falhou',
+                                                    'expired': 'Se pagamento expirado'
+                                                };
+                                                condLabel = labels[status] || 'Se status de pagamento';
+                                            } else if (cond.type === 'time_elapsed') {
+                                                condLabel = `Se ${cond.minutes || 5} minuto(s) decorrido(s)`;
+                                            }
+                                            
+                                            const targetStepName = self.config.flow_steps.find(s => s.id === cond.target_step)?.name || 
+                                                                   self.getStepTitle(self.config.flow_steps.find(s => s.id === cond.target_step)?.type) || 
+                                                                   cond.target_step.substring(0, 12);
+                                            return `
+                                                <div data-condition class="p-3 bg-gray-900 rounded-lg border border-blue-600">
+                                                    <div class="flex items-start justify-between mb-2">
+                                                        <div class="flex-1">
+                                                            <div class="flex items-center gap-2 mb-1">
+                                                                <span class="px-2 py-0.5 bg-blue-600 text-white rounded text-xs font-bold">${idx + 1}</span>
+                                                                <span class="text-sm font-semibold text-blue-300">${escapeHtml(condLabel)}</span>
+                                                            </div>
+                                                            <div class="text-xs text-gray-400">
+                                                                → <span class="text-blue-300 font-medium">${escapeHtml(targetStepName)}</span>
+                                                            </div>
+                                                        </div>
+                                                        <button type="button" 
+                                                                onclick="removeCondition('${stepId}', ${idx})"
+                                                                class="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs">
+                                                            <i class="fas fa-times"></i>
+                                                        </button>
+                                                    </div>
+                                                    <button type="button" 
+                                                            onclick="editCondition('${stepId}', ${idx})"
+                                                            class="w-full mt-2 px-2 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded text-xs">
+                                                        <i class="fas fa-edit mr-1"></i>Editar
+                                                    </button>
+                                                </div>
+                                            `;
+                                        }).join('');
+                                    })()}
+                                </div>
                             </div>
                         ` : ''}
                         <div class="flex justify-end gap-3 mt-6">
@@ -3275,11 +3461,18 @@ function botConfigApp() {
                     } else if (stepType === 'message') {
                         const retryVal = (currentStep.connections && currentStep.connections.retry) || '';
                         connectionsHtml = `
-                            <div class="mb-4 p-4 bg-gray-800 rounded-lg">
-                                <label class="block text-sm font-medium text-gray-300 mb-2">Verificar novamente → Step:</label>
-                                <select id="step-retry-${stepId}" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white">
-                                    <option value="">Nenhum</option>${stepOptions}
+                            <div class="mb-4 p-4 bg-gray-800 rounded-lg border border-yellow-700">
+                                <label class="block text-sm font-medium text-yellow-300 mb-2">
+                                    <i class="fas fa-redo mr-2"></i>Quando lead enviar mensagem → Ir para Step:
+                                </label>
+                                <select id="step-retry-${stepId}" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white mb-2">
+                                    <option value="">Nenhum (fluxo para aqui)</option>${stepOptions}
                                 </select>
+                                <div class="mt-2 p-2 bg-yellow-500 bg-opacity-20 border border-yellow-500 rounded text-xs text-yellow-200">
+                                    <i class="fas fa-info-circle mr-1"></i>
+                                    <strong>Como funciona:</strong> Após enviar esta mensagem, quando o lead responder com <strong>qualquer texto</strong>, o fluxo automaticamente irá para o step selecionado acima. 
+                                    <br><span class="text-yellow-300 mt-1 block">💡 Útil para: verificar mensagens, processar respostas, criar loops de validação.</span>
+                                </div>
                             </div>
                         `;
                         setTimeout(() => {
@@ -3326,7 +3519,7 @@ function botConfigApp() {
                     if (helpDiv) {
                         const helps = {
                             'content': '📸 <strong>Conteúdo:</strong> Ideal para apresentação. Envia mensagem com foto/vídeo e pode incluir botões.',
-                            'message': '💬 <strong>Mensagem:</strong> Texto simples. Usado para instruções ou comunicação direta.',
+                            'message': '💬 <strong>Mensagem:</strong> Texto simples. Quando o lead responder, você pode configurar um step de verificação para processar a resposta.',
                             'audio': '🎵 <strong>Áudio:</strong> Envia áudio do Telegram. Ideal para criar conexão pessoal.',
                             'video': '🎥 <strong>Vídeo:</strong> Envia vídeo do Telegram. Perfeito para explicações detalhadas.',
                             'buttons': '🔘 <strong>Botões:</strong> Exibe botões cadastrados (pagamento ou links). Lead escolhe opção.',
@@ -3452,30 +3645,57 @@ function botConfigApp() {
                     step.config.message = step.config.message || 'Acesso liberado!';
                 }
                 if (step.type === 'buttons') {
-                    // Coletar botões selecionados
-                    const selectedButtons = [];
+                    // ✅ Verificar tipo de botões (globais ou contextuais)
+                    const buttonTypeRadio = document.querySelector(`input[name="button-type-${stepId}"]:checked`);
+                    const useCustomButtons = buttonTypeRadio && buttonTypeRadio.value === 'custom';
                     
-                    // Verificar botões principais (main_buttons)
-                    if (self.config.main_buttons) {
-                        self.config.main_buttons.forEach((button, index) => {
-                            const checkbox = document.getElementById(`button-main-${index}-${stepId}`);
-                            if (checkbox && checkbox.checked) {
-                                selectedButtons.push({ type: 'main', index: index });
-                            }
-                        });
+                    step.config.use_custom_buttons = useCustomButtons;
+                    
+                    if (useCustomButtons) {
+                        // ✅ Botões contextuais
+                        const customButtons = [];
+                        const customButtonsList = document.getElementById(`custom-buttons-list-${stepId}`);
+                        if (customButtonsList) {
+                            customButtonsList.querySelectorAll('[data-custom-button]').forEach((btnEl, idx) => {
+                                const text = btnEl.querySelector(`input[name="custom-btn-text-${stepId}-${idx}"]`)?.value || '';
+                                const targetStep = btnEl.querySelector(`select[name="custom-btn-target-${stepId}-${idx}"]`)?.value || '';
+                                if (text.trim()) {
+                                    customButtons.push({
+                                        text: text.trim(),
+                                        target_step: targetStep || null
+                                    });
+                                }
+                            });
+                        }
+                        step.config.custom_buttons = customButtons;
+                        step.config.selected_buttons = []; // Limpar botões globais
+                    } else {
+                        // ✅ Botões globais (comportamento antigo)
+                        const selectedButtons = [];
+                        
+                        // Verificar botões principais (main_buttons)
+                        if (self.config.main_buttons) {
+                            self.config.main_buttons.forEach((button, index) => {
+                                const checkbox = document.getElementById(`button-main-${index}-${stepId}`);
+                                if (checkbox && checkbox.checked) {
+                                    selectedButtons.push({ type: 'main', index: index });
+                                }
+                            });
+                        }
+                        
+                        // Verificar botões de redirecionamento (redirect_buttons)
+                        if (self.config.redirect_buttons) {
+                            self.config.redirect_buttons.forEach((button, index) => {
+                                const checkbox = document.getElementById(`button-redirect-${index}-${stepId}`);
+                                if (checkbox && checkbox.checked) {
+                                    selectedButtons.push({ type: 'redirect', index: index });
+                                }
+                            });
+                        }
+                        
+                        step.config.selected_buttons = selectedButtons;
+                        step.config.custom_buttons = []; // Limpar botões contextuais
                     }
-                    
-                    // Verificar botões de redirecionamento (redirect_buttons)
-                    if (self.config.redirect_buttons) {
-                        self.config.redirect_buttons.forEach((button, index) => {
-                            const checkbox = document.getElementById(`button-redirect-${index}-${stepId}`);
-                            if (checkbox && checkbox.checked) {
-                                selectedButtons.push({ type: 'redirect', index: index });
-                            }
-                        });
-                    }
-                    
-                    step.config.selected_buttons = selectedButtons;
                 }
                 
                 if (step.type === 'payment') {
@@ -3486,6 +3706,44 @@ function botConfigApp() {
                     step.connections.next = document.getElementById(`step-next-${stepId}`)?.value || '';
                 } else if (step.type === 'buttons' || (step.type !== 'access' && step.type !== 'payment' && step.type !== 'message')) {
                     step.connections.next = document.getElementById(`step-next-${stepId}`)?.value || '';
+                }
+                
+                // ✅ SALVAR CONDIÇÕES
+                const conditionsList = document.getElementById(`conditions-list-${stepId}`);
+                if (conditionsList) {
+                    const conditions = [];
+                    conditionsList.querySelectorAll('[data-condition]').forEach((condEl, idx) => {
+                        const condType = condEl.querySelector(`select[name="condition-type-${stepId}-${idx}"]`)?.value;
+                        const targetStep = condEl.querySelector(`select[name="condition-target-${stepId}-${idx}"]`)?.value;
+                        const order = idx + 1;
+                        
+                        if (condType && targetStep) {
+                            const condition = {
+                                id: `cond_${Date.now()}_${idx}`,
+                                type: condType,
+                                target_step: targetStep,
+                                order: order
+                            };
+                            
+                            // Configurações específicas por tipo
+                            if (condType === 'text_validation') {
+                                condition.validation = condEl.querySelector(`select[name="condition-validation-${stepId}-${idx}"]`)?.value || 'any';
+                                if (condition.validation === 'contains' || condition.validation === 'equals') {
+                                    condition.value = condEl.querySelector(`input[name="condition-value-${stepId}-${idx}"]`)?.value || '';
+                                }
+                                condition.max_attempts = parseInt(condEl.querySelector(`input[name="condition-max-attempts-${stepId}-${idx}"]`)?.value) || null;
+                            } else if (condType === 'button_click') {
+                                condition.button_text = condEl.querySelector(`input[name="condition-button-text-${stepId}-${idx}"]`)?.value || '';
+                            } else if (condType === 'payment_status') {
+                                condition.status = condEl.querySelector(`select[name="condition-payment-status-${stepId}-${idx}"]`)?.value || 'paid';
+                            } else if (condType === 'time_elapsed') {
+                                condition.minutes = parseInt(condEl.querySelector(`input[name="condition-minutes-${stepId}-${idx}"]`)?.value) || 5;
+                            }
+                            
+                            conditions.push(condition);
+                        }
+                    });
+                    step.conditions = conditions.length > 0 ? conditions : null;
                 }
                 
                 document.getElementById(`flow-step-modal-${stepId}`).remove();
@@ -3516,6 +3774,456 @@ function botConfigApp() {
             
             this.config.flow_steps.push(duplicatedStep);
             this.showNotification(`✅ Step duplicado! Edite o novo step para configurar conexões.`, 'success');
+        },
+        
+        addCustomButton(stepId) {
+            const customButtonsList = document.getElementById(`custom-buttons-list-${stepId}`);
+            if (!customButtonsList) return;
+            
+            const self = this;
+            function escapeHtml(text) {
+                const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+                return String(text).replace(/[&<>"']/g, m => map[m]);
+            }
+            
+            const btnIndex = customButtonsList.querySelectorAll('[data-custom-button]').length;
+            const availableSteps = self.config.flow_steps.filter(s => s.id !== stepId);
+            const stepOptions = availableSteps.map(s => {
+                const stepLabel = s.name ? s.name : self.getStepTitle(s.type);
+                return `<option value="${s.id}">${s.order || 0} - ${stepLabel}</option>`;
+            }).join('');
+            
+            const btnHtml = `
+                <div data-custom-button class="p-3 bg-gray-900 rounded-lg border border-purple-600 mb-2">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-2 mb-2">
+                        <div class="md:col-span-2">
+                            <label class="block text-xs font-medium text-gray-300 mb-1">Texto do Botão</label>
+                            <input type="text" 
+                                   name="custom-btn-text-${stepId}-${btnIndex}" 
+                                   placeholder="Ex: Sim, quero!"
+                                   class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm"
+                                   maxlength="64">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-gray-300 mb-1">Ir para Step</label>
+                            <select name="custom-btn-target-${stepId}-${btnIndex}" 
+                                    class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm">
+                                <option value="">Nenhum</option>${stepOptions}
+                            </select>
+                        </div>
+                    </div>
+                    <button type="button" 
+                            onclick="removeCustomButton('${stepId}', ${btnIndex})"
+                            class="w-full px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-medium transition">
+                        <i class="fas fa-times mr-1"></i>Remover
+                    </button>
+                </div>
+            `;
+            
+            customButtonsList.insertAdjacentHTML('beforeend', btnHtml);
+        },
+        
+        removeCustomButton(stepId, btnIndex) {
+            const customButtonsList = document.getElementById(`custom-buttons-list-${stepId}`);
+            if (!customButtonsList) return;
+            
+            const btnEls = customButtonsList.querySelectorAll('[data-custom-button]');
+            if (btnIndex >= 0 && btnIndex < btnEls.length) {
+                btnEls[btnIndex].remove();
+            }
+            
+            // Atualizar índices dos inputs
+            customButtonsList.querySelectorAll('[data-custom-button]').forEach((btnEl, newIdx) => {
+                const textInput = btnEl.querySelector('input[type="text"]');
+                const targetSelect = btnEl.querySelector('select');
+                const removeBtn = btnEl.querySelector('button[onclick*="removeCustomButton"]');
+                
+                if (textInput) {
+                    const oldName = textInput.name;
+                    textInput.name = oldName.replace(/-\d+-/, `-${newIdx}-`);
+                }
+                if (targetSelect) {
+                    const oldName = targetSelect.name;
+                    targetSelect.name = oldName.replace(/-\d+-/, `-${newIdx}-`);
+                }
+                if (removeBtn) {
+                    removeBtn.setAttribute('onclick', `removeCustomButton('${stepId}', ${newIdx})`);
+                }
+            });
+        },
+        
+        getConditionLabel(condition) {
+            if (!condition) return 'Condição';
+            
+            if (condition.type === 'text_validation') {
+                const validation = condition.validation || 'any';
+                const labels = {
+                    'email': 'Se email válido',
+                    'phone': 'Se telefone válido',
+                    'cpf': 'Se CPF válido',
+                    'contains': `Se texto contém "${condition.value || ''}"`,
+                    'equals': `Se texto igual a "${condition.value || ''}"`,
+                    'any': 'Se qualquer texto'
+                };
+                return labels[validation] || 'Se texto válido';
+            } else if (condition.type === 'button_click') {
+                return `Se botão "${condition.button_text || ''}" clicado`;
+            } else if (condition.type === 'payment_status') {
+                const status = condition.status || 'paid';
+                const labels = {
+                    'paid': 'Se pagamento confirmado',
+                    'pending': 'Se pagamento pendente',
+                    'failed': 'Se pagamento falhou',
+                    'expired': 'Se pagamento expirado'
+                };
+                return labels[status] || 'Se status de pagamento';
+            } else if (condition.type === 'time_elapsed') {
+                return `Se ${condition.minutes || 5} minuto(s) decorrido(s)`;
+            }
+            
+            return 'Condição';
+        },
+        
+        addCondition(stepId) {
+            this.editCondition(stepId, -1); // -1 = nova condição
+        },
+        
+        editCondition(stepId, condIndex) {
+            const self = this;
+            const step = self.config.flow_steps.find(s => s.id === stepId);
+            if (!step) return;
+            
+            const isNew = condIndex < 0;
+            const condition = isNew ? null : (step.conditions && step.conditions[condIndex]) || null;
+            
+            const availableSteps = self.config.flow_steps.filter(s => s.id !== stepId);
+            const stepOptions = availableSteps.map(s => {
+                const stepLabel = s.name ? s.name : self.getStepTitle(s.type);
+                return `<option value="${s.id}" ${condition && condition.target_step === s.id ? 'selected' : ''}>${s.order || 0} - ${stepLabel}</option>`;
+            }).join('');
+            
+            // Determinar tipos de condição disponíveis baseado no tipo do step
+            let availableConditionTypes = [];
+            if (step.type === 'message') {
+                availableConditionTypes = [
+                    { value: 'text_validation', label: '💬 Validação de Texto' }
+                ];
+            } else if (step.type === 'buttons') {
+                availableConditionTypes = [
+                    { value: 'button_click', label: '🔘 Clique em Botão' }
+                ];
+            } else if (step.type === 'payment') {
+                availableConditionTypes = [
+                    { value: 'payment_status', label: '💰 Status de Pagamento' }
+                ];
+            } else {
+                // Para outros tipos, permitir condições de tempo
+                availableConditionTypes = [
+                    { value: 'time_elapsed', label: '⏰ Tempo Decorrido' }
+                ];
+            }
+            
+            const conditionTypeOptions = availableConditionTypes.map(t => 
+                `<option value="${t.value}" ${condition && condition.type === t.value ? 'selected' : ''}>${t.label}</option>`
+            ).join('');
+            
+            // Renderizar campos específicos baseado no tipo
+            function renderConditionConfig(condType, cond) {
+                if (condType === 'text_validation') {
+                    const validation = cond ? (cond.validation || 'any') : 'any';
+                    return `
+                        <div class="mb-3">
+                            <label class="block text-xs font-medium text-gray-300 mb-1">Tipo de Validação:</label>
+                            <select name="condition-validation-${stepId}-${condIndex}" 
+                                    class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm"
+                                    onchange="updateConditionConfig('${stepId}', ${condIndex}, this.value)">
+                                <option value="email" ${validation === 'email' ? 'selected' : ''}>Email válido</option>
+                                <option value="phone" ${validation === 'phone' ? 'selected' : ''}>Telefone válido</option>
+                                <option value="cpf" ${validation === 'cpf' ? 'selected' : ''}>CPF válido</option>
+                                <option value="contains" ${validation === 'contains' ? 'selected' : ''}>Texto contém</option>
+                                <option value="equals" ${validation === 'equals' ? 'selected' : ''}>Texto igual a</option>
+                                <option value="any" ${validation === 'any' ? 'selected' : ''}>Qualquer texto</option>
+                            </select>
+                        </div>
+                        <div id="condition-value-field-${stepId}-${condIndex}" class="mb-3" style="display: ${(validation === 'contains' || validation === 'equals') ? 'block' : 'none'};">
+                            <label class="block text-xs font-medium text-gray-300 mb-1">Valor esperado:</label>
+                            <input type="text" 
+                                   name="condition-value-${stepId}-${condIndex}" 
+                                   value="${cond && cond.value ? cond.value.replace(/"/g, '&quot;') : ''}"
+                                   placeholder="Ex: sim, não, ok..."
+                                   class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm">
+                        </div>
+                        <div class="mb-3">
+                            <label class="block text-xs font-medium text-gray-300 mb-1">Máximo de tentativas (opcional):</label>
+                            <input type="number" 
+                                   name="condition-max-attempts-${stepId}-${condIndex}" 
+                                   value="${cond && cond.max_attempts ? cond.max_attempts : ''}"
+                                   min="1" max="10"
+                                   placeholder="Deixe vazio para ilimitado"
+                                   class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm">
+                        </div>
+                    `;
+                } else if (condType === 'button_click') {
+                    return `
+                        <div class="mb-3">
+                            <label class="block text-xs font-medium text-gray-300 mb-1">Texto do botão:</label>
+                            <input type="text" 
+                                   name="condition-button-text-${stepId}-${condIndex}" 
+                                   value="${cond && cond.button_text ? cond.button_text.replace(/"/g, '&quot;') : ''}"
+                                   placeholder="Ex: Sim, quero!"
+                                   class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm">
+                        </div>
+                    `;
+                } else if (condType === 'payment_status') {
+                    const status = cond ? (cond.status || 'paid') : 'paid';
+                    return `
+                        <div class="mb-3">
+                            <label class="block text-xs font-medium text-gray-300 mb-1">Status do pagamento:</label>
+                            <select name="condition-payment-status-${stepId}-${condIndex}" 
+                                    class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm">
+                                <option value="paid" ${status === 'paid' ? 'selected' : ''}>✅ Confirmado (pago)</option>
+                                <option value="pending" ${status === 'pending' ? 'selected' : ''}>⏳ Pendente</option>
+                                <option value="failed" ${status === 'failed' ? 'selected' : ''}>❌ Falhou</option>
+                                <option value="expired" ${status === 'expired' ? 'selected' : ''}>⏰ Expirado</option>
+                            </select>
+                        </div>
+                    `;
+                } else if (condType === 'time_elapsed') {
+                    return `
+                        <div class="mb-3">
+                            <label class="block text-xs font-medium text-gray-300 mb-1">Minutos decorridos:</label>
+                            <input type="number" 
+                                   name="condition-minutes-${stepId}-${condIndex}" 
+                                   value="${cond && cond.minutes ? cond.minutes : 5}"
+                                   min="1" max="1440"
+                                   class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm">
+                        </div>
+                    `;
+                }
+                return '';
+            }
+            
+            const currentCondType = condition ? condition.type : (availableConditionTypes[0] ? availableConditionTypes[0].value : 'text_validation');
+            const configHtml = renderConditionConfig(currentCondType, condition);
+            
+            const modal = document.createElement('div');
+            modal.className = 'fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50';
+            modal.id = `condition-modal-${stepId}-${condIndex}`;
+            modal.innerHTML = `
+                <div class="bg-gray-900 rounded-lg p-6 max-w-lg w-full mx-4 border-2 border-blue-500">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-xl font-bold text-blue-300">
+                            <i class="fas fa-code-branch mr-2"></i>${isNew ? 'Nova' : 'Editar'} Condição
+                        </h3>
+                        <button onclick="document.getElementById('condition-modal-${stepId}-${condIndex}').remove()" 
+                                class="text-gray-400 hover:text-white text-2xl">&times;</button>
+                    </div>
+                    <form onsubmit="event.preventDefault(); saveCondition('${stepId}', ${condIndex});">
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-300 mb-2">Tipo de Condição:</label>
+                            <select id="condition-type-select-${stepId}-${condIndex}" 
+                                    name="condition-type-${stepId}-${condIndex}"
+                                    class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white"
+                                    onchange="updateConditionConfig('${stepId}', ${condIndex}, null)">
+                                ${conditionTypeOptions}
+                            </select>
+                        </div>
+                        <div id="condition-config-${stepId}-${condIndex}">
+                            ${configHtml}
+                        </div>
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-300 mb-2">Ir para Step:</label>
+                            <select name="condition-target-${stepId}-${condIndex}" 
+                                    class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white">
+                                <option value="">Selecione um step...</option>${stepOptions}
+                            </select>
+                        </div>
+                        <div class="flex justify-end gap-3 mt-6">
+                            <button type="button" 
+                                    onclick="document.getElementById('condition-modal-${stepId}-${condIndex}').remove()" 
+                                    class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg">Cancelar</button>
+                            <button type="submit" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold">
+                                <i class="fas fa-save mr-2"></i>Salvar Condição
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        },
+        
+        removeCondition(stepId, condIndex) {
+            if (!confirm('⚠️ Remover esta condição?')) return;
+            
+            const step = this.config.flow_steps.find(s => s.id === stepId);
+            if (!step) return;
+            
+            if (step.conditions && step.conditions.length > condIndex) {
+                step.conditions.splice(condIndex, 1);
+            }
+            
+            // Recarregar modal do step para atualizar lista
+            const stepModal = document.getElementById(`flow-step-modal-${stepId}`);
+            if (stepModal) {
+                stepModal.remove();
+                setTimeout(() => this.editFlowStep(stepId), 100);
+            }
+        },
+        
+        saveCondition(stepId, condIndex) {
+            const self = this;
+            const step = self.config.flow_steps.find(s => s.id === stepId);
+            if (!step) return;
+            
+            const modal = document.getElementById(`condition-modal-${stepId}-${condIndex}`);
+            if (!modal) return;
+            
+            const isNew = condIndex < 0;
+            const condType = modal.querySelector(`select[name="condition-type-${stepId}-${condIndex}"]`)?.value;
+            const targetStep = modal.querySelector(`select[name="condition-target-${stepId}-${condIndex}"]`)?.value;
+            
+            if (!condType || !targetStep) {
+                alert('⚠️ Preencha todos os campos obrigatórios');
+                return;
+            }
+            
+            const condition = {
+                id: isNew ? `cond_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` : (step.conditions && step.conditions[condIndex] ? step.conditions[condIndex].id : `cond_${Date.now()}`),
+                type: condType,
+                target_step: targetStep,
+                order: isNew ? ((step.conditions && step.conditions.length) || 0) + 1 : condIndex + 1
+            };
+            
+            // Configurações específicas por tipo
+            if (condType === 'text_validation') {
+                condition.validation = modal.querySelector(`select[name="condition-validation-${stepId}-${condIndex}"]`)?.value || 'any';
+                if (condition.validation === 'contains' || condition.validation === 'equals') {
+                    condition.value = modal.querySelector(`input[name="condition-value-${stepId}-${condIndex}"]`)?.value || '';
+                }
+                const maxAttempts = modal.querySelector(`input[name="condition-max-attempts-${stepId}-${condIndex}"]`)?.value;
+                condition.max_attempts = maxAttempts ? parseInt(maxAttempts) : null;
+            } else if (condType === 'button_click') {
+                condition.button_text = modal.querySelector(`input[name="condition-button-text-${stepId}-${condIndex}"]`)?.value || '';
+            } else if (condType === 'payment_status') {
+                condition.status = modal.querySelector(`select[name="condition-payment-status-${stepId}-${condIndex}"]`)?.value || 'paid';
+            } else if (condType === 'time_elapsed') {
+                condition.minutes = parseInt(modal.querySelector(`input[name="condition-minutes-${stepId}-${condIndex}"]`)?.value) || 5;
+            }
+            
+            // Adicionar ou atualizar condição
+            if (!step.conditions) step.conditions = [];
+            
+            if (isNew) {
+                step.conditions.push(condition);
+            } else {
+                step.conditions[condIndex] = condition;
+            }
+            
+            // Reordenar condições
+            step.conditions.forEach((c, idx) => {
+                c.order = idx + 1;
+            });
+            
+            // Fechar modal e recarregar modal do step
+            modal.remove();
+            const stepModal = document.getElementById(`flow-step-modal-${stepId}`);
+            if (stepModal) {
+                stepModal.remove();
+                setTimeout(() => self.editFlowStep(stepId), 100);
+            }
+        },
+        
+        updateConditionConfig(stepId, condIndex, validationType) {
+            const modal = document.getElementById(`condition-modal-${stepId}-${condIndex}`);
+            if (!modal) return;
+            
+            const typeSelect = modal.querySelector(`#condition-type-select-${stepId}-${condIndex}`);
+            const condType = validationType || (typeSelect ? typeSelect.value : null);
+            if (!condType) return;
+            
+            const configDiv = modal.querySelector(`#condition-config-${stepId}-${condIndex}`);
+            if (!configDiv) return;
+            
+            // Buscar condição existente se estiver editando
+            const self = this;
+            const step = self.config.flow_steps.find(s => s.id === stepId);
+            const condition = step && step.conditions && step.conditions[condIndex] ? step.conditions[condIndex] : null;
+            
+            // Renderizar campos específicos
+            let configHtml = '';
+            if (condType === 'text_validation') {
+                const validation = validationType || (condition ? condition.validation : 'any');
+                configHtml = `
+                    <div class="mb-3">
+                        <label class="block text-xs font-medium text-gray-300 mb-1">Tipo de Validação:</label>
+                        <select name="condition-validation-${stepId}-${condIndex}" 
+                                class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm"
+                                onchange="updateConditionConfig('${stepId}', ${condIndex}, this.value)">
+                            <option value="email" ${validation === 'email' ? 'selected' : ''}>Email válido</option>
+                            <option value="phone" ${validation === 'phone' ? 'selected' : ''}>Telefone válido</option>
+                            <option value="cpf" ${validation === 'cpf' ? 'selected' : ''}>CPF válido</option>
+                            <option value="contains" ${validation === 'contains' ? 'selected' : ''}>Texto contém</option>
+                            <option value="equals" ${validation === 'equals' ? 'selected' : ''}>Texto igual a</option>
+                            <option value="any" ${validation === 'any' ? 'selected' : ''}>Qualquer texto</option>
+                        </select>
+                    </div>
+                    <div id="condition-value-field-${stepId}-${condIndex}" class="mb-3" style="display: ${(validation === 'contains' || validation === 'equals') ? 'block' : 'none'};">
+                        <label class="block text-xs font-medium text-gray-300 mb-1">Valor esperado:</label>
+                        <input type="text" 
+                               name="condition-value-${stepId}-${condIndex}" 
+                               value="${condition && condition.value ? condition.value.replace(/"/g, '&quot;') : ''}"
+                               placeholder="Ex: sim, não, ok..."
+                               class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm">
+                    </div>
+                    <div class="mb-3">
+                        <label class="block text-xs font-medium text-gray-300 mb-1">Máximo de tentativas (opcional):</label>
+                        <input type="number" 
+                               name="condition-max-attempts-${stepId}-${condIndex}" 
+                               value="${condition && condition.max_attempts ? condition.max_attempts : ''}"
+                               min="1" max="10"
+                               placeholder="Deixe vazio para ilimitado"
+                               class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm">
+                    </div>
+                `;
+            } else if (condType === 'button_click') {
+                configHtml = `
+                    <div class="mb-3">
+                        <label class="block text-xs font-medium text-gray-300 mb-1">Texto do botão:</label>
+                        <input type="text" 
+                               name="condition-button-text-${stepId}-${condIndex}" 
+                               value="${condition && condition.button_text ? condition.button_text.replace(/"/g, '&quot;') : ''}"
+                               placeholder="Ex: Sim, quero!"
+                               class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm">
+                    </div>
+                `;
+            } else if (condType === 'payment_status') {
+                const status = condition ? (condition.status || 'paid') : 'paid';
+                configHtml = `
+                    <div class="mb-3">
+                        <label class="block text-xs font-medium text-gray-300 mb-1">Status do pagamento:</label>
+                        <select name="condition-payment-status-${stepId}-${condIndex}" 
+                                class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm">
+                            <option value="paid" ${status === 'paid' ? 'selected' : ''}>✅ Confirmado (pago)</option>
+                            <option value="pending" ${status === 'pending' ? 'selected' : ''}>⏳ Pendente</option>
+                            <option value="failed" ${status === 'failed' ? 'selected' : ''}>❌ Falhou</option>
+                            <option value="expired" ${status === 'expired' ? 'selected' : ''}>⏰ Expirado</option>
+                        </select>
+                    </div>
+                `;
+            } else if (condType === 'time_elapsed') {
+                configHtml = `
+                    <div class="mb-3">
+                        <label class="block text-xs font-medium text-gray-300 mb-1">Minutos decorridos:</label>
+                        <input type="number" 
+                               name="condition-minutes-${stepId}-${condIndex}" 
+                               value="${condition && condition.minutes ? condition.minutes : 5}"
+                               min="1" max="1440"
+                               class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm">
+                    </div>
+                `;
+            }
+            
+            configDiv.innerHTML = configHtml;
         },
         
         removeFlowStep(stepId) {
@@ -3576,6 +4284,42 @@ function botConfigApp() {
         }
     };
 }
+
+// ✅ Funções globais para condições (acessam contexto Alpine via DOM)
+window.addCondition = function(stepId) {
+    const alpineData = Alpine.$data(document.querySelector('[x-data*="botConfigApp"]'));
+    if (alpineData && alpineData.addCondition) {
+        alpineData.addCondition(stepId);
+    }
+};
+
+window.editCondition = function(stepId, condIndex) {
+    const alpineData = Alpine.$data(document.querySelector('[x-data*="botConfigApp"]'));
+    if (alpineData && alpineData.editCondition) {
+        alpineData.editCondition(stepId, condIndex);
+    }
+};
+
+window.removeCondition = function(stepId, condIndex) {
+    const alpineData = Alpine.$data(document.querySelector('[x-data*="botConfigApp"]'));
+    if (alpineData && alpineData.removeCondition) {
+        alpineData.removeCondition(stepId, condIndex);
+    }
+};
+
+window.saveCondition = function(stepId, condIndex) {
+    const alpineData = Alpine.$data(document.querySelector('[x-data*="botConfigApp"]'));
+    if (alpineData && alpineData.saveCondition) {
+        alpineData.saveCondition(stepId, condIndex);
+    }
+};
+
+window.updateConditionConfig = function(stepId, condIndex, validationType) {
+    const alpineData = Alpine.$data(document.querySelector('[x-data*="botConfigApp"]'));
+    if (alpineData && alpineData.updateConditionConfig) {
+        alpineData.updateConditionConfig(stepId, condIndex, validationType);
+    }
+};
 
 // ✅ Remarketing App (componente separado)
 function remarketingApp() {
