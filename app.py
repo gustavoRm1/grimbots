@@ -5295,8 +5295,8 @@ def update_pool_meta_pixel_config(pool_id):
         
         # ✅ CRÍTICO: Atualizar pixel_id só se estiver no payload (permite atualização parcial)
         if 'meta_pixel_id' in data:
-        pool.meta_pixel_id = pixel_id
-        logger.info(f"💾 [Meta Pixel Save] Pixel ID salvo: {pixel_id[:10] if pixel_id else 'None'}...")
+            pool.meta_pixel_id = pixel_id
+            logger.info(f"💾 [Meta Pixel Save] Pixel ID salvo: {pixel_id[:10] if pixel_id else 'None'}...")
         
         if 'meta_tracking_enabled' in data:
             pool.meta_tracking_enabled = bool(data['meta_tracking_enabled'])
