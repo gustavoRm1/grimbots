@@ -859,7 +859,9 @@
                 </thead>
                 <tbody>
                         <template x-for="payment in filteredPayments.slice(0, 10)" :key="payment.id">
-                            <tr>
+                            <tr @click="window.location.href = `/bots/${payment.bot_id}/stats`" 
+                                class="cursor-pointer hover:bg-gray-700 transition-colors"
+                                :title="`Ver estatísticas do bot ${payment.bot_name}`">
                                 <td class="text-gray-400 font-mono">#<span x-text="payment.id"></span></td>
                                 <td class="text-white font-medium" x-text="payment.customer_name || 'N/A'"></td>
                                 <td class="text-gray-300" x-text="payment.product_name || 'Produto'"></td>
@@ -892,7 +894,9 @@
         <!-- ✅ CARDS PARA MOBILE (mostra apenas no mobile) -->
         <div class="md:hidden space-y-3">
             <template x-for="payment in filteredPayments.slice(0, 10)" :key="payment.id">
-                <div class="bg-gray-800 border border-gray-700 rounded-lg p-4">
+                <div @click="window.location.href = `/bots/${payment.bot_id}/stats`" 
+                     class="bg-gray-800 border border-gray-700 rounded-lg p-4 cursor-pointer hover:bg-gray-700 hover:border-gray-600 transition-colors active:scale-[0.98]"
+                     :title="`Ver estatísticas do bot ${payment.bot_name}`">
                     <div class="flex justify-between items-start mb-3">
                         <div class="flex-1 min-w-0">
                             <div class="font-bold text-white truncate" x-text="payment.customer_name || 'Cliente'"></div>

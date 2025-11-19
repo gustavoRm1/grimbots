@@ -1330,6 +1330,7 @@ def dashboard():
             'amount': float(payment.amount),
             'status': payment.status,
             'created_at': payment.created_at.isoformat(),
+            'bot_id': bot.id,
             'bot_name': bot.name,
             'bot_username': bot.username
         })
