@@ -2926,9 +2926,16 @@ function botConfigApp() {
              * ✅ QI 500: Editor Visual de Fluxo com jsPlumb
              * Renderiza steps como blocos arrastáveis com conexões visuais
              */
+            console.log('🎨 Inicializando editor visual...');
             const self = this;
             const canvas = document.getElementById('flow-visual-canvas');
-            if (!canvas) return;
+            if (!canvas) {
+                console.error('❌ Canvas não encontrado!');
+                return;
+            }
+            
+            console.log('✅ Canvas encontrado:', canvas);
+            console.log('📊 Steps disponíveis:', this.sortedFlowSteps.length);
             
             // Limpar canvas
             canvas.innerHTML = '';
@@ -2936,37 +2943,108 @@ function botConfigApp() {
             // Aguardar DOM renderizar
             setTimeout(() => {
                 try {
-                    // ✅ Inicializar jsPlumb
-                    if (window.jsPlumb) {
-                        // Destruir instância anterior se existir
-                        if (this.jsPlumbInstance) {
-                            this.jsPlumbInstance.destroy();
-                        }
-                        
-                        this.jsPlumbInstance = window.jsPlumb.newInstance({
+                    // ✅ Verificar jsPlumb disponível
+                    console.log('🔍 Verificando jsPlumb...');
+                    console.log('window.jsPlumb:', window.jsPlumb);
+                    console.log('typeof window.jsPlumb:', typeof window.jsPlumb);
+                    
+                    // jsPlumb 5.x usa API diferente
+                    let jsPlumbInstance = null;
+                    
+                    // ✅ Priorizar jsPlumb 2.x (versão estável do CDN)
+                    if (typeof jsPlumb !== 'undefined' && jsPlumb.jsPlumb && typeof jsPlumb.jsPlumb.getInstance === 'function') {
+                        console.log('✅ Usando jsPlumb 2.x (versão estável)');
+                        jsPlumbInstance = jsPlumb.jsPlumb.getInstance({
+                            container: canvas,
+                            paintStyle: { stroke: '#3B82F6', strokeWidth: 2 },
+                            hoverPaintStyle: { stroke: '#60A5FA', strokeWidth: 3 },
+                            endpointStyle: { fill: '#3B82F6', radius: 5 },
+                            endpointHoverStyle: { fill: '#60A5FA', radius: 7 },
+                            connector: ['Flowchart', { stub: [10, 15], gap: 5, cornerRadius: 5, alwaysRespectStubs: true }],
+                            anchors: ['Right', 'Left', 'Top', 'Bottom'],
+                            maxConnections: -1
+                        });
+                    } else if (typeof jsPlumb !== 'undefined' && typeof jsPlumb.getInstance === 'function') {
+                        console.log('✅ Usando jsPlumb global (versão antiga)');
+                        jsPlumbInstance = jsPlumb.getInstance({
                             container: canvas
                         });
-                        
-                        // ✅ Configurar estilos padrão
-                        const defaultPaintStyle = { stroke: '#3B82F6', strokeWidth: 2 };
-                        const defaultHoverPaintStyle = { stroke: '#60A5FA', strokeWidth: 3 };
-                        const defaultEndpointStyle = { fill: '#3B82F6', radius: 5 };
-                        const defaultEndpointHoverStyle = { fill: '#60A5FA', radius: 7 };
-                        
-                        this.jsPlumbInstance.setDefaultConnectionType({
-                            type: 'Flowchart',
-                            options: {
-                                stub: [10, 15],
-                                gap: 5,
-                                cornerRadius: 5,
-                                alwaysRespectStubs: true
-                            }
+                    } else if (window.jsPlumb && typeof window.jsPlumb.newInstance === 'function') {
+                        console.log('✅ Usando jsPlumb.newInstance()');
+                        jsPlumbInstance = window.jsPlumb.newInstance({
+                            container: canvas
                         });
+                    } else if (window.jsPlumb && typeof window.jsPlumb.getInstance === 'function') {
+                        console.log('✅ Usando jsPlumb.getInstance()');
+                        jsPlumbInstance = window.jsPlumb.getInstance({
+                            container: canvas
+                        });
+                    } else if (window.jsPlumb) {
+                        console.log('✅ Usando window.jsPlumb diretamente');
+                        jsPlumbInstance = window.jsPlumb;
+                        if (typeof jsPlumbInstance.ready === 'function') {
+                            jsPlumbInstance.ready(() => {
+                                if (typeof jsPlumbInstance.setContainer === 'function') {
+                                    jsPlumbInstance.setContainer(canvas);
+                                }
+                            });
+                        }
+                    } else {
+                        throw new Error('jsPlumb não está disponível. Verifique se o CDN está carregando corretamente.');
+                    }
+                    
+                    if (!jsPlumbInstance) {
+                        throw new Error('Não foi possível criar instância do jsPlumb');
+                    }
+                    
+                    // Destruir instância anterior se existir
+                    if (this.jsPlumbInstance) {
+                        try {
+                            this.jsPlumbInstance.destroy();
+                        } catch (e) {
+                            console.warn('⚠️ Erro ao destruir instância anterior:', e);
+                        }
+                    }
+                    
+                    this.jsPlumbInstance = jsPlumbInstance;
+                    
+                    console.log('✅ Instância jsPlumb criada:', this.jsPlumbInstance);
+                    
+                    // ✅ Configurar estilos padrão
+                    const defaultPaintStyle = { stroke: '#3B82F6', strokeWidth: 2 };
+                    const defaultHoverPaintStyle = { stroke: '#60A5FA', strokeWidth: 3 };
+                    const defaultEndpointStyle = { fill: '#3B82F6', radius: 5 };
+                    const defaultEndpointHoverStyle = { fill: '#60A5FA', radius: 7 };
+                    
+                    // Tentar configurar (pode variar conforme versão)
+                    try {
+                        if (typeof this.jsPlumbInstance.setDefaultConnectionType === 'function') {
+                            this.jsPlumbInstance.setDefaultConnectionType({
+                                type: 'Flowchart',
+                                options: {
+                                    stub: [10, 15],
+                                    gap: 5,
+                                    cornerRadius: 5,
+                                    alwaysRespectStubs: true
+                                }
+                            });
+                        }
                         
-                        this.jsPlumbInstance.setDefaultConnectionStyle(defaultPaintStyle);
-                        this.jsPlumbInstance.setDefaultConnectionHoverStyle(defaultHoverPaintStyle);
-                        this.jsPlumbInstance.setDefaultEndpointStyle(defaultEndpointStyle);
-                        this.jsPlumbInstance.setDefaultEndpointHoverStyle(defaultEndpointHoverStyle);
+                        if (typeof this.jsPlumbInstance.setDefaultConnectionStyle === 'function') {
+                            this.jsPlumbInstance.setDefaultConnectionStyle(defaultPaintStyle);
+                        }
+                        if (typeof this.jsPlumbInstance.setDefaultConnectionHoverStyle === 'function') {
+                            this.jsPlumbInstance.setDefaultConnectionHoverStyle(defaultHoverPaintStyle);
+                        }
+                        if (typeof this.jsPlumbInstance.setDefaultEndpointStyle === 'function') {
+                            this.jsPlumbInstance.setDefaultEndpointStyle(defaultEndpointStyle);
+                        }
+                        if (typeof this.jsPlumbInstance.setDefaultEndpointHoverStyle === 'function') {
+                            this.jsPlumbInstance.setDefaultEndpointHoverStyle(defaultEndpointHoverStyle);
+                        }
+                    } catch (e) {
+                        console.warn('⚠️ Erro ao configurar estilos padrão (pode ser normal):', e);
+                    }
                         
                         // ✅ Renderizar steps como blocos
                         const steps = this.sortedFlowSteps;
@@ -3036,41 +3114,76 @@ function botConfigApp() {
                             canvas.appendChild(stepEl);
                             
                             // ✅ Tornar arrastável
-                            this.jsPlumbInstance.draggable(stepEl, {
-                                containment: 'parent',
-                                grid: [10, 10],
-                                stop: (el) => {
-                                    // Salvar posição quando arrastar
-                                    const rect = stepEl.getBoundingClientRect();
-                                    const canvasRect = canvas.getBoundingClientRect();
-                                    const x = rect.left - canvasRect.left + canvas.scrollLeft;
-                                    const y = rect.top - canvasRect.top + canvas.scrollTop;
-                                    this.saveStepPosition(stepId, x, y);
+                            try {
+                                if (typeof this.jsPlumbInstance.draggable === 'function') {
+                                    this.jsPlumbInstance.draggable(stepEl, {
+                                        containment: 'parent',
+                                        grid: [10, 10],
+                                        stop: (el) => {
+                                            // Salvar posição quando arrastar
+                                            const rect = stepEl.getBoundingClientRect();
+                                            const canvasRect = canvas.getBoundingClientRect();
+                                            const x = rect.left - canvasRect.left + canvas.scrollLeft;
+                                            const y = rect.top - canvasRect.top + canvas.scrollTop;
+                                            this.saveStepPosition(stepId, x, y);
+                                        }
+                                    });
+                                } else if (typeof this.jsPlumbInstance.makeSource === 'function') {
+                                    // Versão antiga
+                                    this.jsPlumbInstance.draggable(stepEl, {
+                                        containment: 'parent',
+                                        grid: [10, 10]
+                                    });
                                 }
-                            });
+                            } catch (e) {
+                                console.error('❌ Erro ao tornar arrastável:', e);
+                            }
                             
                             // ✅ Adicionar endpoints (pontos de conexão)
-                            this.jsPlumbInstance.addEndpoint(stepEl, {
-                                anchor: 'Right',
-                                endpoint: 'Dot',
-                                paintStyle: { fill: '#3B82F6', radius: 5 },
-                                isSource: true,
-                                isTarget: false,
-                                maxConnections: -1
-                            }, {
-                                uuid: `source-${stepId}`
-                            });
-                            
-                            this.jsPlumbInstance.addEndpoint(stepEl, {
-                                anchor: 'Left',
-                                endpoint: 'Dot',
-                                paintStyle: { fill: '#10B981', radius: 5 },
-                                isSource: false,
-                                isTarget: true,
-                                maxConnections: -1
-                            }, {
-                                uuid: `target-${stepId}`
-                            });
+                            try {
+                                if (typeof this.jsPlumbInstance.makeSource === 'function') {
+                                    // jsPlumb 2.x
+                                    this.jsPlumbInstance.makeSource(stepEl, {
+                                        anchor: 'Right',
+                                        endpoint: 'Dot',
+                                        paintStyle: { fill: '#3B82F6', radius: 5 },
+                                        isSource: true,
+                                        maxConnections: -1
+                                    });
+                                    this.jsPlumbInstance.makeTarget(stepEl, {
+                                        anchor: 'Left',
+                                        endpoint: 'Dot',
+                                        paintStyle: { fill: '#10B981', radius: 5 },
+                                        isTarget: true,
+                                        maxConnections: -1
+                                    });
+                                } else if (typeof this.jsPlumbInstance.addEndpoint === 'function') {
+                                    // Versão 5.x
+                                    this.jsPlumbInstance.addEndpoint(stepEl, {
+                                        anchor: 'Right',
+                                        endpoint: 'Dot',
+                                        paintStyle: { fill: '#3B82F6', radius: 5 },
+                                        isSource: true,
+                                        isTarget: false,
+                                        maxConnections: -1
+                                    }, {
+                                        uuid: `source-${stepId}`
+                                    });
+                                    
+                                    this.jsPlumbInstance.addEndpoint(stepEl, {
+                                        anchor: 'Left',
+                                        endpoint: 'Dot',
+                                        paintStyle: { fill: '#10B981', radius: 5 },
+                                        isSource: false,
+                                        isTarget: true,
+                                        maxConnections: -1
+                                    }, {
+                                        uuid: `target-${stepId}`
+                                    });
+                                }
+                            } catch (e) {
+                                console.error('❌ Erro ao adicionar endpoints:', e);
+                            }
                         });
                         
                         // ✅ Conectar steps baseado em connections
@@ -3084,15 +3197,19 @@ function botConfigApp() {
                             if (connections.next) {
                                 const targetEl = document.getElementById(`flow-step-${connections.next}`);
                                 if (targetEl) {
-                                    this.jsPlumbInstance.connect({
-                                        source: `source-${step.id}`,
-                                        target: `target-${connections.next}`,
-                                        paintStyle: { stroke: '#10B981', strokeWidth: 2 },
-                                        overlays: [
-                                            ['Arrow', { location: 1, width: 10, length: 10 }],
-                                            ['Label', { label: 'Próximo', location: 0.5, cssClass: 'connection-label' }]
-                                        ]
-                                    });
+                                    try {
+                                        this.jsPlumbInstance.connect({
+                                            source: stepEl,
+                                            target: targetEl,
+                                            paintStyle: { stroke: '#10B981', strokeWidth: 2 },
+                                            overlays: [
+                                                ['Arrow', { location: 1, width: 10, length: 10 }],
+                                                ['Label', { label: 'Próximo', location: 0.5, cssClass: 'connection-label' }]
+                                            ]
+                                        });
+                                    } catch (e) {
+                                        console.error('❌ Erro ao conectar next:', e);
+                                    }
                                 }
                             }
                             
@@ -3100,15 +3217,19 @@ function botConfigApp() {
                             if (connections.pending) {
                                 const targetEl = document.getElementById(`flow-step-${connections.pending}`);
                                 if (targetEl) {
-                                    this.jsPlumbInstance.connect({
-                                        source: `source-${step.id}`,
-                                        target: `target-${connections.pending}`,
-                                        paintStyle: { stroke: '#EF4444', strokeWidth: 2 },
-                                        overlays: [
-                                            ['Arrow', { location: 1, width: 10, length: 10 }],
-                                            ['Label', { label: 'Pendente', location: 0.5, cssClass: 'connection-label' }]
-                                        ]
-                                    });
+                                    try {
+                                        this.jsPlumbInstance.connect({
+                                            source: stepEl,
+                                            target: targetEl,
+                                            paintStyle: { stroke: '#EF4444', strokeWidth: 2 },
+                                            overlays: [
+                                                ['Arrow', { location: 1, width: 10, length: 10 }],
+                                                ['Label', { label: 'Pendente', location: 0.5, cssClass: 'connection-label' }]
+                                            ]
+                                        });
+                                    } catch (e) {
+                                        console.error('❌ Erro ao conectar pending:', e);
+                                    }
                                 }
                             }
                             
@@ -3116,15 +3237,19 @@ function botConfigApp() {
                             if (connections.retry) {
                                 const targetEl = document.getElementById(`flow-step-${connections.retry}`);
                                 if (targetEl) {
-                                    this.jsPlumbInstance.connect({
-                                        source: `source-${step.id}`,
-                                        target: `target-${connections.retry}`,
-                                        paintStyle: { stroke: '#F59E0B', strokeWidth: 2 },
-                                        overlays: [
-                                            ['Arrow', { location: 1, width: 10, length: 10 }],
-                                            ['Label', { label: 'Retry', location: 0.5, cssClass: 'connection-label' }]
-                                        ]
-                                    });
+                                    try {
+                                        this.jsPlumbInstance.connect({
+                                            source: stepEl,
+                                            target: targetEl,
+                                            paintStyle: { stroke: '#F59E0B', strokeWidth: 2 },
+                                            overlays: [
+                                                ['Arrow', { location: 1, width: 10, length: 10 }],
+                                                ['Label', { label: 'Retry', location: 0.5, cssClass: 'connection-label' }]
+                                            ]
+                                        });
+                                    } catch (e) {
+                                        console.error('❌ Erro ao conectar retry:', e);
+                                    }
                                 }
                             }
                             
@@ -3134,15 +3259,19 @@ function botConfigApp() {
                                     if (cond.target_step) {
                                         const targetEl = document.getElementById(`flow-step-${cond.target_step}`);
                                         if (targetEl) {
-                                            this.jsPlumbInstance.connect({
-                                                source: `source-${step.id}`,
-                                                target: `target-${cond.target_step}`,
-                                                paintStyle: { stroke: '#8B5CF6', strokeWidth: 2, strokeDasharray: '5,5' },
-                                                overlays: [
-                                                    ['Arrow', { location: 1, width: 10, length: 10 }],
-                                                    ['Label', { label: `Cond ${idx + 1}`, location: 0.5, cssClass: 'connection-label' }]
-                                                ]
-                                            });
+                                            try {
+                                                this.jsPlumbInstance.connect({
+                                                    source: stepEl,
+                                                    target: targetEl,
+                                                    paintStyle: { stroke: '#8B5CF6', strokeWidth: 2, strokeDasharray: '5,5' },
+                                                    overlays: [
+                                                        ['Arrow', { location: 1, width: 10, length: 10 }],
+                                                        ['Label', { label: `Cond ${idx + 1}`, location: 0.5, cssClass: 'connection-label' }]
+                                                    ]
+                                                });
+                                            } catch (e) {
+                                                console.error('❌ Erro ao conectar condição:', e);
+                                            }
                                         }
                                     }
                                 });
@@ -3150,31 +3279,48 @@ function botConfigApp() {
                         });
                         
                         // ✅ Permitir criar conexões arrastando
-                        this.jsPlumbInstance.bind('connection', (info) => {
-                            const sourceId = info.sourceId.replace('source-', '');
-                            const targetId = info.targetId.replace('target-', '');
-                            
-                            // Atualizar connections no step
-                            const sourceStep = this.config.flow_steps.find(s => s.id === sourceId);
-                            if (sourceStep) {
-                                if (!sourceStep.connections) sourceStep.connections = {};
-                                // Por padrão, salvar como "next"
-                                sourceStep.connections.next = targetId;
-                                this.showNotification(`✅ Conexão criada: ${sourceStep.name || sourceId} → ${this.config.flow_steps.find(s => s.id === targetId)?.name || targetId}`, 'success');
+                        try {
+                            if (typeof this.jsPlumbInstance.bind === 'function') {
+                                this.jsPlumbInstance.bind('connection', (info) => {
+                                    const sourceId = (info.sourceId || info.source?.id || '').replace('source-', '');
+                                    const targetId = (info.targetId || info.target?.id || '').replace('target-', '');
+                                    
+                                    // Atualizar connections no step
+                                    const sourceStep = this.config.flow_steps.find(s => s.id === sourceId);
+                                    if (sourceStep) {
+                                        if (!sourceStep.connections) sourceStep.connections = {};
+                                        // Por padrão, salvar como "next"
+                                        sourceStep.connections.next = targetId;
+                                        this.showNotification(`✅ Conexão criada: ${sourceStep.name || sourceId} → ${this.config.flow_steps.find(s => s.id === targetId)?.name || targetId}`, 'success');
+                                    }
+                                });
                             }
-                        });
+                        } catch (e) {
+                            console.warn('⚠️ Erro ao bind connection (pode ser normal):', e);
+                        }
                         
                         // ✅ Redesenhar após mudanças
-                        this.jsPlumbInstance.repaintEverything();
+                        try {
+                            if (typeof this.jsPlumbInstance.repaintEverything === 'function') {
+                                this.jsPlumbInstance.repaintEverything();
+                            } else if (typeof this.jsPlumbInstance.repaint === 'function') {
+                                this.jsPlumbInstance.repaint();
+                            }
+                        } catch (e) {
+                            console.warn('⚠️ Erro ao repaint (pode ser normal):', e);
+                        }
                         
-                        console.log('✅ Editor visual inicializado!');
+                        console.log('✅ Editor visual inicializado! Blocos criados:', steps.length);
                     } else {
                         console.error('❌ jsPlumb não carregado');
+                        this.showNotification('❌ Erro: jsPlumb não carregou. Verifique o console.', 'error');
                     }
                 } catch (error) {
                     console.error('❌ Erro ao inicializar editor visual:', error);
+                    console.error('Stack:', error.stack);
+                    this.showNotification('❌ Erro ao inicializar editor visual. Verifique o console.', 'error');
                 }
-            });
+            }, 300); // Aumentar delay para garantir DOM renderizado
         },
         
         loadStepPositions() {
