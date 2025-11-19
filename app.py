@@ -8208,16 +8208,23 @@ def send_meta_pixel_purchase_event(payment):
             logger.error(f"   SOLUÇÃO: Ative 'Purchase Event' nas configurações do pool {pool.name}")
             return
         
-        # ✅ VERIFICAÇÃO 4: Já enviou este pagamento? (ANTI-DUPLICAÇÃO)
-        # ✅ CORREÇÃO: Permitir reenvio se forçado (force_resend=True via função auxiliar)
-        logger.info(f"🔍 DEBUG Meta Pixel Purchase - Já enviado: {payment.meta_purchase_sent}")
-        if payment.meta_purchase_sent:
-            # Verificar se é um reenvio forçado (via flag temporária ou função auxiliar)
-            # Por padrão, não reenvia para evitar duplicação
-            # Mas se flag foi resetada explicitamente, permite reenvio
-            logger.info(f"⚠️ Purchase já enviado ao Meta, ignorando: {payment.payment_id}")
-            logger.info(f"   💡 Para reenviar, resetar flag meta_purchase_sent antes de chamar esta função")
+        # ✅ VERIFICAÇÃO 4: Já enviou este pagamento via CAPI? (ANTI-DUPLICAÇÃO)
+        # ✅ CORREÇÃO CRÍTICA: NÃO bloquear se apenas client-side foi enviado!
+        # O Purchase pode ter sido enviado apenas client-side (via delivery.html), mas CAPI ainda não foi enviado
+        # Se CAPI já foi enviado (meta_purchase_sent = True E meta_event_id existe), então bloquear
+        # Caso contrário, permitir envio via CAPI (garante que ambos sejam enviados)
+        logger.info(f"🔍 DEBUG Meta Pixel Purchase - Já enviado via CAPI: {payment.meta_purchase_sent} | Event ID: {getattr(payment, 'meta_event_id', None)}")
+        if payment.meta_purchase_sent and getattr(payment, 'meta_event_id', None):
+            # ✅ CAPI já foi enviado com sucesso (tem meta_event_id) - bloquear para evitar duplicação
+            logger.info(f"⚠️ Purchase já enviado via CAPI ao Meta, ignorando: {payment.payment_id} | Event ID: {payment.meta_event_id}")
+            logger.info(f"   💡 Para reenviar, resetar flag meta_purchase_sent e meta_event_id antes de chamar esta função")
             return
+        elif payment.meta_purchase_sent and not getattr(payment, 'meta_event_id', None):
+            # ⚠️ meta_purchase_sent está True mas meta_event_id não existe
+            # Isso indica que foi marcado apenas client-side, mas CAPI ainda não foi enviado
+            logger.warning(f"⚠️ Purchase marcado como enviado, mas CAPI ainda não foi enviado (sem meta_event_id)")
+            logger.warning(f"   Permitting CAPI send to ensure server-side event is sent")
+            # ✅ NÃO retornar - permitir envio via CAPI
         
         logger.info(f"📊 Preparando envio Meta Purchase: {payment.payment_id} | Pool: {pool.name}")
         
@@ -8277,57 +8284,90 @@ def send_meta_pixel_purchase_event(payment):
         
         # ✅ PRIORIDADE 1: tracking_session_id do BotUser (token do redirect - MAIS CONFIÁVEL)
         if bot_user and bot_user.tracking_session_id:
-            try:
-                tracking_data = tracking_service_v4.recover_tracking_data(bot_user.tracking_session_id) or {}
-                if tracking_data:
-                    tracking_token_used = bot_user.tracking_session_id
-                    logger.info(f"[META PURCHASE] Purchase - tracking_data recuperado usando bot_user.tracking_session_id (PRIORIDADE 1): {len(tracking_data)} campos")
-                    logger.info(f"[META PURCHASE] Purchase - Tracking Token (BotUser): {bot_user.tracking_session_id[:30]}... (len={len(bot_user.tracking_session_id)})")
-                    # ✅ LOG CRÍTICO: Mostrar TODOS os campos para identificar o problema
-                    logger.info(f"[META PURCHASE] Purchase - Campos no tracking_data: {list(tracking_data.keys())}")
-                    for key, value in tracking_data.items():
-                        if value:
-                            logger.info(f"[META PURCHASE] Purchase - {key}: {str(value)[:50]}...")
-                        else:
-                            logger.warning(f"[META PURCHASE] Purchase - {key}: None/Empty")
-                    # ✅ CRÍTICO: Atualizar payment.tracking_token com o token correto (token do redirect)
-                    if payment.tracking_token != bot_user.tracking_session_id:
-                        payment.tracking_token = bot_user.tracking_session_id
-                        logger.info(f"✅ Purchase - payment.tracking_token atualizado com token do redirect: {bot_user.tracking_session_id[:30]}...")
-                else:
-                    logger.warning(f"[META PURCHASE] Purchase - tracking_data VAZIO no Redis para bot_user.tracking_session_id: {bot_user.tracking_session_id[:30]}...")
-            except Exception as e:
-                logger.warning(f"[META PURCHASE] Purchase - Erro ao recuperar tracking_data usando bot_user.tracking_session_id: {e}")
+            # ✅ VALIDAÇÃO CRÍTICA: Verificar se tracking_session_id é um token gerado (tracking_xxx)
+            is_generated_token = bot_user.tracking_session_id.startswith('tracking_')
+            is_uuid_token = len(bot_user.tracking_session_id) == 32 and all(c in '0123456789abcdef' for c in bot_user.tracking_session_id.lower())
+            
+            if is_generated_token:
+                logger.error(f"❌ [META PURCHASE] Purchase - bot_user.tracking_session_id é um TOKEN GERADO: {bot_user.tracking_session_id[:30]}...")
+                logger.error(f"   Token gerado não tem dados do redirect (client_ip, client_user_agent, pageview_event_id)")
+                logger.error(f"   Tentando recuperar via PRIORIDADE 2 (payment.tracking_token) ou PRIORIDADE 4 (fbclid)")
+                # ✅ NÃO usar token gerado - continuar para próxima prioridade
+            elif is_uuid_token:
+                # ✅ Token é UUID (vem do redirect) - pode usar
+                try:
+                    tracking_data = tracking_service_v4.recover_tracking_data(bot_user.tracking_session_id) or {}
+                    if tracking_data:
+                        tracking_token_used = bot_user.tracking_session_id
+                        logger.info(f"[META PURCHASE] Purchase - tracking_data recuperado usando bot_user.tracking_session_id (PRIORIDADE 1): {len(tracking_data)} campos")
+                        logger.info(f"[META PURCHASE] Purchase - Tracking Token (BotUser): {bot_user.tracking_session_id[:30]}... (len={len(bot_user.tracking_session_id)})")
+                        # ✅ LOG CRÍTICO: Mostrar TODOS os campos para identificar o problema
+                        logger.info(f"[META PURCHASE] Purchase - Campos no tracking_data: {list(tracking_data.keys())}")
+                        # ✅ LOG CRÍTICO: Verificar UTMs especificamente
+                        logger.info(f"[META PURCHASE] Purchase - UTMs no tracking_data: utm_source={'✅' if tracking_data.get('utm_source') else '❌'}, utm_campaign={'✅' if tracking_data.get('utm_campaign') else '❌'}, grim={'✅' if tracking_data.get('grim') else '❌'}, campaign_code={'✅' if tracking_data.get('campaign_code') else '❌'}")
+                        for key, value in tracking_data.items():
+                            if value:
+                                logger.info(f"[META PURCHASE] Purchase - {key}: {str(value)[:50]}...")
+                            else:
+                                logger.warning(f"[META PURCHASE] Purchase - {key}: None/Empty")
+                        # ✅ CRÍTICO: Atualizar payment.tracking_token com o token correto (token do redirect)
+                        if payment.tracking_token != bot_user.tracking_session_id:
+                            payment.tracking_token = bot_user.tracking_session_id
+                            logger.info(f"✅ Purchase - payment.tracking_token atualizado com token do redirect: {bot_user.tracking_session_id[:30]}...")
+                    else:
+                        logger.warning(f"[META PURCHASE] Purchase - tracking_data VAZIO no Redis para bot_user.tracking_session_id: {bot_user.tracking_session_id[:30]}...")
+                except Exception as e:
+                    logger.warning(f"[META PURCHASE] Purchase - Erro ao recuperar tracking_data usando bot_user.tracking_session_id: {e}")
+            else:
+                logger.warning(f"⚠️ [META PURCHASE] Purchase - bot_user.tracking_session_id tem formato inválido: {bot_user.tracking_session_id[:30]}... (len={len(bot_user.tracking_session_id)})")
+                # ✅ Continuar para próxima prioridade
+        elif bot_user and not bot_user.tracking_session_id:
+            logger.warning(f"⚠️ [META PURCHASE] Purchase - bot_user encontrado mas tracking_session_id está VAZIO (telegram_user_id: {telegram_user_id})")
+            logger.warning(f"   Isso indica que o usuário NÃO passou pelo redirect ou token não foi salvo")
         
         # ✅ PRIORIDADE 2: payment.tracking_token (se não encontrou no BotUser)
         if not tracking_data and payment_tracking_token:
-            logger.info(f"[META PURCHASE] Purchase - Tentando recuperar usando payment.tracking_token (PRIORIDADE 2): {payment_tracking_token[:30]}... (len={len(payment_tracking_token)})")
-            # Verificar se token existe no Redis
-            try:
-                exists = tracking_service_v4.redis.exists(f"tracking:{payment_tracking_token}")
-                logger.info(f"[META PURCHASE] Purchase - Token existe no Redis: {'✅' if exists else '❌'}")
-                if exists:
-                    ttl = tracking_service_v4.redis.ttl(f"tracking:{payment_tracking_token}")
-                    logger.info(f"[META PURCHASE] Purchase - TTL restante: {ttl} segundos ({'expirando' if ttl < 3600 else 'OK'})")
-            except Exception as e:
-                logger.warning(f"[META PURCHASE] Purchase - Erro ao verificar token no Redis: {e}")
+            # ✅ VALIDAÇÃO CRÍTICA: Verificar se payment.tracking_token é um token gerado (tracking_xxx)
+            is_generated_token = payment_tracking_token.startswith('tracking_')
+            is_uuid_token = len(payment_tracking_token) == 32 and all(c in '0123456789abcdef' for c in payment_tracking_token.lower())
             
-            try:
-                tracking_data = tracking_service_v4.recover_tracking_data(payment_tracking_token) or {}
-                if tracking_data:
-                    tracking_token_used = payment_tracking_token
-                    logger.info(f"[META PURCHASE] Purchase - tracking_data recuperado do Redis (usando payment.tracking_token): {len(tracking_data)} campos")
-                    # ✅ LOG CRÍTICO: Mostrar TODOS os campos para identificar o problema
-                    logger.info(f"[META PURCHASE] Purchase - Campos no tracking_data: {list(tracking_data.keys())}")
-                    for key, value in tracking_data.items():
-                        if value:
-                            logger.info(f"[META PURCHASE] Purchase - {key}: {str(value)[:50]}...")
-                        else:
-                            logger.warning(f"[META PURCHASE] Purchase - {key}: None/Empty")
-                else:
-                    logger.warning(f"[META PURCHASE] Purchase - tracking_data VAZIO no Redis para token: {payment_tracking_token[:30]}...")
-            except Exception as e:
-                logger.exception(f"[META PURCHASE] Purchase - Erro ao recuperar tracking_token do Redis: {e}")
+            if is_generated_token:
+                logger.error(f"❌ [META PURCHASE] Purchase - payment.tracking_token é um TOKEN GERADO: {payment_tracking_token[:30]}...")
+                logger.error(f"   Token gerado não tem dados do redirect (client_ip, client_user_agent, pageview_event_id)")
+                logger.error(f"   Tentando recuperar via PRIORIDADE 4 (fbclid)")
+                # ✅ NÃO usar token gerado - continuar para próxima prioridade
+            elif is_uuid_token:
+                # ✅ Token é UUID (vem do redirect) - pode usar
+                logger.info(f"[META PURCHASE] Purchase - Tentando recuperar usando payment.tracking_token (PRIORIDADE 2): {payment_tracking_token[:30]}... (len={len(payment_tracking_token)})")
+                # Verificar se token existe no Redis
+                try:
+                    exists = tracking_service_v4.redis.exists(f"tracking:{payment_tracking_token}")
+                    logger.info(f"[META PURCHASE] Purchase - Token existe no Redis: {'✅' if exists else '❌'}")
+                    if exists:
+                        ttl = tracking_service_v4.redis.ttl(f"tracking:{payment_tracking_token}")
+                        logger.info(f"[META PURCHASE] Purchase - TTL restante: {ttl} segundos ({'expirando' if ttl < 3600 else 'OK'})")
+                except Exception as e:
+                    logger.warning(f"[META PURCHASE] Purchase - Erro ao verificar token no Redis: {e}")
+                
+                try:
+                    tracking_data = tracking_service_v4.recover_tracking_data(payment_tracking_token) or {}
+                    if tracking_data:
+                        tracking_token_used = payment_tracking_token
+                        logger.info(f"[META PURCHASE] Purchase - tracking_data recuperado do Redis (usando payment.tracking_token): {len(tracking_data)} campos")
+                        # ✅ LOG CRÍTICO: Mostrar TODOS os campos para identificar o problema
+                        logger.info(f"[META PURCHASE] Purchase - Campos no tracking_data: {list(tracking_data.keys())}")
+                        for key, value in tracking_data.items():
+                            if value:
+                                logger.info(f"[META PURCHASE] Purchase - {key}: {str(value)[:50]}...")
+                            else:
+                                logger.warning(f"[META PURCHASE] Purchase - {key}: None/Empty")
+                    else:
+                        logger.warning(f"[META PURCHASE] Purchase - tracking_data VAZIO no Redis para token: {payment_tracking_token[:30]}...")
+                except Exception as e:
+                    logger.exception(f"[META PURCHASE] Purchase - Erro ao recuperar tracking_token do Redis: {e}")
+            else:
+                logger.warning(f"⚠️ [META PURCHASE] Purchase - payment.tracking_token tem formato inválido: {payment_tracking_token[:30]}... (len={len(payment_tracking_token)})")
+                # ✅ Continuar para próxima prioridade
         elif not payment_tracking_token:
             logger.warning(f"[META PURCHASE] Purchase - payment.tracking_token AUSENTE! Payment ID: {payment.payment_id}")
             logger.warning(f"[META PURCHASE] Purchase - Isso indica que o usuário NÃO veio do redirect ou token não foi salvo")
@@ -8358,7 +8398,7 @@ def send_meta_pixel_purchase_event(payment):
             except Exception as e:
                 logger.warning(f"[META PURCHASE] Purchase - Erro ao recuperar tracking_data via fbclid: {e}")
 
-        # ✅ FALLBACK: Se Redis estiver vazio, usar dados do Payment (incluindo pageview_event_id)
+        # ✅ FALLBACK: Se Redis estiver vazio, usar dados do Payment (incluindo pageview_event_id E UTMs)
         if not tracking_data:
             tracking_data = {
                 "fbp": getattr(payment, "fbp", None),
@@ -8368,9 +8408,36 @@ def send_meta_pixel_purchase_event(payment):
                 "client_user_agent": getattr(payment, "client_user_agent", None),
                 "pageview_ts": getattr(payment, "pageview_ts", None),
                 "pageview_event_id": getattr(payment, "pageview_event_id", None),  # ✅ CRÍTICO: Fallback do Payment
+                # ✅ CRÍTICO: Incluir UTMs do Payment no fallback para atribuição de campanha
+                "utm_source": payment.utm_source if payment.utm_source else None,
+                "utm_campaign": payment.utm_campaign if payment.utm_campaign else None,
+                "utm_medium": payment.utm_medium if payment.utm_medium else None,
+                "utm_content": payment.utm_content if payment.utm_content else None,
+                "utm_term": payment.utm_term if payment.utm_term else None,
+                "grim": payment.campaign_code if payment.campaign_code else None,
+                "campaign_code": payment.campaign_code if payment.campaign_code else None,
             }
             if tracking_data.get("pageview_event_id"):
                 logger.info(f"✅ pageview_event_id recuperado do Payment (fallback): {tracking_data['pageview_event_id']}")
+            # ✅ LOG CRÍTICO: Verificar se UTMs foram incluídos no fallback
+            if tracking_data.get("utm_source") or tracking_data.get("campaign_code"):
+                logger.info(f"✅ Purchase - UTMs recuperados do Payment (fallback): utm_source={'✅' if tracking_data.get('utm_source') else '❌'}, utm_campaign={'✅' if tracking_data.get('utm_campaign') else '❌'}, campaign_code={'✅' if tracking_data.get('campaign_code') else '❌'}")
+            else:
+                logger.warning(f"⚠️ Purchase - Payment FALLBACK criado MAS SEM UTMs! Payment: {payment.id}")
+        
+        # ✅ CRÍTICO: Se tracking_data existe mas não tem UTMs, tentar adicionar do Payment
+        if tracking_data and not tracking_data.get('utm_source') and not tracking_data.get('campaign_code'):
+            # ✅ Tentar adicionar UTMs do Payment se tracking_data não tiver
+            if payment.utm_source and not tracking_data.get('utm_source'):
+                tracking_data['utm_source'] = payment.utm_source
+                logger.info(f"✅ Purchase - utm_source adicionado do Payment: {payment.utm_source}")
+            if payment.utm_campaign and not tracking_data.get('utm_campaign'):
+                tracking_data['utm_campaign'] = payment.utm_campaign
+                logger.info(f"✅ Purchase - utm_campaign adicionado do Payment: {payment.utm_campaign}")
+            if payment.campaign_code and not tracking_data.get('campaign_code') and not tracking_data.get('grim'):
+                tracking_data['campaign_code'] = payment.campaign_code
+                tracking_data['grim'] = payment.campaign_code
+                logger.info(f"✅ Purchase - campaign_code adicionado do Payment: {payment.campaign_code}")
         
         # ✅ CRÍTICO: Se tracking_data não tem pageview_event_id mas Payment tem, usar do Payment
         if not tracking_data.get("pageview_event_id") and getattr(payment, "pageview_event_id", None):
@@ -8743,20 +8810,76 @@ def send_meta_pixel_purchase_event(payment):
         
         custom_data['value'] = total_value  # ✅ Garantir valor total correto
         
-        # UTM e campaign tracking
-        if payment.utm_source:
-            custom_data['utm_source'] = payment.utm_source
-        if payment.utm_campaign:
-            custom_data['utm_campaign'] = payment.utm_campaign
-        if payment.campaign_code:
-            custom_data['campaign_code'] = payment.campaign_code
-
+        # ✅ CRÍTICO: UTM e campaign tracking - PRIORIDADE: tracking_data (Redis) > payment (banco)
+        # tracking_data tem os UTMs ORIGINAIS do redirect, mais confiáveis para atribuição de campanha
+        # payment pode ter UTMs vazios ou desatualizados se não foram salvos corretamente
+        
+        # PRIORIDADE 1: tracking_data (Redis - dados do redirect) - MAIS CONFIÁVEL
         tracking_campaign = tracking_data.get('grim') or tracking_data.get('campaign_code')
-        if tracking_campaign and not custom_data.get('campaign_code'):
+        if tracking_campaign:
             custom_data['campaign_code'] = tracking_campaign
+            logger.info(f"✅ Purchase - campaign_code do tracking_data (Redis): {tracking_campaign}")
+        
         for utm_key in ('utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'):
-            if tracking_data.get(utm_key) and not custom_data.get(utm_key):
-                custom_data[utm_key] = tracking_data.get(utm_key)
+            utm_value_from_tracking = tracking_data.get(utm_key)
+            if utm_value_from_tracking:
+                custom_data[utm_key] = utm_value_from_tracking
+                logger.info(f"✅ Purchase - {utm_key} do tracking_data (Redis): {utm_value_from_tracking}")
+        
+        # PRIORIDADE 2: payment (banco) - FALLBACK apenas se tracking_data não tiver
+        if not custom_data.get('campaign_code') and payment.campaign_code:
+            custom_data['campaign_code'] = payment.campaign_code
+            logger.info(f"✅ Purchase - campaign_code do payment (fallback): {payment.campaign_code}")
+        
+        if not custom_data.get('utm_source') and payment.utm_source:
+            custom_data['utm_source'] = payment.utm_source
+            logger.info(f"✅ Purchase - utm_source do payment (fallback): {payment.utm_source}")
+        
+        if not custom_data.get('utm_campaign') and payment.utm_campaign:
+            custom_data['utm_campaign'] = payment.utm_campaign
+            logger.info(f"✅ Purchase - utm_campaign do payment (fallback): {payment.utm_campaign}")
+        
+        if not custom_data.get('utm_medium') and payment.utm_medium:
+            custom_data['utm_medium'] = payment.utm_medium
+        
+        if not custom_data.get('utm_content') and payment.utm_content:
+            custom_data['utm_content'] = payment.utm_content
+        
+        if not custom_data.get('utm_term') and payment.utm_term:
+            custom_data['utm_term'] = payment.utm_term
+        
+        # ✅ VALIDAÇÃO CRÍTICA: Se não tem UTMs nem campaign_code, LOGAR ERRO CRÍTICO E TENTAR RECUPERAR
+        if not custom_data.get('utm_source') and not custom_data.get('campaign_code'):
+            logger.error(f"❌ [CRÍTICO] Purchase SEM UTMs e SEM campaign_code! Payment: {payment.id}")
+            logger.error(f"   tracking_data tem utm_source: {bool(tracking_data.get('utm_source'))}")
+            logger.error(f"   tracking_data tem utm_campaign: {bool(tracking_data.get('utm_campaign'))}")
+            logger.error(f"   tracking_data tem grim: {bool(tracking_data.get('grim'))}")
+            logger.error(f"   tracking_data tem campaign_code: {bool(tracking_data.get('campaign_code'))}")
+            logger.error(f"   payment tem utm_source: {bool(payment.utm_source)}")
+            logger.error(f"   payment tem utm_campaign: {bool(payment.utm_campaign)}")
+            logger.error(f"   payment tem campaign_code: {bool(payment.campaign_code)}")
+            logger.error(f"   bot_user tem utm_source: {bool(bot_user and getattr(bot_user, 'utm_source', None))}")
+            logger.error(f"   bot_user tem utm_campaign: {bool(bot_user and getattr(bot_user, 'utm_campaign', None))}")
+            logger.error(f"   bot_user tem campaign_code: {bool(bot_user and getattr(bot_user, 'campaign_code', None))}")
+            
+            # ✅ ÚLTIMO RECURSO: Tentar recuperar UTMs do bot_user se não estiverem nem no tracking_data nem no payment
+            if bot_user:
+                if not custom_data.get('utm_source') and getattr(bot_user, 'utm_source', None):
+                    custom_data['utm_source'] = bot_user.utm_source
+                    logger.info(f"✅ Purchase - utm_source recuperado do bot_user (último recurso): {bot_user.utm_source}")
+                if not custom_data.get('utm_campaign') and getattr(bot_user, 'utm_campaign', None):
+                    custom_data['utm_campaign'] = bot_user.utm_campaign
+                    logger.info(f"✅ Purchase - utm_campaign recuperado do bot_user (último recurso): {bot_user.utm_campaign}")
+                if not custom_data.get('campaign_code') and getattr(bot_user, 'campaign_code', None):
+                    custom_data['campaign_code'] = bot_user.campaign_code
+                    logger.info(f"✅ Purchase - campaign_code recuperado do bot_user (último recurso): {bot_user.campaign_code}")
+            
+            # ✅ VALIDAÇÃO FINAL: Se ainda não tem UTMs, logar erro crítico
+            if not custom_data.get('utm_source') and not custom_data.get('campaign_code'):
+                logger.error(f"❌ [CRÍTICO] Purchase SERÁ ENVIADO SEM UTMs e SEM campaign_code! Meta NÃO atribuirá à campanha!")
+                logger.error(f"   ⚠️ ATENÇÃO: Esta venda NÃO será atribuída à campanha no Meta Ads Manager!")
+            else:
+                logger.info(f"✅ Purchase - UTMs recuperados no último recurso (bot_user)")
         
         # ✅ LOG CRÍTICO: Parâmetros enviados para Meta (para debug)
         external_id_hash = user_data.get('external_id', ['N/A'])[0] if user_data.get('external_id') else 'N/A'

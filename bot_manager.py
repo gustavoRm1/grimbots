@@ -6650,17 +6650,19 @@ Seu pagamento ainda não foi confirmado.
                         os_type=getattr(bot_user, 'os_type', None) if bot_user else None,
                         browser=getattr(bot_user, 'browser', None) if bot_user else None,
                         device_model=getattr(bot_user, 'device_model', None) if bot_user else None,
-                        # ✅ CRÍTICO: UTM TRACKING E CAMPAIGN CODE (grim) - Copiar de bot_user para matching com campanha Meta
-                        utm_source=getattr(bot_user, 'utm_source', None) if bot_user else None,
-                        utm_campaign=getattr(bot_user, 'utm_campaign', None) if bot_user else None,
-                        utm_content=getattr(bot_user, 'utm_content', None) if bot_user else None,
-                        utm_medium=getattr(bot_user, 'utm_medium', None) if bot_user else None,
-                        utm_term=getattr(bot_user, 'utm_term', None) if bot_user else None,
+                        # ✅ CRÍTICO: UTM TRACKING E CAMPAIGN CODE (grim) - PRIORIDADE: tracking_data_v4 > bot_user
+                        # ✅ CORREÇÃO CRÍTICA: Usar UTMs do tracking_data_v4 (mais atualizados do redirect) ao invés de bot_user
+                        # Isso garante que UTMs sejam salvos corretamente mesmo se bot_user não tiver
+                        utm_source=utm_source if utm_source else (getattr(bot_user, 'utm_source', None) if bot_user else None),
+                        utm_campaign=utm_campaign if utm_campaign else (getattr(bot_user, 'utm_campaign', None) if bot_user else None),
+                        utm_content=utm_content if utm_content else (getattr(bot_user, 'utm_content', None) if bot_user else None),
+                        utm_medium=utm_medium if utm_medium else (getattr(bot_user, 'utm_medium', None) if bot_user else None),
+                        utm_term=utm_term if utm_term else (getattr(bot_user, 'utm_term', None) if bot_user else None),
                         # ✅ CRÍTICO QI 600+: fbclid para external_id (matching Meta Pixel)
                         fbclid=fbclid,  # ✅ Usar fbclid já extraído
                         # ✅ CRÍTICO QI 600+: campaign_code (grim) para atribuição de campanha
-                        # Usar campaign_code do bot_user (grim), não external_id (que agora é fbclid)
-                        campaign_code=getattr(bot_user, 'campaign_code', None) if bot_user else None,
+                        # PRIORIDADE: tracking_data_v4.grim > bot_user.campaign_code
+                        campaign_code=tracking_data_v4.get('grim') if tracking_data_v4.get('grim') else (getattr(bot_user, 'campaign_code', None) if bot_user else None),
                         # ✅ QI 500: TRACKING_TOKEN V4 (pode ser None se PIX foi gerado sem tracking_token)
                         tracking_token=tracking_token,  # ✅ Token válido (UUID do redirect) ou None se ausente
                         # ✅ CRÍTICO: pageview_event_id para deduplicação Meta Pixel (fallback se Redis expirar)

@@ -18,20 +18,19 @@
         'https://connect.facebook.net/en_US/fbevents.js');
         fbq('init', '{{ pixel_config.pixel_id }}');
         
-        // ✅ PURCHASE com matching perfeito (INCLUINDO FBP E FBC!)
+        // ✅ PURCHASE conforme documentação oficial Meta
+        // ✅ CRÍTICO: Meta Pixel JS captura _fbp e _fbc AUTOMATICAMENTE dos cookies do browser
+        // ✅ NÃO incluir _fbp/_fbc manualmente no objeto de parâmetros (pode causar duplicação)
         fbq('track', 'Purchase', {
             value: {{ pixel_config.value }},
             currency: '{{ pixel_config.currency }}',
-            eventID: '{{ pixel_config.event_id }}',  // ✅ MESMO event_id do PageView (matching garantido)
+            eventID: '{{ pixel_config.event_id }}',  // ✅ MESMO event_id do PageView (deduplicação garantida)
             content_ids: ['{{ pixel_config.content_id }}'],
             content_name: '{{ pixel_config.content_name|replace("'", "\\'") }}',
             content_type: 'product',
-            num_items: 1{% if pixel_config.fbp %},
-            _fbp: '{{ pixel_config.fbp }}'  // ✅ CRÍTICO: FBP para matching perfeito
-            {% endif %}{% if pixel_config.fbc %},
-            _fbc: '{{ pixel_config.fbc }}'  // ✅ CRÍTICO: FBC para matching perfeito (apenas se real)
-            {% endif %}
-            // ✅ NOTA: external_id será enviado via CAPI (server-side) para melhor matching
+            num_items: 1
+            // ✅ Meta Pixel JS captura _fbp e _fbc automaticamente dos cookies (_fbp, _fbc)
+            // ✅ external_id será enviado via CAPI (server-side) para melhor matching
         });
         
         console.log('[META PIXEL] Purchase disparado com eventID: {{ pixel_config.event_id }}');
