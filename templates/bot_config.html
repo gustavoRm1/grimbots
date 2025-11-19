@@ -2358,8 +2358,9 @@
 
 {% block extra_scripts %}
 <script>
-function botConfigApp() {
-    return {
+// ✅ Registrar componente no Alpine.js ANTES de inicializar
+document.addEventListener('alpine:init', () => {
+    Alpine.data('botConfigApp', () => ({
         activeTab: 'welcome',
         loading: false,
         newBotToken: '',  // ✅ NOVO: Para trocar token
@@ -5042,12 +5043,10 @@ window.removeFlowStepFromVisual = function(stepId) {
                 }
             }, 100);
         }
-    }
-};
-
-// ✅ Remarketing App (componente separado)
-function remarketingApp() {
-    return {
+    };
+    
+    // ✅ Remarketing App (componente separado)
+    Alpine.data('remarketingApp', () => ({
         campaigns: [],
         showCreateModal: false,
         showStatsModal: false,
@@ -5235,8 +5234,7 @@ function remarketingApp() {
             document.body.appendChild(notification);
             setTimeout(() => notification.remove(), 3000);
         }
-    };
-}
+    }));
+});
 </script>
 {% endblock %}
-
