@@ -2397,6 +2397,66 @@ class BotManager:
                 pass
             return False
     
+    def _build_step_buttons(self, step: Dict[str, Any], config: Dict[str, Any] = None) -> list:
+        """
+        ✅ QI 500: Constrói lista de botões para um step (customizados + cadastrados)
+        
+        Returns:
+            list: Lista de botões no formato Telegram API
+        """
+        buttons = []
+        step_config = step.get('config', {})
+        step_id = step.get('id', '')
+        
+        if config is None:
+            config = {}
+        
+        # ✅ 1. Processar botões customizados primeiro
+        custom_buttons = step_config.get('custom_buttons', [])
+        if custom_buttons and len(custom_buttons) > 0:
+            for idx, custom_btn in enumerate(custom_buttons):
+                btn_text = custom_btn.get('text', '')
+                target_step = custom_btn.get('target_step', '')
+                
+                if btn_text:
+                    # Criar callback_data no formato: flow_step_{step_id}_btn_{idx}
+                    action = f"btn_{idx}"
+                    callback_data = f"flow_step_{step_id}_{action}"
+                    buttons.append({
+                        'text': btn_text,
+                        'callback_data': callback_data
+                    })
+                    logger.info(f"🔘 Botão customizado criado: '{btn_text}' → {target_step if target_step else 'nenhum'} (callback: {callback_data})")
+        
+        # ✅ 2. Processar botões cadastrados (se não houver customizados ou adicionar junto)
+        selected_buttons = step_config.get('selected_buttons', [])
+        if selected_buttons:
+            main_buttons = config.get('main_buttons', []) if config else []
+            redirect_buttons = config.get('redirect_buttons', []) if config else []
+            
+            for selected in selected_buttons:
+                btn_type = selected.get('type')
+                btn_index = selected.get('index')
+                
+                if btn_type == 'main' and btn_index is not None:
+                    if btn_index < len(main_buttons):
+                        btn = main_buttons[btn_index]
+                        if btn.get('text') and btn.get('price'):
+                            buttons.append({
+                                'text': btn['text'],
+                                'callback_data': f"buy_{btn_index}"
+                            })
+                elif btn_type == 'redirect' and btn_index is not None:
+                    if btn_index < len(redirect_buttons):
+                        btn = redirect_buttons[btn_index]
+                        if btn.get('text') and btn.get('url'):
+                            buttons.append({
+                                'text': btn['text'],
+                                'url': btn['url']
+                            })
+        
+        return buttons
+    
     def _execute_step(self, step: Dict[str, Any], token: str, chat_id: int, delay: float = 0, config: Dict[str, Any] = None):
         """
         ✅ QI 500: Executa um step do fluxo com tratamento de erro robusto
@@ -2420,29 +2480,8 @@ class BotManager:
         # ✅ TRATAMENTO DE ERRO: Try/except para cada tipo de step
         try:
             if step_type == 'content':
-                # ✅ NOVO: Processar custom_buttons se existirem
-                buttons = []
-                custom_buttons = step_config.get('custom_buttons', [])
-                step_id = step.get('id', '')
-                
-                if custom_buttons and len(custom_buttons) > 0:
-                    # ✅ Processar botões customizados (específicos do step)
-                    for idx, custom_btn in enumerate(custom_buttons):
-                        btn_text = custom_btn.get('text', '')
-                        target_step = custom_btn.get('target_step', '')
-                        
-                        if btn_text:
-                            # Criar callback_data no formato: flow_step_{step_id}_btn_{idx}
-                            action = f"btn_{idx}"
-                            callback_data = f"flow_step_{step_id}_{action}"
-                            buttons.append({
-                                'text': btn_text,
-                                'callback_data': callback_data
-                            })
-                            logger.info(f"🔘 Botão customizado (content) criado: '{btn_text}' → {target_step if target_step else 'nenhum'} (callback: {callback_data})")
-                else:
-                    # ✅ Fallback: usar botões antigos se não houver custom_buttons
-                    buttons = step_config.get('buttons', [])
+                # ✅ Processar botões (customizados + cadastrados)
+                buttons = self._build_step_buttons(step, config)
                 
                 self.send_funnel_step_sequential(
                     token=token,
@@ -2454,29 +2493,38 @@ class BotManager:
                     delay_between=delay
                 )
             elif step_type == 'message':
+                # ✅ Processar botões (customizados + cadastrados)
+                buttons = self._build_step_buttons(step, config)
+                
                 self.send_telegram_message(
                     token=token,
                     chat_id=str(chat_id),
                     message=step_config.get('message', ''),
-                    buttons=step_config.get('buttons', [])
+                    buttons=buttons
                 )
             elif step_type == 'audio':
+                # ✅ Processar botões (customizados + cadastrados)
+                buttons = self._build_step_buttons(step, config)
+                
                 self.send_telegram_message(
                     token=token,
                     chat_id=str(chat_id),
                     message='',
                     media_url=step_config.get('audio_url'),
                     media_type='audio',
-                    buttons=None
+                    buttons=buttons if buttons else None
                 )
             elif step_type == 'video':
+                # ✅ Processar botões (customizados + cadastrados)
+                buttons = self._build_step_buttons(step, config)
+                
                 self.send_telegram_message(
                     token=token,
                     chat_id=str(chat_id),
                     message=step_config.get('message', ''),
                     media_url=step_config.get('media_url'),
                     media_type='video',
-                    buttons=step_config.get('buttons', [])
+                    buttons=buttons
                 )
             elif step_type == 'buttons':
                 # ✅ NOVO: Verificar se usa botões contextuais ou globais
