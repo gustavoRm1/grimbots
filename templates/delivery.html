@@ -18,6 +18,11 @@
         'https://connect.facebook.net/en_US/fbevents.js');
         fbq('init', '{{ pixel_config.pixel_id }}');
         
+        // ✅ ANTI-DUPLICAÇÃO: Verificar se Purchase já foi enviado (server-side)
+        // ✅ CRÍTICO: Sistema multi-usuário não pode usar localStorage (seria compartilhado por domínio)
+        // ✅ Solução: Usar payment.meta_purchase_sent (verificado server-side antes de renderizar)
+        {% if not payment.meta_purchase_sent %}
+        // ✅ Purchase ainda NÃO foi enviado - pode disparar client-side
         // ✅ PURCHASE conforme documentação oficial Meta
         // ✅ CRÍTICO: Meta Pixel JS captura _fbp e _fbc AUTOMATICAMENTE dos cookies do browser
         // ✅ NÃO incluir _fbp/_fbc manualmente no objeto de parâmetros (pode causar duplicação)
@@ -33,7 +38,11 @@
             // ✅ external_id será enviado via CAPI (server-side) para melhor matching
         });
         
-        console.log('[META PIXEL] Purchase disparado com eventID: {{ pixel_config.event_id }}');
+        console.log('[META PIXEL] Purchase disparado (client-side) com eventID: {{ pixel_config.event_id }}');
+        {% else %}
+        // ✅ Purchase JÁ foi enviado anteriormente - NÃO disparar novamente
+        console.log('[META PIXEL] Purchase já foi enviado anteriormente (payment.meta_purchase_sent=true), pulando client-side...');
+        {% endif %}
     </script>
     <noscript>
         <img height="1" width="1" style="display:none"
