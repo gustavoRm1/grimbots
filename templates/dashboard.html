@@ -851,6 +851,7 @@
                             <th>ID</th>
                             <th>Cliente</th>
                             <th>Produto</th>
+                            <th>Bot</th>
                             <th>Valor</th>
                             <th>Status</th>
                             <th>Data</th>
@@ -862,6 +863,12 @@
                                 <td class="text-gray-400 font-mono">#<span x-text="payment.id"></span></td>
                                 <td class="text-white font-medium" x-text="payment.customer_name || 'N/A'"></td>
                                 <td class="text-gray-300" x-text="payment.product_name || 'Produto'"></td>
+                                <td class="text-gray-300">
+                                    <div class="flex flex-col">
+                                        <span class="font-medium text-white" x-text="payment.bot_name || 'N/A'"></span>
+                                        <span class="text-xs text-gray-500" x-text="payment.bot_username ? '@' + payment.bot_username : ''"></span>
+                                    </div>
+                                </td>
                                 <td class="font-bold" style="color: var(--brand-gold-300);">
                                 R$ <span x-text="formatMoney(payment.amount)"></span>
                         </td>
@@ -887,11 +894,15 @@
             <template x-for="payment in filteredPayments.slice(0, 10)" :key="payment.id">
                 <div class="bg-gray-800 border border-gray-700 rounded-lg p-4">
                     <div class="flex justify-between items-start mb-3">
-                        <div>
-                            <div class="font-bold text-white" x-text="payment.customer_name || 'Cliente'"></div>
-                            <div class="text-sm text-gray-400" x-text="payment.product_name || 'Produto'"></div>
+                        <div class="flex-1 min-w-0">
+                            <div class="font-bold text-white truncate" x-text="payment.customer_name || 'Cliente'"></div>
+                            <div class="text-sm text-gray-400 truncate" x-text="payment.product_name || 'Produto'"></div>
+                            <div class="text-xs text-gray-500 mt-1">
+                                <span class="font-medium text-gray-400" x-text="payment.bot_name || 'Bot'"></span>
+                                <span x-show="payment.bot_username" x-text="' (@' + payment.bot_username + ')'" class="text-gray-600"></span>
+                            </div>
                         </div>
-                        <span class="badge-status badge-paid" x-text="payment.status === 'paid' ? 'Pago' : 'Pendente'"></span>
+                        <span class="badge-status badge-paid ml-2 flex-shrink-0" x-text="payment.status === 'paid' ? 'Pago' : 'Pendente'"></span>
                     </div>
                     <div class="flex justify-between items-center">
                         <div class="text-lg font-bold" style="color: var(--brand-gold-300);">R$ <span x-text="formatMoney(payment.amount)"></span></div>

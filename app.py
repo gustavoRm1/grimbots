@@ -1278,9 +1278,9 @@ def dashboard():
     }
     
     # ✅ PERFORMANCE: Últimos pagamentos - usar índices se disponíveis
-    # Se bot_ids já temos, filtrar diretamente por bot_id (mais rápido que JOIN)
+    # JOIN com Bot para obter nome do bot
     if bot_ids:
-        recent_payments = db.session.query(Payment).filter(
+        recent_payments = db.session.query(Payment, Bot).join(Bot, Payment.bot_id == Bot.id).filter(
             Payment.bot_id.in_(bot_ids)
     ).order_by(Payment.id.desc()).limit(20).all()
     else:
@@ -1320,15 +1320,19 @@ def dashboard():
         
         bots_list.append(bot_dict)
     
-    # Converter payments para dicionários
-    payments_list = [{
-        'id': p.id,
-        'customer_name': p.customer_name,
-        'product_name': p.product_name,
-        'amount': float(p.amount),
-        'status': p.status,
-        'created_at': p.created_at.isoformat()
-    } for p in recent_payments]
+    # Converter payments para dicionários (incluindo nome do bot)
+    payments_list = []
+    for payment, bot in recent_payments:
+        payments_list.append({
+            'id': payment.id,
+            'customer_name': payment.customer_name,
+            'product_name': payment.product_name,
+            'amount': float(payment.amount),
+            'status': payment.status,
+            'created_at': payment.created_at.isoformat(),
+            'bot_name': bot.name,
+            'bot_username': bot.username
+        })
     
     return render_template('dashboard.html', stats=stats, recent_payments=payments_list, bots=bots_list)
 
