@@ -10,10 +10,27 @@
     position: relative;
     background: linear-gradient(135deg, rgba(255, 255, 255, 0.02) 0%, rgba(255, 255, 255, 0.01) 100%);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 16px;
-    padding: 24px;
+    border-radius: 12px;
+    padding: 16px;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     overflow: hidden;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+@media (min-width: 640px) {
+    .stat-card {
+        border-radius: 14px;
+        padding: 20px;
+    }
+}
+
+@media (min-width: 768px) {
+    .stat-card {
+        border-radius: 16px;
+        padding: 24px;
+    }
 }
 
 .stat-card::before {
@@ -33,11 +50,25 @@
 }
 
 .stat-value {
-    font-size: 2.5rem;
+    font-size: 1.75rem;
     font-weight: 900;
     line-height: 1;
-    margin: 16px 0 8px 0;
+    margin: 12px 0 6px 0;
     font-variant-numeric: tabular-nums;
+}
+
+@media (min-width: 640px) {
+    .stat-value {
+        font-size: 2rem;
+        margin: 14px 0 7px 0;
+    }
+}
+
+@media (min-width: 768px) {
+    .stat-value {
+        font-size: 2.5rem;
+        margin: 16px 0 8px 0;
+    }
 }
 
 .stat-label {
@@ -52,9 +83,25 @@
 .gateway-card {
     background: linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.01) 100%);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 12px;
-    padding: 20px;
+    border-radius: 10px;
+    padding: 16px;
     transition: all 0.3s ease;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+@media (min-width: 640px) {
+    .gateway-card {
+        border-radius: 12px;
+        padding: 18px;
+    }
+}
+
+@media (min-width: 768px) {
+    .gateway-card {
+        padding: 20px;
+    }
 }
 
 .gateway-card:hover {
@@ -113,13 +160,27 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: 10px 20px;
+    padding: 8px 16px;
     border-radius: 8px;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 700;
     transition: all 0.2s ease;
     border: none;
     cursor: pointer;
+}
+
+@media (min-width: 640px) {
+    .btn-action {
+        padding: 9px 18px;
+        font-size: 12.5px;
+    }
+}
+
+@media (min-width: 768px) {
+    .btn-action {
+        padding: 10px 20px;
+        font-size: 13px;
+    }
 }
 
 .btn-action-primary {
@@ -148,8 +209,26 @@
     position: relative;
     background: linear-gradient(135deg, rgba(255, 255, 255, 0.02) 0%, rgba(255, 255, 255, 0.01) 100%);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 16px;
-    padding: 24px;
+    border-radius: 12px;
+    padding: 16px;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow-x: hidden;
+}
+
+@media (min-width: 640px) {
+    .chart-container {
+        border-radius: 14px;
+        padding: 20px;
+    }
+}
+
+@media (min-width: 768px) {
+    .chart-container {
+        border-radius: 16px;
+        padding: 24px;
+    }
 }
 
 /* Form Inputs (Estilo Dashboard) */
@@ -189,10 +268,10 @@
     border-left-color: #10B981;
 }
 
-/* Tab Buttons */
+/* Tab Buttons - Responsivo */
 .tab-button {
-    padding: 16px 24px;
-    font-size: 0.875rem;
+    padding: 12px 16px;
+    font-size: 0.75rem;
     font-weight: 600;
     color: #9CA3AF;
     background: transparent;
@@ -202,6 +281,20 @@
     transition: all 0.2s ease;
     position: relative;
     top: 2px;
+}
+
+@media (min-width: 640px) {
+    .tab-button {
+        padding: 14px 20px;
+        font-size: 0.8125rem;
+    }
+}
+
+@media (min-width: 768px) {
+    .tab-button {
+        padding: 16px 24px;
+        font-size: 0.875rem;
+    }
 }
 
 .tab-button:hover {
@@ -223,73 +316,83 @@
     display: none;
 }
 
-/* Mobile Optimization */
+/* ✅ Garantir responsividade completa para mobile */
 @media (max-width: 640px) {
-    .tab-button {
-        padding: 16px 20px;
-        font-size: 0.875rem;
+    .max-w-full {
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
+        max-width: 100vw;
+        overflow-x: hidden;
     }
-
-    .stat-card {
-        padding: 16px;
+    
+    /* Prevenir overflow horizontal */
+    * {
+        box-sizing: border-box;
     }
-
-    .stat-value {
-        font-size: 2rem;
+    
+    body {
+        overflow-x: hidden;
     }
-
-    .gateway-card {
-        padding: 16px;
+    
+    /* Garantir que grids sejam sempre 1 coluna em mobile quando necessário */
+    .grid.grid-cols-1.md\:grid-cols-2,
+    .grid.grid-cols-2.md\:grid-cols-2,
+    .grid.grid-cols-3 {
+        grid-template-columns: 1fr !important;
     }
+}
 
-    .chart-container {
-        padding: 16px;
+@media (min-width: 1024px) {
+    .max-w-full {
+        max-width: 100%;
+        padding-left: 2rem;
+        padding-right: 2rem;
     }
 }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" x-data="settingsApp()" x-init="init()">
+<div class="max-w-full mx-auto px-2 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 md:py-8" x-data="settingsApp()" x-init="init()">
     
-    <!-- Header -->
-    <div class="mb-8">
-        <h1 class="text-3xl sm:text-4xl font-black text-white mb-2">
+    <!-- Header - Responsivo -->
+    <div class="mb-4 sm:mb-6 md:mb-8">
+        <h1 class="text-2xl sm:text-3xl md:text-4xl font-black text-white mb-2 truncate">
             Configurações ⚙️
         </h1>
-        <p class="text-base sm:text-lg text-gray-400">
+        <p class="text-sm sm:text-base md:text-lg text-gray-400 truncate">
             Gerencie seu perfil e gateways de pagamento
         </p>
     </div>
 
-    <!-- Tabs -->
-    <div class="flex gap-0 border-b-2 border-gray-800 mb-8 overflow-x-auto scrollbar-hide">
+    <!-- Tabs - Responsivo -->
+    <div class="flex gap-0 border-b-2 border-gray-800 mb-4 sm:mb-6 md:mb-8 overflow-x-auto scrollbar-hide">
         <button @click="activeTab = 'profile'" 
                 :class="{'active': activeTab === 'profile'}"
-                class="tab-button whitespace-nowrap flex-shrink-0">
-            <i class="fas fa-user mr-2"></i><span class="hidden sm:inline">Perfil</span>
+                class="tab-button whitespace-nowrap flex-shrink-0 text-xs sm:text-sm px-3 sm:px-4 md:px-6 py-3 sm:py-4">
+            <i class="fas fa-user mr-1 sm:mr-2"></i><span class="hidden sm:inline">Perfil</span><span class="sm:hidden">Perfil</span>
         </button>
         <button @click="activeTab = 'gateways'" 
                 :class="{'active': activeTab === 'gateways'}"
-                class="tab-button whitespace-nowrap flex-shrink-0">
-            <i class="fas fa-credit-card mr-2"></i><span class="hidden sm:inline">Gateways</span>
+                class="tab-button whitespace-nowrap flex-shrink-0 text-xs sm:text-sm px-3 sm:px-4 md:px-6 py-3 sm:py-4">
+            <i class="fas fa-credit-card mr-1 sm:mr-2"></i><span class="hidden sm:inline">Gateways</span><span class="sm:hidden">Gateways</span>
         </button>
         <button @click="activeTab = 'plan'" 
                 :class="{'active': activeTab === 'plan'}"
-                class="tab-button whitespace-nowrap flex-shrink-0">
-            <i class="fas fa-crown mr-2"></i><span class="hidden sm:inline">Plano</span>
+                class="tab-button whitespace-nowrap flex-shrink-0 text-xs sm:text-sm px-3 sm:px-4 md:px-6 py-3 sm:py-4">
+            <i class="fas fa-crown mr-1 sm:mr-2"></i><span class="hidden sm:inline">Plano</span><span class="sm:hidden">Plano</span>
         </button>
         <button @click="activeTab = 'notifications'" 
                 :class="{'active': activeTab === 'notifications'}"
-                class="tab-button whitespace-nowrap flex-shrink-0">
-            <i class="fas fa-bell mr-2"></i><span class="hidden sm:inline">Notificações</span>
+                class="tab-button whitespace-nowrap flex-shrink-0 text-xs sm:text-sm px-3 sm:px-4 md:px-6 py-3 sm:py-4">
+            <i class="fas fa-bell mr-1 sm:mr-2"></i><span class="hidden sm:inline">Notificações</span><span class="sm:hidden">Notif.</span>
         </button>
     </div>
 
-    <!-- Profile Tab -->
+    <!-- Profile Tab - Responsivo -->
     <div x-show="activeTab === 'profile'" x-cloak>
-        <div class="chart-container mb-8">
-            <h3 class="text-2xl font-bold text-white mb-6">Informações do Perfil</h3>
+        <div class="chart-container mb-4 sm:mb-6 md:mb-8">
+            <h3 class="text-xl sm:text-2xl font-bold text-white mb-4 sm:mb-6">Informações do Perfil</h3>
 
             <form @submit.prevent="updateProfile()" class="space-y-4">
                 <div>
@@ -341,9 +444,9 @@
             </form>
         </div>
 
-        <!-- Alterar Senha -->
+        <!-- Alterar Senha - Responsivo -->
         <div class="chart-container">
-            <h3 class="text-2xl font-bold text-white mb-6">Alterar Senha</h3>
+            <h3 class="text-xl sm:text-2xl font-bold text-white mb-4 sm:mb-6">Alterar Senha</h3>
             <form @submit.prevent="updatePassword()" class="space-y-4">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                 <div>
@@ -384,8 +487,8 @@
 
     <!-- Gateways Tab - REDESENHADO (Estilo Dashboard) -->
     <div x-show="activeTab === 'gateways'" x-cloak>
-        <!-- Stats Cards (Gateway Ativo) -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <!-- Stats Cards (Gateway Ativo) - Responsivo -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6 md:mb-8">
             <div class="stat-card">
                 <div class="stat-label">Gateway Ativo</div>
                 <template x-if="gatewaysList.find(g => g.is_active && g.is_verified)">
@@ -430,19 +533,19 @@
             </p>
         </div>
 
-        <!-- Gateways Configurados (Ativar/Desativar) -->
-        <div class="chart-container mb-8" x-show="gatewaysList.filter(g => g.is_verified).length > 0">
-            <div class="mb-6">
-                <h2 class="text-2xl font-bold text-white">Gateways Configurados</h2>
-                <p class="text-sm text-gray-500 mt-1">Ative ou desative seus gateways com um clique</p>
+        <!-- Gateways Configurados (Ativar/Desativar) - Responsivo -->
+        <div class="chart-container mb-4 sm:mb-6 md:mb-8" x-show="gatewaysList.filter(g => g.is_verified).length > 0">
+            <div class="mb-4 sm:mb-6">
+                <h2 class="text-xl sm:text-2xl font-bold text-white truncate">Gateways Configurados</h2>
+                <p class="text-xs sm:text-sm text-gray-500 mt-1 truncate">Ative ou desative seus gateways com um clique</p>
             </div>
 
             <div class="grid grid-cols-1 gap-4">
                 <template x-for="gateway in gatewaysList.filter(g => g.is_verified && g.gateway_type !== 'hoopay')" :key="gateway.id">
                     <div class="gateway-card" :class="gateway.is_active ? 'border-green-500' : ''" x-data="{ editMode: false }">
-                        <div class="flex items-center justify-between mb-4">
-                            <div class="flex items-center gap-3 flex-1">
-                                <div class="w-12 h-12 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0" 
+                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
+                            <div class="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+                                <div class="w-10 h-10 sm:w-12 sm:h-12 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0" 
                                      style="background: linear-gradient(135deg, rgba(255, 184, 0, 0.1), rgba(255, 184, 0, 0.05));">
                                     <template x-if="gateway.gateway_type === 'pushynpay'">
                                         <img src="{{ url_for('static', filename='img/pushyn.png') }}" alt="PushynPay" class="w-12 h-12 object-contain">
@@ -478,20 +581,20 @@
                                              onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'48\' height=\'48\'%3E%3Crect width=\'48\' height=\'48\' fill=\'%238B5CF6\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' text-anchor=\'middle\' dy=\'.3em\' fill=\'white\' font-size=\'10\' font-weight=\'bold\'%3EOP%3C/text%3E%3C/svg%3E';">
                                     </template>
                                 </div>
-                                <div class="flex-1">
-                                    <h3 class="text-sm font-bold text-white" x-text="gateway.gateway_type.toUpperCase()"></h3>
-                                    <p class="text-xs text-gray-500">Verificado e pronto</p>
+                                <div class="flex-1 min-w-0">
+                                    <h3 class="text-xs sm:text-sm font-bold text-white truncate" x-text="gateway.gateway_type.toUpperCase()"></h3>
+                                    <p class="text-xs text-gray-500 truncate">Verificado e pronto</p>
                                 </div>
                             </div>
-                            <span :class="gateway.is_active ? 'gateway-status-active' : 'gateway-status-verified'">
+                            <span :class="gateway.is_active ? 'gateway-status-active' : 'gateway-status-verified'" class="flex-shrink-0 text-xs">
                                 <span class="w-2 h-2 rounded-full" 
                                       :class="gateway.is_active ? 'bg-green-400 animate-pulse' : 'bg-blue-400'"></span>
                                 <span x-text="gateway.is_active ? 'Ativo' : 'Inativo'"></span>
                             </span>
                         </div>
 
-                        <!-- Toggle Switch -->
-                        <div class="flex items-center justify-between p-4 bg-black bg-opacity-20 rounded-lg mb-3">
+                        <!-- Toggle Switch - Responsivo -->
+                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 p-3 sm:p-4 bg-black bg-opacity-20 rounded-lg mb-3">
                             <div>
                                 <p class="text-sm font-bold text-white">Ativar Gateway</p>
                                 <p class="text-xs text-gray-500">Processar pagamentos</p>
@@ -505,11 +608,11 @@
                             </button>
                         </div>
 
-                        <!-- Botão Editar Credenciais -->
+                        <!-- Botão Editar Credenciais - Responsivo -->
                         <button @click="editMode = !editMode; if (editMode) { editGateway = { ...gateway }; }" 
-                                class="w-full py-2 px-4 rounded-lg text-sm font-bold transition-all mb-3"
+                                class="w-full py-2 px-3 sm:px-4 rounded-lg text-xs sm:text-sm font-bold transition-all mb-3"
                                 style="background: rgba(255, 184, 0, 0.1); color: #FFB800; border: 1px solid rgba(255, 184, 0, 0.3);">
-                            <i class="fas mr-2" :class="editMode ? 'fa-times' : 'fa-edit'"></i>
+                            <i class="fas mr-1 sm:mr-2" :class="editMode ? 'fa-times' : 'fa-edit'"></i>
                             <span x-text="editMode ? 'Cancelar' : 'Editar Credenciais'"></span>
                         </button>
 
@@ -736,15 +839,15 @@
                             </template>
                         </div>
 
-                        <!-- Stats do Gateway -->
-                        <div class="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-gray-800">
+                        <!-- Stats do Gateway - Responsivo -->
+                        <div class="grid grid-cols-2 gap-2 sm:gap-3 mt-3 pt-3 border-t border-gray-800">
                             <div class="text-center">
-                                <div class="text-xs text-gray-500 mb-1">Transações</div>
-                                <div class="text-sm font-bold text-white" x-text="gateway.total_transactions || 0"></div>
+                                <div class="text-xs text-gray-500 mb-1 truncate">Transações</div>
+                                <div class="text-xs sm:text-sm font-bold text-white truncate" x-text="gateway.total_transactions || 0"></div>
                             </div>
                             <div class="text-center">
-                                <div class="text-xs text-gray-500 mb-1">Taxa Sucesso</div>
-                                <div class="text-sm font-bold text-green-400" x-text="gateway.success_rate ? gateway.success_rate.toFixed(1) + '%' : '0%'"></div>
+                                <div class="text-xs text-gray-500 mb-1 truncate">Taxa Sucesso</div>
+                                <div class="text-xs sm:text-sm font-bold text-green-400 truncate" x-text="gateway.success_rate ? gateway.success_rate.toFixed(1) + '%' : '0%'"></div>
                             </div>
                         </div>
                     </div>
@@ -752,30 +855,30 @@
             </div>
         </div>
 
-        <!-- Adicionar Novo Gateway -->
+        <!-- Adicionar Novo Gateway - Responsivo -->
         <div class="chart-container">
-            <div class="mb-6">
-                <h2 class="text-2xl font-bold text-white">Adicionar Novo Gateway</h2>
-                <p class="text-sm text-gray-500 mt-1">Configure suas credenciais pela primeira vez</p>
+            <div class="mb-4 sm:mb-6">
+                <h2 class="text-xl sm:text-2xl font-bold text-white truncate">Adicionar Novo Gateway</h2>
+                <p class="text-xs sm:text-sm text-gray-500 mt-1 truncate">Configure suas credenciais pela primeira vez</p>
             </div>
 
             <div class="grid grid-cols-1 gap-4">
                 <!-- PushynPay -->
                 <div class="gateway-card" x-show="!getGatewayStatus('pushynpay')?.is_verified">
-                    <div class="flex items-start justify-between mb-4">
-                        <div class="flex items-center gap-3 flex-1">
-                            <div class="w-12 h-12 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0" 
+                    <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
+                        <div class="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+                            <div class="w-10 h-10 sm:w-12 sm:h-12 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0" 
                                  style="background: linear-gradient(135deg, rgba(255, 184, 0, 0.1), rgba(255, 184, 0, 0.05));">
                                 <img src="{{ url_for('static', filename='img/pushyn.png') }}" 
                                      alt="PushynPay" 
                                      class="w-12 h-12 object-contain">
                             </div>
-                            <div>
-                                <h3 class="text-sm font-bold text-white">PushynPay</h3>
-                                <p class="text-xs text-gray-500">Gateway Rápido</p>
+                            <div class="min-w-0 flex-1">
+                                <h3 class="text-xs sm:text-sm font-bold text-white truncate">PushynPay</h3>
+                                <p class="text-xs text-gray-500 truncate">Gateway Rápido</p>
                             </div>
                         </div>
-                        <span class="gateway-status-unconfigured">
+                        <span class="gateway-status-unconfigured flex-shrink-0 text-xs">
                             <i class="fas fa-exclamation-circle"></i>
                             Novo
                         </span>
@@ -805,20 +908,20 @@
 
                 <!-- Paradise -->
                 <div class="gateway-card" x-show="!getGatewayStatus('paradise')?.is_verified">
-                    <div class="flex items-start justify-between mb-4">
-                        <div class="flex items-center gap-3 flex-1">
-                            <div class="w-12 h-12 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0" 
+                    <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
+                        <div class="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+                            <div class="w-10 h-10 sm:w-12 sm:h-12 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0" 
                                  style="background: linear-gradient(135deg, rgba(255, 184, 0, 0.1), rgba(255, 184, 0, 0.05));">
                                 <img src="{{ url_for('static', filename='img/paradise.jpg') }}" 
                                      alt="Paradise" 
                                      class="w-12 h-12 object-cover rounded-lg">
                             </div>
-                            <div>
-                                <h3 class="text-sm font-bold text-white">Paradise</h3>
-                                <p class="text-xs text-gray-500">Gateway Global</p>
+                            <div class="min-w-0 flex-1">
+                                <h3 class="text-xs sm:text-sm font-bold text-white truncate">Paradise</h3>
+                                <p class="text-xs text-gray-500 truncate">Gateway Global</p>
                             </div>
                         </div>
-                        <span class="gateway-status-unconfigured">
+                        <span class="gateway-status-unconfigured flex-shrink-0 text-xs">
                             <i class="fas fa-exclamation-circle"></i>
                             Novo
                         </span>
@@ -935,20 +1038,20 @@
 
                 <!-- WiinPay -->
                 <div class="gateway-card" x-show="!getGatewayStatus('wiinpay')?.is_verified">
-                    <div class="flex items-start justify-between mb-4">
-                        <div class="flex items-center gap-3 flex-1">
-                            <div class="w-12 h-12 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0" 
+                    <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
+                        <div class="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+                            <div class="w-10 h-10 sm:w-12 sm:h-12 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0" 
                                  style="background: linear-gradient(135deg, rgba(255, 184, 0, 0.1), rgba(255, 184, 0, 0.05));">
                                 <img src="{{ url_for('static', filename='img/wiinpay.ico') }}" 
                                      alt="WiinPay" 
                                      class="w-12 h-12 object-contain">
                             </div>
-                            <div>
-                                <h3 class="text-sm font-bold text-white">WiinPay</h3>
-                                <p class="text-xs text-gray-500">Simples</p>
+                            <div class="min-w-0 flex-1">
+                                <h3 class="text-xs sm:text-sm font-bold text-white truncate">WiinPay</h3>
+                                <p class="text-xs text-gray-500 truncate">Simples</p>
                             </div>
                         </div>
-                        <span class="gateway-status-unconfigured">
+                        <span class="gateway-status-unconfigured flex-shrink-0 text-xs">
                             <i class="fas fa-exclamation-circle"></i>
                             Novo
                         </span>
@@ -984,21 +1087,21 @@
 
                 <!-- Átomo Pay -->
                 <div class="gateway-card" x-show="!getGatewayStatus('atomopay')?.is_verified">
-                    <div class="flex items-start justify-between mb-4">
-                        <div class="flex items-center gap-3 flex-1">
-                            <div class="w-12 h-12 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0" 
+                    <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
+                        <div class="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+                            <div class="w-10 h-10 sm:w-12 sm:h-12 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0" 
                                  style="background: linear-gradient(135deg, rgba(255, 184, 0, 0.1), rgba(255, 184, 0, 0.05));">
                                 <img src="{{ url_for('static', filename='img/atomopay.png') }}?v=2" 
                                      alt="Átomo Pay" 
                                      class="w-12 h-12 object-contain"
                                      onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'48\' height=\'48\'%3E%3Crect width=\'48\' height=\'48\' fill=\'%23FFB800\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' text-anchor=\'middle\' dy=\'.3em\' fill=\'white\' font-size=\'12\' font-weight=\'bold\'%3EAP%3C/text%3E%3C/svg%3E';">
                             </div>
-                            <div>
-                                <h3 class="text-sm font-bold text-white">Átomo Pay</h3>
-                                <p class="text-xs text-gray-500">Verificado e pronto</p>
+                            <div class="min-w-0 flex-1">
+                                <h3 class="text-xs sm:text-sm font-bold text-white truncate">Átomo Pay</h3>
+                                <p class="text-xs text-gray-500 truncate">Verificado e pronto</p>
                             </div>
                         </div>
-                        <span class="gateway-status-unconfigured">
+                        <span class="gateway-status-unconfigured flex-shrink-0 text-xs">
                             <i class="fas fa-exclamation-circle"></i>
                             Novo
                         </span>
@@ -1112,21 +1215,21 @@
 
                 <!-- SyncPay -->
                 <div class="gateway-card" x-show="!getGatewayStatus('syncpay')?.is_verified">
-                    <div class="flex items-start justify-between mb-4">
-                        <div class="flex items-center gap-3 flex-1">
-                            <div class="w-12 h-12 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0" 
+                    <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
+                        <div class="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+                            <div class="w-10 h-10 sm:w-12 sm:h-12 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0" 
                                  style="background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(59, 130, 246, 0.05));">
                                 <img src="{{ url_for('static', filename='img/syncpay.png') }}?v=1" 
                                      alt="SyncPay" 
                                      class="w-12 h-12 object-contain"
                                      onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'48\' height=\'48\'%3E%3Crect width=\'48\' height=\'48\' fill=\'%233B82F6\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' text-anchor=\'middle\' dy=\'.3em\' fill=\'white\' font-size=\'12\' font-weight=\'bold\'%3ESP%3C/text%3E%3C/svg%3E';">
                             </div>
-                            <div>
-                                <h3 class="text-sm font-bold text-white">SyncPay</h3>
-                                <p class="text-xs text-gray-500">Gateway Rápido</p>
+                            <div class="min-w-0 flex-1">
+                                <h3 class="text-xs sm:text-sm font-bold text-white truncate">SyncPay</h3>
+                                <p class="text-xs text-gray-500 truncate">Gateway Rápido</p>
                             </div>
                         </div>
-                        <span class="gateway-status-unconfigured">
+                        <span class="gateway-status-unconfigured flex-shrink-0 text-xs">
                             <i class="fas fa-exclamation-circle"></i>
                             Novo
                         </span>
@@ -1168,21 +1271,21 @@
 
                 <!-- UmbrellaPag -->
                 <div class="gateway-card" x-show="!getGatewayStatus('umbrellapag')?.is_verified">
-                    <div class="flex items-start justify-between mb-4">
-                        <div class="flex items-center gap-3 flex-1">
-                            <div class="w-12 h-12 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0" 
+                    <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
+                        <div class="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+                            <div class="w-10 h-10 sm:w-12 sm:h-12 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0" 
                                  style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(99, 102, 241, 0.05));">
                                 <img src="{{ url_for('static', filename='img/umbrellapag.png') }}" 
                                      alt="UmbrellaPag" 
                                      class="w-12 h-12 object-contain"
                                      onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'48\' height=\'48\'%3E%3Crect width=\'48\' height=\'48\' fill=\'%236366F1\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' text-anchor=\'middle\' dy=\'.3em\' fill=\'white\' font-size=\'10\' font-weight=\'bold\'%3EUP%3C/text%3E%3C/svg%3E';">
                             </div>
-                            <div>
-                                <h3 class="text-sm font-bold text-white">UmbrellaPag</h3>
-                                <p class="text-xs text-gray-500">Gateway Completo</p>
+                            <div class="min-w-0 flex-1">
+                                <h3 class="text-xs sm:text-sm font-bold text-white truncate">UmbrellaPag</h3>
+                                <p class="text-xs text-gray-500 truncate">Gateway Completo</p>
                             </div>
                         </div>
-                        <span class="gateway-status-unconfigured">
+                        <span class="gateway-status-unconfigured flex-shrink-0 text-xs">
                             <i class="fas fa-exclamation-circle"></i>
                             Novo
                         </span>
@@ -1302,21 +1405,21 @@
 
                 <!-- OrionPay -->
                 <div class="gateway-card" x-show="!getGatewayStatus('orionpay')?.is_verified">
-                    <div class="flex items-start justify-between mb-4">
-                        <div class="flex items-center gap-3 flex-1">
-                            <div class="w-12 h-12 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0" 
+                    <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
+                        <div class="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+                            <div class="w-10 h-10 sm:w-12 sm:h-12 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0" 
                                  style="background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(139, 92, 246, 0.05));">
                                 <img src="{{ url_for('static', filename='img/orionpay.svg') }}" 
                                      alt="OrionPay" 
                                      class="w-12 h-12 object-contain"
                                      onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'48\' height=\'48\'%3E%3Crect width=\'48\' height=\'48\' fill=\'%238B5CF6\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' text-anchor=\'middle\' dy=\'.3em\' fill=\'white\' font-size=\'10\' font-weight=\'bold\'%3EOP%3C/text%3E%3C/svg%3E';">
                             </div>
-                            <div>
-                                <h3 class="text-sm font-bold text-white">OrionPay</h3>
-                                <p class="text-xs text-gray-500">Gateway Moderno</p>
+                            <div class="min-w-0 flex-1">
+                                <h3 class="text-xs sm:text-sm font-bold text-white truncate">OrionPay</h3>
+                                <p class="text-xs text-gray-500 truncate">Gateway Moderno</p>
                             </div>
                         </div>
-                        <span class="gateway-status-unconfigured">
+                        <span class="gateway-status-unconfigured flex-shrink-0 text-xs">
                             <i class="fas fa-exclamation-circle"></i>
                             Novo
                         </span>
@@ -1418,13 +1521,13 @@
         </div>
     </div>
 
-    <!-- Plan Tab (Idêntico anterior) -->
+    <!-- Plan Tab - Responsivo -->
     <div x-show="activeTab === 'plan'" x-cloak>
         <div class="chart-container">
-            <h2 class="text-2xl font-bold text-white mb-4">💰 Modelo de Pricing</h2>
-            <p class="text-gray-400 mb-6">Pague apenas quando vender - simples e transparente</p>
+            <h2 class="text-xl sm:text-2xl font-bold text-white mb-3 sm:mb-4 truncate">💰 Modelo de Pricing</h2>
+            <p class="text-sm sm:text-base text-gray-400 mb-4 sm:mb-6 truncate">Pague apenas quando vender - simples e transparente</p>
 
-            <div class="stat-card mb-8">
+            <div class="stat-card mb-4 sm:mb-6 md:mb-8">
                 <div class="stat-label">Taxa Atual</div>
                 <div class="stat-value" style="color: #10B981;">2%</div>
                 <div class="text-sm text-gray-500">de cada venda confirmada</div>
@@ -1452,27 +1555,27 @@
         </div>
     </div>
 
-    <!-- Notifications Tab -->
+    <!-- Notifications Tab - Responsivo -->
     <div x-show="activeTab === 'notifications'" x-cloak>
         <div class="chart-container">
-            <div class="flex items-center justify-between mb-6">
-                <div>
-                    <h3 class="text-2xl font-bold text-white">🔔 Notificações</h3>
-                    <p class="text-sm text-gray-500 mt-1">Configure quais notificações você quer receber</p>
+            <div class="flex items-center justify-between mb-4 sm:mb-6">
+                <div class="min-w-0 flex-1">
+                    <h3 class="text-xl sm:text-2xl font-bold text-white truncate">🔔 Notificações</h3>
+                    <p class="text-xs sm:text-sm text-gray-500 mt-1 truncate">Configure quais notificações você quer receber</p>
                 </div>
             </div>
             
-            <!-- Status da Subscription -->
-            <div class="mb-6 p-4 rounded-lg" :style="pushSubscriptionStatus.registered ? 'background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3);' : 'background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3);'">
-                <div class="flex items-center justify-between">
-                    <div class="flex items-center gap-3">
-                        <i class="fas text-xl" :class="pushSubscriptionStatus.registered ? 'fa-check-circle text-green-500' : 'fa-exclamation-triangle text-red-500'"></i>
-                        <div>
-                            <div class="text-sm font-bold text-white">
+            <!-- Status da Subscription - Responsivo -->
+            <div class="mb-4 sm:mb-6 p-3 sm:p-4 rounded-lg" :style="pushSubscriptionStatus.registered ? 'background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3);' : 'background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3);'">
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+                    <div class="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                        <i class="fas text-lg sm:text-xl flex-shrink-0" :class="pushSubscriptionStatus.registered ? 'fa-check-circle text-green-500' : 'fa-exclamation-triangle text-red-500'"></i>
+                        <div class="min-w-0 flex-1">
+                            <div class="text-xs sm:text-sm font-bold text-white truncate">
                                 <span x-show="pushSubscriptionStatus.registered">✅ Dispositivo Registrado</span>
                                 <span x-show="!pushSubscriptionStatus.registered">⚠️ Dispositivo NÃO Registrado</span>
                             </div>
-                            <div class="text-xs" :class="pushSubscriptionStatus.registered ? 'text-green-400' : 'text-red-400'">
+                            <div class="text-xs truncate" :class="pushSubscriptionStatus.registered ? 'text-green-400' : 'text-red-400'">
                                 <span x-show="pushSubscriptionStatus.registered">Você receberá notificações push neste dispositivo</span>
                                 <span x-show="!pushSubscriptionStatus.registered">Clique no botão abaixo para registrar seu dispositivo e receber notificações</span>
                             </div>
@@ -1481,14 +1584,15 @@
                 </div>
             </div>
             
-            <!-- Botão para Registrar Dispositivo -->
-            <div class="mb-6" x-show="!pushSubscriptionStatus.registered">
+            <!-- Botão para Registrar Dispositivo - Responsivo -->
+            <div class="mb-4 sm:mb-6" x-show="!pushSubscriptionStatus.registered">
                 <button @click="registerPushNotifications()" 
                         :disabled="pushSubscriptionStatus.registering"
-                        class="w-full py-3 px-6 rounded-lg font-bold text-white transition-all flex items-center justify-center gap-2"
+                        class="w-full py-2.5 sm:py-3 px-4 sm:px-6 rounded-lg text-xs sm:text-sm font-bold text-white transition-all flex items-center justify-center gap-2"
                         :class="pushSubscriptionStatus.registering ? 'bg-gray-600 cursor-not-allowed' : 'bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700'">
                     <i class="fas" :class="pushSubscriptionStatus.registering ? 'fa-spinner fa-spin' : 'fa-bell'"></i>
-                    <span x-text="pushSubscriptionStatus.registering ? 'Registrando...' : '📱 Registrar Dispositivo para Notificações'"></span>
+                    <span class="hidden sm:inline" x-text="pushSubscriptionStatus.registering ? 'Registrando...' : '📱 Registrar Dispositivo para Notificações'"></span>
+                    <span class="sm:hidden" x-text="pushSubscriptionStatus.registering ? 'Registrando...' : '📱 Registrar'"></span>
                 </button>
                 <p class="text-xs text-gray-500 mt-2 text-center">
                     <i class="fas fa-info-circle mr-1"></i>
@@ -1497,17 +1601,17 @@
             </div>
             
             <div class="space-y-3">
-                <label class="flex items-center justify-between p-4 rounded-lg" style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.1);">
-                    <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background: rgba(16, 185, 129, 0.1);">
-                            <i class="fas fa-check-circle text-green-500"></i>
+                <label class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 p-3 sm:p-4 rounded-lg" style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.1);">
+                    <div class="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                        <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center flex-shrink-0" style="background: rgba(16, 185, 129, 0.1);">
+                            <i class="fas fa-check-circle text-green-500 text-sm sm:text-base"></i>
                         </div>
-                        <div>
-                            <div class="text-sm font-semibold text-white">Vendas Aprovadas</div>
-                            <div class="text-xs text-gray-400">Receber notificação quando pagamento for confirmado</div>
+                        <div class="min-w-0 flex-1">
+                            <div class="text-xs sm:text-sm font-semibold text-white truncate">Vendas Aprovadas</div>
+                            <div class="text-xs text-gray-400 truncate">Receber notificação quando pagamento for confirmado</div>
                         </div>
                     </div>
-                    <label class="relative inline-flex items-center cursor-pointer">
+                    <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
                         <input type="checkbox" 
                                x-model="notificationSettings.notify_approved_sales"
                                @change="saveNotificationSettings(); if(notificationSettings.notify_approved_sales && !pushSubscriptionStatus.registered) registerPushNotifications(true);"
@@ -1516,17 +1620,17 @@
                     </label>
                 </label>
                 
-                <label class="flex items-center justify-between p-4 rounded-lg" style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.1);">
-                    <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 rounded-lg flex items-center justify-center" style="background: rgba(255, 184, 0, 0.1);">
-                            <i class="fas fa-clock text-yellow-500"></i>
+                <label class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 p-3 sm:p-4 rounded-lg" style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.1);">
+                    <div class="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                        <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center flex-shrink-0" style="background: rgba(255, 184, 0, 0.1);">
+                            <i class="fas fa-clock text-yellow-500 text-sm sm:text-base"></i>
                         </div>
-                        <div>
-                            <div class="text-sm font-semibold text-white">Vendas Pendentes</div>
-                            <div class="text-xs text-gray-400">Receber notificação quando pagamento estiver pendente</div>
+                        <div class="min-w-0 flex-1">
+                            <div class="text-xs sm:text-sm font-semibold text-white truncate">Vendas Pendentes</div>
+                            <div class="text-xs text-gray-400 truncate">Receber notificação quando pagamento estiver pendente</div>
                         </div>
                     </div>
-                    <label class="relative inline-flex items-center cursor-pointer">
+                    <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
                         <input type="checkbox" 
                                x-model="notificationSettings.notify_pending_sales"
                                @change="saveNotificationSettings(); if(notificationSettings.notify_pending_sales && !pushSubscriptionStatus.registered) registerPushNotifications(true);"
