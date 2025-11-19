@@ -16,23 +16,130 @@
 
 .flow-step-block {
     transition: transform 0.2s, box-shadow 0.2s;
+    min-width: 220px;
+    max-width: 280px;
 }
 
 .flow-step-block:hover {
-    transform: scale(1.02);
-    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+    transform: scale(1.03);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    z-index: 100 !important;
 }
 
 .jtk-endpoint {
-    cursor: pointer;
+    cursor: crosshair !important;
+    transition: all 0.2s ease;
+}
+
+.jtk-endpoint:hover {
+    transform: scale(1.3);
+    z-index: 50 !important;
 }
 
 .jtk-connector {
     cursor: pointer;
+    transition: stroke-width 0.2s ease;
 }
 
 .jtk-connector:hover {
+    stroke-width: 4 !important;
+    filter: drop-shadow(0 0 4px rgba(59, 130, 246, 0.6));
+}
+
+/* ✅ Melhorar visual das conexões */
+.jtk-connector path {
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+/* ✅ Estilo para conexões de botões customizados (vermelhas) */
+.jtk-connector[data-button-connection="true"] {
+    stroke: #FF6B6B !important;
     stroke-width: 3 !important;
+}
+
+.jtk-connector[data-button-connection="true"]:hover {
+    stroke-width: 5 !important;
+    filter: drop-shadow(0 0 6px rgba(255, 107, 107, 0.8));
+}
+
+/* ✅ Botão de remover conexão (ao passar mouse) - MELHORADO */
+.jtk-overlay-connection-delete {
+    background: #EF4444 !important;
+    border-radius: 50% !important;
+    width: 24px !important;
+    height: 24px !important;
+    cursor: pointer !important;
+    opacity: 0;
+    transition: all 0.2s ease;
+    border: 2px solid #FFFFFF !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+.jtk-overlay-connection-delete::before {
+    content: '×' !important;
+    color: #FFFFFF !important;
+    font-size: 18px !important;
+    font-weight: bold !important;
+    line-height: 1 !important;
+}
+
+.jtk-connector:hover .jtk-overlay-connection-delete {
+    opacity: 1 !important;
+    transform: scale(1.1);
+}
+
+.jtk-connector:hover {
+    cursor: pointer !important;
+}
+
+/* ✅ Indicador visual de que a linha pode ser removida */
+.jtk-connector[data-removable="true"] {
+    position: relative;
+}
+
+.jtk-connector[data-removable="true"]::after {
+    content: '❌ Duplo clique para remover';
+    position: absolute;
+    top: -25px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(239, 68, 68, 0.9);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+    z-index: 1000;
+}
+
+.jtk-connector[data-removable="true"]:hover::after {
+    opacity: 1;
+}
+
+/* ✅ Feedback visual ao arrastar */
+.jtk-drag-select {
+    border: 2px dashed #3B82F6;
+    background: rgba(59, 130, 246, 0.1);
+}
+
+/* ✅ Tooltip para conexões */
+.connection-tooltip {
+    position: absolute;
+    background: rgba(0, 0, 0, 0.9);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    pointer-events: none;
+    z-index: 1000;
+    white-space: nowrap;
 }
 
 /* ✅ Estilos para endpoints de botões customizados */
@@ -678,7 +785,7 @@
                             </div>
                             <div class="flex items-center gap-2 text-xs text-gray-400">
                                 <i class="fas fa-info-circle"></i>
-                                <span>Arraste os blocos para reposicionar • Clique e arraste para conectar</span>
+                                <span>Arraste os blocos para reposicionar • Clique e arraste para conectar • <strong class="text-red-400">Duplo clique ou botão direito na linha para remover</strong></span>
                             </div>
                         </div>
                         <!-- ✅ Mensagem se não houver steps -->
@@ -3144,8 +3251,10 @@ document.addEventListener('alpine:init', () => {
                             stepEl.className = 'flow-step-block absolute cursor-move bg-gray-800 border-2 rounded-lg p-3 shadow-lg';
                             stepEl.style.left = `${x}px`;
                             stepEl.style.top = `${y}px`;
-                            stepEl.style.width = '200px';
+                            stepEl.style.width = '240px';
                             stepEl.style.zIndex = '10';
+                            stepEl.setAttribute('data-step-id', stepId);
+                            stepEl.setAttribute('data-step-type', step.type);
                             
                             // Cor baseada no tipo
                             let borderColor = 'border-blue-500';
@@ -3156,21 +3265,30 @@ document.addEventListener('alpine:init', () => {
                             
                             stepEl.className += ` ${borderColor} ${bgColor}`;
                             
-                            // Conteúdo do bloco
+                            // Conteúdo do bloco (melhorado para usabilidade)
+                            const stepPreview = step.config && step.config.message ? 
+                                (step.config.message.substring(0, 40) + (step.config.message.length > 40 ? '...' : '')) : 
+                                'Sem conteúdo';
+                            
                             stepEl.innerHTML = `
-                                <div class="flex items-center justify-between mb-2">
-                                    <div class="flex items-center gap-2">
-                                        ${isInitial ? '<i class="fas fa-star text-yellow-400 text-xs"></i>' : ''}
-                                        <span class="text-xl">${stepIcon}</span>
-                                        <span class="text-white font-bold text-sm">${stepName}</span>
+                                <div class="flex items-center justify-between mb-2 pb-2 border-b border-gray-700">
+                                    <div class="flex items-center gap-2 flex-1 min-w-0">
+                                        ${isInitial ? '<i class="fas fa-star text-yellow-400 text-sm" title="⭐ Step Inicial"></i>' : ''}
+                                        <span class="text-xl flex-shrink-0">${stepIcon}</span>
+                                        <span class="text-white font-bold text-sm truncate" title="${stepName}">${stepName}</span>
                                     </div>
-                                    <div class="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold">
+                                    <div class="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold flex-shrink-0" title="Ordem: ${step.order || index + 1}">
                                         ${step.order || index + 1}
                                     </div>
                                 </div>
                                 <div class="text-xs text-gray-400 mb-2">
                                     ${this.getStepTitle(step.type)}
                                 </div>
+                                ${stepPreview && stepPreview !== 'Sem conteúdo' ? `
+                                    <div class="text-xs text-gray-500 mb-2 truncate" title="${step.config.message || ''}">
+                                        "${stepPreview}"
+                                    </div>
+                                ` : ''}
                                 ${step.conditions && step.conditions.length > 0 ? `
                                     <div class="text-xs text-blue-400 mb-1">
                                         🔀 ${step.conditions.length} condição(ões)
@@ -3230,30 +3348,35 @@ document.addEventListener('alpine:init', () => {
                                 console.error('❌ Erro ao tornar arrastável:', e);
                             }
                             
-                            // ✅ Adicionar endpoints (pontos de conexão)
+                            // ✅ Adicionar endpoints (pontos de conexão) - MELHORADOS
                             try {
                                 if (typeof this.jsPlumbInstance.makeSource === 'function') {
-                                    // jsPlumb 2.x
+                                    // jsPlumb 2.x - Endpoints maiores e mais visíveis
                                     this.jsPlumbInstance.makeSource(stepEl, {
                                         anchor: 'Right',
-                                        endpoint: 'Dot',
-                                        paintStyle: { fill: '#3B82F6', radius: 5 },
+                                        endpoint: ['Dot', { radius: 8 }],
+                                        paintStyle: { fill: '#3B82F6', radius: 8, stroke: '#1E40AF', strokeWidth: 2 },
+                                        hoverPaintStyle: { fill: '#60A5FA', radius: 10 },
                                         isSource: true,
-                                        maxConnections: -1
+                                        maxConnections: -1,
+                                        connectorStyle: { stroke: '#3B82F6', strokeWidth: 2 },
+                                        connectorHoverStyle: { stroke: '#60A5FA', strokeWidth: 3 }
                                     });
                                     this.jsPlumbInstance.makeTarget(stepEl, {
                                         anchor: 'Left',
-                                        endpoint: 'Dot',
-                                        paintStyle: { fill: '#10B981', radius: 5 },
+                                        endpoint: ['Dot', { radius: 8 }],
+                                        paintStyle: { fill: '#10B981', radius: 8, stroke: '#059669', strokeWidth: 2 },
+                                        hoverPaintStyle: { fill: '#34D399', radius: 10 },
                                         isTarget: true,
                                         maxConnections: -1
                                     });
                                 } else if (typeof this.jsPlumbInstance.addEndpoint === 'function') {
-                                    // Versão 5.x
+                                    // Versão 5.x - Endpoints maiores e mais visíveis
                                     this.jsPlumbInstance.addEndpoint(stepEl, {
                                         anchor: 'Right',
-                                        endpoint: 'Dot',
-                                        paintStyle: { fill: '#3B82F6', radius: 5 },
+                                        endpoint: ['Dot', { radius: 8 }],
+                                        paintStyle: { fill: '#3B82F6', radius: 8, stroke: '#1E40AF', strokeWidth: 2 },
+                                        hoverPaintStyle: { fill: '#60A5FA', radius: 10 },
                                         isSource: true,
                                         isTarget: false,
                                         maxConnections: -1
@@ -3263,8 +3386,9 @@ document.addEventListener('alpine:init', () => {
                                     
                                     this.jsPlumbInstance.addEndpoint(stepEl, {
                                         anchor: 'Left',
-                                        endpoint: 'Dot',
-                                        paintStyle: { fill: '#10B981', radius: 5 },
+                                        endpoint: ['Dot', { radius: 8 }],
+                                        paintStyle: { fill: '#10B981', radius: 8, stroke: '#059669', strokeWidth: 2 },
+                                        hoverPaintStyle: { fill: '#34D399', radius: 10 },
                                         isSource: false,
                                         isTarget: true,
                                         maxConnections: -1
@@ -3295,12 +3419,14 @@ document.addEventListener('alpine:init', () => {
                                             
                                             this.jsPlumbInstance.addEndpoint(stepEl, {
                                                 anchor: ['Right', finalPosition, 1, 0, 0, 0],
-                                                endpoint: ['Dot', { radius: 8 }],
-                                                paintStyle: { fill: '#FF6B6B', stroke: '#FF0000', strokeWidth: 2 },
-                                                hoverPaintStyle: { fill: '#FF8787', stroke: '#FF3333', strokeWidth: 3 },
+                                                endpoint: ['Dot', { radius: 10 }],
+                                                paintStyle: { fill: '#FF6B6B', stroke: '#FF0000', strokeWidth: 3 },
+                                                hoverPaintStyle: { fill: '#FF8787', stroke: '#FF3333', strokeWidth: 4, radius: 12 },
                                                 isSource: true,
                                                 isTarget: false,
-                                                maxConnections: 1
+                                                maxConnections: 1,
+                                                connectorStyle: { stroke: '#FF6B6B', strokeWidth: 3 },
+                                                connectorHoverStyle: { stroke: '#FF8787', strokeWidth: 4 }
                                             }, {
                                                 uuid: buttonEndpointId
                                             });
@@ -3324,7 +3450,7 @@ document.addEventListener('alpine:init', () => {
                                             btnEndpointEl.title = btnText + (btn.target_step ? ` → Step ${btn.target_step}` : '');
                                             // Posicionar endpoints na lateral direita, distribuídos verticalmente
                                             const topPercent = 25 + (btnIdx * 15);
-                                            btnEndpointEl.style.cssText = `position: absolute; right: -10px; top: ${topPercent}%; width: 16px; height: 16px; background: #FF6B6B; border: 2px solid #FF0000; border-radius: 50%; cursor: pointer; z-index: 20; box-shadow: 0 0 5px rgba(255, 107, 107, 0.5);`;
+                                            btnEndpointEl.style.cssText = `position: absolute; right: -12px; top: ${topPercent}%; width: 20px; height: 20px; background: #FF6B6B; border: 3px solid #FF0000; border-radius: 50%; cursor: crosshair; z-index: 20; box-shadow: 0 0 8px rgba(255, 107, 107, 0.7); transition: all 0.2s ease;`;
                                             stepEl.appendChild(btnEndpointEl);
                                             
                                             // Adicionar label de texto ao lado do endpoint
@@ -3336,11 +3462,13 @@ document.addEventListener('alpine:init', () => {
                                             
                                             this.jsPlumbInstance.makeSource(btnEndpointEl, {
                                                 anchor: 'Right',
-                                                endpoint: 'Dot',
-                                                paintStyle: { fill: '#FF6B6B', radius: 8 },
-                                                hoverPaintStyle: { fill: '#FF8787', radius: 10 },
+                                                endpoint: ['Dot', { radius: 10 }],
+                                                paintStyle: { fill: '#FF6B6B', radius: 10, stroke: '#FF0000', strokeWidth: 3 },
+                                                hoverPaintStyle: { fill: '#FF8787', radius: 12, stroke: '#FF3333', strokeWidth: 4 },
                                                 isSource: true,
-                                                maxConnections: 1
+                                                maxConnections: 1,
+                                                connectorStyle: { stroke: '#FF6B6B', strokeWidth: 3 },
+                                                connectorHoverStyle: { stroke: '#FF8787', strokeWidth: 4 }
                                             });
                                         }
                                     });
@@ -3357,39 +3485,97 @@ document.addEventListener('alpine:init', () => {
                             
                             const connections = step.connections || {};
                             
-                            // Conexão "next" (verde)
+                            // Conexão "next" (verde) - MELHORADA
                             if (connections.next) {
                                 const targetEl = document.getElementById(`flow-step-${connections.next}`);
                                 if (targetEl) {
                                     try {
-                                        this.jsPlumbInstance.connect({
+                                        const connection = this.jsPlumbInstance.connect({
                                             source: stepEl,
                                             target: targetEl,
-                                            paintStyle: { stroke: '#10B981', strokeWidth: 2 },
+                                            paintStyle: { stroke: '#10B981', strokeWidth: 3, strokeLinecap: 'round', strokeLinejoin: 'round' },
                                             overlays: [
-                                                ['Arrow', { location: 1, width: 10, length: 10 }],
-                                                ['Label', { label: 'Próximo', location: 0.5, cssClass: 'connection-label' }]
-                                            ]
+                                                ['Arrow', { location: 1, width: 14, length: 14, foldback: 0.8 }],
+                                                ['Label', { 
+                                                    label: 'Próximo', 
+                                                    location: 0.5, 
+                                                    cssClass: 'connection-label',
+                                                    labelStyle: {
+                                                        backgroundColor: 'rgba(16, 185, 129, 0.9)',
+                                                        color: '#FFFFFF',
+                                                        padding: '3px 8px',
+                                                        borderRadius: '4px',
+                                                        fontSize: '11px',
+                                                        fontWeight: 'bold'
+                                                    }
+                                                }]
+                                            ],
+                                            detachable: true,
+                                            reattach: true,
+                                            deleteEndpointsOnDetach: false
                                         });
+                                        
+                                        // ✅ Adicionar feedback visual ao hover e marcação como removível
+                                        if (connection) {
+                                            if (connection.canvas) {
+                                                connection.canvas.setAttribute('data-removable', 'true');
+                                            }
+                                            
+                                            // Tentar adicionar eventos de hover (pode variar por versão do jsPlumb)
+                                            try {
+                                                if (connection.bind && typeof connection.bind === 'function') {
+                                                    connection.bind('mouseenter', () => {
+                                                        if (connection.canvas) {
+                                                            connection.canvas.style.cursor = 'pointer';
+                                                            connection.canvas.style.filter = 'drop-shadow(0 0 8px rgba(16, 185, 129, 0.9))';
+                                                            connection.canvas.style.strokeWidth = '4';
+                                                        }
+                                                    });
+                                                    connection.bind('mouseleave', () => {
+                                                        if (connection.canvas) {
+                                                            connection.canvas.style.filter = '';
+                                                            connection.canvas.style.strokeWidth = '';
+                                                        }
+                                                    });
+                                                }
+                                            } catch (e) {
+                                                // Pode não funcionar em algumas versões do jsPlumb, ignorar
+                                            }
+                                        }
                                     } catch (e) {
                                         console.error('❌ Erro ao conectar next:', e);
                                     }
                                 }
                             }
                             
-                            // Conexão "pending" (vermelho)
+                            // Conexão "pending" (vermelho) - MELHORADA
                             if (connections.pending) {
                                 const targetEl = document.getElementById(`flow-step-${connections.pending}`);
                                 if (targetEl) {
                                     try {
-                                        this.jsPlumbInstance.connect({
+                                        const connection = this.jsPlumbInstance.connect({
                                             source: stepEl,
                                             target: targetEl,
-                                            paintStyle: { stroke: '#EF4444', strokeWidth: 2 },
+                                            paintStyle: { stroke: '#EF4444', strokeWidth: 3, strokeLinecap: 'round', strokeLinejoin: 'round', strokeDasharray: '5,5' },
                                             overlays: [
-                                                ['Arrow', { location: 1, width: 10, length: 10 }],
-                                                ['Label', { label: 'Pendente', location: 0.5, cssClass: 'connection-label' }]
-                                            ]
+                                                ['Arrow', { location: 1, width: 14, length: 14, foldback: 0.8 }],
+                                                ['Label', { 
+                                                    label: 'Pendente', 
+                                                    location: 0.5, 
+                                                    cssClass: 'connection-label',
+                                                    labelStyle: {
+                                                        backgroundColor: 'rgba(239, 68, 68, 0.9)',
+                                                        color: '#FFFFFF',
+                                                        padding: '3px 8px',
+                                                        borderRadius: '4px',
+                                                        fontSize: '11px',
+                                                        fontWeight: 'bold'
+                                                    }
+                                                }]
+                                            ],
+                                            detachable: true,
+                                            reattach: true,
+                                            deleteEndpointsOnDetach: false
                                         });
                                     } catch (e) {
                                         console.error('❌ Erro ao conectar pending:', e);
@@ -3397,19 +3583,34 @@ document.addEventListener('alpine:init', () => {
                                 }
                             }
                             
-                            // Conexão "retry" (amarelo)
+                            // Conexão "retry" (amarelo) - MELHORADA
                             if (connections.retry) {
                                 const targetEl = document.getElementById(`flow-step-${connections.retry}`);
                                 if (targetEl) {
                                     try {
-                                        this.jsPlumbInstance.connect({
+                                        const connection = this.jsPlumbInstance.connect({
                                             source: stepEl,
                                             target: targetEl,
-                                            paintStyle: { stroke: '#F59E0B', strokeWidth: 2 },
+                                            paintStyle: { stroke: '#F59E0B', strokeWidth: 3, strokeLinecap: 'round', strokeLinejoin: 'round', strokeDasharray: '8,4' },
                                             overlays: [
-                                                ['Arrow', { location: 1, width: 10, length: 10 }],
-                                                ['Label', { label: 'Retry', location: 0.5, cssClass: 'connection-label' }]
-                                            ]
+                                                ['Arrow', { location: 1, width: 14, length: 14, foldback: 0.8 }],
+                                                ['Label', { 
+                                                    label: 'Retry', 
+                                                    location: 0.5, 
+                                                    cssClass: 'connection-label',
+                                                    labelStyle: {
+                                                        backgroundColor: 'rgba(245, 158, 11, 0.9)',
+                                                        color: '#FFFFFF',
+                                                        padding: '3px 8px',
+                                                        borderRadius: '4px',
+                                                        fontSize: '11px',
+                                                        fontWeight: 'bold'
+                                                    }
+                                                }]
+                                            ],
+                                            detachable: true,
+                                            reattach: true,
+                                            deleteEndpointsOnDetach: false
                                         });
                                     } catch (e) {
                                         console.error('❌ Erro ao conectar retry:', e);
@@ -3439,12 +3640,12 @@ document.addEventListener('alpine:init', () => {
                                                     }
                                                     
                                                     if (endpoint) {
-                                                        this.jsPlumbInstance.connect({
+                                                        const connection = this.jsPlumbInstance.connect({
                                                             source: endpoint,
                                                             target: targetEl,
                                                             paintStyle: { stroke: '#FF6B6B', strokeWidth: 3 },
                                                             overlays: [
-                                                                ['Arrow', { location: 1, width: 12, length: 12 }],
+                                                                ['Arrow', { location: 1, width: 14, length: 14, foldback: 0.8 }],
                                                                 ['Label', { 
                                                                     label: btnText, 
                                                                     location: 0.5, 
@@ -3453,21 +3654,30 @@ document.addEventListener('alpine:init', () => {
                                                                         color: '#FF6B6B', 
                                                                         fontWeight: 'bold',
                                                                         fontSize: '11px',
-                                                                        backgroundColor: 'rgba(0, 0, 0, 0.7)',
-                                                                        padding: '2px 6px',
-                                                                        borderRadius: '3px'
+                                                                        backgroundColor: 'rgba(0, 0, 0, 0.85)',
+                                                                        padding: '3px 8px',
+                                                                        borderRadius: '4px',
+                                                                        border: '1px solid #FF6B6B'
                                                                     }
                                                                 }]
-                                                            ]
+                                                            ],
+                                                            detachable: true,
+                                                            reattach: true
                                                         });
+                                                        
+                                                        // ✅ Marcar como conexão de botão customizado e removível
+                                                        if (connection && connection.canvas) {
+                                                            connection.canvas.setAttribute('data-button-connection', 'true');
+                                                            connection.canvas.setAttribute('data-removable', 'true');
+                                                        }
                                                     } else {
                                                         // Fallback: conectar diretamente usando ID do endpoint como string
-                                                        this.jsPlumbInstance.connect({
+                                                        const connection = this.jsPlumbInstance.connect({
                                                             source: buttonEndpointId,
                                                             target: targetEl,
                                                             paintStyle: { stroke: '#FF6B6B', strokeWidth: 3 },
                                                             overlays: [
-                                                                ['Arrow', { location: 1, width: 12, length: 12 }],
+                                                                ['Arrow', { location: 1, width: 14, length: 14, foldback: 0.8 }],
                                                                 ['Label', { 
                                                                     label: btnText, 
                                                                     location: 0.5, 
@@ -3475,23 +3685,35 @@ document.addEventListener('alpine:init', () => {
                                                                     labelStyle: { 
                                                                         color: '#FF6B6B', 
                                                                         fontWeight: 'bold',
-                                                                        fontSize: '11px'
+                                                                        fontSize: '11px',
+                                                                        backgroundColor: 'rgba(0, 0, 0, 0.85)',
+                                                                        padding: '3px 8px',
+                                                                        borderRadius: '4px',
+                                                                        border: '1px solid #FF6B6B'
                                                                     }
                                                                 }]
-                                                            ]
+                                                            ],
+                                                            detachable: true,
+                                                            reattach: true
                                                         });
+                                                        
+                                                        // ✅ Marcar como conexão de botão customizado e removível
+                                                        if (connection && connection.canvas) {
+                                                            connection.canvas.setAttribute('data-button-connection', 'true');
+                                                            connection.canvas.setAttribute('data-removable', 'true');
+                                                        }
                                                     }
                                                 } else if (typeof this.jsPlumbInstance.makeSource === 'function') {
                                                     // jsPlumb 2.x: conectar usando elemento do endpoint ou step
                                                     const btnEndpointEl = document.getElementById(buttonEndpointId);
                                                     const sourceEl = btnEndpointEl || stepEl;
                                                     
-                                                    this.jsPlumbInstance.connect({
+                                                    const connection = this.jsPlumbInstance.connect({
                                                         source: sourceEl,
                                                         target: targetEl,
                                                         paintStyle: { stroke: '#FF6B6B', strokeWidth: 3 },
                                                         overlays: [
-                                                            ['Arrow', { location: 1, width: 12, length: 12 }],
+                                                            ['Arrow', { location: 1, width: 14, length: 14, foldback: 0.8 }],
                                                             ['Label', { 
                                                                 label: btnText, 
                                                                 location: 0.5, 
@@ -3499,11 +3721,23 @@ document.addEventListener('alpine:init', () => {
                                                                 labelStyle: { 
                                                                     color: '#FF6B6B', 
                                                                     fontWeight: 'bold',
-                                                                    fontSize: '11px'
+                                                                    fontSize: '11px',
+                                                                    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+                                                                    padding: '3px 8px',
+                                                                    borderRadius: '4px',
+                                                                    border: '1px solid #FF6B6B'
                                                                 }
                                                             }]
-                                                        ]
+                                                        ],
+                                                        detachable: true,
+                                                        reattach: true
                                                     });
+                                                    
+                                                    // ✅ Marcar como conexão de botão customizado e removível
+                                                    if (connection && connection.canvas) {
+                                                        connection.canvas.setAttribute('data-button-connection', 'true');
+                                                        connection.canvas.setAttribute('data-removable', 'true');
+                                                    }
                                                 }
                                                 
                                                 console.log(`✅ Botão "${btnText}" conectado de step ${step.id} para step ${btn.target_step}`);
@@ -3540,6 +3774,108 @@ document.addEventListener('alpine:init', () => {
                                 });
                             }
                         });
+                        
+                        // ✅ PERMITIR REMOVER CONEXÕES - CRÍTICO PARA USABILIDADE
+                        try {
+                            // ✅ Double-click na conexão para remover
+                            if (typeof this.jsPlumbInstance.bind === 'function') {
+                                this.jsPlumbInstance.bind('connection:dblclick', (connection, event) => {
+                                    event.stopPropagation();
+                                    event.preventDefault();
+                                    
+                                    if (confirm('❓ Remover esta conexão?')) {
+                                        try {
+                                            // ✅ Extrair informações da conexão para atualizar dados
+                                            const sourceId = connection.sourceId || connection.source?.id || connection.sourceEndpoint?.uuid || '';
+                                            const targetId = connection.targetId || connection.target?.id || connection.targetEndpoint?.uuid || '';
+                                            
+                                            // ✅ Verificar se é conexão de botão customizado
+                                            if (sourceId.startsWith('btn-endpoint-')) {
+                                                const parts = sourceId.split('-');
+                                                if (parts.length >= 4) {
+                                                    const stepId = parts.slice(2, -1).join('-');
+                                                    const btnIdx = parseInt(parts[parts.length - 1]);
+                                                    
+                                                    const sourceStep = this.config.flow_steps.find(s => s.id === stepId);
+                                                    if (sourceStep && sourceStep.config && sourceStep.config.custom_buttons && sourceStep.config.custom_buttons[btnIdx]) {
+                                                        sourceStep.config.custom_buttons[btnIdx].target_step = '';
+                                                        this.showNotification(`✅ Conexão do botão "${sourceStep.config.custom_buttons[btnIdx].text}" removida`, 'success');
+                                                    }
+                                                }
+                                            } else {
+                                                // ✅ Conexão normal
+                                                const sourceStepId = sourceId.replace('source-', '').replace('flow-step-', '');
+                                                const sourceStep = this.config.flow_steps.find(s => s.id === sourceStepId);
+                                                if (sourceStep && sourceStep.connections) {
+                                                    if (sourceStep.connections.next === targetId.replace('target-', '').replace('flow-step-', '')) {
+                                                        sourceStep.connections.next = '';
+                                                    }
+                                                    if (sourceStep.connections.pending === targetId.replace('target-', '').replace('flow-step-', '')) {
+                                                        sourceStep.connections.pending = '';
+                                                    }
+                                                    if (sourceStep.connections.retry === targetId.replace('target-', '').replace('flow-step-', '')) {
+                                                        sourceStep.connections.retry = '';
+                                                    }
+                                                    this.showNotification('✅ Conexão removida', 'success');
+                                                }
+                                            }
+                                            
+                                            // ✅ Remover conexão visualmente
+                                            this.jsPlumbInstance.deleteConnection(connection);
+                                        } catch (e) {
+                                            console.error('❌ Erro ao remover conexão:', e);
+                                            this.showNotification('❌ Erro ao remover conexão', 'error');
+                                        }
+                                    }
+                                });
+                            }
+                            
+                            // ✅ Click direito na conexão para remover (context menu)
+                            if (typeof this.jsPlumbInstance.bind === 'function') {
+                                this.jsPlumbInstance.bind('connection:contextmenu', (connection, event) => {
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    
+                                    if (confirm('❓ Remover esta conexão?')) {
+                                        try {
+                                            const sourceId = connection.sourceId || connection.source?.id || connection.sourceEndpoint?.uuid || '';
+                                            const targetId = connection.targetId || connection.target?.id || connection.targetEndpoint?.uuid || '';
+                                            
+                                            // ✅ Verificar se é conexão de botão customizado
+                                            if (sourceId.startsWith('btn-endpoint-')) {
+                                                const parts = sourceId.split('-');
+                                                if (parts.length >= 4) {
+                                                    const stepId = parts.slice(2, -1).join('-');
+                                                    const btnIdx = parseInt(parts[parts.length - 1]);
+                                                    
+                                                    const sourceStep = this.config.flow_steps.find(s => s.id === stepId);
+                                                    if (sourceStep && sourceStep.config && sourceStep.config.custom_buttons && sourceStep.config.custom_buttons[btnIdx]) {
+                                                        sourceStep.config.custom_buttons[btnIdx].target_step = '';
+                                                        this.showNotification(`✅ Conexão do botão "${sourceStep.config.custom_buttons[btnIdx].text}" removida`, 'success');
+                                                    }
+                                                }
+                                            } else {
+                                                const sourceStepId = sourceId.replace('source-', '').replace('flow-step-', '');
+                                                const sourceStep = this.config.flow_steps.find(s => s.id === sourceStepId);
+                                                if (sourceStep && sourceStep.connections) {
+                                                    const targetStepId = targetId.replace('target-', '').replace('flow-step-', '');
+                                                    if (sourceStep.connections.next === targetStepId) sourceStep.connections.next = '';
+                                                    if (sourceStep.connections.pending === targetStepId) sourceStep.connections.pending = '';
+                                                    if (sourceStep.connections.retry === targetStepId) sourceStep.connections.retry = '';
+                                                    this.showNotification('✅ Conexão removida', 'success');
+                                                }
+                                            }
+                                            
+                                            this.jsPlumbInstance.deleteConnection(connection);
+                                        } catch (e) {
+                                            console.error('❌ Erro ao remover conexão:', e);
+                                        }
+                                    }
+                                });
+                            }
+                        } catch (e) {
+                            console.warn('⚠️ Erro ao bind delete connection (pode ser normal):', e);
+                        }
                         
                         // ✅ Permitir criar conexões arrastando
                         try {
