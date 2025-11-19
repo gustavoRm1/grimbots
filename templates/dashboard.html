@@ -2624,31 +2624,21 @@ function dashboardApp() {
         goToPaymentPage(page) {
             if (page !== '...' && page >= 1 && page <= this.totalPaymentPages) {
                 this.currentPaymentPage = page;
-                // Scroll suave para o topo da seção de vendas
-                const section = document.querySelector('.chart-container');
-                if (section) {
-                    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }
+                // ✅ Removido scroll automático - manter posição atual da tela
             }
         },
         
         nextPaymentPage() {
             if (this.currentPaymentPage < this.totalPaymentPages) {
                 this.currentPaymentPage++;
-                const section = document.querySelector('.chart-container');
-                if (section) {
-                    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }
+                // ✅ Removido scroll automático - manter posição atual da tela
             }
         },
         
         prevPaymentPage() {
             if (this.currentPaymentPage > 1) {
                 this.currentPaymentPage--;
-                const section = document.querySelector('.chart-container');
-                if (section) {
-                    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }
+                // ✅ Removido scroll automático - manter posição atual da tela
             }
         },
         
