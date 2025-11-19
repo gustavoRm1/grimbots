@@ -1692,130 +1692,81 @@ class BotManager:
             
             # 2️⃣ ENVIAR MÍDIA (se houver)
             if media_url:
-                logger.info(f"🖼️ Enviando mídia sequencial ({media_type}): {media_url[:100]}...")
-                
-                # ✅ VALIDAÇÃO ROBUSTA: Verificar se URL retorna mídia válida ANTES de enviar
-                try:
-                    head_response = requests.head(media_url, allow_redirects=True, timeout=5, stream=True)
-                    content_type = head_response.headers.get('Content-Type', '').lower()
-                    
-                    # Se HEAD não retornar Content-Type, tentar GET parcial (primeiros bytes)
-                    if not content_type or 'text/html' in content_type:
-                        logger.warning(f"⚠️ Content-Type não detectado ou HTML detectado: {content_type}. Tentando validação alternativa...")
-                        get_response = requests.get(media_url, stream=True, timeout=5, headers={'Range': 'bytes=0-1024'})
-                        content_type = get_response.headers.get('Content-Type', '').lower()
-                        
-                        # Se ainda for HTML, a URL está errada
-                        if 'text/html' in content_type:
-                            logger.error(f"❌ URL de mídia retorna HTML ao invés de mídia: {media_url[:100]}... (Content-Type: {content_type})")
-                            logger.error(f"   Isso indica que a URL aponta para uma página web, não para um arquivo de mídia")
-                            logger.error(f"   Solução: Verifique se a URL é um link direto do Telegram (t.me/c/...) ou um arquivo direto")
-                            media_url = None  # Invalidar URL
-                            all_success = False
+                logger.info(f"🖼️ Enviando mídia sequencial ({media_type})...")
+                CAPTION_LIMIT = 1024  # ✅ Limite real do Telegram para caption
+                text_sent_separately = False
+                inline_keyboard: List[List[Dict[str, str]]] = []
+                if buttons:
+                    for button in buttons:
+                        button_dict = {'text': button.get('text')}
+                        if button.get('url'):
+                            button_dict['url'] = button['url']
+                        elif button.get('callback_data'):
+                            button_dict['callback_data'] = button['callback_data']
                         else:
-                            logger.info(f"✅ Content-Type válido detectado: {content_type}")
-                    else:
-                        logger.info(f"✅ Content-Type válido: {content_type}")
-                        
-                except Exception as validation_error:
-                    logger.warning(f"⚠️ Erro ao validar URL de mídia: {validation_error} - continuando (pode ser URL do Telegram)")
-                    # Fail-open: URLs do Telegram podem não responder a HEAD/GET, então continuar
-                    content_type = None
+                            button_dict['callback_data'] = 'button_pressed'
+                        inline_keyboard.append([button_dict])
+
+                # ✅ NOVA LÓGICA: Se texto > 1024, enviar mídia PRIMEIRO (sem caption), depois texto completo com botões
+                text_exceeds_caption = text and len(text or '') > CAPTION_LIMIT
                 
+                if text_exceeds_caption:
+                    logger.info(f"📊 Texto excede limite de caption ({len(text)} > {CAPTION_LIMIT}). Enviando mídia PRIMEIRO (sem caption), depois texto completo com botões...")
+                    text_sent_separately = True  # Marcar que texto será enviado separadamente
+                else:
+                    # Texto <= 1024: pode usar como caption
+                    logger.info(f"📊 Texto dentro do limite de caption ({len(text) if text else 0} <= {CAPTION_LIMIT}). Usando como caption da mídia.")
+
+                # Preparar caption (apenas se texto <= 1024)
+                caption_text = ''
+                if text and text.strip() and not text_sent_separately:
+                    caption_text = text[:CAPTION_LIMIT] if len(text) > CAPTION_LIMIT else text
+
+                # ✅ PASSO 1: ENVIAR MÍDIA (SEM caption se texto > 1024, COM caption se texto <= 1024)
+                if media_type == 'photo':
+                    url = f"{base_url}/sendPhoto"
+                    payload = {
+                        'chat_id': chat_id,
+                        'photo': media_url,
+                        'parse_mode': 'HTML'
+                    }
+                    if caption_text:
+                        payload['caption'] = caption_text
+                elif media_type == 'video':
+                    url = f"{base_url}/sendVideo"
+                    payload = {
+                        'chat_id': chat_id,
+                        'video': media_url,
+                        'parse_mode': 'HTML'
+                    }
+                    if caption_text:
+                        payload['caption'] = caption_text
+                elif media_type == 'audio':
+                    url = f"{base_url}/sendAudio"
+                    payload = {
+                        'chat_id': chat_id,
+                        'audio': media_url,
+                        'parse_mode': 'HTML'
+                    }
+                    if caption_text:
+                        payload['caption'] = caption_text
+                else:
+                    logger.warning(f"⚠️ Tipo de mídia desconhecido: {media_type}")
+                    all_success = False
+                    media_url = None  # Não enviar mídia inválida
+
                 if media_url:
-                    CAPTION_LIMIT = 1024  # ✅ Limite real do Telegram para caption
-                    text_sent_separately = False
-                    inline_keyboard: List[List[Dict[str, str]]] = []
-                    if buttons:
-                        for button in buttons:
-                            button_dict = {'text': button.get('text')}
-                            if button.get('url'):
-                                button_dict['url'] = button['url']
-                            elif button.get('callback_data'):
-                                button_dict['callback_data'] = button['callback_data']
-                            else:
-                                button_dict['callback_data'] = 'button_pressed'
-                            inline_keyboard.append([button_dict])
+                    # ✅ Adicionar botões à mídia APENAS se texto <= 1024 (texto será caption)
+                    # Se texto > 1024, botões vão no texto separado
+                    if inline_keyboard and not text_sent_separately:
+                        payload['reply_markup'] = {'inline_keyboard': inline_keyboard}
 
-                    # ✅ NOVA LÓGICA: Se texto > 1024, enviar mídia PRIMEIRO (sem caption), depois texto completo com botões
-                    text_exceeds_caption = text and len(text or '') > CAPTION_LIMIT
-                    
-                    if text_exceeds_caption:
-                        logger.info(f"📊 Texto excede limite de caption ({len(text)} > {CAPTION_LIMIT}). Enviando mídia PRIMEIRO (sem caption), depois texto completo com botões...")
-                        text_sent_separately = True  # Marcar que texto será enviado separadamente
+                    response = requests.post(url, json=payload, timeout=10)
+                    if response.status_code == 200 and response.json().get('ok'):
+                        logger.info(f"✅ Mídia enviada{' com caption' if caption_text else ' sem caption'} {'e botões' if inline_keyboard and not text_sent_separately else ''}")
                     else:
-                        # Texto <= 1024: pode usar como caption
-                        logger.info(f"📊 Texto dentro do limite de caption ({len(text) if text else 0} <= {CAPTION_LIMIT}). Usando como caption da mídia.")
-
-                    # Preparar caption (apenas se texto <= 1024)
-                    caption_text = ''
-                    if text and text.strip() and not text_sent_separately:
-                        caption_text = text[:CAPTION_LIMIT] if len(text) > CAPTION_LIMIT else text
-
-                    # ✅ PASSO 1: ENVIAR MÍDIA (SEM caption se texto > 1024, COM caption se texto <= 1024)
-                    if media_type == 'photo':
-                        url = f"{base_url}/sendPhoto"
-                        payload = {
-                            'chat_id': chat_id,
-                            'photo': media_url,
-                            'parse_mode': 'HTML'
-                        }
-                        if caption_text:
-                            payload['caption'] = caption_text
-                    elif media_type == 'video':
-                        url = f"{base_url}/sendVideo"
-                        payload = {
-                            'chat_id': chat_id,
-                            'video': media_url,
-                            'parse_mode': 'HTML'
-                        }
-                        if caption_text:
-                            payload['caption'] = caption_text
-                    elif media_type == 'audio':
-                        url = f"{base_url}/sendAudio"
-                        payload = {
-                            'chat_id': chat_id,
-                            'audio': media_url,
-                            'parse_mode': 'HTML'
-                        }
-                        if caption_text:
-                            payload['caption'] = caption_text
-                    else:
-                        logger.warning(f"⚠️ Tipo de mídia desconhecido: {media_type}")
+                        logger.error(f"❌ Falha ao enviar mídia: {response.text}")
                         all_success = False
-                        media_url = None  # Não enviar mídia inválida
-
-                    if media_url:
-                        # ✅ Adicionar botões à mídia APENAS se texto <= 1024 (texto será caption)
-                        # Se texto > 1024, botões vão no texto separado
-                        if inline_keyboard and not text_sent_separately:
-                            payload['reply_markup'] = {'inline_keyboard': inline_keyboard}
-
-                        response = requests.post(url, json=payload, timeout=10)
-                        if response.status_code == 200 and response.json().get('ok'):
-                            logger.info(f"✅ Mídia enviada{' com caption' if caption_text else ' sem caption'} {'e botões' if inline_keyboard and not text_sent_separately else ''}")
-                        else:
-                            error_data = response.json() if response.status_code == 200 else {}
-                            error_description = error_data.get('description', response.text[:200])
-                            logger.error(f"❌ Falha ao enviar mídia: {error_description}")
-                            logger.error(f"   URL da mídia: {media_url[:100]}...")
-                            logger.error(f"   Tipo esperado: {media_type}, Content-Type detectado: {content_type}")
-                            all_success = False
-                            
-                            # ✅ FALLBACK: Se mídia falhar e houver texto, enviar apenas texto
-                            if text and text.strip():
-                                logger.info(f"🔄 Fallback: Enviando apenas texto (mídia falhou)...")
-                                fallback_result = self.send_telegram_message(
-                                    token=token,
-                                    chat_id=str(chat_id),
-                                    message=text,
-                                    media_url=None,
-                                    media_type=None,
-                                    buttons=buttons
-                                )
-                                if fallback_result:
-                                    logger.info(f"✅ Fallback bem-sucedido: texto enviado")
-                                    all_success = True  # Considerar sucesso se texto foi enviado
 
                     time.sleep(delay_between)  # ✅ Delay entre envios
 
