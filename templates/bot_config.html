@@ -3591,23 +3591,21 @@ document.addEventListener('alpine:init', () => {
                                             if (self.config.main_buttons && self.config.main_buttons.length > 0) {
                                                 html += '<div class="mb-4"><div class="text-xs font-bold text-blue-400 mb-2">💰 Botões de Pagamento</div>';
                                                 self.config.main_buttons.forEach((button, index) => {
-                                                    const buttonId = `main-${index}`;
+                                                    const buttonId = 'main-' + index;
                                                     const selected = (step.config && step.config.selected_buttons) ? 
                                                         step.config.selected_buttons.some(b => b.type === 'main' && b.index === index) : false;
-                                                    const buttonText = button.text || `Botão ${index + 1}`;
-                                                    const buttonPrice = button.price ? `R$ ${parseFloat(button.price).toFixed(2)}` : 'Sem preço';
-                                                    html += `
-                                                        <label class="flex items-center gap-3 p-3 bg-gray-900 rounded-lg cursor-pointer hover:bg-gray-850 border border-gray-700 hover:border-blue-500 transition-all mb-2">
-                                                            <input type="checkbox" 
-                                                                   id="button-${buttonId}-${stepId}" 
-                                                                   ${selected ? 'checked' : ''}
-                                                                   class="w-4 h-4 rounded border-gray-600 bg-gray-800 text-blue-500">
-                                                            <div class="flex-1">
-                                                                <div class="text-sm font-bold text-white">${escapeHtml(buttonText)}</div>
-                                                                <div class="text-xs text-gray-400">${escapeHtml(buttonPrice)}</div>
-                                                            </div>
-                                                        </label>
-                                                    `;
+                                                    const buttonText = button.text || 'Botão ' + (index + 1);
+                                                    const buttonPrice = button.price ? 'R$ ' + parseFloat(button.price).toFixed(2) : 'Sem preço';
+                                                    html += '<label class="flex items-center gap-3 p-3 bg-gray-900 rounded-lg cursor-pointer hover:bg-gray-850 border border-gray-700 hover:border-blue-500 transition-all mb-2">' +
+                                                        '<input type="checkbox" ' +
+                                                        'id="button-' + buttonId + '-' + stepId + '" ' +
+                                                        (selected ? 'checked' : '') +
+                                                        ' class="w-4 h-4 rounded border-gray-600 bg-gray-800 text-blue-500">' +
+                                                        '<div class="flex-1">' +
+                                                        '<div class="text-sm font-bold text-white">' + escapeHtml(buttonText) + '</div>' +
+                                                        '<div class="text-xs text-gray-400">' + escapeHtml(buttonPrice) + '</div>' +
+                                                        '</div>' +
+                                                        '</label>';
                                                 });
                                                 html += '</div>';
                                             }
@@ -3616,23 +3614,21 @@ document.addEventListener('alpine:init', () => {
                                             if (self.config.redirect_buttons && self.config.redirect_buttons.length > 0) {
                                                 html += '<div><div class="text-xs font-bold text-green-400 mb-2">🔗 Botões de Link</div>';
                                                 self.config.redirect_buttons.forEach((button, index) => {
-                                                    const buttonId = `redirect-${index}`;
+                                                    const buttonId = 'redirect-' + index;
                                                     const selected = (step.config && step.config.selected_buttons) ? 
                                                         step.config.selected_buttons.some(b => b.type === 'redirect' && b.index === index) : false;
-                                                    const buttonText = button.text || `Link ${index + 1}`;
+                                                    const buttonText = button.text || 'Link ' + (index + 1);
                                                     const buttonUrl = button.url || 'Sem URL';
-                                                    html += `
-                                                        <label class="flex items-center gap-3 p-3 bg-gray-900 rounded-lg cursor-pointer hover:bg-gray-850 border border-gray-700 hover:border-green-500 transition-all mb-2">
-                                                            <input type="checkbox" 
-                                                                   id="button-${buttonId}-${stepId}" 
-                                                                   ${selected ? 'checked' : ''}
-                                                                   class="w-4 h-4 rounded border-gray-600 bg-gray-800 text-green-500">
-                                                            <div class="flex-1">
-                                                                <div class="text-sm font-bold text-white">${escapeHtml(buttonText)}</div>
-                                                                <div class="text-xs text-gray-400 font-mono truncate">${escapeHtml(buttonUrl)}</div>
-                                                            </div>
-                                                        </label>
-                                                    `;
+                                                    html += '<label class="flex items-center gap-3 p-3 bg-gray-900 rounded-lg cursor-pointer hover:bg-gray-850 border border-gray-700 hover:border-green-500 transition-all mb-2">' +
+                                                        '<input type="checkbox" ' +
+                                                        'id="button-' + buttonId + '-' + stepId + '" ' +
+                                                        (selected ? 'checked' : '') +
+                                                        ' class="w-4 h-4 rounded border-gray-600 bg-gray-800 text-green-500">' +
+                                                        '<div class="flex-1">' +
+                                                        '<div class="text-sm font-bold text-white">' + escapeHtml(buttonText) + '</div>' +
+                                                        '<div class="text-xs text-gray-400 font-mono truncate">' + escapeHtml(buttonUrl) + '</div>' +
+                                                        '</div>' +
+                                                        '</label>';
                                                 });
                                                 html += '</div>';
                                             }
