@@ -4737,19 +4737,19 @@ def public_redirect(slug):
     
     # ✅ CORREÇÃO: Só injetar cookies se Meta Pixel está habilitado (fbp_cookie e fbc_cookie só são definidos nesse caso)
     if pool.meta_tracking_enabled and (fbp_cookie or fbc_cookie):
-    # ✅ Injetar _fbp/_fbc gerados no servidor (90 dias - padrão Meta)
-    cookie_kwargs = {
-        'max_age': 90 * 24 * 60 * 60,
-        'httponly': False,
-        'secure': True,
-        'samesite': 'None',
-    }
-    if fbp_cookie:
-        response.set_cookie('_fbp', fbp_cookie, **cookie_kwargs)
-        logger.info(f"✅ Cookie _fbp injetado: {fbp_cookie[:30]}...")
-    if fbc_cookie:
-        response.set_cookie('_fbc', fbc_cookie, **cookie_kwargs)
-        logger.info(f"✅ Cookie _fbc injetado: {fbc_cookie[:30]}...")
+        # ✅ Injetar _fbp/_fbc gerados no servidor (90 dias - padrão Meta)
+        cookie_kwargs = {
+            'max_age': 90 * 24 * 60 * 60,
+            'httponly': False,
+            'secure': True,
+            'samesite': 'None',
+        }
+        if fbp_cookie:
+            response.set_cookie('_fbp', fbp_cookie, **cookie_kwargs)
+            logger.info(f"✅ Cookie _fbp injetado: {fbp_cookie[:30]}...")
+        if fbc_cookie:
+            response.set_cookie('_fbc', fbc_cookie, **cookie_kwargs)
+            logger.info(f"✅ Cookie _fbc injetado: {fbc_cookie[:30]}...")
     
     return response
 
