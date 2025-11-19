@@ -19,6 +19,52 @@
     min-width: 200px;
     max-width: 280px;
     width: 240px;
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    touch-action: none;
+    -webkit-touch-callout: none;
+}
+
+/* ✅ Prevenir seleção de texto durante drag */
+.flow-step-block.dragging {
+    cursor: grabbing !important;
+    user-select: none !important;
+    pointer-events: all;
+    opacity: 0.9;
+    transform: scale(1.05);
+    z-index: 1000 !important;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.8) !important;
+}
+
+.flow-step-block:not(.dragging) {
+    cursor: move;
+}
+
+/* ✅ Garantir que botões dentro do card não sejam arrastáveis */
+.flow-step-block button,
+.flow-step-block input,
+.flow-step-block textarea,
+.flow-step-block select,
+.flow-step-block a,
+.flow-step-block i {
+    cursor: pointer !important;
+    pointer-events: auto !important;
+    user-select: auto !important;
+}
+
+/* ✅ Prevenir que o canvas seja arrastável */
+#flow-visual-canvas {
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+/* ✅ Permitir seleção apenas em inputs dentro do canvas */
+#flow-visual-canvas input,
+#flow-visual-canvas textarea {
+    user-select: text !important;
+    -webkit-user-select: text !important;
 }
 
 /* ✅ Responsividade para telas menores */
@@ -1022,7 +1068,7 @@ body {
                              class="w-full overflow-hidden">
                             <div id="flow-visual-canvas" 
                                  class="relative w-full bg-gray-950 rounded border border-gray-700"
-                                 style="height: calc(100vh - 380px); min-height: 500px; max-height: 90vh; overflow: auto; width: 100%; max-width: 100%; box-sizing: border-box; position: relative;">
+                                 style="height: calc(100vh - 380px); min-height: 500px; max-height: 90vh; overflow: auto; width: 100%; max-width: 100%; box-sizing: border-box; position: relative; touch-action: none; overscroll-behavior: contain;">
                                 <!-- Steps serão renderizados aqui via JavaScript -->
                             </div>
                         </div>
@@ -3320,6 +3366,29 @@ document.addEventListener('alpine:init', () => {
             console.log('✅ Canvas encontrado:', canvas);
             console.log('📊 Steps disponíveis:', this.sortedFlowSteps.length);
             
+            // ✅ Controle global de drag state - garantir que apenas um card seja arrastado por vez
+            let globalDragState = {
+                isDragging: false,
+                draggedElement: null
+            };
+            
+            // ✅ Função para prevenir scroll durante drag
+            const preventScrollDuringDrag = (isDragging) => {
+                if (isDragging) {
+                    canvas.style.overflow = 'hidden';
+                    canvas.style.touchAction = 'none';
+                    document.body.style.overflow = 'hidden';
+                    document.body.style.position = 'fixed';
+                    document.body.style.width = '100%';
+                } else {
+                    canvas.style.overflow = 'auto';
+                    canvas.style.touchAction = 'auto';
+                    document.body.style.overflow = '';
+                    document.body.style.position = '';
+                    document.body.style.width = '';
+                }
+            };
+            
             // ✅ Ajustar dimensões do canvas para responsividade
             const adjustCanvasSize = () => {
                 const container = canvas.parentElement;
@@ -3603,13 +3672,153 @@ document.addEventListener('alpine:init', () => {
                             
                             canvas.appendChild(stepEl);
                             
-                            // ✅ Tornar arrastável
+                            // ✅ Tornar arrastável - PREVENIR SCROLL DA PÁGINA
                             try {
+                                // ✅ Função auxiliar para verificar se o elemento é clicável (botão, input, etc)
+                                const isClickableElement = (target) => {
+                                    if (!target) return false;
+                                    const tagName = target.tagName?.toLowerCase();
+                                    const isButton = tagName === 'button' || target.closest('button');
+                                    const isInput = ['input', 'textarea', 'select', 'a'].includes(tagName) || target.closest('input, textarea, select, a');
+                                    const isIcon = target.closest('i.fas, i.far, i.fab');
+                                    return isButton || isInput || isIcon;
+                                };
+                                
+                                // ✅ Prevenir scroll durante drag - Desktop
+                                const handleMouseDown = (e) => {
+                                    // Se clicou em elemento clicável, não iniciar drag
+                                    if (isClickableElement(e.target)) {
+                                        return;
+                                    }
+                                    
+                                    // ✅ Verificar se já há outro elemento sendo arrastado
+                                    if (globalDragState.isDragging && globalDragState.draggedElement !== stepEl) {
+                                        return; // Não permitir múltiplos drags simultâneos
+                                    }
+                                    
+                                    // Atualizar estado global
+                                    globalDragState.isDragging = true;
+                                    globalDragState.draggedElement = stepEl;
+                                    
+                                    // Adicionar classe dragging para feedback visual
+                                    stepEl.classList.add('dragging');
+                                    
+                                    // Prevenir scroll da página e do canvas durante drag
+                                    preventScrollDuringDrag(true);
+                                };
+                                
+                                const handleMouseUp = () => {
+                                    // Remover classe dragging
+                                    stepEl.classList.remove('dragging');
+                                    
+                                    // Atualizar estado global
+                                    if (globalDragState.draggedElement === stepEl) {
+                                        globalDragState.isDragging = false;
+                                        globalDragState.draggedElement = null;
+                                    }
+                                    
+                                    // Restaurar scroll
+                                    preventScrollDuringDrag(false);
+                                };
+                                
+                                // ✅ Prevenir scroll durante drag - Mobile/Touch
+                                const handleTouchStart = (e) => {
+                                    // Se tocou em elemento clicável, não iniciar drag
+                                    if (isClickableElement(e.target)) {
+                                        return;
+                                    }
+                                    
+                                    // ✅ Verificar se já há outro elemento sendo arrastado
+                                    if (globalDragState.isDragging && globalDragState.draggedElement !== stepEl) {
+                                        return;
+                                    }
+                                    
+                                    // Atualizar estado global
+                                    globalDragState.isDragging = true;
+                                    globalDragState.draggedElement = stepEl;
+                                    
+                                    // Adicionar classe dragging
+                                    stepEl.classList.add('dragging');
+                                    
+                                    // Prevenir scroll
+                                    preventScrollDuringDrag(true);
+                                };
+                                
+                                const handleTouchEnd = () => {
+                                    // Remover classe dragging
+                                    stepEl.classList.remove('dragging');
+                                    
+                                    // Atualizar estado global
+                                    if (globalDragState.draggedElement === stepEl) {
+                                        globalDragState.isDragging = false;
+                                        globalDragState.draggedElement = null;
+                                    }
+                                    
+                                    // Restaurar scroll
+                                    preventScrollDuringDrag(false);
+                                };
+                                
+                                // ✅ Adicionar event listeners
+                                stepEl.addEventListener('mousedown', handleMouseDown, { passive: true });
+                                stepEl.addEventListener('mouseup', handleMouseUp, { passive: true });
+                                stepEl.addEventListener('mouseleave', handleMouseUp, { passive: true });
+                                
+                                stepEl.addEventListener('touchstart', handleTouchStart, { passive: false });
+                                stepEl.addEventListener('touchend', handleTouchEnd, { passive: true });
+                                stepEl.addEventListener('touchcancel', handleTouchEnd, { passive: true });
+                                
+                                // ✅ Configurar draggable do jsPlumb
                                 if (typeof this.jsPlumbInstance.draggable === 'function') {
+                                    // jsPlumb 5.x
                                     this.jsPlumbInstance.draggable(stepEl, {
                                         containment: 'parent',
                                         grid: [10, 10],
-                                        stop: (el) => {
+                                        filter: 'button, input, textarea, select, a, i', // ✅ Não arrastar se clicar nestes elementos
+                                        drag: (el, e) => {
+                                            // ✅ Prevenir scroll durante drag
+                                            if (e && e.originalEvent) {
+                                                e.originalEvent.preventDefault();
+                                                e.originalEvent.stopPropagation();
+                                            }
+                                            
+                                            // Atualizar estado global
+                                            globalDragState.isDragging = true;
+                                            globalDragState.draggedElement = stepEl;
+                                            
+                                            // Garantir que scroll está desabilitado
+                                            preventScrollDuringDrag(true);
+                                            
+                                            // Adicionar classe dragging se ainda não tiver
+                                            if (!stepEl.classList.contains('dragging')) {
+                                                stepEl.classList.add('dragging');
+                                            }
+                                        },
+                                        start: (el, e) => {
+                                            // Verificar se não é elemento clicável
+                                            if (e && e.originalEvent && isClickableElement(e.originalEvent.target)) {
+                                                return false; // Cancelar drag
+                                            }
+                                            
+                                            // Atualizar estado global
+                                            globalDragState.isDragging = true;
+                                            globalDragState.draggedElement = stepEl;
+                                            
+                                            stepEl.classList.add('dragging');
+                                            preventScrollDuringDrag(true);
+                                        },
+                                        stop: (el, e) => {
+                                            // Remover classe dragging
+                                            stepEl.classList.remove('dragging');
+                                            
+                                            // Atualizar estado global
+                                            if (globalDragState.draggedElement === stepEl) {
+                                                globalDragState.isDragging = false;
+                                                globalDragState.draggedElement = null;
+                                            }
+                                            
+                                            // Restaurar scroll após drag
+                                            preventScrollDuringDrag(false);
+                                            
                                             // Salvar posição quando arrastar
                                             const rect = stepEl.getBoundingClientRect();
                                             const canvasRect = canvas.getBoundingClientRect();
@@ -3619,10 +3828,58 @@ document.addEventListener('alpine:init', () => {
                                         }
                                     });
                                 } else if (typeof this.jsPlumbInstance.makeSource === 'function') {
-                                    // Versão antiga
+                                    // jsPlumb 2.x
                                     this.jsPlumbInstance.draggable(stepEl, {
                                         containment: 'parent',
-                                        grid: [10, 10]
+                                        grid: [10, 10],
+                                        filter: 'button, input, textarea, select, a, i', // ✅ Não arrastar se clicar nestes elementos
+                                        drag: (el, e) => {
+                                            // ✅ Prevenir scroll durante drag
+                                            if (e && e.originalEvent) {
+                                                e.originalEvent.preventDefault();
+                                                e.originalEvent.stopPropagation();
+                                            }
+                                            
+                                            // Atualizar estado global
+                                            globalDragState.isDragging = true;
+                                            globalDragState.draggedElement = stepEl;
+                                            
+                                            preventScrollDuringDrag(true);
+                                            
+                                            if (!stepEl.classList.contains('dragging')) {
+                                                stepEl.classList.add('dragging');
+                                            }
+                                        },
+                                        start: (el, e) => {
+                                            if (e && e.originalEvent && isClickableElement(e.originalEvent.target)) {
+                                                return false;
+                                            }
+                                            
+                                            // Atualizar estado global
+                                            globalDragState.isDragging = true;
+                                            globalDragState.draggedElement = stepEl;
+                                            
+                                            stepEl.classList.add('dragging');
+                                            preventScrollDuringDrag(true);
+                                        },
+                                        stop: (el, e) => {
+                                            stepEl.classList.remove('dragging');
+                                            
+                                            // Atualizar estado global
+                                            if (globalDragState.draggedElement === stepEl) {
+                                                globalDragState.isDragging = false;
+                                                globalDragState.draggedElement = null;
+                                            }
+                                            
+                                            preventScrollDuringDrag(false);
+                                            
+                                            // Salvar posição
+                                            const rect = stepEl.getBoundingClientRect();
+                                            const canvasRect = canvas.getBoundingClientRect();
+                                            const x = rect.left - canvasRect.left + canvas.scrollLeft;
+                                            const y = rect.top - canvasRect.top + canvas.scrollTop;
+                                            this.saveStepPosition(stepId, x, y);
+                                        }
                                     });
                                 }
                             } catch (e) {
