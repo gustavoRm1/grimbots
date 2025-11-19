@@ -3043,45 +3043,47 @@ document.addEventListener('alpine:init', () => {
                     
                     console.log('✅ Instância jsPlumb criada:', this.jsPlumbInstance);
                     
-                    // ✅ Configurar estilos padrão
-                    const defaultPaintStyle = { stroke: '#3B82F6', strokeWidth: 2 };
-                    const defaultHoverPaintStyle = { stroke: '#60A5FA', strokeWidth: 3 };
-                    const defaultEndpointStyle = { fill: '#3B82F6', radius: 5 };
-                    const defaultEndpointHoverStyle = { fill: '#60A5FA', radius: 7 };
-                    
-                    // Tentar configurar (pode variar conforme versão)
-                    try {
-                        if (typeof this.jsPlumbInstance.setDefaultConnectionType === 'function') {
-                            this.jsPlumbInstance.setDefaultConnectionType({
-                                type: 'Flowchart',
-                                options: {
-                                    stub: [10, 15],
-                                    gap: 5,
-                                    cornerRadius: 5,
-                                    alwaysRespectStubs: true
-                                }
-                            });
+                    // ✅ Verificar se jsPlumbInstance foi criado com sucesso
+                    if (jsPlumbInstance) {
+                        // ✅ Configurar estilos padrão
+                        const defaultPaintStyle = { stroke: '#3B82F6', strokeWidth: 2 };
+                        const defaultHoverPaintStyle = { stroke: '#60A5FA', strokeWidth: 3 };
+                        const defaultEndpointStyle = { fill: '#3B82F6', radius: 5 };
+                        const defaultEndpointHoverStyle = { fill: '#60A5FA', radius: 7 };
+                        
+                        // Tentar configurar (pode variar conforme versão)
+                        try {
+                            if (typeof this.jsPlumbInstance.setDefaultConnectionType === 'function') {
+                                this.jsPlumbInstance.setDefaultConnectionType({
+                                    type: 'Flowchart',
+                                    options: {
+                                        stub: [10, 15],
+                                        gap: 5,
+                                        cornerRadius: 5,
+                                        alwaysRespectStubs: true
+                                    }
+                                });
+                            }
+                            
+                            if (typeof this.jsPlumbInstance.setDefaultConnectionStyle === 'function') {
+                                this.jsPlumbInstance.setDefaultConnectionStyle(defaultPaintStyle);
+                            }
+                            if (typeof this.jsPlumbInstance.setDefaultConnectionHoverStyle === 'function') {
+                                this.jsPlumbInstance.setDefaultConnectionHoverStyle(defaultHoverPaintStyle);
+                            }
+                            if (typeof this.jsPlumbInstance.setDefaultEndpointStyle === 'function') {
+                                this.jsPlumbInstance.setDefaultEndpointStyle(defaultEndpointStyle);
+                            }
+                            if (typeof this.jsPlumbInstance.setDefaultEndpointHoverStyle === 'function') {
+                                this.jsPlumbInstance.setDefaultEndpointHoverStyle(defaultEndpointHoverStyle);
+                            }
+                        } catch (e) {
+                            console.warn('⚠️ Erro ao configurar estilos padrão (pode ser normal):', e);
                         }
                         
-                        if (typeof this.jsPlumbInstance.setDefaultConnectionStyle === 'function') {
-                            this.jsPlumbInstance.setDefaultConnectionStyle(defaultPaintStyle);
-                        }
-                        if (typeof this.jsPlumbInstance.setDefaultConnectionHoverStyle === 'function') {
-                            this.jsPlumbInstance.setDefaultConnectionHoverStyle(defaultHoverPaintStyle);
-                        }
-                        if (typeof this.jsPlumbInstance.setDefaultEndpointStyle === 'function') {
-                            this.jsPlumbInstance.setDefaultEndpointStyle(defaultEndpointStyle);
-                        }
-                        if (typeof this.jsPlumbInstance.setDefaultEndpointHoverStyle === 'function') {
-                            this.jsPlumbInstance.setDefaultEndpointHoverStyle(defaultEndpointHoverStyle);
-                        }
-                    } catch (e) {
-                        console.warn('⚠️ Erro ao configurar estilos padrão (pode ser normal):', e);
-                    }
-                    
-                    // ✅ Renderizar steps como blocos
-                    const steps = this.sortedFlowSteps;
-                    const stepPositions = this.loadStepPositions(); // Carregar posições salvas
+                        // ✅ Renderizar steps como blocos
+                        const steps = this.sortedFlowSteps;
+                        const stepPositions = this.loadStepPositions(); // Carregar posições salvas
                         
                         steps.forEach((step, index) => {
                             const stepId = step.id;
@@ -3373,11 +3375,11 @@ document.addEventListener('alpine:init', () => {
                         
                         this.showNotification('❌ Erro: jsPlumb não carregou. Verifique o console para detalhes.', 'error');
                     }
-                } catch (error) {
-                    console.error('❌ Erro ao inicializar editor visual:', error);
-                    console.error('Stack:', error.stack);
-                    this.showNotification('❌ Erro ao inicializar editor visual. Verifique o console.', 'error');
-                }
+            } catch (error) {
+                console.error('❌ Erro ao inicializar editor visual:', error);
+                console.error('Stack:', error.stack);
+                this.showNotification('❌ Erro ao inicializar editor visual. Verifique o console.', 'error');
+            }
             }, 300); // Aumentar delay para garantir DOM renderizado
         },
         
