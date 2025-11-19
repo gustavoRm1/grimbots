@@ -5238,18 +5238,18 @@ def update_pool_meta_pixel_config(pool_id):
         # ✅ Validar Pixel ID (só se estiver no payload - permite atualização parcial)
         pixel_id = None
         if 'meta_pixel_id' in data:
-        pixel_id = data.get('meta_pixel_id', '').strip()
-        if pixel_id:
-            if not MetaPixelHelper.is_valid_pixel_id(pixel_id):
-                return jsonify({'error': 'Pixel ID inválido (deve ter 15-16 dígitos numéricos)'}), 400
-        else:
-            # ✅ CORREÇÃO: String vazia = limpar campo
-            pixel_id = None
+            pixel_id = data.get('meta_pixel_id', '').strip()
+            if pixel_id:
+                if not MetaPixelHelper.is_valid_pixel_id(pixel_id):
+                    return jsonify({'error': 'Pixel ID inválido (deve ter 15-16 dígitos numéricos)'}), 400
+            else:
+                # ✅ CORREÇÃO: String vazia = limpar campo
+                pixel_id = None
         
         # ✅ Validar Access Token (só se estiver no payload - permite atualização parcial)
         access_token = None
         if 'meta_access_token' in data:
-        access_token = data.get('meta_access_token', '').strip()
+            access_token = data.get('meta_access_token', '').strip()
         
         logger.info(f"🔍 [Meta Pixel Save] User: {current_user.email} | Pool: {pool.name} | Token recebido: {'SIM' if access_token else 'NÃO'} | Tamanho: {len(access_token) if access_token else 0}")
         
