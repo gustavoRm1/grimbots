@@ -33,6 +33,15 @@
         height: calc(100vh - 320px) !important;
         min-height: 400px !important;
     }
+    
+    .config-section {
+        padding: 16px;
+    }
+    
+    .config-section-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
 }
 
 @media (max-width: 640px) {
@@ -46,6 +55,85 @@
     #flow-visual-canvas {
         height: calc(100vh - 280px) !important;
         min-height: 350px !important;
+    }
+    
+    .config-section {
+        padding: 12px;
+        border-radius: 8px;
+    }
+    
+    .config-section-header {
+        gap: 8px;
+    }
+    
+    .config-section-title {
+        font-size: 1rem;
+    }
+    
+    .form-group {
+        margin-bottom: 16px;
+    }
+    
+    /* Grids responsivos */
+    .grid.grid-cols-1.md\:grid-cols-2 {
+        grid-template-columns: 1fr;
+    }
+    
+    .grid.grid-cols-1.md\:grid-cols-3 {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ✅ Garantir que todos os containers sejam 100% em mobile */
+@media (max-width: 640px) {
+    /* Container principal - garantir 100% width */
+    .max-w-full {
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
+        max-width: 100vw;
+        overflow-x: hidden;
+    }
+    
+    /* Botões full width em mobile */
+    .btn-action {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    /* Canvas do editor visual - garantir 100% em mobile */
+    #flow-visual-canvas {
+        width: 100% !important;
+        max-width: 100% !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        padding: 0 !important;
+    }
+    
+    /* Garantir que grids sejam sempre 1 coluna em mobile */
+    .grid {
+        grid-template-columns: 1fr !important;
+    }
+}
+
+/* ✅ Garantir que elementos não quebrem o layout */
+* {
+    box-sizing: border-box;
+}
+
+/* ✅ Prevenir overflow horizontal */
+body {
+    overflow-x: hidden;
+}
+
+/* ✅ Garantir que modais sejam responsivos */
+@media (max-width: 640px) {
+    .fixed.inset-0.z-50 > .flex > div,
+    [id^="flow-step-modal-"],
+    [id^="condition-modal-"] {
+        width: 95% !important;
+        max-width: 95% !important;
+        margin: 0 auto !important;
+        padding: 1rem !important;
     }
 }
 
@@ -221,34 +309,90 @@
 .config-section {
     background: linear-gradient(135deg, rgba(255, 255, 255, 0.02) 0%, rgba(255, 255, 255, 0.01) 100%);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 16px;
-    padding: 24px;
-    margin-bottom: 24px;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 16px;
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+    box-sizing: border-box;
+}
+
+@media (min-width: 640px) {
+    .config-section {
+        border-radius: 14px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+}
+
+@media (min-width: 768px) {
+    .config-section {
+        border-radius: 16px;
+        padding: 24px;
+        margin-bottom: 24px;
+    }
 }
 
 .config-section-header {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 12px;
-    margin-bottom: 20px;
-    padding-bottom: 16px;
+    gap: 8px;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+@media (min-width: 640px) {
+    .config-section-header {
+        gap: 12px;
+        margin-bottom: 20px;
+        padding-bottom: 16px;
+    }
+}
+
 .config-section-title {
-    font-size: 1.25rem;
+    font-size: 1rem;
     font-weight: 700;
     color: #FFFFFF;
+    word-wrap: break-word;
+}
+
+@media (min-width: 640px) {
+    .config-section-title {
+        font-size: 1.125rem;
+    }
+}
+
+@media (min-width: 768px) {
+    .config-section-title {
+        font-size: 1.25rem;
+    }
 }
 
 .config-section-description {
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     color: #9CA3AF;
     margin-top: 4px;
+    word-wrap: break-word;
+}
+
+@media (min-width: 640px) {
+    .config-section-description {
+        font-size: 0.875rem;
+    }
 }
 
 .form-group {
-    margin-bottom: 20px;
+    margin-bottom: 16px;
+    width: 100%;
+}
+
+@media (min-width: 640px) {
+    .form-group {
+        margin-bottom: 20px;
+    }
 }
 
 .form-label {
@@ -261,13 +405,21 @@
 
 .form-input {
     width: 100%;
-    padding: 12px 16px;
+    max-width: 100%;
+    padding: 10px 12px;
     background: #1A1A1A;
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 8px;
     color: #FFFFFF;
     font-size: 0.875rem;
     transition: all 0.2s ease;
+    box-sizing: border-box;
+}
+
+@media (min-width: 640px) {
+    .form-input {
+        padding: 12px 16px;
+    }
 }
 
 .form-input:focus {
@@ -278,7 +430,8 @@
 
 .form-textarea {
     width: 100%;
-    padding: 12px 16px;
+    max-width: 100%;
+    padding: 10px 12px;
     background: #1A1A1A;
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 8px;
@@ -287,6 +440,14 @@
     resize: vertical;
     min-height: 100px;
     transition: all 0.2s ease;
+    box-sizing: border-box;
+}
+
+@media (min-width: 640px) {
+    .form-textarea {
+        padding: 12px 16px;
+        min-height: 120px;
+    }
 }
 
 .form-textarea:focus {
@@ -299,11 +460,28 @@
     display: flex;
     gap: 0;
     border-bottom: 2px solid rgba(255, 255, 255, 0.08);
-    margin-bottom: 32px;
+    margin-bottom: 24px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.tab-nav::-webkit-scrollbar {
+    height: 4px;
+}
+
+.tab-nav::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.tab-nav::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 2px;
 }
 
 .tab-button {
-    padding: 16px 24px;
+    padding: 12px 16px;
     font-size: 0.875rem;
     font-weight: 600;
     color: #9CA3AF;
@@ -314,6 +492,14 @@
     transition: all 0.2s ease;
     position: relative;
     top: 2px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+@media (min-width: 640px) {
+    .tab-button {
+        padding: 16px 24px;
+    }
 }
 
 .tab-button:hover {
@@ -513,81 +699,85 @@
 {% endblock %}
 
 {% block content %}
-<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8" x-data="botConfigApp()" x-init="init()">
+<div class="max-w-full mx-auto px-2 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 md:py-8" x-data="botConfigApp()" x-init="init()">
     
     <!-- Header -->
-    <div class="mb-8 flex items-center justify-between">
-        <div class="flex items-center gap-4">
+    <div class="mb-4 sm:mb-6 md:mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
+        <div class="flex items-center gap-2 sm:gap-4 w-full sm:w-auto">
             <a href="{{ url_for('dashboard') }}" 
-               class="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-700 text-gray-400 hover:text-white hover:border-yellow-500 transition-all">
-                <i class="fas fa-arrow-left"></i>
+               class="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-lg border border-gray-700 text-gray-400 hover:text-white hover:border-yellow-500 transition-all flex-shrink-0">
+                <i class="fas fa-arrow-left text-sm sm:text-base"></i>
             </a>
-            <div>
-                <h1 class="text-3xl font-bold text-white">{{ bot.name }}</h1>
-                <p class="text-sm text-gray-500 mt-1">@{{ bot.username }}</p>
+            <div class="min-w-0 flex-1">
+                <h1 class="text-xl sm:text-2xl md:text-3xl font-bold text-white truncate">{{ bot.name }}</h1>
+                <p class="text-xs sm:text-sm text-gray-500 mt-1 truncate">@{{ bot.username }}</p>
             </div>
         </div>
-        <div class="flex items-center space-x-3">
+        <div class="flex items-center space-x-2 sm:space-x-3 w-full sm:w-auto">
             <!-- ❌ REMOVIDO: Meta Pixel agora é configurado POR POOL (não por bot) -->
             <!-- Acesse: Redirecionadores → Editar Pool → Meta Pixel -->
             <button @click="saveConfig()" 
                     :disabled="loading"
                     :class="{'opacity-50 cursor-not-allowed': loading}"
-                    class="btn-action btn-action-primary">
+                    class="btn-action btn-action-primary w-full sm:w-auto text-sm sm:text-base px-3 sm:px-6 py-2 sm:py-3">
                 <span x-show="!loading">
-                    <i class="fas fa-save mr-2"></i>
-                    Salvar Configurações
+                    <i class="fas fa-save mr-1 sm:mr-2"></i>
+                    <span class="hidden sm:inline">Salvar Configurações</span>
+                    <span class="sm:hidden">Salvar</span>
                 </span>
                 <span x-show="loading">
-                    <i class="fas fa-spinner fa-spin mr-2"></i>
-                    Salvando...
+                    <i class="fas fa-spinner fa-spin mr-1 sm:mr-2"></i>
+                    <span class="hidden sm:inline">Salvando...</span>
+                    <span class="sm:hidden">Salvando</span>
                 </span>
             </button>
         </div>
     </div>
 
     <!-- Tabs -->
-    <div class="tab-nav">
-        <button @click="activeTab = 'welcome'" 
-                :class="{'active': activeTab === 'welcome'}"
-                class="tab-button">
-            <i class="fas fa-home mr-2"></i>Boas-vindas
-        </button>
-        <button @click="activeTab = 'flow'" 
-                :class="{'active': activeTab === 'flow'}"
-                class="tab-button">
-            <i class="fas fa-project-diagram mr-2"></i>Fluxo
-        </button>
-        <button @click="activeTab = 'buttons'" 
-                :class="{'active': activeTab === 'buttons'}"
-                class="tab-button">
-            <i class="fas fa-shopping-cart mr-2"></i>Botões
-        </button>
-        <button @click="activeTab = 'downsells'" 
-                :class="{'active': activeTab === 'downsells'}"
-                class="tab-button">
-            <i class="fas fa-arrow-down mr-2"></i>Downsells
-        </button>
-        <button @click="activeTab = 'upsells'" 
-                :class="{'active': activeTab === 'upsells'}"
-                class="tab-button">
-            <i class="fas fa-arrow-up mr-2"></i>Upsells
-        </button>
-        <button @click="activeTab = 'access'" 
-                :class="{'active': activeTab === 'access'}"
-                class="tab-button">
-            <i class="fas fa-key mr-2"></i>Acesso
-        </button>
-        <button @click="activeTab = 'remarketing'" 
-                :class="{'active': activeTab === 'remarketing'}"
-                class="tab-button">
-            <i class="fas fa-bullhorn mr-2"></i>Remarketing
-        </button>
-        <button @click="activeTab = 'settings'" 
-                :class="{'active': activeTab === 'settings'}"
-                class="tab-button">
-            <i class="fas fa-cog mr-2"></i>Configurações
-        </button>
+    <div class="tab-nav overflow-x-auto -mx-2 sm:-mx-4 md:-mx-6 lg:-mx-8 px-2 sm:px-4 md:px-6 lg:px-8">
+        <div class="flex gap-1 sm:gap-2 min-w-max">
+            <button @click="activeTab = 'welcome'" 
+                    :class="{'active': activeTab === 'welcome'}"
+                    class="tab-button text-xs sm:text-sm whitespace-nowrap px-3 sm:px-6 py-2 sm:py-4">
+                <i class="fas fa-home mr-1 sm:mr-2"></i><span class="hidden sm:inline">Boas-vindas</span><span class="sm:hidden">Boas-vindas</span>
+            </button>
+            <button @click="activeTab = 'flow'" 
+                    :class="{'active': activeTab === 'flow'}"
+                    class="tab-button text-xs sm:text-sm whitespace-nowrap px-3 sm:px-6 py-2 sm:py-4">
+                <i class="fas fa-project-diagram mr-1 sm:mr-2"></i><span class="hidden sm:inline">Fluxo</span><span class="sm:hidden">Fluxo</span>
+            </button>
+            <button @click="activeTab = 'buttons'" 
+                    :class="{'active': activeTab === 'buttons'}"
+                    class="tab-button text-xs sm:text-sm whitespace-nowrap px-3 sm:px-6 py-2 sm:py-4">
+                <i class="fas fa-shopping-cart mr-1 sm:mr-2"></i><span class="hidden sm:inline">Botões</span><span class="sm:hidden">Botões</span>
+            </button>
+            <button @click="activeTab = 'downsells'" 
+                    :class="{'active': activeTab === 'downsells'}"
+                    class="tab-button text-xs sm:text-sm whitespace-nowrap px-3 sm:px-6 py-2 sm:py-4">
+                <i class="fas fa-arrow-down mr-1 sm:mr-2"></i><span class="hidden sm:inline">Downsells</span><span class="sm:hidden">Down</span>
+            </button>
+            <button @click="activeTab = 'upsells'" 
+                    :class="{'active': activeTab === 'upsells'}"
+                    class="tab-button text-xs sm:text-sm whitespace-nowrap px-3 sm:px-6 py-2 sm:py-4">
+                <i class="fas fa-arrow-up mr-1 sm:mr-2"></i><span class="hidden sm:inline">Upsells</span><span class="sm:hidden">Up</span>
+            </button>
+            <button @click="activeTab = 'access'" 
+                    :class="{'active': activeTab === 'access'}"
+                    class="tab-button text-xs sm:text-sm whitespace-nowrap px-3 sm:px-6 py-2 sm:py-4">
+                <i class="fas fa-key mr-1 sm:mr-2"></i><span class="hidden sm:inline">Acesso</span><span class="sm:hidden">Acesso</span>
+            </button>
+            <button @click="activeTab = 'remarketing'" 
+                    :class="{'active': activeTab === 'remarketing'}"
+                    class="tab-button text-xs sm:text-sm whitespace-nowrap px-3 sm:px-6 py-2 sm:py-4">
+                <i class="fas fa-bullhorn mr-1 sm:mr-2"></i><span class="hidden sm:inline">Remarketing</span><span class="sm:hidden">Remark</span>
+            </button>
+            <button @click="activeTab = 'settings'" 
+                    :class="{'active': activeTab === 'settings'}"
+                    class="tab-button text-xs sm:text-sm whitespace-nowrap px-3 sm:px-6 py-2 sm:py-4">
+                <i class="fas fa-cog mr-1 sm:mr-2"></i><span class="hidden sm:inline">Configurações</span><span class="sm:hidden">Config</span>
+            </button>
+        </div>
     </div>
 
     <!-- Tab Content: Welcome -->
@@ -805,8 +995,8 @@
                 <!-- ✅ EDITOR VISUAL (Canvas com linhas) -->
                 <div x-show="flowViewMode === 'visual'" 
                      x-cloak
-                     class="mb-6 w-full -mx-4 sm:-mx-6 lg:-mx-8 overflow-hidden">
-                    <div class="bg-gray-900 rounded-lg border-2 border-blue-500 p-2 sm:p-4 w-full">
+                     class="mb-6 w-full overflow-hidden">
+                    <div class="bg-gray-900 rounded-lg border-2 border-blue-500 p-2 sm:p-3 md:p-4 w-full max-w-full">
                         <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-4">
                             <div class="flex items-center gap-2">
                                 <i class="fas fa-project-diagram text-blue-400 text-xl"></i>
@@ -832,7 +1022,7 @@
                              class="w-full overflow-hidden">
                             <div id="flow-visual-canvas" 
                                  class="relative w-full bg-gray-950 rounded border border-gray-700"
-                                 style="height: calc(100vh - 380px); min-height: 500px; max-height: 90vh; overflow: auto; width: 100%; max-width: 100%; box-sizing: border-box;">
+                                 style="height: calc(100vh - 380px); min-height: 500px; max-height: 90vh; overflow: auto; width: 100%; max-width: 100%; box-sizing: border-box; position: relative;">
                                 <!-- Steps serão renderizados aqui via JavaScript -->
                             </div>
                         </div>
