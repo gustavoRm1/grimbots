@@ -35,6 +35,51 @@
     stroke-width: 3 !important;
 }
 
+/* ✅ Estilos para endpoints de botões customizados */
+.btn-endpoint-marker {
+    position: absolute;
+    right: -10px;
+    width: 16px;
+    height: 16px;
+    background: #FF6B6B;
+    border: 2px solid #FF0000;
+    border-radius: 50%;
+    cursor: pointer;
+    z-index: 20;
+    box-shadow: 0 0 5px rgba(255, 107, 107, 0.5);
+    transition: all 0.2s ease;
+}
+
+.btn-endpoint-marker:hover {
+    background: #FF8787;
+    border-color: #FF3333;
+    transform: scale(1.2);
+    box-shadow: 0 0 10px rgba(255, 107, 107, 0.8);
+}
+
+.btn-endpoint-label {
+    background: rgba(255, 107, 107, 0.9);
+    color: #FFFFFF;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: bold;
+    pointer-events: none;
+    border: 1px solid #FF0000;
+}
+
+.btn-endpoint-label-text {
+    position: absolute;
+    font-size: 10px;
+    color: #FF6B6B;
+    font-weight: bold;
+    white-space: nowrap;
+    pointer-events: none;
+    transform: translateY(-50%);
+    z-index: 25;
+    text-shadow: 0 0 3px rgba(0, 0, 0, 0.8);
+}
+
 /* Bot Config V2.0 - Design System */
 
 .config-section {
@@ -3133,7 +3178,16 @@ document.addEventListener('alpine:init', () => {
                                 ` : ''}
                                 ${(step.config && step.config.custom_buttons && step.config.custom_buttons.length > 0) ? `
                                     <div class="text-xs text-red-400 mb-1">
-                                        🔘 ${step.config.custom_buttons.length} botão(ões)
+                                        🔘 ${step.config.custom_buttons.length} botão(ões):
+                                    </div>
+                                    <div class="flex flex-wrap gap-1 mb-1">
+                                        ${step.config.custom_buttons.map((btn, idx) => `
+                                            <div class="px-2 py-0.5 bg-red-600 bg-opacity-30 border border-red-500 rounded text-xs text-red-300" 
+                                                 title="${(btn.text || 'Botão ' + (idx + 1))} → ${btn.target_step ? 'Step ' + btn.target_step : 'Nenhum'}"
+                                                 data-button-idx="${idx}">
+                                                ${(btn.text || 'Btn ' + (idx + 1)).substring(0, 10)}
+                                            </div>
+                                        `).join('')}
                                     </div>
                                 ` : ''}
                                 <div class="flex items-center gap-1 mt-2">
@@ -3222,27 +3276,44 @@ document.addEventListener('alpine:init', () => {
                                 console.error('❌ Erro ao adicionar endpoints:', e);
                             }
                             
-                            // ✅ Adicionar endpoints INDIVIDUAIS para cada botão customizado (content)
+                            // ✅ Adicionar endpoints INDIVIDUAIS para cada botão customizado (TODOS os tipos de step)
+                            // ✅ Isso permite que cada botão tenha sua própria linha de conexão no fluxograma
                             if (step.config && step.config.custom_buttons && step.config.custom_buttons.length > 0) {
                                 try {
                                     step.config.custom_buttons.forEach((btn, btnIdx) => {
+                                        const btnText = (btn.text || `Botão ${btnIdx + 1}`).substring(0, 15);
+                                        
                                         if (typeof this.jsPlumbInstance.addEndpoint === 'function') {
                                             // jsPlumb 5.x: criar endpoint individual por botão
                                             const buttonEndpointId = `btn-endpoint-${stepId}-${btnIdx}`;
                                             // Posicionar endpoints na lateral direita, distribuídos verticalmente
-                                            const anchorPosition = 0.3 + (btnIdx * 0.15); // 0.3, 0.45, 0.6, 0.75...
+                                            // Começar em 25% e espaçar cada botão em 15% (25%, 40%, 55%, 70%, ...)
+                                            const anchorPosition = 0.25 + (btnIdx * 0.15);
+                                            
+                                            // Limitar posição máxima para não ultrapassar 100%
+                                            const finalPosition = Math.min(anchorPosition, 0.85);
                                             
                                             this.jsPlumbInstance.addEndpoint(stepEl, {
-                                                anchor: ['Right', anchorPosition, 1, 0, 0, 0],
-                                                endpoint: ['Dot', { radius: 7 }],
+                                                anchor: ['Right', finalPosition, 1, 0, 0, 0],
+                                                endpoint: ['Dot', { radius: 8 }],
                                                 paintStyle: { fill: '#FF6B6B', stroke: '#FF0000', strokeWidth: 2 },
-                                                hoverPaintStyle: { fill: '#FF8787' },
+                                                hoverPaintStyle: { fill: '#FF8787', stroke: '#FF3333', strokeWidth: 3 },
                                                 isSource: true,
                                                 isTarget: false,
                                                 maxConnections: 1
                                             }, {
                                                 uuid: buttonEndpointId
                                             });
+                                            
+                                            // ✅ Adicionar label/tooltip no endpoint para identificar o botão
+                                            const endpoint = this.jsPlumbInstance.getEndpoint(buttonEndpointId);
+                                            if (endpoint && endpoint.setLabel) {
+                                                endpoint.setLabel({
+                                                    label: btnText,
+                                                    location: [0.5, -0.5],
+                                                    cssClass: 'btn-endpoint-label'
+                                                });
+                                            }
                                         } else if (typeof this.jsPlumbInstance.makeSource === 'function') {
                                             // jsPlumb 2.x: criar endpoint individual usando makeSource
                                             const buttonEndpointId = `btn-endpoint-${stepId}-${btnIdx}`;
@@ -3250,13 +3321,24 @@ document.addEventListener('alpine:init', () => {
                                             const btnEndpointEl = document.createElement('span');
                                             btnEndpointEl.id = buttonEndpointId;
                                             btnEndpointEl.className = 'btn-endpoint-marker';
-                                            btnEndpointEl.style.cssText = 'position: absolute; right: -8px; top: ' + (30 + btnIdx * 20) + '%; width: 14px; height: 14px; background: #FF6B6B; border: 2px solid #FF0000; border-radius: 50%; cursor: pointer; z-index: 20;';
+                                            btnEndpointEl.title = btnText + (btn.target_step ? ` → Step ${btn.target_step}` : '');
+                                            // Posicionar endpoints na lateral direita, distribuídos verticalmente
+                                            const topPercent = 25 + (btnIdx * 15);
+                                            btnEndpointEl.style.cssText = `position: absolute; right: -10px; top: ${topPercent}%; width: 16px; height: 16px; background: #FF6B6B; border: 2px solid #FF0000; border-radius: 50%; cursor: pointer; z-index: 20; box-shadow: 0 0 5px rgba(255, 107, 107, 0.5);`;
                                             stepEl.appendChild(btnEndpointEl);
+                                            
+                                            // Adicionar label de texto ao lado do endpoint
+                                            const btnLabelEl = document.createElement('span');
+                                            btnLabelEl.className = 'btn-endpoint-label-text';
+                                            btnLabelEl.textContent = btnText;
+                                            btnLabelEl.style.cssText = `position: absolute; right: -90px; top: ${topPercent}%; font-size: 10px; color: #FF6B6B; font-weight: bold; white-space: nowrap; pointer-events: none; transform: translateY(-50%); z-index: 25;`;
+                                            stepEl.appendChild(btnLabelEl);
                                             
                                             this.jsPlumbInstance.makeSource(btnEndpointEl, {
                                                 anchor: 'Right',
                                                 endpoint: 'Dot',
-                                                paintStyle: { fill: '#FF6B6B', radius: 7 },
+                                                paintStyle: { fill: '#FF6B6B', radius: 8 },
+                                                hoverPaintStyle: { fill: '#FF8787', radius: 10 },
                                                 isSource: true,
                                                 maxConnections: 1
                                             });
@@ -3335,7 +3417,8 @@ document.addEventListener('alpine:init', () => {
                                 }
                             }
                             
-                            // ✅ Conectar botões customizados (content e buttons) - LINHAS VERMELHAS
+                            // ✅ Conectar botões customizados (TODOS os tipos de step) - LINHAS VERMELHAS
+                            // ✅ Cada botão customizado pode ter sua própria conexão para um step diferente
                             if (step.config && step.config.custom_buttons && step.config.custom_buttons.length > 0) {
                                 step.config.custom_buttons.forEach((btn, btnIdx) => {
                                     if (btn.target_step) {
@@ -3343,19 +3426,61 @@ document.addEventListener('alpine:init', () => {
                                         if (targetEl) {
                                             try {
                                                 const buttonEndpointId = `btn-endpoint-${step.id}-${btnIdx}`;
-                                                const btnText = (btn.text || `Btn ${btnIdx + 1}`).substring(0, 15); // Limitar tamanho do label
+                                                const btnText = (btn.text || `Botão ${btnIdx + 1}`).substring(0, 15); // Limitar tamanho do label
                                                 
                                                 if (typeof this.jsPlumbInstance.addEndpoint === 'function') {
                                                     // jsPlumb 5.x: conectar usando UUID do endpoint
-                                                    this.jsPlumbInstance.connect({
-                                                        source: buttonEndpointId,
-                                                        target: targetEl,
-                                                        paintStyle: { stroke: '#FF6B6B', strokeWidth: 3 },
-                                                        overlays: [
-                                                            ['Arrow', { location: 1, width: 12, length: 12 }],
-                                                            ['Label', { label: btnText, location: 0.5, cssClass: 'connection-label', labelStyle: { color: '#FF6B6B', fontWeight: 'bold' } }]
-                                                        ]
-                                                    });
+                                                    // ✅ Buscar endpoint ou criar se não existir
+                                                    let endpoint = null;
+                                                    try {
+                                                        endpoint = this.jsPlumbInstance.getEndpoint(buttonEndpointId);
+                                                    } catch (e) {
+                                                        console.warn('⚠️ Endpoint não encontrado, tentando conectar diretamente:', buttonEndpointId);
+                                                    }
+                                                    
+                                                    if (endpoint) {
+                                                        this.jsPlumbInstance.connect({
+                                                            source: endpoint,
+                                                            target: targetEl,
+                                                            paintStyle: { stroke: '#FF6B6B', strokeWidth: 3 },
+                                                            overlays: [
+                                                                ['Arrow', { location: 1, width: 12, length: 12 }],
+                                                                ['Label', { 
+                                                                    label: btnText, 
+                                                                    location: 0.5, 
+                                                                    cssClass: 'connection-label',
+                                                                    labelStyle: { 
+                                                                        color: '#FF6B6B', 
+                                                                        fontWeight: 'bold',
+                                                                        fontSize: '11px',
+                                                                        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+                                                                        padding: '2px 6px',
+                                                                        borderRadius: '3px'
+                                                                    }
+                                                                }]
+                                                            ]
+                                                        });
+                                                    } else {
+                                                        // Fallback: conectar diretamente usando ID do endpoint como string
+                                                        this.jsPlumbInstance.connect({
+                                                            source: buttonEndpointId,
+                                                            target: targetEl,
+                                                            paintStyle: { stroke: '#FF6B6B', strokeWidth: 3 },
+                                                            overlays: [
+                                                                ['Arrow', { location: 1, width: 12, length: 12 }],
+                                                                ['Label', { 
+                                                                    label: btnText, 
+                                                                    location: 0.5, 
+                                                                    cssClass: 'connection-label',
+                                                                    labelStyle: { 
+                                                                        color: '#FF6B6B', 
+                                                                        fontWeight: 'bold',
+                                                                        fontSize: '11px'
+                                                                    }
+                                                                }]
+                                                            ]
+                                                        });
+                                                    }
                                                 } else if (typeof this.jsPlumbInstance.makeSource === 'function') {
                                                     // jsPlumb 2.x: conectar usando elemento do endpoint ou step
                                                     const btnEndpointEl = document.getElementById(buttonEndpointId);
@@ -3367,12 +3492,24 @@ document.addEventListener('alpine:init', () => {
                                                         paintStyle: { stroke: '#FF6B6B', strokeWidth: 3 },
                                                         overlays: [
                                                             ['Arrow', { location: 1, width: 12, length: 12 }],
-                                                            ['Label', { label: btnText, location: 0.5, cssClass: 'connection-label' }]
+                                                            ['Label', { 
+                                                                label: btnText, 
+                                                                location: 0.5, 
+                                                                cssClass: 'connection-label',
+                                                                labelStyle: { 
+                                                                    color: '#FF6B6B', 
+                                                                    fontWeight: 'bold',
+                                                                    fontSize: '11px'
+                                                                }
+                                                            }]
                                                         ]
                                                     });
                                                 }
+                                                
+                                                console.log(`✅ Botão "${btnText}" conectado de step ${step.id} para step ${btn.target_step}`);
                                             } catch (e) {
                                                 console.error('❌ Erro ao conectar botão customizado:', e);
+                                                console.error('   Step:', step.id, 'Botão:', btnIdx, 'Target:', btn.target_step);
                                             }
                                         }
                                     }
@@ -3408,16 +3545,71 @@ document.addEventListener('alpine:init', () => {
                         try {
                             if (typeof this.jsPlumbInstance.bind === 'function') {
                                 this.jsPlumbInstance.bind('connection', (info) => {
-                                    const sourceId = (info.sourceId || info.source?.id || '').replace('source-', '');
-                                    const targetId = (info.targetId || info.target?.id || '').replace('target-', '');
+                                    // ✅ Extrair informações da conexão
+                                    let sourceId = '';
+                                    let targetId = '';
                                     
-                                    // Atualizar connections no step
-                                    const sourceStep = this.config.flow_steps.find(s => s.id === sourceId);
+                                    // Tentar várias formas de obter o sourceId
+                                    if (info.sourceId) {
+                                        sourceId = info.sourceId;
+                                    } else if (info.source && info.source.id) {
+                                        sourceId = info.source.id;
+                                    } else if (info.source && info.source.uuid) {
+                                        sourceId = info.source.uuid;
+                                    } else if (info.sourceEndpoint && info.sourceEndpoint.uuid) {
+                                        sourceId = info.sourceEndpoint.uuid;
+                                    }
+                                    
+                                    // Tentar várias formas de obter o targetId
+                                    if (info.targetId) {
+                                        targetId = info.targetId.replace('target-', '');
+                                    } else if (info.target && info.target.id) {
+                                        targetId = info.target.id.replace('flow-step-', '').replace('target-', '');
+                                    } else if (info.target && info.target.uuid) {
+                                        targetId = info.target.uuid.replace('target-', '');
+                                    } else if (info.targetEndpoint && info.targetEndpoint.uuid) {
+                                        targetId = info.targetEndpoint.uuid.replace('target-', '');
+                                    }
+                                    
+                                    if (!sourceId || !targetId) {
+                                        console.warn('⚠️ Não foi possível extrair sourceId ou targetId da conexão:', info);
+                                        return;
+                                    }
+                                    
+                                    // ✅ Verificar se a conexão vem de um endpoint de botão customizado
+                                    // Formato: btn-endpoint-{stepId}-{btnIdx}
+                                    if (sourceId.startsWith('btn-endpoint-')) {
+                                        const parts = sourceId.split('-');
+                                        if (parts.length >= 4) {
+                                            const stepId = parts.slice(2, -1).join('-'); // Pode ter hífens no stepId
+                                            const btnIdx = parseInt(parts[parts.length - 1]);
+                                            
+                                            if (!isNaN(btnIdx)) {
+                                                const sourceStep = this.config.flow_steps.find(s => s.id === stepId);
+                                                if (sourceStep && sourceStep.config && sourceStep.config.custom_buttons) {
+                                                    const button = sourceStep.config.custom_buttons[btnIdx];
+                                                    if (button) {
+                                                        // ✅ Atualizar target_step do botão customizado
+                                                        button.target_step = targetId;
+                                                        const targetStepName = this.config.flow_steps.find(s => s.id === targetId)?.name || targetId;
+                                                        this.showNotification(`✅ Botão "${button.text || 'Botão ' + (btnIdx + 1)}" conectado para "${targetStepName}"`, 'success');
+                                                        console.log(`✅ Botão customizado "${button.text}" do step ${stepId} conectado para step ${targetId}`);
+                                                        return; // Não processar mais
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    
+                                    // ✅ Conexão normal (não é botão customizado)
+                                    const sourceStepId = sourceId.replace('source-', '').replace('flow-step-', '');
+                                    const sourceStep = this.config.flow_steps.find(s => s.id === sourceStepId);
                                     if (sourceStep) {
                                         if (!sourceStep.connections) sourceStep.connections = {};
                                         // Por padrão, salvar como "next"
                                         sourceStep.connections.next = targetId;
-                                        this.showNotification(`✅ Conexão criada: ${sourceStep.name || sourceId} → ${this.config.flow_steps.find(s => s.id === targetId)?.name || targetId}`, 'success');
+                                        const targetStepName = this.config.flow_steps.find(s => s.id === targetId)?.name || targetId;
+                                        this.showNotification(`✅ Conexão criada: ${sourceStep.name || sourceStepId} → ${targetStepName}`, 'success');
                                     }
                                 });
                             }
