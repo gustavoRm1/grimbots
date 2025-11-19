@@ -3346,13 +3346,12 @@ document.addEventListener('alpine:init', () => {
                         if (this.jsPlumbInstance && typeof this.jsPlumbInstance.repaintEverything === 'function') {
                             this.jsPlumbInstance.repaintEverything();
                         } else if (this.jsPlumbInstance && typeof this.jsPlumbInstance.repaint === 'function') {
-                                this.jsPlumbInstance.repaint();
-                            }
-                        } catch (e) {
-                            console.warn('⚠️ Erro ao repaint após resize:', e);
+                            this.jsPlumbInstance.repaint();
                         }
-                    }, 100);
-                }
+                    } catch (e) {
+                        console.warn('⚠️ Erro ao repaint após resize:', e);
+                    }
+                }, 100);
             });
             
             // Limpar canvas
