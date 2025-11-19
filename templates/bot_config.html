@@ -3784,7 +3784,7 @@ document.addEventListener('alpine:init', () => {
                                     '<i class="fas fa-toggle-on mr-2"></i>Botões Customizados (Cada botão pode levar a um step diferente)' +
                                     '</label>' +
                                     '<p class="text-xs text-blue-100 mb-3">Adicione botões personalizados. Cada botão pode levar o lead para um step diferente do fluxo. Conecte visualmente no editor de fluxo.</p>' +
-                                    '<div id="custom-buttons-list-${stepId}" class="space-y-2 mb-3">' +
+                                    '<div id="custom-buttons-list-' + stepId + '" class="space-y-2 mb-3">' +
                                     customButtonsHtml +
                                     '</div>' +
                                     '<button type="button" ' +
@@ -4217,7 +4217,7 @@ document.addEventListener('alpine:init', () => {
                             '<i class="fas fa-toggle-on mr-2"></i>Botões Customizados (Cada botão pode levar a um step diferente)' +
                             '</label>' +
                             '<p class="text-xs text-blue-100 mb-3">Adicione botões personalizados. Cada botão pode levar o lead para um step diferente do fluxo. Conecte visualmente no editor de fluxo.</p>' +
-                            '<div id="custom-buttons-list-${stepId}" class="space-y-2 mb-3">' +
+                            '<div id="custom-buttons-list-' + stepId + '" class="space-y-2 mb-3">' +
                             customButtonsHtml +
                             '</div>' +
                             '<button type="button" ' +
@@ -5431,10 +5431,53 @@ window.removeFlowStepFromVisual = function(stepId) {
 // ✅ Funções globais para botões customizados
 window.addCustomButton = function(stepId) {
     try {
-        const container = document.getElementById(`custom-buttons-list-${stepId}`);
+        // ✅ DEBUG: Log para verificar stepId
+        console.log('🔍 Tentando adicionar botão customizado para stepId:', stepId);
+        
+        // Tentar encontrar o container
+        let container = document.getElementById(`custom-buttons-list-${stepId}`);
+        
+        // ✅ Se não encontrar, tentar buscar por atributo data ou classe
         if (!container) {
-            console.error('❌ Container de botões customizados não encontrado:', `custom-buttons-list-${stepId}`);
-            alert('❌ Erro: Container de botões não encontrado. Tente fechar e reabrir o modal.');
+            console.warn('⚠️ Container não encontrado pelo ID, tentando buscar no modal...');
+            // Buscar no modal atual
+            const modal = document.querySelector('.fixed.inset-0.bg-black');
+            if (modal) {
+                container = modal.querySelector(`[id*="custom-buttons-list"]`);
+                if (container) {
+                    console.log('✅ Container encontrado no modal:', container.id);
+                }
+            }
+        }
+        
+        if (!container) {
+            // ✅ Tentar aguardar um pouco e buscar novamente (pode ser problema de timing)
+            console.warn('⚠️ Container não encontrado imediatamente, aguardando 100ms...');
+            setTimeout(() => {
+                container = document.getElementById(`custom-buttons-list-${stepId}`);
+                if (container) {
+                    console.log('✅ Container encontrado após aguardar!');
+                    // Chamar função novamente
+                    window.addCustomButton(stepId);
+                    return;
+                }
+                
+                // ✅ DEBUG: Listar todos os elementos com "custom-buttons" no ID
+                const allContainers = document.querySelectorAll('[id*="custom-buttons"]');
+                console.error('❌ Container de botões customizados não encontrado:', `custom-buttons-list-${stepId}`);
+                console.log('🔍 Containers encontrados no DOM:', Array.from(allContainers).map(el => el.id));
+                console.log('🔍 StepId recebido:', stepId);
+                console.log('🔍 Tipo do stepId:', typeof stepId);
+                
+                // Verificar se o modal existe
+                const modal = document.querySelector('.fixed.inset-0.bg-black');
+                console.log('🔍 Modal encontrado:', !!modal);
+                if (modal) {
+                    console.log('🔍 HTML do modal (primeiros 500 chars):', modal.innerHTML.substring(0, 500));
+                }
+                
+                alert(`❌ Erro: Container de botões não encontrado para stepId: ${stepId}\n\nVerifique o console para mais detalhes.`);
+            }, 100);
             return;
         }
         
