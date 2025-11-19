@@ -306,25 +306,27 @@ body {
 }
 
 /* ✅ Estilos para endpoints de botões customizados */
-.btn-endpoint-marker {
+.btn-endpoint-marker,
+.btn-visual-endpoint {
     position: absolute;
-    right: -10px;
     width: 16px;
     height: 16px;
     background: #FF6B6B;
-    border: 2px solid #FF0000;
+    border: 3px solid #FF0000;
     border-radius: 50%;
-    cursor: pointer;
-    z-index: 20;
-    box-shadow: 0 0 5px rgba(255, 107, 107, 0.5);
+    cursor: crosshair;
+    z-index: 30;
+    box-shadow: 0 0 8px rgba(255, 107, 107, 0.8);
     transition: all 0.2s ease;
+    pointer-events: all;
 }
 
-.btn-endpoint-marker:hover {
+.btn-endpoint-marker:hover,
+.btn-visual-endpoint:hover {
     background: #FF8787;
     border-color: #FF3333;
-    transform: scale(1.2);
-    box-shadow: 0 0 10px rgba(255, 107, 107, 0.8);
+    transform: translateY(-50%) scale(1.3) !important;
+    box-shadow: 0 0 12px rgba(255, 107, 107, 1);
 }
 
 .btn-endpoint-label {
@@ -3372,20 +3374,76 @@ document.addEventListener('alpine:init', () => {
                 draggedElement: null
             };
             
-            // ✅ Função para prevenir scroll durante drag
+            // ✅ Event listeners para prevenir scroll durante drag
+            let scrollPreventionHandlers = {
+                wheel: null,
+                touchmove: null
+            };
+            
+            // ✅ Função para prevenir scroll durante drag - SEM position: fixed (evita card pular)
             const preventScrollDuringDrag = (isDragging) => {
                 if (isDragging) {
+                    // ✅ Apenas desabilitar overflow do canvas (não mexer no body)
                     canvas.style.overflow = 'hidden';
                     canvas.style.touchAction = 'none';
+                    
+                    // ✅ Prevenir scroll do body sem position: fixed
                     document.body.style.overflow = 'hidden';
-                    document.body.style.position = 'fixed';
-                    document.body.style.width = '100%';
+                    
+                    // ✅ Salvar posição atual do scroll para restaurar depois
+                    if (!canvas.dataset.scrollTop) {
+                        canvas.dataset.scrollTop = canvas.scrollTop;
+                        canvas.dataset.scrollLeft = canvas.scrollLeft;
+                    }
+                    
+                    // ✅ Adicionar event listeners para prevenir scroll via wheel/touch
+                    if (!scrollPreventionHandlers.wheel) {
+                        scrollPreventionHandlers.wheel = (e) => {
+                            // Apenas prevenir se estiver arrastando
+                            if (globalDragState.isDragging) {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                return false;
+                            }
+                        };
+                        scrollPreventionHandlers.touchmove = (e) => {
+                            // Apenas prevenir se estiver arrastando
+                            if (globalDragState.isDragging) {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                return false;
+                            }
+                        };
+                        
+                        // Adicionar listeners no canvas e window
+                        canvas.addEventListener('wheel', scrollPreventionHandlers.wheel, { passive: false });
+                        canvas.addEventListener('touchmove', scrollPreventionHandlers.touchmove, { passive: false });
+                        window.addEventListener('wheel', scrollPreventionHandlers.wheel, { passive: false });
+                        window.addEventListener('touchmove', scrollPreventionHandlers.touchmove, { passive: false });
+                    }
                 } else {
+                    // ✅ Remover event listeners
+                    if (scrollPreventionHandlers.wheel) {
+                        canvas.removeEventListener('wheel', scrollPreventionHandlers.wheel);
+                        canvas.removeEventListener('touchmove', scrollPreventionHandlers.touchmove);
+                        window.removeEventListener('wheel', scrollPreventionHandlers.wheel);
+                        window.removeEventListener('touchmove', scrollPreventionHandlers.touchmove);
+                        scrollPreventionHandlers.wheel = null;
+                        scrollPreventionHandlers.touchmove = null;
+                    }
+                    
+                    // ✅ Restaurar overflow
                     canvas.style.overflow = 'auto';
                     canvas.style.touchAction = 'auto';
                     document.body.style.overflow = '';
-                    document.body.style.position = '';
-                    document.body.style.width = '';
+                    
+                    // ✅ Restaurar posição do scroll se necessário
+                    if (canvas.dataset.scrollTop) {
+                        canvas.scrollTop = parseInt(canvas.dataset.scrollTop) || 0;
+                        canvas.scrollLeft = parseInt(canvas.dataset.scrollLeft) || 0;
+                        delete canvas.dataset.scrollTop;
+                        delete canvas.dataset.scrollLeft;
+                    }
                 }
             };
             
@@ -3644,20 +3702,89 @@ document.addEventListener('alpine:init', () => {
                                         🔀 ${step.conditions.length} condição(ões)
                                     </div>
                                 ` : ''}
-                                ${(step.config && step.config.custom_buttons && step.config.custom_buttons.length > 0) ? `
-                                    <div class="text-xs text-red-400 mb-1">
-                                        🔘 ${step.config.custom_buttons.length} botão(ões):
-                                    </div>
-                                    <div class="flex flex-wrap gap-1 mb-1">
-                                        ${step.config.custom_buttons.map((btn, idx) => `
-                                            <div class="px-2 py-0.5 bg-red-600 bg-opacity-30 border border-red-500 rounded text-xs text-red-300" 
-                                                 title="${(btn.text || 'Botão ' + (idx + 1))} → ${btn.target_step ? 'Step ' + btn.target_step : 'Nenhum'}"
-                                                 data-button-idx="${idx}">
-                                                ${(btn.text || 'Btn ' + (idx + 1)).substring(0, 10)}
+                                ${(() => {
+                                    // ✅ Coletar TODOS os botões (customizados + cadastrados)
+                                    const allButtons = [];
+                                    
+                                    // Botões customizados
+                                    if (step.config && step.config.custom_buttons) {
+                                        step.config.custom_buttons.forEach((btn, idx) => {
+                                            allButtons.push({
+                                                type: 'custom',
+                                                index: idx,
+                                                text: btn.text || `Botão ${idx + 1}`,
+                                                target_step: btn.target_step,
+                                                price: null
+                                            });
+                                        });
+                                    }
+                                    
+                                    // Botões cadastrados (main_buttons)
+                                    if (step.config && step.config.selected_buttons && this.config.main_buttons) {
+                                        step.config.selected_buttons.forEach((selected) => {
+                                            if (selected.type === 'main' && selected.index !== undefined) {
+                                                const mainBtn = this.config.main_buttons[selected.index];
+                                                if (mainBtn) {
+                                                    allButtons.push({
+                                                        type: 'main',
+                                                        index: selected.index,
+                                                        text: mainBtn.text || `Botão ${selected.index + 1}`,
+                                                        target_step: null, // Main buttons não têm target_step individual
+                                                        price: mainBtn.price
+                                                    });
+                                                }
+                                            }
+                                        });
+                                    }
+                                    
+                                    // Botões cadastrados (redirect_buttons)
+                                    if (step.config && step.config.selected_buttons && this.config.redirect_buttons) {
+                                        step.config.selected_buttons.forEach((selected) => {
+                                            if (selected.type === 'redirect' && selected.index !== undefined) {
+                                                const redirectBtn = this.config.redirect_buttons[selected.index];
+                                                if (redirectBtn) {
+                                                    allButtons.push({
+                                                        type: 'redirect',
+                                                        index: selected.index,
+                                                        text: redirectBtn.text || `Link ${selected.index + 1}`,
+                                                        target_step: null,
+                                                        url: redirectBtn.url
+                                                    });
+                                                }
+                                            }
+                                        });
+                                    }
+                                    
+                                    if (allButtons.length === 0) return '';
+                                    
+                                    return `
+                                        <div class="mt-2 mb-2 border-t border-gray-700 pt-2">
+                                            <div class="text-xs text-gray-500 mb-2">Botões:</div>
+                                            <div class="space-y-1.5">
+                                                ${allButtons.map((btn, idx) => `
+                                                    <div class="relative group">
+                                                        <div class="flex items-center gap-2 pr-6">
+                                                            <div class="flex-1 px-3 py-2 bg-red-600 bg-opacity-20 border border-red-500 rounded-lg text-xs font-semibold text-red-200 truncate"
+                                                                 title="${btn.text}${btn.price ? ' - R$ ' + parseFloat(btn.price).toFixed(2) : ''}${btn.target_step ? ' → Step ' + btn.target_step : ''}">
+                                                                ${btn.text.length > 25 ? btn.text.substring(0, 22) + '...' : btn.text}
+                                                                ${btn.price ? '<span class="text-xs opacity-75"> (R$ ' + parseFloat(btn.price).toFixed(2) + ')</span>' : ''}
+                                                            </div>
+                                                            <!-- ✅ Bolinha endpoint ao lado direito -->
+                                                            <div class="btn-visual-endpoint" 
+                                                                 data-button-type="${btn.type}"
+                                                                 data-button-index="${btn.index}"
+                                                                 data-step-id="${stepId}"
+                                                                 data-button-visual-idx="${idx}"
+                                                                 style="position: absolute; right: -10px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; background: #FF6B6B; border: 3px solid #FF0000; border-radius: 50%; cursor: crosshair; z-index: 30; box-shadow: 0 0 8px rgba(255, 107, 107, 0.8); transition: all 0.2s ease;"
+                                                                 title="Arraste para conectar">
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                `).join('')}
                                             </div>
-                                        `).join('')}
-                                    </div>
-                                ` : ''}
+                                        </div>
+                                    `;
+                                })()}
                                 <div class="flex items-center gap-1 mt-2">
                                     <button onclick="window.editFlowStepFromVisual('${stepId}')" 
                                             class="flex-1 px-2 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded text-xs">
@@ -3938,25 +4065,78 @@ document.addEventListener('alpine:init', () => {
                                 console.error('❌ Erro ao adicionar endpoints:', e);
                             }
                             
-                            // ✅ Adicionar endpoints INDIVIDUAIS para cada botão customizado (TODOS os tipos de step)
-                            // ✅ Isso permite que cada botão tenha sua própria linha de conexão no fluxograma
-                            if (step.config && step.config.custom_buttons && step.config.custom_buttons.length > 0) {
-                                try {
-                                    step.config.custom_buttons.forEach((btn, btnIdx) => {
-                                        const btnText = (btn.text || `Botão ${btnIdx + 1}`).substring(0, 15);
+                            // ✅ Adicionar endpoints INDIVIDUAIS para TODOS os botões (customizados + cadastrados)
+                            // ✅ Usar os elementos visuais criados no HTML (.btn-visual-endpoint)
+                            try {
+                                // Aguardar DOM renderizar para encontrar os elementos
+                                setTimeout(() => {
+                                    const allButtonEndpoints = stepEl.querySelectorAll('.btn-visual-endpoint');
+                                    
+                                    allButtonEndpoints.forEach((endpointEl, visualIdx) => {
+                                        const btnType = endpointEl.getAttribute('data-button-type');
+                                        const btnIndex = endpointEl.getAttribute('data-button-index');
+                                        const buttonEndpointId = `btn-endpoint-${stepId}-${btnType}-${btnIndex}-${visualIdx}`;
                                         
-                                        if (typeof this.jsPlumbInstance.addEndpoint === 'function') {
-                                            // jsPlumb 5.x: criar endpoint individual por botão
-                                            const buttonEndpointId = `btn-endpoint-${stepId}-${btnIdx}`;
-                                            // Posicionar endpoints na lateral direita, distribuídos verticalmente
-                                            // Começar em 25% e espaçar cada botão em 15% (25%, 40%, 55%, 70%, ...)
-                                            const anchorPosition = 0.25 + (btnIdx * 0.15);
+                                        // Obter texto do botão
+                                        let btnText = '';
+                                        if (btnType === 'custom' && step.config && step.config.custom_buttons) {
+                                            const customBtn = step.config.custom_buttons[parseInt(btnIndex)];
+                                            btnText = (customBtn && customBtn.text) ? customBtn.text.substring(0, 15) : `Botão ${btnIndex}`;
+                                        } else if (btnType === 'main' && this.config.main_buttons) {
+                                            const mainBtn = this.config.main_buttons[parseInt(btnIndex)];
+                                            btnText = (mainBtn && mainBtn.text) ? mainBtn.text.substring(0, 15) : `Botão ${btnIndex}`;
+                                        } else if (btnType === 'redirect' && this.config.redirect_buttons) {
+                                            const redirectBtn = this.config.redirect_buttons[parseInt(btnIndex)];
+                                            btnText = (redirectBtn && redirectBtn.text) ? redirectBtn.text.substring(0, 15) : `Link ${btnIndex}`;
+                                        }
+                                        
+                                        if (typeof this.jsPlumbInstance.makeSource === 'function') {
+                                            // jsPlumb 2.x: usar o elemento visual como source
+                                            endpointEl.id = buttonEndpointId;
+                                            endpointEl.style.cursor = 'crosshair';
                                             
-                                            // Limitar posição máxima para não ultrapassar 100%
-                                            const finalPosition = Math.min(anchorPosition, 0.85);
+                                            // Adicionar efeito hover
+                                            endpointEl.addEventListener('mouseenter', () => {
+                                                endpointEl.style.transform = 'translateY(-50%) scale(1.3)';
+                                                endpointEl.style.boxShadow = '0 0 12px rgba(255, 107, 107, 1)';
+                                            });
+                                            endpointEl.addEventListener('mouseleave', () => {
+                                                endpointEl.style.transform = 'translateY(-50%) scale(1)';
+                                                endpointEl.style.boxShadow = '0 0 8px rgba(255, 107, 107, 0.8)';
+                                            });
+                                            
+                                            this.jsPlumbInstance.makeSource(endpointEl, {
+                                                anchor: 'Right',
+                                                endpoint: ['Dot', { radius: 10 }],
+                                                paintStyle: { fill: '#FF6B6B', radius: 10, stroke: '#FF0000', strokeWidth: 3 },
+                                                hoverPaintStyle: { fill: '#FF8787', radius: 12, stroke: '#FF3333', strokeWidth: 4 },
+                                                isSource: true,
+                                                maxConnections: 1,
+                                                connectorStyle: { stroke: '#FF6B6B', strokeWidth: 3 },
+                                                connectorHoverStyle: { stroke: '#FF8787', strokeWidth: 4 }
+                                            });
+                                        } else if (typeof this.jsPlumbInstance.addEndpoint === 'function') {
+                                            // jsPlumb 5.x: criar endpoint usando posição do elemento visual
+                                            endpointEl.id = buttonEndpointId;
+                                            endpointEl.style.cursor = 'crosshair';
+                                            
+                                            // Adicionar efeito hover
+                                            endpointEl.addEventListener('mouseenter', () => {
+                                                endpointEl.style.transform = 'translateY(-50%) scale(1.3)';
+                                                endpointEl.style.boxShadow = '0 0 12px rgba(255, 107, 107, 1)';
+                                            });
+                                            endpointEl.addEventListener('mouseleave', () => {
+                                                endpointEl.style.transform = 'translateY(-50%) scale(1)';
+                                                endpointEl.style.boxShadow = '0 0 8px rgba(255, 107, 107, 0.8)';
+                                            });
+                                            
+                                            // Calcular posição relativa do endpoint
+                                            const rect = endpointEl.getBoundingClientRect();
+                                            const stepRect = stepEl.getBoundingClientRect();
+                                            const relativeTop = (rect.top - stepRect.top + rect.height / 2) / stepRect.height;
                                             
                                             this.jsPlumbInstance.addEndpoint(stepEl, {
-                                                anchor: ['Right', finalPosition, 1, 0, 0, 0],
+                                                anchor: ['Right', relativeTop, 1, 0, 0, 0],
                                                 endpoint: ['Dot', { radius: 10 }],
                                                 paintStyle: { fill: '#FF6B6B', stroke: '#FF0000', strokeWidth: 3 },
                                                 hoverPaintStyle: { fill: '#FF8787', stroke: '#FF3333', strokeWidth: 4, radius: 12 },
@@ -3969,7 +4149,7 @@ document.addEventListener('alpine:init', () => {
                                                 uuid: buttonEndpointId
                                             });
                                             
-                                            // ✅ Adicionar label/tooltip no endpoint para identificar o botão
+                                            // Adicionar label
                                             const endpoint = this.jsPlumbInstance.getEndpoint(buttonEndpointId);
                                             if (endpoint && endpoint.setLabel) {
                                                 endpoint.setLabel({
@@ -3978,41 +4158,11 @@ document.addEventListener('alpine:init', () => {
                                                     cssClass: 'btn-endpoint-label'
                                                 });
                                             }
-                                        } else if (typeof this.jsPlumbInstance.makeSource === 'function') {
-                                            // jsPlumb 2.x: criar endpoint individual usando makeSource
-                                            const buttonEndpointId = `btn-endpoint-${stepId}-${btnIdx}`;
-                                            // Criar um elemento span para o endpoint do botão
-                                            const btnEndpointEl = document.createElement('span');
-                                            btnEndpointEl.id = buttonEndpointId;
-                                            btnEndpointEl.className = 'btn-endpoint-marker';
-                                            btnEndpointEl.title = btnText + (btn.target_step ? ` → Step ${btn.target_step}` : '');
-                                            // Posicionar endpoints na lateral direita, distribuídos verticalmente
-                                            const topPercent = 25 + (btnIdx * 15);
-                                            btnEndpointEl.style.cssText = `position: absolute; right: -12px; top: ${topPercent}%; width: 20px; height: 20px; background: #FF6B6B; border: 3px solid #FF0000; border-radius: 50%; cursor: crosshair; z-index: 20; box-shadow: 0 0 8px rgba(255, 107, 107, 0.7); transition: all 0.2s ease;`;
-                                            stepEl.appendChild(btnEndpointEl);
-                                            
-                                            // Adicionar label de texto ao lado do endpoint
-                                            const btnLabelEl = document.createElement('span');
-                                            btnLabelEl.className = 'btn-endpoint-label-text';
-                                            btnLabelEl.textContent = btnText;
-                                            btnLabelEl.style.cssText = `position: absolute; right: -90px; top: ${topPercent}%; font-size: 10px; color: #FF6B6B; font-weight: bold; white-space: nowrap; pointer-events: none; transform: translateY(-50%); z-index: 25;`;
-                                            stepEl.appendChild(btnLabelEl);
-                                            
-                                            this.jsPlumbInstance.makeSource(btnEndpointEl, {
-                                                anchor: 'Right',
-                                                endpoint: ['Dot', { radius: 10 }],
-                                                paintStyle: { fill: '#FF6B6B', radius: 10, stroke: '#FF0000', strokeWidth: 3 },
-                                                hoverPaintStyle: { fill: '#FF8787', radius: 12, stroke: '#FF3333', strokeWidth: 4 },
-                                                isSource: true,
-                                                maxConnections: 1,
-                                                connectorStyle: { stroke: '#FF6B6B', strokeWidth: 3 },
-                                                connectorHoverStyle: { stroke: '#FF8787', strokeWidth: 4 }
-                                            });
                                         }
                                     });
-                                } catch (e) {
-                                    console.error('❌ Erro ao adicionar endpoints de botões customizados:', e);
-                                }
+                                }, 100); // Delay para garantir DOM renderizado
+                            } catch (e) {
+                                console.error('❌ Erro ao adicionar endpoints de botões:', e);
                             }
                         });
                         
@@ -4158,29 +4308,38 @@ document.addEventListener('alpine:init', () => {
                             
                             // ✅ Conectar botões customizados (TODOS os tipos de step) - LINHAS VERMELHAS
                             // ✅ Cada botão customizado pode ter sua própria conexão para um step diferente
-                            if (step.config && step.config.custom_buttons && step.config.custom_buttons.length > 0) {
-                                step.config.custom_buttons.forEach((btn, btnIdx) => {
-                                    if (btn.target_step) {
-                                        const targetEl = document.getElementById(`flow-step-${btn.target_step}`);
-                                        if (targetEl) {
-                                            try {
-                                                const buttonEndpointId = `btn-endpoint-${step.id}-${btnIdx}`;
-                                                const btnText = (btn.text || `Botão ${btnIdx + 1}`).substring(0, 15); // Limitar tamanho do label
-                                                
-                                                if (typeof this.jsPlumbInstance.addEndpoint === 'function') {
-                                                    // jsPlumb 5.x: conectar usando UUID do endpoint
-                                                    // ✅ Buscar endpoint ou criar se não existir
-                                                    let endpoint = null;
-                                                    try {
-                                                        endpoint = this.jsPlumbInstance.getEndpoint(buttonEndpointId);
-                                                    } catch (e) {
-                                                        console.warn('⚠️ Endpoint não encontrado, tentando conectar diretamente:', buttonEndpointId);
-                                                    }
+                            // ✅ Aguardar endpoints serem criados antes de conectar
+                            setTimeout(() => {
+                                if (step.config && step.config.custom_buttons && step.config.custom_buttons.length > 0) {
+                                    step.config.custom_buttons.forEach((btn, btnIdx) => {
+                                        if (btn.target_step) {
+                                            const targetEl = document.getElementById(`flow-step-${btn.target_step}`);
+                                            if (targetEl) {
+                                                try {
+                                                    // ✅ Usar novo formato de ID de endpoint
+                                                    const buttonEndpointId = `btn-endpoint-${step.id}-custom-${btnIdx}-0`;
+                                                    const btnText = (btn.text || `Botão ${btnIdx + 1}`).substring(0, 15); // Limitar tamanho do label
                                                     
-                                                    if (endpoint) {
-                                                        const connection = this.jsPlumbInstance.connect({
-                                                            source: endpoint,
-                                                            target: targetEl,
+                                                    // ✅ Tentar encontrar o elemento visual do endpoint também
+                                                    const endpointVisualEl = stepEl.querySelector(`[data-button-type="custom"][data-button-index="${btnIdx}"]`);
+                                                    
+                                                    if (typeof this.jsPlumbInstance.addEndpoint === 'function') {
+                                                        // jsPlumb 5.x: conectar usando UUID do endpoint
+                                                        // ✅ Buscar endpoint ou criar se não existir
+                                                        let endpoint = null;
+                                                        try {
+                                                            endpoint = this.jsPlumbInstance.getEndpoint(buttonEndpointId);
+                                                        } catch (e) {
+                                                            console.warn('⚠️ Endpoint não encontrado, tentando usar elemento visual:', buttonEndpointId);
+                                                        }
+                                                        
+                                                        // ✅ Se não encontrou por ID, tentar usar elemento visual
+                                                        const sourceEl = endpoint || endpointVisualEl || stepEl;
+                                                        
+                                                        if (endpoint || endpointVisualEl) {
+                                                            const connection = this.jsPlumbInstance.connect({
+                                                                source: sourceEl,
+                                                                target: targetEl,
                                                             paintStyle: { stroke: '#FF6B6B', strokeWidth: 3 },
                                                             overlays: [
                                                                 ['Arrow', { location: 1, width: 14, length: 14, foldback: 0.8 }],
@@ -4241,10 +4400,9 @@ document.addEventListener('alpine:init', () => {
                                                             connection.canvas.setAttribute('data-removable', 'true');
                                                         }
                                                     }
-                                                } else if (typeof this.jsPlumbInstance.makeSource === 'function') {
-                                                    // jsPlumb 2.x: conectar usando elemento do endpoint ou step
-                                                    const btnEndpointEl = document.getElementById(buttonEndpointId);
-                                                    const sourceEl = btnEndpointEl || stepEl;
+                                                    } else if (typeof this.jsPlumbInstance.makeSource === 'function') {
+                                                        // jsPlumb 2.x: conectar usando elemento visual do endpoint
+                                                        const sourceEl = endpointVisualEl || document.getElementById(buttonEndpointId) || stepEl;
                                                     
                                                     const connection = this.jsPlumbInstance.connect({
                                                         source: sourceEl,
@@ -4287,6 +4445,7 @@ document.addEventListener('alpine:init', () => {
                                     }
                                 });
                             }
+                            }, 200); // Delay maior para garantir que endpoints foram criados
                             
                             // ✅ Conectar condições
                             if (step.conditions && step.conditions.length > 0) {
