@@ -3569,83 +3569,83 @@ class BotManager:
                     action = parts[1] if len(parts) > 1 else ''
                 
                 logger.info(f"🔘 Botão contextual clicado: step={source_step_id}, action={action}")
+                
+                # Buscar step no fluxo
+                flow_steps = config.get('flow_steps', [])
+                source_step = self._find_step_by_id(flow_steps, source_step_id)
+                
+                if source_step:
+                    telegram_user_id = str(user_info.get('id', ''))
                     
-                    # Buscar step no fluxo
-                    flow_steps = config.get('flow_steps', [])
-                    source_step = self._find_step_by_id(flow_steps, source_step_id)
-                    
-                    if source_step:
-                        telegram_user_id = str(user_info.get('id', ''))
-                        
-                        # ✅ QI 500: Avaliar condições de button_click ANTES de usar target_step do botão
-                        conditions = source_step.get('conditions', [])
-                        if conditions and len(conditions) > 0:
-                            try:
-                                redis_conn = get_redis_connection()
-                                current_step_key = f"flow_current_step:{bot_id}:{telegram_user_id}"
-                                
-                                # Avaliar condições com parâmetros completos
-                                next_step_id = self._evaluate_conditions(
-                                    source_step,
-                                    user_input=callback_data,
-                                    context={},
-                                    bot_id=bot_id,
-                                    telegram_user_id=telegram_user_id,
-                                    step_id=source_step_id
-                                )
-                                
-                                if next_step_id:
-                                    logger.info(f"✅ Condição de button_click matchou! Continuando para step: {next_step_id}")
-                                    # Limpar step atual do Redis
-                                    redis_conn.delete(current_step_key)
-                                    # Continuar fluxo no step da condição (sobrescreve target_step do botão)
-                                    self._execute_flow_recursive(bot_id, token, config, chat_id, telegram_user_id, next_step_id)
-                                    return
-                                else:
-                                    logger.info(f"⚠️ Nenhuma condição de button_click matchou para callback: {callback_data}")
-                                    # Fallback: usar target_step do botão (comportamento antigo)
-                            except Exception as e:
-                                logger.warning(f"⚠️ Erro ao avaliar condições de button_click: {e} - usando target_step do botão")
-                        
-                        # ✅ Fallback: Buscar botão correspondente no step (comportamento antigo)
-                        step_config = source_step.get('config', {})
-                        custom_buttons = step_config.get('custom_buttons', [])
-                        
-                        # Extrair índice do botão do action (formato: btn_{idx})
-                        btn_idx = None
-                        if action.startswith('btn_'):
-                            try:
-                                btn_idx = int(action.replace('btn_', ''))
-                            except:
-                                pass
-                        
-                        if btn_idx is not None and btn_idx < len(custom_buttons):
-                            target_step_id = custom_buttons[btn_idx].get('target_step')
-                            if target_step_id:
-                                logger.info(f"✅ Continuando fluxo para step: {target_step_id} (target_step do botão)")
-                                # ✅ NOVO: Limpar step atual atomicamente
-                                try:
-                                    redis_conn = get_redis_connection()
-                                    if redis_conn:
-                                        current_step_key = f"flow_current_step:{bot_id}:{telegram_user_id}"
-                                        redis_conn.delete(current_step_key)
-                                except:
-                                    pass
-                                # ✅ NOVO: Buscar snapshot do Redis
-                                flow_snapshot = self._get_flow_snapshot_from_redis(bot_id, telegram_user_id)
-                                
-                                # Continuar fluxo no step de destino
-                                self._execute_flow_recursive(
-                                    bot_id, token, config, chat_id, telegram_user_id, target_step_id,
-                                    recursion_depth=0, visited_steps=set(), flow_snapshot=flow_snapshot
-                                )
+                    # ✅ QI 500: Avaliar condições de button_click ANTES de usar target_step do botão
+                    conditions = source_step.get('conditions', [])
+                    if conditions and len(conditions) > 0:
+                        try:
+                            redis_conn = get_redis_connection()
+                            current_step_key = f"flow_current_step:{bot_id}:{telegram_user_id}"
+                            
+                            # Avaliar condições com parâmetros completos
+                            next_step_id = self._evaluate_conditions(
+                                source_step,
+                                user_input=callback_data,
+                                context={},
+                                bot_id=bot_id,
+                                telegram_user_id=telegram_user_id,
+                                step_id=source_step_id
+                            )
+                            
+                            if next_step_id:
+                                logger.info(f"✅ Condição de button_click matchou! Continuando para step: {next_step_id}")
+                                # Limpar step atual do Redis
+                                redis_conn.delete(current_step_key)
+                                # Continuar fluxo no step da condição (sobrescreve target_step do botão)
+                                self._execute_flow_recursive(bot_id, token, config, chat_id, telegram_user_id, next_step_id)
                                 return
                             else:
-                                logger.warning(f"⚠️ Botão contextual sem target_step definido")
+                                logger.info(f"⚠️ Nenhuma condição de button_click matchou para callback: {callback_data}")
+                                # Fallback: usar target_step do botão (comportamento antigo)
+                        except Exception as e:
+                            logger.warning(f"⚠️ Erro ao avaliar condições de button_click: {e} - usando target_step do botão")
+                    
+                    # ✅ Fallback: Buscar botão correspondente no step (comportamento antigo)
+                    step_config = source_step.get('config', {})
+                    custom_buttons = step_config.get('custom_buttons', [])
+                    
+                    # Extrair índice do botão do action (formato: btn_{idx})
+                    btn_idx = None
+                    if action.startswith('btn_'):
+                        try:
+                            btn_idx = int(action.replace('btn_', ''))
+                        except:
+                            pass
+                    
+                    if btn_idx is not None and btn_idx < len(custom_buttons):
+                        target_step_id = custom_buttons[btn_idx].get('target_step')
+                        if target_step_id:
+                            logger.info(f"✅ Continuando fluxo para step: {target_step_id} (target_step do botão)")
+                            # ✅ NOVO: Limpar step atual atomicamente
+                            try:
+                                redis_conn = get_redis_connection()
+                                if redis_conn:
+                                    current_step_key = f"flow_current_step:{bot_id}:{telegram_user_id}"
+                                    redis_conn.delete(current_step_key)
+                            except:
+                                pass
+                            # ✅ NOVO: Buscar snapshot do Redis
+                            flow_snapshot = self._get_flow_snapshot_from_redis(bot_id, telegram_user_id)
+                            
+                            # Continuar fluxo no step de destino
+                            self._execute_flow_recursive(
+                                bot_id, token, config, chat_id, telegram_user_id, target_step_id,
+                                recursion_depth=0, visited_steps=set(), flow_snapshot=flow_snapshot
+                            )
+                            return
                         else:
-                            logger.warning(f"⚠️ Índice de botão inválido: {btn_idx}")
+                            logger.warning(f"⚠️ Botão contextual sem target_step definido")
                     else:
-                        logger.warning(f"⚠️ Step não encontrado: {source_step_id}")
+                        logger.warning(f"⚠️ Índice de botão inválido: {btn_idx}")
+                else:
+                    logger.warning(f"⚠️ Step não encontrado: {source_step_id}")
                 
                 return
             
