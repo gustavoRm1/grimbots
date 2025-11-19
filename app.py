@@ -8389,11 +8389,23 @@ def send_meta_pixel_purchase_event(payment):
         external_id_value = tracking_data.get('fbclid')
         fbp_value = tracking_data.get('fbp')
         fbc_value = tracking_data.get('fbc')
+        # ✅ CRÍTICO: Buscar client_ip em múltiplos campos (compatibilidade)
+        # Prioridade: client_ip (atualizado pelo Parameter Builder) > ip (legacy) > client_ip_address (legacy)
         ip_value = tracking_data.get('client_ip') or tracking_data.get('ip') or tracking_data.get('client_ip_address')
+        # ✅ CRÍTICO: Se client_ip tem sufixo do Parameter Builder (.AQYBAQIA.AQYBAQIA), remover para usar apenas o IP
+        if ip_value and isinstance(ip_value, str) and '.AQYBAQIA' in ip_value:
+            # Remover sufixo do Parameter Builder (manter apenas o IP)
+            ip_value = ip_value.split('.AQYBAQIA')[0]
+            logger.info(f"[META PURCHASE] Purchase - client_ip limpo do sufixo Parameter Builder: {ip_value}")
         user_agent_value = tracking_data.get('client_user_agent') or tracking_data.get('ua') or tracking_data.get('client_ua')
         
         # ✅ LOG DETALHADO: Mostrar o que foi recuperado
         logger.info(f"[META PURCHASE] Purchase - tracking_data recuperado do Redis: fbclid={'✅' if tracking_data.get('fbclid') else '❌'}, fbp={'✅' if tracking_data.get('fbp') else '❌'}, fbc={'✅' if tracking_data.get('fbc') else '❌'}, ip={'✅' if ip_value else '❌'}, ua={'✅' if user_agent_value else '❌'}")
+        # ✅ LOG CRÍTICO: Mostrar valor completo do client_ip se encontrado
+        if ip_value:
+            logger.info(f"[META PURCHASE] Purchase - client_ip encontrado: {ip_value[:50]}... (len={len(ip_value)})")
+        else:
+            logger.warning(f"[META PURCHASE] Purchase - client_ip NÃO encontrado no tracking_data! Campos disponíveis: {list(tracking_data.keys())}")
         
         # ✅ CRÍTICO V4.1: Recuperar fbc se veio do cookie OU foi gerado conforme documentação Meta
         # Meta aceita _fbc gerado quando fbclid está presente na URL (conforme documentação oficial)
