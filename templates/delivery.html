@@ -18,7 +18,7 @@
         'https://connect.facebook.net/en_US/fbevents.js');
         fbq('init', '{{ pixel_config.pixel_id }}');
         
-        // ✅ PURCHASE com matching perfeito
+        // ✅ PURCHASE com matching perfeito (INCLUINDO FBP E FBC!)
         fbq('track', 'Purchase', {
             value: {{ pixel_config.value }},
             currency: '{{ pixel_config.currency }}',
@@ -26,11 +26,12 @@
             content_ids: ['{{ pixel_config.content_id }}'],
             content_name: '{{ pixel_config.content_name|replace("'", "\\'") }}',
             content_type: 'product',
-            num_items: 1
-            {% if pixel_config.external_id %}
-            // ✅ external_id será enviado via CAPI (não suportado no browser-side)
-            // Mas event_id garante matching mesmo sem external_id
+            num_items: 1{% if pixel_config.fbp %},
+            _fbp: '{{ pixel_config.fbp }}'  // ✅ CRÍTICO: FBP para matching perfeito
+            {% endif %}{% if pixel_config.fbc %},
+            _fbc: '{{ pixel_config.fbc }}'  // ✅ CRÍTICO: FBC para matching perfeito (apenas se real)
             {% endif %}
+            // ✅ NOTA: external_id será enviado via CAPI (server-side) para melhor matching
         });
         
         console.log('[META PIXEL] Purchase disparado com eventID: {{ pixel_config.event_id }}');

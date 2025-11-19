@@ -5,9 +5,83 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LIBERE SEU ACESSO</title>
     
+    <!-- ✅ Meta Parameter Builder Library (Client-Side) -->
+    <!-- CRÍTICO: Carregar ANTES do Meta Pixel JS para capturar fbc/fbp corretamente -->
+    <script src="https://capi-automation.s3.us-east-2.amazonaws.com/public/client_js/capiParamBuilder/clientParamBuilder.bundle.js"></script>
+    
     <!-- Meta Pixel Code -->
     {% if pixel_id %}
     <script>
+        // ✅ CRÍTICO: Usar Meta Parameter Builder para melhorar FBC/FBP coverage
+        (async() => {
+            try {
+                // ✅ Função para buscar IP (priorizar IPv6, fallback IPv4)
+                const getIpFn = async function () {
+                    try {
+                        // Tentar IPv6 primeiro
+                        const ipv6Response = await fetch('https://api64.ipify.org?format=text').catch(() => null);
+                        if (ipv6Response && ipv6Response.ok) {
+                            const ipv6 = await ipv6Response.text();
+                            if (ipv6 && ipv6.includes(':')) {
+                                return ipv6; // IPv6
+                            }
+                        }
+                        // Fallback IPv4
+                        const ipv4Response = await fetch('https://api.ipify.org?format=text').catch(() => null);
+                        if (ipv4Response && ipv4Response.ok) {
+                            return await ipv4Response.text(); // IPv4
+                        }
+                        return null;
+                    } catch (e) {
+                        console.warn('[META PARAM BUILDER] Erro ao buscar IP:', e);
+                        return null;
+                    }
+                };
+                
+                // ✅ CRÍTICO: Processar e coletar TODOS os parâmetros ANTES do Meta Pixel JS
+                // Isso garante que fbc, fbp e client_ip_address sejam capturados corretamente
+                const currentUrl = window.location.href;
+                const updated_cookies = await clientParamBuilder.processAndCollectAllParams(currentUrl, getIpFn);
+                
+                // ✅ Log para debug
+                if (updated_cookies) {
+                    console.log('[META PARAM BUILDER] Parâmetros coletados:', {
+                        fbc: updated_cookies['_fbc'] ? updated_cookies['_fbc'].substring(0, 50) + '...' : 'ausente',
+                        fbp: updated_cookies['_fbp'] ? updated_cookies['_fbp'].substring(0, 30) + '...' : 'ausente',
+                        client_ip: updated_cookies['_fbi'] || 'ausente'
+                    });
+                }
+                
+                // ✅ Enviar cookies para servidor (incluindo _fbi para client_ip_address)
+                const trackingToken = '{{ tracking_token }}';
+                if (trackingToken && (updated_cookies['_fbc'] || updated_cookies['_fbp'] || updated_cookies['_fbi'])) {
+                    const cookiePayload = JSON.stringify({
+                        tracking_token: trackingToken,
+                        _fbp: updated_cookies['_fbp'] || null,
+                        _fbc: updated_cookies['_fbc'] || null,
+                        _fbi: updated_cookies['_fbi'] || null  // ✅ client_ip_address
+                    });
+                    
+                    // ✅ Enviar via Beacon API (não bloqueia)
+                    if (navigator.sendBeacon) {
+                        const blob = new Blob([cookiePayload], { type: 'application/json' });
+                        navigator.sendBeacon('/api/tracking/cookies', blob);
+                    } else {
+                        fetch('/api/tracking/cookies', {
+                            method: 'POST',
+                            body: cookiePayload,
+                            headers: {'Content-Type': 'application/json'},
+                            keepalive: true
+                        }).catch(err => console.error('[META PARAM BUILDER] Erro ao enviar cookies:', err));
+                    }
+                }
+            } catch (e) {
+                console.error('[META PARAM BUILDER] Erro ao processar parâmetros:', e);
+                // ✅ Não bloquear Meta Pixel se Parameter Builder falhar
+            }
+        })();
+        
+        // ✅ Meta Pixel JS (carregar após Parameter Builder processar)
         !function(f,b,e,v,n,t,s)
         {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
         n.callMethod.apply(n,arguments):n.queue.push(arguments)};
@@ -17,7 +91,17 @@
         s.parentNode.insertBefore(t,s)}(window, document,'script',
         'https://connect.facebook.net/en_US/fbevents.js');
         fbq('init', '{{ pixel_id }}');
-        fbq('track', 'PageView');
+        
+        // ✅ CRÍTICO: Usar event_id do servidor para deduplicação perfeita
+        // Se servidor enviou pageview_event_id, usar (garante deduplicação PageView ↔ Purchase)
+        // Caso contrário, Meta Pixel JS gerará automaticamente
+        {% if pageview_event_id %}
+        fbq('track', 'PageView', {
+            eventID: '{{ pageview_event_id }}'  // ✅ MESMO event_id usado no server-side (deduplicação perfeita!)
+        });
+        {% else %}
+        fbq('track', 'PageView');  // Meta Pixel JS gerará event_id automaticamente
+        {% endif %}
     </script>
     <noscript>
         <img height="1" width="1" style="display:none"

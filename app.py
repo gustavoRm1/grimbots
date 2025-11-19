@@ -4682,11 +4682,15 @@ def public_redirect(slug):
             logger.info(f"📊 Template params - has_utmify: {has_utmify}, utmify_pixel_id_to_template: {'✅' if utmify_pixel_id_to_template else '❌'} ({utmify_pixel_id_to_template[:20] + '...' if utmify_pixel_id_to_template else 'None'})")
             logger.info(f"📊 Template params - has_meta_pixel: {has_meta_pixel}, pixel_id_to_template: {'✅' if pixel_id_to_template else '❌'}")
             
+            # ✅ CRÍTICO: Passar pageview_event_id para deduplicação perfeita (client-side usa mesmo event_id)
+            pageview_event_id_safe = sanitize_js_value(pageview_event_id) if pageview_event_id else None
+            
             response = make_response(render_template('telegram_redirect.html',
                 bot_username=bot_username_safe,
                 tracking_token=tracking_token_safe,
                 pixel_id=pixel_id_to_template,  # ✅ None se Meta Pixel desabilitado
                 utmify_pixel_id=utmify_pixel_id_to_template,  # ✅ Pixel ID da Utmify (pode estar sem Meta Pixel)
+                pageview_event_id=pageview_event_id_safe,  # ✅ CRÍTICO: Para deduplicação perfeita (client-side usa mesmo event_id)
                 fbclid=sanitize_js_value(fbclid) if fbclid else '',
                 utm_source=sanitize_js_value(request.args.get('utm_source', '')),
                 utm_campaign=sanitize_js_value(request.args.get('utm_campaign', '')),
@@ -4817,6 +4821,7 @@ def capture_tracking_cookies():
         tracking_token = data.get('tracking_token')
         fbp = data.get('_fbp')
         fbc = data.get('_fbc')
+        fbi = data.get('_fbi')  # ✅ CRÍTICO: client_ip_address do Parameter Builder (IPv6 ou IPv4)
         
         if not tracking_token:
             return jsonify({'success': False, 'error': 'tracking_token required'}), 400
@@ -4838,7 +4843,7 @@ def capture_tracking_cookies():
         # ✅ Recuperar tracking_data existente do Redis
         tracking_data = tracking_service_v4.recover_tracking_data(tracking_token) or {}
         
-        # ✅ Atualizar tracking_data com cookies do browser
+        # ✅ Atualizar tracking_data com cookies do browser e client_ip do Parameter Builder
         updated = False
         if fbp and fbp != tracking_data.get('fbp'):
             tracking_data['fbp'] = fbp
@@ -4852,6 +4857,14 @@ def capture_tracking_cookies():
             updated = True
             logger.info(f"[META TRACKING] Cookie _fbc capturado do browser: {fbc[:50]}...")
         
+        # ✅ CRÍTICO: Atualizar client_ip_address do Parameter Builder (_fbi) se disponível
+        # Parameter Builder prioriza IPv6, fallback IPv4 (melhor que IP do servidor para matching)
+        if fbi and fbi != tracking_data.get('client_ip'):
+            tracking_data['client_ip'] = fbi  # ✅ Usar campo 'client_ip' para compatibilidade com código existente
+            tracking_data['client_ip_origin'] = 'parameter_builder'  # ✅ Rastrear origem (Parameter Builder é mais confiável)
+            updated = True
+            logger.info(f"[META TRACKING] Client IP capturado do Parameter Builder (_fbi): {fbi} (IPv6/IPv4)")
+        
         # ✅ Salvar no Redis apenas se houver atualizações
         if updated:
             # ✅ Garantir que tracking_token existe no Redis (criar se não existir)
@@ -4860,7 +4873,7 @@ def capture_tracking_cookies():
             
             # ✅ Salvar/atualizar no Redis
             tracking_service_v4.save_tracking_token(tracking_token, tracking_data)
-            logger.info(f"[META TRACKING] Tracking token atualizado com cookies: {tracking_token[:20]}... | fbp={'✅' if fbp else '❌'}, fbc={'✅' if fbc else '❌'}")
+            logger.info(f"[META TRACKING] Tracking token atualizado: {tracking_token[:20]}... | fbp={'✅' if fbp else '❌'}, fbc={'✅' if fbc else '❌'}, client_ip={'✅' if fbi else '❌'}")
         else:
             logger.debug(f"[META TRACKING] Tracking token já está atualizado: {tracking_token[:20]}...")
         
@@ -7437,6 +7450,17 @@ def delivery_page(delivery_token):
         # ✅ PREPARAR DADOS PARA PURCHASE
         pageview_event_id = tracking_data.get('pageview_event_id') or payment.pageview_event_id
         external_id = tracking_data.get('fbclid') or payment.fbclid
+        fbp_value = tracking_data.get('fbp') or getattr(payment, 'fbp', None) or getattr(bot_user, 'fbp', None)
+        fbc_value = tracking_data.get('fbc') or getattr(payment, 'fbc', None) or getattr(bot_user, 'fbc', None)
+        fbc_origin = tracking_data.get('fbc_origin')
+        
+        # ✅ CRÍTICO: Validar fbc_origin (ignorar fbc sintético)
+        if fbc_value and fbc_origin == 'synthetic':
+            fbc_value = None  # Meta não atribui com fbc sintético
+            logger.warning(f"[META DELIVERY] Delivery - fbc IGNORADO (origem: synthetic) - Meta não atribui com fbc sintético")
+        
+        # ✅ LOG CRÍTICO: Verificar dados recuperados
+        logger.info(f"[META DELIVERY] Delivery - Dados recuperados: fbclid={'✅' if external_id else '❌'}, fbp={'✅' if fbp_value else '❌'}, fbc={'✅' if fbc_value else '❌'}, fbc_origin={fbc_origin or 'ausente'}")
         
         # ✅ Sanitizar valores para JavaScript
         def sanitize_js_value(value):
@@ -7447,17 +7471,33 @@ def delivery_page(delivery_token):
             value = re.sub(r'[^a-zA-Z0-9_.-]', '', value)
             return value[:255]
         
-        # ✅ Renderizar página com Purchase tracking
+        # ✅ Renderizar página com Purchase tracking (INCLUINDO FBP E FBC!)
         pixel_config = {
             'pixel_id': pool.meta_pixel_id if has_meta_pixel else None,
             'event_id': pageview_event_id or f"purchase_{payment.id}_{int(time.time())}",
             'external_id': external_id or '',
+            'fbp': fbp_value or '',  # ✅ CRÍTICO: FBP para matching perfeito
+            'fbc': fbc_value or '',  # ✅ CRÍTICO: FBC para matching perfeito (apenas se real)
             'value': float(payment.amount),
             'currency': 'BRL',
             'content_id': str(payment.id),
             'content_name': payment.product_name or 'Produto',
-            'redirect_url': redirect_url or ''
+            'redirect_url': redirect_url or '',
+            'utm_source': tracking_data.get('utm_source') or '',
+            'utm_campaign': tracking_data.get('utm_campaign') or '',
+            'campaign_code': tracking_data.get('campaign_code') or tracking_data.get('grim') or ''
         }
+        
+        # ✅ CRÍTICO: ENVIAR PURCHASE VIA SERVER (Conversions API) TAMBÉM!
+        # Isso garante que Purchase seja enviado mesmo se client-side falhar
+        if has_meta_pixel and not payment.meta_purchase_sent:
+            try:
+                logger.info(f"[META DELIVERY] Delivery - Enviando Purchase via Server (Conversions API) para payment {payment.id}")
+                send_meta_pixel_purchase_event(payment)
+                logger.info(f"[META DELIVERY] Delivery - Purchase via Server enfileirado com sucesso")
+            except Exception as e:
+                logger.error(f"❌ Erro ao enviar Purchase via Server: {e}", exc_info=True)
+                # Não bloquear renderização da página se server-side falhar
         
         logger.info(f"✅ Delivery - Renderizando página para payment {payment.id} | Pixel: {'✅' if has_meta_pixel else '❌'} | event_id: {pixel_config['event_id'][:30]}...")
         
