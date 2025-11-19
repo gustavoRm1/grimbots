@@ -3555,93 +3555,92 @@ document.addEventListener('alpine:init', () => {
                                    class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white">
                         </div>
                         <div class="mb-4" id="config-content-${stepId}">
-                            ${step.type === 'content' || step.type === 'message' ? `
-                                <label class="block text-sm font-medium text-gray-300 mb-2">Mensagem</label>
-                                <textarea id="step-message-${stepId}" rows="4"
-                                          class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white">${(step.config && step.config.message) || ''}</textarea>
-                            ` : ''}
-                            ${step.type === 'content' || step.type === 'video' ? `
-                                <label class="block text-sm font-medium text-gray-300 mb-2 mt-4">URL da Mídia</label>
-                                <input type="url" id="step-media-url-${stepId}" value="${(step.config && step.config.media_url) || ''}"
-                                       class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white">
-                            ` : ''}
-                            ${step.type === 'payment' ? `
-                                <label class="block text-sm font-medium text-gray-300 mb-2">Valor (opcional)</label>
-                                <input type="number" id="step-amount-${stepId}" value="${(step.config && step.config.amount) || ''}" min="0" step="0.01"
-                                       class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white">
-                            ` : ''}
-                            ${step.type === 'access' ? `
-                                <label class="block text-sm font-medium text-gray-300 mb-2">Link de Acesso (opcional)</label>
-                                <input type="url" id="step-link-${stepId}" value="${(step.config && step.config.link) || ''}"
-                                       class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white">
-                            ` : ''}
-                            ${step.type === 'buttons' ? `
-                                <div class="mt-4 p-4 bg-gray-800 rounded-lg border border-gray-700">
-                                    <label class="block text-sm font-medium text-gray-300 mb-3">Selecionar Botões Cadastrados</label>
-                                    <div class="space-y-3 max-h-64 overflow-y-auto">
-                                        ${(() => {
-                                            const self = this;
-                                            function escapeHtml(text) {
-                                                const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
-                                                return String(text).replace(/[&<>"']/g, m => map[m]);
-                                            }
-                                            let html = '';
-                                            
-                                            // Botões principais (main_buttons)
-                                            if (self.config.main_buttons && self.config.main_buttons.length > 0) {
-                                                html += '<div class="mb-4"><div class="text-xs font-bold text-blue-400 mb-2">💰 Botões de Pagamento</div>';
-                                                self.config.main_buttons.forEach((button, index) => {
-                                                    const buttonId = 'main-' + index;
-                                                    const selected = (step.config && step.config.selected_buttons) ? 
-                                                        step.config.selected_buttons.some(b => b.type === 'main' && b.index === index) : false;
-                                                    const buttonText = button.text || 'Botão ' + (index + 1);
-                                                    const buttonPrice = button.price ? 'R$ ' + parseFloat(button.price).toFixed(2) : 'Sem preço';
-                                                    html += '<label class="flex items-center gap-3 p-3 bg-gray-900 rounded-lg cursor-pointer hover:bg-gray-850 border border-gray-700 hover:border-blue-500 transition-all mb-2">' +
-                                                        '<input type="checkbox" ' +
-                                                        'id="button-' + buttonId + '-' + stepId + '" ' +
-                                                        (selected ? 'checked' : '') +
-                                                        ' class="w-4 h-4 rounded border-gray-600 bg-gray-800 text-blue-500">' +
-                                                        '<div class="flex-1">' +
-                                                        '<div class="text-sm font-bold text-white">' + escapeHtml(buttonText) + '</div>' +
-                                                        '<div class="text-xs text-gray-400">' + escapeHtml(buttonPrice) + '</div>' +
-                                                        '</div>' +
-                                                        '</label>';
-                                                });
-                                                html += '</div>';
-                                            }
-                                            
-                                            // Botões de redirecionamento (redirect_buttons)
-                                            if (self.config.redirect_buttons && self.config.redirect_buttons.length > 0) {
-                                                html += '<div><div class="text-xs font-bold text-green-400 mb-2">🔗 Botões de Link</div>';
-                                                self.config.redirect_buttons.forEach((button, index) => {
-                                                    const buttonId = 'redirect-' + index;
-                                                    const selected = (step.config && step.config.selected_buttons) ? 
-                                                        step.config.selected_buttons.some(b => b.type === 'redirect' && b.index === index) : false;
-                                                    const buttonText = button.text || 'Link ' + (index + 1);
-                                                    const buttonUrl = button.url || 'Sem URL';
-                                                    html += '<label class="flex items-center gap-3 p-3 bg-gray-900 rounded-lg cursor-pointer hover:bg-gray-850 border border-gray-700 hover:border-green-500 transition-all mb-2">' +
-                                                        '<input type="checkbox" ' +
-                                                        'id="button-' + buttonId + '-' + stepId + '" ' +
-                                                        (selected ? 'checked' : '') +
-                                                        ' class="w-4 h-4 rounded border-gray-600 bg-gray-800 text-green-500">' +
-                                                        '<div class="flex-1">' +
-                                                        '<div class="text-sm font-bold text-white">' + escapeHtml(buttonText) + '</div>' +
-                                                        '<div class="text-xs text-gray-400 font-mono truncate">' + escapeHtml(buttonUrl) + '</div>' +
-                                                        '</div>' +
-                                                        '</label>';
-                                                });
-                                                html += '</div>';
-                                            }
-                                            
-                                            if (!html) {
-                                                html = '<div class="text-center py-4 text-gray-500 text-sm">⚠️ Nenhum botão cadastrado na aba "Botões". <br><span class="text-xs">Adicione botões antes de usar este step.</span></div>';
-                                            }
-                                            
-                                            return html;
-                                        })()}
-                                    </div>
-                                </div>
-                            ` : ''}
+                            ${(step.type === 'content' || step.type === 'message') ? 
+                                '<label class="block text-sm font-medium text-gray-300 mb-2">Mensagem</label>' +
+                                '<textarea id="step-message-' + stepId + '" rows="4" ' +
+                                'class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white">' +
+                                (step.config && step.config.message ? String(step.config.message).replace(/"/g, '&quot;').replace(/'/g, '&#039;') : '') +
+                                '</textarea>' : ''}
+                            ${(step.type === 'content' || step.type === 'video') ? 
+                                '<label class="block text-sm font-medium text-gray-300 mb-2 mt-4">URL da Mídia</label>' +
+                                '<input type="url" id="step-media-url-' + stepId + '" value="' +
+                                (step.config && step.config.media_url ? String(step.config.media_url).replace(/"/g, '&quot;') : '') +
+                                '" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white">' : ''}
+                            ${step.type === 'payment' ? 
+                                '<label class="block text-sm font-medium text-gray-300 mb-2">Valor (opcional)</label>' +
+                                '<input type="number" id="step-amount-' + stepId + '" value="' +
+                                (step.config && step.config.amount ? String(step.config.amount) : '') +
+                                '" min="0" step="0.01" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white">' : ''}
+                            ${step.type === 'access' ? 
+                                '<label class="block text-sm font-medium text-gray-300 mb-2">Link de Acesso (opcional)</label>' +
+                                '<input type="url" id="step-link-' + stepId + '" value="' +
+                                (step.config && step.config.link ? String(step.config.link).replace(/"/g, '&quot;') : '') +
+                                '" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white">' : ''}
+                            ${step.type === 'buttons' ? (() => {
+                                const self = this;
+                                function escapeHtml(text) {
+                                    const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+                                    return String(text).replace(/[&<>"']/g, m => map[m]);
+                                }
+                                let html = '';
+                                
+                                // Botões principais (main_buttons)
+                                if (self.config.main_buttons && self.config.main_buttons.length > 0) {
+                                    html += '<div class="mb-4"><div class="text-xs font-bold text-blue-400 mb-2">💰 Botões de Pagamento</div>';
+                                    self.config.main_buttons.forEach((button, index) => {
+                                        const buttonId = 'main-' + index;
+                                        const selected = (step.config && step.config.selected_buttons) ? 
+                                            step.config.selected_buttons.some(b => b.type === 'main' && b.index === index) : false;
+                                        const buttonText = button.text || 'Botão ' + (index + 1);
+                                        const buttonPrice = button.price ? 'R$ ' + parseFloat(button.price).toFixed(2) : 'Sem preço';
+                                        html += '<label class="flex items-center gap-3 p-3 bg-gray-900 rounded-lg cursor-pointer hover:bg-gray-850 border border-gray-700 hover:border-blue-500 transition-all mb-2">' +
+                                            '<input type="checkbox" ' +
+                                            'id="button-' + buttonId + '-' + stepId + '" ' +
+                                            (selected ? 'checked' : '') +
+                                            ' class="w-4 h-4 rounded border-gray-600 bg-gray-800 text-blue-500">' +
+                                            '<div class="flex-1">' +
+                                            '<div class="text-sm font-bold text-white">' + escapeHtml(buttonText) + '</div>' +
+                                            '<div class="text-xs text-gray-400">' + escapeHtml(buttonPrice) + '</div>' +
+                                            '</div>' +
+                                            '</label>';
+                                    });
+                                    html += '</div>';
+                                }
+                                
+                                // Botões de redirecionamento (redirect_buttons)
+                                if (self.config.redirect_buttons && self.config.redirect_buttons.length > 0) {
+                                    html += '<div><div class="text-xs font-bold text-green-400 mb-2">🔗 Botões de Link</div>';
+                                    self.config.redirect_buttons.forEach((button, index) => {
+                                        const buttonId = 'redirect-' + index;
+                                        const selected = (step.config && step.config.selected_buttons) ? 
+                                            step.config.selected_buttons.some(b => b.type === 'redirect' && b.index === index) : false;
+                                        const buttonText = button.text || 'Link ' + (index + 1);
+                                        const buttonUrl = button.url || 'Sem URL';
+                                        html += '<label class="flex items-center gap-3 p-3 bg-gray-900 rounded-lg cursor-pointer hover:bg-gray-850 border border-gray-700 hover:border-green-500 transition-all mb-2">' +
+                                            '<input type="checkbox" ' +
+                                            'id="button-' + buttonId + '-' + stepId + '" ' +
+                                            (selected ? 'checked' : '') +
+                                            ' class="w-4 h-4 rounded border-gray-600 bg-gray-800 text-green-500">' +
+                                            '<div class="flex-1">' +
+                                            '<div class="text-sm font-bold text-white">' + escapeHtml(buttonText) + '</div>' +
+                                            '<div class="text-xs text-gray-400 font-mono truncate">' + escapeHtml(buttonUrl) + '</div>' +
+                                            '</div>' +
+                                            '</label>';
+                                    });
+                                    html += '</div>';
+                                }
+                                
+                                if (!html) {
+                                    html = '<div class="text-center py-4 text-gray-500 text-sm">⚠️ Nenhum botão cadastrado na aba "Botões". <br><span class="text-xs">Adicione botões antes de usar este step.</span></div>';
+                                }
+                                
+                                return '<div class="mt-4 p-4 bg-gray-800 rounded-lg border border-gray-700">' +
+                                    '<label class="block text-sm font-medium text-gray-300 mb-3">Selecionar Botões Cadastrados</label>' +
+                                    '<div class="space-y-3 max-h-64 overflow-y-auto">' +
+                                    html +
+                                    '</div>' +
+                                    '</div>';
+                            })() : ''}
                         </div>
                         ${step.type === 'payment' ? `
                             <div class="mb-4 p-4 bg-gray-800 rounded-lg">
@@ -3922,35 +3921,32 @@ document.addEventListener('alpine:init', () => {
                 let html = '';
                 
                 if (stepType === 'content' || stepType === 'message') {
-                    html += `
-                        <label class="block text-sm font-medium text-gray-300 mb-2">Mensagem</label>
-                        <textarea id="step-message-${stepId}" rows="4"
-                                  class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white">${(currentStep.config && currentStep.config.message) || ''}</textarea>
-                    `;
+                    html += '<label class="block text-sm font-medium text-gray-300 mb-2">Mensagem</label>' +
+                        '<textarea id="step-message-' + stepId + '" rows="4" ' +
+                        'class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white">' +
+                        escapeHtml((currentStep.config && currentStep.config.message) || '') +
+                        '</textarea>';
                 }
                 
                 if (stepType === 'content' || stepType === 'video') {
-                    html += `
-                        <label class="block text-sm font-medium text-gray-300 mb-2 mt-4">URL da Mídia</label>
-                        <input type="url" id="step-media-url-${stepId}" value="${(currentStep.config && currentStep.config.media_url) || ''}"
-                               class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white">
-                    `;
+                    html += '<label class="block text-sm font-medium text-gray-300 mb-2 mt-4">URL da Mídia</label>' +
+                        '<input type="url" id="step-media-url-' + stepId + '" value="' +
+                        escapeHtml((currentStep.config && currentStep.config.media_url) || '') +
+                        '" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white">';
                 }
                 
                 if (stepType === 'payment') {
-                    html += `
-                        <label class="block text-sm font-medium text-gray-300 mb-2">Valor (opcional)</label>
-                        <input type="number" id="step-amount-${stepId}" value="${(currentStep.config && currentStep.config.amount) || ''}" min="0" step="0.01"
-                               class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white">
-                    `;
+                    html += '<label class="block text-sm font-medium text-gray-300 mb-2">Valor (opcional)</label>' +
+                        '<input type="number" id="step-amount-' + stepId + '" value="' +
+                        escapeHtml((currentStep.config && currentStep.config.amount) || '') +
+                        '" min="0" step="0.01" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white">';
                 }
                 
                 if (stepType === 'access') {
-                    html += `
-                        <label class="block text-sm font-medium text-gray-300 mb-2">Link de Acesso (opcional)</label>
-                        <input type="url" id="step-link-${stepId}" value="${(currentStep.config && currentStep.config.link) || ''}"
-                               class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white">
-                    `;
+                    html += '<label class="block text-sm font-medium text-gray-300 mb-2">Link de Acesso (opcional)</label>' +
+                        '<input type="url" id="step-link-' + stepId + '" value="' +
+                        escapeHtml((currentStep.config && currentStep.config.link) || '') +
+                        '" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white">';
                 }
                 
                 if (stepType === 'buttons') {
@@ -3960,23 +3956,21 @@ document.addEventListener('alpine:init', () => {
                     if (self.config.main_buttons && self.config.main_buttons.length > 0) {
                         buttonsHtml += '<div class="mb-4"><div class="text-xs font-bold text-blue-400 mb-2">💰 Botões de Pagamento</div>';
                         self.config.main_buttons.forEach((button, index) => {
-                            const buttonId = `main-${index}`;
+                            const buttonId = 'main-' + index;
                             const selected = (currentStep.config && currentStep.config.selected_buttons) ? 
                                 currentStep.config.selected_buttons.some(b => b.type === 'main' && b.index === index) : false;
-                            const buttonText = button.text || `Botão ${index + 1}`;
-                            const buttonPrice = button.price ? `R$ ${parseFloat(button.price).toFixed(2)}` : 'Sem preço';
-                            buttonsHtml += `
-                                <label class="flex items-center gap-3 p-3 bg-gray-900 rounded-lg cursor-pointer hover:bg-gray-850 border border-gray-700 hover:border-blue-500 transition-all mb-2">
-                                    <input type="checkbox" 
-                                           id="button-${buttonId}-${stepId}" 
-                                           ${selected ? 'checked' : ''}
-                                           class="w-4 h-4 rounded border-gray-600 bg-gray-800 text-blue-500">
-                                    <div class="flex-1">
-                                        <div class="text-sm font-bold text-white">${escapeHtml(buttonText)}</div>
-                                        <div class="text-xs text-gray-400">${escapeHtml(buttonPrice)}</div>
-                                    </div>
-                                </label>
-                            `;
+                            const buttonText = button.text || 'Botão ' + (index + 1);
+                            const buttonPrice = button.price ? 'R$ ' + parseFloat(button.price).toFixed(2) : 'Sem preço';
+                            buttonsHtml += '<label class="flex items-center gap-3 p-3 bg-gray-900 rounded-lg cursor-pointer hover:bg-gray-850 border border-gray-700 hover:border-blue-500 transition-all mb-2">' +
+                                '<input type="checkbox" ' +
+                                'id="button-' + buttonId + '-' + stepId + '" ' +
+                                (selected ? 'checked' : '') +
+                                ' class="w-4 h-4 rounded border-gray-600 bg-gray-800 text-blue-500">' +
+                                '<div class="flex-1">' +
+                                '<div class="text-sm font-bold text-white">' + escapeHtml(buttonText) + '</div>' +
+                                '<div class="text-xs text-gray-400">' + escapeHtml(buttonPrice) + '</div>' +
+                                '</div>' +
+                                '</label>';
                         });
                         buttonsHtml += '</div>';
                     }
@@ -3985,23 +3979,21 @@ document.addEventListener('alpine:init', () => {
                     if (self.config.redirect_buttons && self.config.redirect_buttons.length > 0) {
                         buttonsHtml += '<div><div class="text-xs font-bold text-green-400 mb-2">🔗 Botões de Link</div>';
                         self.config.redirect_buttons.forEach((button, index) => {
-                            const buttonId = `redirect-${index}`;
+                            const buttonId = 'redirect-' + index;
                             const selected = (currentStep.config && currentStep.config.selected_buttons) ? 
                                 currentStep.config.selected_buttons.some(b => b.type === 'redirect' && b.index === index) : false;
-                            const buttonText = button.text || `Link ${index + 1}`;
+                            const buttonText = button.text || 'Link ' + (index + 1);
                             const buttonUrl = button.url || 'Sem URL';
-                            buttonsHtml += `
-                                <label class="flex items-center gap-3 p-3 bg-gray-900 rounded-lg cursor-pointer hover:bg-gray-850 border border-gray-700 hover:border-green-500 transition-all mb-2">
-                                    <input type="checkbox" 
-                                           id="button-${buttonId}-${stepId}" 
-                                           ${selected ? 'checked' : ''}
-                                           class="w-4 h-4 rounded border-gray-600 bg-gray-800 text-green-500">
-                                    <div class="flex-1">
-                                        <div class="text-sm font-bold text-white">${escapeHtml(buttonText)}</div>
-                                        <div class="text-xs text-gray-400 font-mono truncate">${escapeHtml(buttonUrl)}</div>
-                                    </div>
-                                </label>
-                            `;
+                            buttonsHtml += '<label class="flex items-center gap-3 p-3 bg-gray-900 rounded-lg cursor-pointer hover:bg-gray-850 border border-gray-700 hover:border-green-500 transition-all mb-2">' +
+                                '<input type="checkbox" ' +
+                                'id="button-' + buttonId + '-' + stepId + '" ' +
+                                (selected ? 'checked' : '') +
+                                ' class="w-4 h-4 rounded border-gray-600 bg-gray-800 text-green-500">' +
+                                '<div class="flex-1">' +
+                                '<div class="text-sm font-bold text-white">' + escapeHtml(buttonText) + '</div>' +
+                                '<div class="text-xs text-gray-400 font-mono truncate">' + escapeHtml(buttonUrl) + '</div>' +
+                                '</div>' +
+                                '</label>';
                         });
                         buttonsHtml += '</div>';
                     }
@@ -4010,14 +4002,12 @@ document.addEventListener('alpine:init', () => {
                         buttonsHtml = '<div class="text-center py-4 text-gray-500 text-sm">⚠️ Nenhum botão cadastrado na aba "Botões". <br><span class="text-xs">Adicione botões antes de usar este step.</span></div>';
                     }
                     
-                    html += `
-                        <div class="mt-4 p-4 bg-gray-800 rounded-lg border border-gray-700">
-                            <label class="block text-sm font-medium text-gray-300 mb-3">Selecionar Botões Cadastrados</label>
-                            <div class="space-y-3 max-h-64 overflow-y-auto">
-                                ${buttonsHtml}
-                            </div>
-                        </div>
-                    `;
+                    html += '<div class="mt-4 p-4 bg-gray-800 rounded-lg border border-gray-700">' +
+                        '<label class="block text-sm font-medium text-gray-300 mb-3">Selecionar Botões Cadastrados</label>' +
+                        '<div class="space-y-3 max-h-64 overflow-y-auto">' +
+                        buttonsHtml +
+                        '</div>' +
+                        '</div>';
                 }
                 
                 configDiv.innerHTML = html;
@@ -4045,18 +4035,16 @@ document.addEventListener('alpine:init', () => {
                     if (stepType === 'payment') {
                         const nextVal = (currentStep.connections && currentStep.connections.next) || '';
                         const pendingVal = (currentStep.connections && currentStep.connections.pending) || '';
-                        connectionsHtml = `
-                            <div class="mb-4 p-4 bg-gray-800 rounded-lg">
-                                <label class="block text-sm font-medium text-gray-300 mb-2">Se pago → Step:</label>
-                                <select id="step-next-${stepId}" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white">
-                                    <option value="">Nenhum</option>${stepOptions}
-                                </select>
-                                <label class="block text-sm font-medium text-gray-300 mb-2 mt-4">Se não pago → Step:</label>
-                                <select id="step-pending-${stepId}" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white">
-                                    <option value="">Nenhum</option>${stepOptions}
-                                </select>
-                            </div>
-                        `;
+                        connectionsHtml = '<div class="mb-4 p-4 bg-gray-800 rounded-lg">' +
+                            '<label class="block text-sm font-medium text-gray-300 mb-2">Se pago → Step:</label>' +
+                            '<select id="step-next-' + stepId + '" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white">' +
+                            '<option value="">Nenhum</option>' + stepOptions +
+                            '</select>' +
+                            '<label class="block text-sm font-medium text-gray-300 mb-2 mt-4">Se não pago → Step:</label>' +
+                            '<select id="step-pending-' + stepId + '" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white">' +
+                            '<option value="">Nenhum</option>' + stepOptions +
+                            '</select>' +
+                            '</div>';
                         // Set selected values
                         setTimeout(() => {
                             const nextSelect = document.getElementById(`step-next-${stepId}`);
@@ -4066,35 +4054,31 @@ document.addEventListener('alpine:init', () => {
                         }, 10);
                     } else if (stepType === 'message') {
                         const retryVal = (currentStep.connections && currentStep.connections.retry) || '';
-                        connectionsHtml = `
-                            <div class="mb-4 p-4 bg-gray-800 rounded-lg border border-yellow-700">
-                                <label class="block text-sm font-medium text-yellow-300 mb-2">
-                                    <i class="fas fa-redo mr-2"></i>Quando lead enviar mensagem → Ir para Step:
-                                </label>
-                                <select id="step-retry-${stepId}" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white mb-2">
-                                    <option value="">Nenhum (fluxo para aqui)</option>${stepOptions}
-                                </select>
-                                <div class="mt-2 p-2 bg-yellow-500 bg-opacity-20 border border-yellow-500 rounded text-xs text-yellow-200">
-                                    <i class="fas fa-info-circle mr-1"></i>
-                                    <strong>Como funciona:</strong> Após enviar esta mensagem, quando o lead responder com <strong>qualquer texto</strong>, o fluxo automaticamente irá para o step selecionado acima. 
-                                    <br><span class="text-yellow-300 mt-1 block">💡 Útil para: verificar mensagens, processar respostas, criar loops de validação.</span>
-                                </div>
-                            </div>
-                        `;
+                        connectionsHtml = '<div class="mb-4 p-4 bg-gray-800 rounded-lg border border-yellow-700">' +
+                            '<label class="block text-sm font-medium text-yellow-300 mb-2">' +
+                            '<i class="fas fa-redo mr-2"></i>Quando lead enviar mensagem → Ir para Step:' +
+                            '</label>' +
+                            '<select id="step-retry-' + stepId + '" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white mb-2">' +
+                            '<option value="">Nenhum (fluxo para aqui)</option>' + stepOptions +
+                            '</select>' +
+                            '<div class="mt-2 p-2 bg-yellow-500 bg-opacity-20 border border-yellow-500 rounded text-xs text-yellow-200">' +
+                            '<i class="fas fa-info-circle mr-1"></i>' +
+                            '<strong>Como funciona:</strong> Após enviar esta mensagem, quando o lead responder com <strong>qualquer texto</strong>, o fluxo automaticamente irá para o step selecionado acima. ' +
+                            '<br><span class="text-yellow-300 mt-1 block">💡 Útil para: verificar mensagens, processar respostas, criar loops de validação.</span>' +
+                            '</div>' +
+                            '</div>';
                         setTimeout(() => {
                             const retrySelect = document.getElementById(`step-retry-${stepId}`);
                             if (retrySelect && retryVal) retrySelect.value = retryVal;
                         }, 10);
                     } else if (stepType !== 'access' && stepType !== 'payment' && stepType !== 'message') {
                         const nextVal = (currentStep.connections && currentStep.connections.next) || '';
-                        connectionsHtml = `
-                            <div class="mb-4 p-4 bg-gray-800 rounded-lg">
-                                <label class="block text-sm font-medium text-gray-300 mb-2">Próximo → Step:</label>
-                                <select id="step-next-${stepId}" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white">
-                                    <option value="">Nenhum</option>${stepOptions}
-                                </select>
-                            </div>
-                        `;
+                        connectionsHtml = '<div class="mb-4 p-4 bg-gray-800 rounded-lg">' +
+                            '<label class="block text-sm font-medium text-gray-300 mb-2">Próximo → Step:</label>' +
+                            '<select id="step-next-' + stepId + '" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white">' +
+                            '<option value="">Nenhum</option>' + stepOptions +
+                            '</select>' +
+                            '</div>';
                         setTimeout(() => {
                             const nextSelect = document.getElementById(`step-next-${stepId}`);
                             if (nextSelect && nextVal) nextSelect.value = nextVal;
@@ -4692,7 +4676,7 @@ document.addEventListener('alpine:init', () => {
                                     const match = opt.match(/value="([^"]+)"/);
                                     const value = match ? match[1] : '';
                                     const selected = (condition && condition.target_step === value) ? 'selected' : '';
-                                    return opt.replace(/<option/, `<option ${selected}`);
+                                    return opt.replace(/<option/, '<option ' + selected);
                                 }).join('')}
                             </select>
                         </div>
@@ -4706,7 +4690,7 @@ document.addEventListener('alpine:init', () => {
                                     const match = opt.match(/value="([^"]+)"/);
                                     const value = match ? match[1] : '';
                                     const selected = (condition && condition.fallback_step === value) ? 'selected' : '';
-                                    return opt.replace(/<option/, `<option ${selected}`);
+                                    return opt.replace(/<option/, '<option ' + selected);
                                 }).join('')}
                             </select>
                             <p class="text-xs text-purple-300 mt-1">
