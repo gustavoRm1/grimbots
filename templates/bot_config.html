@@ -3,6 +3,38 @@
 
 {% block extra_head %}
 <style>
+/* ✅ Editor Visual de Fluxo - jsPlumb Styles */
+.connection-label {
+    background: rgba(0, 0, 0, 0.8);
+    color: #FFFFFF;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: bold;
+    pointer-events: none;
+}
+
+.flow-step-block {
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.flow-step-block:hover {
+    transform: scale(1.02);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
+}
+
+.jtk-endpoint {
+    cursor: pointer;
+}
+
+.jtk-connector {
+    cursor: pointer;
+}
+
+.jtk-connector:hover {
+    stroke-width: 3 !important;
+}
+
 /* Bot Config V2.0 - Design System */
 
 .config-section {
@@ -568,14 +600,52 @@
                 
                 <div class="flex items-center justify-between mb-4">
                     <h3 class="text-lg font-bold text-white">Steps do Fluxo</h3>
-                    <button @click="addFlowStep()" 
-                            class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition">
-                        <i class="fas fa-plus mr-2"></i>Adicionar Step
-                    </button>
+                    <div class="flex items-center gap-3">
+                        <!-- ✅ Toggle Modo Visual/Lista -->
+                        <div class="flex items-center gap-2 bg-gray-800 rounded-lg p-1 border border-gray-700">
+                            <button @click="flowViewMode = 'list'" 
+                                    :class="{'bg-blue-600 text-white': flowViewMode === 'list', 'text-gray-400': flowViewMode !== 'list'}"
+                                    class="px-3 py-1.5 rounded text-xs font-medium transition">
+                                <i class="fas fa-list mr-1"></i>Lista
+                            </button>
+                            <button @click="flowViewMode = 'visual'; initVisualFlowEditor()" 
+                                    :class="{'bg-blue-600 text-white': flowViewMode === 'visual', 'text-gray-400': flowViewMode !== 'visual'}"
+                                    class="px-3 py-1.5 rounded text-xs font-medium transition">
+                                <i class="fas fa-project-diagram mr-1"></i>Visual
+                            </button>
+                        </div>
+                        <button @click="addFlowStep()" 
+                                class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition">
+                            <i class="fas fa-plus mr-2"></i>Adicionar Step
+                        </button>
+                    </div>
                 </div>
 
-                <!-- Lista de Steps -->
-                <div class="space-y-4" x-show="config.flow_steps && config.flow_steps.length > 0">
+                <!-- ✅ EDITOR VISUAL (Canvas com linhas) -->
+                <div x-show="flowViewMode === 'visual' && config.flow_steps && config.flow_steps.length > 0" 
+                     x-cloak
+                     class="mb-6">
+                    <div class="bg-gray-900 rounded-lg border-2 border-blue-500 p-4">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center gap-2">
+                                <i class="fas fa-project-diagram text-blue-400 text-xl"></i>
+                                <h4 class="text-white font-bold">Editor Visual de Fluxo</h4>
+                            </div>
+                            <div class="flex items-center gap-2 text-xs text-gray-400">
+                                <i class="fas fa-info-circle"></i>
+                                <span>Arraste os blocos para reposicionar • Clique e arraste para conectar</span>
+                            </div>
+                        </div>
+                        <div id="flow-visual-canvas" 
+                             class="relative w-full bg-gray-950 rounded border border-gray-700"
+                             style="min-height: 600px; overflow: auto;">
+                            <!-- Steps serão renderizados aqui via JavaScript -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Lista de Steps (modo lista) -->
+                <div class="space-y-4" x-show="flowViewMode === 'list' && config.flow_steps && config.flow_steps.length > 0">
                     <template x-for="(step, index) in sortedFlowSteps" :key="step.id">
                         <div class="bg-gray-800 border border-gray-700 rounded-lg p-4">
                             <div class="flex items-start justify-between mb-3">
@@ -2280,6 +2350,8 @@ function botConfigApp() {
         activeTab: 'welcome',
         loading: false,
         newBotToken: '',  // ✅ NOVO: Para trocar token
+        flowViewMode: 'list',  // ✅ Modo de visualização: 'list' ou 'visual'
+        jsPlumbInstance: null,  // ✅ Instância do jsPlumb
         
         config: {
             welcome_message: '',
@@ -2849,6 +2921,283 @@ function botConfigApp() {
             return icons[type] || '📦';
         },
         
+        initVisualFlowEditor() {
+            /**
+             * ✅ QI 500: Editor Visual de Fluxo com jsPlumb
+             * Renderiza steps como blocos arrastáveis com conexões visuais
+             */
+            const self = this;
+            const canvas = document.getElementById('flow-visual-canvas');
+            if (!canvas) return;
+            
+            // Limpar canvas
+            canvas.innerHTML = '';
+            
+            // Aguardar DOM renderizar
+            setTimeout(() => {
+                try {
+                    // ✅ Inicializar jsPlumb
+                    if (window.jsPlumb) {
+                        // Destruir instância anterior se existir
+                        if (this.jsPlumbInstance) {
+                            this.jsPlumbInstance.destroy();
+                        }
+                        
+                        this.jsPlumbInstance = window.jsPlumb.newInstance({
+                            container: canvas
+                        });
+                        
+                        // ✅ Configurar estilos padrão
+                        const defaultPaintStyle = { stroke: '#3B82F6', strokeWidth: 2 };
+                        const defaultHoverPaintStyle = { stroke: '#60A5FA', strokeWidth: 3 };
+                        const defaultEndpointStyle = { fill: '#3B82F6', radius: 5 };
+                        const defaultEndpointHoverStyle = { fill: '#60A5FA', radius: 7 };
+                        
+                        this.jsPlumbInstance.setDefaultConnectionType({
+                            type: 'Flowchart',
+                            options: {
+                                stub: [10, 15],
+                                gap: 5,
+                                cornerRadius: 5,
+                                alwaysRespectStubs: true
+                            }
+                        });
+                        
+                        this.jsPlumbInstance.setDefaultConnectionStyle(defaultPaintStyle);
+                        this.jsPlumbInstance.setDefaultConnectionHoverStyle(defaultHoverPaintStyle);
+                        this.jsPlumbInstance.setDefaultEndpointStyle(defaultEndpointStyle);
+                        this.jsPlumbInstance.setDefaultEndpointHoverStyle(defaultEndpointHoverStyle);
+                        
+                        // ✅ Renderizar steps como blocos
+                        const steps = this.sortedFlowSteps;
+                        const stepPositions = this.loadStepPositions(); // Carregar posições salvas
+                        
+                        steps.forEach((step, index) => {
+                            const stepId = step.id;
+                            const stepName = step.name || this.getStepTitle(step.type);
+                            const stepIcon = this.getStepIcon(step.type);
+                            const isInitial = this.config.flow_start_step_id === stepId;
+                            
+                            // Posição (salva ou calculada)
+                            const savedPos = stepPositions[stepId];
+                            const x = savedPos ? savedPos.x : 100 + (index % 3) * 250;
+                            const y = savedPos ? savedPos.y : 100 + Math.floor(index / 3) * 150;
+                            
+                            // Criar elemento do step
+                            const stepEl = document.createElement('div');
+                            stepEl.id = `flow-step-${stepId}`;
+                            stepEl.className = 'flow-step-block absolute cursor-move bg-gray-800 border-2 rounded-lg p-3 shadow-lg';
+                            stepEl.style.left = `${x}px`;
+                            stepEl.style.top = `${y}px`;
+                            stepEl.style.width = '200px';
+                            stepEl.style.zIndex = '10';
+                            
+                            // Cor baseada no tipo
+                            let borderColor = 'border-blue-500';
+                            let bgColor = 'bg-blue-900 bg-opacity-30';
+                            if (step.type === 'payment') borderColor = 'border-green-500';
+                            else if (step.type === 'access') borderColor = 'border-purple-500';
+                            else if (step.type === 'message') borderColor = 'border-yellow-500';
+                            
+                            stepEl.className += ` ${borderColor} ${bgColor}`;
+                            
+                            // Conteúdo do bloco
+                            stepEl.innerHTML = `
+                                <div class="flex items-center justify-between mb-2">
+                                    <div class="flex items-center gap-2">
+                                        ${isInitial ? '<i class="fas fa-star text-yellow-400 text-xs"></i>' : ''}
+                                        <span class="text-xl">${stepIcon}</span>
+                                        <span class="text-white font-bold text-sm">${stepName}</span>
+                                    </div>
+                                    <div class="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold">
+                                        ${step.order || index + 1}
+                                    </div>
+                                </div>
+                                <div class="text-xs text-gray-400 mb-2">
+                                    ${this.getStepTitle(step.type)}
+                                </div>
+                                ${step.conditions && step.conditions.length > 0 ? `
+                                    <div class="text-xs text-blue-400 mb-1">
+                                        🔀 ${step.conditions.length} condição(ões)
+                                    </div>
+                                ` : ''}
+                                <div class="flex items-center gap-1 mt-2">
+                                    <button onclick="window.editFlowStepFromVisual('${stepId}')" 
+                                            class="flex-1 px-2 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded text-xs">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button onclick="window.removeFlowStepFromVisual('${stepId}')" 
+                                            class="flex-1 px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            `;
+                            
+                            canvas.appendChild(stepEl);
+                            
+                            // ✅ Tornar arrastável
+                            this.jsPlumbInstance.draggable(stepEl, {
+                                containment: 'parent',
+                                grid: [10, 10],
+                                stop: (el) => {
+                                    // Salvar posição quando arrastar
+                                    const rect = stepEl.getBoundingClientRect();
+                                    const canvasRect = canvas.getBoundingClientRect();
+                                    const x = rect.left - canvasRect.left + canvas.scrollLeft;
+                                    const y = rect.top - canvasRect.top + canvas.scrollTop;
+                                    this.saveStepPosition(stepId, x, y);
+                                }
+                            });
+                            
+                            // ✅ Adicionar endpoints (pontos de conexão)
+                            this.jsPlumbInstance.addEndpoint(stepEl, {
+                                anchor: 'Right',
+                                endpoint: 'Dot',
+                                paintStyle: { fill: '#3B82F6', radius: 5 },
+                                isSource: true,
+                                isTarget: false,
+                                maxConnections: -1
+                            }, {
+                                uuid: `source-${stepId}`
+                            });
+                            
+                            this.jsPlumbInstance.addEndpoint(stepEl, {
+                                anchor: 'Left',
+                                endpoint: 'Dot',
+                                paintStyle: { fill: '#10B981', radius: 5 },
+                                isSource: false,
+                                isTarget: true,
+                                maxConnections: -1
+                            }, {
+                                uuid: `target-${stepId}`
+                            });
+                        });
+                        
+                        // ✅ Conectar steps baseado em connections
+                        steps.forEach(step => {
+                            const stepEl = document.getElementById(`flow-step-${step.id}`);
+                            if (!stepEl) return;
+                            
+                            const connections = step.connections || {};
+                            
+                            // Conexão "next" (verde)
+                            if (connections.next) {
+                                const targetEl = document.getElementById(`flow-step-${connections.next}`);
+                                if (targetEl) {
+                                    this.jsPlumbInstance.connect({
+                                        source: `source-${step.id}`,
+                                        target: `target-${connections.next}`,
+                                        paintStyle: { stroke: '#10B981', strokeWidth: 2 },
+                                        overlays: [
+                                            ['Arrow', { location: 1, width: 10, length: 10 }],
+                                            ['Label', { label: 'Próximo', location: 0.5, cssClass: 'connection-label' }]
+                                        ]
+                                    });
+                                }
+                            }
+                            
+                            // Conexão "pending" (vermelho)
+                            if (connections.pending) {
+                                const targetEl = document.getElementById(`flow-step-${connections.pending}`);
+                                if (targetEl) {
+                                    this.jsPlumbInstance.connect({
+                                        source: `source-${step.id}`,
+                                        target: `target-${connections.pending}`,
+                                        paintStyle: { stroke: '#EF4444', strokeWidth: 2 },
+                                        overlays: [
+                                            ['Arrow', { location: 1, width: 10, length: 10 }],
+                                            ['Label', { label: 'Pendente', location: 0.5, cssClass: 'connection-label' }]
+                                        ]
+                                    });
+                                }
+                            }
+                            
+                            // Conexão "retry" (amarelo)
+                            if (connections.retry) {
+                                const targetEl = document.getElementById(`flow-step-${connections.retry}`);
+                                if (targetEl) {
+                                    this.jsPlumbInstance.connect({
+                                        source: `source-${step.id}`,
+                                        target: `target-${connections.retry}`,
+                                        paintStyle: { stroke: '#F59E0B', strokeWidth: 2 },
+                                        overlays: [
+                                            ['Arrow', { location: 1, width: 10, length: 10 }],
+                                            ['Label', { label: 'Retry', location: 0.5, cssClass: 'connection-label' }]
+                                        ]
+                                    });
+                                }
+                            }
+                            
+                            // ✅ Conectar condições
+                            if (step.conditions && step.conditions.length > 0) {
+                                step.conditions.forEach((cond, idx) => {
+                                    if (cond.target_step) {
+                                        const targetEl = document.getElementById(`flow-step-${cond.target_step}`);
+                                        if (targetEl) {
+                                            this.jsPlumbInstance.connect({
+                                                source: `source-${step.id}`,
+                                                target: `target-${cond.target_step}`,
+                                                paintStyle: { stroke: '#8B5CF6', strokeWidth: 2, strokeDasharray: '5,5' },
+                                                overlays: [
+                                                    ['Arrow', { location: 1, width: 10, length: 10 }],
+                                                    ['Label', { label: `Cond ${idx + 1}`, location: 0.5, cssClass: 'connection-label' }]
+                                                ]
+                                            });
+                                        }
+                                    }
+                                });
+                            }
+                        });
+                        
+                        // ✅ Permitir criar conexões arrastando
+                        this.jsPlumbInstance.bind('connection', (info) => {
+                            const sourceId = info.sourceId.replace('source-', '');
+                            const targetId = info.targetId.replace('target-', '');
+                            
+                            // Atualizar connections no step
+                            const sourceStep = this.config.flow_steps.find(s => s.id === sourceId);
+                            if (sourceStep) {
+                                if (!sourceStep.connections) sourceStep.connections = {};
+                                // Por padrão, salvar como "next"
+                                sourceStep.connections.next = targetId;
+                                this.showNotification(`✅ Conexão criada: ${sourceStep.name || sourceId} → ${this.config.flow_steps.find(s => s.id === targetId)?.name || targetId}`, 'success');
+                            }
+                        });
+                        
+                        // ✅ Redesenhar após mudanças
+                        this.jsPlumbInstance.repaintEverything();
+                        
+                        console.log('✅ Editor visual inicializado!');
+                    } else {
+                        console.error('❌ jsPlumb não carregado');
+                    }
+                } catch (error) {
+                    console.error('❌ Erro ao inicializar editor visual:', error);
+                }
+            });
+        },
+        
+        loadStepPositions() {
+            /** Carrega posições salvas dos steps do localStorage */
+            try {
+                const saved = localStorage.getItem(`flow_positions_${this.config.bot_id || 'default'}`);
+                return saved ? JSON.parse(saved) : {};
+            } catch {
+                return {};
+            }
+        },
+        
+        saveStepPosition(stepId, x, y) {
+            /** Salva posição do step no localStorage */
+            try {
+                const positions = this.loadStepPositions();
+                positions[stepId] = { x, y };
+                localStorage.setItem(`flow_positions_${this.config.bot_id || 'default'}`, JSON.stringify(positions));
+            } catch (e) {
+                console.error('Erro ao salvar posição:', e);
+            }
+        },
+        
         getStepTitle(type) {
             const titles = {'content': 'Conteúdo', 'payment': 'Pagamento', 'message': 'Mensagem', 'audio': 'Áudio', 'video': 'Vídeo', 'buttons': 'Botões', 'access': 'Acesso'};
             return titles[type] || 'Desconhecido';
@@ -2883,7 +3232,13 @@ function botConfigApp() {
                 this.showNotification('✅ Step adicionado!', 'success');
             }
             
-            setTimeout(() => this.editFlowStep(stepId), 100);
+            setTimeout(() => {
+                this.editFlowStep(stepId);
+                // ✅ Recarregar editor visual se estiver ativo
+                if (this.flowViewMode === 'visual') {
+                    setTimeout(() => this.initVisualFlowEditor(), 200);
+                }
+            }, 100);
         },
         
         editFlowStep(stepId) {
@@ -3817,6 +4172,11 @@ function botConfigApp() {
                 document.body.style.overflow = '';
                 document.getElementById(`flow-step-modal-${stepId}`).remove();
                 self.showNotification('✅ Step salvo!', 'success');
+                
+                // ✅ Recarregar editor visual se estiver ativo
+                if (self.flowViewMode === 'visual') {
+                    setTimeout(() => self.initVisualFlowEditor(), 200);
+                }
             };
         },
         
@@ -4358,6 +4718,8 @@ function botConfigApp() {
         },
         
         removeFlowStep(stepId) {
+            // ✅ Recarregar editor visual após remover
+            const wasVisual = this.flowViewMode === 'visual';
             if (!confirm('⚠️ Remover este step? Isso pode quebrar conexões de outros steps.')) return;
             
             // ✅ Se este step é o inicial, limpar e auto-definir novo
@@ -4404,6 +4766,11 @@ function botConfigApp() {
             } else {
                 this.showNotification('✅ Step removido!', 'success');
             }
+            
+            // ✅ Recarregar editor visual se estiver ativo
+            if (wasVisual && this.flowViewMode === 'visual') {
+                setTimeout(() => this.initVisualFlowEditor(), 100);
+            }
         },
         
         showNotification(message, type = 'success') {
@@ -4449,6 +4816,29 @@ window.updateConditionConfig = function(stepId, condIndex, validationType) {
     const alpineData = Alpine.$data(document.querySelector('[x-data*="botConfigApp"]'));
     if (alpineData && alpineData.updateConditionConfig) {
         alpineData.updateConditionConfig(stepId, condIndex, validationType);
+    }
+};
+
+// ✅ Funções globais para editor visual
+window.editFlowStepFromVisual = function(stepId) {
+    const alpineData = Alpine.$data(document.querySelector('[x-data*="botConfigApp"]'));
+    if (alpineData && alpineData.editFlowStep) {
+        alpineData.editFlowStep(stepId);
+    }
+};
+
+window.removeFlowStepFromVisual = function(stepId) {
+    const alpineData = Alpine.$data(document.querySelector('[x-data*="botConfigApp"]'));
+    if (alpineData && alpineData.removeFlowStep) {
+        if (confirm('⚠️ Remover este step? Todas as conexões serão perdidas.')) {
+            alpineData.removeFlowStep(stepId);
+            // Recarregar editor visual após remover
+            setTimeout(() => {
+                if (alpineData.flowViewMode === 'visual') {
+                    alpineData.initVisualFlowEditor();
+                }
+            }, 100);
+        }
     }
 };
 
