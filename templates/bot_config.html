@@ -608,7 +608,7 @@
                                     class="px-3 py-1.5 rounded text-xs font-medium transition">
                                 <i class="fas fa-list mr-1"></i>Lista
                             </button>
-                            <button @click="flowViewMode = 'visual'; initVisualFlowEditor()" 
+                            <button @click="flowViewMode = 'visual'; setTimeout(() => initVisualFlowEditor(), 100)" 
                                     :class="{'bg-blue-600 text-white': flowViewMode === 'visual', 'text-gray-400': flowViewMode !== 'visual'}"
                                     class="px-3 py-1.5 rounded text-xs font-medium transition">
                                 <i class="fas fa-project-diagram mr-1"></i>Visual
@@ -622,7 +622,7 @@
                 </div>
 
                 <!-- ✅ EDITOR VISUAL (Canvas com linhas) -->
-                <div x-show="flowViewMode === 'visual' && config.flow_steps && config.flow_steps.length > 0" 
+                <div x-show="flowViewMode === 'visual'" 
                      x-cloak
                      class="mb-6">
                     <div class="bg-gray-900 rounded-lg border-2 border-blue-500 p-4">
@@ -636,10 +636,23 @@
                                 <span>Arraste os blocos para reposicionar • Clique e arraste para conectar</span>
                             </div>
                         </div>
-                        <div id="flow-visual-canvas" 
-                             class="relative w-full bg-gray-950 rounded border border-gray-700"
-                             style="min-height: 600px; overflow: auto;">
-                            <!-- Steps serão renderizados aqui via JavaScript -->
+                        <!-- ✅ Mensagem se não houver steps -->
+                        <div x-show="!config.flow_steps || config.flow_steps.length === 0" 
+                             x-cloak
+                             class="text-center py-12 text-gray-400">
+                            <i class="fas fa-project-diagram text-4xl mb-4 opacity-50"></i>
+                            <p class="text-lg font-medium mb-2">Nenhum step criado ainda</p>
+                            <p class="text-sm">Adicione um step clicando em "Adicionar Step" acima</p>
+                        </div>
+                        <!-- ✅ Canvas apenas se houver steps -->
+                        <div x-show="config.flow_steps && config.flow_steps.length > 0"
+                             x-cloak
+                             x-init="$nextTick(() => { if (flowViewMode === 'visual') initVisualFlowEditor(); })">
+                            <div id="flow-visual-canvas" 
+                                 class="relative w-full bg-gray-950 rounded border border-gray-700"
+                                 style="min-height: 600px; overflow: auto;">
+                                <!-- Steps serão renderizados aqui via JavaScript -->
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -676,8 +689,8 @@
                                             <span x-show="step.conditions && step.conditions.length > 0" 
                                                   x-cloak
                                                   class="px-2 py-0.5 bg-blue-500 bg-opacity-20 border border-blue-500 rounded text-xs text-blue-400 font-bold"
-                                                  x-bind:title="`${step.conditions.length} condição(ões) configurada(s)`">
-                                                🔀 <span x-text="step.conditions.length"></span> condição(ões)
+                                                  x-bind:title="`${(step.conditions || []).length} condição(ões) configurada(s)`">
+                                                🔀 <span x-text="(step.conditions || []).length"></span> condição(ões)
                                             </span>
                                         </div>
                                         <div class="text-xs text-gray-400 mt-1">
@@ -1346,7 +1359,7 @@
                                                     <div class="flex items-center justify-between mt-2 pt-2 border-t border-gray-700">
                                                         <div>
                                                             <span class="text-xs font-bold text-yellow-500" x-show="orderBumpRef.orderBump.price > 0">
-                                                                R$ <span x-text="orderBumpRef.orderBump.price.toFixed(2)"></span>
+                                                                R$ <span x-text="parseFloat(orderBumpRef.orderBump.price || 0).toFixed(2)"></span>
                                                             </span>
                                                             <span class="text-xs text-gray-500" x-show="orderBumpRef.orderBump.price === 0">
                                                                 Sem preço
@@ -2945,15 +2958,30 @@ function botConfigApp() {
                 try {
                     // ✅ Verificar jsPlumb disponível
                     console.log('🔍 Verificando jsPlumb...');
+                    console.log('typeof jsPlumb:', typeof jsPlumb);
+                    console.log('jsPlumb:', typeof jsPlumb !== 'undefined' ? (jsPlumb ? 'EXISTS' : 'null') : 'undefined');
                     console.log('window.jsPlumb:', window.jsPlumb);
-                    console.log('typeof window.jsPlumb:', typeof window.jsPlumb);
+                    console.log('window.jsPlumb?.jsPlumb:', window.jsPlumb?.jsPlumb);
                     
-                    // jsPlumb 5.x usa API diferente
+                    // jsPlumb 2.x usa API diferente
                     let jsPlumbInstance = null;
                     
                     // ✅ Priorizar jsPlumb 2.x (versão estável do CDN)
-                    if (typeof jsPlumb !== 'undefined' && jsPlumb.jsPlumb && typeof jsPlumb.jsPlumb.getInstance === 'function') {
-                        console.log('✅ Usando jsPlumb 2.x (versão estável)');
+                    // jsPlumb 2.x pode estar em window.jsPlumb.jsPlumb ou jsPlumb diretamente
+                    if (window.jsPlumb && window.jsPlumb.jsPlumb && typeof window.jsPlumb.jsPlumb.getInstance === 'function') {
+                        console.log('✅ Usando window.jsPlumb.jsPlumb 2.x');
+                        jsPlumbInstance = window.jsPlumb.jsPlumb.getInstance({
+                            container: canvas,
+                            paintStyle: { stroke: '#3B82F6', strokeWidth: 2 },
+                            hoverPaintStyle: { stroke: '#60A5FA', strokeWidth: 3 },
+                            endpointStyle: { fill: '#3B82F6', radius: 5 },
+                            endpointHoverStyle: { fill: '#60A5FA', radius: 7 },
+                            connector: ['Flowchart', { stub: [10, 15], gap: 5, cornerRadius: 5, alwaysRespectStubs: true }],
+                            anchors: ['Right', 'Left', 'Top', 'Bottom'],
+                            maxConnections: -1
+                        });
+                    } else if (typeof jsPlumb !== 'undefined' && jsPlumb && jsPlumb.jsPlumb && typeof jsPlumb.jsPlumb.getInstance === 'function') {
+                        console.log('✅ Usando jsPlumb.jsPlumb 2.x (versão estável)');
                         jsPlumbInstance = jsPlumb.jsPlumb.getInstance({
                             container: canvas,
                             paintStyle: { stroke: '#3B82F6', strokeWidth: 2 },
@@ -2964,7 +2992,7 @@ function botConfigApp() {
                             anchors: ['Right', 'Left', 'Top', 'Bottom'],
                             maxConnections: -1
                         });
-                    } else if (typeof jsPlumb !== 'undefined' && typeof jsPlumb.getInstance === 'function') {
+                    } else if (typeof jsPlumb !== 'undefined' && jsPlumb && typeof jsPlumb.getInstance === 'function') {
                         console.log('✅ Usando jsPlumb global (versão antiga)');
                         jsPlumbInstance = jsPlumb.getInstance({
                             container: canvas
@@ -2975,7 +3003,7 @@ function botConfigApp() {
                             container: canvas
                         });
                     } else if (window.jsPlumb && typeof window.jsPlumb.getInstance === 'function') {
-                        console.log('✅ Usando jsPlumb.getInstance()');
+                        console.log('✅ Usando window.jsPlumb.getInstance()');
                         jsPlumbInstance = window.jsPlumb.getInstance({
                             container: canvas
                         });
@@ -2990,6 +3018,10 @@ function botConfigApp() {
                             });
                         }
                     } else {
+                        console.error('❌ jsPlumb não encontrado! Verificando variáveis...');
+                        console.error('- typeof jsPlumb:', typeof jsPlumb);
+                        console.error('- window.jsPlumb:', window.jsPlumb);
+                        console.error('- window.jsPlumb?.jsPlumb:', window.jsPlumb?.jsPlumb);
                         throw new Error('jsPlumb não está disponível. Verifique se o CDN está carregando corretamente.');
                     }
                     
@@ -3312,8 +3344,33 @@ function botConfigApp() {
                         
                         console.log('✅ Editor visual inicializado! Blocos criados:', steps.length);
                     } else {
+                        // ✅ Verificar se chegou até aqui (significa que passou pela verificação mas não entrou no if)
                         console.error('❌ jsPlumb não carregado');
-                        this.showNotification('❌ Erro: jsPlumb não carregou. Verifique o console.', 'error');
+                        console.error('🔍 Debug completo:');
+                        console.error('- typeof jsPlumb:', typeof jsPlumb);
+                        console.error('- jsPlumb:', typeof jsPlumb !== 'undefined' ? jsPlumb : 'undefined');
+                        console.error('- window.jsPlumb:', window.jsPlumb);
+                        console.error('- window.jsPlumb?.jsPlumb:', window.jsPlumb?.jsPlumb);
+                        console.error('- Variáveis window com "plumb":', Object.keys(window).filter(k => k.toLowerCase().includes('plumb')));
+                        
+                        // ✅ Tentar carregar manualmente se não encontrou
+                        if (typeof window.jsPlumb === 'undefined' && typeof jsPlumb === 'undefined') {
+                            console.warn('⚠️ Tentando carregar jsPlumb manualmente...');
+                            const script = document.createElement('script');
+                            script.src = 'https://cdn.jsdelivr.net/npm/jsplumb@2.15.6/dist/js/jsplumb.min.js';
+                            script.onload = () => {
+                                console.log('✅ jsPlumb carregado manualmente! Tentando novamente...');
+                                setTimeout(() => this.initVisualFlowEditor(), 200);
+                            };
+                            script.onerror = () => {
+                                console.error('❌ Falha ao carregar jsPlumb manualmente');
+                                this.showNotification('❌ Erro: jsPlumb não pôde ser carregado. Verifique sua conexão.', 'error');
+                            };
+                            document.head.appendChild(script);
+                            return; // Sair da função, vai tentar novamente quando carregar
+                        }
+                        
+                        this.showNotification('❌ Erro: jsPlumb não carregou. Verifique o console para detalhes.', 'error');
                     }
                 } catch (error) {
                     console.error('❌ Erro ao inicializar editor visual:', error);
