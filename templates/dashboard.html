@@ -916,40 +916,40 @@
             </template>
         </div>
         
+        </template>
+        
         <!-- ✅ Paginação -->
-        <template x-if="filteredPayments.length > 0 && totalPaymentPages > 1">
-            <div class="flex items-center justify-center gap-2 mt-4 sm:mt-6">
-                <!-- Botão Anterior -->
-                <button @click="prevPaymentPage()" 
-                        :disabled="currentPaymentPage === 1"
-                        :class="currentPaymentPage === 1 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-700'"
-                        class="px-3 sm:px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm font-medium transition-colors">
-                    <i class="fas fa-chevron-left"></i>
-                </button>
-                
-                <!-- Números das páginas -->
-                <div class="flex items-center gap-1 sm:gap-2">
-                    <template x-for="page in visiblePaymentPages" :key="page">
-                        <button x-show="page !== '...'" 
-                                @click="goToPaymentPage(page)"
-                                :class="currentPaymentPage === page ? 'bg-yellow-500 text-black border-yellow-500' : 'bg-gray-800 border-gray-700 text-white hover:bg-gray-700'"
-                                class="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center border rounded-lg text-sm font-bold transition-colors"
-                                x-text="page">
-                        </button>
-                        <span x-show="page === '...'" class="px-2 text-gray-500">...</span>
-                    </template>
-                </div>
-                
-                <!-- Botão Próximo -->
-                <button @click="nextPaymentPage()" 
-                        :disabled="currentPaymentPage === totalPaymentPages"
-                        :class="currentPaymentPage === totalPaymentPages ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-700'"
-                        class="px-3 sm:px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm font-medium transition-colors">
-                    <i class="fas fa-chevron-right"></i>
-                </button>
+        <div x-show="filteredPayments && filteredPayments.length > 0 && Math.ceil(filteredPayments.length / paymentsPerPage) > 1" 
+             class="flex items-center justify-center gap-2 mt-4 sm:mt-6">
+            <!-- Botão Anterior -->
+            <button @click="prevPaymentPage()" 
+                    :disabled="currentPaymentPage === 1"
+                    :class="currentPaymentPage === 1 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-700'"
+                    class="px-3 sm:px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm font-medium transition-colors">
+                <i class="fas fa-chevron-left"></i>
+            </button>
+            
+            <!-- Números das páginas -->
+            <div class="flex items-center gap-1 sm:gap-2">
+                <template x-for="page in visiblePaymentPages" :key="page">
+                    <button x-show="page !== '...'" 
+                            @click="goToPaymentPage(page)"
+                            :class="currentPaymentPage === page ? 'bg-yellow-500 text-black border-yellow-500' : 'bg-gray-800 border-gray-700 text-white hover:bg-gray-700'"
+                            class="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center border rounded-lg text-sm font-bold transition-colors"
+                            x-text="page">
+                    </button>
+                    <span x-show="page === '...'" class="px-2 text-gray-500">...</span>
+                </template>
             </div>
-        </template>
-        </template>
+            
+            <!-- Botão Próximo -->
+            <button @click="nextPaymentPage()" 
+                    :disabled="currentPaymentPage === totalPaymentPages"
+                    :class="currentPaymentPage === totalPaymentPages ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-700'"
+                    class="px-3 sm:px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm font-medium transition-colors">
+                <i class="fas fa-chevron-right"></i>
+            </button>
+        </div>
 
         <!-- Empty State -->
         <template x-if="filteredPayments.length === 0">
@@ -2572,13 +2572,16 @@ function dashboardApp() {
         },
         
         get totalPaymentPages() {
+            if (!this.filteredPayments || this.filteredPayments.length === 0) return 1;
             return Math.ceil(this.filteredPayments.length / this.paymentsPerPage);
         },
         
         get visiblePaymentPages() {
-            const total = this.totalPaymentPages;
-            const current = this.currentPaymentPage;
+            const total = this.totalPaymentPages || 1;
+            const current = this.currentPaymentPage || 1;
             const pages = [];
+            
+            if (total === 0) return [1];
             
             // Mostrar no máximo 7 páginas
             if (total <= 7) {
