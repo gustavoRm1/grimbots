@@ -16,8 +16,37 @@
 
 .flow-step-block {
     transition: transform 0.2s, box-shadow 0.2s;
-    min-width: 220px;
+    min-width: 200px;
     max-width: 280px;
+    width: 240px;
+}
+
+/* ✅ Responsividade para telas menores */
+@media (max-width: 768px) {
+    .flow-step-block {
+        min-width: 180px;
+        max-width: 240px;
+        width: 200px;
+    }
+    
+    #flow-visual-canvas {
+        height: calc(100vh - 320px) !important;
+        min-height: 400px !important;
+    }
+}
+
+@media (max-width: 640px) {
+    .flow-step-block {
+        min-width: 160px;
+        max-width: 200px;
+        width: 180px;
+        font-size: 0.875rem;
+    }
+    
+    #flow-visual-canvas {
+        height: calc(100vh - 280px) !important;
+        min-height: 350px !important;
+    }
 }
 
 .flow-step-block:hover {
@@ -776,16 +805,16 @@
                 <!-- ✅ EDITOR VISUAL (Canvas com linhas) -->
                 <div x-show="flowViewMode === 'visual'" 
                      x-cloak
-                     class="mb-6">
-                    <div class="bg-gray-900 rounded-lg border-2 border-blue-500 p-4">
-                        <div class="flex items-center justify-between mb-4">
+                     class="mb-6 w-full -mx-4 sm:-mx-6 lg:-mx-8 overflow-hidden">
+                    <div class="bg-gray-900 rounded-lg border-2 border-blue-500 p-2 sm:p-4 w-full">
+                        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 mb-4">
                             <div class="flex items-center gap-2">
                                 <i class="fas fa-project-diagram text-blue-400 text-xl"></i>
-                                <h4 class="text-white font-bold">Editor Visual de Fluxo</h4>
+                                <h4 class="text-white font-bold text-sm sm:text-base">Editor Visual de Fluxo</h4>
                             </div>
-                            <div class="flex items-center gap-2 text-xs text-gray-400">
-                                <i class="fas fa-info-circle"></i>
-                                <span>Arraste os blocos para reposicionar • Clique e arraste para conectar • <strong class="text-red-400">Duplo clique ou botão direito na linha para remover</strong></span>
+                            <div class="flex items-center gap-2 text-xs text-gray-400 flex-wrap">
+                                <i class="fas fa-info-circle flex-shrink-0"></i>
+                                <span class="text-xs sm:text-sm">Arraste os blocos para reposicionar • Clique e arraste para conectar • <strong class="text-red-400">Duplo clique ou botão direito na linha para remover</strong></span>
                             </div>
                         </div>
                         <!-- ✅ Mensagem se não houver steps -->
@@ -799,10 +828,11 @@
                         <!-- ✅ Canvas apenas se houver steps -->
                         <div x-show="config.flow_steps && config.flow_steps.length > 0"
                              x-cloak
-                             x-init="$nextTick(() => { if (flowViewMode === 'visual') initVisualFlowEditor(); })">
+                             x-init="$nextTick(() => { if (flowViewMode === 'visual') initVisualFlowEditor(); })"
+                             class="w-full overflow-hidden">
                             <div id="flow-visual-canvas" 
                                  class="relative w-full bg-gray-950 rounded border border-gray-700"
-                                 style="min-height: 600px; overflow: auto;">
+                                 style="height: calc(100vh - 380px); min-height: 500px; max-height: 90vh; overflow: auto; width: 100%; max-width: 100%; box-sizing: border-box;">
                                 <!-- Steps serão renderizados aqui via JavaScript -->
                             </div>
                         </div>
@@ -3099,6 +3129,67 @@ document.addEventListener('alpine:init', () => {
             
             console.log('✅ Canvas encontrado:', canvas);
             console.log('📊 Steps disponíveis:', this.sortedFlowSteps.length);
+            
+            // ✅ Ajustar dimensões do canvas para responsividade
+            const adjustCanvasSize = () => {
+                const container = canvas.parentElement;
+                if (container) {
+                    // Calcular altura disponível baseada na viewport
+                    const viewportHeight = window.innerHeight;
+                    const viewportWidth = window.innerWidth;
+                    
+                    // Altura aproximada dos elementos acima do canvas
+                    let headerHeight = 200; // Header padrão
+                    if (viewportWidth < 640) {
+                        headerHeight = 250; // Mobile: mais espaço para header
+                    } else if (viewportWidth < 768) {
+                        headerHeight = 220; // Tablet
+                    }
+                    
+                    // Altura disponível (viewport - header - margens)
+                    const availableHeight = viewportHeight - headerHeight - 40; // 40px de margem
+                    
+                    // Altura mínima e máxima baseada no tamanho da tela
+                    const minHeight = viewportWidth < 640 ? 350 : viewportWidth < 768 ? 400 : 500;
+                    const maxHeight = Math.min(availableHeight, viewportHeight * 0.85); // Máximo 85% da viewport
+                    
+                    // Aplicar altura calculada
+                    const finalHeight = Math.max(minHeight, Math.min(maxHeight, availableHeight));
+                    canvas.style.height = `${finalHeight}px`;
+                    canvas.style.width = '100%';
+                    canvas.style.maxWidth = '100%';
+                    
+                    // Garantir que o container também seja 100%
+                    if (container) {
+                        container.style.width = '100%';
+                        container.style.maxWidth = '100%';
+                    }
+                    
+                    console.log(`📐 Canvas ajustado: ${canvas.style.width} x ${canvas.style.height} (viewport: ${viewportWidth}x${viewportHeight})`);
+                }
+            };
+            
+            // Ajustar tamanho inicial
+            adjustCanvasSize();
+            
+            // ✅ Ajustar tamanho ao redimensionar a janela
+            window.addEventListener('resize', () => {
+                if (this.flowViewMode === 'visual') {
+                    adjustCanvasSize();
+                    // Redesenhar conexões após resize
+                    setTimeout(() => {
+                        try {
+                            if (this.jsPlumbInstance && typeof this.jsPlumbInstance.repaintEverything === 'function') {
+                                this.jsPlumbInstance.repaintEverything();
+                            } else if (this.jsPlumbInstance && typeof this.jsPlumbInstance.repaint === 'function') {
+                                this.jsPlumbInstance.repaint();
+                            }
+                        } catch (e) {
+                            console.warn('⚠️ Erro ao repaint após resize:', e);
+                        }
+                    }, 100);
+                }
+            });
             
             // Limpar canvas
             canvas.innerHTML = '';
