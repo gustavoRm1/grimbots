@@ -4441,40 +4441,29 @@ document.addEventListener('alpine:init', () => {
                     step.config.link = document.getElementById(`step-link-${stepId}`)?.value || '';
                     step.config.message = step.config.message || 'Acesso liberado!';
                 }
-                if (step.type === 'content') {
-                    // ✅ Para tipo "content", salvar botões customizados
-                    const customButtons = [];
-                    const customButtonsList = document.getElementById(`custom-buttons-list-${stepId}`);
-                    if (customButtonsList) {
-                        customButtonsList.querySelectorAll('[data-custom-button]').forEach((btnEl, idx) => {
-                            const text = btnEl.querySelector(`input[name="custom-btn-text-${stepId}-${idx}"]`)?.value || '';
-                            const targetStep = btnEl.querySelector(`select[name="custom-btn-target-${stepId}-${idx}"]`)?.value || '';
-                            if (text.trim()) {
-                                customButtons.push({
-                                    text: text.trim(),
-                                    target_step: targetStep || null
-                                });
-                            }
-                        });
-                    }
-                    if (!step.config) step.config = {};
-                    step.config.custom_buttons = customButtons;
-                }
-                
                 // ✅ Para TODOS os tipos (exceto access), salvar tanto botões cadastrados quanto customizados
-                if (step.type !== 'access' && step.type !== 'content') {
+                if (step.type !== 'access') {
                     // ✅ 1. Salvar botões customizados
                     const customButtons = [];
                     const customButtonsList = document.getElementById(`custom-buttons-list-${stepId}`);
                     if (customButtonsList) {
-                        customButtonsList.querySelectorAll('[data-custom-button]').forEach((btnEl, idx) => {
-                            const text = btnEl.querySelector(`input[name="custom-btn-text-${stepId}-${idx}"]`)?.value || '';
-                            const targetStep = btnEl.querySelector(`select[name="custom-btn-target-${stepId}-${idx}"]`)?.value || '';
-                            if (text.trim()) {
-                                customButtons.push({
-                                    text: text.trim(),
-                                    target_step: targetStep || null
-                                });
+                        // ✅ CORREÇÃO: Buscar pelos atributos name reais, não pelo índice do forEach
+                        customButtonsList.querySelectorAll('[data-custom-button]').forEach((btnEl) => {
+                            // Buscar input de texto (pode ter qualquer índice no name)
+                            const textInput = btnEl.querySelector(`input[name^="custom-btn-text-${stepId}-"]`);
+                            // Buscar select de target (pode ter qualquer índice no name)
+                            const targetSelect = btnEl.querySelector(`select[name^="custom-btn-target-${stepId}-"]`);
+                            
+                            if (textInput) {
+                                const text = textInput.value || '';
+                                const targetStep = targetSelect ? (targetSelect.value || '') : '';
+                                
+                                if (text.trim()) {
+                                    customButtons.push({
+                                        text: text.trim(),
+                                        target_step: targetStep || null
+                                    });
+                                }
                             }
                         });
                     }
@@ -5436,6 +5425,161 @@ window.removeFlowStepFromVisual = function(stepId) {
                 }
             }, 100);
         }
+    }
+};
+
+// ✅ Funções globais para botões customizados
+window.addCustomButton = function(stepId) {
+    try {
+        const container = document.getElementById(`custom-buttons-list-${stepId}`);
+        if (!container) {
+            console.error('❌ Container de botões customizados não encontrado:', `custom-buttons-list-${stepId}`);
+            alert('❌ Erro: Container de botões não encontrado. Tente fechar e reabrir o modal.');
+            return;
+        }
+        
+        // Buscar dados do Alpine para obter steps disponíveis
+        const alpineData = Alpine.$data(document.querySelector('[x-data*="botConfigApp"]'));
+        if (!alpineData || !alpineData.config) {
+            console.error('❌ Dados do Alpine não encontrados');
+            alert('❌ Erro: Dados não carregados. Tente recarregar a página.');
+            return;
+        }
+        
+        // Buscar steps disponíveis (exceto o step atual)
+        const flowSteps = alpineData.config.flow_steps || [];
+        const availableSteps = flowSteps.filter(s => s && s.id !== stepId);
+        
+        // Função auxiliar para escapar HTML
+        function escapeHtml(text) {
+            const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+            return String(text || '').replace(/[&<>"']/g, m => map[m]);
+        }
+        
+        // Função auxiliar para obter título do step
+        function getStepTitle(type) {
+            const titles = {'content': 'Conteúdo', 'payment': 'Pagamento', 'message': 'Mensagem', 'audio': 'Áudio', 'video': 'Vídeo', 'buttons': 'Botões', 'access': 'Acesso'};
+            return titles[type] || 'Desconhecido';
+        }
+        
+        // Contar botões existentes para gerar índice único
+        const existingButtons = container.querySelectorAll('[data-custom-button]');
+        const newIndex = existingButtons.length;
+        
+        // Construir options do select
+        const stepOptions = availableSteps.map(s => {
+            const stepLabel = (s.name && s.name.trim()) ? s.name : getStepTitle(s.type);
+            return `<option value="${s.id}">${s.order || 0} - ${escapeHtml(stepLabel)}</option>`;
+        }).join('');
+        
+        // Criar HTML do novo botão
+        const buttonHtml = `
+            <div data-custom-button class="p-3 bg-gray-900 rounded-lg border border-blue-600 mb-2">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-2 mb-2">
+                    <div class="md:col-span-2">
+                        <label class="block text-xs font-medium text-gray-300 mb-1">Texto do Botão</label>
+                        <input type="text" 
+                               name="custom-btn-text-${stepId}-${newIndex}" 
+                               value=""
+                               placeholder="Ex: Sim, quero!"
+                               class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm"
+                               maxlength="64">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-300 mb-1">🔗 Ir para Step</label>
+                        <select name="custom-btn-target-${stepId}-${newIndex}" 
+                                class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm">
+                            <option value="">Nenhum</option>${stepOptions}
+                        </select>
+                    </div>
+                </div>
+                <button type="button" 
+                        onclick="window.removeCustomButton('${stepId}', ${newIndex})"
+                        class="w-full px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-medium transition">
+                    <i class="fas fa-times mr-1"></i>Remover
+                </button>
+            </div>
+        `;
+        
+        // Remover mensagem "Nenhum botão adicionado" se existir
+        const emptyMessage = container.querySelector('.text-center');
+        if (emptyMessage) {
+            emptyMessage.remove();
+        }
+        
+        // Adicionar novo botão ao container
+        container.insertAdjacentHTML('beforeend', buttonHtml);
+        
+        // Scroll suave para o novo botão
+        const newButton = container.lastElementChild;
+        if (newButton) {
+            newButton.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            // Focar no input de texto do novo botão
+            const textInput = newButton.querySelector('input[type="text"]');
+            if (textInput) {
+                setTimeout(() => textInput.focus(), 100);
+            }
+        }
+    } catch (error) {
+        console.error('❌ Erro ao adicionar botão customizado:', error);
+        alert('❌ Erro ao adicionar botão. Verifique o console para mais detalhes.');
+    }
+};
+
+window.removeCustomButton = function(stepId, index) {
+    const container = document.getElementById(`custom-buttons-list-${stepId}`);
+    if (!container) {
+        console.error('❌ Container de botões customizados não encontrado:', `custom-buttons-list-${stepId}`);
+        return;
+    }
+    
+    // ✅ CORREÇÃO: Buscar o botão pelo índice ou pelo elemento clicado
+    const buttons = Array.from(container.querySelectorAll('[data-custom-button]'));
+    let buttonToRemove = null;
+    
+    // Se index for fornecido, usar índice
+    if (typeof index === 'number' && index >= 0 && index < buttons.length) {
+        buttonToRemove = buttons[index];
+    } else {
+        // Tentar encontrar pelo evento (se chamado via onclick)
+        const event = window.event || arguments[2];
+        if (event && event.target) {
+            buttonToRemove = event.target.closest('[data-custom-button]');
+        }
+    }
+    
+    if (!buttonToRemove) {
+        console.error('❌ Botão customizado não encontrado para remover');
+        return;
+    }
+    
+    // Remover o botão
+    buttonToRemove.remove();
+    
+    // Se não houver mais botões, mostrar mensagem
+    const remainingButtons = container.querySelectorAll('[data-custom-button]');
+    if (remainingButtons.length === 0) {
+        container.innerHTML = '<div class="text-xs text-blue-300 italic text-center py-2">Nenhum botão adicionado. Clique em "Adicionar Botão" para criar um.</div>';
+    } else {
+        // Reindexar os botões restantes para manter índices sequenciais
+        remainingButtons.forEach((btn, newIdx) => {
+            // Atualizar names dos inputs e selects
+            const textInput = btn.querySelector(`input[name^="custom-btn-text-${stepId}-"]`);
+            const targetSelect = btn.querySelector(`select[name^="custom-btn-target-${stepId}-"]`);
+            const removeButton = btn.querySelector('button[onclick*="removeCustomButton"]');
+            
+            if (textInput) {
+                textInput.name = `custom-btn-text-${stepId}-${newIdx}`;
+            }
+            
+            if (targetSelect) {
+                targetSelect.name = `custom-btn-target-${stepId}-${newIdx}`;
+            }
+            
+            if (removeButton) {
+                removeButton.setAttribute('onclick', `window.removeCustomButton('${stepId}', ${newIdx})`);
+            }
+        });
     }
 };
 </script>
