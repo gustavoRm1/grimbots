@@ -858,7 +858,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                        <template x-for="payment in filteredPayments.slice(0, 10)" :key="payment.id">
+                        <template x-for="payment in paginatedPayments" :key="payment.id">
                             <tr @click="window.location.href = `/bots/${payment.bot_id}/stats`" 
                                 class="cursor-pointer hover:bg-gray-700 transition-colors"
                                 :title="`Ver estatísticas do bot ${payment.bot_name}`">
@@ -893,7 +893,7 @@
         
         <!-- ✅ CARDS PARA MOBILE (mostra apenas no mobile) -->
         <div class="md:hidden space-y-3">
-            <template x-for="payment in filteredPayments.slice(0, 10)" :key="payment.id">
+            <template x-for="payment in paginatedPayments" :key="payment.id">
                 <div @click="window.location.href = `/bots/${payment.bot_id}/stats`" 
                      class="bg-gray-800 border border-gray-700 rounded-lg p-4 cursor-pointer hover:bg-gray-700 hover:border-gray-600 transition-colors active:scale-[0.98]"
                      :title="`Ver estatísticas do bot ${payment.bot_name}`">
@@ -915,6 +915,40 @@
                 </div>
             </template>
         </div>
+        
+        <!-- ✅ Paginação -->
+        <template x-if="filteredPayments.length > 0 && totalPaymentPages > 1">
+            <div class="flex items-center justify-center gap-2 mt-4 sm:mt-6">
+                <!-- Botão Anterior -->
+                <button @click="prevPaymentPage()" 
+                        :disabled="currentPaymentPage === 1"
+                        :class="currentPaymentPage === 1 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-700'"
+                        class="px-3 sm:px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm font-medium transition-colors">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+                
+                <!-- Números das páginas -->
+                <div class="flex items-center gap-1 sm:gap-2">
+                    <template x-for="page in visiblePaymentPages" :key="page">
+                        <button x-show="page !== '...'" 
+                                @click="goToPaymentPage(page)"
+                                :class="currentPaymentPage === page ? 'bg-yellow-500 text-black border-yellow-500' : 'bg-gray-800 border-gray-700 text-white hover:bg-gray-700'"
+                                class="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center border rounded-lg text-sm font-bold transition-colors"
+                                x-text="page">
+                        </button>
+                        <span x-show="page === '...'" class="px-2 text-gray-500">...</span>
+                    </template>
+                </div>
+                
+                <!-- Botão Próximo -->
+                <button @click="nextPaymentPage()" 
+                        :disabled="currentPaymentPage === totalPaymentPages"
+                        :class="currentPaymentPage === totalPaymentPages ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-700'"
+                        class="px-3 sm:px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm font-medium transition-colors">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+            </div>
+        </template>
         </template>
 
         <!-- Empty State -->
@@ -1543,6 +1577,10 @@ function dashboardApp() {
         filteredBots: [],
         filteredPayments: [],
         
+        // ✅ Paginação de vendas
+        currentPaymentPage: 1,
+        paymentsPerPage: 10,
+        
         filters: {
             period: '7'
         },
@@ -1565,6 +1603,12 @@ function dashboardApp() {
             console.log('🚀 Dashboard V2.0 inicializando...');
             this.filteredBots = this.bots;
             this.filteredPayments = this.payments;
+            
+            // ✅ Watcher: Resetar página quando filteredPayments mudar
+            this.$watch('filteredPayments', () => {
+                // Resetar para primeira página quando filtros mudarem
+                this.currentPaymentPage = 1;
+            });
             
             // ✅ Watchers para bloquear scroll do body quando modal abre
             this.$watch('showAddBotModal', (value) => {
@@ -2517,6 +2561,91 @@ function dashboardApp() {
                 // Restaurar scroll do body
                 document.body.style.overflow = '';
                 document.body.style.paddingRight = '';
+            }
+        },
+        
+        // ✅ Computed Properties - Paginação de Vendas
+        get paginatedPayments() {
+            const start = (this.currentPaymentPage - 1) * this.paymentsPerPage;
+            const end = start + this.paymentsPerPage;
+            return this.filteredPayments.slice(start, end);
+        },
+        
+        get totalPaymentPages() {
+            return Math.ceil(this.filteredPayments.length / this.paymentsPerPage);
+        },
+        
+        get visiblePaymentPages() {
+            const total = this.totalPaymentPages;
+            const current = this.currentPaymentPage;
+            const pages = [];
+            
+            // Mostrar no máximo 7 páginas
+            if (total <= 7) {
+                // Se tem 7 ou menos páginas, mostrar todas
+                for (let i = 1; i <= total; i++) {
+                    pages.push(i);
+                }
+            } else {
+                // Mostrar páginas inteligentemente
+                if (current <= 4) {
+                    // Páginas iniciais: 1, 2, 3, 4, 5, ..., última
+                    for (let i = 1; i <= 5; i++) {
+                        pages.push(i);
+                    }
+                    pages.push('...');
+                    pages.push(total);
+                } else if (current >= total - 3) {
+                    // Páginas finais: 1, ..., penúltimas, última
+                    pages.push(1);
+                    pages.push('...');
+                    for (let i = total - 4; i <= total; i++) {
+                        pages.push(i);
+                    }
+                } else {
+                    // Páginas do meio: 1, ..., anteriores, atual, próximas, ..., última
+                    pages.push(1);
+                    pages.push('...');
+                    for (let i = current - 1; i <= current + 1; i++) {
+                        pages.push(i);
+                    }
+                    pages.push('...');
+                    pages.push(total);
+                }
+            }
+            
+            return pages;
+        },
+        
+        // ✅ Métodos de Navegação - Paginação de Vendas
+        goToPaymentPage(page) {
+            if (page !== '...' && page >= 1 && page <= this.totalPaymentPages) {
+                this.currentPaymentPage = page;
+                // Scroll suave para o topo da seção de vendas
+                const section = document.querySelector('.chart-container');
+                if (section) {
+                    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }
+        },
+        
+        nextPaymentPage() {
+            if (this.currentPaymentPage < this.totalPaymentPages) {
+                this.currentPaymentPage++;
+                const section = document.querySelector('.chart-container');
+                if (section) {
+                    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }
+        },
+        
+        prevPaymentPage() {
+            if (this.currentPaymentPage > 1) {
+                this.currentPaymentPage--;
+                const section = document.querySelector('.chart-container');
+                if (section) {
+                    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
             }
         },
         

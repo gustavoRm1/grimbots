@@ -418,32 +418,6 @@
     
     
     
-    <!-- Card 2: Problemas (Ação Imediata) -->
-    <div class="config-section" x-show="analyticsV2.problems && analyticsV2.problems.length > 0" style="background: linear-gradient(135deg, rgba(239, 68, 68, 0.08), rgba(239, 68, 68, 0.02)); border-color: rgba(239, 68, 68, 0.3);">
-        <div class="config-section-header">
-            <i class="fas fa-exclamation-triangle text-2xl text-red-500"></i>
-            <div>
-                <div class="config-section-title text-red-400">⚠️ Problemas Detectados</div>
-                <div class="config-section-description">Ação imediata necessária</div>
-            </div>
-        </div>
-        <div class="space-y-3">
-            <template x-for="problem in analyticsV2.problems" :key="problem.title">
-                <div class="p-3 sm:p-4 rounded-lg border" x-bind:class="problem.severity === 'CRITICAL' ? 'bg-red-900/20 border-red-500/50' : 'bg-orange-900/20 border-orange-500/50'">
-                    <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
-                        <div class="flex-1 min-w-0">
-                            <div class="text-sm sm:text-base font-bold text-white mb-1 truncate" x-text="problem.title"></div>
-                            <div class="text-xs sm:text-sm text-gray-400 mb-2" x-text="problem.description"></div>
-                            <div class="text-xs text-gray-500 italic" x-text="'💡 ' + problem.action"></div>
-                        </div>
-                        <button class="px-3 sm:px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs sm:text-sm font-bold rounded-lg transition whitespace-nowrap flex-shrink-0 w-full sm:w-auto" x-text="problem.action_button"></button>
-                    </div>
-                </div>
-            </template>
-        </div>
-    </div>
-
-    
     <!-- Métricas Principais -->
     <div class="config-section">
         <div class="config-section-header">
