@@ -4984,8 +4984,7 @@ document.addEventListener('alpine:init', () => {
             document.body.appendChild(notification);
             setTimeout(() => notification.remove(), 3000);
         }
-    };
-}
+    }));
 
 // ✅ Funções globais para condições (acessam contexto Alpine via DOM)
 window.addCondition = function(stepId) {
@@ -5043,10 +5042,11 @@ window.removeFlowStepFromVisual = function(stepId) {
                 }
             }, 100);
         }
-    };
-    
-    // ✅ Remarketing App (componente separado)
-    Alpine.data('remarketingApp', () => ({
+    }
+};
+
+// ✅ Remarketing App (componente separado)
+Alpine.data('remarketingApp', () => ({
         campaigns: [],
         showCreateModal: false,
         showStatsModal: false,
