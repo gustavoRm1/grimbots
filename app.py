@@ -3986,13 +3986,45 @@ def update_bot_config(bot_id):
         
         if 'flow_steps' in data:
             flow_steps = data['flow_steps']
-            # ✅ Validação básica
+            # ✅ QI 500: Validação completa de estrutura
             if isinstance(flow_steps, list):
-                # Validar estrutura mínima
-                for step in flow_steps:
-                    if not step.get('id') or not step.get('type'):
-                        logger.warning(f"⚠️ Step inválido (sem id ou type): {step}")
+                # Validar estrutura mínima e conexões obrigatórias
+                step_ids = set()
+                for idx, step in enumerate(flow_steps):
+                    if not isinstance(step, dict):
+                        logger.warning(f"⚠️ Step {idx} não é um objeto válido")
                         continue
+                    
+                    if not step.get('id') or not step.get('type'):
+                        logger.warning(f"⚠️ Step {idx} inválido (sem id ou type): {step}")
+                        continue
+                    
+                    step_id = step.get('id')
+                    if step_id in step_ids:
+                        logger.warning(f"⚠️ Step duplicado encontrado: {step_id}")
+                        continue
+                    step_ids.add(step_id)
+                    
+                    step_type = step.get('type')
+                    connections = step.get('connections', {})
+                    
+                    # ✅ VALIDAÇÃO: Payment step deve ter conexões obrigatórias
+                    if step_type == 'payment':
+                        has_next = bool(connections.get('next'))
+                        has_pending = bool(connections.get('pending'))
+                        if not has_next and not has_pending:
+                            logger.error(f"❌ Step payment {step_id} não tem conexões obrigatórias (next ou pending)")
+                            return jsonify({
+                                'error': f'Step de pagamento "{step_id}" deve ter pelo menos uma conexão: "next" (se pago) ou "pending" (se não pago)'
+                            }), 400
+                    
+                    # Validar que conexões apontam para steps existentes
+                    for conn_type in ['next', 'pending', 'retry']:
+                        conn_step_id = connections.get(conn_type)
+                        if conn_step_id and conn_step_id not in step_ids:
+                            logger.warning(f"⚠️ Step {step_id} tem conexão '{conn_type}' apontando para step inexistente: {conn_step_id}")
+                            # Não bloquear, mas avisar (step pode ser criado depois)
+                
                 config.set_flow_steps(flow_steps)
                 logger.info(f"✅ flow_steps salvo: {len(flow_steps)} steps")
             else:

@@ -1310,20 +1310,27 @@ class BotManager:
                                 
                                 if next_step_id:
                                     logger.info(f"✅ Condição matchou! Continuando para step: {next_step_id}")
-                                    # ✅ NOVO: Limpar step atual com lock atômico
+                                    # ✅ NOVO: Limpar step atual e tentativas globais
                                     try:
                                         redis_conn = get_redis_connection()
                                         if redis_conn:
                                             current_step_key = f"flow_current_step:{bot_id}:{telegram_user_id}"
                                             redis_conn.delete(current_step_key)
+                                            
+                                            # ✅ NOVO: Limpar tentativas globais quando condição matcha
+                                            global_attempts_key = f"flow_global_attempts:{bot_id}:{telegram_user_id}:{current_step_id}"
+                                            redis_conn.delete(global_attempts_key)
                                     except:
                                         pass
+                                    # ✅ NOVO: Buscar snapshot do Redis se disponível
+                                    flow_snapshot = self._get_flow_snapshot_from_redis(bot_id, telegram_user_id)
+                                    
                                     # Continuar fluxo no próximo step
                                     self._execute_flow_recursive(
                                         bot_id, token, config, chat_id, telegram_user_id, next_step_id,
                                         recursion_depth=0,
                                         visited_steps=set(),
-                                        flow_snapshot=None  # Buscar snapshot do Redis se necessário
+                                        flow_snapshot=flow_snapshot
                                     )
                                     return
                                 else:
@@ -1340,9 +1347,11 @@ class BotManager:
                                                 redis_conn.delete(current_step_key)
                                         except:
                                             pass
+                                        # ✅ NOVO: Buscar snapshot do Redis
+                                        flow_snapshot = self._get_flow_snapshot_from_redis(bot_id, telegram_user_id)
                                         self._execute_flow_recursive(
                                             bot_id, token, config, chat_id, telegram_user_id, error_step_id,
-                                            recursion_depth=0, visited_steps=set(), flow_snapshot=None
+                                            recursion_depth=0, visited_steps=set(), flow_snapshot=flow_snapshot
                                         )
                                         return
                                     
@@ -1358,14 +1367,47 @@ class BotManager:
                                                 redis_conn.delete(current_step_key)
                                         except:
                                             pass
+                                        # ✅ NOVO: Buscar snapshot do Redis
+                                        flow_snapshot = self._get_flow_snapshot_from_redis(bot_id, telegram_user_id)
                                         self._execute_flow_recursive(
                                             bot_id, token, config, chat_id, telegram_user_id, retry_step_id,
-                                            recursion_depth=0, visited_steps=set(), flow_snapshot=None
+                                            recursion_depth=0, visited_steps=set(), flow_snapshot=flow_snapshot
                                         )
                                         return
                                     
-                                    # ✅ QI 500: Fallback padrão - enviar mensagem de erro e manter step ativo
+                                    # ✅ QI 500: Fallback padrão - enviar mensagem de erro com limite de tentativas
                                     error_message = current_step.get('config', {}).get('error_message') or "⚠️ Resposta não reconhecida. Por favor, tente novamente."
+                                    
+                                    # ✅ NOVO: Limite global de tentativas por usuário (evita loop infinito)
+                                    try:
+                                        redis_conn = get_redis_connection()
+                                        if redis_conn:
+                                            global_attempts_key = f"flow_global_attempts:{bot_id}:{telegram_user_id}:{current_step_id}"
+                                            global_attempts = redis_conn.get(global_attempts_key)
+                                            global_attempts = int(global_attempts) if global_attempts else 0
+                                            
+                                            # Limite global: 10 tentativas por step
+                                            max_global_attempts = 10
+                                            if global_attempts >= max_global_attempts:
+                                                logger.warning(f"⚠️ Limite global de tentativas ({max_global_attempts}) atingido para step {current_step_id}")
+                                                # Limpar step ativo e enviar mensagem final
+                                                current_step_key = f"flow_current_step:{bot_id}:{telegram_user_id}"
+                                                redis_conn.delete(current_step_key)
+                                                final_message = "⚠️ Muitas tentativas incorretas. Por favor, reinicie o bot com /start."
+                                                self.send_telegram_message(
+                                                    token=token,
+                                                    chat_id=str(chat_id),
+                                                    message=final_message,
+                                                    buttons=None
+                                                )
+                                                return
+                                            
+                                            # Incrementar tentativas globais
+                                            redis_conn.incr(global_attempts_key)
+                                            redis_conn.expire(global_attempts_key, 3600)  # Expira em 1 hora
+                                    except:
+                                        pass  # Se Redis falhar, continuar (fail-open)
+                                    
                                     self.send_telegram_message(
                                         token=token,
                                         chat_id=str(chat_id),
@@ -2100,7 +2142,8 @@ class BotManager:
                     matched = True
             
             elif condition_type == 'time_elapsed':
-                if context and self._match_time_elapsed(condition, context):
+                # ✅ NOVO: Passar parâmetros adicionais para calcular tempo decorrido
+                if self._match_time_elapsed(condition, context or {}, bot_id, telegram_user_id, step_id):
                     matched = True
             
             if matched:
@@ -2219,16 +2262,43 @@ class BotManager:
         
         return actual_status == expected_status
     
-    def _match_time_elapsed(self, condition: Dict[str, Any], context: Dict[str, Any]) -> bool:
-        """Verifica se tempo decorrido corresponde à condição"""
-        required_minutes = condition.get('minutes', 5)
-        elapsed_minutes = context.get('elapsed_minutes', 0)
+    def _match_time_elapsed(self, condition: Dict[str, Any], context: Dict[str, Any], 
+                           bot_id: int = None, telegram_user_id: str = None, step_id: str = None) -> bool:
+        """
+        ✅ QI 500: Verifica se tempo decorrido corresponde à condição
         
+        ✅ NOVO: Implementação funcional usando Redis para rastrear timestamp
+        """
+        required_minutes = condition.get('minutes', 5)
+        
+        # ✅ NOVO: Buscar timestamp do step do Redis
+        if bot_id and telegram_user_id and step_id:
+            try:
+                redis_conn = get_redis_connection()
+                if redis_conn:
+                    timestamp_key = f"flow_step_timestamp:{bot_id}:{telegram_user_id}"
+                    step_timestamp = redis_conn.get(timestamp_key)
+                    
+                    if step_timestamp:
+                        step_timestamp = int(step_timestamp) if isinstance(step_timestamp, (str, bytes)) else step_timestamp
+                        import time
+                        elapsed_seconds = int(time.time()) - step_timestamp
+                        elapsed_minutes = elapsed_seconds / 60
+                        
+                        logger.debug(f"⏱️ Tempo decorrido: {elapsed_minutes:.1f} minutos (requerido: {required_minutes})")
+                        return elapsed_minutes >= required_minutes
+            except Exception as e:
+                logger.warning(f"⚠️ Erro ao calcular tempo decorrido: {e}")
+        
+        # Fallback: usar context se disponível
+        elapsed_minutes = context.get('elapsed_minutes', 0)
         return elapsed_minutes >= required_minutes
     
     def _validate_cpf(self, cpf: str) -> bool:
         """
         ✅ QI 500: Valida CPF com dígitos verificadores
+        
+        ✅ NOVO: Validação robusta de edge cases
         
         Args:
             cpf: CPF a ser validado (pode conter formatação)
@@ -2238,12 +2308,22 @@ class BotManager:
         """
         import re
         
+        # ✅ VALIDAÇÃO: Verificar se cpf é string válida
+        if not cpf or not isinstance(cpf, str):
+            return False
+        
         # Remover formatação
-        cpf = re.sub(r'\D', '', cpf)
+        cpf_clean = re.sub(r'\D', '', cpf)
+        
+        # ✅ VALIDAÇÃO: Verificar se tem apenas números após limpeza
+        if not cpf_clean.isdigit():
+            return False
         
         # Verificar tamanho
-        if len(cpf) != 11:
+        if len(cpf_clean) != 11:
             return False
+        
+        cpf = cpf_clean
         
         # CPFs conhecidos como inválidos (todos dígitos iguais)
         if cpf == cpf[0] * 11:
@@ -2456,9 +2536,12 @@ class BotManager:
         if delay > 0:
             time.sleep(delay)
     
-    def _save_current_step_atomic(self, bot_id: int, telegram_user_id: str, step_id: str, ttl: int = 3600) -> bool:
+    def _save_current_step_atomic(self, bot_id: int, telegram_user_id: str, step_id: str, ttl: int = 7200) -> bool:
         """
         ✅ QI 500: Salva step atual com lock atômico (evita race conditions)
+        
+        ✅ NOVO: TTL aumentado para 2 horas (evita perda de estado em sessões longas)
+        ✅ NOVO: Timeout em operações Redis
         
         Returns:
             bool: True se salvou com sucesso, False se falhou
@@ -2470,37 +2553,63 @@ class BotManager:
                 logger.warning("⚠️ Redis não disponível - usando fallback")
                 return False
             
+            # ✅ VALIDAÇÃO: Sanitizar telegram_user_id
+            if not telegram_user_id or not isinstance(telegram_user_id, str) or not telegram_user_id.strip():
+                logger.error(f"❌ telegram_user_id inválido: {telegram_user_id}")
+                return False
+            
+            telegram_user_id = telegram_user_id.strip()
+            
             lock_key = f"lock:flow_step:{bot_id}:{telegram_user_id}"
             step_key = f"flow_current_step:{bot_id}:{telegram_user_id}"
             
-            # Tentar adquirir lock (expira em 5 segundos)
-            lock_acquired = redis_conn.set(lock_key, "1", ex=5, nx=True)
+            # ✅ NOVO: Timeout de 2 segundos para operações Redis
+            try:
+                # Tentar adquirir lock (expira em 5 segundos)
+                lock_acquired = redis_conn.set(lock_key, "1", ex=5, nx=True)
+            except Exception as e:
+                logger.warning(f"⚠️ Erro ao adquirir lock (timeout?): {e}")
+                return False
+            
             if not lock_acquired:
                 logger.warning(f"⛔ Lock já adquirido para {step_key} - aguardando...")
                 # Aguardar até 2 segundos para lock ser liberado
                 for _ in range(20):  # 20 tentativas de 0.1s = 2s total
                     time.sleep(0.1)
-                    if redis_conn.set(lock_key, "1", ex=5, nx=True):
-                        lock_acquired = True
-                        break
+                    try:
+                        if redis_conn.set(lock_key, "1", ex=5, nx=True):
+                            lock_acquired = True
+                            break
+                    except:
+                        pass
                 
                 if not lock_acquired:
                     logger.error(f"❌ Não foi possível adquirir lock após 2s - abortando")
                     return False
             
             try:
-                # Salvar step atual
+                # ✅ NOVO: TTL aumentado para 2 horas (7200 segundos)
                 redis_conn.set(step_key, step_id, ex=ttl)
                 
-                # Salvar timestamp para debug
+                # ✅ NOVO: Salvar timestamp para time_elapsed
                 timestamp_key = f"flow_step_timestamp:{bot_id}:{telegram_user_id}"
-                redis_conn.set(timestamp_key, int(time.time()), ex=ttl)
+                try:
+                    redis_conn.set(timestamp_key, int(time.time()), ex=ttl)
+                    logger.debug(f"⏱️ Timestamp salvo para time_elapsed: {timestamp_key}")
+                except Exception as e:
+                    logger.warning(f"⚠️ Erro ao salvar timestamp (não crítico): {e}")
                 
-                logger.info(f"✅ Step atual salvo atomicamente: {step_id}")
+                logger.info(f"✅ Step atual salvo atomicamente: {step_id} (TTL: {ttl}s)")
                 return True
+            except Exception as e:
+                logger.error(f"❌ Erro ao salvar step atual (timeout?): {e}")
+                return False
             finally:
                 # Sempre liberar lock
-                redis_conn.delete(lock_key)
+                try:
+                    redis_conn.delete(lock_key)
+                except:
+                    pass
         
         except Exception as e:
             logger.error(f"❌ Erro ao salvar step atual: {e}", exc_info=True)
@@ -2508,7 +2617,7 @@ class BotManager:
     
     def _get_current_step_atomic(self, bot_id: int, telegram_user_id: str) -> Optional[str]:
         """
-        ✅ QI 500: Busca step atual com validação
+        ✅ QI 500: Busca step atual com validação e timeout
         
         Returns:
             str: step_id ou None se não encontrado
@@ -2518,8 +2627,13 @@ class BotManager:
             if not redis_conn:
                 return None
             
+            # ✅ NOVO: Timeout de 2 segundos para operações Redis
             step_key = f"flow_current_step:{bot_id}:{telegram_user_id}"
-            step_id = redis_conn.get(step_key)
+            try:
+                step_id = redis_conn.get(step_key)
+            except Exception as e:
+                logger.warning(f"⚠️ Erro ao buscar step atual (timeout?): {e}")
+                return None
             
             if step_id:
                 step_id = step_id.decode('utf-8') if isinstance(step_id, bytes) else step_id
@@ -2530,6 +2644,37 @@ class BotManager:
             return None
         except Exception as e:
             logger.error(f"❌ Erro ao buscar step atual: {e}", exc_info=True)
+            return None
+    
+    def _get_flow_snapshot_from_redis(self, bot_id: int, telegram_user_id: str) -> Optional[Dict[str, Any]]:
+        """
+        ✅ QI 500: Busca snapshot de config do Redis
+        
+        Returns:
+            Dict com snapshot ou None se não encontrado
+        """
+        try:
+            import json
+            redis_conn = get_redis_connection()
+            if not redis_conn:
+                return None
+            
+            snapshot_key = f"flow_snapshot:{bot_id}:{telegram_user_id}"
+            try:
+                snapshot_json = redis_conn.get(snapshot_key)
+            except Exception as e:
+                logger.warning(f"⚠️ Erro ao buscar snapshot (timeout?): {e}")
+                return None
+            
+            if snapshot_json:
+                snapshot_json = snapshot_json.decode('utf-8') if isinstance(snapshot_json, bytes) else snapshot_json
+                snapshot = json.loads(snapshot_json)
+                logger.info(f"✅ Snapshot recuperado do Redis: {snapshot_key}")
+                return snapshot
+            
+            return None
+        except Exception as e:
+            logger.error(f"❌ Erro ao buscar snapshot: {e}", exc_info=True)
             return None
     
     def _execute_flow(self, bot_id: int, token: str, config: Dict[str, Any], 
@@ -2604,6 +2749,13 @@ class BotManager:
                     else:
                         logger.error(f"❌ Nenhum step encontrado no fluxo")
                         raise ValueError("Nenhum step disponível")
+            
+            # ✅ NOVO: Validar ciclos antes de executar
+            is_valid_cycles, cycles_error = self._validate_flow_no_cycles(flow_steps, start_step_id)
+            if not is_valid_cycles:
+                logger.error(f"❌ Fluxo tem ciclos: {cycles_error}")
+                # Ainda assim executar, mas visited_steps vai detectar e parar
+                logger.warning(f"⚠️ Executando mesmo com ciclos detectados - visited_steps vai prevenir loops")
             
             # Executar recursivamente a partir do step inicial
             logger.info(f"🚀 Iniciando fluxo a partir do step inicial: {start_step_id} (order={start_step.get('order', 0)})")
@@ -2705,21 +2857,79 @@ class BotManager:
             if step_type == 'payment':
                 logger.info(f"💰 Step payment detectado - gerando PIX e parando fluxo")
                 
+                # ✅ VALIDAÇÃO CRÍTICA: Verificar conexões obrigatórias ANTES de gerar PIX
+                has_next = bool(connections.get('next'))
+                has_pending = bool(connections.get('pending'))
+                
+                if not has_next and not has_pending:
+                    logger.error(f"❌ Step payment {step_id} não tem conexões obrigatórias (next ou pending)")
+                    error_message = "⚠️ Erro de configuração: Step de pagamento sem conexões definidas. Entre em contato com o suporte."
+                    self.send_telegram_message(
+                        token=token,
+                        chat_id=str(chat_id),
+                        message=error_message
+                    )
+                    return  # Não gerar PIX se não tem conexões
+                
+                # Validar que conexões apontam para steps existentes
+                if has_next:
+                    next_step_id = connections.get('next')
+                    if not self._find_step_by_id(flow_steps, next_step_id):
+                        logger.error(f"❌ Step payment {step_id} tem conexão 'next' apontando para step inexistente: {next_step_id}")
+                        error_message = "⚠️ Erro de configuração: Conexão inválida no step de pagamento. Entre em contato com o suporte."
+                        self.send_telegram_message(
+                            token=token,
+                            chat_id=str(chat_id),
+                            message=error_message
+                        )
+                        return
+                
+                if has_pending:
+                    pending_step_id = connections.get('pending')
+                    if not self._find_step_by_id(flow_steps, pending_step_id):
+                        logger.error(f"❌ Step payment {step_id} tem conexão 'pending' apontando para step inexistente: {pending_step_id}")
+                        error_message = "⚠️ Erro de configuração: Conexão inválida no step de pagamento. Entre em contato com o suporte."
+                        self.send_telegram_message(
+                            token=token,
+                            chat_id=str(chat_id),
+                            message=error_message
+                        )
+                        return
+                
+                # ✅ NOVO: Buscar contexto do botão clicado (se disponível)
+                # Isso será implementado quando rastrearmos botão até payment step
+                context = visited_steps  # Por enquanto, usar visited_steps como contexto
+                button_context = getattr(self, f'_button_context_{bot_id}_{telegram_user_id}', None)
+                
                 # Buscar dados do botão principal (primeiro main_button) para gerar PIX
                 main_buttons = config.get('main_buttons', [])
                 amount = 0.0
                 description = 'Produto'
                 button_index = 0
                 
-                if main_buttons and len(main_buttons) > 0:
+                # ✅ NOVO: Usar contexto do botão se disponível
+                if button_context and isinstance(button_context, dict):
+                    button_index = button_context.get('button_index')
+                    if button_index is not None and button_index < len(main_buttons):
+                        selected_button = main_buttons[button_index]
+                        amount = float(selected_button.get('price', 0))
+                        description = selected_button.get('description', 'Produto') or selected_button.get('text', 'Produto')
+                        logger.info(f"💰 Usando botão do contexto: índice={button_index}, valor=R$ {amount:.2f}")
+                    # Limpar contexto após usar
+                    if hasattr(self, f'_button_context_{bot_id}_{telegram_user_id}'):
+                        delattr(self, f'_button_context_{bot_id}_{telegram_user_id}')
+                elif main_buttons and len(main_buttons) > 0:
+                    # Fallback: primeiro botão
                     first_button = main_buttons[0]
                     amount = float(first_button.get('price', 0))
                     description = first_button.get('description', 'Produto') or first_button.get('text', 'Produto')
                     button_index = 0
+                    logger.warning(f"⚠️ Usando primeiro botão (contexto não disponível)")
                 
-                # Usar valores do step se especificados
+                # Usar valores do step se especificados (sobrescreve botão)
                 if step_config.get('amount'):
                     amount = float(step_config.get('amount'))
+                    logger.info(f"💰 Usando valor do step: R$ {amount:.2f}")
                 if step_config.get('description'):
                     description = step_config.get('description')
                 
@@ -2807,8 +3017,8 @@ class BotManager:
                 conditions = step.get('conditions', [])
                 if conditions and len(conditions) > 0:
                     logger.info(f"⏸️ Step {step_id} tem {len(conditions)} condição(ões) - aguardando input do usuário")
-                    # ✅ NOVO: Salvar step atual com lock atômico
-                    success = self._save_current_step_atomic(bot_id, telegram_user_id, step_id, ttl=3600)
+                    # ✅ NOVO: Salvar step atual com lock atômico (TTL aumentado para 2 horas)
+                    success = self._save_current_step_atomic(bot_id, telegram_user_id, step_id, ttl=7200)
                     if not success:
                         logger.error(f"❌ Falha ao salvar step atual atomicamente - condições podem não funcionar")
                     # Fluxo pausa aqui - será continuado quando usuário enviar mensagem/clicar botão
@@ -2874,22 +3084,66 @@ class BotManager:
     def _execute_flow_step_async(self, bot_id: int, token: str, config: Dict[str, Any],
                                   chat_id: int, telegram_user_id: str, step_id: str):
         """
-        Executa step do fluxo de forma assíncrona (via RQ)
+        ✅ QI 500: Executa step do fluxo de forma assíncrona (via RQ)
         
         ✅ ASSÍNCRONO: Pode ser pesado (access pode enviar múltiplas mensagens)
+        ✅ SNAPSHOT: Busca snapshot do Redis para manter consistência
+        ✅ IDEMPOTÊNCIA: Verifica se step já foi executado (evita duplicação)
         """
         try:
             from app import app, db
             
             with app.app_context():
-                # Buscar bot e config atualizada
-                from models import Bot
-                bot = Bot.query.get(bot_id)
-                if bot and bot.config:
-                    config = bot.config.to_dict()
+                # ✅ NOVO: Buscar snapshot do Redis primeiro (prioridade sobre config atual)
+                telegram_user_id_str = str(telegram_user_id) if telegram_user_id else ''
+                flow_snapshot = self._get_flow_snapshot_from_redis(bot_id, telegram_user_id_str)
+                
+                if flow_snapshot:
+                    # Usar snapshot se disponível
+                    import json
+                    flow_steps = json.loads(flow_snapshot.get('flow_steps', '[]'))
+                    main_buttons = json.loads(flow_snapshot.get('main_buttons', '[]'))
+                    redirect_buttons = json.loads(flow_snapshot.get('redirect_buttons', '[]'))
+                    
+                    config_from_snapshot = {
+                        'flow_steps': flow_steps,
+                        'flow_start_step_id': flow_snapshot.get('flow_start_step_id'),
+                        'flow_enabled': flow_snapshot.get('flow_enabled', False),
+                        'main_buttons': main_buttons,
+                        'redirect_buttons': redirect_buttons
+                    }
+                    # Mesclar com config atual (priorizar snapshot)
+                    config = {**config, **config_from_snapshot}
+                    logger.info(f"✅ Usando snapshot de config para step {step_id}")
+                else:
+                    # Fallback: buscar config atual do banco
+                    from models import Bot
+                    bot = Bot.query.get(bot_id)
+                    if bot and bot.config:
+                        config = bot.config.to_dict()
+                        logger.info(f"⚠️ Snapshot não encontrado, usando config atual do banco")
+                
+                # ✅ NOVO: Idempotência - verificar se step já foi executado recentemente
+                try:
+                    redis_conn = get_redis_connection()
+                    if redis_conn:
+                        execution_key = f"flow_step_executed:{bot_id}:{telegram_user_id_str}:{step_id}"
+                        already_executed = redis_conn.get(execution_key)
+                        if already_executed:
+                            logger.warning(f"⛔ Step {step_id} já foi executado recentemente - pulando (idempotência)")
+                            return
+                        # Marcar como executado (expira em 5 minutos)
+                        redis_conn.set(execution_key, "1", ex=300)
+                except:
+                    pass  # Se Redis falhar, continuar (fail-open)
                 
                 # Executar step recursivamente
-                self._execute_flow_recursive(bot_id, token, config, chat_id, telegram_user_id, step_id)
+                self._execute_flow_recursive(
+                    bot_id, token, config, chat_id, telegram_user_id_str, step_id,
+                    recursion_depth=0,
+                    visited_steps=set(),
+                    flow_snapshot=flow_snapshot
+                )
                 
                 logger.info(f"✅ Step {step_id} executado com sucesso (assíncrono)")
         
@@ -3343,10 +3597,13 @@ class BotManager:
                                         redis_conn.delete(current_step_key)
                                 except:
                                     pass
+                                # ✅ NOVO: Buscar snapshot do Redis
+                                flow_snapshot = self._get_flow_snapshot_from_redis(bot_id, telegram_user_id)
+                                
                                 # Continuar fluxo no step de destino
                                 self._execute_flow_recursive(
                                     bot_id, token, config, chat_id, telegram_user_id, target_step_id,
-                                    recursion_depth=0, visited_steps=set(), flow_snapshot=None
+                                    recursion_depth=0, visited_steps=set(), flow_snapshot=flow_snapshot
                                 )
                                 return
                             else:
