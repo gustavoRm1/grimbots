@@ -2420,13 +2420,37 @@ class BotManager:
         # ✅ TRATAMENTO DE ERRO: Try/except para cada tipo de step
         try:
             if step_type == 'content':
+                # ✅ NOVO: Processar custom_buttons se existirem
+                buttons = []
+                custom_buttons = step_config.get('custom_buttons', [])
+                step_id = step.get('id', '')
+                
+                if custom_buttons and len(custom_buttons) > 0:
+                    # ✅ Processar botões customizados (específicos do step)
+                    for idx, custom_btn in enumerate(custom_buttons):
+                        btn_text = custom_btn.get('text', '')
+                        target_step = custom_btn.get('target_step', '')
+                        
+                        if btn_text:
+                            # Criar callback_data no formato: flow_step_{step_id}_btn_{idx}
+                            action = f"btn_{idx}"
+                            callback_data = f"flow_step_{step_id}_{action}"
+                            buttons.append({
+                                'text': btn_text,
+                                'callback_data': callback_data
+                            })
+                            logger.info(f"🔘 Botão customizado (content) criado: '{btn_text}' → {target_step if target_step else 'nenhum'} (callback: {callback_data})")
+                else:
+                    # ✅ Fallback: usar botões antigos se não houver custom_buttons
+                    buttons = step_config.get('buttons', [])
+                
                 self.send_funnel_step_sequential(
                     token=token,
                     chat_id=str(chat_id),
                     text=step_config.get('message', ''),
                     media_url=step_config.get('media_url'),
                     media_type=step_config.get('media_type', 'video'),
-                    buttons=step_config.get('buttons', []),
+                    buttons=buttons,
                     delay_between=delay
                 )
             elif step_type == 'message':
@@ -3528,13 +3552,23 @@ class BotManager:
                 }, timeout=3)
                 
                 # Extrair step_id e action do callback_data
-                # Formato: flow_step_{step_id}_{action}
-                parts = callback_data.replace('flow_step_', '').split('_', 1)
-                if len(parts) >= 1:
+                # Formato: flow_step_{step_id}_btn_{idx}
+                # ✅ CORREÇÃO: step_id pode conter underscores, então usar rsplit para pegar action corretamente
+                callback_without_prefix = callback_data.replace('flow_step_', '')
+                
+                # Buscar pelo padrão _btn_ para dividir corretamente (action sempre é btn_{idx})
+                if '_btn_' in callback_without_prefix:
+                    # Dividir no último _btn_ para pegar step_id completo
+                    parts = callback_without_prefix.rsplit('_btn_', 1)
+                    source_step_id = parts[0]
+                    action = 'btn_' + parts[1] if len(parts) > 1 else ''
+                else:
+                    # Fallback: usar split tradicional (compatibilidade com formato antigo)
+                    parts = callback_without_prefix.split('_', 1)
                     source_step_id = parts[0]
                     action = parts[1] if len(parts) > 1 else ''
-                    
-                    logger.info(f"🔘 Botão contextual clicado: step={source_step_id}, action={action}")
+                
+                logger.info(f"🔘 Botão contextual clicado: step={source_step_id}, action={action}")
                     
                     # Buscar step no fluxo
                     flow_steps = config.get('flow_steps', [])

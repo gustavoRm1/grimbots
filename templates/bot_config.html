@@ -769,6 +769,10 @@
                                             <span class="text-gray-500">Mídia:</span>
                                             <span class="ml-2 text-xs font-mono truncate block" x-text="step.config.media_url.substring(0, 60) + '...'"></span>
                                         </div>
+                                        <div x-show="step.config && step.config.custom_buttons && step.config.custom_buttons.length > 0">
+                                            <span class="text-gray-500">Botões:</span>
+                                            <span class="ml-2 text-red-400 font-bold" x-text="step.config.custom_buttons.length + ' botão(ões) customizado(s)'"></span>
+                                        </div>
                                     </div>
                                 </template>
                                 <template x-if="step.type === 'payment'">
@@ -3134,6 +3138,11 @@ document.addEventListener('alpine:init', () => {
                                         🔀 ${step.conditions.length} condição(ões)
                                     </div>
                                 ` : ''}
+                                ${(step.config && step.config.custom_buttons && step.config.custom_buttons.length > 0) ? `
+                                    <div class="text-xs text-red-400 mb-1">
+                                        🔘 ${step.config.custom_buttons.length} botão(ões)
+                                    </div>
+                                ` : ''}
                                 <div class="flex items-center gap-1 mt-2">
                                     <button onclick="window.editFlowStepFromVisual('${stepId}')" 
                                             class="flex-1 px-2 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded text-xs">
@@ -3219,6 +3228,51 @@ document.addEventListener('alpine:init', () => {
                             } catch (e) {
                                 console.error('❌ Erro ao adicionar endpoints:', e);
                             }
+                            
+                            // ✅ Adicionar endpoints INDIVIDUAIS para cada botão customizado (content)
+                            if (step.config && step.config.custom_buttons && step.config.custom_buttons.length > 0) {
+                                try {
+                                    step.config.custom_buttons.forEach((btn, btnIdx) => {
+                                        if (typeof this.jsPlumbInstance.addEndpoint === 'function') {
+                                            // jsPlumb 5.x: criar endpoint individual por botão
+                                            const buttonEndpointId = `btn-endpoint-${stepId}-${btnIdx}`;
+                                            // Posicionar endpoints na lateral direita, distribuídos verticalmente
+                                            const anchorPosition = 0.3 + (btnIdx * 0.15); // 0.3, 0.45, 0.6, 0.75...
+                                            
+                                            this.jsPlumbInstance.addEndpoint(stepEl, {
+                                                anchor: ['Right', anchorPosition, 1, 0, 0, 0],
+                                                endpoint: ['Dot', { radius: 7 }],
+                                                paintStyle: { fill: '#FF6B6B', stroke: '#FF0000', strokeWidth: 2 },
+                                                hoverPaintStyle: { fill: '#FF8787' },
+                                                isSource: true,
+                                                isTarget: false,
+                                                maxConnections: 1
+                                            }, {
+                                                uuid: buttonEndpointId
+                                            });
+                                        } else if (typeof this.jsPlumbInstance.makeSource === 'function') {
+                                            // jsPlumb 2.x: criar endpoint individual usando makeSource
+                                            const buttonEndpointId = `btn-endpoint-${stepId}-${btnIdx}`;
+                                            // Criar um elemento span para o endpoint do botão
+                                            const btnEndpointEl = document.createElement('span');
+                                            btnEndpointEl.id = buttonEndpointId;
+                                            btnEndpointEl.className = 'btn-endpoint-marker';
+                                            btnEndpointEl.style.cssText = 'position: absolute; right: -8px; top: ' + (30 + btnIdx * 20) + '%; width: 14px; height: 14px; background: #FF6B6B; border: 2px solid #FF0000; border-radius: 50%; cursor: pointer; z-index: 20;';
+                                            stepEl.appendChild(btnEndpointEl);
+                                            
+                                            this.jsPlumbInstance.makeSource(btnEndpointEl, {
+                                                anchor: 'Right',
+                                                endpoint: 'Dot',
+                                                paintStyle: { fill: '#FF6B6B', radius: 7 },
+                                                isSource: true,
+                                                maxConnections: 1
+                                            });
+                                        }
+                                    });
+                                } catch (e) {
+                                    console.error('❌ Erro ao adicionar endpoints de botões customizados:', e);
+                                }
+                            }
                         });
                         
                         // ✅ Conectar steps baseado em connections
@@ -3286,6 +3340,50 @@ document.addEventListener('alpine:init', () => {
                                         console.error('❌ Erro ao conectar retry:', e);
                                     }
                                 }
+                            }
+                            
+                            // ✅ Conectar botões customizados (content e buttons) - LINHAS VERMELHAS
+                            if (step.config && step.config.custom_buttons && step.config.custom_buttons.length > 0) {
+                                step.config.custom_buttons.forEach((btn, btnIdx) => {
+                                    if (btn.target_step) {
+                                        const targetEl = document.getElementById(`flow-step-${btn.target_step}`);
+                                        if (targetEl) {
+                                            try {
+                                                const buttonEndpointId = `btn-endpoint-${step.id}-${btnIdx}`;
+                                                const btnText = (btn.text || `Btn ${btnIdx + 1}`).substring(0, 15); // Limitar tamanho do label
+                                                
+                                                if (typeof this.jsPlumbInstance.addEndpoint === 'function') {
+                                                    // jsPlumb 5.x: conectar usando UUID do endpoint
+                                                    this.jsPlumbInstance.connect({
+                                                        source: buttonEndpointId,
+                                                        target: targetEl,
+                                                        paintStyle: { stroke: '#FF6B6B', strokeWidth: 3 },
+                                                        overlays: [
+                                                            ['Arrow', { location: 1, width: 12, length: 12 }],
+                                                            ['Label', { label: btnText, location: 0.5, cssClass: 'connection-label', labelStyle: { color: '#FF6B6B', fontWeight: 'bold' } }]
+                                                        ]
+                                                    });
+                                                } else if (typeof this.jsPlumbInstance.makeSource === 'function') {
+                                                    // jsPlumb 2.x: conectar usando elemento do endpoint ou step
+                                                    const btnEndpointEl = document.getElementById(buttonEndpointId);
+                                                    const sourceEl = btnEndpointEl || stepEl;
+                                                    
+                                                    this.jsPlumbInstance.connect({
+                                                        source: sourceEl,
+                                                        target: targetEl,
+                                                        paintStyle: { stroke: '#FF6B6B', strokeWidth: 3 },
+                                                        overlays: [
+                                                            ['Arrow', { location: 1, width: 12, length: 12 }],
+                                                            ['Label', { label: btnText, location: 0.5, cssClass: 'connection-label' }]
+                                                        ]
+                                                    });
+                                                }
+                                            } catch (e) {
+                                                console.error('❌ Erro ao conectar botão customizado:', e);
+                                            }
+                                        }
+                                    }
+                                });
                             }
                             
                             // ✅ Conectar condições
@@ -3578,7 +3676,7 @@ document.addEventListener('alpine:init', () => {
                                 '<input type="url" id="step-link-' + stepId + '" value="' +
                                 (step.config && step.config.link ? String(step.config.link).replace(/"/g, '&quot;') : '') +
                                 '" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white">' : ''}
-                            ${step.type === 'buttons' ? (() => {
+                            ${(step.type === 'content' || step.type === 'buttons') ? (() => {
                                 const self = this;
                                 function escapeHtml(text) {
                                     const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
@@ -3636,12 +3734,68 @@ document.addEventListener('alpine:init', () => {
                                     html = '<div class="text-center py-4 text-gray-500 text-sm">⚠️ Nenhum botão cadastrado na aba "Botões". <br><span class="text-xs">Adicione botões antes de usar este step.</span></div>';
                                 }
                                 
-                                return '<div class="mt-4 p-4 bg-gray-800 rounded-lg border border-gray-700">' +
-                                    '<label class="block text-sm font-medium text-gray-300 mb-3">Selecionar Botões Cadastrados</label>' +
-                                    '<div class="space-y-3 max-h-64 overflow-y-auto">' +
-                                    html +
-                                    '</div>' +
-                                    '</div>';
+                                if (step.type === 'content') {
+                                    // Para tipo "content", adicionar seção de botões customizados
+                                    return '<div class="mt-4 p-4 bg-blue-900 bg-opacity-30 border-2 border-blue-500 rounded-lg">' +
+                                        '<label class="block text-sm font-bold text-blue-200 mb-3">' +
+                                        '<i class="fas fa-toggle-on mr-2"></i>Botões Customizados (Cada botão pode levar a um step diferente)' +
+                                        '</label>' +
+                                        '<p class="text-xs text-blue-100 mb-3">Adicione botões que aparecerão abaixo da mensagem. Cada botão pode levar o lead para um step diferente do fluxo.</p>' +
+                                        '<div id="custom-buttons-list-${stepId}" class="space-y-2 mb-3">' +
+                                        (() => {
+                                            const customButtons = (step.config && step.config.custom_buttons) || [];
+                                            if (customButtons.length === 0) {
+                                                return '<div class="text-xs text-blue-300 italic text-center py-2">Nenhum botão adicionado. Clique em "Adicionar Botão" para criar um.</div>';
+                                            }
+                                            const availableSteps = self.config.flow_steps.filter(s => s.id !== stepId);
+                                            const stepOptionsForBtn = availableSteps.map(s => {
+                                                const stepLabel = s.name ? s.name : self.getStepTitle(s.type);
+                                                return `<option value="${s.id}" ${btn.target_step === s.id ? 'selected' : ''}>${s.order || 0} - ${stepLabel}</option>`;
+                                            }).join('');
+                                            return customButtons.map((btn, idx) => `
+                                                <div data-custom-button class="p-3 bg-gray-900 rounded-lg border border-blue-600 mb-2">
+                                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-2 mb-2">
+                                                        <div class="md:col-span-2">
+                                                            <label class="block text-xs font-medium text-gray-300 mb-1">Texto do Botão</label>
+                                                            <input type="text" 
+                                                                   name="custom-btn-text-${stepId}-${idx}" 
+                                                                   value="${escapeHtml(btn.text || '')}"
+                                                                   placeholder="Ex: Sim, quero!"
+                                                                   class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm"
+                                                                   maxlength="64">
+                                                        </div>
+                                                        <div>
+                                                            <label class="block text-xs font-medium text-gray-300 mb-1">🔗 Ir para Step</label>
+                                                            <select name="custom-btn-target-${stepId}-${idx}" 
+                                                                    class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm">
+                                                                <option value="">Nenhum</option>${stepOptionsForBtn}
+                                                            </select>
+                                                        </div>
+                                                    </div>
+                                                    <button type="button" 
+                                                            onclick="window.removeCustomButton('${stepId}', ${idx})"
+                                                            class="w-full px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-medium transition">
+                                                        <i class="fas fa-times mr-1"></i>Remover
+                                                    </button>
+                                                </div>
+                                            `).join('');
+                                        })() +
+                                        '</div>' +
+                                        '<button type="button" ' +
+                                        'onclick="window.addCustomButton(\'' + stepId + '\')"' +
+                                        'class="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm font-medium transition">' +
+                                        '<i class="fas fa-plus mr-2"></i>Adicionar Botão' +
+                                        '</button>' +
+                                        '</div>';
+                                } else {
+                                    // Para tipo "buttons", manter comportamento antigo
+                                    return '<div class="mt-4 p-4 bg-gray-800 rounded-lg border border-gray-700">' +
+                                        '<label class="block text-sm font-medium text-gray-300 mb-3">Selecionar Botões Cadastrados</label>' +
+                                        '<div class="space-y-3 max-h-64 overflow-y-auto">' +
+                                        html +
+                                        '</div>' +
+                                        '</div>';
+                                }
                             })() : ''}
                         </div>
                         ${step.type === 'payment' ? `
@@ -3740,7 +3894,7 @@ document.addEventListener('alpine:init', () => {
                                                             </div>
                                                         </div>
                                                         <button type="button" 
-                                                                onclick="removeCustomButton('${stepId}', ${idx})"
+                                                                onclick="window.removeCustomButton('${stepId}', ${idx})"
                                                                 class="w-full px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-medium transition">
                                                             <i class="fas fa-times mr-1"></i>Remover
                                                         </button>
@@ -3749,7 +3903,7 @@ document.addEventListener('alpine:init', () => {
                                             })()}
                                         </div>
                                         <button type="button" 
-                                                onclick="addCustomButton('${stepId}')"
+                                                onclick="window.addCustomButton('${stepId}')"
                                                 class="w-full px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded text-sm font-medium transition">
                                             <i class="fas fa-plus mr-2"></i>Adicionar Botão Contextual
                                         </button>
@@ -3763,6 +3917,18 @@ document.addEventListener('alpine:init', () => {
                                         <option value="">Nenhum</option>${stepOptions}
                                     </select>
                                 </div>
+                            </div>
+                        ` : step.type === 'content' ? `
+                            <div class="mb-4 p-4 bg-gray-800 rounded-lg border border-gray-600">
+                                <label class="block text-sm font-medium text-gray-300 mb-2">
+                                    <i class="fas fa-arrow-right mr-2"></i>Próximo → Step (opcional):
+                                </label>
+                                <select id="step-next-${stepId}" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white">
+                                    <option value="">Nenhum (botões customizados já têm destino)</option>${stepOptions}
+                                </select>
+                                <p class="text-xs text-gray-400 mt-2">
+                                    💡 Se nenhum botão for clicado, o fluxo seguirá para este step. Se deixar vazio, o fluxo para aqui se nenhum botão for clicado.
+                                </p>
                             </div>
                         ` : step.type !== 'access' ? `
                             <div class="mb-4 p-4 bg-gray-800 rounded-lg">
@@ -3951,7 +4117,69 @@ document.addEventListener('alpine:init', () => {
                         '" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white">';
                 }
                 
-                if (stepType === 'buttons') {
+                if (stepType === 'content') {
+                    // ✅ Para tipo "content", adicionar seção de botões customizados
+                    const availableSteps = self.config.flow_steps.filter(s => s.id !== stepId);
+                    const stepOptionsForBtn = availableSteps.map(s => {
+                        const stepLabel = s.name ? s.name : self.getStepTitle(s.type);
+                        return `<option value="${s.id}">${s.order || 0} - ${stepLabel}</option>`;
+                    }).join('');
+                    
+                    const customButtons = (currentStep.config && currentStep.config.custom_buttons) || [];
+                    let customButtonsHtml = '';
+                    if (customButtons.length === 0) {
+                        customButtonsHtml = '<div class="text-xs text-blue-300 italic text-center py-2">Nenhum botão adicionado. Clique em "Adicionar Botão" para criar um.</div>';
+                    } else {
+                        customButtonsHtml = customButtons.map((btn, idx) => `
+                            <div data-custom-button class="p-3 bg-gray-900 rounded-lg border border-blue-600 mb-2">
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-2 mb-2">
+                                    <div class="md:col-span-2">
+                                        <label class="block text-xs font-medium text-gray-300 mb-1">Texto do Botão</label>
+                                        <input type="text" 
+                                               name="custom-btn-text-${stepId}-${idx}" 
+                                               value="${escapeHtml(btn.text || '')}"
+                                               placeholder="Ex: Sim, quero!"
+                                               class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm"
+                                               maxlength="64">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-medium text-gray-300 mb-1">🔗 Ir para Step</label>
+                                        <select name="custom-btn-target-${stepId}-${idx}" 
+                                                class="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-white text-sm">
+                                            <option value="">Nenhum</option>${stepOptionsForBtn.split('<option').slice(1).map(opt => {
+                                                const fullOpt = '<option' + opt;
+                                                if (btn.target_step && fullOpt.includes(`value="${btn.target_step}"`)) {
+                                                    return fullOpt.replace(/^<option/, '<option selected');
+                                                }
+                                                return fullOpt;
+                                            }).join('')}
+                                        </select>
+                                    </div>
+                                </div>
+                                <button type="button" 
+                                        onclick="window.removeCustomButton('${stepId}', ${idx})"
+                                        class="w-full px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-medium transition">
+                                    <i class="fas fa-times mr-1"></i>Remover
+                                </button>
+                            </div>
+                        `).join('');
+                    }
+                    
+                    html += '<div class="mt-4 p-4 bg-blue-900 bg-opacity-30 border-2 border-blue-500 rounded-lg">' +
+                        '<label class="block text-sm font-bold text-blue-200 mb-3">' +
+                        '<i class="fas fa-toggle-on mr-2"></i>Botões Customizados (Cada botão pode levar a um step diferente)' +
+                        '</label>' +
+                        '<p class="text-xs text-blue-100 mb-3">Adicione botões que aparecerão abaixo da mensagem. Cada botão pode levar o lead para um step diferente do fluxo.</p>' +
+                        '<div id="custom-buttons-list-${stepId}" class="space-y-2 mb-3">' +
+                        customButtonsHtml +
+                        '</div>' +
+                        '<button type="button" ' +
+                        'onclick="window.addCustomButton(\'' + stepId + '\')"' +
+                        'class="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm font-medium transition">' +
+                        '<i class="fas fa-plus mr-2"></i>Adicionar Botão' +
+                        '</button>' +
+                        '</div>';
+                } else if (stepType === 'buttons') {
                     let buttonsHtml = '';
                     
                     // Botões principais (main_buttons)
@@ -4073,7 +4301,24 @@ document.addEventListener('alpine:init', () => {
                             const retrySelect = document.getElementById(`step-retry-${stepId}`);
                             if (retrySelect && retryVal) retrySelect.value = retryVal;
                         }, 10);
-                    } else if (stepType !== 'access' && stepType !== 'payment' && stepType !== 'message') {
+                    } else if (stepType === 'content') {
+                        const nextVal = (currentStep.connections && currentStep.connections.next) || '';
+                        connectionsHtml = '<div class="mb-4 p-4 bg-gray-800 rounded-lg border border-gray-600">' +
+                            '<label class="block text-sm font-medium text-gray-300 mb-2">' +
+                            '<i class="fas fa-arrow-right mr-2"></i>Próximo → Step (opcional):' +
+                            '</label>' +
+                            '<select id="step-next-' + stepId + '" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white">' +
+                            '<option value="">Nenhum (botões customizados já têm destino)</option>' + stepOptions +
+                            '</select>' +
+                            '<p class="text-xs text-gray-400 mt-2">' +
+                            '💡 Se nenhum botão for clicado, o fluxo seguirá para este step. Se deixar vazio, o fluxo para aqui se nenhum botão for clicado.' +
+                            '</p>' +
+                            '</div>';
+                        setTimeout(() => {
+                            const nextSelect = document.getElementById(`step-next-${stepId}`);
+                            if (nextSelect && nextVal) nextSelect.value = nextVal;
+                        }, 10);
+                    } else if (stepType !== 'access' && stepType !== 'payment' && stepType !== 'message' && stepType !== 'content') {
                         const nextVal = (currentStep.connections && currentStep.connections.next) || '';
                         connectionsHtml = '<div class="mb-4 p-4 bg-gray-800 rounded-lg">' +
                             '<label class="block text-sm font-medium text-gray-300 mb-2">Próximo → Step:</label>' +
@@ -4236,7 +4481,25 @@ document.addEventListener('alpine:init', () => {
                     step.config.link = document.getElementById(`step-link-${stepId}`)?.value || '';
                     step.config.message = step.config.message || 'Acesso liberado!';
                 }
-                if (step.type === 'buttons') {
+                if (step.type === 'content') {
+                    // ✅ Para tipo "content", salvar botões customizados
+                    const customButtons = [];
+                    const customButtonsList = document.getElementById(`custom-buttons-list-${stepId}`);
+                    if (customButtonsList) {
+                        customButtonsList.querySelectorAll('[data-custom-button]').forEach((btnEl, idx) => {
+                            const text = btnEl.querySelector(`input[name="custom-btn-text-${stepId}-${idx}"]`)?.value || '';
+                            const targetStep = btnEl.querySelector(`select[name="custom-btn-target-${stepId}-${idx}"]`)?.value || '';
+                            if (text.trim()) {
+                                customButtons.push({
+                                    text: text.trim(),
+                                    target_step: targetStep || null
+                                });
+                            }
+                        });
+                    }
+                    if (!step.config) step.config = {};
+                    step.config.custom_buttons = customButtons;
+                } else if (step.type === 'buttons') {
                     // ✅ Verificar tipo de botões (globais ou contextuais)
                     const buttonTypeRadio = document.querySelector(`input[name="button-type-${stepId}"]:checked`);
                     const useCustomButtons = buttonTypeRadio && buttonTypeRadio.value === 'custom';
@@ -4428,7 +4691,7 @@ document.addEventListener('alpine:init', () => {
                         </div>
                     </div>
                     <button type="button" 
-                            onclick="removeCustomButton('${stepId}', ${btnIndex})"
+                            onclick="window.removeCustomButton('${stepId}', ${btnIndex})"
                             class="w-full px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-medium transition">
                         <i class="fas fa-times mr-1"></i>Remover
                     </button>
