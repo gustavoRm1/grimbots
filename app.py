@@ -4510,75 +4510,75 @@ def public_redirect(slug):
         else:
             tracking_token = None
             logger.info(f"🤖 Crawler detectado - Tracking NÃO salvo (evita poluição do Redis)")
-    
-    # ============================================================================
-    # ✅ META PIXEL: PAGEVIEW TRACKING + UTM CAPTURE (NÍVEL DE POOL)
-    # ============================================================================
-    # CRÍTICO: Captura UTM e External ID para vincular eventos posteriores
-    # ============================================================================
-    try:
-        external_id, utm_data, pageview_context = send_meta_pixel_pageview_event(
-            pool,
-            request,
-            pageview_event_id=pageview_event_id if not is_crawler_request else None,
-            tracking_token=tracking_token
-        )
-    except Exception as e:
-        logger.error(f"Erro ao enviar PageView para Meta Pixel: {e}")
-        # Não impedir o redirect se Meta falhar
-        pageview_context = {}
-    else:
-        # ✅ CRÍTICO: Sempre salvar pageview_context, mesmo se vazio, para garantir que pageview_event_id seja preservado
-        # ✅ CORREÇÃO CRÍTICA QI 1000+: MERGE pageview_context com tracking_payload inicial
-        # Isso garante que client_ip e client_user_agent sejam preservados (não sobrescritos)
-        if tracking_token:
-            try:
-                # ✅ CORREÇÃO CRÍTICA: MERGE pageview_context com tracking_payload inicial
-                # PROBLEMA IDENTIFICADO: pageview_context estava sobrescrevendo tracking_payload inicial
-                # Isso fazia com que client_ip e client_user_agent fossem perdidos
-                # SOLUÇÃO: Fazer merge (não sobrescrever)
-                if pageview_context:
-                    # ✅ MERGE: Combinar dados iniciais com dados do PageView
-                    merged_context = {
-                        **tracking_payload,  # ✅ Dados iniciais (client_ip, client_user_agent, fbclid, fbp, etc.)
-                        **pageview_context   # ✅ Dados do PageView (pageview_event_id, event_source_url, etc.)
-                    }
-                    # ✅ GARANTIR que client_ip e client_user_agent sejam preservados (prioridade: tracking_payload > pageview_context)
-                    if tracking_payload.get('client_ip') and not merged_context.get('client_ip'):
-                        merged_context['client_ip'] = tracking_payload['client_ip']
-                    if tracking_payload.get('client_user_agent') and not merged_context.get('client_user_agent'):
-                        merged_context['client_user_agent'] = tracking_payload['client_user_agent']
-                    # ✅ GARANTIR que pageview_event_id seja preservado (prioridade: pageview_context > tracking_payload)
-                    if not merged_context.get('pageview_event_id') and tracking_payload.get('pageview_event_id'):
-                        merged_context['pageview_event_id'] = tracking_payload['pageview_event_id']
-                        logger.info(f"✅ Preservando pageview_event_id do tracking_payload inicial: {tracking_payload['pageview_event_id']}")
+        
+        # ============================================================================
+        # ✅ META PIXEL: PAGEVIEW TRACKING + UTM CAPTURE (NÍVEL DE POOL)
+        # ============================================================================
+        # CRÍTICO: Captura UTM e External ID para vincular eventos posteriores
+        # ============================================================================
+        try:
+            external_id, utm_data, pageview_context = send_meta_pixel_pageview_event(
+                pool,
+                request,
+                pageview_event_id=pageview_event_id if not is_crawler_request else None,
+                tracking_token=tracking_token
+            )
+        except Exception as e:
+            logger.error(f"Erro ao enviar PageView para Meta Pixel: {e}")
+            # Não impedir o redirect se Meta falhar
+            pageview_context = {}
+        else:
+            # ✅ CRÍTICO: Sempre salvar pageview_context, mesmo se vazio, para garantir que pageview_event_id seja preservado
+            # ✅ CORREÇÃO CRÍTICA QI 1000+: MERGE pageview_context com tracking_payload inicial
+            # Isso garante que client_ip e client_user_agent sejam preservados (não sobrescritos)
+            if tracking_token:
+                try:
+                    # ✅ CORREÇÃO CRÍTICA: MERGE pageview_context com tracking_payload inicial
+                    # PROBLEMA IDENTIFICADO: pageview_context estava sobrescrevendo tracking_payload inicial
+                    # Isso fazia com que client_ip e client_user_agent fossem perdidos
+                    # SOLUÇÃO: Fazer merge (não sobrescrever)
+                    if pageview_context:
+                        # ✅ MERGE: Combinar dados iniciais com dados do PageView
+                        merged_context = {
+                            **tracking_payload,  # ✅ Dados iniciais (client_ip, client_user_agent, fbclid, fbp, etc.)
+                            **pageview_context   # ✅ Dados do PageView (pageview_event_id, event_source_url, etc.)
+                        }
+                        # ✅ GARANTIR que client_ip e client_user_agent sejam preservados (prioridade: tracking_payload > pageview_context)
+                        if tracking_payload.get('client_ip') and not merged_context.get('client_ip'):
+                            merged_context['client_ip'] = tracking_payload['client_ip']
+                        if tracking_payload.get('client_user_agent') and not merged_context.get('client_user_agent'):
+                            merged_context['client_user_agent'] = tracking_payload['client_user_agent']
+                        # ✅ GARANTIR que pageview_event_id seja preservado (prioridade: pageview_context > tracking_payload)
+                        if not merged_context.get('pageview_event_id') and tracking_payload.get('pageview_event_id'):
+                            merged_context['pageview_event_id'] = tracking_payload['pageview_event_id']
+                            logger.info(f"✅ Preservando pageview_event_id do tracking_payload inicial: {tracking_payload['pageview_event_id']}")
+                        
+                        logger.info(f"✅ Merge realizado: client_ip={'✅' if merged_context.get('client_ip') else '❌'}, client_user_agent={'✅' if merged_context.get('client_user_agent') else '❌'}, pageview_event_id={'✅' if merged_context.get('pageview_event_id') else '❌'}")
+                        
+                        ok = tracking_service_v4.save_tracking_token(
+                            tracking_token,
+                            merged_context,  # ✅ Dados completos (não sobrescreve)
+                            ttl=TRACKING_TOKEN_TTL
+                        )
+                    else:
+                        # Se pageview_context está vazio, salvar apenas o tracking_payload inicial (já tem tudo)
+                        logger.warning(f"⚠️ pageview_context vazio - preservando tracking_payload inicial completo")
+                        ok = tracking_service_v4.save_tracking_token(
+                            tracking_token,
+                            tracking_payload,  # ✅ Dados iniciais completos (client_ip, client_user_agent, pageview_event_id, etc.)
+                            ttl=TRACKING_TOKEN_TTL
+                        )
                     
-                    logger.info(f"✅ Merge realizado: client_ip={'✅' if merged_context.get('client_ip') else '❌'}, client_user_agent={'✅' if merged_context.get('client_user_agent') else '❌'}, pageview_event_id={'✅' if merged_context.get('pageview_event_id') else '❌'}")
-                    
-                    ok = tracking_service_v4.save_tracking_token(
-                        tracking_token,
-                        merged_context,  # ✅ Dados completos (não sobrescreve)
-                        ttl=TRACKING_TOKEN_TTL
-                    )
-                else:
-                    # Se pageview_context está vazio, salvar apenas o tracking_payload inicial (já tem tudo)
-                    logger.warning(f"⚠️ pageview_context vazio - preservando tracking_payload inicial completo")
-                    ok = tracking_service_v4.save_tracking_token(
-                        tracking_token,
-                        tracking_payload,  # ✅ Dados iniciais completos (client_ip, client_user_agent, pageview_event_id, etc.)
-                        ttl=TRACKING_TOKEN_TTL
-                    )
-                
-                if not ok:
-                    logger.warning("Retry saving merged context once (redirect)")
-                    retry_context = merged_context if pageview_context else tracking_payload
-                    tracking_service_v4.save_tracking_token(
-                        tracking_token,
-                        retry_context,
-                        ttl=TRACKING_TOKEN_TTL
-                    )
-            except Exception as e:
-                logger.warning(f"⚠️ Erro ao atualizar tracking_token {tracking_token} com merged context: {e}")
+                    if not ok:
+                        logger.warning("Retry saving merged context once (redirect)")
+                        retry_context = merged_context if pageview_context else tracking_payload
+                        tracking_service_v4.save_tracking_token(
+                            tracking_token,
+                            retry_context,
+                            ttl=TRACKING_TOKEN_TTL
+                        )
+                except Exception as e:
+                    logger.warning(f"⚠️ Erro ao atualizar tracking_token {tracking_token} com merged context: {e}")
     else:
         # ✅ Meta Pixel desabilitado - nenhum tracking será executado
         logger.info(f"⚠️ [META PIXEL] Tracking desabilitado para pool {pool.name} - pulando todo processamento de Meta Pixel")
