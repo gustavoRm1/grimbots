@@ -4337,7 +4337,10 @@ def public_redirect(slug):
     
     # Capturar dados do request
     # ✅ CORREÇÃO CRÍTICA: Usar função get_user_ip() que prioriza Cloudflare headers
-    user_ip = get_user_ip(request)
+    user_ip_raw = get_user_ip(request)
+    # ✅ VALIDAÇÃO: Tratar '0.0.0.0' e strings vazias como None (será atualizado pelo Parameter Builder)
+    # '0.0.0.0' não é um IP válido para tracking, mas salvaremos como None e o Parameter Builder atualizará
+    user_ip = user_ip_raw if user_ip_raw and user_ip_raw.strip() and user_ip_raw.strip() != '0.0.0.0' else None
     user_agent = request.headers.get('User-Agent', '')
     fbclid = request.args.get('fbclid', '')
     
@@ -4473,13 +4476,17 @@ def public_redirect(slug):
                 'fbp': fbp_cookie,
                 'pageview_event_id': pageview_event_id,
                 'pageview_ts': pageview_ts,
-                'client_ip': user_ip,  # ✅ Nome correto (Purchase busca por 'client_ip' ou 'ip')
-                'client_user_agent': user_agent,  # ✅ CORRIGIDO: Purchase busca por 'client_user_agent' ou 'ua'
+                'client_ip': user_ip if user_ip else None,  # ✅ Só salvar se user_ip for válido (não '0.0.0.0' ou vazio) - será atualizado pelo Parameter Builder (_fbi)
+                'client_user_agent': user_agent if user_agent and user_agent.strip() else None,  # ✅ Só salvar se user_agent for válido
                 'grim': grim_param or None,
                 'event_source_url': request.url or f'https://{request.host}/go/{pool.slug}',
                 'first_page': request.url or f'https://{request.host}/go/{pool.slug}',  # ✅ ADICIONAR para fallback no Purchase
                 **{k: v for k, v in utms.items() if v}
             }
+            
+            # ✅ LOG INFORMATIVO: Indicar se client_ip será atualizado pelo Parameter Builder
+            if not user_ip:
+                logger.info(f"[META TRACKING] client_ip não capturado no redirect (será atualizado pelo Parameter Builder via _fbi)")
             
             # ✅ CRÍTICO V4.1: Salvar fbc se veio do cookie OU foi gerado conforme documentação Meta
             # Meta aceita _fbc gerado quando fbclid está presente na URL (conforme documentação oficial)
@@ -4544,15 +4551,31 @@ def public_redirect(slug):
                     # SOLUÇÃO: Fazer merge (não sobrescrever)
                     if pageview_context:
                         # ✅ MERGE: Combinar dados iniciais com dados do PageView
+                        # ✅ PRIORIDADE: pageview_context > tracking_payload (pageview_context é mais recente e tem dados do PageView)
                         merged_context = {
                             **tracking_payload,  # ✅ Dados iniciais (client_ip, client_user_agent, fbclid, fbp, etc.)
-                            **pageview_context   # ✅ Dados do PageView (pageview_event_id, event_source_url, etc.)
+                            **pageview_context   # ✅ Dados do PageView (pageview_event_id, event_source_url, client_ip, client_user_agent, etc.) - SOBRESCREVE tracking_payload
                         }
-                        # ✅ GARANTIR que client_ip e client_user_agent sejam preservados (prioridade: tracking_payload > pageview_context)
-                        if tracking_payload.get('client_ip') and not merged_context.get('client_ip'):
+                        # ✅ CRÍTICO: GARANTIR que client_ip e client_user_agent sejam preservados (prioridade: pageview_context > tracking_payload)
+                        # Se pageview_context tem valores válidos, usar (são mais recentes e vêm do PageView)
+                        # Se pageview_context tem vazios/None mas tracking_payload tem valores válidos, usar tracking_payload (fallback)
+                        if pageview_context.get('client_ip') and isinstance(pageview_context.get('client_ip'), str) and pageview_context.get('client_ip').strip():
+                            # ✅ Prioridade 1: Usar client_ip do pageview_context (mais recente e vem do PageView)
+                            merged_context['client_ip'] = pageview_context['client_ip']
+                            logger.info(f"✅ Usando client_ip do pageview_context (mais recente): {pageview_context['client_ip']}")
+                        elif tracking_payload.get('client_ip') and isinstance(tracking_payload.get('client_ip'), str) and tracking_payload.get('client_ip').strip():
+                            # ✅ Prioridade 2: Se pageview_context não tem, usar tracking_payload (fallback)
                             merged_context['client_ip'] = tracking_payload['client_ip']
-                        if tracking_payload.get('client_user_agent') and not merged_context.get('client_user_agent'):
+                            logger.info(f"✅ Usando client_ip do tracking_payload (fallback): {tracking_payload['client_ip']}")
+                        
+                        if pageview_context.get('client_user_agent') and isinstance(pageview_context.get('client_user_agent'), str) and pageview_context.get('client_user_agent').strip():
+                            # ✅ Prioridade 1: Usar client_user_agent do pageview_context (mais recente e vem do PageView)
+                            merged_context['client_user_agent'] = pageview_context['client_user_agent']
+                            logger.info(f"✅ Usando client_user_agent do pageview_context (mais recente): {pageview_context['client_user_agent'][:50]}...")
+                        elif tracking_payload.get('client_user_agent') and isinstance(tracking_payload.get('client_user_agent'), str) and tracking_payload.get('client_user_agent').strip():
+                            # ✅ Prioridade 2: Se pageview_context não tem, usar tracking_payload (fallback)
                             merged_context['client_user_agent'] = tracking_payload['client_user_agent']
+                            logger.info(f"✅ Usando client_user_agent do tracking_payload (fallback): {tracking_payload['client_user_agent'][:50]}...")
                         # ✅ GARANTIR que pageview_event_id seja preservado (prioridade: pageview_context > tracking_payload)
                         if not merged_context.get('pageview_event_id') and tracking_payload.get('pageview_event_id'):
                             merged_context['pageview_event_id'] = tracking_payload['pageview_event_id']

@@ -173,11 +173,26 @@ class TrackingServiceV4:
                             payload['fbc'] = None
                             payload['fbc_origin'] = None
                         
-                        # ✅ CORREÇÃO V4.1: Não sobrescrever com None
+                        # ✅ CORREÇÃO V4.1: Não sobrescrever com None ou valores vazios para campos críticos
+                        # ✅ CRÍTICO V5.0: Preservar client_ip e client_user_agent se novo payload tiver vazios/None
+                        # Campos críticos: client_ip, client_user_agent, pageview_event_id, fbclid, fbp, fbc
+                        critical_fields = ['client_ip', 'client_user_agent', 'pageview_event_id', 'fbclid', 'fbp', 'fbc']
+                        
                         for key, value in payload.items():
-                            if value is not None:  # ✅ Só atualizar se não for None
-                                previous[key] = value
-                            # Se value é None, manter valor anterior (se existir)
+                            if key in critical_fields:
+                                # ✅ Para campos críticos: só atualizar se novo valor for válido (não None, não vazio)
+                                if value is not None and (not isinstance(value, str) or value.strip()):
+                                    previous[key] = value
+                                    logger.debug(f"✅ Atualizando campo crítico {key}: {str(value)[:50]}...")
+                                elif previous.get(key):
+                                    # ✅ Preservar valor anterior se novo valor for inválido
+                                    logger.debug(f"✅ Preservando campo crítico {key} do payload anterior: {str(previous[key])[:50]}...")
+                                    # Não atualizar - manter valor anterior
+                            else:
+                                # ✅ Para campos não críticos: atualizar se não for None
+                                if value is not None:
+                                    previous[key] = value
+                                # Se value é None, manter valor anterior (se existir)
                         payload = previous
                 except Exception:
                     logger.exception("Falha ao mesclar payload existente; substituindo")
