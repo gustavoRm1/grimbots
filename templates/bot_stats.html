@@ -11,9 +11,29 @@
 .config-section {
     background: linear-gradient(135deg, rgba(255, 255, 255, 0.02) 0%, rgba(255, 255, 255, 0.01) 100%);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 16px;
-    padding: 24px;
-    margin-bottom: 24px;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 16px;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow-x: hidden;
+}
+
+@media (min-width: 640px) {
+    .config-section {
+        border-radius: 14px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+}
+
+@media (min-width: 768px) {
+    .config-section {
+        border-radius: 16px;
+        padding: 24px;
+        margin-bottom: 24px;
+    }
 }
 
 .config-section-header {
@@ -26,9 +46,21 @@
 }
 
 .config-section-title {
-    font-size: 1.25rem;
+    font-size: 1rem;
     font-weight: 700;
     color: #FFFFFF;
+}
+
+@media (min-width: 640px) {
+    .config-section-title {
+        font-size: 1.125rem;
+    }
+}
+
+@media (min-width: 768px) {
+    .config-section-title {
+        font-size: 1.25rem;
+    }
 }
 
 .config-section-description {
@@ -40,10 +72,26 @@
 .stat-box {
     background: linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.01) 100%);
     border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 12px;
-    padding: 20px;
+    border-radius: 10px;
+    padding: 16px;
     text-align: center;
     transition: all 0.2s ease;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+@media (min-width: 640px) {
+    .stat-box {
+        border-radius: 12px;
+        padding: 18px;
+    }
+}
+
+@media (min-width: 768px) {
+    .stat-box {
+        padding: 20px;
+    }
 }
 
 .stat-box:hover {
@@ -53,10 +101,22 @@
 }
 
 .stat-value {
-    font-size: 2rem;
+    font-size: 1.5rem;
     font-weight: 700;
     color: #FFFFFF;
     margin-bottom: 4px;
+}
+
+@media (min-width: 640px) {
+    .stat-value {
+        font-size: 1.75rem;
+    }
+}
+
+@media (min-width: 768px) {
+    .stat-value {
+        font-size: 2rem;
+    }
 }
 
 .stat-label {
@@ -69,9 +129,31 @@
 .chart-container {
     background: #1A1A1A;
     border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 12px;
-    padding: 20px;
-    margin-bottom: 24px;
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 16px;
+    width: 100%;
+    max-width: 100%;
+    min-height: 250px;
+    box-sizing: border-box;
+    overflow-x: hidden;
+}
+
+@media (min-width: 640px) {
+    .chart-container {
+        border-radius: 12px;
+        padding: 18px;
+        margin-bottom: 18px;
+        min-height: 280px;
+    }
+}
+
+@media (min-width: 768px) {
+    .chart-container {
+        padding: 20px;
+        margin-bottom: 24px;
+        min-height: 320px;
+    }
 }
 
 .info-box {
@@ -121,15 +203,30 @@
 }
 
 .table-premium thead th {
-    padding: 16px 24px;
+    padding: 12px 16px;
     background: rgba(255, 184, 0, 0.05);
     border-bottom: 2px solid rgba(255, 184, 0, 0.2);
-    font-size: 12px;
+    font-size: 10px;
     font-weight: 700;
     color: #FFC933;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     text-align: left;
+    white-space: nowrap;
+}
+
+@media (min-width: 640px) {
+    .table-premium thead th {
+        padding: 14px 20px;
+        font-size: 11px;
+    }
+}
+
+@media (min-width: 768px) {
+    .table-premium thead th {
+        padding: 16px 24px;
+        font-size: 12px;
+    }
 }
 
 .table-premium tbody tr {
@@ -142,8 +239,22 @@
 }
 
 .table-premium tbody td {
-    padding: 16px 24px;
-    font-size: 14px;
+    padding: 12px 16px;
+    font-size: 12px;
+}
+
+@media (min-width: 640px) {
+    .table-premium tbody td {
+        padding: 14px 20px;
+        font-size: 13px;
+    }
+}
+
+@media (min-width: 768px) {
+    .table-premium tbody td {
+        padding: 16px 24px;
+        font-size: 14px;
+    }
 }
 
 .badge-status {
@@ -221,38 +332,82 @@
     0%, 100% { opacity: 1; }
     50% { opacity: .5; }
 }
+
+/* ✅ Garantir responsividade completa para mobile */
+@media (max-width: 640px) {
+    .max-w-full {
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
+        max-width: 100vw;
+        overflow-x: hidden;
+    }
+    
+    /* Prevenir overflow horizontal */
+    * {
+        box-sizing: border-box;
+    }
+    
+    body {
+        overflow-x: hidden;
+    }
+    
+    /* Garantir que grids sejam sempre 1 coluna em mobile quando necessário */
+    .grid.grid-cols-1.md\:grid-cols-2 {
+        grid-template-columns: 1fr !important;
+    }
+    
+    /* Tabela responsiva em mobile */
+    .overflow-x-auto {
+        -webkit-overflow-scrolling: touch;
+        overflow-x: auto;
+    }
+    
+    .table-premium {
+        min-width: 600px; /* Largura mínima para scroll horizontal se necessário */
+    }
+}
+
+@media (min-width: 1024px) {
+    .max-w-full {
+        max-width: 100%;
+        padding-left: 2rem;
+        padding-right: 2rem;
+    }
+}
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" x-data="botStatsApp()" x-init="init()">
+<div class="max-w-full mx-auto px-2 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 md:py-8" x-data="botStatsApp()" x-init="init()">
     
-    <!-- Header -->
-    <div class="mb-8 flex items-center justify-between">
-        <div class="flex items-center gap-4">
+    <!-- Header - Responsivo -->
+    <div class="mb-4 sm:mb-6 md:mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+        <div class="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
             <a href="{{ url_for('dashboard') }}" 
-               class="w-10 h-10 flex items-center justify-center rounded-lg border border-gray-700 text-gray-400 hover:text-white hover:border-yellow-500 transition-all">
-                <i class="fas fa-arrow-left"></i>
+               class="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-lg border border-gray-700 text-gray-400 hover:text-white hover:border-yellow-500 transition-all flex-shrink-0">
+                <i class="fas fa-arrow-left text-sm sm:text-base"></i>
             </a>
-            <div>
-                <h1 class="text-3xl font-bold text-white flex items-center gap-3">
-                    <i class="fas fa-chart-line" style="color: var(--brand-gold-500);"></i>
-                    Estatísticas do Bot
+            <div class="min-w-0 flex-1">
+                <h1 class="text-xl sm:text-2xl md:text-3xl font-bold text-white flex items-center gap-2 sm:gap-3 truncate">
+                    <i class="fas fa-chart-line text-lg sm:text-xl md:text-2xl flex-shrink-0" style="color: var(--brand-gold-500);"></i>
+                    <span class="truncate">Estatísticas do Bot</span>
             </h1>
-                <p class="text-sm text-gray-500 mt-1">{{ bot.name }} (@{{ bot.username }})</p>
+                <p class="text-xs sm:text-sm text-gray-500 mt-1 truncate">{{ bot.name }} (@{{ bot.username }})</p>
             </div>
         </div>
-        <div class="flex items-center gap-3">
-            <div class="live-indicator">
-                <div class="live-dot"></div>
-                <span>AO VIVO</span>
+        <div class="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+            <div class="live-indicator text-xs sm:text-sm px-2 sm:px-3 py-1.5 sm:py-2">
+                <div class="live-dot w-2 h-2 sm:w-2.5 sm:h-2.5"></div>
+                <span class="hidden sm:inline">AO VIVO</span>
+                <span class="sm:hidden">LIVE</span>
             </div>
             <button @click="loadStats()" 
                     :disabled="loading"
                     :class="{'opacity-50 cursor-not-allowed': loading}"
-                    class="btn-action">
+                    class="btn-action text-xs sm:text-sm px-3 sm:px-4 py-1.5 sm:py-2">
                 <i class="fas fa-sync-alt" :class="{'fa-spin': loading}"></i>
-                <span x-text="loading ? 'Atualizando...' : 'Atualizar'"></span>
+                <span class="hidden sm:inline" x-text="loading ? 'Atualizando...' : 'Atualizar'"></span>
+                <span class="sm:hidden" x-text="loading ? '...' : 'Atualizar'"></span>
             </button>
         </div>
     </div>
@@ -274,14 +429,14 @@
         </div>
         <div class="space-y-3">
             <template x-for="problem in analyticsV2.problems" :key="problem.title">
-                <div class="p-4 rounded-lg border" x-bind:class="problem.severity === 'CRITICAL' ? 'bg-red-900/20 border-red-500/50' : 'bg-orange-900/20 border-orange-500/50'">
-                    <div class="flex items-start justify-between gap-4">
-                        <div class="flex-1">
-                            <div class="font-bold text-white mb-1" x-text="problem.title"></div>
-                            <div class="text-sm text-gray-400 mb-2" x-text="problem.description"></div>
+                <div class="p-3 sm:p-4 rounded-lg border" x-bind:class="problem.severity === 'CRITICAL' ? 'bg-red-900/20 border-red-500/50' : 'bg-orange-900/20 border-orange-500/50'">
+                    <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
+                        <div class="flex-1 min-w-0">
+                            <div class="text-sm sm:text-base font-bold text-white mb-1 truncate" x-text="problem.title"></div>
+                            <div class="text-xs sm:text-sm text-gray-400 mb-2" x-text="problem.description"></div>
                             <div class="text-xs text-gray-500 italic" x-text="'💡 ' + problem.action"></div>
                         </div>
-                        <button class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded-lg transition whitespace-nowrap" x-text="problem.action_button"></button>
+                        <button class="px-3 sm:px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs sm:text-sm font-bold rounded-lg transition whitespace-nowrap flex-shrink-0 w-full sm:w-auto" x-text="problem.action_button"></button>
                     </div>
                 </div>
             </template>
@@ -299,7 +454,7 @@
             </div>
         </div>
         
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
             <div class="stat-box">
                 <div class="stat-value" style="color: #60A5FA;" x-text="stats.general.total_users"></div>
                 <div class="stat-label">Usuários</div>
@@ -341,8 +496,8 @@
         </div>
     </div>
     
-    <!-- Order Bumps e Downsells -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+    <!-- Order Bumps e Downsells - Responsivo -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6">
         <!-- Order Bumps -->
         <div class="config-section">
             <div class="config-section-header">
@@ -354,35 +509,35 @@
             </div>
 
             <div class="space-y-4">
-                <div class="flex justify-between items-center p-4 bg-gray-900 rounded-lg">
-                    <div>
+                <div class="flex justify-between items-center p-3 sm:p-4 bg-gray-900 rounded-lg">
+                    <div class="min-w-0 flex-1">
                         <div class="text-xs text-gray-500 mb-1">Exibidos</div>
-                        <div class="text-2xl font-bold text-white" x-text="stats.order_bumps.shown"></div>
+                        <div class="text-xl sm:text-2xl font-bold text-white truncate" x-text="stats.order_bumps.shown"></div>
                     </div>
-                    <i class="fas fa-eye text-blue-500 text-2xl"></i>
+                    <i class="fas fa-eye text-blue-500 text-xl sm:text-2xl flex-shrink-0 ml-2"></i>
                 </div>
                 
-                <div class="flex justify-between items-center p-4 bg-gray-900 rounded-lg">
-                    <div>
+                <div class="flex justify-between items-center p-3 sm:p-4 bg-gray-900 rounded-lg">
+                    <div class="min-w-0 flex-1">
                         <div class="text-xs text-gray-500 mb-1">Aceitos</div>
-                        <div class="text-2xl font-bold text-white" x-text="stats.order_bumps.accepted"></div>
+                        <div class="text-xl sm:text-2xl font-bold text-white truncate" x-text="stats.order_bumps.accepted"></div>
                     </div>
-                    <i class="fas fa-check-circle text-green-500 text-2xl"></i>
+                    <i class="fas fa-check-circle text-green-500 text-xl sm:text-2xl flex-shrink-0 ml-2"></i>
                 </div>
                 
-                <div class="p-4 rounded-lg border-2" style="background: rgba(255, 184, 0, 0.15); border-color: rgba(255, 184, 0, 0.5);">
-                    <div class="text-sm font-bold mb-2" style="color: #FFC933;">Taxa de Aceitação</div>
-                    <div class="flex items-center gap-3">
-                        <div class="flex-1 progress-bar" style="background: rgba(0, 0, 0, 0.4); height: 12px;">
-                            <div class="progress-fill" style="background: linear-gradient(90deg, #FFB800, #DAA520); height: 12px;" :style="`width: ${stats.order_bumps.acceptance_rate}%`"></div>
+                <div class="p-3 sm:p-4 rounded-lg border-2" style="background: rgba(255, 184, 0, 0.15); border-color: rgba(255, 184, 0, 0.5);">
+                    <div class="text-xs sm:text-sm font-bold mb-2" style="color: #FFC933;">Taxa de Aceitação</div>
+                    <div class="flex items-center gap-2 sm:gap-3">
+                        <div class="flex-1 progress-bar h-2.5 sm:h-3" style="background: rgba(0, 0, 0, 0.4);">
+                            <div class="progress-fill h-2.5 sm:h-3" style="background: linear-gradient(90deg, #FFB800, #DAA520);" :style="`width: ${stats.order_bumps.acceptance_rate}%`"></div>
                         </div>
-                        <span class="text-2xl font-bold" style="color: #FFB800;" x-text="stats.order_bumps.acceptance_rate + '%'"></span>
+                        <span class="text-lg sm:text-2xl font-bold flex-shrink-0" style="color: #FFB800;" x-text="stats.order_bumps.acceptance_rate + '%'"></span>
                     </div>
                 </div>
                 
-                <div class="p-4 bg-gray-900 rounded-lg border border-yellow-500 border-opacity-30">
+                <div class="p-3 sm:p-4 bg-gray-900 rounded-lg border border-yellow-500 border-opacity-30">
                     <div class="text-xs text-gray-400 mb-1">Receita de Order Bumps</div>
-                    <div class="text-2xl font-bold" style="color: var(--brand-gold-500);" x-text="'R$ ' + stats.order_bumps.revenue.toFixed(2)"></div>
+                    <div class="text-xl sm:text-2xl font-bold truncate" style="color: var(--brand-gold-500);" x-text="'R$ ' + stats.order_bumps.revenue.toFixed(2)"></div>
                 </div>
             </div>
 
@@ -405,35 +560,35 @@
             </div>
 
             <div class="space-y-4">
-                <div class="flex justify-between items-center p-4 bg-gray-900 rounded-lg">
-                    <div>
+                <div class="flex justify-between items-center p-3 sm:p-4 bg-gray-900 rounded-lg">
+                    <div class="min-w-0 flex-1">
                         <div class="text-xs text-gray-500 mb-1">Enviados</div>
-                        <div class="text-2xl font-bold text-white" x-text="stats.downsells.sent"></div>
+                        <div class="text-xl sm:text-2xl font-bold text-white truncate" x-text="stats.downsells.sent"></div>
                     </div>
-                    <i class="fas fa-paper-plane text-blue-500 text-2xl"></i>
+                    <i class="fas fa-paper-plane text-blue-500 text-xl sm:text-2xl flex-shrink-0 ml-2"></i>
                 </div>
                 
-                <div class="flex justify-between items-center p-4 bg-gray-900 rounded-lg">
-                    <div>
+                <div class="flex justify-between items-center p-3 sm:p-4 bg-gray-900 rounded-lg">
+                    <div class="min-w-0 flex-1">
                         <div class="text-xs text-gray-500 mb-1">Convertidos</div>
-                        <div class="text-2xl font-bold text-white" x-text="stats.downsells.converted"></div>
+                        <div class="text-xl sm:text-2xl font-bold text-white truncate" x-text="stats.downsells.converted"></div>
                     </div>
-                    <i class="fas fa-check-circle text-green-500 text-2xl"></i>
+                    <i class="fas fa-check-circle text-green-500 text-xl sm:text-2xl flex-shrink-0 ml-2"></i>
                 </div>
                 
-                <div class="p-4 rounded-lg border-2" style="background: rgba(255, 184, 0, 0.15); border-color: rgba(255, 184, 0, 0.5);">
-                    <div class="text-sm font-bold mb-2" style="color: #FFC933;">Taxa de Conversão</div>
-                    <div class="flex items-center gap-3">
-                        <div class="flex-1 progress-bar" style="background: rgba(0, 0, 0, 0.4); height: 12px;">
-                            <div class="progress-fill" style="background: linear-gradient(90deg, #FFB800, #DAA520); height: 12px;" :style="`width: ${stats.downsells.conversion_rate}%`"></div>
+                <div class="p-3 sm:p-4 rounded-lg border-2" style="background: rgba(255, 184, 0, 0.15); border-color: rgba(255, 184, 0, 0.5);">
+                    <div class="text-xs sm:text-sm font-bold mb-2" style="color: #FFC933;">Taxa de Conversão</div>
+                    <div class="flex items-center gap-2 sm:gap-3">
+                        <div class="flex-1 progress-bar h-2.5 sm:h-3" style="background: rgba(0, 0, 0, 0.4);">
+                            <div class="progress-fill h-2.5 sm:h-3" style="background: linear-gradient(90deg, #FFB800, #DAA520);" :style="`width: ${stats.downsells.conversion_rate}%`"></div>
                         </div>
-                        <span class="text-2xl font-bold" style="color: #FFB800;" x-text="stats.downsells.conversion_rate + '%'"></span>
+                        <span class="text-lg sm:text-2xl font-bold flex-shrink-0" style="color: #FFB800;" x-text="stats.downsells.conversion_rate + '%'"></span>
                     </div>
                 </div>
                 
-                <div class="p-4 bg-gray-900 rounded-lg border border-yellow-500 border-opacity-30">
+                <div class="p-3 sm:p-4 bg-gray-900 rounded-lg border border-yellow-500 border-opacity-30">
                     <div class="text-xs text-gray-400 mb-1">Receita de Downsells</div>
-                    <div class="text-2xl font-bold" style="color: var(--brand-gold-500);" x-text="'R$ ' + stats.downsells.revenue.toFixed(2)"></div>
+                    <div class="text-xl sm:text-2xl font-bold truncate" style="color: var(--brand-gold-500);" x-text="'R$ ' + stats.downsells.revenue.toFixed(2)"></div>
                 </div>
             </div>
 
@@ -446,8 +601,8 @@
         </div>
     </div>
     
-    <!-- Top Produtos e Horários de Pico -->
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+    <!-- Top Produtos e Horários de Pico - Responsivo -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6">
         <!-- Top Produtos -->
         <div class="config-section">
             <div class="config-section-header">
@@ -460,18 +615,18 @@
 
             <div class="space-y-3">
                 <template x-for="(product, index) in stats.products.slice(0, 5)" :key="index">
-                    <div class="p-4 bg-gray-900 rounded-lg border border-gray-800 hover:border-yellow-500 transition-all">
-                        <div class="flex items-center justify-between mb-2">
-                            <div class="flex items-center gap-3">
-                                <div class="w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm"
+                    <div class="p-3 sm:p-4 bg-gray-900 rounded-lg border border-gray-800 hover:border-yellow-500 transition-all">
+                        <div class="flex items-center justify-between mb-2 gap-2">
+                            <div class="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                                <div class="w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center font-bold text-xs sm:text-sm flex-shrink-0"
                                      :style="index === 0 ? 'background: #FFB800; color: #000;' : (index === 1 ? 'background: #C0C0C0; color: #000;' : (index === 2 ? 'background: #CD7F32; color: #000;' : 'background: rgba(255, 255, 255, 0.1); color: #9CA3AF;'))"
                                      x-text="index + 1"></div>
-                                <h4 class="text-sm font-bold text-white" x-text="product.product"></h4>
+                                <h4 class="text-xs sm:text-sm font-bold text-white truncate" x-text="product.product"></h4>
                             </div>
                         </div>
-                        <div class="flex justify-between items-center text-xs">
-                            <span class="text-gray-500" x-text="product.sales + ' vendas'"></span>
-                            <span class="font-bold" style="color: var(--brand-gold-500);" x-text="'R$ ' + product.revenue.toFixed(2)"></span>
+                        <div class="flex justify-between items-center text-xs gap-2">
+                            <span class="text-gray-500 truncate" x-text="product.sales + ' vendas'"></span>
+                            <span class="font-bold flex-shrink-0" style="color: var(--brand-gold-500);" x-text="'R$ ' + product.revenue.toFixed(2)"></span>
                         </div>
                     </div>
                 </template>
@@ -497,14 +652,14 @@
 
             <div class="space-y-3">
                 <template x-for="(hour, index) in stats.peak_hours.slice(0, 5)" :key="index">
-                    <div class="flex items-center gap-3 p-3 bg-gray-900 rounded-lg">
-                        <div class="w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm"
+                    <div class="flex items-center gap-2 sm:gap-3 p-3 bg-gray-900 rounded-lg">
+                        <div class="w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center font-bold text-xs sm:text-sm flex-shrink-0"
                              style="background: rgba(59, 130, 246, 0.2); color: #60A5FA;"
                              x-text="index + 1"></div>
-                        <div class="flex-1">
-                            <div class="text-sm font-bold text-white" x-text="hour.hour"></div>
+                        <div class="flex-1 min-w-0">
+                            <div class="text-xs sm:text-sm font-bold text-white truncate" x-text="hour.hour"></div>
                         </div>
-                        <div class="text-sm font-bold" style="color: var(--brand-gold-500);" x-text="hour.sales + ' vendas'"></div>
+                        <div class="text-xs sm:text-sm font-bold flex-shrink-0" style="color: var(--brand-gold-500);" x-text="hour.sales + ' vendas'"></div>
                     </div>
                 </template>
                 
@@ -538,14 +693,14 @@
             </div>
         </div>
         
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <!-- Distribuição por Cidade -->
-            <div class="bg-gray-900 rounded-lg p-4 border border-gray-800">
-                <div class="flex items-center gap-3 mb-4">
-                    <i class="fas fa-map-marker-alt text-2xl text-blue-500"></i>
-                    <div>
-                        <div class="text-lg font-bold text-white">Top Cidades</div>
-                        <div class="text-sm text-gray-400">Onde estão seus melhores clientes</div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+            <!-- Distribuição por Cidade - Responsivo -->
+            <div class="bg-gray-900 rounded-lg p-3 sm:p-4 border border-gray-800 w-full max-w-full box-border overflow-hidden">
+                <div class="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
+                    <i class="fas fa-map-marker-alt text-xl sm:text-2xl text-blue-500 flex-shrink-0"></i>
+                    <div class="min-w-0 flex-1">
+                        <div class="text-base sm:text-lg font-bold text-white truncate">Top Cidades</div>
+                        <div class="text-xs sm:text-sm text-gray-400 truncate">Onde estão seus melhores clientes</div>
                     </div>
                 </div>
                 <div id="cityData" class="space-y-2">
@@ -553,16 +708,16 @@
                 </div>
             </div>
             
-            <!-- Distribuição por Device -->
-            <div class="bg-gray-900 rounded-lg p-4 border border-gray-800">
-                <div class="flex items-center gap-3 mb-4">
-                    <i class="fas fa-mobile-alt text-2xl text-green-500"></i>
-                    <div>
-                        <div class="text-lg font-bold text-white">Dispositivos</div>
-                        <div class="text-sm text-gray-400">Modelos de dispositivos dos clientes</div>
+            <!-- Distribuição por Device - Responsivo -->
+            <div class="bg-gray-900 rounded-lg p-3 sm:p-4 border border-gray-800 w-full max-w-full box-border overflow-hidden">
+                <div class="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
+                    <i class="fas fa-mobile-alt text-xl sm:text-2xl text-green-500 flex-shrink-0"></i>
+                    <div class="min-w-0 flex-1">
+                        <div class="text-base sm:text-lg font-bold text-white truncate">Dispositivos</div>
+                        <div class="text-xs sm:text-sm text-gray-400 truncate">Modelos de dispositivos dos clientes</div>
                     </div>
                 </div>
-                <canvas id="deviceChart" style="max-height: 200px;"></canvas>
+                <canvas id="deviceChart" class="w-full max-w-full" style="max-height: 200px;"></canvas>
             </div>
         </div>
         
@@ -1047,23 +1202,23 @@ function botStatsApp() {
                 });
             }
             
-            // ===== TOP CIDADES =====
+            // ===== TOP CIDADES (Responsivo) =====
             const cities = this.analyzeTopCities(salesData);
             const cityContainer = document.getElementById('cityData');
             if (cityContainer) {
                 cityContainer.innerHTML = cities.slice(0, 5).map((city, index) => `
-                    <div class="flex items-center justify-between p-3 bg-gray-800 rounded-lg border border-gray-700">
-                        <div class="flex items-center gap-3">
-                            <div class="w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm"
+                    <div class="flex items-center justify-between p-2 sm:p-3 bg-gray-800 rounded-lg border border-gray-700 gap-2 sm:gap-3">
+                        <div class="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                            <div class="w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center font-bold text-xs sm:text-sm flex-shrink-0"
                                  style="background: ${index === 0 ? '#FFB800' : index === 1 ? '#C0C0C0' : '#CD7F32'}; color: #000;"
                                  x-text="${index + 1}"></div>
-                            <div>
-                                <div class="text-sm font-bold text-white">${city.city}</div>
-                                <div class="text-xs text-gray-500">${city.state}</div>
+                            <div class="min-w-0 flex-1">
+                                <div class="text-xs sm:text-sm font-bold text-white truncate">${city.city}</div>
+                                <div class="text-xs text-gray-500 truncate">${city.state}</div>
                             </div>
                         </div>
-                        <div class="text-right">
-                            <div class="text-lg font-bold" style="color: var(--brand-gold-500);">${city.count}</div>
+                        <div class="text-right flex-shrink-0">
+                            <div class="text-base sm:text-lg font-bold" style="color: var(--brand-gold-500);">${city.count}</div>
                             <div class="text-xs text-gray-400">vendas</div>
                         </div>
                     </div>

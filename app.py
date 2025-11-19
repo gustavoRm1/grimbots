@@ -6363,8 +6363,11 @@ def ranking():
     from models import BotUser, UserAchievement, Achievement
     from datetime import timedelta
     
-    # Filtro de período
-    period = request.args.get('period', 'month')  # month (padrão) ou all
+    # ✅ Filtro de período - APENAS "month" disponível (removido "all")
+    period = request.args.get('period', 'month')
+    # Forçar sempre 'month' (removido suporte a 'all')
+    if period != 'month':
+        period = 'month'
     
     # ✅ CORREÇÃO: Definir período corretamente
     date_filter = None
@@ -6379,8 +6382,8 @@ def ranking():
         now = get_brazil_time()
         date_filter = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     
-    # ✅ RANKING V2.0: Ordenar por receita do período (faturamento)
-    if period == 'all':
+    # ✅ RANKING V2.0: Ordenar por receita do período (faturamento) - APENAS MÊS ATUAL
+    if False:  # Removido: period == 'all' (não mais suportado)
         # Ranking all-time (ordenar por receita total)
         users_query = User.query.filter_by(is_admin=False, is_banned=False)\
                                .order_by(
@@ -6468,29 +6471,22 @@ def ranking():
     # Encontrar posição do usuário atual
     my_position = next((item for item in ranking_data if item['user'].id == current_user.id), None)
     if not my_position:
-        # Calcular posição real se não está no top 100
-        if period == 'all':
-            my_position_number = User.query.filter(
+        # ✅ Calcular posição real se não está no top 100 (APENAS MÊS ATUAL - removido 'all')
+        # Calcular receita do usuário atual no período
+        my_period_revenue = db.session.query(func.sum(Payment.amount)).join(Bot).filter(
+            Bot.user_id == current_user.id,
+            Payment.status == 'paid',
+            Payment.created_at >= date_filter
+        ).scalar() or 0.0
+        
+        # Contar usuários com receita maior
+        my_position_number = db.session.query(func.count(User.id))\
+            .join(subquery, User.id == subquery.c.user_id)\
+            .filter(
                 User.is_admin == False,
                 User.is_banned == False,
-                User.total_revenue > current_user.total_revenue
-            ).count() + 1
-        else:
-            # Calcular receita do usuário atual no período
-            my_period_revenue = db.session.query(func.sum(Payment.amount)).join(Bot).filter(
-                Bot.user_id == current_user.id,
-                Payment.status == 'paid',
-                Payment.created_at >= date_filter
-            ).scalar() or 0.0
-            
-            # Contar usuários com receita maior
-            my_position_number = db.session.query(func.count(User.id))\
-                .join(subquery, User.id == subquery.c.user_id)\
-                .filter(
-                    User.is_admin == False,
-                    User.is_banned == False,
-                    subquery.c.period_revenue > my_period_revenue
-                ).scalar() + 1
+                subquery.c.period_revenue > my_period_revenue
+            ).scalar() + 1
     else:
         my_position_number = my_position['position']
     

@@ -20,9 +20,29 @@
 .config-section {
     background: linear-gradient(135deg, rgba(255, 255, 255, 0.02) 0%, rgba(255, 255, 255, 0.01) 100%);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 16px;
-    padding: 24px;
-    margin-bottom: 24px;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 16px;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow-x: hidden;
+}
+
+@media (min-width: 640px) {
+    .config-section {
+        border-radius: 14px;
+        padding: 20px;
+        margin-bottom: 20px;
+    }
+}
+
+@media (min-width: 768px) {
+    .config-section {
+        border-radius: 16px;
+        padding: 24px;
+        margin-bottom: 24px;
+    }
 }
 
 .config-section-header {
@@ -35,9 +55,21 @@
 }
 
 .config-section-title {
-    font-size: 1.25rem;
+    font-size: 1rem;
     font-weight: 700;
     color: #FFFFFF;
+}
+
+@media (min-width: 640px) {
+    .config-section-title {
+        font-size: 1.125rem;
+    }
+}
+
+@media (min-width: 768px) {
+    .config-section-title {
+        font-size: 1.25rem;
+    }
 }
 
 .config-section-description {
@@ -49,9 +81,25 @@
 .podium-card {
     background: linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.01) 100%);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 12px;
-    padding: 20px;
+    border-radius: 10px;
+    padding: 16px;
     transition: all 0.3s ease;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+@media (min-width: 640px) {
+    .podium-card {
+        border-radius: 12px;
+        padding: 18px;
+    }
+}
+
+@media (min-width: 768px) {
+    .podium-card {
+        padding: 20px;
+    }
 }
 
 .podium-card:hover {
@@ -78,10 +126,26 @@
 .stat-box {
     background: linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.01) 100%);
     border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 12px;
-    padding: 20px;
+    border-radius: 10px;
+    padding: 16px;
     text-align: center;
     transition: all 0.2s ease;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+@media (min-width: 640px) {
+    .stat-box {
+        border-radius: 12px;
+        padding: 18px;
+    }
+}
+
+@media (min-width: 768px) {
+    .stat-box {
+        padding: 20px;
+    }
 }
 
 .stat-box:hover {
@@ -91,10 +155,22 @@
 }
 
 .stat-value {
-    font-size: 2rem;
+    font-size: 1.5rem;
     font-weight: 700;
     color: #FFFFFF;
     margin-bottom: 4px;
+}
+
+@media (min-width: 640px) {
+    .stat-value {
+        font-size: 1.75rem;
+    }
+}
+
+@media (min-width: 768px) {
+    .stat-value {
+        font-size: 2rem;
+    }
 }
 
 .stat-label {
@@ -111,15 +187,30 @@
 }
 
 .table-premium thead th {
-    padding: 16px 24px;
+    padding: 12px 16px;
     background: rgba(255, 184, 0, 0.05);
     border-bottom: 2px solid rgba(255, 184, 0, 0.2);
-    font-size: 12px;
+    font-size: 10px;
     font-weight: 700;
     color: #FFC933;
     text-transform: uppercase;
     letter-spacing: 0.5px;
     text-align: left;
+    white-space: nowrap;
+}
+
+@media (min-width: 640px) {
+    .table-premium thead th {
+        padding: 14px 20px;
+        font-size: 11px;
+    }
+}
+
+@media (min-width: 768px) {
+    .table-premium thead th {
+        padding: 16px 24px;
+        font-size: 12px;
+    }
 }
 
 .table-premium tbody tr {
@@ -132,8 +223,22 @@
 }
 
 .table-premium tbody td {
-    padding: 16px 24px;
-    font-size: 14px;
+    padding: 12px 16px;
+    font-size: 12px;
+}
+
+@media (min-width: 640px) {
+    .table-premium tbody td {
+        padding: 14px 20px;
+        font-size: 13px;
+    }
+}
+
+@media (min-width: 768px) {
+    .table-premium tbody td {
+        padding: 16px 24px;
+        font-size: 14px;
+    }
 }
 
 .badge-status {
@@ -179,8 +284,8 @@
 }
 
 .tab-button {
-    padding: 16px 24px;
-    font-size: 0.875rem;
+    padding: 12px 16px;
+    font-size: 0.75rem;
     font-weight: 600;
     color: #9CA3AF;
     background: transparent;
@@ -190,6 +295,20 @@
     transition: all 0.2s ease;
     position: relative;
     top: 2px;
+    white-space: nowrap;
+}
+
+@media (min-width: 640px) {
+    .tab-button {
+        padding: 14px 20px;
+        font-size: 0.875rem;
+    }
+}
+
+@media (min-width: 768px) {
+    .tab-button {
+        padding: 16px 24px;
+    }
 }
 
 .tab-button:hover {
@@ -231,38 +350,70 @@
     -webkit-box-orient: vertical;
     overflow: hidden;
 }
+
+/* ✅ Garantir responsividade completa para mobile */
+@media (max-width: 640px) {
+    .max-w-full {
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
+        max-width: 100vw;
+        overflow-x: hidden;
+    }
+    
+    /* Prevenir overflow horizontal */
+    * {
+        box-sizing: border-box;
+    }
+    
+    body {
+        overflow-x: hidden;
+    }
+    
+    /* Garantir que grids sejam sempre 1 coluna em mobile quando necessário */
+    .grid.grid-cols-1.md\:grid-cols-3 {
+        grid-template-columns: 1fr !important;
+    }
+    
+    /* Tabela responsiva em mobile */
+    .overflow-x-auto {
+        -webkit-overflow-scrolling: touch;
+        overflow-x: auto;
+    }
+    
+    .table-premium {
+        min-width: 600px; /* Largura mínima para scroll horizontal se necessário */
+    }
+}
+
+@media (min-width: 1024px) {
+    .max-w-full {
+        max-width: 100%;
+        padding-left: 2rem;
+        padding-right: 2rem;
+    }
+}
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+<div class="max-w-full mx-auto px-2 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 md:py-8">
     
     <!-- Header -->
-    <div class="mb-8">
-        <h1 class="text-4xl font-black text-white mb-2 flex items-center gap-3">
-            <i class="fas fa-trophy" style="color: #FFB800;"></i>
+    <div class="mb-4 sm:mb-6 md:mb-8">
+        <h1 class="text-2xl sm:text-3xl md:text-4xl font-black text-white mb-2 flex items-center gap-2 sm:gap-3 truncate">
+            <i class="fas fa-trophy text-xl sm:text-2xl md:text-3xl" style="color: #FFB800;"></i>
             Ranking
             </h1>
-        <p class="text-lg text-gray-400">
+        <p class="text-sm sm:text-base md:text-lg text-gray-400">
             Compete, venda e domine o ranking!
         </p>
     </div>
     
-    <!-- Filtros (Tabs) -->
-    <div class="flex gap-0 border-b-2 border-gray-800 mb-8">
-        <a href="?period=month" 
-           class="tab-button {% if period == 'month' %}active{% endif %}">
-            <i class="fas fa-calendar-alt mr-2"></i>Este Mês
-        </a>
-        <a href="?period=all" 
-           class="tab-button {% if period == 'all' %}active{% endif %}">
-            <i class="fas fa-infinity mr-2"></i>Histórico Completo
-                </a>
-            </div>
+    <!-- ✅ Removido: Filtro "Histórico Completo" - apenas "Este Mês" disponível -->
 
     
-    <!-- ✅ RANKING V2.0 - Pódio Premium (Top 3) com Premiação -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+    <!-- ✅ RANKING V2.0 - Pódio Premium (Top 3) com Premiação - Responsivo -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4 md:gap-6 mb-4 sm:mb-6 md:mb-8">
         {% for item in ranking[:3] %}
         <div class="podium-card {% if loop.index == 1 %}podium-gold order-2 md:order-1{% elif loop.index == 2 %}podium-silver order-1 md:order-2 md:scale-105{% else %}podium-bronze order-3{% endif %}">
             <!-- ✅ V2.0: Avatar Anonimizado (LGPD) - Logo do Sistema -->
@@ -285,15 +436,15 @@
                        style="color: {% if loop.index == 1 %}#000{% elif loop.index == 2 %}#FFFFFF{% else %}#000{% endif %};"></i>
                     </div>
                 </div>
-                <p class="text-3xl font-black" style="{% if loop.index == 1 %}color: #FFB800;{% elif loop.index == 2 %}color: #C0C0C0;{% else %}color: #CD7F32;{% endif %}">
+                <p class="text-2xl sm:text-3xl font-black" style="{% if loop.index == 1 %}color: #FFB800;{% elif loop.index == 2 %}color: #C0C0C0;{% else %}color: #CD7F32;{% endif %}">
                         #{{ item.position }}
                     </p>
                 </div>
                 
-            <!-- ✅ V2.0: Identificação Anonimizada (LGPD) -->
-            <div class="text-center mb-4 pb-4 border-b border-gray-800">
-                <p class="text-lg font-bold text-white">Usuário #{{ item.position }}</p>
-                <p class="text-sm text-gray-500 mt-1">
+            <!-- ✅ V2.0: Identificação Anonimizada (LGPD) - Responsivo -->
+            <div class="text-center mb-3 sm:mb-4 pb-3 sm:pb-4 border-b border-gray-800">
+                <p class="text-base sm:text-lg font-bold text-white truncate">Usuário #{{ item.position }}</p>
+                <p class="text-xs sm:text-sm text-gray-500 mt-1">
                     {% if item.user.id == current_user.id %}
                     <span class="text-yellow-500 font-semibold">Você</span>
                     {% endif %}
@@ -308,8 +459,9 @@
                     <i class="fas fa-percent text-lg" style="color: #FFB800;"></i>
                     <span class="text-sm font-bold text-gray-300">TAXA PREMIUM</span>
                 </div>
-                <div class="text-2xl font-black" style="color: #FFB800;">{{ item.premium_rate }}%</div>
-                <div class="text-xs text-gray-400 mt-1">Taxa reduzida operando</div>
+                <div class="text-xl sm:text-2xl font-black" style="color: #FFB800;">{{ item.premium_rate }}%</div>
+                <div class="text-xs text-gray-400 mt-1 hidden sm:block">Taxa reduzida operando</div>
+                <div class="text-xs text-gray-400 mt-1 sm:hidden">Taxa Premium</div>
             </div>
             {% endif %}
                 
@@ -317,7 +469,7 @@
             <div class="space-y-3">
                 <div class="flex justify-between items-center p-3 bg-black bg-opacity-30 rounded-lg">
                     <span class="text-xs font-bold text-gray-400">FATURAMENTO</span>
-                    <span class="text-lg font-black text-green-400">R$ {{ "%.2f"|format(item.revenue) }}</span>
+                    <span class="text-base sm:text-lg font-black text-green-400 truncate">R$ {{ "%.2f"|format(item.revenue) }}</span>
                     </div>
                     {% if item.streak > 0 %}
                 <div class="flex justify-between items-center p-3 bg-black bg-opacity-30 rounded-lg">
@@ -421,8 +573,8 @@
         </div>
 
         {% if revenue_awards and revenue_awards|length > 0 %}
-        <!-- Estatísticas Rápidas -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <!-- Estatísticas Rápidas - Responsivo -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4 mb-4 sm:mb-6 md:mb-8">
             <div class="stat-box">
                 <div class="stat-value" style="color: #10B981;">R$ {{ "%.2f"|format(total_revenue)|replace('.', ',') }}</div>
                 <div class="stat-label">Faturamento Total</div>
@@ -438,7 +590,7 @@
         </div>
 
         <!-- Grid de Placas - Design Responsivo e Limpo -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 md:gap-6">
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2 sm:gap-3 md:gap-4 lg:gap-6">
             {% for award in revenue_awards %}
             <div class="relative w-full revenue-award">
                 <!-- Card Principal -->
