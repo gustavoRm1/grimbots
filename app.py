@@ -5589,9 +5589,15 @@ def create_gateway():
         elif gateway_type == 'wiinpay':
             # ✅ WIINPAY
             gateway.api_key = data.get('api_key')
-            # Split User ID da plataforma (4% de comissão pelos serviços de automação)
-            # Fallback para o ID da plataforma se não fornecido
-            gateway.split_user_id = data.get('split_user_id', '6877edeba3c39f8451ba5bdd')
+            # ✅ Split User ID: configuração interna da plataforma, não deve ser alterado pelo usuário
+            # Se não fornecido, manter o valor existente ou usar fallback padrão da plataforma
+            if 'split_user_id' in data and data.get('split_user_id'):
+                # Se enviado explicitamente (via admin/backend), atualizar
+                gateway.split_user_id = data.get('split_user_id')
+            elif not gateway.split_user_id:
+                # Se não existe valor e não foi enviado, usar fallback padrão da plataforma
+                gateway.split_user_id = '6877edeba3c39f8451ba5bdd'
+            # Se já existe valor e não foi enviado, manter o valor existente (não sobrescrever)
         
         elif gateway_type == 'atomopay':
             # ✅ ÁTOMO PAY

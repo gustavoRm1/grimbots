@@ -588,18 +588,7 @@
                                             </button>
                                         </div>
                                     </div>
-                                    <div x-data="{ show: false }">
-                                        <label class="text-xs font-bold text-gray-400 block mb-1">Split User ID</label>
-                                        <div class="relative">
-                                            <input :type="show ? 'text' : 'password'" 
-                                                   x-model="editGateway.split_user_id" 
-                                                   class="form-input pr-10"
-                                                   placeholder="●●●●●●●●">
-                                            <button type="button" @click="show = !show" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">
-                                                <i class="fas" :class="show ? 'fa-eye-slash' : 'fa-eye'"></i>
-                                            </button>
-                                        </div>
-                                    </div>
+                                    <!-- ✅ Split User ID removido: configuração interna da plataforma, não deve ser exibido ao usuário -->
                                     <button type="submit" :disabled="loading" class="btn-action btn-action-primary w-full">
                                         <i class="fas fa-save mr-2"></i>
                                         <span x-text="loading ? 'Salvando...' : 'Atualizar'"></span>
@@ -1571,7 +1560,7 @@ function settingsApp() {
             syncpay: { client_id: '', client_secret: '' },
             pushynpay: { api_key: '' },
             paradise: { api_key: '', offer_hash: '', product_hash: '' },
-            wiinpay: { api_key: '', split_user_id: '' },
+            wiinpay: { api_key: '' }, // ✅ split_user_id removido: configuração interna da plataforma
             atomopay: { api_token: '', product_hash: '' },
             umbrellapag: { api_key: '', product_hash: '' }
         },
@@ -1701,6 +1690,10 @@ function settingsApp() {
             this.loading = true;
             try {
                 const payload = { gateway_type: type, ...this.gateways[type] };
+                // ✅ Remover split_user_id do payload para WiinPay (configuração interna, não editável pelo usuário)
+                if (type === 'wiinpay' && payload.split_user_id) {
+                    delete payload.split_user_id;
+                }
                 const response = await fetch('/api/gateways', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -1716,7 +1709,7 @@ function settingsApp() {
                     } else if (type === 'paradise') {
                         this.gateways[type] = { api_key: '', offer_hash: '', product_hash: '' };
                     } else if (type === 'wiinpay') {
-                        this.gateways[type] = { api_key: '', split_user_id: '' };
+                        this.gateways[type] = { api_key: '' }; // ✅ split_user_id removido: configuração interna da plataforma
                     } else if (type === 'atomopay') {
                         this.gateways[type] = { api_token: '', product_hash: '' };
                     } else if (type === 'umbrellapag') {
@@ -1738,6 +1731,10 @@ function settingsApp() {
             this.loading = true;
             try {
                 const payload = { gateway_type: type, ...this.editGateway };
+                // ✅ Remover split_user_id do payload para WiinPay (configuração interna, não editável pelo usuário)
+                if (type === 'wiinpay' && payload.split_user_id) {
+                    delete payload.split_user_id;
+                }
                 const response = await fetch(`/api/gateways/${gatewayId}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
