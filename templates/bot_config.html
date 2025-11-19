@@ -3078,10 +3078,10 @@ document.addEventListener('alpine:init', () => {
                     } catch (e) {
                         console.warn('⚠️ Erro ao configurar estilos padrão (pode ser normal):', e);
                     }
-                        
-                        // ✅ Renderizar steps como blocos
-                        const steps = this.sortedFlowSteps;
-                        const stepPositions = this.loadStepPositions(); // Carregar posições salvas
+                    
+                    // ✅ Renderizar steps como blocos
+                    const steps = this.sortedFlowSteps;
+                    const stepPositions = this.loadStepPositions(); // Carregar posições salvas
                         
                         steps.forEach((step, index) => {
                             const stepId = step.id;
