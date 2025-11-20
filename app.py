@@ -365,8 +365,13 @@ def send_payment_delivery(payment, bot_manager):
         has_access_link = payment.bot.config and payment.bot.config.access_link
         final_link = payment.bot.config.access_link if has_access_link else None
         
-        if has_access_link and has_meta_pixel:
-            # ✅ NOVA ARQUITETURA: Link de entrega com Purchase tracking
+        # ✅ CRÍTICO: SEMPRE enviar delivery_url para garantir Purchase tracking
+        # Mesmo sem meta_pixel, deve enviar delivery_url para manter consistência
+        # Purchase será enviado quando usuário acessar /delivery/<token>
+        # Se has_meta_pixel = True, Purchase será enviado com tracking
+        # Se has_meta_pixel = False, Purchase não será enviado mas link funciona normalmente
+        if has_access_link:
+            # ✅ SEMPRE enviar delivery_url para garantir Purchase tracking
             access_message = f"""
 ✅ <b>Pagamento Confirmado!</b>
 
@@ -380,21 +385,7 @@ def send_payment_delivery(payment, bot_manager):
 
 Aproveite! 🚀
             """
-        elif has_access_link:
-            # ✅ Link direto (sem pixel configurado)
-            access_message = f"""
-✅ <b>Pagamento Confirmado!</b>
-
-🎉 Parabéns! Seu pagamento foi aprovado!
-
-🎯 <b>Produto:</b> {payment.product_name}
-💰 <b>Valor:</b> R$ {payment.amount:.2f}
-
-🔗 <b>Seu acesso:</b>
-{final_link}
-
-Aproveite! 🚀
-            """
+            logger.info(f"✅ Delivery URL enviado para payment {payment.id} (delivery_token: {payment.delivery_token[:20]}...)")
         else:
             # Mensagem genérica sem link (bot não configurou access_link)
             access_message = f"""
@@ -407,7 +398,7 @@ Aproveite! 🚀
 
 📧 Entre em contato com o suporte para receber seu acesso.
             """
-            logger.warning(f"⚠️ Bot {payment.bot_id} não tem access_link configurado - enviando mensagem genérica")
+            logger.warning(f"⚠️ Bot {payment.bot_id} não tem access_link configurado - enviando mensagem genérica (Purchase não será enviado)")
         
         # Enviar via bot manager e capturar exceção se falhar
         try:
