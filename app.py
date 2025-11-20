@@ -7518,8 +7518,17 @@ def delivery_page(delivery_token):
         # Meta deduplicará automaticamente se event_id for o mesmo, mesmo sem pageview_event_id
         if has_meta_pixel and not payment.meta_purchase_sent:
             try:
+                # ✅ CRÍTICO: Lock pessimista - marcar ANTES de enviar para evitar chamadas duplicadas
+                # Isso evita condição de corrida onde duas chamadas veem meta_purchase_sent=False simultaneamente
+                payment.meta_purchase_sent = True
+                from models import get_brazil_time
+                payment.meta_purchase_sent_at = get_brazil_time()
+                db.session.commit()
+                logger.info(f"[META DELIVERY] Delivery - payment.meta_purchase_sent marcado como True (ANTES de enviar) para evitar duplicação")
+                
                 # ✅ CRÍTICO: Garantir que pixel_config['event_id'] existe antes de passar
                 # Se não tiver, gerar agora (mesmo formato do client-side)
+                # ✅ IMPORTANTE: Gerar event_id UMA VEZ e reutilizar (evitar timestamps diferentes)
                 event_id_to_pass = pixel_config.get('event_id') or f"purchase_{payment.id}_{int(time.time())}"
                 logger.info(f"[META DELIVERY] Delivery - Enviando Purchase via Server (Conversions API) para payment {payment.id}")
                 logger.info(f"[META DELIVERY] Delivery - event_id que será usado (mesmo do client-side): {event_id_to_pass[:50]}...")
@@ -7529,6 +7538,13 @@ def delivery_page(delivery_token):
                 logger.info(f"[META DELIVERY] Delivery - Purchase via Server enfileirado com sucesso (event_id: {event_id_to_pass[:30]}...)")
             except Exception as e:
                 logger.error(f"❌ Erro ao enviar Purchase via Server: {e}", exc_info=True)
+                # ✅ ROLLBACK: Se falhou, reverter meta_purchase_sent para permitir nova tentativa
+                try:
+                    payment.meta_purchase_sent = False
+                    payment.meta_purchase_sent_at = None
+                    db.session.commit()
+                except:
+                    pass
                 # Não bloquear renderização da página se server-side falhar
         elif has_meta_pixel and payment.meta_purchase_sent:
             # ✅ Purchase já foi enviado (server-side) - client-side NÃO deve enviar
@@ -9355,11 +9371,11 @@ def send_meta_pixel_purchase_event(payment, pageview_event_id=None):
                 
                 # Verificar se foi bem-sucedido
                 if result and result.get('events_received', 0) > 0:
-                    # ✅ SUCESSO: Marcar como enviado APÓS confirmação
-                    payment.meta_purchase_sent = True
-                    payment.meta_purchase_sent_at = get_brazil_time()
+                    # ✅ SUCESSO: Atualizar meta_event_id (meta_purchase_sent já foi marcado antes de enviar)
+                    # ✅ CRÍTICO: Não marcar meta_purchase_sent novamente aqui (já foi marcado antes de enviar para evitar duplicação)
                     payment.meta_event_id = event_id
                     db.session.commit()
+                    logger.info(f"[META PURCHASE] Purchase - meta_event_id atualizado: {event_id[:50]}...")
                     
                     events_received = result.get('events_received', 0)
                     # ✅ CRÍTICO: Mostrar origem real do event_id usado (pode vir do Redis ou Payment)
