@@ -2658,10 +2658,18 @@ body {
 <script>
 // ✅ CRÍTICO: Registrar componente no Alpine.js ANTES do Alpine processar o HTML
 // ✅ O Alpine.js está sendo carregado com defer, então precisa registrar via alpine:init
-document.addEventListener('alpine:init', () => {
-    console.log('✅ Alpine.js pronto! Registrando botConfigApp...');
+// ✅ TAMBÉM tentar registrar imediatamente se Alpine já estiver disponível
+(function() {
+    'use strict';
     
-    Alpine.data('botConfigApp', () => ({
+    function registerBotConfigApp() {
+        if (typeof Alpine === 'undefined' || !Alpine.data) {
+            console.error('❌ Alpine.js não está disponível!');
+            return false;
+        }
+        
+        console.log('✅ Registrando botConfigApp...');
+        Alpine.data('botConfigApp', () => ({
         activeTab: 'welcome',
         loading: false,
         newBotToken: '',  // ✅ NOVO: Para trocar token
