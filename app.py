@@ -9388,15 +9388,26 @@ def send_meta_pixel_purchase_event(payment, pageview_event_id=None):
                                f"Task: {task.id} | " +
                                f"Deduplicação: event_id={event_id} (reutilizado do PageView: {pageview_event_id_used} via {pageview_event_id_source})")
                 else:
-                    # Falhou silenciosamente - não marcar como enviado
+                    # ❌ FALHOU: Reverter meta_purchase_sent para permitir nova tentativa
                     logger.error(f"❌ Purchase FALHOU silenciosamente: R$ {payment.amount} | " +
                                f"Result: {result} | " +
                                f"Task: {task.id}")
-                    db.session.rollback()
-            except Exception as result_error:
-                # Timeout ou erro ao obter resultado - não marcar como enviado
-                logger.error(f"❌ Erro ao obter resultado do Celery: {result_error} | Task: {task.id}")
-                # Tentar obter estado da task
+                    logger.error(f"   ⚠️ Revertendo meta_purchase_sent para permitir nova tentativa")
+                    try:
+                        payment.meta_purchase_sent = False
+                        payment.meta_purchase_sent_at = None
+                        db.session.commit()
+                        logger.warning(f"   ✅ meta_purchase_sent revertido - Purchase pode ser tentado novamente")
+                    except Exception as rollback_error:
+                        logger.error(f"   ❌ Erro ao reverter meta_purchase_sent: {rollback_error}")
+            except Exception as timeout_error:
+                # ❌ TIMEOUT ou ERRO: Reverter meta_purchase_sent para permitir nova tentativa
+                logger.error(f"❌ Purchase FALHOU (timeout/erro): R$ {payment.amount} | " +
+                           f"Erro: {timeout_error} | " +
+                           f"Task: {task.id}")
+                logger.error(f"   ⚠️ Timeout ao aguardar resultado do Celery ou erro ao processar task")
+                logger.error(f"   ⚠️ Revertendo meta_purchase_sent para permitir nova tentativa")
+                # Tentar obter estado da task para diagnóstico
                 try:
                     task_state = task.state
                     logger.error(f"   Task state: {task_state}")
@@ -9404,6 +9415,15 @@ def send_meta_pixel_purchase_event(payment, pageview_event_id=None):
                         logger.error(f"   Task traceback: {task.traceback[:500]}")
                 except:
                     pass
+                # Reverter meta_purchase_sent
+                try:
+                    payment.meta_purchase_sent = False
+                    payment.meta_purchase_sent_at = None
+                    db.session.commit()
+                    logger.warning(f"   ✅ meta_purchase_sent revertido - Purchase pode ser tentado novamente")
+                except Exception as rollback_error:
+                    logger.error(f"   ❌ Erro ao reverter meta_purchase_sent: {rollback_error}")
+                    db.session.rollback()
                 db.session.rollback()
                 
         except Exception as celery_error:
