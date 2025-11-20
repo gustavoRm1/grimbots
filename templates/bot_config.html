@@ -4853,30 +4853,7 @@ body {
                             */
                             
                             // ✅ Conectar condições - REMOVIDO (conexões devem ser criadas manualmente)
-                            // if (step.conditions && step.conditions.length > 0) {
-                            //     step.conditions.forEach((cond, idx) => {
-                            //         if (cond.target_step) {
-                            //             const targetEl = document.getElementById(`flow-step-${cond.target_step}`);
-                            //             if (targetEl) {
-                            //                 try {
-                            //                     this.jsPlumbInstance.connect({
-                            //                         source: stepEl,
-                            //                         target: targetEl,
-                            //                         paintStyle: { stroke: '#8B5CF6', strokeWidth: 2, strokeDasharray: '5,5' },
-                            //                         overlays: [
-                            //                             ['Arrow', { location: 1, width: 10, length: 10 }],
-                            //                             ['Label', { label: `Cond ${idx + 1}`, location: 0.5, cssClass: 'connection-label' }]
-                            //                         ]
-                            //                     });
-                            //                 } catch (e) {
-                            //                     console.error('❌ Erro ao conectar condição:', e);
-                            //                 }
-                            //             }
-                            //         }
-                            //     });
-                            // }
-                        // });
-                        */
+                            // ✅ TODO O CÓDIGO DE CONEXÃO AUTOMÁTICA FOI REMOVIDO
                         
                         // ✅ PERMITIR REMOVER CONEXÕES - CRÍTICO PARA USABILIDADE
                         try {
@@ -6863,9 +6840,22 @@ body {
         }
     }));
     console.log('✅ botConfigApp registrado com sucesso!');
+    return true;
+    }
     
-    // ✅ Remarketing App (componente separado) - DENTRO de alpine:init
-    Alpine.data('remarketingApp', () => ({
+    // ✅ Tentar registrar imediatamente se Alpine já estiver disponível
+    if (typeof Alpine !== 'undefined' && Alpine.data) {
+        registerBotConfigApp();
+    }
+    
+    // ✅ Registrar quando Alpine.js estiver pronto
+    document.addEventListener('alpine:init', () => {
+        if (!registerBotConfigApp()) {
+            console.error('❌ Falha ao registrar botConfigApp via alpine:init');
+        }
+        
+        // ✅ Remarketing App (componente separado) - DENTRO de alpine:init
+        Alpine.data('remarketingApp', () => ({
         campaigns: [],
         showCreateModal: false,
         showStatsModal: false,
@@ -7073,6 +7063,7 @@ if (typeof window !== 'undefined' && typeof window.Alpine !== 'undefined' && win
         console.warn('⚠️ Erro ao verificar botConfigApp:', e);
     }
 }
+})(); // ✅ Fecha IIFE
 
 // ✅ Funções globais para condições (acessam contexto Alpine via DOM)
 // Estas funções devem ficar FORA de alpine:init para serem acessíveis globalmente
