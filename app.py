@@ -8521,15 +8521,27 @@ def send_meta_pixel_purchase_event(payment):
         if client_ip_from_tracking:
             sim_cookies['_fbi'] = client_ip_from_tracking
         
-        # ✅ FBclid: Recuperar de tracking_data, payment ou bot_user (para gerar fbc se necessário)
+        # ✅ CRÍTICO: FBclid - Recuperar de tracking_data, payment ou bot_user (para gerar fbc se necessário)
+        # SEM fbclid, Parameter Builder NÃO consegue gerar fbc - VENDAS NÃO SÃO TRACKEADAS!
         if tracking_data.get('fbclid'):
             sim_args['fbclid'] = tracking_data.get('fbclid')
+            logger.info(f"[META PURCHASE] Purchase - fbclid recuperado do tracking_data (Redis): {tracking_data.get('fbclid')[:50]}... (len={len(tracking_data.get('fbclid', ''))})")
         elif getattr(payment, 'fbclid', None):
             sim_args['fbclid'] = payment.fbclid
+            logger.info(f"[META PURCHASE] Purchase - fbclid recuperado do Payment: {payment.fbclid[:50]}... (len={len(payment.fbclid)})")
         elif bot_user and bot_user.fbclid:
             sim_args['fbclid'] = bot_user.fbclid
+            logger.info(f"[META PURCHASE] Purchase - fbclid recuperado do BotUser: {bot_user.fbclid[:50]}... (len={len(bot_user.fbclid)})")
+        else:
+            logger.error(f"[META PURCHASE] Purchase - ❌ CRÍTICO: fbclid NÃO encontrado em nenhuma fonte!")
+            logger.error(f"   tracking_data tem fbclid: {bool(tracking_data.get('fbclid'))}")
+            logger.error(f"   payment tem fbclid: {bool(getattr(payment, 'fbclid', None))}")
+            logger.error(f"   bot_user tem fbclid: {bool(bot_user and bot_user.fbclid)}")
+            logger.error(f"   ⚠️ SEM fbclid, Parameter Builder NÃO consegue gerar fbc - VENDAS NÃO SÃO TRACKEADAS!")
         
-        # ✅ Processar via Parameter Builder (valida e processa conforme Meta best practices)
+        # ✅ CRÍTICO: Processar via Parameter Builder (valida e processa conforme Meta best practices)
+        # SEM Parameter Builder, fbc não é gerado e vendas NÃO são trackeadas!
+        logger.info(f"[META PURCHASE] Purchase - Chamando Parameter Builder com fbclid={'✅' if sim_args.get('fbclid') else '❌'} e _fbc={'✅' if sim_cookies.get('_fbc') else '❌'}")
         param_builder_result = process_meta_parameters(
             request_cookies=sim_cookies,
             request_args=sim_args,
@@ -8550,18 +8562,23 @@ def send_meta_pixel_purchase_event(payment):
         # Parameter Builder processa e valida conforme Meta best practices
         fbp_value = fbp_value_from_builder  # ✅ PRIORIDADE 1: Parameter Builder
         
-        # ✅ LOG: Mostrar origem dos parâmetros processados pelo Parameter Builder
+        # ✅ CRÍTICO: LOG - Mostrar origem dos parâmetros processados pelo Parameter Builder
+        # SEM fbc do Parameter Builder, vendas NÃO são trackeadas corretamente!
         if fbc_value:
-            logger.info(f"[META PURCHASE] Purchase - fbc processado pelo Parameter Builder (origem: {fbc_origin}): {fbc_value[:50]}...")
+            logger.info(f"[META PURCHASE] Purchase - ✅ fbc processado pelo Parameter Builder (origem: {fbc_origin}): {fbc_value[:50]}...")
+            logger.info(f"[META PURCHASE] Purchase - ✅ VENDA SERÁ TRACKEADA CORRETAMENTE (fbc presente)")
         else:
-            # ✅ DEBUG: Verificar por que fbc não foi retornado
+            # ✅ CRÍTICO: Verificar por que fbc não foi retornado - SEM fbc, VENDAS NÃO SÃO TRACKEADAS!
             fbclid_in_sim_args = sim_args.get('fbclid', '').strip()
             fbc_in_sim_cookies = sim_cookies.get('_fbc', '').strip()
-            logger.warning(f"[META PURCHASE] Purchase - fbc NÃO retornado pelo Parameter Builder")
-            logger.warning(f"   Cookie _fbc simulado: {'✅ Presente' if fbc_in_sim_cookies else '❌ Ausente'}")
-            logger.warning(f"   fbclid simulado: {'✅ Presente' if fbclid_in_sim_args else '❌ Ausente'} (len={len(fbclid_in_sim_args)})")
+            logger.error(f"[META PURCHASE] Purchase - ❌ CRÍTICO: fbc NÃO retornado pelo Parameter Builder")
+            logger.error(f"   Cookie _fbc simulado: {'✅ Presente' if fbc_in_sim_cookies else '❌ Ausente'}")
+            logger.error(f"   fbclid simulado: {'✅ Presente' if fbclid_in_sim_args else '❌ Ausente'} (len={len(fbclid_in_sim_args)})")
             if fbclid_in_sim_args:
-                logger.warning(f"   fbclid valor: {fbclid_in_sim_args[:50]}...")
+                logger.error(f"   fbclid valor: {fbclid_in_sim_args[:50]}...")
+                logger.error(f"   ⚠️ Parameter Builder recebeu fbclid mas NÃO retornou fbc - VERIFICAR CÓDIGO!")
+            else:
+                logger.error(f"   ❌ SEM fbclid, Parameter Builder NÃO consegue gerar fbc - VENDAS NÃO SÃO TRACKEADAS!")
         
         if fbp_value_from_builder:
             logger.info(f"[META PURCHASE] Purchase - fbp processado pelo Parameter Builder (origem: {param_builder_result.get('fbp_origin')}): {fbp_value_from_builder[:30]}...")
