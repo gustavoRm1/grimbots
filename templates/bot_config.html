@@ -2656,9 +2656,19 @@ body {
 
 {% block extra_scripts %}
 <script>
-// ✅ Registrar componente no Alpine.js ANTES de inicializar
-document.addEventListener('alpine:init', () => {
-    Alpine.data('botConfigApp', () => ({
+// ✅ CRÍTICO: Registrar componente no Alpine.js
+// ✅ Garantir que Alpine.js está disponível antes de registrar
+(function() {
+    'use strict';
+    
+    // ✅ Função para registrar o componente
+    function registerBotConfigApp() {
+        if (typeof Alpine === 'undefined' || !Alpine.data) {
+            console.error('❌ Alpine.js não está disponível!');
+            return false;
+        }
+        
+        Alpine.data('botConfigApp', () => ({
         activeTab: 'welcome',
         loading: false,
         newBotToken: '',  // ✅ NOVO: Para trocar token
@@ -6846,10 +6856,25 @@ document.addEventListener('alpine:init', () => {
             document.body.appendChild(notification);
             setTimeout(() => notification.remove(), 3000);
         }
-    }));
+        }));
+        
+        console.log('✅ botConfigApp registrado com sucesso!');
+        return true;
+    }
     
-    // ✅ Remarketing App (componente separado) - DENTRO de alpine:init
-    Alpine.data('remarketingApp', () => ({
+    // ✅ Tentar registrar imediatamente se Alpine já estiver disponível
+    if (typeof Alpine !== 'undefined' && Alpine.data) {
+        registerBotConfigApp();
+    }
+    
+    // ✅ Registrar quando Alpine.js estiver pronto
+    document.addEventListener('alpine:init', () => {
+        if (!registerBotConfigApp()) {
+            console.error('❌ Falha ao registrar botConfigApp via alpine:init');
+        }
+        
+        // ✅ Remarketing App (componente separado) - DENTRO de alpine:init
+        Alpine.data('remarketingApp', () => ({
         campaigns: [],
         showCreateModal: false,
         showStatsModal: false,
