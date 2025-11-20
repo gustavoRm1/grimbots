@@ -3274,13 +3274,30 @@ body {
                 zoomStep: 0.1
             };
             
+            // ✅ CRÍTICO: Flag para indicar quando está arrastando conexão (endpoint)
+            // ✅ Isso previne que PAN interfira com o drag de conexões do jsPlumb
+            let isDraggingConnection = false;
+            
             // ✅ PAN: Iniciar arrasto do canvas (clicar e segurar no canvas vazio)
             const startPan = (e) => {
+                // ✅ CRÍTICO: NÃO iniciar PAN se estiver arrastando conexão ou endpoint
+                if (isDraggingConnection) return;
+                
                 // Verificar se clicou no canvas vazio (não em um card)
                 const target = e.target;
                 if (target === canvas || target.closest('#flow-visual-canvas') === canvas) {
+                    // ✅ CRÍTICO: Verificar se não clicou em endpoint (bolinha verde/vermelha)
+                    const isEndpoint = target.closest('.jtk-endpoint') || 
+                                      target.closest('.step-input-endpoint') || 
+                                      target.closest('.step-output-endpoint') || 
+                                      target.closest('.btn-visual-endpoint') ||
+                                      target.classList.contains('jtk-endpoint') ||
+                                      target.classList.contains('step-input-endpoint') ||
+                                      target.classList.contains('step-output-endpoint') ||
+                                      target.classList.contains('btn-visual-endpoint');
+                    
                     // Verificar se não clicou em um card ou botão
-                    if (!target.closest('.flow-step-block') && !target.closest('button') && !target.closest('.jtk-endpoint')) {
+                    if (!target.closest('.flow-step-block') && !target.closest('button') && !isEndpoint) {
                         canvasState.isPanning = true;
                         canvasState.startX = e.pageX - canvas.offsetLeft;
                         canvasState.startY = e.pageY - canvas.offsetTop;
@@ -3296,7 +3313,8 @@ body {
             
             // ✅ PAN: Arrastar canvas
             const pan = (e) => {
-                if (!canvasState.isPanning) return;
+                // ✅ CRÍTICO: NÃO fazer PAN se estiver arrastando conexão
+                if (isDraggingConnection || !canvasState.isPanning) return;
                 
                 e.preventDefault();
                 e.stopPropagation();
@@ -3313,6 +3331,9 @@ body {
             
             // ✅ PAN: Parar arrasto
             const stopPan = (e) => {
+                // ✅ CRÍTICO: NÃO parar PAN se estiver arrastando conexão
+                if (isDraggingConnection) return;
+                
                 if (canvasState.isPanning) {
                     canvasState.isPanning = false;
                     canvas.style.cursor = 'default';
@@ -3693,48 +3714,65 @@ body {
                         const defaultEndpointStyle = { fill: '#3B82F6', radius: 5 };
                         const defaultEndpointHoverStyle = { fill: '#60A5FA', radius: 7 };
                         
-                        // ✅ HABILITAR ARRASTE DE CONEXÕES - linha segue o mouse DURANTE O ARRASTE
+                        // ✅ CRÍTICO: HABILITAR ARRASTE DE CONEXÕES - linha segue o mouse DURANTE O ARRASTE
+                        // ✅ Configurar eventos para rastrear quando está arrastando conexão
                         try {
                             // jsPlumb 2.x: habilitar drag de conexões (linha segue mouse)
                             if (typeof this.jsPlumbInstance.bind === 'function') {
-                                // Evento quando começa a arrastar a linha
+                                // ✅ Evento quando COMEÇA a arrastar (mousedown na bolinha vermelha)
+                                this.jsPlumbInstance.bind('beforeStartConnect', (params, originalEvent) => {
+                                    console.log('🎯 Iniciando conexão - linha deve seguir mouse:', params);
+                                    // ✅ CRÍTICO: Marcar que está arrastando conexão - previne PAN interferir
+                                    isDraggingConnection = true;
+                                    // Parar PAN se estiver ativo
+                                    if (canvasState.isPanning) {
+                                        canvasState.isPanning = false;
+                                        canvas.style.cursor = 'crosshair';
+                                    }
+                                    return true; // Permitir início da conexão
+                                });
+                                
+                                // ✅ Evento DURANTE o drag (mousemove) - linha segue mouse
                                 this.jsPlumbInstance.bind('connectionDrag', (connection, originalEvent) => {
-                                    // Linha segue o mouse durante o arraste
+                                    // ✅ CRÍTICO: Linha segue o mouse durante o arraste
                                     if (connection && originalEvent) {
-                                        originalEvent.stopPropagation();
-                                        // Atualizar conexão para seguir mouse
+                                        // NÃO chamar stopPropagation aqui - permite jsPlumb rastrear mouse
+                                        // Apenas atualizar visualmente
                                         if (typeof this.jsPlumbInstance.repaint === 'function') {
+                                            // Forçar repaint para linha seguir mouse
                                             this.jsPlumbInstance.repaint(connection.sourceId, connection.targetId);
                                         }
                                     }
                                 });
                                 
-                                // Evento quando solta a linha
+                                // ✅ Evento quando SOLTA a linha (mouseup)
                                 this.jsPlumbInstance.bind('connectionDragStop', (connection, originalEvent) => {
-                                    // Quando soltar, verifica se está sobre um target válido
+                                    console.log('✅ Conexão solta:', connection);
+                                    // ✅ CRÍTICO: Desmarcar flag - permite PAN novamente
+                                    isDraggingConnection = false;
+                                    
                                     if (connection && originalEvent) {
-                                        console.log('🔄 Conexão arrastada e solta:', connection);
                                         // Repintar para garantir que está ordenado
                                         if (typeof this.jsPlumbInstance.repaintEverything === 'function') {
                                             setTimeout(() => {
                                                 this.jsPlumbInstance.repaintEverything();
-                                            }, 100);
+                                            }, 50);
                                         }
                                     }
                                 });
                                 
-                                // Evento durante o movimento do mouse (linha segue)
-                                this.jsPlumbInstance.bind('connectionMoved', (params) => {
-                                    // Garantir que linha está atualizando durante movimento
-                                    if (params && typeof this.jsPlumbInstance.repaint === 'function') {
-                                        this.jsPlumbInstance.repaint(params.sourceId, params.targetId);
-                                    }
+                                // ✅ Evento quando conexão é criada
+                                this.jsPlumbInstance.bind('connection', (connectionInfo) => {
+                                    console.log('✅ Conexão criada:', connectionInfo);
+                                    // ✅ Desmarcar flag após conexão ser criada
+                                    isDraggingConnection = false;
                                 });
                             }
                             
                             // jsPlumb 2.x: configurar para permitir drop em qualquer target
                             if (typeof this.jsPlumbInstance.bind === 'function') {
                                 this.jsPlumbInstance.bind('beforeDrop', (params) => {
+                                    console.log('🎯 Tentando fazer drop:', params);
                                     // Permitir drop em qualquer target válido
                                     return true;
                                 });
