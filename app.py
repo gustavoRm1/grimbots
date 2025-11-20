@@ -4504,6 +4504,7 @@ def public_redirect(slug):
             try:
                 # ✅ LOG DETALHADO: Mostrar o que está sendo salvo
                 logger.info(f"[META PIXEL] Redirect - tracking_payload completo: fbclid={'✅' if tracking_payload.get('fbclid') else '❌'}, fbp={'✅' if tracking_payload.get('fbp') else '❌'}, ip={'✅' if tracking_payload.get('client_ip') else '❌'}, ua={'✅' if tracking_payload.get('client_user_agent') else '❌'}")
+                logger.info(f"[META PIXEL] Redirect - UTMs no tracking_payload: utm_source={'✅' if tracking_payload.get('utm_source') else '❌'}, utm_campaign={'✅' if tracking_payload.get('utm_campaign') else '❌'}, grim={'✅' if tracking_payload.get('grim') else '❌'}")
                 logger.info(f"[META PIXEL] Redirect - Salvando tracking_payload inicial com pageview_event_id: {tracking_payload.get('pageview_event_id', 'N/A')}")
                 ok = tracking_service_v4.save_tracking_token(tracking_token, tracking_payload, ttl=TRACKING_TOKEN_TTL)
                 if not ok:
@@ -8825,9 +8826,13 @@ def send_meta_pixel_purchase_event(payment):
             logger.info(f"✅ Purchase - event_id reutilizado do Payment (fallback): {event_id}")
         
         # ✅ ÚLTIMO RECURSO: Gerar novo event_id se não encontrou em nenhum lugar
+        # ⚠️ ATENÇÃO: Se gerar novo event_id, desduplicação NÃO funcionará! (cobertura será 0%)
         if not event_id:
+            logger.warning(f"⚠️ [CRÍTICO] Purchase - event_id NÃO encontrado! Gerando novo event_id (desduplicação NÃO funcionará!)")
+            logger.warning(f"   tracking_data tem pageview_event_id: {bool(tracking_data.get('pageview_event_id') if tracking_data else False)}")
+            logger.warning(f"   payment tem pageview_event_id: {bool(getattr(payment, 'pageview_event_id', None))}")
             event_id = f"purchase_{payment.payment_id}_{event_time}"
-            logger.warning(f"⚠️ Purchase - event_id não encontrado, gerado novo: {event_id} (deduplicação pode falhar)")
+            logger.warning(f"⚠️ Purchase - event_id gerado novo: {event_id} (cobertura será 0% - desduplicação quebrada)")
         
         # ✅ CRÍTICO #2: external_id IMUTÁVEL e CONSISTENTE (SEMPRE MESMO FORMATO DO PAGEVIEW/VIEWCONTENT!)
         # ✅ CORREÇÃO CIRÚRGICA: Normalizar external_id com MESMO algoritmo usado em todos os eventos
@@ -9014,18 +9019,33 @@ def send_meta_pixel_purchase_event(payment):
             custom_data['utm_term'] = payment.utm_term
         
         # ✅ VALIDAÇÃO CRÍTICA: Se não tem UTMs nem campaign_code, LOGAR ERRO CRÍTICO E TENTAR RECUPERAR
+        # SEM UTMs, VENDAS NÃO SÃO ATRIBUÍDAS ÀS CAMPANHAS!
         if not custom_data.get('utm_source') and not custom_data.get('campaign_code'):
             logger.error(f"❌ [CRÍTICO] Purchase SEM UTMs e SEM campaign_code! Payment: {payment.id}")
-            logger.error(f"   tracking_data tem utm_source: {bool(tracking_data.get('utm_source'))}")
-            logger.error(f"   tracking_data tem utm_campaign: {bool(tracking_data.get('utm_campaign'))}")
-            logger.error(f"   tracking_data tem grim: {bool(tracking_data.get('grim'))}")
-            logger.error(f"   tracking_data tem campaign_code: {bool(tracking_data.get('campaign_code'))}")
+            logger.error(f"   ⚠️ ATENÇÃO: Esta venda NÃO será atribuída à campanha no Meta Ads Manager!")
+            logger.error(f"   tracking_data existe: {bool(tracking_data)}")
+            logger.error(f"   tracking_data tem utm_source: {bool(tracking_data.get('utm_source') if tracking_data else False)}")
+            logger.error(f"   tracking_data tem utm_campaign: {bool(tracking_data.get('utm_campaign') if tracking_data else False)}")
+            logger.error(f"   tracking_data tem grim: {bool(tracking_data.get('grim') if tracking_data else False)}")
+            logger.error(f"   tracking_data tem campaign_code: {bool(tracking_data.get('campaign_code') if tracking_data else False)}")
             logger.error(f"   payment tem utm_source: {bool(payment.utm_source)}")
             logger.error(f"   payment tem utm_campaign: {bool(payment.utm_campaign)}")
             logger.error(f"   payment tem campaign_code: {bool(payment.campaign_code)}")
             logger.error(f"   bot_user tem utm_source: {bool(bot_user and getattr(bot_user, 'utm_source', None))}")
             logger.error(f"   bot_user tem utm_campaign: {bool(bot_user and getattr(bot_user, 'utm_campaign', None))}")
             logger.error(f"   bot_user tem campaign_code: {bool(bot_user and getattr(bot_user, 'campaign_code', None))}")
+            
+            # ✅ LOG CRÍTICO: Mostrar tracking_token usado (se houver)
+            if tracking_token_used:
+                logger.error(f"   tracking_token usado: {tracking_token_used[:30]}... (len={len(tracking_token_used)})")
+            else:
+                logger.error(f"   tracking_token usado: ❌ NONE")
+            
+            # ✅ LOG CRÍTICO: Mostrar tracking_token usado (se houver)
+            if tracking_token_used:
+                logger.error(f"   tracking_token usado: {tracking_token_used[:30]}... (len={len(tracking_token_used)})")
+            else:
+                logger.error(f"   tracking_token usado: ❌ NONE")
             
             # ✅ ÚLTIMO RECURSO: Tentar recuperar UTMs do bot_user se não estiverem nem no tracking_data nem no payment
             if bot_user:
