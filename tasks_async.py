@@ -742,12 +742,16 @@ def process_webhook_async(gateway_type: str, data: Dict[str, Any]):
     - Enviar Meta Pixel Purchase
     """
     try:
+        # ✅ CRÍTICO: Logging no início para verificar se função está sendo chamada
+        logger.info(f"🔍 [DIAGNÓSTICO] process_webhook_async INICIADO para gateway_type={gateway_type}")
+        
         from app import app, db
         from models import Payment, Gateway, Bot, get_brazil_time, Commission, WebhookEvent, WebhookPendingMatch
         from gateway_factory import GatewayFactory
         from app import bot_manager, send_payment_delivery, send_meta_pixel_purchase_event
         
         with app.app_context():
+            logger.info(f"🔍 [DIAGNÓSTICO] process_webhook_async - App context criado para gateway_type={gateway_type}")
             grim_payment_id = data.pop('_grim_payment_id', None)
             # Criar gateway com adapter
             dummy_credentials = {}
@@ -1167,16 +1171,20 @@ def process_webhook_async(gateway_type: str, data: Dict[str, Any]):
                             logger.error(f"❌ [WEBHOOK {gateway_type.upper()}] Erro ao emitir notificação WebSocket para payment {payment.id}: {e}")
                     
                     logger.info(f"✅ [WEBHOOK {gateway_type.upper()}] Webhook processado com sucesso: {payment.payment_id} -> {status}")
+                    logger.info(f"🔍 [DIAGNÓSTICO] process_webhook_async - SUCESSO para payment {payment.payment_id}")
                     return {'status': 'success', 'payment_id': payment.payment_id}
                 else:
                     logger.warning(f"⚠️ Payment não encontrado para webhook: {gateway_transaction_id}")
+                    logger.warning(f"🔍 [DIAGNÓSTICO] process_webhook_async - Payment NÃO encontrado: gateway_transaction_id={gateway_transaction_id}")
                     return {'status': 'payment_not_found'}
             else:
                 logger.warning(f"⚠️ Webhook não processado: result=None")
                 return {'status': 'not_processed'}
                 
     except Exception as e:
-        logger.error(f"❌ Erro em process_webhook_async: {e}", exc_info=True)
+        logger.error(f"❌ [DIAGNÓSTICO] ERRO CRÍTICO em process_webhook_async para gateway_type={gateway_type}: {e}", exc_info=True)
+        logger.error(f"❌ [DIAGNÓSTICO] Exception type: {type(e).__name__}")
+        logger.error(f"❌ [DIAGNÓSTICO] Exception message: {str(e)}")
         return {'status': 'error', 'error': str(e)}
 
 
