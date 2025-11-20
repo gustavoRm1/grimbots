@@ -1039,7 +1039,8 @@ def process_webhook_async(gateway_type: str, data: Dict[str, Any]):
                     # ✅ Purchase é disparado APENAS quando lead acessa link de entrega (/delivery/<token>)
                     deve_enviar_meta_purchase = False  # ❌ Sempre False - Purchase apenas na página de entrega
                     
-                    # ✅ LOGS DETALHADOS: Decisões de processamento
+                    # ✅ CRÍTICO: Logging detalhado para diagnóstico
+                    logger.info(f"🔍 [DIAGNÓSTICO] payment {payment.payment_id}: status='{status}' | deve_enviar_entregavel={deve_enviar_entregavel} | status_antigo='{status_antigo}' | was_pending={was_pending}")
                     logger.info(f"📊 [WEBHOOK {gateway_type.upper()}] Decisões de processamento:")
                     logger.info(f"   Status é paid: {status_is_paid}")
                     logger.info(f"   Deve processar estatísticas: {deve_processar_estatisticas}")
@@ -1101,9 +1102,12 @@ def process_webhook_async(gateway_type: str, data: Dict[str, Any]):
                     # ✅ Não disparar Purchase quando pagamento é confirmado (via webhook async)
                     logger.info(f"✅ [WEBHOOK {gateway_type.upper()}] Purchase será disparado apenas quando lead acessar link de entrega: /delivery/<token>")
                     
+                    # ✅ CRÍTICO: Logging antes de verificar deve_enviar_entregavel
+                    logger.info(f"🔍 [DIAGNÓSTICO] payment {payment.payment_id}: Verificando deve_enviar_entregavel={deve_enviar_entregavel} | status='{status}'")
                     if deve_enviar_entregavel:
                         # ✅ CRÍTICO: Refresh antes de validar status
                         db.session.refresh(payment)
+                        logger.info(f"✅ [DIAGNÓSTICO] payment {payment.payment_id}: deve_enviar_entregavel=True - VAI ENVIAR ENTREGÁVEL")
                         
                         # ✅ CRÍTICO: Validar status ANTES de chamar send_payment_delivery
                         if payment.status == 'paid':
@@ -1118,6 +1122,8 @@ def process_webhook_async(gateway_type: str, data: Dict[str, Any]):
                                 f"❌ ERRO GRAVE: send_payment_delivery chamado com payment.status != 'paid' "
                                 f"(status atual: {payment.status}, payment_id: {payment.payment_id})"
                             )
+                    else:
+                        logger.error(f"❌ [DIAGNÓSTICO] payment {payment.payment_id}: deve_enviar_entregavel=False - NÃO VAI ENVIAR ENTREGÁVEL! (status='{status}')")
                     
                     # ✅ COMMIT: Salvar todas as alterações
                     try:
