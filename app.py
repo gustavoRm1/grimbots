@@ -9806,6 +9806,9 @@ def payment_webhook(gateway_type):
                 deve_processar_estatisticas = (status == 'paid' and was_pending)
                 deve_enviar_entregavel = (status == 'paid')  # SEMPRE envia se status é 'paid'
                 
+                # ✅ CRÍTICO: Logging para diagnóstico
+                logger.info(f"🔍 [DIAGNÓSTICO] payment {payment.payment_id}: status='{status}' | deve_enviar_entregavel={deve_enviar_entregavel} | status_antigo='{status_antigo}' | was_pending={was_pending}")
+                
                 # ✅ PROCESSAR ESTATÍSTICAS/COMISSÕES APENAS SE ERA PENDENTE (evita duplicação)
                 if deve_processar_estatisticas:
                     logger.info(f"✅ Processando pagamento confirmado (era pending): {payment.payment_id}")
@@ -9900,9 +9903,13 @@ def payment_webhook(gateway_type):
                 
                 # ✅ ENVIAR ENTREGÁVEL E META PIXEL SEMPRE QUE STATUS VIRA 'paid' (CRÍTICO!)
                 # Isso garante que mesmo se estatísticas já foram processadas, o entregável e Meta Pixel são enviados
+                logger.info(f"🔍 [DIAGNÓSTICO] payment {payment.payment_id}: Verificando deve_enviar_entregavel={deve_enviar_entregavel} | status='{status}'")
                 if deve_enviar_entregavel:
                     # ✅ CRÍTICO: Refresh antes de validar status
                     db.session.refresh(payment)
+                    logger.info(f"✅ [DIAGNÓSTICO] payment {payment.payment_id}: deve_enviar_entregavel=True - VAI ENVIAR ENTREGÁVEL")
+                else:
+                    logger.error(f"❌ [DIAGNÓSTICO] payment {payment.payment_id}: deve_enviar_entregavel=False - NÃO VAI ENVIAR ENTREGÁVEL! (status='{status}')")
                     
                     # ✅ CRÍTICO: Validar status ANTES de chamar send_payment_delivery
                     if payment.status == 'paid':
