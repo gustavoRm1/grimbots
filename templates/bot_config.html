@@ -2656,19 +2656,12 @@ body {
 
 {% block extra_scripts %}
 <script>
-// ✅ CRÍTICO: Registrar componente no Alpine.js
-// ✅ Garantir que Alpine.js está disponível antes de registrar
-(function() {
-    'use strict';
+// ✅ CRÍTICO: Registrar componente no Alpine.js ANTES do Alpine processar o HTML
+// ✅ O Alpine.js está sendo carregado com defer, então precisa registrar via alpine:init
+document.addEventListener('alpine:init', () => {
+    console.log('✅ Alpine.js pronto! Registrando botConfigApp...');
     
-    // ✅ Função para registrar o componente
-    function registerBotConfigApp() {
-        if (typeof Alpine === 'undefined' || !Alpine.data) {
-            console.error('❌ Alpine.js não está disponível!');
-            return false;
-        }
-        
-        Alpine.data('botConfigApp', () => ({
+    Alpine.data('botConfigApp', () => ({
         activeTab: 'welcome',
         loading: false,
         newBotToken: '',  // ✅ NOVO: Para trocar token
@@ -6856,25 +6849,11 @@ body {
             document.body.appendChild(notification);
             setTimeout(() => notification.remove(), 3000);
         }
-        }));
-        
-        console.log('✅ botConfigApp registrado com sucesso!');
-        return true;
-    }
+    }));
+    console.log('✅ botConfigApp registrado com sucesso!');
     
-    // ✅ Tentar registrar imediatamente se Alpine já estiver disponível
-    if (typeof Alpine !== 'undefined' && Alpine.data) {
-        registerBotConfigApp();
-    }
-    
-    // ✅ Registrar quando Alpine.js estiver pronto
-    document.addEventListener('alpine:init', () => {
-        if (!registerBotConfigApp()) {
-            console.error('❌ Falha ao registrar botConfigApp via alpine:init');
-        }
-        
-        // ✅ Remarketing App (componente separado) - DENTRO de alpine:init
-        Alpine.data('remarketingApp', () => ({
+    // ✅ Remarketing App (componente separado) - DENTRO de alpine:init
+    Alpine.data('remarketingApp', () => ({
         campaigns: [],
         showCreateModal: false,
         showStatsModal: false,
@@ -7063,7 +7042,25 @@ body {
             setTimeout(() => notification.remove(), 3000);
         }
     }));
+    console.log('✅ remarketingApp registrado com sucesso!');
 }); // ✅ Fecha document.addEventListener('alpine:init', ...)
+
+// ✅ FALLBACK: Se Alpine.js já estiver disponível, tentar registrar imediatamente
+// ✅ Isso é necessário porque o alpine:init pode não ser disparado se o Alpine já inicializou
+if (typeof window !== 'undefined' && typeof window.Alpine !== 'undefined' && window.Alpine.data) {
+    // Verificar se já foi registrado
+    try {
+        // Tentar acessar o componente para ver se existe
+        const testComponent = window.Alpine.data('botConfigApp');
+        if (!testComponent) {
+            console.warn('⚠️ botConfigApp não foi registrado via alpine:init! O Alpine pode ter inicializado antes do script executar.');
+        } else {
+            console.log('✅ botConfigApp já está registrado!');
+        }
+    } catch (e) {
+        console.warn('⚠️ Erro ao verificar botConfigApp:', e);
+    }
+}
 
 // ✅ Funções globais para condições (acessam contexto Alpine via DOM)
 // Estas funções devem ficar FORA de alpine:init para serem acessíveis globalmente
