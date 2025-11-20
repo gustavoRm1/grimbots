@@ -686,6 +686,146 @@ def reconcile_pushynpay_payments():
     except Exception as e:
         logger.error(f"❌ Reconciliador PushynPay: erro: {e}", exc_info=True)
 
+# ==================== RECONCILIADOR DE PAGAMENTOS ATOMOPAY (POLLING) ====================
+def reconcile_atomopay_payments():
+    """Consulta periodicamente pagamentos pendentes do Atomopay (BATCH LIMITADO para evitar spam)."""
+    try:
+        with app.app_context():
+            from models import Payment, Gateway, db, Bot
+            # ✅ BATCH LIMITADO: apenas 5 por execução para evitar spam
+            # ✅ CORREÇÃO CRÍTICA: Buscar MAIS RECENTES primeiro (created_at DESC) para priorizar novos PIX
+            pending = Payment.query.filter_by(status='pending', gateway_type='atomopay').order_by(Payment.created_at.desc()).limit(5).all()
+            if not pending:
+                logger.debug("🔍 Reconciliador Atomopay: Nenhum payment pendente encontrado")
+                return
+            
+            logger.info(f"🔍 Reconciliador Atomopay: Consultando {len(pending)} payment(s) mais recente(s)")
+            
+            # Agrupar por user_id para reusar instância do gateway
+            gateways_by_user = {}
+            
+            for p in pending:
+                try:
+                    # Buscar gateway do dono do bot
+                    user_id = p.bot.user_id if p.bot else None
+                    if not user_id:
+                        continue
+                    
+                    if user_id not in gateways_by_user:
+                        gw = Gateway.query.filter_by(user_id=user_id, gateway_type='atomopay', is_active=True, is_verified=True).first()
+                        if not gw:
+                            continue
+                        from gateway_factory import GatewayFactory
+                        creds = {
+                            'api_token': gw.api_key,
+                            'offer_hash': gw.offer_hash,
+                            'product_hash': gw.product_hash,
+                        }
+                        g = GatewayFactory.create_gateway('atomopay', creds)
+                        if not g:
+                            continue
+                        gateways_by_user[user_id] = g
+                    
+                    gateway = gateways_by_user[user_id]
+                    
+                    # ✅ Para Atomopay, usar hash ou transaction_id (prioridade: hash > transaction_id)
+                    hash_or_id = p.gateway_transaction_hash or p.gateway_transaction_id
+                    if not hash_or_id:
+                        logger.warning(f"⚠️ Atomopay Payment {p.id} ({p.payment_id}): sem hash ou transaction_id para consulta")
+                        logger.warning(f"   Gateway Hash: {p.gateway_transaction_hash} | Transaction ID: {p.gateway_transaction_id}")
+                        continue
+                    
+                    logger.info(f"🔍 Atomopay: Consultando payment {p.id} ({p.payment_id})")
+                    logger.info(f"   Valor: R$ {p.amount:.2f} | Hash: {p.gateway_transaction_hash} | Transaction ID: {p.gateway_transaction_id}")
+                    logger.info(f"   Usando para consulta (prioridade): {hash_or_id}")
+                    
+                    # ✅ Tentar primeiro com hash/id (o que aparece no painel)
+                    result = gateway.get_payment_status(str(hash_or_id))
+                    
+                    # ✅ Se falhar e tiver transaction_id diferente, tentar com ele também
+                    if not result and p.gateway_transaction_id and p.gateway_transaction_id != hash_or_id:
+                        logger.info(f"   🔄 Tentando com transaction_id alternativo: {p.gateway_transaction_id}")
+                        result = gateway.get_payment_status(str(p.gateway_transaction_id))
+                    
+                    if result:
+                        status = result.get('status')
+                        amount = result.get('amount')
+                        # ✅ CORREÇÃO: Garantir que amount seja numérico antes de formatar
+                        amount_str = f"R$ {amount:.2f}" if amount is not None else "N/A"
+                        if status == 'paid':
+                            logger.info(f"   ✅ Status: PAID | Amount: {amount_str}")
+                        elif status == 'pending':
+                            logger.info(f"   ⏳ Status: PENDING | Amount: {amount_str}")
+                        else:
+                            logger.info(f"   📊 Status: {status.upper()} | Amount: {amount_str}")
+                    else:
+                        logger.warning(f"   ⚠️ Atomopay não retornou status para {hash_or_id}")
+                        logger.warning(f"      Transaction ID alternativo: {p.gateway_transaction_id}")
+                        logger.warning(f"      Possíveis causas: transação não existe na API, ainda está sendo processada, ou hash/ID incorreto")
+                    
+                    if result and result.get('status') == 'paid':
+                        # Atualizar pagamento e estatísticas
+                        p.status = 'paid'
+                        p.paid_at = get_brazil_time()
+                        if p.bot:
+                            p.bot.total_sales += 1
+                            p.bot.total_revenue += p.amount
+                            if p.bot.user_id:
+                                from models import User
+                                user = User.query.get(p.bot.user_id)
+                                if user:
+                                    user.total_sales += 1
+                                    user.total_revenue += p.amount
+                        db.session.commit()
+                        logger.info(f"✅ Atomopay: Payment {p.id} atualizado para paid via reconciliação")
+                        
+                        # ✅ REFRESH payment após commit para garantir que está atualizado
+                        db.session.refresh(p)
+                        
+                        # ✅ NOVA ARQUITETURA: Purchase NÃO é disparado quando pagamento é confirmado
+                        # ✅ Purchase é disparado APENAS quando lead acessa link de entrega (/delivery/<token>)
+                        # ✅ Isso garante que Purchase dispara no momento certo (quando lead RECEBE entregável no Telegram)
+                        logger.info(f"✅ Purchase será disparado apenas quando lead acessar link de entrega: /delivery/<token>")
+                        
+                        # ✅ ENVIAR ENTREGÁVEL AO CLIENTE (CORREÇÃO CRÍTICA)
+                        try:
+                            from models import Payment
+                            payment_obj = Payment.query.get(p.id)
+                            if payment_obj:
+                                # ✅ CRÍTICO: Refresh antes de validar status
+                                db.session.refresh(payment_obj)
+                                
+                                # ✅ CRÍTICO: Validar status ANTES de chamar send_payment_delivery
+                                if payment_obj.status == 'paid':
+                                    send_payment_delivery(payment_obj, bot_manager)
+                                else:
+                                    logger.error(
+                                        f"❌ ERRO GRAVE: send_payment_delivery chamado com payment.status != 'paid' "
+                                        f"(status atual: {payment_obj.status}, payment_id: {payment_obj.payment_id})"
+                                    )
+                        except Exception as e:
+                            logger.error(f"❌ Erro ao enviar entregável via reconciliação Atomopay: {e}")
+                        
+                        # ✅ Emitir evento em tempo real APENAS para o dono do bot
+                        try:
+                            # ✅ CRÍTICO: Validar user_id antes de emitir (já validado acima, mas garantir)
+                            if p.bot and p.bot.user_id:
+                                socketio.emit('payment_update', {
+                                    'payment_id': p.id,
+                                    'status': 'paid',
+                                    'amount': float(p.amount),
+                                    'bot_id': p.bot_id,
+                                }, room=f'user_{p.bot.user_id}')
+                            else:
+                                logger.warning(f"⚠️ Payment {p.id} não tem bot.user_id - não enviando notificação WebSocket")
+                        except Exception as e:
+                            logger.error(f"❌ Erro ao emitir notificação WebSocket para payment {p.id}: {e}")
+                except Exception as e:
+                    logger.error(f"❌ Erro ao reconciliar payment Atomopay {p.id} ({p.payment_id}): {e}", exc_info=True)
+                    continue
+    except Exception as e:
+        logger.error(f"❌ Reconciliador Atomopay: erro: {e}", exc_info=True)
+
 # ✅ QI 200: Reconciliadores movidos para fila async (gateway_queue)
 # Agendar job que enfileira reconciliação (não executa diretamente)
 def enqueue_reconcile_paradise():
@@ -706,6 +846,15 @@ def enqueue_reconcile_pushynpay():
     except Exception as e:
         logger.warning(f"Erro ao enfileirar reconciliação PushynPay: {e}")
 
+def enqueue_reconcile_atomopay():
+    """Enfileira reconciliação Atomopay na fila gateway"""
+    try:
+        from tasks_async import gateway_queue
+        if gateway_queue:
+            gateway_queue.enqueue(reconcile_atomopay_payments)
+    except Exception as e:
+        logger.warning(f"Erro ao enfileirar reconciliação Atomopay: {e}")
+
 if _scheduler_owner:
     scheduler.add_job(id='reconcile_paradise', func=enqueue_reconcile_paradise,
                       trigger='interval', seconds=300, replace_existing=True, max_instances=1)
@@ -715,6 +864,11 @@ if _scheduler_owner:
     scheduler.add_job(id='reconcile_pushynpay', func=enqueue_reconcile_pushynpay,
                       trigger='interval', seconds=60, replace_existing=True, max_instances=1)
     logger.info("✅ Job de reconciliação PushynPay agendado (60s, fila async)")
+
+if _scheduler_owner:
+    scheduler.add_job(id='reconcile_atomopay', func=enqueue_reconcile_atomopay,
+                      trigger='interval', seconds=60, replace_existing=True, max_instances=1)
+    logger.info("✅ Job de reconciliação Atomopay agendado (60s, fila async)")
 
 # ✅ JOB PERIÓDICO: Sincronização UmbrellaPay (5 minutos)
 if _scheduler_owner:
