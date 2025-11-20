@@ -8815,22 +8815,41 @@ def send_meta_pixel_purchase_event(payment):
 
         # ✅ CRÍTICO: Reutilizar pageview_event_id para deduplicação perfeita
         # Prioridade: tracking_data (Redis) > payment.pageview_event_id > gerar novo
+        # ✅ LOG DETALHADO: Verificar se tracking_data existe e tem pageview_event_id
         if not event_id:
-            event_id = tracking_data.get('pageview_event_id')
+            logger.info(f"[META PURCHASE] Purchase - Verificando pageview_event_id no tracking_data...")
+            logger.info(f"   tracking_data existe: {bool(tracking_data)}")
+            if tracking_data:
+                logger.info(f"   tracking_data tem pageview_event_id: {bool(tracking_data.get('pageview_event_id'))}")
+                if tracking_data.get('pageview_event_id'):
+                    logger.info(f"   pageview_event_id no tracking_data: {tracking_data.get('pageview_event_id')[:50]}...")
+                else:
+                    logger.warning(f"   ⚠️ tracking_data NÃO tem pageview_event_id! Campos disponíveis: {list(tracking_data.keys())}")
+            
+            event_id = tracking_data.get('pageview_event_id') if tracking_data else None
             if event_id:
                 logger.info(f"✅ Purchase - event_id reutilizado do tracking_data (Redis): {event_id}")
         
         # ✅ FALLBACK: Se não encontrou no tracking_data, usar do Payment
-        if not event_id and getattr(payment, 'pageview_event_id', None):
-            event_id = payment.pageview_event_id
-            logger.info(f"✅ Purchase - event_id reutilizado do Payment (fallback): {event_id}")
+        if not event_id:
+            logger.info(f"[META PURCHASE] Purchase - Verificando pageview_event_id no Payment (fallback)...")
+            payment_pageview_event_id = getattr(payment, 'pageview_event_id', None)
+            logger.info(f"   payment tem pageview_event_id: {bool(payment_pageview_event_id)}")
+            if payment_pageview_event_id:
+                logger.info(f"   pageview_event_id no payment: {payment_pageview_event_id[:50]}...")
+            
+            if payment_pageview_event_id:
+                event_id = payment_pageview_event_id
+                logger.info(f"✅ Purchase - event_id reutilizado do Payment (fallback): {event_id}")
         
         # ✅ ÚLTIMO RECURSO: Gerar novo event_id se não encontrou em nenhum lugar
         # ⚠️ ATENÇÃO: Se gerar novo event_id, desduplicação NÃO funcionará! (cobertura será 0%)
         if not event_id:
             logger.warning(f"⚠️ [CRÍTICO] Purchase - event_id NÃO encontrado! Gerando novo event_id (desduplicação NÃO funcionará!)")
+            logger.warning(f"   tracking_data existe: {bool(tracking_data)}")
             logger.warning(f"   tracking_data tem pageview_event_id: {bool(tracking_data.get('pageview_event_id') if tracking_data else False)}")
             logger.warning(f"   payment tem pageview_event_id: {bool(getattr(payment, 'pageview_event_id', None))}")
+            logger.warning(f"   ⚠️ ATENÇÃO: Cobertura será 0% - Meta não conseguirá deduplicar eventos!")
             event_id = f"purchase_{payment.payment_id}_{event_time}"
             logger.warning(f"⚠️ Purchase - event_id gerado novo: {event_id} (cobertura será 0% - desduplicação quebrada)")
         
