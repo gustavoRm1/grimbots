@@ -9008,9 +9008,10 @@ def send_meta_pixel_purchase_event(payment, pageview_event_id=None):
             payment.fbc = fbc_value
             logger.info(f"✅ Purchase - fbc salvo no payment para futuras referências: {fbc_value[:50]}...")
 
+        import time as time_module  # ✅ CRÍTICO: Importar time_module para evitar conflito com variável local 'time'
         event_time_source = payment.paid_at or payment.created_at
-        event_time = int(event_time_source.timestamp()) if event_time_source else int(time.time())
-        now_ts = int(time.time())
+        event_time = int(event_time_source.timestamp()) if event_time_source else int(time_module.time())
+        now_ts = int(time_module.time())
         three_day_window = 3 * 24 * 60 * 60
         if event_time > now_ts:
             event_time = now_ts
