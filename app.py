@@ -9511,8 +9511,9 @@ def payment_webhook(gateway_type):
     data.setdefault('_content_type', request.content_type)
     data.setdefault('_payload_source', payload_source)
     
-    # ✅ QI 200: Log mínimo (reduzir 80% dos logs)
-    logger.info(f"🔔 Webhook {gateway_type} recebido | content-type={request.content_type} | source={payload_source}")
+    # ✅ CRÍTICO: Log detalhado para diagnóstico
+    logger.info(f"🔔 [DIAGNÓSTICO] Webhook {gateway_type} recebido | content-type={request.content_type} | source={payload_source}")
+    logger.info(f"🔔 [DIAGNÓSTICO] Webhook {gateway_type} - URL: {request.url} | Method: {request.method} | Headers: {dict(request.headers)}")
     
     # ✅ QI 200: Enfileirar processamento pesado na fila WEBHOOK
     try:
