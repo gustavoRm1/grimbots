@@ -58,6 +58,18 @@
 #flow-visual-canvas {
     user-select: none;
     -webkit-user-select: none;
+    cursor: default;
+    position: relative;
+}
+
+/* ✅ PAN: Cursor de arrasto quando estiver arrastando o canvas */
+#flow-visual-canvas.panning {
+    cursor: grabbing !important;
+}
+
+/* ✅ ZOOM: Garantir que elementos internos possam ser escalados */
+#flow-visual-canvas .jtk-surface-canvas {
+    transition: transform 0.1s ease-out;
 }
 
 /* ✅ Permitir seleção apenas em inputs dentro do canvas */
@@ -1082,7 +1094,7 @@ body {
                              class="w-full overflow-hidden">
                             <div id="flow-visual-canvas" 
                                  class="relative w-full bg-gray-950 rounded border border-gray-700"
-                                 style="height: calc(100vh - 380px); min-height: 500px; max-height: 90vh; overflow: auto; width: 100%; max-width: 100%; box-sizing: border-box; position: relative; touch-action: none; overscroll-behavior: contain;">
+                                 style="height: calc(100vh - 380px); min-height: 500px; max-height: 90vh; overflow: auto; width: 100%; max-width: 100%; box-sizing: border-box; position: relative; touch-action: pan-x pan-y; overscroll-behavior: contain; cursor: grab;">
                                 <!-- Steps serão renderizados aqui via JavaScript -->
                             </div>
                         </div>
@@ -3204,6 +3216,7 @@ document.addEventListener('alpine:init', () => {
             /**
              * ✅ QI 500: Editor Visual de Fluxo com jsPlumb
              * Renderiza steps como blocos arrastáveis com conexões visuais
+             * ✅ PAN (arrastar canvas) e ZOOM (scroll para aumentar/diminuir)
              */
             console.log('🎨 Inicializando editor visual...');
             const self = this;
@@ -3215,6 +3228,181 @@ document.addEventListener('alpine:init', () => {
             
             console.log('✅ Canvas encontrado:', canvas);
             console.log('📊 Steps disponíveis:', this.sortedFlowSteps.length);
+            
+            // ✅ PAN E ZOOM: Estado inicial
+            let canvasState = {
+                isPanning: false,
+                startX: 0,
+                startY: 0,
+                scrollLeft: 0,
+                scrollTop: 0,
+                zoom: 1.0,
+                minZoom: 0.5,
+                maxZoom: 2.0,
+                zoomStep: 0.1
+            };
+            
+            // ✅ PAN: Iniciar arrasto do canvas (clicar e segurar no canvas vazio)
+            const startPan = (e) => {
+                // Verificar se clicou no canvas vazio (não em um card)
+                const target = e.target;
+                if (target === canvas || target.closest('#flow-visual-canvas') === canvas) {
+                    // Verificar se não clicou em um card ou botão
+                    if (!target.closest('.flow-step-block') && !target.closest('button') && !target.closest('.jtk-endpoint')) {
+                        canvasState.isPanning = true;
+                        canvasState.startX = e.pageX - canvas.offsetLeft;
+                        canvasState.startY = e.pageY - canvas.offsetTop;
+                        canvasState.scrollLeft = canvas.scrollLeft;
+                        canvasState.scrollTop = canvas.scrollTop;
+                        canvas.style.cursor = 'grabbing';
+                        canvas.style.userSelect = 'none';
+                        e.preventDefault();
+                        e.stopPropagation();
+                    }
+                }
+            };
+            
+            // ✅ PAN: Arrastar canvas
+            const pan = (e) => {
+                if (!canvasState.isPanning) return;
+                
+                e.preventDefault();
+                e.stopPropagation();
+                
+                const x = e.pageX - canvas.offsetLeft;
+                const y = e.pageY - canvas.offsetTop;
+                
+                const walkX = (x - canvasState.startX) * 1.5; // Velocidade do pan
+                const walkY = (y - canvasState.startY) * 1.5;
+                
+                canvas.scrollLeft = canvasState.scrollLeft - walkX;
+                canvas.scrollTop = canvasState.scrollTop - walkY;
+            };
+            
+            // ✅ PAN: Parar arrasto
+            const stopPan = (e) => {
+                if (canvasState.isPanning) {
+                    canvasState.isPanning = false;
+                    canvas.style.cursor = 'default';
+                    canvas.style.userSelect = 'none';
+                }
+            };
+            
+            // ✅ ZOOM: Aplicar zoom no canvas e elementos
+            const applyZoom = (delta) => {
+                const oldZoom = canvasState.zoom;
+                canvasState.zoom += delta;
+                canvasState.zoom = Math.max(canvasState.minZoom, Math.min(canvasState.maxZoom, canvasState.zoom));
+                
+                if (oldZoom !== canvasState.zoom) {
+                    // ✅ Aplicar zoom via CSS transform no container interno (melhor performance)
+                    // Criar ou usar container interno para zoom
+                    let zoomContainer = canvas.querySelector('.zoom-container');
+                    if (!zoomContainer) {
+                        // Criar container se não existir
+                        zoomContainer = document.createElement('div');
+                        zoomContainer.className = 'zoom-container';
+                        zoomContainer.style.width = '100%';
+                        zoomContainer.style.height = '100%';
+                        zoomContainer.style.position = 'relative';
+                        zoomContainer.style.transformOrigin = 'top left';
+                        
+                        // Mover conteúdo do canvas para o container
+                        while (canvas.firstChild) {
+                            zoomContainer.appendChild(canvas.firstChild);
+                        }
+                        canvas.appendChild(zoomContainer);
+                    }
+                    
+                    // Aplicar transform no container
+                    zoomContainer.style.transform = `scale(${canvasState.zoom})`;
+                    zoomContainer.style.transformOrigin = 'top left';
+                    
+                    // Ajustar largura/altura do container baseado no zoom
+                    const contentWidth = zoomContainer.scrollWidth || canvas.scrollWidth;
+                    const contentHeight = zoomContainer.scrollHeight || canvas.scrollHeight;
+                    zoomContainer.style.width = `${contentWidth * canvasState.zoom}px`;
+                    zoomContainer.style.height = `${contentHeight * canvasState.zoom}px`;
+                    
+                    // Redesenhar conexões do jsPlumb após zoom
+                    if (this.jsPlumbInstance) {
+                        setTimeout(() => {
+                            try {
+                                if (typeof this.jsPlumbInstance.repaintEverything === 'function') {
+                                    this.jsPlumbInstance.repaintEverything();
+                                } else if (typeof this.jsPlumbInstance.repaint === 'function') {
+                                    this.jsPlumbInstance.repaint();
+                                }
+                            } catch (e) {
+                                console.warn('⚠️ Erro ao redesenhar após zoom:', e);
+                            }
+                        }, 50);
+                    }
+                    
+                    console.log(`🔍 Zoom: ${(canvasState.zoom * 100).toFixed(0)}%`);
+                }
+            };
+            
+            // ✅ ZOOM: Scroll do mouse para aumentar/diminuir
+            const handleZoom = (e) => {
+                // Verificar se não está arrastando o canvas (pan)
+                if (canvasState.isPanning) return;
+                
+                // Verificar se não está arrastando um card
+                if (globalDragState.isDragging) return;
+                
+                // Verificar se não está sobre um card ou botão (permitir zoom mesmo assim, mas não prevenir default)
+                const target = e.target;
+                const isOverInteractive = target.closest('.flow-step-block') || target.closest('button') || target.closest('.jtk-endpoint');
+                
+                // Se não estiver sobre elemento interativo, prevenir scroll padrão e aplicar zoom
+                if (!isOverInteractive) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    // Detectar direção do scroll (Ctrl+Scroll ou apenas Scroll)
+                    const delta = e.deltaY > 0 ? -canvasState.zoomStep : canvasState.zoomStep;
+                    applyZoom(delta);
+                }
+            };
+            
+            // ✅ Event listeners para PAN
+            canvas.addEventListener('mousedown', startPan);
+            canvas.addEventListener('mousemove', pan);
+            canvas.addEventListener('mouseup', stopPan);
+            canvas.addEventListener('mouseleave', stopPan);
+            
+            // ✅ Event listeners para PAN (touch)
+            canvas.addEventListener('touchstart', (e) => {
+                if (e.touches.length === 1) {
+                    const touch = e.touches[0];
+                    startPan({
+                        target: e.target,
+                        pageX: touch.pageX,
+                        pageY: touch.pageY,
+                        preventDefault: () => e.preventDefault(),
+                        stopPropagation: () => e.stopPropagation()
+                    });
+                }
+            }, { passive: false });
+            
+            canvas.addEventListener('touchmove', (e) => {
+                if (canvasState.isPanning && e.touches.length === 1) {
+                    const touch = e.touches[0];
+                    pan({
+                        pageX: touch.pageX,
+                        pageY: touch.pageY,
+                        preventDefault: () => e.preventDefault(),
+                        stopPropagation: () => e.stopPropagation()
+                    });
+                }
+            }, { passive: false });
+            
+            canvas.addEventListener('touchend', stopPan);
+            canvas.addEventListener('touchcancel', stopPan);
+            
+            // ✅ Event listener para ZOOM (scroll do mouse)
+            canvas.addEventListener('wheel', handleZoom, { passive: false });
             
             // ✅ Controle global de drag state - garantir que apenas um card seja arrastado por vez
             let globalDragState = {
