@@ -6225,6 +6225,56 @@ def delete_gateway(gateway_id):
     logger.info(f"Gateway {gateway.gateway_type} deletado por {current_user.email}")
     return jsonify({'message': 'Gateway deletado com sucesso'})
 
+@app.route('/api/gateways/<int:gateway_id>/clear-credentials', methods=['POST'])
+@login_required
+@csrf.exempt
+def clear_gateway_credentials(gateway_id):
+    """Limpa as credenciais de um gateway, voltando para estado não configurado"""
+    try:
+        gateway = Gateway.query.filter_by(id=gateway_id, user_id=current_user.id).first_or_404()
+        
+        gateway_type = gateway.gateway_type
+        
+        # Limpar todas as credenciais conforme o tipo
+        if gateway_type == 'syncpay':
+            gateway.client_id = None
+            gateway.client_secret = None
+        elif gateway_type == 'pushynpay':
+            gateway.api_key = None
+        elif gateway_type == 'paradise':
+            gateway.api_key = None
+            gateway.offer_hash = None
+            gateway.product_hash = None
+        elif gateway_type == 'wiinpay':
+            gateway.api_key = None
+            # split_user_id é interno, não limpar
+        elif gateway_type == 'atomopay':
+            gateway.api_key = None
+            gateway.product_hash = None
+        elif gateway_type == 'umbrellapag':
+            gateway.api_key = None
+            gateway.product_hash = None
+        elif gateway_type == 'orionpay':
+            gateway.api_key = None
+        
+        # Desativar e desmarcar como verificado
+        gateway.is_active = False
+        gateway.is_verified = False
+        gateway.verified_at = None
+        gateway.last_error = None
+        
+        db.session.commit()
+        
+        logger.info(f"✅ Credenciais do gateway {gateway_type} (ID: {gateway_id}) limpas por {current_user.email}")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Credenciais do gateway {gateway_type} apagadas com sucesso. Gateway voltou para estado não configurado.'
+        })
+    except Exception as e:
+        logger.error(f"❌ Erro ao limpar credenciais do gateway {gateway_id}: {e}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
 # ==================== CONFIGURAÇÕES ====================
 
 @app.route('/gamification/profile')

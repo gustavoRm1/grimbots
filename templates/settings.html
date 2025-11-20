@@ -608,13 +608,23 @@
                             </button>
                         </div>
 
-                        <!-- Botão Editar Credenciais - Responsivo -->
-                        <button @click="editMode = !editMode; if (editMode) { editGateway = { ...gateway }; }" 
-                                class="w-full py-2 px-3 sm:px-4 rounded-lg text-xs sm:text-sm font-bold transition-all mb-3"
-                                style="background: rgba(255, 184, 0, 0.1); color: #FFB800; border: 1px solid rgba(255, 184, 0, 0.3);">
-                            <i class="fas mr-1 sm:mr-2" :class="editMode ? 'fa-times' : 'fa-edit'"></i>
-                            <span x-text="editMode ? 'Cancelar' : 'Editar Credenciais'"></span>
-                        </button>
+                        <!-- Botões Editar e Apagar Credenciais - Responsivo -->
+                        <div class="flex flex-col sm:flex-row gap-2 mb-3">
+                            <button @click="editMode = !editMode; if (editMode) { editGateway = { ...gateway }; } else { editGateway = {}; }" 
+                                    class="flex-1 py-2 px-3 sm:px-4 rounded-lg text-xs sm:text-sm font-bold transition-all"
+                                    style="background: rgba(255, 184, 0, 0.1); color: #FFB800; border: 1px solid rgba(255, 184, 0, 0.3);">
+                                <i class="fas mr-1 sm:mr-2" :class="editMode ? 'fa-times' : 'fa-edit'"></i>
+                                <span x-text="editMode ? 'Cancelar' : 'Editar Credenciais'"></span>
+                            </button>
+                            <button @click="clearGatewayCredentials(gateway.id, gateway.gateway_type)" 
+                                    :disabled="loading || editMode"
+                                    class="flex-1 py-2 px-3 sm:px-4 rounded-lg text-xs sm:text-sm font-bold transition-all"
+                                    :style="editMode ? 'background: rgba(107, 114, 128, 0.1); color: #6B7280; border: 1px solid rgba(107, 114, 128, 0.3); cursor: not-allowed;' : 'background: rgba(239, 68, 68, 0.1); color: #EF4444; border: 1px solid rgba(239, 68, 68, 0.3);'">
+                                <i class="fas mr-1 sm:mr-2 fa-trash"></i>
+                                <span class="hidden sm:inline">Apagar Credenciais</span>
+                                <span class="sm:hidden">Apagar</span>
+                            </button>
+                        </div>
 
                         <!-- Formulário de Edição (Expandível) -->
                         <div x-show="editMode" x-cloak class="space-y-3 p-4 bg-gray-900 rounded-lg border border-yellow-500 border-opacity-30">
@@ -1849,8 +1859,36 @@ function settingsApp() {
                     this.showNotification(`Credenciais do ${type.toUpperCase()} atualizadas!`);
                     await this.loadGateways();
                     this.editGateway = {};
+                    this.editMode = false;
                 } else {
                     alert('Erro: ' + data.error);
+                }
+            } catch (error) {
+                alert('Erro: ' + error.message);
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async clearGatewayCredentials(gatewayId, gatewayType) {
+            if (!confirm(`⚠️ Tem certeza que deseja apagar as credenciais do gateway ${gatewayType.toUpperCase()}?\n\nO gateway voltará para o estado "Adicionar Novo Gateway" e você precisará configurar novamente.`)) {
+                return;
+            }
+            
+            this.loading = true;
+            try {
+                const response = await fetch(`/api/gateways/${gatewayId}/clear-credentials`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    this.showNotification(`✅ Credenciais do ${gatewayType.toUpperCase()} apagadas!`);
+                    await this.loadGateways();
+                    this.editGateway = {};
+                    this.editMode = false;
+                } else {
+                    alert('Erro: ' + (data.error || 'Erro ao apagar credenciais'));
                 }
             } catch (error) {
                 alert('Erro: ' + error.message);
