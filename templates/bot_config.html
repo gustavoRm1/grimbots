@@ -4700,6 +4700,10 @@ document.addEventListener('alpine:init', () => {
                             // ✅ Conectar botões customizados - REMOVIDO (conexões devem ser criadas manualmente)
                             // ✅ Cada botão customizado pode ter sua própria conexão para um step diferente
                             // ✅ Aguardar endpoints serem criados antes de conectar
+                            // ✅ CÓDIGO REMOVIDO: Conexões automáticas de botões customizados foram removidas
+                            // ✅ As conexões devem ser criadas manualmente pelo usuário arrastando da bola vermelha para a verde
+                            // ✅ TODO O CÓDIGO DE CONEXÃO AUTOMÁTICA FOI REMOVIDO - NÃO HÁ MAIS COMENTÁRIOS ANINHADOS
+                            // ✅ O código comentado abaixo foi removido para evitar erro de sintaxe com comentários aninhados
                             /*
                             setTimeout(() => {
                                 if (step.config && step.config.custom_buttons && step.config.custom_buttons.length > 0) {
@@ -4837,7 +4841,7 @@ document.addEventListener('alpine:init', () => {
                                     }
                                 });
                             }
-                            }, 200); // Delay maior para garantir que endpoints foram criados
+                            }, 200);
                             */
                             
                             // ✅ Conectar condições - REMOVIDO (conexões devem ser criadas manualmente)
