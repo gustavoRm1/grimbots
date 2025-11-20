@@ -91,18 +91,29 @@ if [ -f "logs/gunicorn.log" ]; then
     TOTAL_PAGEVIEW=$(tail -1000 logs/gunicorn.log | grep -c "META PAGEVIEW.*PageView -" 2>/dev/null || echo "0")
     PAGEVIEW_FBC=$(tail -1000 logs/gunicorn.log | grep -c "PageView - fbc processado pelo Parameter Builder" 2>/dev/null || echo "0")
     PAGEVIEW_FBC_REAL=$(tail -1000 logs/gunicorn.log | grep -c "PageView - fbc REAL confirmado\|PageView - fbc confirmado" 2>/dev/null || echo "0")
+    PAGEVIEW_FBC_AUSENTE=$(tail -1000 logs/gunicorn.log | grep -c "PageView - fbc NÃO retornado pelo Parameter Builder" 2>/dev/null || echo "0")
     
     TOTAL_PURCHASE=$(tail -1000 logs/gunicorn.log | grep -c "META PURCHASE.*Purchase -" 2>/dev/null || echo "0")
     PURCHASE_FBC=$(tail -1000 logs/gunicorn.log | grep -c "Purchase - fbc processado pelo Parameter Builder" 2>/dev/null || echo "0")
     PURCHASE_FBC_REAL=$(tail -1000 logs/gunicorn.log | grep -c "Purchase - fbc REAL aplicado" 2>/dev/null || echo "0")
-    PURCHASE_FBC_AUSENTE=$(tail -1000 logs/gunicorn.log | grep -c "Purchase - fbc ausente ou ignorado" 2>/dev/null || echo "0")
+    PURCHASE_FBC_AUSENTE=$(tail -1000 logs/gunicorn.log | grep -c "Purchase - fbc ausente ou ignorado\|Purchase - fbc NÃO retornado pelo Parameter Builder" 2>/dev/null || echo "0")
     
     echo "   📊 PageView:"
     echo "      Total: ${TOTAL_PAGEVIEW}"
     echo "      Com fbc (Parameter Builder): ${PAGEVIEW_FBC}"
-    if [ "$TOTAL_PAGEVIEW" -gt 0 ]; then
+    echo "      Com fbc REAL confirmado: ${PAGEVIEW_FBC_REAL}"
+    echo "      Com fbc ausente: ${PAGEVIEW_FBC_AUSENTE}"
+    if [ "${TOTAL_PAGEVIEW}" -gt 0 ] 2>/dev/null; then
         PAGEVIEW_COVERAGE=$(echo "scale=1; ${PAGEVIEW_FBC}*100/${TOTAL_PAGEVIEW}" | bc 2>/dev/null || echo "0")
         echo "      Cobertura: ${PAGEVIEW_COVERAGE}%"
+        
+        if (( $(echo "${PAGEVIEW_COVERAGE} > 50" | bc -l 2>/dev/null || echo "0") )); then
+            echo "      ✅ Cobertura EXCELENTE (> 50%)"
+        elif (( $(echo "${PAGEVIEW_COVERAGE} > 20" | bc -l 2>/dev/null || echo "0") )); then
+            echo "      ⚠️ Cobertura ACEITÁVEL (20-50%)"
+        else
+            echo "      ❌ Cobertura BAIXA (< 20%)"
+        fi
     fi
     
     echo ""
@@ -111,7 +122,7 @@ if [ -f "logs/gunicorn.log" ]; then
     echo "      Com fbc (Parameter Builder): ${PURCHASE_FBC}"
     echo "      Com fbc REAL aplicado: ${PURCHASE_FBC_REAL}"
     echo "      Com fbc ausente: ${PURCHASE_FBC_AUSENTE}"
-    if [ "$TOTAL_PURCHASE" -gt 0 ]; then
+    if [ "${TOTAL_PURCHASE}" -gt 0 ] 2>/dev/null && [ -n "${TOTAL_PURCHASE}" ] && [ "${TOTAL_PURCHASE}" != "0" ]; then
         PURCHASE_COVERAGE=$(echo "scale=1; ${PURCHASE_FBC_REAL}*100/${TOTAL_PURCHASE}" | bc 2>/dev/null || echo "0")
         echo "      Cobertura: ${PURCHASE_COVERAGE}%"
         

@@ -7919,10 +7919,25 @@ def send_meta_pixel_pageview_event(pool, request, pageview_event_id=None, tracki
         # ✅ LOG: Mostrar origem dos parâmetros processados pelo Parameter Builder
         if fbp_value:
             logger.info(f"[META PAGEVIEW] PageView - fbp processado pelo Parameter Builder (origem: {param_builder_result.get('fbp_origin')}): {fbp_value[:30]}...")
+        else:
+            logger.warning(f"[META PAGEVIEW] PageView - fbp NÃO retornado pelo Parameter Builder (cookie _fbp ausente)")
+        
         if fbc_value:
             logger.info(f"[META PAGEVIEW] PageView - fbc processado pelo Parameter Builder (origem: {fbc_origin}): {fbc_value[:50]}...")
+        else:
+            # ✅ DEBUG: Verificar por que fbc não foi retornado
+            fbclid_in_args = request.args.get('fbclid', '').strip()
+            fbc_in_cookies = request.cookies.get('_fbc', '').strip()
+            logger.warning(f"[META PAGEVIEW] PageView - fbc NÃO retornado pelo Parameter Builder")
+            logger.warning(f"   Cookie _fbc: {'✅ Presente' if fbc_in_cookies else '❌ Ausente'}")
+            logger.warning(f"   fbclid na URL: {'✅ Presente' if fbclid_in_args else '❌ Ausente'} (len={len(fbclid_in_args)})")
+            if fbclid_in_args:
+                logger.warning(f"   fbclid valor: {fbclid_in_args[:50]}...")
+        
         if client_ip_from_builder:
             logger.info(f"[META PAGEVIEW] PageView - client_ip processado pelo Parameter Builder (origem: {ip_origin}): {client_ip_from_builder}")
+        else:
+            logger.warning(f"[META PAGEVIEW] PageView - client_ip NÃO retornado pelo Parameter Builder (cookie _fbi ausente)")
         
         # ✅ FALLBACK: Se Parameter Builder não retornou valores, tentar tracking_data (Redis)
         from utils.tracking_service import TrackingService
@@ -8538,10 +8553,25 @@ def send_meta_pixel_purchase_event(payment):
         # ✅ LOG: Mostrar origem dos parâmetros processados pelo Parameter Builder
         if fbc_value:
             logger.info(f"[META PURCHASE] Purchase - fbc processado pelo Parameter Builder (origem: {fbc_origin}): {fbc_value[:50]}...")
+        else:
+            # ✅ DEBUG: Verificar por que fbc não foi retornado
+            fbclid_in_sim_args = sim_args.get('fbclid', '').strip()
+            fbc_in_sim_cookies = sim_cookies.get('_fbc', '').strip()
+            logger.warning(f"[META PURCHASE] Purchase - fbc NÃO retornado pelo Parameter Builder")
+            logger.warning(f"   Cookie _fbc simulado: {'✅ Presente' if fbc_in_sim_cookies else '❌ Ausente'}")
+            logger.warning(f"   fbclid simulado: {'✅ Presente' if fbclid_in_sim_args else '❌ Ausente'} (len={len(fbclid_in_sim_args)})")
+            if fbclid_in_sim_args:
+                logger.warning(f"   fbclid valor: {fbclid_in_sim_args[:50]}...")
+        
         if fbp_value_from_builder:
             logger.info(f"[META PURCHASE] Purchase - fbp processado pelo Parameter Builder (origem: {param_builder_result.get('fbp_origin')}): {fbp_value_from_builder[:30]}...")
+        else:
+            logger.warning(f"[META PURCHASE] Purchase - fbp NÃO retornado pelo Parameter Builder (cookie _fbp ausente)")
+        
         if client_ip_from_builder:
             logger.info(f"[META PURCHASE] Purchase - client_ip processado pelo Parameter Builder (origem: {ip_origin}): {client_ip_from_builder}")
+        else:
+            logger.warning(f"[META PURCHASE] Purchase - client_ip NÃO retornado pelo Parameter Builder (cookie _fbi ausente)")
         
         # ✅ FALLBACK: Se Parameter Builder não retornou valores, usar tracking_data (Redis)
         

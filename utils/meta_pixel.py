@@ -106,29 +106,48 @@ def process_meta_parameters(
     request_args = request_args or {}
     request_headers = request_headers or {}
     
+    # ✅ DEBUG: Log cookies e args recebidos (para identificar problemas)
+    logger.debug(f"[PARAM BUILDER] Cookies recebidos: {list(request_cookies.keys())}")
+    logger.debug(f"[PARAM BUILDER] Args recebidos: {list(request_args.keys())}")
+    
     # ✅ FBC: Prioridade 1 - Cookie _fbc do browser (MAIS CONFIÁVEL - Meta confia 100%)
     fbc_cookie = request_cookies.get('_fbc', '').strip()
-    if fbc_cookie and len(fbc_cookie) >= 10:
-        # Validar formato (deve começar com 'fb.1.' ou 'fb.2.')
-        if fbc_cookie.startswith(('fb.1.', 'fb.2.')):
-            result['fbc'] = fbc_cookie
-            result['fbc_origin'] = 'cookie'
-            logger.debug(f"[PARAM BUILDER] fbc capturado do cookie (ORIGEM REAL): {fbc_cookie[:50]}...")
+    if fbc_cookie:
+        logger.debug(f"[PARAM BUILDER] Cookie _fbc encontrado: {fbc_cookie[:50]}... (len={len(fbc_cookie)})")
+        if len(fbc_cookie) >= 10:
+            # Validar formato (deve começar com 'fb.1.' ou 'fb.2.')
+            if fbc_cookie.startswith(('fb.1.', 'fb.2.')):
+                result['fbc'] = fbc_cookie
+                result['fbc_origin'] = 'cookie'
+                logger.info(f"[PARAM BUILDER] ✅ fbc capturado do cookie (ORIGEM REAL): {fbc_cookie[:50]}...")
+            else:
+                logger.warning(f"[PARAM BUILDER] ⚠️ Cookie _fbc tem formato inválido (não começa com fb.1./fb.2.): {fbc_cookie[:30]}...")
+        else:
+            logger.warning(f"[PARAM BUILDER] ⚠️ Cookie _fbc muito curto (len={len(fbc_cookie)}, mínimo=10): {fbc_cookie[:30]}...")
+    else:
+        logger.debug(f"[PARAM BUILDER] Cookie _fbc não encontrado")
     
     # ✅ FBC: Prioridade 2 - Gerar baseado em fbclid (se presente na URL)
     # Meta aceita _fbc gerado quando fbclid está presente na URL (conforme documentação oficial)
     if not result['fbc']:
         fbclid = request_args.get('fbclid', '').strip()
         if fbclid:
+            logger.debug(f"[PARAM BUILDER] fbclid encontrado nos args: {fbclid[:50]}... (len={len(fbclid)})")
             try:
                 # Formato: fb.1.{creationTime_ms}.{fbclid}
                 # creationTime_ms: Timestamp em milissegundos da criação do fbc
                 creation_time_ms = int(time.time() * 1000)
                 result['fbc'] = f"fb.1.{creation_time_ms}.{fbclid}"
                 result['fbc_origin'] = 'generated_from_fbclid'
-                logger.debug(f"[PARAM BUILDER] fbc gerado baseado em fbclid (conforme doc Meta): {result['fbc'][:50]}...")
+                logger.info(f"[PARAM BUILDER] ✅ fbc gerado baseado em fbclid (conforme doc Meta): {result['fbc'][:50]}...")
             except Exception as e:
-                logger.warning(f"[PARAM BUILDER] Erro ao gerar fbc baseado em fbclid: {e}")
+                logger.error(f"[PARAM BUILDER] ❌ Erro ao gerar fbc baseado em fbclid: {e}", exc_info=True)
+        else:
+            logger.debug(f"[PARAM BUILDER] fbclid não encontrado nos args (não será gerado fbc)")
+    
+    # ✅ LOG FINAL: Mostrar resultado do fbc
+    if not result['fbc']:
+        logger.warning(f"[PARAM BUILDER] ⚠️ fbc NÃO retornado (cookie _fbc ausente e fbclid ausente)")
     
     # ✅ FBP: Prioridade 1 - Cookie _fbp do browser (MAIS CONFIÁVEL)
     fbp_cookie = request_cookies.get('_fbp', '').strip()
