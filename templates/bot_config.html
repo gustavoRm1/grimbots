@@ -106,6 +106,27 @@
     cursor: crosshair !important;
 }
 
+/* ✅ Endpoints VERDE (entrada) e VERMELHO (saída) */
+.jtk-endpoint[data-endpoint-type="input"] {
+    background: #10B981 !important;
+    border: 3px solid #059669 !important;
+}
+
+.jtk-endpoint[data-endpoint-type="output"] {
+    background: #EF4444 !important;
+    border: 3px solid #DC2626 !important;
+}
+
+/* ✅ Hover em conexões para remover */
+.jtk-connector {
+    cursor: pointer !important;
+}
+
+.jtk-connector:hover {
+    stroke-width: 4 !important;
+    opacity: 0.9 !important;
+}
+
 /* ✅ Responsividade para telas menores */
 @media (max-width: 768px) {
     .flow-step-block {
@@ -3697,10 +3718,74 @@ document.addEventListener('alpine:init', () => {
                                     return true;
                                 });
                                 
+                                // ✅ MELHORADO: Remover conexão com duplo clique OU botão direito OU arrastar endpoint para desconectar
+                                // jsPlumb 2.x usa eventos diferentes
+                                this.jsPlumbInstance.bind('connection:dblclick', (conn, event) => {
+                                    if (event) {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                    }
+                                    if (confirm('❓ Remover esta conexão?')) {
+                                        try {
+                                            this.jsPlumbInstance.deleteConnection(conn);
+                                            console.log('✅ Conexão removida (duplo clique)');
+                                            this.updateStepConnectionsFromConnection(conn);
+                                        } catch (e) {
+                                            console.error('❌ Erro ao remover conexão:', e);
+                                        }
+                                    }
+                                });
+                                
+                                // ✅ Remover conexão com botão direito
+                                this.jsPlumbInstance.bind('connection:contextmenu', (conn, event) => {
+                                    if (event) {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                    }
+                                    if (confirm('❓ Remover esta conexão?')) {
+                                        try {
+                                            this.jsPlumbInstance.deleteConnection(conn);
+                                            console.log('✅ Conexão removida (botão direito)');
+                                            this.updateStepConnectionsFromConnection(conn);
+                                        } catch (e) {
+                                            console.error('❌ Erro ao remover conexão:', e);
+                                        }
+                                    }
+                                });
+                                
+                                // ✅ Remover conexão ao arrastar endpoint de volta para desconectar (soltar fora de um target válido)
+                                this.jsPlumbInstance.bind('beforeStartDetach', (params) => {
+                                    // Permitir desconectar e reconectar
+                                    return true;
+                                });
+                                
+                                this.jsPlumbInstance.bind('connectionDetached', (info) => {
+                                    // Conexão desconectada (arrastou endpoint para fora)
+                                    console.log('✅ Conexão desconectada:', info);
+                                    this.updateStepConnectionsFromConnection(info);
+                                    // Limpar target_step se for botão customizado
+                                    if (info && info.sourceId && info.sourceId.startsWith('btn-endpoint-')) {
+                                        const parts = info.sourceId.split('-');
+                                        if (parts.length >= 4) {
+                                            const stepId = parts.slice(2, -1).join('-');
+                                            const btnType = parts[parts.length - 2];
+                                            const btnIdx = parseInt(parts[parts.length - 1]);
+                                            const sourceStep = this.config.flow_steps.find(s => s.id === stepId);
+                                            if (sourceStep && sourceStep.config && btnType === 'custom' && sourceStep.config.custom_buttons && sourceStep.config.custom_buttons[btnIdx]) {
+                                                sourceStep.config.custom_buttons[btnIdx].target_step = '';
+                                            }
+                                        }
+                                    }
+                                });
+                                
                                 // Após conectar, garantir ordem correta
                                 this.jsPlumbInstance.bind('connection', (info) => {
                                     // Quando uma nova conexão é criada
                                     console.log('✅ Nova conexão criada:', info);
+                                    
+                                    // ✅ Atualizar connections no step
+                                    this.updateStepConnectionsFromConnection(info);
+                                    
                                     // Repintar tudo para garantir ordem
                                     if (typeof this.jsPlumbInstance.repaintEverything === 'function') {
                                         setTimeout(() => {
@@ -3721,11 +3806,11 @@ document.addEventListener('alpine:init', () => {
                             if (typeof this.jsPlumbInstance.importDefaults === 'function') {
                                 const defaults = {
                                     Connector: ['Flowchart', { stub: [10, 15], gap: 5, cornerRadius: 5, alwaysRespectStubs: true }],
-                                    PaintStyle: { stroke: '#3B82F6', strokeWidth: 2 },
-                                    HoverPaintStyle: { stroke: '#60A5FA', strokeWidth: 3 },
-                                    Endpoint: ['Dot', { radius: 8 }],
-                                    EndpointStyle: { fill: '#3B82F6', radius: 8 },
-                                    EndpointHoverStyle: { fill: '#60A5FA', radius: 10 },
+                                    PaintStyle: { stroke: '#EF4444', strokeWidth: 2 },  // ✅ Mudado para vermelho (saída)
+                                    HoverPaintStyle: { stroke: '#F87171', strokeWidth: 3 },
+                                    Endpoint: ['Dot', { radius: 10 }],
+                                    EndpointStyle: { fill: '#EF4444', radius: 10 },  // ✅ Mudado para vermelho (saída)
+                                    EndpointHoverStyle: { fill: '#F87171', radius: 12 },
                                     MaxConnections: -1,
                                     AllowNestedGroups: false
                                 };
@@ -3815,6 +3900,11 @@ document.addEventListener('alpine:init', () => {
                                 'Sem conteúdo';
                             
                             stepEl.innerHTML = `
+                                <!-- ✅ Bola VERDE (entrada) sempre visível no lado esquerdo -->
+                                <div style="position: absolute; left: -12px; top: 20px; width: 18px; height: 18px; background: #10B981; border: 3px solid #059669; border-radius: 50%; cursor: crosshair; z-index: 30; box-shadow: 0 0 10px rgba(16, 185, 129, 0.9);" 
+                                     class="step-input-endpoint"
+                                     title="🟢 Endpoint de Entrada - Conecte aqui para receber de outros cards">
+                                </div>
                                 <div class="flex items-center justify-between mb-2 pb-2 border-b border-gray-700">
                                     <div class="flex items-center gap-2 flex-1 min-w-0">
                                         ${isInitial ? '<i class="fas fa-star text-yellow-400 text-sm" title="⭐ Step Inicial"></i>' : ''}
@@ -3905,14 +3995,14 @@ document.addEventListener('alpine:init', () => {
                                                                 ${btn.text.length > 25 ? btn.text.substring(0, 22) + '...' : btn.text}
                                                                 ${btn.price ? '<span class="text-xs opacity-90"> (R$ ' + parseFloat(btn.price).toFixed(2) + ')</span>' : ''}
                                                             </div>
-                                                            <!-- ✅ Bolinha endpoint ao lado direito -->
+                                                            <!-- ✅ Bola VERMELHA (saída) ao lado direito de cada botão -->
                                                             <div class="btn-visual-endpoint" 
                                                                  data-button-type="${btn.type}"
                                                                  data-button-index="${btn.index}"
                                                                  data-step-id="${stepId}"
                                                                  data-button-visual-idx="${idx}"
-                                                                 style="position: absolute; right: -10px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; background: #FF6B6B; border: 3px solid #FF0000; border-radius: 50%; cursor: crosshair; z-index: 30; box-shadow: 0 0 8px rgba(255, 107, 107, 0.8); transition: all 0.2s ease;"
-                                                                 title="Arraste para conectar">
+                                                                 style="position: absolute; right: -12px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; background: #EF4444; border: 3px solid #DC2626; border-radius: 50%; cursor: crosshair; z-index: 30; box-shadow: 0 0 10px rgba(239, 68, 68, 0.9); transition: all 0.2s ease;"
+                                                                 title="🔴 Endpoint de Saída - Arraste para conectar ao endpoint VERDE de outro card">
                                                             </div>
                                                         </div>
                                                     </div>
@@ -4149,57 +4239,32 @@ document.addEventListener('alpine:init', () => {
                                 console.error('❌ Erro ao tornar arrastável:', e);
                             }
                             
-                            // ✅ Adicionar endpoints (pontos de conexão) - MELHORADOS
+                            // ✅ NOVO SISTEMA: Endpoint VERDE (entrada) sempre visível, VERMELHO (saída) condicional
+                            // Verificar se step tem botões
+                            const hasButtons = (step.config && step.config.custom_buttons && step.config.custom_buttons.length > 0) ||
+                                             (step.config && step.config.selected_buttons && step.config.selected_buttons.length > 0);
+                            
                             try {
-                                if (typeof this.jsPlumbInstance.makeSource === 'function') {
-                                    // jsPlumb 2.x - Endpoints maiores e mais visíveis COM DRAG HABILITADO
-                                    this.jsPlumbInstance.makeSource(stepEl, {
-                                        anchor: 'Right',
-                                        endpoint: ['Dot', { radius: 8 }],
-                                        paintStyle: { fill: '#3B82F6', radius: 8, stroke: '#1E40AF', strokeWidth: 2 },
-                                        hoverPaintStyle: { fill: '#60A5FA', radius: 10 },
-                                        isSource: true,
-                                        isTarget: false,
-                                        maxConnections: -1,
-                                        connector: ['Flowchart', { stub: [10, 15], gap: 5, cornerRadius: 5, alwaysRespectStubs: true }],
-                                        connectorStyle: { stroke: '#3B82F6', strokeWidth: 2 },
-                                        connectorHoverStyle: { stroke: '#60A5FA', strokeWidth: 3 },
-                                        beforeDrop: () => { return true; }, // Permitir drop em qualquer target
-                                        onMaxConnections: () => { console.log('⚠️ Máximo de conexões atingido'); }
-                                    });
+                                // ✅ SEMPRE adicionar endpoint VERDE (entrada) à ESQUERDA
+                                if (typeof this.jsPlumbInstance.makeTarget === 'function') {
+                                    // jsPlumb 2.x - Endpoint VERDE de entrada (sempre visível)
                                     this.jsPlumbInstance.makeTarget(stepEl, {
                                         anchor: 'Left',
-                                        endpoint: ['Dot', { radius: 8 }],
-                                        paintStyle: { fill: '#10B981', radius: 8, stroke: '#059669', strokeWidth: 2 },
-                                        hoverPaintStyle: { fill: '#34D399', radius: 10 },
+                                        endpoint: ['Dot', { radius: 10 }],
+                                        paintStyle: { fill: '#10B981', radius: 10, stroke: '#059669', strokeWidth: 3 },
+                                        hoverPaintStyle: { fill: '#34D399', radius: 12 },
                                         isSource: false,
                                         isTarget: true,
                                         maxConnections: -1,
                                         dropOptions: { hoverClass: 'drop-hover', activeClass: 'drop-active' }
                                     });
                                 } else if (typeof this.jsPlumbInstance.addEndpoint === 'function') {
-                                    // Versão 5.x - Endpoints maiores e mais visíveis COM DRAG HABILITADO
-                                    this.jsPlumbInstance.addEndpoint(stepEl, {
-                                        anchor: 'Right',
-                                        endpoint: ['Dot', { radius: 8 }],
-                                        paintStyle: { fill: '#3B82F6', radius: 8, stroke: '#1E40AF', strokeWidth: 2 },
-                                        hoverPaintStyle: { fill: '#60A5FA', radius: 10 },
-                                        isSource: true,
-                                        isTarget: false,
-                                        maxConnections: -1,
-                                        connector: ['Flowchart', { stub: [10, 15], gap: 5, cornerRadius: 5, alwaysRespectStubs: true }],
-                                        connectorStyle: { stroke: '#3B82F6', strokeWidth: 2 },
-                                        connectorHoverStyle: { stroke: '#60A5FA', strokeWidth: 3 },
-                                        beforeDrop: () => { return true; } // Permitir drop em qualquer target
-                                    }, {
-                                        uuid: `source-${stepId}`
-                                    });
-                                    
+                                    // jsPlumb 5.x - Endpoint VERDE de entrada
                                     this.jsPlumbInstance.addEndpoint(stepEl, {
                                         anchor: 'Left',
-                                        endpoint: ['Dot', { radius: 8 }],
-                                        paintStyle: { fill: '#10B981', radius: 8, stroke: '#059669', strokeWidth: 2 },
-                                        hoverPaintStyle: { fill: '#34D399', radius: 10 },
+                                        endpoint: ['Dot', { radius: 10 }],
+                                        paintStyle: { fill: '#10B981', radius: 10, stroke: '#059669', strokeWidth: 3 },
+                                        hoverPaintStyle: { fill: '#34D399', radius: 12 },
                                         isSource: false,
                                         isTarget: true,
                                         maxConnections: -1,
@@ -4207,6 +4272,44 @@ document.addEventListener('alpine:init', () => {
                                     }, {
                                         uuid: `target-${stepId}`
                                     });
+                                }
+                                
+                                // ✅ Apenas adicionar endpoint VERMELHO geral se NÃO tiver botões
+                                if (!hasButtons) {
+                                    if (typeof this.jsPlumbInstance.makeSource === 'function') {
+                                        // jsPlumb 2.x - Endpoint VERMELHO de saída (quando não há botões)
+                                        this.jsPlumbInstance.makeSource(stepEl, {
+                                            anchor: 'Right',
+                                            endpoint: ['Dot', { radius: 10 }],
+                                            paintStyle: { fill: '#EF4444', radius: 10, stroke: '#DC2626', strokeWidth: 3 },
+                                            hoverPaintStyle: { fill: '#F87171', radius: 12 },
+                                            isSource: true,
+                                            isTarget: false,
+                                            maxConnections: -1,
+                                            connector: ['Flowchart', { stub: [10, 15], gap: 5, cornerRadius: 5, alwaysRespectStubs: true }],
+                                            connectorStyle: { stroke: '#EF4444', strokeWidth: 2 },
+                                            connectorHoverStyle: { stroke: '#F87171', strokeWidth: 3 },
+                                            beforeDrop: () => { return true; },
+                                            onMaxConnections: () => { console.log('⚠️ Máximo de conexões atingido'); }
+                                        });
+                                    } else if (typeof this.jsPlumbInstance.addEndpoint === 'function') {
+                                        // jsPlumb 5.x - Endpoint VERMELHO de saída
+                                        this.jsPlumbInstance.addEndpoint(stepEl, {
+                                            anchor: 'Right',
+                                            endpoint: ['Dot', { radius: 10 }],
+                                            paintStyle: { fill: '#EF4444', radius: 10, stroke: '#DC2626', strokeWidth: 3 },
+                                            hoverPaintStyle: { fill: '#F87171', radius: 12 },
+                                            isSource: true,
+                                            isTarget: false,
+                                            maxConnections: -1,
+                                            connector: ['Flowchart', { stub: [10, 15], gap: 5, cornerRadius: 5, alwaysRespectStubs: true }],
+                                            connectorStyle: { stroke: '#EF4444', strokeWidth: 2 },
+                                            connectorHoverStyle: { stroke: '#F87171', strokeWidth: 3 },
+                                            beforeDrop: () => { return true; }
+                                        }, {
+                                            uuid: `source-${stepId}`
+                                        });
+                                    }
                                 }
                             } catch (e) {
                                 console.error('❌ Erro ao adicionar endpoints:', e);
@@ -4252,18 +4355,18 @@ document.addEventListener('alpine:init', () => {
                                                 endpointEl.style.boxShadow = '0 0 8px rgba(255, 107, 107, 0.8)';
                                             });
                                             
-                                            // ✅ HABILITAR ARRASTE: linha segue o mouse ao arrastar da bolinha
+                                            // ✅ HABILITAR ARRASTE: linha segue o mouse ao arrastar da bolinha VERMELHA
                                             this.jsPlumbInstance.makeSource(endpointEl, {
                                                 anchor: 'Right',
                                                 endpoint: ['Dot', { radius: 10 }],
-                                                paintStyle: { fill: '#FF6B6B', radius: 10, stroke: '#FF0000', strokeWidth: 3 },
-                                                hoverPaintStyle: { fill: '#FF8787', radius: 12, stroke: '#FF3333', strokeWidth: 4 },
+                                                paintStyle: { fill: '#EF4444', radius: 10, stroke: '#DC2626', strokeWidth: 3 },
+                                                hoverPaintStyle: { fill: '#F87171', radius: 12, stroke: '#EF4444', strokeWidth: 4 },
                                                 isSource: true,
                                                 isTarget: false,
                                                 maxConnections: 1,
                                                 connector: ['Flowchart', { stub: [10, 15], gap: 5, cornerRadius: 5, alwaysRespectStubs: true }],
-                                                connectorStyle: { stroke: '#FF6B6B', strokeWidth: 3 },
-                                                connectorHoverStyle: { stroke: '#FF8787', strokeWidth: 4 },
+                                                connectorStyle: { stroke: '#EF4444', strokeWidth: 3 },
+                                                connectorHoverStyle: { stroke: '#F87171', strokeWidth: 4 },
                                                 onMaxConnections: (info) => {
                                                     console.log('⚠️ Máximo de conexões atingido para este botão');
                                                 }
@@ -4294,14 +4397,14 @@ document.addEventListener('alpine:init', () => {
                                             endpointEl.id = buttonEndpointId;
                                             endpointEl.style.cursor = 'crosshair';
                                             
-                                            // Adicionar efeito hover
+                                            // Adicionar efeito hover (VERMELHO)
                                             endpointEl.addEventListener('mouseenter', () => {
                                                 endpointEl.style.transform = 'translateY(-50%) scale(1.3)';
-                                                endpointEl.style.boxShadow = '0 0 12px rgba(255, 107, 107, 1)';
+                                                endpointEl.style.boxShadow = '0 0 12px rgba(239, 68, 68, 1)';
                                             });
                                             endpointEl.addEventListener('mouseleave', () => {
                                                 endpointEl.style.transform = 'translateY(-50%) scale(1)';
-                                                endpointEl.style.boxShadow = '0 0 8px rgba(255, 107, 107, 0.8)';
+                                                endpointEl.style.boxShadow = '0 0 10px rgba(239, 68, 68, 0.9)';
                                             });
                                             
                                             // Calcular posição relativa do endpoint
@@ -4309,18 +4412,18 @@ document.addEventListener('alpine:init', () => {
                                             const stepRect = stepEl.getBoundingClientRect();
                                             const relativeTop = (rect.top - stepRect.top + rect.height / 2) / stepRect.height;
                                             
-                                            // ✅ HABILITAR ARRASTE: linha segue o mouse ao arrastar da bolinha
+                                            // ✅ HABILITAR ARRASTE: linha segue o mouse ao arrastar da bolinha VERMELHA
                                             this.jsPlumbInstance.addEndpoint(stepEl, {
                                                 anchor: ['Right', relativeTop, 1, 0, 0, 0],
                                                 endpoint: ['Dot', { radius: 10 }],
-                                                paintStyle: { fill: '#FF6B6B', stroke: '#FF0000', strokeWidth: 3 },
-                                                hoverPaintStyle: { fill: '#FF8787', stroke: '#FF3333', strokeWidth: 4, radius: 12 },
+                                                paintStyle: { fill: '#EF4444', stroke: '#DC2626', strokeWidth: 3 },
+                                                hoverPaintStyle: { fill: '#F87171', stroke: '#EF4444', strokeWidth: 4, radius: 12 },
                                                 isSource: true,
                                                 isTarget: false,
                                                 maxConnections: 1,
                                                 connector: ['Flowchart', { stub: [10, 15], gap: 5, cornerRadius: 5, alwaysRespectStubs: true }],
-                                                connectorStyle: { stroke: '#FF6B6B', strokeWidth: 3 },
-                                                connectorHoverStyle: { stroke: '#FF8787', strokeWidth: 4 },
+                                                connectorStyle: { stroke: '#EF4444', strokeWidth: 3 },
+                                                connectorHoverStyle: { stroke: '#F87171', strokeWidth: 4 },
                                                 beforeDrop: () => {
                                                     return true; // Permitir drop em qualquer target
                                                 }
@@ -4925,6 +5028,69 @@ document.addEventListener('alpine:init', () => {
                 localStorage.setItem(`flow_positions_${this.config.bot_id || 'default'}`, JSON.stringify(positions));
             } catch (e) {
                 console.error('Erro ao salvar posição:', e);
+            }
+        },
+        
+        updateStepConnectionsFromConnection(connection) {
+            /** ✅ Atualiza connections do step baseado em uma conexão jsPlumb criada ou removida */
+            try {
+                if (!connection) return;
+                
+                // Extrair IDs da conexão
+                let sourceId = '';
+                let targetId = '';
+                
+                if (connection.sourceId) sourceId = connection.sourceId;
+                else if (connection.source && connection.source.id) sourceId = connection.source.id;
+                else if (connection.sourceEndpoint && connection.sourceEndpoint.uuid) sourceId = connection.sourceEndpoint.uuid;
+                
+                if (connection.targetId) targetId = connection.targetId;
+                else if (connection.target && connection.target.id) targetId = connection.target.id;
+                else if (connection.targetEndpoint && connection.targetEndpoint.uuid) targetId = connection.targetEndpoint.uuid;
+                
+                if (!sourceId || !targetId) {
+                    console.warn('⚠️ Não foi possível extrair IDs da conexão:', connection);
+                    return;
+                }
+                
+                // Extrair stepId do target (sempre é o mesmo formato)
+                const targetStepId = targetId.replace('target-', '').replace('flow-step-', '');
+                
+                // ✅ Verificar se é conexão de botão customizado
+                if (sourceId.startsWith('btn-endpoint-')) {
+                    const parts = sourceId.split('-');
+                    if (parts.length >= 4) {
+                        const stepId = parts.slice(2, -1).join('-');
+                        const btnType = parts[parts.length - 2];
+                        const btnIdx = parseInt(parts[parts.length - 1]);
+                        
+                        if (!isNaN(btnIdx)) {
+                            const sourceStep = this.config.flow_steps.find(s => s.id === stepId);
+                            if (sourceStep && sourceStep.config) {
+                                if (btnType === 'custom' && sourceStep.config.custom_buttons) {
+                                    const button = sourceStep.config.custom_buttons[btnIdx];
+                                    if (button) {
+                                        // ✅ Atualizar target_step do botão customizado
+                                        button.target_step = targetStepId;
+                                        console.log(`✅ Conexão atualizada: Botão "${button.text}" → Step ${targetStepId}`);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // ✅ Conexão normal (não é botão customizado)
+                    const sourceStepId = sourceId.replace('source-', '').replace('flow-step-', '');
+                    const sourceStep = this.config.flow_steps.find(s => s.id === sourceStepId);
+                    if (sourceStep) {
+                        if (!sourceStep.connections) sourceStep.connections = {};
+                        // Por padrão, salvar como "next"
+                        sourceStep.connections.next = targetStepId;
+                        console.log(`✅ Conexão atualizada: Step ${sourceStepId} → Step ${targetStepId}`);
+                    }
+                }
+            } catch (e) {
+                console.error('❌ Erro ao atualizar conexões:', e);
             }
         },
         
