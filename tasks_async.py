@@ -259,6 +259,9 @@ def process_start_async(
 
             tracking_service_v4 = TrackingServiceV4()
             tracking_token_from_start = None
+            utm_data_from_start = {}  # ✅ CRÍTICO: Inicializar dict antes de usar
+            pool_id_from_start = None
+            external_id_from_start = None
             
             if start_param:
                 # ✅ NOVO FORMATO (V4): tracking_token direto (32 chars hex)
@@ -656,27 +659,95 @@ def process_start_async(
                     bot_user.campaign_code = utm_data_from_start['campaign_code']
                 # ✅ CORREÇÃO SÊNIOR QI 500: Garantir que fbclid seja completo (até 255 chars)
                 # Isso garante que bot_user.fbclid seja exatamente igual ao fbclid salvo no Redis
-                if utm_data_from_start.get('fbclid') and not bot_user.fbclid:
+                # ✅ CRÍTICO: SEMPRE atualizar fbclid se veio do start_param (pode ser mais recente)
+                if utm_data_from_start.get('fbclid'):
                     fbclid_from_start = utm_data_from_start['fbclid']
                     # ✅ CRÍTICO: Salvar fbclid completo sem truncar (até 255 chars)
-                    bot_user.fbclid = fbclid_from_start[:255] if len(fbclid_from_start) > 255 else fbclid_from_start
-                    logger.info(f"✅ bot_user.fbclid salvo do start_param (len={len(bot_user.fbclid)}): {bot_user.fbclid[:50]}...")
+                    fbclid_to_save = fbclid_from_start[:255] if len(fbclid_from_start) > 255 else fbclid_from_start
+                    if bot_user.fbclid != fbclid_to_save:
+                        bot_user.fbclid = fbclid_to_save
+                        logger.info(f"✅ bot_user.fbclid atualizado do start_param (len={len(bot_user.fbclid)}): {bot_user.fbclid[:50]}...")
+                    elif not bot_user.fbclid:
+                        bot_user.fbclid = fbclid_to_save
+                        logger.info(f"✅ bot_user.fbclid salvo do start_param (len={len(bot_user.fbclid)}): {bot_user.fbclid[:50]}...")
+                
+                # ✅ CRÍTICO: Se bot_user já tem fbclid mas não tem tracking_session_id, tentar recuperar do Redis
+                # Isso garante que mesmo se start_param não tiver token, podemos recuperar via fbclid
+                if bot_user.fbclid and not bot_user.tracking_session_id:
+                    try:
+                        tracking_token_from_existing_fbclid = tracking_service_v4.redis.get(f"tracking:fbclid:{bot_user.fbclid}")
+                        if tracking_token_from_existing_fbclid:
+                            # ✅ VALIDAÇÃO: Verificar se token é válido (UUID de 32 chars, não token gerado)
+                            is_generated_token = tracking_token_from_existing_fbclid.startswith('tracking_')
+                            is_uuid_token = len(tracking_token_from_existing_fbclid) == 32 and all(c in '0123456789abcdef' for c in tracking_token_from_existing_fbclid.lower())
+                            
+                            if is_uuid_token and not is_generated_token:
+                                bot_user.tracking_session_id = tracking_token_from_existing_fbclid
+                                logger.info(f"✅ bot_user.tracking_session_id recuperado via fbclid existente: {tracking_token_from_existing_fbclid[:20]}...")
+                                # ✅ Atualizar utm_data_from_start para usar este token nas próximas verificações
+                                if not tracking_token_from_start:
+                                    tracking_token_from_start = tracking_token_from_existing_fbclid
+                                    logger.info(f"✅ tracking_token_from_start atualizado via fbclid existente: {tracking_token_from_start[:20]}...")
+                    except Exception as e:
+                        logger.warning(f"⚠️ Erro ao recuperar tracking_token via fbclid existente: {e}")
 
                 # ✅ CORREÇÃO SÊNIOR QI 500: SEMPRE salvar tracking_session_id quando tracking_token_from_start estiver disponível
                 # Isso garante que _generate_pix_payment sempre encontre o tracking_token correto
+                tracking_token_to_save = None
+                
+                # ✅ PRIORIDADE 1: tracking_token_from_start (do start_param)
                 if tracking_token_from_start:
-                    if bot_user.tracking_session_id != tracking_token_from_start:
-                        bot_user.tracking_session_id = tracking_token_from_start
-                        logger.info(f"✅ bot_user.tracking_session_id atualizado: {tracking_token_from_start[:20]}...")
-                    else:
-                        logger.info(f"✅ bot_user.tracking_session_id já está correto: {tracking_token_from_start[:20]}...")
-                    # ✅ CRÍTICO: Garantir que seja commitado
+                    tracking_token_to_save = tracking_token_from_start
+                    logger.info(f"✅ tracking_token_from_start encontrado (prioridade 1): {tracking_token_from_start[:20]}...")
+                # ✅ PRIORIDADE 2: Recuperar do Redis via fbclid se tracking_token_from_start não existe
+                elif utm_data_from_start.get('fbclid'):
                     try:
-                        db.session.commit()
-                        logger.info(f"✅ bot_user.tracking_session_id commitado no banco")
+                        fbclid_from_start = utm_data_from_start.get('fbclid')
+                        tracking_token_from_fbclid = tracking_service_v4.redis.get(f"tracking:fbclid:{fbclid_from_start}")
+                        if tracking_token_from_fbclid:
+                            tracking_token_to_save = tracking_token_from_fbclid
+                            logger.info(f"✅ tracking_token recuperado do Redis via fbclid (prioridade 2): {tracking_token_from_fbclid[:20]}...")
                     except Exception as e:
-                        logger.warning(f"⚠️ Erro ao commitar bot_user.tracking_session_id: {e}")
-                        db.session.rollback()
+                        logger.warning(f"⚠️ Erro ao recuperar tracking_token via fbclid: {e}")
+                # ✅ PRIORIDADE 3: Recuperar do Redis via bot_user.fbclid se bot_user já tem fbclid mas não tem tracking_session_id
+                elif bot_user and bot_user.fbclid and not bot_user.tracking_session_id:
+                    try:
+                        tracking_token_from_bot_user_fbclid = tracking_service_v4.redis.get(f"tracking:fbclid:{bot_user.fbclid}")
+                        if tracking_token_from_bot_user_fbclid:
+                            tracking_token_to_save = tracking_token_from_bot_user_fbclid
+                            logger.info(f"✅ tracking_token recuperado do Redis via bot_user.fbclid (prioridade 3): {tracking_token_from_bot_user_fbclid[:20]}...")
+                    except Exception as e:
+                        logger.warning(f"⚠️ Erro ao recuperar tracking_token via bot_user.fbclid: {e}")
+                
+                # ✅ CRÍTICO: Salvar tracking_session_id se encontrou token válido
+                if tracking_token_to_save:
+                    # ✅ VALIDAÇÃO: Verificar se token é válido (UUID de 32 chars, não token gerado)
+                    is_generated_token = tracking_token_to_save.startswith('tracking_')
+                    is_uuid_token = len(tracking_token_to_save) == 32 and all(c in '0123456789abcdef' for c in tracking_token_to_save.lower())
+                    
+                    if is_generated_token:
+                        logger.error(f"❌ [PROCESS_START] tracking_token_to_save é GERADO: {tracking_token_to_save[:30]}... - NÃO salvar em bot_user.tracking_session_id")
+                        logger.error(f"   Token gerado não tem dados do redirect (client_ip, client_user_agent, pageview_event_id)")
+                    elif is_uuid_token:
+                        # ✅ Token é válido - salvar
+                        if bot_user.tracking_session_id != tracking_token_to_save:
+                            bot_user.tracking_session_id = tracking_token_to_save
+                            logger.info(f"✅ bot_user.tracking_session_id atualizado: {tracking_token_to_save[:20]}...")
+                        else:
+                            logger.info(f"✅ bot_user.tracking_session_id já está correto: {tracking_token_to_save[:20]}...")
+                        
+                        # ✅ CRÍTICO: Garantir que seja commitado
+                        try:
+                            db.session.commit()
+                            logger.info(f"✅ bot_user.tracking_session_id commitado no banco")
+                        except Exception as e:
+                            logger.warning(f"⚠️ Erro ao commitar bot_user.tracking_session_id: {e}")
+                            db.session.rollback()
+                    else:
+                        logger.warning(f"⚠️ [PROCESS_START] tracking_token_to_save tem formato inválido: {tracking_token_to_save[:30]}... (len={len(tracking_token_to_save)})")
+                else:
+                    logger.warning(f"⚠️ [PROCESS_START] Nenhum tracking_token encontrado para salvar em bot_user.tracking_session_id")
+                    logger.warning(f"   Isso pode quebrar o link entre PageView e Purchase se cliente passar pelo redirect mas start_param não tiver token")
 
                 # ✅ CRÍTICO: Se fbc foi recuperado do tracking_data mas não foi salvo no BotUser, salvar agora
                 # ✅ PATCH 4: Salvar fbc no BotUser se disponível (garantir persistência)
