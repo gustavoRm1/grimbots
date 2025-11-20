@@ -4011,6 +4011,22 @@ document.addEventListener('alpine:init', () => {
                                         </div>
                                     `;
                                 })()}
+                                ${(() => {
+                                    // ✅ Mostrar bola VERMELHA (saída) se NÃO houver botões
+                                    const hasButtons = (step.config && step.config.custom_buttons && step.config.custom_buttons.length > 0) ||
+                                                     (step.config && step.config.selected_buttons && step.config.selected_buttons.length > 0);
+                                    if (!hasButtons) {
+                                        return `
+                                            <!-- ✅ Bola VERMELHA (saída) no lado direito quando não há botões -->
+                                            <div style="position: absolute; right: -12px; top: 50%; transform: translateY(-50%); width: 18px; height: 18px; background: #EF4444; border: 3px solid #DC2626; border-radius: 50%; cursor: crosshair; z-index: 30; box-shadow: 0 0 10px rgba(239, 68, 68, 0.9); transition: all 0.2s ease;" 
+                                                 class="step-output-endpoint"
+                                                 data-step-id="${stepId}"
+                                                 title="🔴 Endpoint de Saída - Arraste para conectar ao endpoint VERDE de outro card">
+                                            </div>
+                                        `;
+                                    }
+                                    return '';
+                                })()}
                                 <div class="flex items-center gap-1 mt-2">
                                     <button onclick="window.editFlowStepFromVisual('${stepId}')" 
                                             class="flex-1 px-2 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded text-xs">
@@ -4322,6 +4338,61 @@ document.addEventListener('alpine:init', () => {
                                 setTimeout(() => {
                                     const allButtonEndpoints = stepEl.querySelectorAll('.btn-visual-endpoint');
                                     
+                                    // ✅ Primeiro, adicionar endpoint para bola vermelha geral (quando não há botões)
+                                    const stepOutputEndpoint = stepEl.querySelector('.step-output-endpoint');
+                                    if (stepOutputEndpoint) {
+                                        const outputEndpointId = `source-${stepId}`;
+                                        stepOutputEndpoint.id = outputEndpointId;
+                                        stepOutputEndpoint.style.cursor = 'crosshair';
+                                        
+                                        // Adicionar efeito hover
+                                        stepOutputEndpoint.addEventListener('mouseenter', () => {
+                                            stepOutputEndpoint.style.transform = 'translateY(-50%) scale(1.3)';
+                                            stepOutputEndpoint.style.boxShadow = '0 0 12px rgba(239, 68, 68, 1)';
+                                        });
+                                        stepOutputEndpoint.addEventListener('mouseleave', () => {
+                                            stepOutputEndpoint.style.transform = 'translateY(-50%) scale(1)';
+                                            stepOutputEndpoint.style.boxShadow = '0 0 10px rgba(239, 68, 68, 0.9)';
+                                        });
+                                        
+                                        // ✅ Conectar bola vermelha geral ao jsPlumb
+                                        if (typeof this.jsPlumbInstance.makeSource === 'function') {
+                                            this.jsPlumbInstance.makeSource(stepOutputEndpoint, {
+                                                anchor: 'Right',
+                                                endpoint: ['Dot', { radius: 10 }],
+                                                paintStyle: { fill: '#EF4444', radius: 10, stroke: '#DC2626', strokeWidth: 3 },
+                                                hoverPaintStyle: { fill: '#F87171', radius: 12 },
+                                                isSource: true,
+                                                isTarget: false,
+                                                maxConnections: -1,
+                                                connector: ['Flowchart', { stub: [10, 15], gap: 5, cornerRadius: 5, alwaysRespectStubs: true }],
+                                                connectorStyle: { stroke: '#EF4444', strokeWidth: 2 },
+                                                connectorHoverStyle: { stroke: '#F87171', strokeWidth: 3 },
+                                                beforeDrop: () => { return true; },
+                                                onMaxConnections: () => { console.log('⚠️ Máximo de conexões atingido'); }
+                                            });
+                                        } else if (typeof this.jsPlumbInstance.addEndpoint === 'function') {
+                                            this.jsPlumbInstance.addEndpoint(stepEl, {
+                                                anchor: 'Right',
+                                                endpoint: ['Dot', { radius: 10 }],
+                                                paintStyle: { fill: '#EF4444', radius: 10, stroke: '#DC2626', strokeWidth: 3 },
+                                                hoverPaintStyle: { fill: '#F87171', radius: 12 },
+                                                isSource: true,
+                                                isTarget: false,
+                                                maxConnections: -1,
+                                                connector: ['Flowchart', { stub: [10, 15], gap: 5, cornerRadius: 5, alwaysRespectStubs: true }],
+                                                connectorStyle: { stroke: '#EF4444', strokeWidth: 2 },
+                                                connectorHoverStyle: { stroke: '#F87171', strokeWidth: 3 },
+                                                beforeDrop: () => { return true; }
+                                            }, {
+                                                uuid: outputEndpointId
+                                            });
+                                        }
+                                        
+                                        console.log(`✅ Bola vermelha geral conectada para step ${stepId}`);
+                                    }
+                                    
+                                    // ✅ Agora, adicionar endpoints para cada botão
                                     allButtonEndpoints.forEach((endpointEl, visualIdx) => {
                                         const btnType = endpointEl.getAttribute('data-button-type');
                                         const btnIndex = endpointEl.getAttribute('data-button-index');
