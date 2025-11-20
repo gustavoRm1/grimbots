@@ -8270,6 +8270,9 @@ def send_meta_pixel_purchase_event(payment):
         from models import BotUser
         from celery_app import send_meta_event
         
+        # ✅ LOG CRÍTICO: Verificar se função está sendo chamada
+        logger.info(f"[META PURCHASE] Purchase - Iniciando send_meta_pixel_purchase_event para payment {payment.id}")
+        
         event_id = None
         
         # Descriptografar access token
@@ -8306,9 +8309,15 @@ def send_meta_pixel_purchase_event(payment):
         # ✅ CORREÇÃO CRÍTICA: Usar _build_user_data para hash correto dos dados
         from utils.meta_pixel import MetaPixelAPI
         
+        # ✅ LOG CRÍTICO: Verificar se função está sendo chamada
+        logger.info(f"[META PURCHASE] Purchase - Iniciando recuperação de tracking_data para payment {payment.id}")
+        
         # ✅ RECUPERAR DADOS DO TRACKING TOKEN (fluxo anterior ao problema)
         from utils.tracking_service import TrackingService, TrackingServiceV4
         tracking_service_v4 = TrackingServiceV4()
+        
+        # ✅ LOG CRÍTICO: Verificar se tracking_service está funcionando
+        logger.info(f"[META PURCHASE] Purchase - TrackingServiceV4 inicializado")
 
         # ✅ CORREÇÃO CRÍTICA QI 1000+: Priorizar tracking_session_id do BotUser (token do redirect)
         # PROBLEMA IDENTIFICADO: payment.tracking_token é gerado em generate_pix_payment (tracking_xxx)
@@ -8317,6 +8326,9 @@ def send_meta_pixel_purchase_event(payment):
         tracking_data = {}
         payment_tracking_token = getattr(payment, "tracking_token", None)
         tracking_token_used = None
+        
+        # ✅ LOG CRÍTICO: Verificar dados iniciais
+        logger.info(f"[META PURCHASE] Purchase - Dados iniciais: payment.tracking_token={'✅' if payment_tracking_token else '❌'}, bot_user={'✅' if bot_user else '❌'}, bot_user.tracking_session_id={'✅' if (bot_user and bot_user.tracking_session_id) else '❌'}")
         
         # ✅ PRIORIDADE 1: tracking_session_id do BotUser (token do redirect - MAIS CONFIÁVEL)
         if bot_user and bot_user.tracking_session_id:
