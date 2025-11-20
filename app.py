@@ -7895,52 +7895,57 @@ def send_meta_pixel_pageview_event(pool, request, pageview_event_id=None, tracki
             logger.error(f"❌ CRÍTICO: tracking_data não está no escopo local!")
             tracking_data = {}  # ✅ Forçar inicialização
         
-        # ✅ PATCH 2: RECUPERAR _fbp e _fbc (Prioridade: tracking_data → BotUser → cookie)
+        # ✅ SERVER-SIDE PARAMETER BUILDER: Processar cookies, request e headers
+        # Conforme Meta best practices para maximizar cobertura de fbc e melhorar match quality
+        from utils.meta_pixel import process_meta_parameters
+        
+        # Processar cookies, args, headers e remote_addr via Parameter Builder
+        param_builder_result = process_meta_parameters(
+            request_cookies=dict(request.cookies),
+            request_args=dict(request.args),
+            request_headers=dict(request.headers),
+            request_remote_addr=request.remote_addr,
+            referer=request.headers.get('Referer')
+        )
+        
+        # ✅ PRIORIDADE: Parameter Builder > tracking_data (Redis) > cookie direto
+        # Parameter Builder tem prioridade porque processa e valida conforme Meta best practices
+        fbp_value = param_builder_result.get('fbp')
+        fbc_value = param_builder_result.get('fbc')
+        fbc_origin = param_builder_result.get('fbc_origin')
+        client_ip_from_builder = param_builder_result.get('client_ip_address')
+        ip_origin = param_builder_result.get('ip_origin')
+        
+        # ✅ LOG: Mostrar origem dos parâmetros processados pelo Parameter Builder
+        if fbp_value:
+            logger.info(f"[META PAGEVIEW] PageView - fbp processado pelo Parameter Builder (origem: {param_builder_result.get('fbp_origin')}): {fbp_value[:30]}...")
+        if fbc_value:
+            logger.info(f"[META PAGEVIEW] PageView - fbc processado pelo Parameter Builder (origem: {fbc_origin}): {fbc_value[:50]}...")
+        if client_ip_from_builder:
+            logger.info(f"[META PAGEVIEW] PageView - client_ip processado pelo Parameter Builder (origem: {ip_origin}): {client_ip_from_builder}")
+        
+        # ✅ FALLBACK: Se Parameter Builder não retornou valores, tentar tracking_data (Redis)
         from utils.tracking_service import TrackingService
         
-        fbp_value = None
-        fbc_value = None
-        
-        # ✅ PATCH 2: Prioridade 1 - tracking_data (Redis) - MAIS CONFIÁVEL
-        fbc_origin = None
-        if tracking_data:
+        if not fbp_value and tracking_data:
             fbp_value = tracking_data.get('fbp') or None
+            if fbp_value:
+                logger.info(f"[META PAGEVIEW] PageView - fbp recuperado do tracking_data (Redis - fallback): {fbp_value[:30]}...")
+        
+        if not fbc_value and tracking_data:
             fbc_value = tracking_data.get('fbc') or None
             fbc_origin = tracking_data.get('fbc_origin')
-            if fbp_value:
-                logger.info(f"[META PAGEVIEW] PageView - fbp recuperado do tracking_data (Redis): {fbp_value[:20]}...")
             if fbc_value:
-                logger.info(f"[META PAGEVIEW] PageView - fbc recuperado do tracking_data (Redis): {fbc_value[:20]}...")
+                logger.info(f"[META PAGEVIEW] PageView - fbc recuperado do tracking_data (Redis - fallback): {fbc_value[:50]}...")
         
-        # ✅ CRÍTICO V4.1: Validar fbc_origin para garantir que só enviamos fbc real (cookie)
-        # Se fbc_origin = 'synthetic' ou None, IGNORAR (não usar fbc sintético)
+        # ✅ CRÍTICO V4.1: Validar fbc_origin para garantir que só enviamos fbc real
+        # Se fbc_origin = 'synthetic', IGNORAR (não usar fbc sintético - Meta não atribui)
         if fbc_value and fbc_origin == 'synthetic':
             logger.warning(f"[META PAGEVIEW] PageView - fbc IGNORADO (origem: synthetic) - Meta não atribui com fbc sintético")
             fbc_value = None
+            fbc_origin = None
         
-        # ✅ PATCH 2: Prioridade 2 - Cookie do browser (fallback)
-        # ✅ NOTA: BotUser não existe no PageView (usuário ainda não deu /start)
-        if not fbc_value:
-            fbc_value = request.cookies.get('_fbc', '') or None
-            if fbc_value:
-                logger.info(f"[META PAGEVIEW] PageView - fbc recuperado dos cookies do browser: {fbc_value[:20]}...")
-        
-        # ✅ PATCH 2: Log de confirmação ou aviso
-        if not fbc_value:
-            logger.warning(f"[META PAGEVIEW] PageView - fbc ausente no Redis, BotUser e cookie - Meta pode ter atribuição reduzida")
-        else:
-            if fbc_origin == 'cookie':
-                logger.info(f"[META PAGEVIEW] PageView - fbc REAL confirmado (origem: cookie): {fbc_value[:50]}...")
-            else:
-                logger.info(f"[META PAGEVIEW] PageView - fbc confirmado (origem: cookie do browser): {fbc_value[:50]}...")
-        
-        # ✅ FBP: Prioridade similar (tracking_data → cookie → gerar)
-        if not fbp_value:
-            fbp_value = request.cookies.get('_fbp', '') or None
-            if fbp_value:
-                logger.info(f"[META PAGEVIEW] PageView - fbp recuperado dos cookies do browser: {fbp_value[:20]}...")
-        
-        # ✅ FBP: Gerar se ainda não tiver (fallback)
+        # ✅ FALLBACK FINAL: FBP - Gerar se ainda não tiver (apenas se não for crawler)
         def is_crawler(ua: str) -> bool:
             """Detecta se o User-Agent é um crawler/bot"""
             if not ua:
@@ -7956,7 +7961,18 @@ def send_meta_pixel_pageview_event(pool, request, pageview_event_id=None, tracki
         
         if not fbp_value and not is_crawler(request.headers.get('User-Agent', '')):
             fbp_value = TrackingService.generate_fbp()
-            logger.info(f"[META PAGEVIEW] PageView - fbp gerado no servidor (fallback): {fbp_value[:20]}...")
+            logger.info(f"[META PAGEVIEW] PageView - fbp gerado no servidor (fallback final): {fbp_value[:30]}...")
+        
+        # ✅ LOG FINAL: Mostrar resultado final
+        if fbc_value:
+            if fbc_origin == 'cookie':
+                logger.info(f"[META PAGEVIEW] PageView - fbc REAL confirmado (origem: cookie): {fbc_value[:50]}...")
+            elif fbc_origin == 'generated_from_fbclid':
+                logger.info(f"[META PAGEVIEW] PageView - fbc gerado conforme Meta best practices (origem: generated_from_fbclid): {fbc_value[:50]}...")
+            else:
+                logger.info(f"[META PAGEVIEW] PageView - fbc confirmado (origem: {fbc_origin}): {fbc_value[:50]}...")
+        else:
+            logger.warning(f"[META PAGEVIEW] PageView - fbc ausente após processamento - Meta pode ter atribuição reduzida")
         
         # ✅ CORREÇÃO SÊNIOR QI 500: Salvar tracking no Redis SEMPRE se external_id existir (garante matching!)
         # Remove filtro 'startswith('PAZ')' que quebra salvamento se external_id não começar com 'PAZ'
@@ -7966,11 +7982,15 @@ def send_meta_pixel_pageview_event(pool, request, pageview_event_id=None, tracki
         # TrackingService.save_tracking_data() é legado e não aceita event_source_url
         if external_id:  # ✅ Salvar SEMPRE se external_id existir (garante matching com Purchase!)
             try:
+                # ✅ SERVER-SIDE PARAMETER BUILDER: Salvar client_ip processado pelo Parameter Builder
+                # Prioridade: Parameter Builder (_fbi) > get_user_ip() (Cloudflare headers)
+                ip_address_to_save = client_ip_from_builder if client_ip_from_builder else get_user_ip(request)
+                
                 TrackingService.save_tracking_data(
                     fbclid=external_id,  # ✅ external_id já está normalizado (linha 7106)
-                    fbp=fbp_value,  # ✅ FBP do browser (prioridade máxima)
-                    fbc=fbc_value,
-                    ip_address=get_user_ip(request),
+                    fbp=fbp_value,  # ✅ FBP processado pelo Parameter Builder (prioridade máxima)
+                    fbc=fbc_value,  # ✅ FBC processado pelo Parameter Builder (cookie ou generated_from_fbclid)
+                    ip_address=ip_address_to_save,  # ✅ SERVER-SIDE PARAMETER BUILDER: IP processado pelo Parameter Builder
                     user_agent=request.headers.get('User-Agent', ''),
                     grim=grim_param,
                     utms=utm_params
@@ -8009,19 +8029,19 @@ def send_meta_pixel_pageview_event(pool, request, pageview_event_id=None, tracki
         
         # ✅ CRÍTICO: Usar _build_user_data com external_id string (será hashado internamente)
         # Isso garante que PageView e Purchase usem EXATAMENTE o mesmo formato
-        # ✅ CORREÇÃO CRÍTICA: Usar função get_user_ip() que prioriza Cloudflare headers
-        # Prioridade: CF-Connecting-IP > True-Client-IP > X-Forwarded-For > X-Real-IP > remote_addr
-        client_ip = get_user_ip(request)
+        # ✅ SERVER-SIDE PARAMETER BUILDER: Priorizar client_ip do Parameter Builder
+        # Prioridade: Parameter Builder (_fbi) > get_user_ip() (Cloudflare headers) > X-Forwarded-For > Remote-Addr
+        client_ip = client_ip_from_builder if client_ip_from_builder else get_user_ip(request)
         
         user_data = MetaPixelAPI._build_user_data(
             customer_user_id=None,  # Não temos telegram_user_id no PageView
             external_id=external_id_for_hash,  # ✅ SEMPRE tem valor (garante matching com Purchase!)
             email=None,
             phone=None,
-            client_ip=client_ip,  # ✅ CORRIGIDO: Usa get_user_ip() que prioriza Cloudflare headers
+            client_ip=client_ip,  # ✅ SERVER-SIDE PARAMETER BUILDER: Prioriza _fbi do Parameter Builder
             client_user_agent=request.headers.get('User-Agent', ''),
-            fbp=fbp_value,  # ✅ CRÍTICO: _fbp do cookie ou Redis
-            fbc=fbc_value  # ✅ CRÍTICO: _fbc do cookie, Redis ou gerado
+            fbp=fbp_value,  # ✅ SERVER-SIDE PARAMETER BUILDER: _fbp processado pelo Parameter Builder
+            fbc=fbc_value  # ✅ SERVER-SIDE PARAMETER BUILDER: _fbc processado pelo Parameter Builder
         )
         
         # ✅ CRÍTICO: Garantir que external_id existe (obrigatório para Conversions API)
@@ -8454,53 +8474,114 @@ def send_meta_pixel_purchase_event(payment):
 
         # ✅ CRÍTICO: Recuperar fbclid completo (até 255 chars) - NUNCA truncar!
         external_id_value = tracking_data.get('fbclid')
-        fbp_value = tracking_data.get('fbp')
-        fbc_value = tracking_data.get('fbc')
-        # ✅ CRÍTICO: Buscar client_ip em múltiplos campos (compatibilidade)
-        # Prioridade: client_ip (atualizado pelo Parameter Builder) > ip (legacy) > client_ip_address (legacy)
-        ip_value = tracking_data.get('client_ip') or tracking_data.get('ip') or tracking_data.get('client_ip_address')
-        # ✅ CRÍTICO: Se client_ip tem sufixo do Parameter Builder (.AQYBAQIA.AQYBAQIA), remover para usar apenas o IP
-        if ip_value and isinstance(ip_value, str) and '.AQYBAQIA' in ip_value:
-            # Remover sufixo do Parameter Builder (manter apenas o IP)
-            ip_value = ip_value.split('.AQYBAQIA')[0]
-            logger.info(f"[META PURCHASE] Purchase - client_ip limpo do sufixo Parameter Builder: {ip_value}")
-        user_agent_value = tracking_data.get('client_user_agent') or tracking_data.get('ua') or tracking_data.get('client_ua')
         
-        # ✅ LOG DETALHADO: Mostrar o que foi recuperado
-        logger.info(f"[META PURCHASE] Purchase - tracking_data recuperado do Redis: fbclid={'✅' if tracking_data.get('fbclid') else '❌'}, fbp={'✅' if tracking_data.get('fbp') else '❌'}, fbc={'✅' if tracking_data.get('fbc') else '❌'}, ip={'✅' if ip_value else '❌'}, ua={'✅' if user_agent_value else '❌'}")
-        # ✅ LOG CRÍTICO: Mostrar valor completo do client_ip se encontrado
-        if ip_value:
-            logger.info(f"[META PURCHASE] Purchase - client_ip encontrado: {ip_value[:50]}... (len={len(ip_value)})")
-        else:
-            logger.warning(f"[META PURCHASE] Purchase - client_ip NÃO encontrado no tracking_data! Campos disponíveis: {list(tracking_data.keys())}")
+        # ✅ SERVER-SIDE PARAMETER BUILDER: Processar dados do Redis/Payment/BotUser como se fossem cookies/request
+        # Conforme Meta best practices para maximizar cobertura de fbc e melhorar match quality
+        from utils.meta_pixel import process_meta_parameters
         
-        # ✅ CRÍTICO V4.1: Recuperar fbc se veio do cookie OU foi gerado conforme documentação Meta
-        # Meta aceita _fbc gerado quando fbclid está presente na URL (conforme documentação oficial)
-        # IGNORAR apenas se fbc_origin = 'synthetic' (gerado incorretamente)
-        fbc_value = None
-        fbc_origin = tracking_data.get('fbc_origin')
+        # ✅ Construir dicts simulando cookies e args para Parameter Builder
+        # Prioridade: tracking_data (Redis) > payment > bot_user
+        sim_cookies = {}
+        sim_args = {}
         
-        # ✅ PRIORIDADE 1: tracking_data com fbc (cookie OU generated_from_fbclid)
-        # Meta aceita ambos conforme documentação oficial
-        if tracking_data.get('fbc') and fbc_origin in ('cookie', 'generated_from_fbclid'):
-            fbc_value = tracking_data.get('fbc')
-            logger.info(f"[META PURCHASE] Purchase - fbc recuperado do tracking_data (origem: {fbc_origin}): {fbc_value[:50]}...")
-        # ✅ PRIORIDADE 2: BotUser (se foi salvo de cookie anteriormente)
+        # ✅ FBC: Recuperar de tracking_data, payment ou bot_user
+        if tracking_data.get('fbc'):
+            sim_cookies['_fbc'] = tracking_data.get('fbc')
+        elif getattr(payment, 'fbc', None):
+            sim_cookies['_fbc'] = payment.fbc
         elif bot_user and getattr(bot_user, 'fbc', None):
+            sim_cookies['_fbc'] = bot_user.fbc
+        
+        # ✅ FBP: Recuperar de tracking_data, payment ou bot_user
+        if tracking_data.get('fbp'):
+            sim_cookies['_fbp'] = tracking_data.get('fbp')
+        elif getattr(payment, 'fbp', None):
+            sim_cookies['_fbp'] = payment.fbp
+        elif bot_user and getattr(bot_user, 'fbp', None):
+            sim_cookies['_fbp'] = bot_user.fbp
+        
+        # ✅ FBI (client_ip do Parameter Builder): Recuperar de tracking_data
+        # Prioridade: client_ip (atualizado pelo Parameter Builder) > ip (legacy)
+        client_ip_from_tracking = tracking_data.get('client_ip') or tracking_data.get('ip')
+        if client_ip_from_tracking:
+            sim_cookies['_fbi'] = client_ip_from_tracking
+        
+        # ✅ FBclid: Recuperar de tracking_data, payment ou bot_user (para gerar fbc se necessário)
+        if tracking_data.get('fbclid'):
+            sim_args['fbclid'] = tracking_data.get('fbclid')
+        elif getattr(payment, 'fbclid', None):
+            sim_args['fbclid'] = payment.fbclid
+        elif bot_user and bot_user.fbclid:
+            sim_args['fbclid'] = bot_user.fbclid
+        
+        # ✅ Processar via Parameter Builder (valida e processa conforme Meta best practices)
+        param_builder_result = process_meta_parameters(
+            request_cookies=sim_cookies,
+            request_args=sim_args,
+            request_headers={},  # Não temos headers no Purchase
+            request_remote_addr=None,  # Não temos remote_addr no Purchase
+            referer=None  # Não temos referer no Purchase
+        )
+        
+        # ✅ PRIORIDADE: Parameter Builder > tracking_data (Redis) > payment > bot_user
+        # Parameter Builder tem prioridade porque processa e valida conforme Meta best practices
+        fbc_value = param_builder_result.get('fbc')
+        fbc_origin = param_builder_result.get('fbc_origin')
+        fbp_value_from_builder = param_builder_result.get('fbp')
+        client_ip_from_builder = param_builder_result.get('client_ip_address')
+        ip_origin = param_builder_result.get('ip_origin')
+        
+        # ✅ FBP: Inicializar com valor do Parameter Builder (prioridade máxima)
+        # Parameter Builder processa e valida conforme Meta best practices
+        fbp_value = fbp_value_from_builder  # ✅ PRIORIDADE 1: Parameter Builder
+        
+        # ✅ LOG: Mostrar origem dos parâmetros processados pelo Parameter Builder
+        if fbc_value:
+            logger.info(f"[META PURCHASE] Purchase - fbc processado pelo Parameter Builder (origem: {fbc_origin}): {fbc_value[:50]}...")
+        if fbp_value_from_builder:
+            logger.info(f"[META PURCHASE] Purchase - fbp processado pelo Parameter Builder (origem: {param_builder_result.get('fbp_origin')}): {fbp_value_from_builder[:30]}...")
+        if client_ip_from_builder:
+            logger.info(f"[META PURCHASE] Purchase - client_ip processado pelo Parameter Builder (origem: {ip_origin}): {client_ip_from_builder}")
+        
+        # ✅ FALLBACK: Se Parameter Builder não retornou valores, usar tracking_data (Redis)
+        
+        # ✅ FBP FALLBACK: Se Parameter Builder não retornou, tentar recuperar do tracking_data/bot_user/payment
+        if not fbp_value and tracking_data.get('fbp'):
+            fbp_value = tracking_data.get('fbp')
+            logger.info(f"[META PURCHASE] Purchase - fbp recuperado do tracking_data (Redis - fallback): {fbp_value[:30]}...")
+        
+        if not fbp_value and bot_user and getattr(bot_user, 'fbp', None):
+            fbp_value = bot_user.fbp
+            logger.info(f"[META PURCHASE] Purchase - fbp recuperado do bot_user (fallback): {fbp_value[:30]}...")
+        
+        if not fbp_value and getattr(payment, 'fbp', None):
+            fbp_value = payment.fbp
+            logger.info(f"[META PURCHASE] Purchase - fbp recuperado do payment (fallback): {fbp_value[:30]}...")
+        if not fbc_value and tracking_data.get('fbc'):
+            fbc_value = tracking_data.get('fbc')
+            fbc_origin = tracking_data.get('fbc_origin')
+            if fbc_value:
+                logger.info(f"[META PURCHASE] Purchase - fbc recuperado do tracking_data (Redis - fallback): {fbc_value[:50]}...")
+        
+        # ✅ FALLBACK: BotUser (se foi salvo de cookie anteriormente)
+        if not fbc_value and bot_user and getattr(bot_user, 'fbc', None):
             # ✅ ASSUMIR que BotUser.fbc veio de cookie (se foi salvo via process_start_async)
             fbc_value = bot_user.fbc
-            logger.info(f"[META PURCHASE] Purchase - fbc recuperado do BotUser (assumido como real): {fbc_value[:50]}...")
-        # ✅ PRIORIDADE 3: Payment (fallback final)
-        elif getattr(payment, 'fbc', None):
-            fbc_value = payment.fbc
-            logger.info(f"[META PURCHASE] Purchase - fbc recuperado do Payment (fallback): {fbc_value[:50]}...")
+            fbc_origin = 'cookie'  # Assumir origem cookie
+            logger.info(f"[META PURCHASE] Purchase - fbc recuperado do BotUser (fallback): {fbc_value[:50]}...")
         
-        # ✅ CRÍTICO V4.1: Aceitar fbc se veio do cookie OU foi gerado conforme documentação Meta
-        # Meta aceita _fbc gerado quando fbclid está presente na URL (conforme documentação oficial)
-        # IGNORAR apenas se fbc_origin = 'synthetic' (gerado incorretamente)
-        if fbc_origin == 'synthetic':
+        # ✅ FALLBACK: Payment (fallback final)
+        if not fbc_value and getattr(payment, 'fbc', None):
+            fbc_value = payment.fbc
+            fbc_origin = None  # Origem desconhecida
+            logger.info(f"[META PURCHASE] Purchase - fbc recuperado do Payment (fallback final): {fbc_value[:50]}...")
+        
+        # ✅ CRÍTICO V4.1: Validar fbc_origin para garantir que só enviamos fbc real
+        # Se fbc_origin = 'synthetic', IGNORAR (não usar fbc sintético - Meta não atribui)
+        if fbc_value and fbc_origin == 'synthetic':
             logger.warning(f"[META PURCHASE] Purchase - fbc IGNORADO (origem: synthetic) - Meta não atribui com fbc sintético")
             fbc_value = None
+            fbc_origin = None
         elif fbc_value and fbc_origin in ('cookie', 'generated_from_fbclid'):
             logger.info(f"[META PURCHASE] Purchase - fbc aceito (origem: {fbc_origin}): {fbc_value[:50]}...")
         
@@ -8522,14 +8603,40 @@ def send_meta_pixel_purchase_event(payment):
         else:
             logger.warning(f"[META PURCHASE] Purchase - ORIGEM: REMARKETING ou Tráfego DIRETO (sem fbclid)")
         
+        # ✅ SERVER-SIDE PARAMETER BUILDER: Priorizar client_ip processado pelo Parameter Builder
+        # Prioridade: Parameter Builder (_fbi) > tracking_data (client_ip) > tracking_data (ip legacy) > BotUser > Payment
+        ip_value = client_ip_from_builder  # ✅ PRIORIDADE 1: Parameter Builder (_fbi)
+        
+        # ✅ FALLBACK: Se Parameter Builder não retornou, tentar recuperar do tracking_data
+        if not ip_value:
+            ip_value = tracking_data.get('client_ip') or tracking_data.get('ip') or tracking_data.get('client_ip_address')
+            # ✅ CRÍTICO: Se client_ip tem sufixo do Parameter Builder (.AQYBAQIA.AQYBAQIA), remover para usar apenas o IP
+            if ip_value and isinstance(ip_value, str) and '.AQYBAQIA' in ip_value:
+                # Remover sufixo do Parameter Builder (manter apenas o IP)
+                ip_value = ip_value.split('.AQYBAQIA')[0]
+                logger.info(f"[META PURCHASE] Purchase - client_ip limpo do sufixo Parameter Builder: {ip_value}")
+        
+        user_agent_value = tracking_data.get('client_user_agent') or tracking_data.get('ua') or tracking_data.get('client_ua')
+        
         # ✅ LOG CRÍTICO: Mostrar campos do Payment e BotUser
         logger.info(f"[META PURCHASE] Purchase - Payment fields: fbp={bool(getattr(payment, 'fbp', None))}, fbc={bool(getattr(payment, 'fbc', None))}, fbclid={bool(getattr(payment, 'fbclid', None))}")
         logger.info(f"[META PURCHASE] Purchase - BotUser fields: ip_address={bool(bot_user and getattr(bot_user, 'ip_address', None))}, user_agent={bool(bot_user and getattr(bot_user, 'user_agent', None))}")
+        
+        # ✅ LOG DETALHADO: Mostrar o que foi recuperado (APÓS Parameter Builder)
+        logger.info(f"[META PURCHASE] Purchase - tracking_data recuperado do Redis: fbclid={'✅' if tracking_data.get('fbclid') else '❌'}, fbp={'✅' if fbp_value else '❌'}, fbc={'✅' if fbc_value else '❌'}, ip={'✅' if ip_value else '❌'} (origem: {ip_origin or 'fallback'}), ua={'✅' if user_agent_value else '❌'}")
+        # ✅ LOG CRÍTICO: Mostrar valor completo do client_ip se encontrado
+        if ip_value:
+            logger.info(f"[META PURCHASE] Purchase - client_ip encontrado (origem: {ip_origin or 'fallback'}): {ip_value[:50]}... (len={len(ip_value)})")
+        else:
+            logger.warning(f"[META PURCHASE] Purchase - client_ip NÃO encontrado! Campos disponíveis: {list(tracking_data.keys())}")
+        
         # ✅ FALLBACK: Recuperar IP e UA do Payment (se existirem - mas Payment não tem esses campos)
         if not ip_value and getattr(payment, 'client_ip', None):
             ip_value = payment.client_ip
+            logger.info(f"[META PURCHASE] Purchase - IP recuperado do Payment (fallback): {ip_value}")
         if not user_agent_value and getattr(payment, 'client_user_agent', None):
             user_agent_value = payment.client_user_agent
+            logger.info(f"[META PURCHASE] Purchase - User Agent recuperado do Payment (fallback): {user_agent_value[:50]}...")
         
         # ✅ FALLBACK CRÍTICO: Recuperar IP e UA do BotUser (campos existem: ip_address e user_agent)
         if not ip_value and bot_user and getattr(bot_user, 'ip_address', None):
@@ -8596,23 +8703,34 @@ def send_meta_pixel_purchase_event(payment):
                 bot_user.fbclid = external_id_value
             logger.info(f"✅ Purchase - fbclid salvo no bot_user: {bot_user.fbclid[:50]}... (len={len(bot_user.fbclid)})")
 
-        # ✅ FALLBACK: Tentar recuperar fbp do bot_user/payment se não estiver no tracking_data
+        # ✅ FBP: Usar valor do Parameter Builder (prioridade máxima)
+        # Parameter Builder processa e valida conforme Meta best practices
+        fbp_value = fbp_value_from_builder if fbp_value_from_builder else fbp_value
+        
+        # ✅ FALLBACK: Se Parameter Builder não retornou, tentar recuperar do tracking_data/bot_user/payment
         fbp_source = None
+        
+        if not fbp_value and tracking_data.get('fbp'):
+            fbp_value = tracking_data.get('fbp')
+            fbp_source = 'Redis (tracking_data)'
+            logger.info(f"[META PURCHASE] Purchase - fbp recuperado do tracking_data (Redis - fallback): {fbp_value[:30]}...")
         
         if not fbp_value and bot_user and getattr(bot_user, 'fbp', None):
             fbp_value = bot_user.fbp
             fbp_source = 'BotUser'
-            logger.info(f"[META PURCHASE] Purchase - fbp recuperado do bot_user: {fbp_value[:30]}...")
+            logger.info(f"[META PURCHASE] Purchase - fbp recuperado do bot_user (fallback): {fbp_value[:30]}...")
         
         if not fbp_value and getattr(payment, 'fbp', None):
             fbp_value = payment.fbp
             fbp_source = 'Payment'
-            logger.info(f"[META PURCHASE] Purchase - fbp recuperado do payment: {fbp_value[:30]}...")
+            logger.info(f"[META PURCHASE] Purchase - fbp recuperado do payment (fallback): {fbp_value[:30]}...")
         
         # ✅ LOG CRÍTICO: Rastrear origem de fbp
         if fbp_value:
             if not fbp_source:
-                if tracking_data.get('fbp') == fbp_value:
+                if param_builder_result.get('fbp'):
+                    fbp_source = 'Parameter Builder'
+                elif tracking_data.get('fbp') == fbp_value:
                     fbp_source = 'Redis (tracking_data)'
                 else:
                     fbp_source = 'Desconhecida'

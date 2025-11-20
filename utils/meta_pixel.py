@@ -59,6 +59,122 @@ def normalize_external_id(fbclid: str) -> str:
     return fbclid
 
 
+def process_meta_parameters(
+    request_cookies: dict = None,
+    request_args: dict = None,
+    request_headers: dict = None,
+    request_remote_addr: str = None,
+    referer: str = None
+) -> dict:
+    """
+    Processa cookies, query parameters e headers para extrair fbc, fbp e client_ip_address
+    conforme best practices do Meta Parameter Builder Library.
+    
+    ✅ SERVER-SIDE PARAMETER BUILDER (Implementação conforme Meta best practices)
+    
+    Prioridades:
+    - fbc: Cookie _fbc (browser) > Gerado baseado em fbclid (se presente na URL) > None
+    - fbp: Cookie _fbp (browser) > None
+    - client_ip_address: Cookie _fbi (Parameter Builder) > X-Forwarded-For > Remote-Addr > None
+    
+    Args:
+        request_cookies: Dict de cookies (ex: {'_fbc': '...', '_fbp': '...', '_fbi': '...'})
+        request_args: Dict de query parameters (ex: {'fbclid': '...'})
+        request_headers: Dict de headers (ex: {'X-Forwarded-For': '...', 'Referer': '...'})
+        request_remote_addr: IP do cliente (ex: '192.168.1.1')
+        referer: URL referer (ex: 'https://facebook.com/...')
+    
+    Returns:
+        dict com keys:
+            - 'fbc': str ou None (Facebook Click ID)
+            - 'fbc_origin': str ('cookie', 'generated_from_fbclid', ou None)
+            - 'fbp': str ou None (Facebook Browser ID)
+            - 'fbp_origin': str ('cookie' ou None)
+            - 'client_ip_address': str ou None (IP do cliente)
+            - 'ip_origin': str ('parameter_builder', 'x_forwarded_for', 'remote_addr', ou None)
+    """
+    result = {
+        'fbc': None,
+        'fbc_origin': None,
+        'fbp': None,
+        'fbp_origin': None,
+        'client_ip_address': None,
+        'ip_origin': None
+    }
+    
+    request_cookies = request_cookies or {}
+    request_args = request_args or {}
+    request_headers = request_headers or {}
+    
+    # ✅ FBC: Prioridade 1 - Cookie _fbc do browser (MAIS CONFIÁVEL - Meta confia 100%)
+    fbc_cookie = request_cookies.get('_fbc', '').strip()
+    if fbc_cookie and len(fbc_cookie) >= 10:
+        # Validar formato (deve começar com 'fb.1.' ou 'fb.2.')
+        if fbc_cookie.startswith(('fb.1.', 'fb.2.')):
+            result['fbc'] = fbc_cookie
+            result['fbc_origin'] = 'cookie'
+            logger.debug(f"[PARAM BUILDER] fbc capturado do cookie (ORIGEM REAL): {fbc_cookie[:50]}...")
+    
+    # ✅ FBC: Prioridade 2 - Gerar baseado em fbclid (se presente na URL)
+    # Meta aceita _fbc gerado quando fbclid está presente na URL (conforme documentação oficial)
+    if not result['fbc']:
+        fbclid = request_args.get('fbclid', '').strip()
+        if fbclid:
+            try:
+                # Formato: fb.1.{creationTime_ms}.{fbclid}
+                # creationTime_ms: Timestamp em milissegundos da criação do fbc
+                creation_time_ms = int(time.time() * 1000)
+                result['fbc'] = f"fb.1.{creation_time_ms}.{fbclid}"
+                result['fbc_origin'] = 'generated_from_fbclid'
+                logger.debug(f"[PARAM BUILDER] fbc gerado baseado em fbclid (conforme doc Meta): {result['fbc'][:50]}...")
+            except Exception as e:
+                logger.warning(f"[PARAM BUILDER] Erro ao gerar fbc baseado em fbclid: {e}")
+    
+    # ✅ FBP: Prioridade 1 - Cookie _fbp do browser (MAIS CONFIÁVEL)
+    fbp_cookie = request_cookies.get('_fbp', '').strip()
+    if fbp_cookie and len(fbp_cookie) >= 10:
+        # Validar formato (deve começar com 'fb.1.' ou 'fb.2.')
+        if fbp_cookie.startswith(('fb.1.', 'fb.2.')):
+            result['fbp'] = fbp_cookie
+            result['fbp_origin'] = 'cookie'
+            logger.debug(f"[PARAM BUILDER] fbp capturado do cookie: {fbp_cookie[:30]}...")
+    
+    # ✅ CLIENT_IP_ADDRESS: Prioridade 1 - Cookie _fbi do Parameter Builder (MAIS CONFIÁVEL)
+    # Parameter Builder prioriza IPv6, fallback IPv4 (melhor que IP do servidor para matching)
+    fbi_cookie = request_cookies.get('_fbi', '').strip()
+    if fbi_cookie:
+        # Limpar sufixo do Parameter Builder (.AQYBAQIA.AQYBAQIA) se presente
+        ip_value = fbi_cookie.split('.AQYBAQIA')[0] if '.AQYBAQIA' in fbi_cookie else fbi_cookie
+        # Validar formato básico de IP (IPv4 ou IPv6)
+        if len(ip_value) >= 7:  # Mínimo: '1.1.1.1' (7 chars)
+            result['client_ip_address'] = ip_value
+            result['ip_origin'] = 'parameter_builder'
+            logger.debug(f"[PARAM BUILDER] client_ip_address capturado do Parameter Builder (_fbi): {ip_value}")
+    
+    # ✅ CLIENT_IP_ADDRESS: Prioridade 2 - X-Forwarded-For header
+    if not result['client_ip_address']:
+        x_forwarded_for = request_headers.get('X-Forwarded-For', '').strip()
+        if x_forwarded_for:
+            # X-Forwarded-For pode conter múltiplos IPs (ex: 'client, proxy1, proxy2')
+            # Pegar o primeiro IP (IP do cliente original)
+            first_ip = x_forwarded_for.split(',')[0].strip()
+            if len(first_ip) >= 7:
+                result['client_ip_address'] = first_ip
+                result['ip_origin'] = 'x_forwarded_for'
+                logger.debug(f"[PARAM BUILDER] client_ip_address capturado do X-Forwarded-For: {first_ip}")
+    
+    # ✅ CLIENT_IP_ADDRESS: Prioridade 3 - Remote-Addr
+    if not result['client_ip_address'] and request_remote_addr:
+        remote_addr = str(request_remote_addr).strip()
+        # Validar que não é '0.0.0.0' ou vazio
+        if remote_addr and remote_addr != '0.0.0.0' and len(remote_addr) >= 7:
+            result['client_ip_address'] = remote_addr
+            result['ip_origin'] = 'remote_addr'
+            logger.debug(f"[PARAM BUILDER] client_ip_address capturado do Remote-Addr: {remote_addr}")
+    
+    return result
+
+
 class MetaPixelAPI:
     """
     Client para Meta Conversions API (CAPI)
