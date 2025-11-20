@@ -88,32 +88,58 @@ echo "3️⃣ Estatísticas dos últimos eventos (últimos 1000 linhas)..."
 echo ""
 
 if [ -f "logs/gunicorn.log" ]; then
-    TOTAL_PAGEVIEW=$(tail -1000 logs/gunicorn.log | grep -c "META PAGEVIEW.*PageView -" 2>/dev/null || echo "0")
-    PAGEVIEW_FBC=$(tail -1000 logs/gunicorn.log | grep -c "PageView - fbc processado pelo Parameter Builder" 2>/dev/null || echo "0")
-    PAGEVIEW_FBC_REAL=$(tail -1000 logs/gunicorn.log | grep -c "PageView - fbc REAL confirmado\|PageView - fbc confirmado" 2>/dev/null || echo "0")
-    PAGEVIEW_FBC_AUSENTE=$(tail -1000 logs/gunicorn.log | grep -c "PageView - fbc NÃO retornado pelo Parameter Builder" 2>/dev/null || echo "0")
+    # ✅ Contar eventos (garantir que variáveis sejam números)
+    TOTAL_PAGEVIEW=$(tail -1000 logs/gunicorn.log 2>/dev/null | grep -c "META PAGEVIEW.*PageView -" 2>/dev/null || echo "0")
+    PAGEVIEW_FBC=$(tail -1000 logs/gunicorn.log 2>/dev/null | grep -c "PageView - fbc processado pelo Parameter Builder" 2>/dev/null || echo "0")
+    PAGEVIEW_FBC_REAL=$(tail -1000 logs/gunicorn.log 2>/dev/null | grep -c "PageView - fbc REAL confirmado\|PageView - fbc confirmado" 2>/dev/null || echo "0")
+    PAGEVIEW_FBC_AUSENTE=$(tail -1000 logs/gunicorn.log 2>/dev/null | grep -c "PageView - fbc NÃO retornado pelo Parameter Builder" 2>/dev/null || echo "0")
     
-    TOTAL_PURCHASE=$(tail -1000 logs/gunicorn.log | grep -c "META PURCHASE.*Purchase -" 2>/dev/null || echo "0")
-    PURCHASE_FBC=$(tail -1000 logs/gunicorn.log | grep -c "Purchase - fbc processado pelo Parameter Builder" 2>/dev/null || echo "0")
-    PURCHASE_FBC_REAL=$(tail -1000 logs/gunicorn.log | grep -c "Purchase - fbc REAL aplicado" 2>/dev/null || echo "0")
-    PURCHASE_FBC_AUSENTE=$(tail -1000 logs/gunicorn.log | grep -c "Purchase - fbc ausente ou ignorado\|Purchase - fbc NÃO retornado pelo Parameter Builder" 2>/dev/null || echo "0")
+    TOTAL_PURCHASE=$(tail -1000 logs/gunicorn.log 2>/dev/null | grep -c "META PURCHASE.*Purchase -" 2>/dev/null || echo "0")
+    PURCHASE_FBC=$(tail -1000 logs/gunicorn.log 2>/dev/null | grep -c "Purchase - fbc processado pelo Parameter Builder" 2>/dev/null || echo "0")
+    PURCHASE_FBC_REAL=$(tail -1000 logs/gunicorn.log 2>/dev/null | grep -c "Purchase - fbc REAL aplicado" 2>/dev/null || echo "0")
+    PURCHASE_FBC_AUSENTE=$(tail -1000 logs/gunicorn.log 2>/dev/null | grep -c "Purchase - fbc ausente ou ignorado\|Purchase - fbc NÃO retornado pelo Parameter Builder" 2>/dev/null || echo "0")
+    
+    # ✅ Normalizar variáveis (remover espaços/newlines e garantir que sejam números)
+    TOTAL_PAGEVIEW=$(printf '%s' "${TOTAL_PAGEVIEW}" | tr -d ' \n\r' | grep -oE '^[0-9]+$' || echo "0")
+    PAGEVIEW_FBC=$(printf '%s' "${PAGEVIEW_FBC}" | tr -d ' \n\r' | grep -oE '^[0-9]+$' || echo "0")
+    PAGEVIEW_FBC_REAL=$(printf '%s' "${PAGEVIEW_FBC_REAL}" | tr -d ' \n\r' | grep -oE '^[0-9]+$' || echo "0")
+    PAGEVIEW_FBC_AUSENTE=$(printf '%s' "${PAGEVIEW_FBC_AUSENTE}" | tr -d ' \n\r' | grep -oE '^[0-9]+$' || echo "0")
+    
+    TOTAL_PURCHASE=$(printf '%s' "${TOTAL_PURCHASE}" | tr -d ' \n\r' | grep -oE '^[0-9]+$' || echo "0")
+    PURCHASE_FBC=$(printf '%s' "${PURCHASE_FBC}" | tr -d ' \n\r' | grep -oE '^[0-9]+$' || echo "0")
+    PURCHASE_FBC_REAL=$(printf '%s' "${PURCHASE_FBC_REAL}" | tr -d ' \n\r' | grep -oE '^[0-9]+$' || echo "0")
+    PURCHASE_FBC_AUSENTE=$(printf '%s' "${PURCHASE_FBC_AUSENTE}" | tr -d ' \n\r' | grep -oE '^[0-9]+$' || echo "0")
     
     echo "   📊 PageView:"
     echo "      Total: ${TOTAL_PAGEVIEW}"
     echo "      Com fbc (Parameter Builder): ${PAGEVIEW_FBC}"
     echo "      Com fbc REAL confirmado: ${PAGEVIEW_FBC_REAL}"
     echo "      Com fbc ausente: ${PAGEVIEW_FBC_AUSENTE}"
-    if [ "${TOTAL_PAGEVIEW}" -gt 0 ] 2>/dev/null; then
-        PAGEVIEW_COVERAGE=$(echo "scale=1; ${PAGEVIEW_FBC}*100/${TOTAL_PAGEVIEW}" | bc 2>/dev/null || echo "0")
-        echo "      Cobertura: ${PAGEVIEW_COVERAGE}%"
-        
-        if (( $(echo "${PAGEVIEW_COVERAGE} > 50" | bc -l 2>/dev/null || echo "0") )); then
-            echo "      ✅ Cobertura EXCELENTE (> 50%)"
-        elif (( $(echo "${PAGEVIEW_COVERAGE} > 20" | bc -l 2>/dev/null || echo "0") )); then
-            echo "      ⚠️ Cobertura ACEITÁVEL (20-50%)"
+    if [ "${TOTAL_PAGEVIEW}" -gt 0 ] 2>/dev/null && [ -n "${TOTAL_PAGEVIEW}" ]; then
+        # ✅ Garantir que valores sejam números antes de calcular
+        if [ "${PAGEVIEW_FBC}" -ge 0 ] 2>/dev/null && [ "${TOTAL_PAGEVIEW}" -gt 0 ] 2>/dev/null; then
+            PAGEVIEW_COVERAGE=$(echo "scale=1; ${PAGEVIEW_FBC}*100/${TOTAL_PAGEVIEW}" 2>/dev/null | bc 2>/dev/null | tr -d ' \n\r' || echo "0")
+            # ✅ Garantir que PAGEVIEW_COVERAGE seja um número válido
+            PAGEVIEW_COVERAGE=$(echo "${PAGEVIEW_COVERAGE}" | grep -oE '[0-9]+\.?[0-9]*' | head -1 || echo "0")
+            echo "      Cobertura: ${PAGEVIEW_COVERAGE}%"
+            
+            # ✅ Comparar usando bc (mais seguro)
+            COVERAGE_NUM=$(echo "${PAGEVIEW_COVERAGE}" | grep -oE '[0-9]+\.?[0-9]*' | head -1 || echo "0")
+            if [ -n "${COVERAGE_NUM}" ] && command -v bc >/dev/null 2>&1; then
+                if (( $(echo "${COVERAGE_NUM} > 50" | bc -l 2>/dev/null || echo "0") )); then
+                    echo "      ✅ Cobertura EXCELENTE (> 50%)"
+                elif (( $(echo "${COVERAGE_NUM} > 20" | bc -l 2>/dev/null || echo "0") )); then
+                    echo "      ⚠️ Cobertura ACEITÁVEL (20-50%)"
+                else
+                    echo "      ❌ Cobertura BAIXA (< 20%)"
+                fi
+            fi
         else
-            echo "      ❌ Cobertura BAIXA (< 20%)"
+            echo "      Cobertura: 0%"
+            echo "      ⚠️ Não foi possível calcular cobertura"
         fi
+    else
+        echo "      Cobertura: N/A (nenhum evento)"
     fi
     
     echo ""
@@ -122,18 +148,32 @@ if [ -f "logs/gunicorn.log" ]; then
     echo "      Com fbc (Parameter Builder): ${PURCHASE_FBC}"
     echo "      Com fbc REAL aplicado: ${PURCHASE_FBC_REAL}"
     echo "      Com fbc ausente: ${PURCHASE_FBC_AUSENTE}"
-    if [ "${TOTAL_PURCHASE}" -gt 0 ] 2>/dev/null && [ -n "${TOTAL_PURCHASE}" ] && [ "${TOTAL_PURCHASE}" != "0" ]; then
-        PURCHASE_COVERAGE=$(echo "scale=1; ${PURCHASE_FBC_REAL}*100/${TOTAL_PURCHASE}" | bc 2>/dev/null || echo "0")
-        echo "      Cobertura: ${PURCHASE_COVERAGE}%"
-        
-        if (( $(echo "${PURCHASE_COVERAGE} > 50" | bc -l 2>/dev/null || echo "0") )); then
-            echo "      ✅ Cobertura EXCELENTE (> 50%)"
-        elif (( $(echo "${PURCHASE_COVERAGE} > 20" | bc -l 2>/dev/null || echo "0") )); then
-            echo "      ⚠️ Cobertura ACEITÁVEL (20-50%)"
+        if [ "${TOTAL_PURCHASE}" -gt 0 ] 2>/dev/null && [ -n "${TOTAL_PURCHASE}" ]; then
+            # ✅ Garantir que valores sejam números antes de calcular
+            if [ "${PURCHASE_FBC_REAL}" -ge 0 ] 2>/dev/null && [ "${TOTAL_PURCHASE}" -gt 0 ] 2>/dev/null; then
+                PURCHASE_COVERAGE=$(echo "scale=1; ${PURCHASE_FBC_REAL}*100/${TOTAL_PURCHASE}" 2>/dev/null | bc 2>/dev/null | tr -d ' \n\r' || echo "0")
+                # ✅ Garantir que PURCHASE_COVERAGE seja um número válido
+                PURCHASE_COVERAGE=$(echo "${PURCHASE_COVERAGE}" | grep -oE '[0-9]+\.?[0-9]*' | head -1 || echo "0")
+                echo "      Cobertura: ${PURCHASE_COVERAGE}%"
+                
+                # ✅ Comparar usando bc (mais seguro)
+                COVERAGE_NUM=$(echo "${PURCHASE_COVERAGE}" | grep -oE '[0-9]+\.?[0-9]*' | head -1 || echo "0")
+                if [ -n "${COVERAGE_NUM}" ] && command -v bc >/dev/null 2>&1; then
+                    if (( $(echo "${COVERAGE_NUM} > 50" | bc -l 2>/dev/null || echo "0") )); then
+                        echo "      ✅ Cobertura EXCELENTE (> 50%)"
+                    elif (( $(echo "${COVERAGE_NUM} > 20" | bc -l 2>/dev/null || echo "0") )); then
+                        echo "      ⚠️ Cobertura ACEITÁVEL (20-50%)"
+                    else
+                        echo "      ❌ Cobertura BAIXA (< 20%)"
+                    fi
+                fi
+            else
+                echo "      Cobertura: 0%"
+                echo "      ⚠️ Não foi possível calcular cobertura"
+            fi
         else
-            echo "      ❌ Cobertura BAIXA (< 20%)"
+            echo "      Cobertura: N/A (nenhum evento)"
         fi
-    fi
 else
     echo "   ⚠️ Arquivo logs/gunicorn.log não encontrado"
 fi
