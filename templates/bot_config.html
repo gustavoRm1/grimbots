@@ -3602,7 +3602,12 @@ body {
                             endpointHoverStyle: { fill: '#60A5FA', radius: 7 },
                             connector: ['Flowchart', { stub: [10, 15], gap: 5, cornerRadius: 5, alwaysRespectStubs: true }],
                             anchors: ['Right', 'Left', 'Top', 'Bottom'],
-                            maxConnections: -1
+                            maxConnections: -1,
+                            // ✅ CRÍTICO: Habilitar drag de conexões - linha segue o mouse
+                            dragOptions: {
+                                cursor: 'crosshair',
+                                zIndex: 10000
+                            }
                         });
                     } else if (typeof jsPlumb !== 'undefined' && jsPlumb && jsPlumb.jsPlumb && typeof jsPlumb.jsPlumb.getInstance === 'function') {
                         console.log('✅ Usando jsPlumb.jsPlumb 2.x (versão estável)');
@@ -3614,7 +3619,12 @@ body {
                             endpointHoverStyle: { fill: '#60A5FA', radius: 7 },
                             connector: ['Flowchart', { stub: [10, 15], gap: 5, cornerRadius: 5, alwaysRespectStubs: true }],
                             anchors: ['Right', 'Left', 'Top', 'Bottom'],
-                            maxConnections: -1
+                            maxConnections: -1,
+                            // ✅ CRÍTICO: Habilitar drag de conexões - linha segue o mouse
+                            dragOptions: {
+                                cursor: 'crosshair',
+                                zIndex: 10000
+                            }
                         });
                     } else if (typeof jsPlumb !== 'undefined' && jsPlumb && typeof jsPlumb.getInstance === 'function') {
                         console.log('✅ Usando jsPlumb global (versão antiga)');
@@ -4294,8 +4304,10 @@ body {
                                             stepOutputEndpoint.style.boxShadow = '0 0 10px rgba(239, 68, 68, 0.9)';
                                         });
                                         
-                                        // ✅ Conectar bola vermelha geral ao jsPlumb
+                                        // ✅ Conectar bola vermelha geral ao jsPlumb - HABILITAR DRAG
                                         if (typeof this.jsPlumbInstance.makeSource === 'function') {
+                                            // ✅ CRÍTICO: Configurar para permitir drag da bolinha vermelha
+                                            // ✅ CRÍTICO: makeSource permite drag automático - linha sai da bolinha e segue o mouse
                                             this.jsPlumbInstance.makeSource(stepOutputEndpoint, {
                                                 anchor: 'Right',
                                                 endpoint: ['Dot', { radius: 10 }],
@@ -4415,7 +4427,8 @@ body {
                                                 endpointEl.style.boxShadow = '0 0 8px rgba(255, 107, 107, 0.8)';
                                             });
                                             
-                                            // ✅ HABILITAR ARRASTE: linha segue o mouse ao arrastar da bolinha VERMELHA
+                                            // ✅ CRÍTICO: makeSource permite drag automático - linha sai da bolinha e segue o mouse
+                                            // ✅ Ao clicar e arrastar da bolinha vermelha, a linha deve sair dali e acompanhar o mouse
                                             this.jsPlumbInstance.makeSource(endpointEl, {
                                                 anchor: 'Right',
                                                 endpoint: ['Dot', { radius: 10 }],
