@@ -4548,7 +4548,13 @@ document.addEventListener('alpine:init', () => {
                             }
                         });
                         
-                        // ✅ Conectar steps baseado em connections
+                        // ✅ REMOVIDO: Conexões automáticas - linhas só aparecem quando usuário arrasta da bola vermelha para a verde
+                        // As conexões serão criadas apenas quando o usuário arrastar manualmente os endpoints
+                        // Isso dá mais controle ao usuário sobre como conectar os steps
+                        console.log('✅ Endpoints criados! Arraste da bola VERMELHA (saída) para a bola VERDE (entrada) para criar conexões.');
+                        
+                        // ✅ OBSOLETO: Código de conexão automática removido - conexões devem ser criadas manualmente pelo usuário
+                        /*
                         steps.forEach(step => {
                             const stepEl = document.getElementById(`flow-step-${step.id}`);
                             if (!stepEl) return;
@@ -4688,9 +4694,10 @@ document.addEventListener('alpine:init', () => {
                                 }
                             }
                             
-                            // ✅ Conectar botões customizados (TODOS os tipos de step) - LINHAS VERMELHAS
+                            // ✅ Conectar botões customizados - REMOVIDO (conexões devem ser criadas manualmente)
                             // ✅ Cada botão customizado pode ter sua própria conexão para um step diferente
                             // ✅ Aguardar endpoints serem criados antes de conectar
+                            /*
                             setTimeout(() => {
                                 if (step.config && step.config.custom_buttons && step.config.custom_buttons.length > 0) {
                                     step.config.custom_buttons.forEach((btn, btnIdx) => {
@@ -4828,31 +4835,33 @@ document.addEventListener('alpine:init', () => {
                                 });
                             }
                             }, 200); // Delay maior para garantir que endpoints foram criados
+                            */
                             
-                            // ✅ Conectar condições
-                            if (step.conditions && step.conditions.length > 0) {
-                                step.conditions.forEach((cond, idx) => {
-                                    if (cond.target_step) {
-                                        const targetEl = document.getElementById(`flow-step-${cond.target_step}`);
-                                        if (targetEl) {
-                                            try {
-                                                this.jsPlumbInstance.connect({
-                                                    source: stepEl,
-                                                    target: targetEl,
-                                                    paintStyle: { stroke: '#8B5CF6', strokeWidth: 2, strokeDasharray: '5,5' },
-                                                    overlays: [
-                                                        ['Arrow', { location: 1, width: 10, length: 10 }],
-                                                        ['Label', { label: `Cond ${idx + 1}`, location: 0.5, cssClass: 'connection-label' }]
-                                                    ]
-                                                });
-                                            } catch (e) {
-                                                console.error('❌ Erro ao conectar condição:', e);
-                                            }
-                                        }
-                                    }
-                                });
-                            }
-                        });
+                            // ✅ Conectar condições - REMOVIDO (conexões devem ser criadas manualmente)
+                            // if (step.conditions && step.conditions.length > 0) {
+                            //     step.conditions.forEach((cond, idx) => {
+                            //         if (cond.target_step) {
+                            //             const targetEl = document.getElementById(`flow-step-${cond.target_step}`);
+                            //             if (targetEl) {
+                            //                 try {
+                            //                     this.jsPlumbInstance.connect({
+                            //                         source: stepEl,
+                            //                         target: targetEl,
+                            //                         paintStyle: { stroke: '#8B5CF6', strokeWidth: 2, strokeDasharray: '5,5' },
+                            //                         overlays: [
+                            //                             ['Arrow', { location: 1, width: 10, length: 10 }],
+                            //                             ['Label', { label: `Cond ${idx + 1}`, location: 0.5, cssClass: 'connection-label' }]
+                            //                         ]
+                            //                     });
+                            //                 } catch (e) {
+                            //                     console.error('❌ Erro ao conectar condição:', e);
+                            //                 }
+                            //             }
+                            //         }
+                            //     });
+                            // }
+                        // });
+                        */
                         
                         // ✅ PERMITIR REMOVER CONEXÕES - CRÍTICO PARA USABILIDADE
                         try {
