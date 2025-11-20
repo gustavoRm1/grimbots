@@ -4266,81 +4266,9 @@ body {
                                 console.error('❌ Erro ao tornar arrastável:', e);
                             }
                             
-                            // ✅ NOVO SISTEMA: Endpoint VERDE (entrada) sempre visível, VERMELHO (saída) condicional
-                            // Verificar se step tem botões
-                            const hasButtons = (step.config && step.config.custom_buttons && step.config.custom_buttons.length > 0) ||
-                                             (step.config && step.config.selected_buttons && step.config.selected_buttons.length > 0);
-                            
-                            try {
-                                // ✅ SEMPRE adicionar endpoint VERDE (entrada) à ESQUERDA
-                                if (typeof this.jsPlumbInstance.makeTarget === 'function') {
-                                    // jsPlumb 2.x - Endpoint VERDE de entrada (sempre visível)
-                                    this.jsPlumbInstance.makeTarget(stepEl, {
-                                        anchor: 'Left',
-                                        endpoint: ['Dot', { radius: 10 }],
-                                        paintStyle: { fill: '#10B981', radius: 10, stroke: '#059669', strokeWidth: 3 },
-                                        hoverPaintStyle: { fill: '#34D399', radius: 12 },
-                                        isSource: false,
-                                        isTarget: true,
-                                        maxConnections: -1,
-                                        dropOptions: { hoverClass: 'drop-hover', activeClass: 'drop-active' }
-                                    });
-                                } else if (typeof this.jsPlumbInstance.addEndpoint === 'function') {
-                                    // jsPlumb 5.x - Endpoint VERDE de entrada
-                                    this.jsPlumbInstance.addEndpoint(stepEl, {
-                                        anchor: 'Left',
-                                        endpoint: ['Dot', { radius: 10 }],
-                                        paintStyle: { fill: '#10B981', radius: 10, stroke: '#059669', strokeWidth: 3 },
-                                        hoverPaintStyle: { fill: '#34D399', radius: 12 },
-                                        isSource: false,
-                                        isTarget: true,
-                                        maxConnections: -1,
-                                        dropOptions: { hoverClass: 'drop-hover', activeClass: 'drop-active' }
-                                    }, {
-                                        uuid: `target-${stepId}`
-                                    });
-                                }
-                                
-                                // ✅ Apenas adicionar endpoint VERMELHO geral se NÃO tiver botões
-                                if (!hasButtons) {
-                                    if (typeof this.jsPlumbInstance.makeSource === 'function') {
-                                        // jsPlumb 2.x - Endpoint VERMELHO de saída (quando não há botões)
-                                        this.jsPlumbInstance.makeSource(stepEl, {
-                                            anchor: 'Right',
-                                            endpoint: ['Dot', { radius: 10 }],
-                                            paintStyle: { fill: '#EF4444', radius: 10, stroke: '#DC2626', strokeWidth: 3 },
-                                            hoverPaintStyle: { fill: '#F87171', radius: 12 },
-                                            isSource: true,
-                                            isTarget: false,
-                                            maxConnections: -1,
-                                            connector: ['Flowchart', { stub: [10, 15], gap: 5, cornerRadius: 5, alwaysRespectStubs: true }],
-                                            connectorStyle: { stroke: '#EF4444', strokeWidth: 2 },
-                                            connectorHoverStyle: { stroke: '#F87171', strokeWidth: 3 },
-                                            beforeDrop: () => { return true; },
-                                            onMaxConnections: () => { console.log('⚠️ Máximo de conexões atingido'); }
-                                        });
-                                    } else if (typeof this.jsPlumbInstance.addEndpoint === 'function') {
-                                        // jsPlumb 5.x - Endpoint VERMELHO de saída
-                                        this.jsPlumbInstance.addEndpoint(stepEl, {
-                                            anchor: 'Right',
-                                            endpoint: ['Dot', { radius: 10 }],
-                                            paintStyle: { fill: '#EF4444', radius: 10, stroke: '#DC2626', strokeWidth: 3 },
-                                            hoverPaintStyle: { fill: '#F87171', radius: 12 },
-                                            isSource: true,
-                                            isTarget: false,
-                                            maxConnections: -1,
-                                            connector: ['Flowchart', { stub: [10, 15], gap: 5, cornerRadius: 5, alwaysRespectStubs: true }],
-                                            connectorStyle: { stroke: '#EF4444', strokeWidth: 2 },
-                                            connectorHoverStyle: { stroke: '#F87171', strokeWidth: 3 },
-                                            beforeDrop: () => { return true; }
-                                        }, {
-                                            uuid: `source-${stepId}`
-                                        });
-                                    }
-                                }
-                            } catch (e) {
-                                console.error('❌ Erro ao adicionar endpoints:', e);
-                            }
+                            // ✅ CRÍTICO: NÃO usar makeTarget/makeSource no card inteiro!
+                            // ✅ Endpoints serão criados APENAS nos elementos visuais (bolinhas) dentro do setTimeout abaixo
+                            // ✅ Isso previne conexões automáticas ao clicar/arrastar o card
                             
                             // ✅ Adicionar endpoints INDIVIDUAIS para TODOS os botões (customizados + cadastrados)
                             // ✅ Usar os elementos visuais criados no HTML (.btn-visual-endpoint)
@@ -4383,7 +4311,8 @@ body {
                                                 onMaxConnections: () => { console.log('⚠️ Máximo de conexões atingido'); }
                                             });
                                         } else if (typeof this.jsPlumbInstance.addEndpoint === 'function') {
-                                            this.jsPlumbInstance.addEndpoint(stepEl, {
+                                            // jsPlumb 5.x - Endpoint VERMELHO apenas na bolinha visual
+                                            this.jsPlumbInstance.addEndpoint(stepOutputEndpoint, {
                                                 anchor: 'Right',
                                                 endpoint: ['Dot', { radius: 10 }],
                                                 paintStyle: { fill: '#EF4444', radius: 10, stroke: '#DC2626', strokeWidth: 3 },
@@ -4401,6 +4330,55 @@ body {
                                         }
                                         
                                         console.log(`✅ Bola vermelha geral conectada para step ${stepId}`);
+                                    }
+                                    
+                                    // ✅ CRÍTICO: Criar endpoint VERDE (entrada) APENAS no elemento visual
+                                    // ✅ Isso previne criação de conexões ao clicar no card inteiro
+                                    const stepInputEndpoint = stepEl.querySelector('.step-input-endpoint');
+                                    if (stepInputEndpoint) {
+                                        const inputEndpointId = `target-${stepId}`;
+                                        stepInputEndpoint.id = inputEndpointId;
+                                        
+                                        // Adicionar efeito hover no endpoint verde
+                                        stepInputEndpoint.addEventListener('mouseenter', () => {
+                                            stepInputEndpoint.style.transform = 'scale(1.3)';
+                                            stepInputEndpoint.style.boxShadow = '0 0 12px rgba(16, 185, 129, 1)';
+                                        });
+                                        stepInputEndpoint.addEventListener('mouseleave', () => {
+                                            stepInputEndpoint.style.transform = 'scale(1)';
+                                            stepInputEndpoint.style.boxShadow = '0 0 10px rgba(16, 185, 129, 0.9)';
+                                        });
+                                        
+                                        // ✅ Criar endpoint jsPlumb APENAS no elemento visual (bolinha verde)
+                                        if (typeof this.jsPlumbInstance.makeTarget === 'function') {
+                                            // jsPlumb 2.x - Endpoint VERDE apenas na bolinha visual
+                                            this.jsPlumbInstance.makeTarget(stepInputEndpoint, {
+                                                anchor: 'Left',
+                                                endpoint: ['Dot', { radius: 10 }],
+                                                paintStyle: { fill: '#10B981', radius: 10, stroke: '#059669', strokeWidth: 3 },
+                                                hoverPaintStyle: { fill: '#34D399', radius: 12 },
+                                                isSource: false,
+                                                isTarget: true,
+                                                maxConnections: -1,
+                                                dropOptions: { hoverClass: 'drop-hover', activeClass: 'drop-active' }
+                                            });
+                                        } else if (typeof this.jsPlumbInstance.addEndpoint === 'function') {
+                                            // jsPlumb 5.x - Endpoint VERDE apenas na bolinha visual
+                                            this.jsPlumbInstance.addEndpoint(stepInputEndpoint, {
+                                                anchor: 'Left',
+                                                endpoint: ['Dot', { radius: 10 }],
+                                                paintStyle: { fill: '#10B981', radius: 10, stroke: '#059669', strokeWidth: 3 },
+                                                hoverPaintStyle: { fill: '#34D399', radius: 12 },
+                                                isSource: false,
+                                                isTarget: true,
+                                                maxConnections: -1,
+                                                dropOptions: { hoverClass: 'drop-hover', activeClass: 'drop-active' }
+                                            }, {
+                                                uuid: inputEndpointId
+                                            });
+                                        }
+                                        
+                                        console.log(`✅ Bola verde (entrada) conectada para step ${stepId}`);
                                     }
                                     
                                     // ✅ Agora, adicionar endpoints para cada botão
@@ -4453,27 +4431,6 @@ body {
                                                     console.log('⚠️ Máximo de conexões atingido para este botão');
                                                 }
                                             });
-                                            
-                                            // ✅ Garantir que todos os steps podem receber conexões (makeTarget) - apenas se não existir
-                                            try {
-                                                // Verificar se já tem target (evitar duplicação)
-                                                const existingTargets = this.jsPlumbInstance.getTargets(stepEl);
-                                                if (!existingTargets || existingTargets.length === 0) {
-                                                    this.jsPlumbInstance.makeTarget(stepEl, {
-                                                        anchor: 'Left',
-                                                        endpoint: ['Dot', { radius: 8 }],
-                                                        paintStyle: { fill: '#10B981', radius: 8, stroke: '#059669', strokeWidth: 2 },
-                                                        hoverPaintStyle: { fill: '#34D399', radius: 10 },
-                                                        isSource: false,
-                                                        isTarget: true,
-                                                        maxConnections: -1,
-                                                        dropOptions: { hoverClass: 'drop-hover', activeClass: 'drop-active' }
-                                                    });
-                                                }
-                                            } catch (e) {
-                                                // Já existe ou erro, continuar
-                                                console.debug('Target já existe ou erro:', e);
-                                            }
                                         } else if (typeof this.jsPlumbInstance.addEndpoint === 'function') {
                                             // jsPlumb 5.x: criar endpoint usando posição do elemento visual
                                             endpointEl.id = buttonEndpointId;
@@ -4495,6 +4452,8 @@ body {
                                             const relativeTop = (rect.top - stepRect.top + rect.height / 2) / stepRect.height;
                                             
                                             // ✅ HABILITAR ARRASTE: linha segue o mouse ao arrastar da bolinha VERMELHA
+                                            // ✅ jsPlumb 5.x: usar elemento visual como base, mas endpoint no stepEl para posicionamento correto
+                                            // NOTA: Para jsPlumb 5.x, precisamos calcular a posição relativa e usar stepEl, mas com UUID único
                                             this.jsPlumbInstance.addEndpoint(stepEl, {
                                                 anchor: ['Right', relativeTop, 1, 0, 0, 0],
                                                 endpoint: ['Dot', { radius: 10 }],
@@ -4523,34 +4482,8 @@ body {
                                                 });
                                             }
                                             
-                                            // ✅ Garantir que todos os steps podem receber conexões (addEndpoint como target)
-                                            const targetEndpointId = `target-${stepId}`;
-                                            try {
-                                                // Verificar se já existe
-                                                let targetEndpoint = null;
-                                                try {
-                                                    targetEndpoint = this.jsPlumbInstance.getEndpoint(targetEndpointId);
-                                                } catch (e) {
-                                                    // Não existe, criar
-                                                }
-                                                
-                                                if (!targetEndpoint) {
-                                                    this.jsPlumbInstance.addEndpoint(stepEl, {
-                                                        anchor: 'Left',
-                                                        endpoint: ['Dot', { radius: 8 }],
-                                                        paintStyle: { fill: '#10B981', stroke: '#059669', strokeWidth: 2 },
-                                                        hoverPaintStyle: { fill: '#34D399', radius: 10 },
-                                                        isSource: false,
-                                                        isTarget: true,
-                                                        maxConnections: -1,
-                                                        dropOptions: { hoverClass: 'drop-hover', activeClass: 'drop-active' }
-                                                    }, {
-                                                        uuid: targetEndpointId
-                                                    });
-                                                }
-                                            } catch (e) {
-                                                // Já existe, continuar
-                                            }
+                                            // ✅ NÃO criar endpoint verde aqui - já foi criado acima apenas no elemento visual
+                                            // ✅ Isso previne duplicação e conexões automáticas ao clicar no card
                                         }
                                     });
                                 }, 100); // Delay para garantir DOM renderizado
