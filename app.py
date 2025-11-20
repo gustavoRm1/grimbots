@@ -7583,29 +7583,51 @@ def delivery_page(delivery_token):
             status='paid'
         ).first_or_404()
         
-        # ✅ Buscar pool para configurar pixel
-        pool_bot = PoolBot.query.filter_by(bot_id=payment.bot_id).first()
-        if not pool_bot:
-            logger.error(f"❌ Payment {payment.id}: Bot não está associado a nenhum pool")
-            return render_template('delivery_error.html', error="Configuração inválida"), 500
+        # ✅ Buscar pool CORRETO (o que gerou o PageView, não o primeiro)
+        # Prioridade: 1) pool_id do tracking_data, 2) primeiro pool do bot
+        pool_id_from_tracking = None
+        pool_bot = None
         
-        pool = pool_bot.pool
-        has_meta_pixel = pool and pool.meta_tracking_enabled and pool.meta_pixel_id and pool.meta_access_token
-        
-        # ✅ Link final para redirecionar (configurado pelo usuário)
-        redirect_url = payment.bot.config.access_link if payment.bot.config and payment.bot.config.access_link else None
-        
-        # ✅ RECUPERAR tracking_data do Redis (para matching perfeito)
-        tracking_data = {}
+        # ✅ RECUPERAR tracking_data primeiro (para identificar pool correto)
         tracking_service_v4 = TrackingServiceV4()
-        
-        # Prioridade 1: bot_user.tracking_session_id (token do redirect)
         telegram_user_id = payment.customer_user_id.replace('user_', '') if payment.customer_user_id and payment.customer_user_id.startswith('user_') else payment.customer_user_id
         bot_user = BotUser.query.filter_by(
             bot_id=payment.bot_id,
             telegram_user_id=str(telegram_user_id)
         ).first()
         
+        if bot_user and bot_user.tracking_session_id:
+            temp_tracking_data = tracking_service_v4.recover_tracking_data(bot_user.tracking_session_id) or {}
+            pool_id_from_tracking = temp_tracking_data.get('pool_id')
+        
+        # ✅ Buscar pool CORRETO
+        if pool_id_from_tracking:
+            pool_bot = PoolBot.query.filter_by(bot_id=payment.bot_id, pool_id=pool_id_from_tracking).first()
+            if pool_bot:
+                logger.info(f"✅ Delivery - Pool correto encontrado via tracking_data: pool_id={pool_id_from_tracking}")
+        
+        # Fallback: primeiro pool do bot
+        if not pool_bot:
+            pool_bot = PoolBot.query.filter_by(bot_id=payment.bot_id).first()
+            if pool_bot:
+                logger.warning(f"⚠️ Delivery - Usando primeiro pool do bot (pool_id não encontrado no tracking_data): pool_id={pool_bot.pool_id}")
+        
+        if not pool_bot:
+            logger.error(f"❌ Payment {payment.id}: Bot não está associado a nenhum pool")
+            return render_template('delivery_error.html', error="Configuração inválida"), 500
+        
+        pool = pool_bot.pool
+        # ✅ CRÍTICO: Se pool tem meta_pixel_id, SEMPRE renderizar pixel (mesmo sem access_token para client-side)
+        # Access token é necessário apenas para server-side (Conversions API), client-side não precisa
+        has_meta_pixel = pool and pool.meta_pixel_id  # ✅ SIMPLIFICADO: Apenas verificar se tem pixel_id
+        
+        # ✅ Link final para redirecionar (configurado pelo usuário)
+        redirect_url = payment.bot.config.access_link if payment.bot.config and payment.bot.config.access_link else None
+        
+        # ✅ RECUPERAR tracking_data do Redis (para matching perfeito)
+        tracking_data = {}
+        
+        # Prioridade 1: bot_user.tracking_session_id (token do redirect)
         if bot_user and bot_user.tracking_session_id:
             tracking_data = tracking_service_v4.recover_tracking_data(bot_user.tracking_session_id) or {}
             logger.info(f"✅ Delivery - tracking_data recuperado via bot_user.tracking_session_id: {len(tracking_data)} campos")
@@ -7657,11 +7679,15 @@ def delivery_page(delivery_token):
             'campaign_code': tracking_data.get('campaign_code') or tracking_data.get('grim') or ''
         }
         
+        # ✅ CRÍTICO: DEDUPLICAÇÃO - Garantir que Purchase NÃO seja enviado duplicado
+        # ✅ ANTI-DUPLICAÇÃO: Usar MESMO event_id no client-side e server-side (via pageview_event_id)
+        # Meta deduplicará automaticamente se event_id for o mesmo
+        # ✅ Lock pessimista: marcar meta_purchase_sent ANTES de enviar para evitar condição de corrida
+        purchase_already_sent = payment.meta_purchase_sent
+        
         # ✅ CRÍTICO: ENVIAR PURCHASE VIA SERVER (Conversions API) TAMBÉM!
         # Isso garante que Purchase seja enviado mesmo se client-side falhar
-        # ✅ ANTI-DUPLICAÇÃO: Usar MESMO event_id no client-side e server-side (via pageview_event_id)
-        # Meta deduplicará automaticamente se event_id for o mesmo, mesmo sem pageview_event_id
-        if has_meta_pixel and not payment.meta_purchase_sent:
+        if has_meta_pixel and not purchase_already_sent:
             try:
                 # ✅ CRÍTICO: Lock pessimista - marcar ANTES de enviar para evitar chamadas duplicadas
                 # Isso evita condição de corrida onde duas chamadas veem meta_purchase_sent=False simultaneamente
