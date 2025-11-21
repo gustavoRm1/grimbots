@@ -107,6 +107,20 @@
 }
 
 /* ✅ Endpoints VERDE (entrada) e VERMELHO (saída) */
+/* ✅ CRÍTICO: Ocultar endpoints jsPlumb padrão - usamos apenas elementos visuais HTML */
+.jtk-endpoint {
+    display: none !important; /* ✅ Ocultar endpoints jsPlumb - usamos apenas elementos visuais */
+}
+
+/* ✅ Manter visíveis apenas nossos elementos visuais customizados */
+.step-input-endpoint,
+.step-output-endpoint,
+.btn-visual-endpoint {
+    display: block !important;
+    pointer-events: auto !important;
+}
+
+/* ✅ Estilos para endpoints visuais (já definidos inline, mas garantir) */
 .jtk-endpoint[data-endpoint-type="input"] {
     background: #10B981 !important;
     border: 3px solid #059669 !important;
@@ -4346,11 +4360,12 @@ body {
                                         if (typeof this.jsPlumbInstance.makeSource === 'function') {
                                             // ✅ CRÍTICO: Configurar para permitir drag da bolinha vermelha
                                             // ✅ CRÍTICO: makeSource permite drag automático - linha sai da bolinha e segue o mouse
+                                            // ✅ Usar endpoint invisível (radius: 0) para não duplicar visualmente
                                             this.jsPlumbInstance.makeSource(stepOutputEndpoint, {
                                                 anchor: 'Right',
-                                                endpoint: ['Dot', { radius: 10 }],
-                                                paintStyle: { fill: '#EF4444', radius: 10, stroke: '#DC2626', strokeWidth: 3 },
-                                                hoverPaintStyle: { fill: '#F87171', radius: 12 },
+                                                endpoint: ['Dot', { radius: 0 }], // ✅ Invisível - elemento HTML já é visível
+                                                paintStyle: { fill: 'transparent', radius: 0, stroke: 'transparent', strokeWidth: 0 },
+                                                hoverPaintStyle: { fill: 'transparent', radius: 0 },
                                                 isSource: true,
                                                 isTarget: false,
                                                 maxConnections: -1,
@@ -4362,11 +4377,12 @@ body {
                                             });
                                         } else if (typeof this.jsPlumbInstance.addEndpoint === 'function') {
                                             // jsPlumb 5.x - Endpoint VERMELHO apenas na bolinha visual
+                                            // ✅ Usar endpoint invisível (radius: 0) para não duplicar visualmente
                                             this.jsPlumbInstance.addEndpoint(stepOutputEndpoint, {
                                                 anchor: 'Right',
-                                                endpoint: ['Dot', { radius: 10 }],
-                                                paintStyle: { fill: '#EF4444', radius: 10, stroke: '#DC2626', strokeWidth: 3 },
-                                                hoverPaintStyle: { fill: '#F87171', radius: 12 },
+                                                endpoint: ['Dot', { radius: 0 }], // ✅ Invisível - elemento HTML já é visível
+                                                paintStyle: { fill: 'transparent', radius: 0, stroke: 'transparent', strokeWidth: 0 },
+                                                hoverPaintStyle: { fill: 'transparent', radius: 0 },
                                                 isSource: true,
                                                 isTarget: false,
                                                 maxConnections: -1,
@@ -4400,13 +4416,15 @@ body {
                                         });
                                         
                                         // ✅ Criar endpoint jsPlumb APENAS no elemento visual (bolinha verde)
+                                        // ✅ CRÍTICO: Usar endpoint invisível do jsPlumb, mas manter elemento visual HTML visível
                                         if (typeof this.jsPlumbInstance.makeTarget === 'function') {
                                             // jsPlumb 2.x - Endpoint VERDE apenas na bolinha visual
+                                            // ✅ Usar endpoint invisível (radius: 0) para não duplicar visualmente
                                             this.jsPlumbInstance.makeTarget(stepInputEndpoint, {
                                                 anchor: 'Left',
-                                                endpoint: ['Dot', { radius: 10 }],
-                                                paintStyle: { fill: '#10B981', radius: 10, stroke: '#059669', strokeWidth: 3 },
-                                                hoverPaintStyle: { fill: '#34D399', radius: 12 },
+                                                endpoint: ['Dot', { radius: 0 }], // ✅ Invisível - elemento HTML já é visível
+                                                paintStyle: { fill: 'transparent', radius: 0, stroke: 'transparent', strokeWidth: 0 },
+                                                hoverPaintStyle: { fill: 'transparent', radius: 0 },
                                                 isSource: false,
                                                 isTarget: true,
                                                 maxConnections: -1,
@@ -4414,11 +4432,12 @@ body {
                                             });
                                         } else if (typeof this.jsPlumbInstance.addEndpoint === 'function') {
                                             // jsPlumb 5.x - Endpoint VERDE apenas na bolinha visual
+                                            // ✅ Usar endpoint invisível (radius: 0) para não duplicar visualmente
                                             this.jsPlumbInstance.addEndpoint(stepInputEndpoint, {
                                                 anchor: 'Left',
-                                                endpoint: ['Dot', { radius: 10 }],
-                                                paintStyle: { fill: '#10B981', radius: 10, stroke: '#059669', strokeWidth: 3 },
-                                                hoverPaintStyle: { fill: '#34D399', radius: 12 },
+                                                endpoint: ['Dot', { radius: 0 }], // ✅ Invisível - elemento HTML já é visível
+                                                paintStyle: { fill: 'transparent', radius: 0, stroke: 'transparent', strokeWidth: 0 },
+                                                hoverPaintStyle: { fill: 'transparent', radius: 0 },
                                                 isSource: false,
                                                 isTarget: true,
                                                 maxConnections: -1,
@@ -4467,11 +4486,12 @@ body {
                                             
                                             // ✅ CRÍTICO: makeSource permite drag automático - linha sai da bolinha e segue o mouse
                                             // ✅ Ao clicar e arrastar da bolinha vermelha, a linha deve sair dali e acompanhar o mouse
+                                            // ✅ Usar endpoint invisível (radius: 0) para não duplicar visualmente
                                             this.jsPlumbInstance.makeSource(endpointEl, {
                                                 anchor: 'Right',
-                                                endpoint: ['Dot', { radius: 10 }],
-                                                paintStyle: { fill: '#EF4444', radius: 10, stroke: '#DC2626', strokeWidth: 3 },
-                                                hoverPaintStyle: { fill: '#F87171', radius: 12, stroke: '#EF4444', strokeWidth: 4 },
+                                                endpoint: ['Dot', { radius: 0 }], // ✅ Invisível - elemento HTML já é visível
+                                                paintStyle: { fill: 'transparent', radius: 0, stroke: 'transparent', strokeWidth: 0 },
+                                                hoverPaintStyle: { fill: 'transparent', radius: 0 },
                                                 isSource: true,
                                                 isTarget: false,
                                                 maxConnections: 1,
@@ -4504,12 +4524,12 @@ body {
                                             
                                             // ✅ HABILITAR ARRASTE: linha segue o mouse ao arrastar da bolinha VERMELHA
                                             // ✅ jsPlumb 5.x: usar elemento visual como base, mas endpoint no stepEl para posicionamento correto
-                                            // NOTA: Para jsPlumb 5.x, precisamos calcular a posição relativa e usar stepEl, mas com UUID único
+                                            // ✅ Usar endpoint invisível (radius: 0) para não duplicar visualmente
                                             this.jsPlumbInstance.addEndpoint(stepEl, {
                                                 anchor: ['Right', relativeTop, 1, 0, 0, 0],
-                                                endpoint: ['Dot', { radius: 10 }],
-                                                paintStyle: { fill: '#EF4444', stroke: '#DC2626', strokeWidth: 3 },
-                                                hoverPaintStyle: { fill: '#F87171', stroke: '#EF4444', strokeWidth: 4, radius: 12 },
+                                                endpoint: ['Dot', { radius: 0 }], // ✅ Invisível - elemento HTML já é visível
+                                                paintStyle: { fill: 'transparent', stroke: 'transparent', strokeWidth: 0 },
+                                                hoverPaintStyle: { fill: 'transparent', stroke: 'transparent', strokeWidth: 0 },
                                                 isSource: true,
                                                 isTarget: false,
                                                 maxConnections: 1,
