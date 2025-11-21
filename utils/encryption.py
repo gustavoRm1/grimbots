@@ -94,6 +94,9 @@ def decrypt(value: str) -> str:
         
     Returns:
         String descriptografada
+        
+    Raises:
+        RuntimeError: Se a descriptografia falhar (ENCRYPTION_KEY incorreta)
     """
     if not value:
         return None
@@ -102,6 +105,16 @@ def decrypt(value: str) -> str:
         decrypted_bytes = fernet.decrypt(value.encode('utf-8'))
         return decrypted_bytes.decode('utf-8')
     except Exception as e:
+        # ✅ CRÍTICO: Log detalhado do erro para diagnóstico
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"❌ ERRO AO DESCRIPTOGRAFAR: {type(e).__name__}: {e}")
+        logger.error(f"   Valor (primeiros 50 chars): {value[:50] if value else 'None'}...")
+        logger.error(f"   ENCRYPTION_KEY está configurada: {bool(ENCRYPTION_KEY)}")
+        logger.error(f"   ENCRYPTION_KEY (primeiros 20 chars): {ENCRYPTION_KEY[:20] if ENCRYPTION_KEY else 'None'}...")
+        logger.error(f"   POSSÍVEL CAUSA: ENCRYPTION_KEY foi alterada após armazenar dados")
+        logger.error(f"   SOLUÇÃO: Restaure a ENCRYPTION_KEY original ou reconfigure os gateways")
+        
         raise RuntimeError(
             f"Erro ao descriptografar: {e}\n"
             "POSSÍVEL CAUSA: ENCRYPTION_KEY foi alterada após armazenar dados.\n"

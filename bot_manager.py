@@ -6029,33 +6029,74 @@ Seu pagamento ainda não foi confirmado.
                 # Prioridade: user.commission_percentage > gateway.split_percentage > 2.0 (padrão)
                 user_commission = bot.owner.commission_percentage or gateway.split_percentage or 2.0
                 
+                # ✅ CRÍTICO: Extrair credenciais e validar ANTES de criar gateway
+                # Se descriptografia falhar, properties retornam None
+                api_key = gateway.api_key
+                client_secret = gateway.client_secret
+                product_hash = gateway.product_hash
+                split_user_id = gateway.split_user_id
+                
+                # ✅ VALIDAÇÃO: Verificar se credenciais foram descriptografadas corretamente
+                # Se alguma propriedade retornar None mas o campo interno existir, significa erro de descriptografia
+                if gateway._api_key and not api_key:
+                    logger.error(f"❌ CRÍTICO: Erro ao descriptografar api_key do gateway {gateway.id}")
+                    logger.error(f"   POSSÍVEL CAUSA: ENCRYPTION_KEY foi alterada após salvar credenciais")
+                    logger.error(f"   SOLUÇÃO: Reconfigure o gateway {gateway.gateway_type} com as credenciais corretas")
+                    logger.error(f"   Gateway ID: {gateway.id} | Tipo: {gateway.gateway_type} | User: {gateway.user_id}")
+                    return None
+                
+                if gateway._client_secret and not client_secret:
+                    logger.error(f"❌ CRÍTICO: Erro ao descriptografar client_secret do gateway {gateway.id}")
+                    logger.error(f"   POSSÍVEL CAUSA: ENCRYPTION_KEY foi alterada após salvar credenciais")
+                    logger.error(f"   SOLUÇÃO: Reconfigure o gateway {gateway.gateway_type} com as credenciais corretas")
+                    return None
+                
+                if gateway._product_hash and not product_hash:
+                    logger.error(f"❌ CRÍTICO: Erro ao descriptografar product_hash do gateway {gateway.id}")
+                    logger.error(f"   POSSÍVEL CAUSA: ENCRYPTION_KEY foi alterada após salvar credenciais")
+                    logger.error(f"   SOLUÇÃO: Reconfigure o gateway {gateway.gateway_type} com as credenciais corretas")
+                    return None
+                
+                if gateway._split_user_id and not split_user_id and gateway.gateway_type == 'wiinpay':
+                    logger.warning(f"⚠️ WiinPay: split_user_id não descriptografado (pode ser normal se não configurado)")
+                
                 credentials = {
                     # SyncPay usa client_id/client_secret
                     'client_id': gateway.client_id,
-                    'client_secret': gateway.client_secret,
+                    'client_secret': client_secret,
                     # Outros gateways usam api_key
-                    'api_key': gateway.api_key,
+                    'api_key': api_key,
                     # ✅ Átomo Pay: api_token é salvo em api_key no banco, mas precisa ser passado como api_token
-                    'api_token': gateway.api_key if gateway.gateway_type == 'atomopay' else None,
+                    'api_token': api_key if gateway.gateway_type == 'atomopay' else None,
                     # Paradise
-                    'product_hash': gateway.product_hash,
+                    'product_hash': product_hash,
                     'offer_hash': gateway.offer_hash,
                     'store_id': gateway.store_id,
                     # WiinPay
-                    'split_user_id': gateway.split_user_id,
+                    'split_user_id': split_user_id,
                     # ✅ RANKING V2.0: Usar taxa do usuário (pode ser premium)
                     'split_percentage': user_commission
                 }
                 
-                # ✅ LOG: Verificar se api_token está presente para Átomo Pay
-                if gateway.gateway_type == 'atomopay':
-                    if not credentials.get('api_token'):
-                        logger.error(f"❌ Átomo Pay: api_token (api_key) não encontrado no gateway!")
-                        logger.error(f"   gateway.api_key: {gateway.api_key}")
+                # ✅ VALIDAÇÃO ESPECÍFICA POR GATEWAY: Verificar credenciais obrigatórias
+                if gateway.gateway_type == 'paradise':
+                    if not api_key:
+                        logger.error(f"❌ Paradise: api_key ausente ou não descriptografado")
+                        return None
+                    if not product_hash:
+                        logger.error(f"❌ Paradise: product_hash ausente ou não descriptografado")
+                        return None
+                elif gateway.gateway_type == 'atomopay':
+                    if not api_key:
+                        logger.error(f"❌ Átomo Pay: api_token (api_key) ausente ou não descriptografado")
                         logger.error(f"   gateway.id: {gateway.id}")
                         return None
                     else:
-                        logger.debug(f"🔑 Átomo Pay: api_token presente ({len(credentials['api_token'])} caracteres)")
+                        logger.debug(f"🔑 Átomo Pay: api_token presente ({len(api_key)} caracteres)")
+                elif gateway.gateway_type in ['syncpay', 'pushynpay', 'wiinpay']:
+                    if not api_key:
+                        logger.error(f"❌ {gateway.gateway_type}: api_key ausente ou não descriptografado")
+                        return None
                 
                 # Log para auditoria (apenas se for premium)
                 if user_commission < 2.0:
