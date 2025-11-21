@@ -343,6 +343,17 @@ class ParadisePaymentGateway(PaymentGateway):
             # ✅ LOG DETALHADO para debug
             logger.info(f"📤 Paradise Payload: {payload}")
             
+            # ✅ VALIDAÇÃO CRÍTICA: Verificar campos antes de enviar
+            if not payload.get('productHash'):
+                logger.error(f"❌ CRÍTICO: productHash ausente no payload!")
+                return None
+            
+            if payload.get('productHash') != self.product_hash:
+                logger.error(f"❌ CRÍTICO: productHash no payload difere do configurado!")
+                logger.error(f"   Payload: {payload.get('productHash')}")
+                logger.error(f"   Configurado: {self.product_hash}")
+                return None
+            
             # Headers Paradise (X-API-Key)
             headers = {
                 'Content-Type': 'application/json',
@@ -350,24 +361,114 @@ class ParadisePaymentGateway(PaymentGateway):
                 'X-API-Key': self.api_key  # ✅ AUTENTICAÇÃO
             }
             
+            # ✅ VALIDAÇÃO: Verificar se API Key está presente
+            if not self.api_key or len(self.api_key) < 10:
+                logger.error(f"❌ CRÍTICO: API Key inválida ou ausente!")
+                logger.error(f"   API Key (primeiros 20 chars): {self.api_key[:20] if self.api_key else 'None'}...")
+                return None
+            
             logger.info(f"📤 Paradise URL: {self.transaction_url}")
             logger.info(f"📤 Paradise Headers: Content-Type=application/json, X-API-Key={self.api_key[:10]}...")
+            logger.info(f"📤 Paradise Request ID: {safe_reference}")
             
-            # Requisição para Paradise
-            response = requests.post(
-                self.transaction_url,
-                json=payload,
-                headers=headers,
-                timeout=15
-            )
+            # ✅ RETRY COM BACKOFF EXPONENCIAL para erros 400/500 transitórios
+            # Alguns 400 podem ser temporários (rate limit, validação transitória)
+            max_retries = 2
+            retry_delays = [0.5, 1.0]  # 500ms, 1s
             
-            logger.info(f"📡 Paradise Response: Status {response.status_code}")
-            logger.info(f"📡 Paradise Response Body: {response.text}")
+            import time
+            request_start_time = time.time()
+            response = None
+            last_error = None
+            
+            for attempt in range(max_retries + 1):
+                try:
+                    response = requests.post(
+                        self.transaction_url,
+                        json=payload,
+                        headers=headers,
+                        timeout=15
+                    )
+                    
+                    request_duration = (time.time() - request_start_time) * 1000  # ms
+                    
+                    logger.info(f"📡 Paradise Response (tentativa {attempt + 1}/{max_retries + 1}): Status {response.status_code} | Duration: {request_duration:.2f}ms")
+                    logger.info(f"📡 Paradise Response Body: {response.text}")
+                    
+                    # ✅ Se for 200, sair do loop
+                    if response.status_code == 200:
+                        break
+                    
+                    # ✅ Se for erro não-retryável (exceto 500), não retentar
+                    if response.status_code not in [400, 500, 502, 503, 504]:
+                        logger.error(f"❌ Paradise API Error: {response.status_code} (não-retryável)")
+                        logger.error(f"❌ Response: {response.text}")
+                        return None
+                    
+                    # ✅ Última tentativa ou erro retryável - logar erro
+                    if attempt < max_retries:
+                        last_error = {
+                            'status': response.status_code,
+                            'message': response.text
+                        }
+                        logger.warning(f"⚠️ Paradise retornou {response.status_code}, retentando em {retry_delays[attempt]}s...")
+                        time.sleep(retry_delays[attempt])
+                    else:
+                        # Última tentativa falhou
+                        logger.error(f"❌ Paradise API Error após {max_retries + 1} tentativas: {response.status_code}")
+                        logger.error(f"❌ Response: {response.text}")
+                        break
+                        
+                except requests.exceptions.Timeout:
+                    if attempt < max_retries:
+                        logger.warning(f"⚠️ Paradise timeout, retentando em {retry_delays[attempt]}s...")
+                        time.sleep(retry_delays[attempt])
+                    else:
+                        logger.error(f"❌ Paradise timeout após {max_retries + 1} tentativas")
+                        return None
+                except Exception as e:
+                    logger.error(f"❌ Erro inesperado ao chamar Paradise API: {e}", exc_info=True)
+                    return None
+            
+            # ✅ Verificar resposta final
+            if not response:
+                logger.error(f"❌ Paradise: Nenhuma resposta recebida após {max_retries + 1} tentativas")
+                return None
             
             # ✅ VALIDAÇÃO CRÍTICA: Status code pode ser 200 mas ter erro no JSON
             if response.status_code != 200:
                 logger.error(f"❌ Paradise API Error: {response.status_code}")
                 logger.error(f"❌ Response: {response.text}")
+                
+                # ✅ DIAGNÓSTICO DETALHADO PARA ERRO 400
+                if response.status_code == 400:
+                    try:
+                        error_data = response.json()
+                        error_message = error_data.get('message', 'Erro desconhecido')
+                        logger.error(f"🔍 ===== DIAGNÓSTICO PARADISE 400 BAD REQUEST =====")
+                        logger.error(f"   Mensagem: {error_message}")
+                        logger.error(f"   Product Hash enviado: {self.product_hash}")
+                        logger.error(f"   Store ID enviado: {self.store_id}")
+                        logger.error(f"   Split configurado: {self.split_percentage}%")
+                        logger.error(f"   Valor: R$ {amount:.2f} ({amount_cents} centavos)")
+                        logger.error(f"   Reference: {safe_reference}")
+                        logger.error(f"   Payload completo: {payload}")
+                        logger.error(f"   Possíveis causas:")
+                        logger.error(f"   1. product_hash inválido ou não existe no painel Paradise")
+                        logger.error(f"   2. store_id inválido ou não tem permissão para split")
+                        logger.error(f"   3. Split amount calculado incorretamente")
+                        logger.error(f"   4. Dados do cliente inválidos (CPF, telefone, email)")
+                        logger.error(f"   5. Valor inválido (muito baixo, muito alto, ou formato incorreto)")
+                        logger.error(f"   6. Campos obrigatórios faltando no payload")
+                        logger.error(f"   7. API Key sem permissões ou inválida")
+                        logger.error(f"   8. Rate limit atingido (muitas requisições)")
+                        logger.error(f"   ================================================")
+                        logger.error(f"   ⚠️ AÇÃO: Verifique se product_hash e store_id estão corretos no painel Paradise")
+                        logger.error(f"   ⚠️ AÇÃO: Verifique se API Key tem permissões para criar transações")
+                        logger.error(f"   ⚠️ AÇÃO: Verifique se store_id {self.store_id} existe e tem permissão para split")
+                    except:
+                        logger.error(f"   Response não é JSON válido")
+                
                 return None
             
             # ✅ CORREÇÃO CRÍTICA: Verificar se response.text contém erro mesmo com 200
