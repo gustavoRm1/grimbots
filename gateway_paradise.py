@@ -56,14 +56,47 @@ class ParadisePaymentGateway(PaymentGateway):
                 - store_id: ID da conta para split (ex: "177")
                 - split_percentage: Percentual de comissão da plataforma (padrão 2%)
         """
-        # ✅ CREDENCIAIS ATUALIZADAS baseadas nos arquivos paradise.php e paradise.json
-        self.api_key = credentials.get('api_key', 'sk_c3728b109649c7ab1d4e19a61189dbb2b07161d6955b8f20b6023c55b8a9e722')
-        self.product_hash = credentials.get('product_hash', 'prod_6c60b3dd3ae2c63e')
+        # ✅ CREDENCIAIS - NÃO usar fallback padrão (gateways devem ter credenciais configuradas)
+        # Fallback padrão estava mascarando erros de configuração
+        api_key = credentials.get('api_key')
+        product_hash = credentials.get('product_hash')
+        
+        # ✅ VALIDAÇÃO CRÍTICA: Credenciais devem ser fornecidas
+        if not api_key:
+            logger.error(f"❌ CRÍTICO: Paradise api_key não fornecida nas credentials!")
+            logger.error(f"   Credentials recebidas: {list(credentials.keys())}")
+            raise ValueError("Paradise api_key é obrigatória")
+        
+        if not product_hash:
+            logger.error(f"❌ CRÍTICO: Paradise product_hash não fornecido nas credentials!")
+            logger.error(f"   Credentials recebidas: {list(credentials.keys())}")
+            raise ValueError("Paradise product_hash é obrigatório")
+        
+        # ✅ VALIDAÇÃO DE FORMATO
+        if not api_key.startswith('sk_'):
+            logger.error(f"❌ CRÍTICO: Paradise api_key deve começar com 'sk_'")
+            logger.error(f"   API Key recebida: {api_key[:20]}...")
+            raise ValueError("Paradise api_key formato inválido")
+        
+        if not product_hash.startswith('prod_'):
+            logger.error(f"❌ CRÍTICO: Paradise product_hash deve começar com 'prod_'")
+            logger.error(f"   Product Hash recebido: {product_hash[:20]}...")
+            raise ValueError("Paradise product_hash formato inválido")
+        
+        self.api_key = api_key
+        self.product_hash = product_hash
         self.offer_hash = credentials.get('offer_hash', '')
         
         # ✅ STORE ID DO SISTEMA (SPLIT DA PLATAFORMA) - NÃO DO USUÁRIO
+        # Prioridade: credentials > env > default
         from os import environ
-        self.store_id = environ.get('PARADISE_STORE_ID', '177')  # Store ID do dono do sistema
+        self.store_id = credentials.get('store_id') or environ.get('PARADISE_STORE_ID', '177')
+        
+        # ✅ VALIDAÇÃO: Store ID deve ser válido
+        if not self.store_id or not str(self.store_id).strip():
+            logger.error(f"❌ CRÍTICO: Paradise store_id inválido ou vazio!")
+            logger.error(f"   Store ID recebido: {self.store_id}")
+            raise ValueError("Paradise store_id é obrigatório para split")
         
         # ✅ CORREÇÃO CRÍTICA: Validar split_percentage
         try:
@@ -340,18 +373,42 @@ class ParadisePaymentGateway(PaymentGateway):
                     
                     logger.info(f"💰 Paradise Split: {split_amount_cents} centavos ({self.split_percentage}%) para store {self.store_id}")
             
-            # ✅ LOG DETALHADO para debug
-            logger.info(f"📤 Paradise Payload: {payload}")
+            # ✅ LOG DETALHADO para debug (mascarar dados sensíveis)
+            payload_log = payload.copy()
+            if 'customer' in payload_log and payload_log['customer']:
+                payload_log['customer'] = payload_log['customer'].copy()
+                if 'document' in payload_log['customer']:
+                    doc = payload_log['customer']['document']
+                    if doc:
+                        payload_log['customer']['document'] = doc[:3] + '***'
+            logger.info(f"📤 Paradise Payload: {payload_log}")
             
             # ✅ VALIDAÇÃO CRÍTICA: Verificar campos antes de enviar
             if not payload.get('productHash'):
                 logger.error(f"❌ CRÍTICO: productHash ausente no payload!")
+                logger.error(f"   Payload keys: {list(payload.keys())}")
                 return None
             
             if payload.get('productHash') != self.product_hash:
                 logger.error(f"❌ CRÍTICO: productHash no payload difere do configurado!")
                 logger.error(f"   Payload: {payload.get('productHash')}")
                 logger.error(f"   Configurado: {self.product_hash}")
+                return None
+            
+            # ✅ VALIDAÇÃO CRÍTICA: Verificar se api_key está presente e no formato correto
+            if not self.api_key:
+                logger.error(f"❌ CRÍTICO: api_key não configurada no gateway Paradise!")
+                return None
+            
+            if not self.api_key.startswith('sk_'):
+                logger.error(f"❌ CRÍTICO: api_key formato inválido (deve começar com 'sk_')!")
+                logger.error(f"   API Key: {self.api_key[:30]}...")
+                return None
+            
+            # ✅ VALIDAÇÃO CRÍTICA: Verificar product_hash
+            if not self.product_hash or not self.product_hash.startswith('prod_'):
+                logger.error(f"❌ CRÍTICO: product_hash inválido (deve começar com 'prod_')!")
+                logger.error(f"   Product Hash: {self.product_hash}")
                 return None
             
             # Headers Paradise (X-API-Key)
@@ -445,29 +502,54 @@ class ParadisePaymentGateway(PaymentGateway):
                     try:
                         error_data = response.json()
                         error_message = error_data.get('message', 'Erro desconhecido')
+                        acquirer = error_data.get('acquirer', 'N/A')
+                        
                         logger.error(f"🔍 ===== DIAGNÓSTICO PARADISE 400 BAD REQUEST =====")
-                        logger.error(f"   Mensagem: {error_message}")
-                        logger.error(f"   Product Hash enviado: {self.product_hash}")
-                        logger.error(f"   Store ID enviado: {self.store_id}")
-                        logger.error(f"   Split configurado: {self.split_percentage}%")
-                        logger.error(f"   Valor: R$ {amount:.2f} ({amount_cents} centavos)")
-                        logger.error(f"   Reference: {safe_reference}")
-                        logger.error(f"   Payload completo: {payload}")
-                        logger.error(f"   Possíveis causas:")
-                        logger.error(f"   1. product_hash inválido ou não existe no painel Paradise")
-                        logger.error(f"   2. store_id inválido ou não tem permissão para split")
-                        logger.error(f"   3. Split amount calculado incorretamente")
-                        logger.error(f"   4. Dados do cliente inválidos (CPF, telefone, email)")
-                        logger.error(f"   5. Valor inválido (muito baixo, muito alto, ou formato incorreto)")
-                        logger.error(f"   6. Campos obrigatórios faltando no payload")
-                        logger.error(f"   7. API Key sem permissões ou inválida")
-                        logger.error(f"   8. Rate limit atingido (muitas requisições)")
-                        logger.error(f"   ================================================")
-                        logger.error(f"   ⚠️ AÇÃO: Verifique se product_hash e store_id estão corretos no painel Paradise")
-                        logger.error(f"   ⚠️ AÇÃO: Verifique se API Key tem permissões para criar transações")
-                        logger.error(f"   ⚠️ AÇÃO: Verifique se store_id {self.store_id} existe e tem permissão para split")
-                    except:
-                        logger.error(f"   Response não é JSON válido")
+                        logger.error(f"   Mensagem da API: {error_message}")
+                        logger.error(f"   Acquirer: {acquirer}")
+                        logger.error(f"   ════════════════════════════════════════════════")
+                        logger.error(f"   🔑 CREDENCIAIS ENVIADAS:")
+                        logger.error(f"   - API Key: {self.api_key[:10]}...{self.api_key[-10:] if len(self.api_key) > 20 else ''} (len={len(self.api_key)})")
+                        logger.error(f"   - Product Hash: {self.product_hash} (valido={'✅' if self.product_hash.startswith('prod_') else '❌'})")
+                        logger.error(f"   - Store ID: {self.store_id}")
+                        logger.error(f"   ════════════════════════════════════════════════")
+                        logger.error(f"   📊 PAYLOAD:")
+                        logger.error(f"   - Valor: R$ {amount:.2f} ({amount_cents} centavos)")
+                        logger.error(f"   - Reference: {safe_reference}")
+                        split_amount = payload.get('split', {}).get('amount', 0) if 'split' in payload else 0
+                        logger.error(f"   - Split: {self.split_percentage}% ({split_amount} centavos)")
+                        customer_data = payload.get('customer', {})
+                        logger.error(f"   - Cliente: {customer_data.get('name')} | {customer_data.get('email')}")
+                        doc = customer_data.get('document', '')
+                        logger.error(f"   - CPF: {doc[:3]}*** (len={len(doc)})")
+                        phone = customer_data.get('phone', '')
+                        logger.error(f"   - Telefone: {phone[:5]}*** (len={len(phone)})")
+                        logger.error(f"   ════════════════════════════════════════════════")
+                        logger.error(f"   🔍 POSSÍVEIS CAUSAS (em ordem de probabilidade):")
+                        logger.error(f"   1. ❌ API Key inválida ou sem permissões")
+                        logger.error(f"      → Verificar se api_key começa com 'sk_' e está ativa no painel Paradise")
+                        logger.error(f"   2. ❌ Product Hash não existe ou foi deletado no painel Paradise")
+                        logger.error(f"      → Verificar se '{self.product_hash}' existe no painel Paradise")
+                        logger.error(f"   3. ❌ Store ID inválido ou sem permissão para split")
+                        logger.error(f"      → Verificar se store_id '{self.store_id}' existe e tem permissão para split")
+                        logger.error(f"   4. ❌ Split amount inválido (valor do split muito alto ou calculado incorretamente)")
+                        logger.error(f"      → Split: {split_amount} centavos de {amount_cents} total")
+                        logger.error(f"   5. ❌ Dados do cliente inválidos (CPF, telefone ou email)")
+                        logger.error(f"      → CPF: {len(doc)} dígitos | Telefone: {len(phone)} dígitos")
+                        logger.error(f"   6. ❌ Valor inválido (muito baixo < R$ 0,01 ou muito alto > R$ 1.000.000)")
+                        logger.error(f"      → Valor: R$ {amount:.2f} ({amount_cents} centavos)")
+                        logger.error(f"   7. ❌ Rate limit atingido (muitas requisições em pouco tempo)")
+                        logger.error(f"   8. ❌ Campos obrigatórios faltando no payload")
+                        logger.error(f"   ════════════════════════════════════════════════")
+                        logger.error(f"   ✅ AÇÕES RECOMENDADAS:")
+                        logger.error(f"   1. Verificar no painel Paradise se Product Hash '{self.product_hash}' existe")
+                        logger.error(f"   2. Verificar no painel Paradise se API Key está ativa e tem permissões")
+                        logger.error(f"   3. Verificar no painel Paradise se Store ID '{self.store_id}' existe e tem permissão para split")
+                        logger.error(f"   4. Reconfigurar gateway em /settings com credenciais corretas")
+                        logger.error(f"   ════════════════════════════════════════════════")
+                    except Exception as e:
+                        logger.error(f"   ❌ Erro ao processar resposta de erro: {e}")
+                        logger.error(f"   Response raw: {response.text[:500]}")
                 
                 return None
             

@@ -6031,34 +6031,69 @@ Seu pagamento ainda não foi confirmado.
                 
                 # ✅ CRÍTICO: Extrair credenciais e validar ANTES de criar gateway
                 # Se descriptografia falhar, properties retornam None
-                api_key = gateway.api_key
-                client_secret = gateway.client_secret
-                product_hash = gateway.product_hash
-                split_user_id = gateway.split_user_id
+                # IMPORTANTE: Acessar properties explicitamente para forçar descriptografia e capturar exceções
+                try:
+                    api_key = gateway.api_key
+                except Exception as decrypt_error:
+                    logger.error(f"❌ ERRO CRÍTICO ao acessar gateway.api_key (gateway {gateway.id}): {decrypt_error}")
+                    logger.error(f"   Isso indica que a descriptografia está FALHANDO com exceção")
+                    api_key = None
+                
+                try:
+                    client_secret = gateway.client_secret
+                except Exception as decrypt_error:
+                    logger.error(f"❌ ERRO CRÍTICO ao acessar gateway.client_secret (gateway {gateway.id}): {decrypt_error}")
+                    client_secret = None
+                
+                try:
+                    product_hash = gateway.product_hash
+                except Exception as decrypt_error:
+                    logger.error(f"❌ ERRO CRÍTICO ao acessar gateway.product_hash (gateway {gateway.id}): {decrypt_error}")
+                    product_hash = None
+                
+                try:
+                    split_user_id = gateway.split_user_id
+                except Exception as decrypt_error:
+                    logger.error(f"❌ ERRO CRÍTICO ao acessar gateway.split_user_id (gateway {gateway.id}): {decrypt_error}")
+                    split_user_id = None
                 
                 # ✅ VALIDAÇÃO: Verificar se credenciais foram descriptografadas corretamente
                 # Se alguma propriedade retornar None mas o campo interno existir, significa erro de descriptografia
+                encryption_error_detected = False
+                
                 if gateway._api_key and not api_key:
                     logger.error(f"❌ CRÍTICO: Erro ao descriptografar api_key do gateway {gateway.id}")
+                    logger.error(f"   Campo interno existe: {gateway._api_key[:30] if gateway._api_key else 'None'}...")
+                    logger.error(f"   Property retornou: {api_key}")
                     logger.error(f"   POSSÍVEL CAUSA: ENCRYPTION_KEY foi alterada após salvar credenciais")
                     logger.error(f"   SOLUÇÃO: Reconfigure o gateway {gateway.gateway_type} com as credenciais corretas")
                     logger.error(f"   Gateway ID: {gateway.id} | Tipo: {gateway.gateway_type} | User: {gateway.user_id}")
-                    return None
+                    encryption_error_detected = True
                 
                 if gateway._client_secret and not client_secret:
                     logger.error(f"❌ CRÍTICO: Erro ao descriptografar client_secret do gateway {gateway.id}")
+                    logger.error(f"   Campo interno existe: {gateway._client_secret[:30] if gateway._client_secret else 'None'}...")
+                    logger.error(f"   Property retornou: {client_secret}")
                     logger.error(f"   POSSÍVEL CAUSA: ENCRYPTION_KEY foi alterada após salvar credenciais")
                     logger.error(f"   SOLUÇÃO: Reconfigure o gateway {gateway.gateway_type} com as credenciais corretas")
-                    return None
+                    encryption_error_detected = True
                 
                 if gateway._product_hash and not product_hash:
                     logger.error(f"❌ CRÍTICO: Erro ao descriptografar product_hash do gateway {gateway.id}")
+                    logger.error(f"   Campo interno existe: {gateway._product_hash[:30] if gateway._product_hash else 'None'}...")
+                    logger.error(f"   Property retornou: {product_hash}")
                     logger.error(f"   POSSÍVEL CAUSA: ENCRYPTION_KEY foi alterada após salvar credenciais")
                     logger.error(f"   SOLUÇÃO: Reconfigure o gateway {gateway.gateway_type} com as credenciais corretas")
-                    return None
+                    encryption_error_detected = True
                 
                 if gateway._split_user_id and not split_user_id and gateway.gateway_type == 'wiinpay':
                     logger.warning(f"⚠️ WiinPay: split_user_id não descriptografado (pode ser normal se não configurado)")
+                
+                # ✅ Se detectou erro de descriptografia, retornar None imediatamente
+                if encryption_error_detected:
+                    logger.error(f"❌ ERRO DE DESCRIPTOGRAFIA DETECTADO - Payment NÃO será criado")
+                    logger.error(f"   ACÃO NECESSÁRIA: Reconfigure o gateway {gateway.gateway_type} (ID: {gateway.id}) em /settings")
+                    return None
                 
                 credentials = {
                     # SyncPay usa client_id/client_secret
@@ -6093,9 +6128,26 @@ Seu pagamento ainda não foi confirmado.
                         return None
                     else:
                         logger.debug(f"🔑 Átomo Pay: api_token presente ({len(api_key)} caracteres)")
-                elif gateway.gateway_type in ['syncpay', 'pushynpay', 'wiinpay']:
+                elif gateway.gateway_type == 'syncpay':
+                    # ✅ SyncPay usa client_id/client_secret, NÃO api_key
+                    if not client_secret:
+                        logger.error(f"❌ SyncPay: client_secret ausente ou não descriptografado")
+                        logger.error(f"   Gateway ID: {gateway.id} | User: {gateway.user_id}")
+                        if gateway._client_secret:
+                            logger.error(f"   Campo interno existe mas descriptografia falhou!")
+                            logger.error(f"   POSSÍVEL CAUSA: ENCRYPTION_KEY foi alterada após salvar credenciais")
+                        return None
+                    if not gateway.client_id:
+                        logger.error(f"❌ SyncPay: client_id ausente")
+                        logger.error(f"   Gateway ID: {gateway.id} | User: {gateway.user_id}")
+                        return None
+                elif gateway.gateway_type in ['pushynpay', 'wiinpay']:
                     if not api_key:
                         logger.error(f"❌ {gateway.gateway_type}: api_key ausente ou não descriptografado")
+                        logger.error(f"   Gateway ID: {gateway.id} | User: {gateway.user_id}")
+                        if gateway._api_key:
+                            logger.error(f"   Campo interno existe mas descriptografia falhou!")
+                            logger.error(f"   POSSÍVEL CAUSA: ENCRYPTION_KEY foi alterada após salvar credenciais")
                         return None
                 
                 # Log para auditoria (apenas se for premium)

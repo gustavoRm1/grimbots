@@ -700,9 +700,25 @@ class Gateway(db.Model):
             return None
         try:
             from utils.encryption import decrypt
-            return decrypt(self._client_secret)
+            decrypted = decrypt(self._client_secret)
+            # ✅ VALIDAÇÃO: Verificar se descriptografia retornou None (indica erro)
+            if decrypted is None:
+                logger.error(f"❌ Erro ao descriptografar client_secret gateway {self.id}: decrypt retornou None")
+                logger.error(f"   Campo interno existe mas descriptografia falhou!")
+                logger.error(f"   POSSÍVEL CAUSA: ENCRYPTION_KEY foi alterada após salvar credenciais")
+                logger.error(f"   SOLUÇÃO: Reconfigure o gateway {self.gateway_type} (ID: {self.id}) em /settings")
+            return decrypted
+        except RuntimeError as e:
+            # ✅ RuntimeError indica erro de descriptografia (ENCRYPTION_KEY incorreta)
+            logger.error(f"❌ ERRO CRÍTICO ao descriptografar client_secret gateway {self.id}: {e}")
+            logger.error(f"   Campo interno existe: {self._client_secret[:30] if self._client_secret else 'None'}...")
+            logger.error(f"   POSSÍVEL CAUSA: ENCRYPTION_KEY foi alterada após salvar credenciais")
+            logger.error(f"   SOLUÇÃO: Reconfigure o gateway {self.gateway_type} (ID: {self.id}) em /settings")
+            return None
         except Exception as e:
-            logger.error(f"Erro ao descriptografar client_secret gateway {self.id}: {e}")
+            # ✅ Outros erros (ex: encoding, formato inválido)
+            logger.error(f"❌ Erro inesperado ao descriptografar client_secret gateway {self.id}: {type(e).__name__}: {e}")
+            logger.error(f"   Campo interno existe: {self._client_secret[:30] if self._client_secret else 'None'}...")
             return None
     
     @client_secret.setter
@@ -721,9 +737,25 @@ class Gateway(db.Model):
             return None
         try:
             from utils.encryption import decrypt
-            return decrypt(self._api_key)
+            decrypted = decrypt(self._api_key)
+            # ✅ VALIDAÇÃO: Verificar se descriptografia retornou None (indica erro)
+            if decrypted is None:
+                logger.error(f"❌ Erro ao descriptografar api_key gateway {self.id}: decrypt retornou None")
+                logger.error(f"   Campo interno existe mas descriptografia falhou!")
+                logger.error(f"   POSSÍVEL CAUSA: ENCRYPTION_KEY foi alterada após salvar credenciais")
+                logger.error(f"   SOLUÇÃO: Reconfigure o gateway {self.gateway_type} (ID: {self.id}) em /settings")
+            return decrypted
+        except RuntimeError as e:
+            # ✅ RuntimeError indica erro de descriptografia (ENCRYPTION_KEY incorreta)
+            logger.error(f"❌ ERRO CRÍTICO ao descriptografar api_key gateway {self.id}: {e}")
+            logger.error(f"   Campo interno existe: {self._api_key[:30] if self._api_key else 'None'}...")
+            logger.error(f"   POSSÍVEL CAUSA: ENCRYPTION_KEY foi alterada após salvar credenciais")
+            logger.error(f"   SOLUÇÃO: Reconfigure o gateway {self.gateway_type} (ID: {self.id}) em /settings")
+            return None
         except Exception as e:
-            logger.error(f"Erro ao descriptografar api_key gateway {self.id}: {e}")
+            # ✅ Outros erros (ex: encoding, formato inválido)
+            logger.error(f"❌ Erro inesperado ao descriptografar api_key gateway {self.id}: {type(e).__name__}: {e}")
+            logger.error(f"   Campo interno existe: {self._api_key[:30] if self._api_key else 'None'}...")
             return None
     
     @api_key.setter
@@ -742,9 +774,25 @@ class Gateway(db.Model):
             return None
         try:
             from utils.encryption import decrypt
-            return decrypt(self._product_hash)
+            decrypted = decrypt(self._product_hash)
+            # ✅ VALIDAÇÃO: Verificar se descriptografia retornou None (indica erro)
+            if decrypted is None:
+                logger.error(f"❌ Erro ao descriptografar product_hash gateway {self.id}: decrypt retornou None")
+                logger.error(f"   Campo interno existe mas descriptografia falhou!")
+                logger.error(f"   POSSÍVEL CAUSA: ENCRYPTION_KEY foi alterada após salvar credenciais")
+                logger.error(f"   SOLUÇÃO: Reconfigure o gateway {self.gateway_type} (ID: {self.id}) em /settings")
+            return decrypted
+        except RuntimeError as e:
+            # ✅ RuntimeError indica erro de descriptografia (ENCRYPTION_KEY incorreta)
+            logger.error(f"❌ ERRO CRÍTICO ao descriptografar product_hash gateway {self.id}: {e}")
+            logger.error(f"   Campo interno existe: {self._product_hash[:30] if self._product_hash else 'None'}...")
+            logger.error(f"   POSSÍVEL CAUSA: ENCRYPTION_KEY foi alterada após salvar credenciais")
+            logger.error(f"   SOLUÇÃO: Reconfigure o gateway {self.gateway_type} (ID: {self.id}) em /settings")
+            return None
         except Exception as e:
-            logger.error(f"Erro ao descriptografar product_hash gateway {self.id}: {e}")
+            # ✅ Outros erros (ex: encoding, formato inválido)
+            logger.error(f"❌ Erro inesperado ao descriptografar product_hash gateway {self.id}: {type(e).__name__}: {e}")
+            logger.error(f"   Campo interno existe: {self._product_hash[:30] if self._product_hash else 'None'}...")
             return None
     
     @product_hash.setter
