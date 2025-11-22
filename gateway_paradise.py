@@ -275,9 +275,24 @@ class ParadisePaymentGateway(PaymentGateway):
             unique_phone = self._validate_phone(f"11{customer_user_id[-9:]}" if len(str(customer_user_id)) >= 9 else f"11{unique_hash[:9]}")
             
             # ✅ NOME ÚNICO: Usar nome real se fornecido, senão gerar baseado no customer_user_id
-            unique_name = customer_data.get('name') or f"Cliente {customer_user_id[-6:]}" if customer_user_id else f"Cliente {unique_hash[:6]}"
-            # Limitar tamanho do nome
+            # CRÍTICO: Nome deve ter pelo menos 2 caracteres (Paradise rejeita nomes muito curtos)
+            raw_name = customer_data.get('name', '') if customer_data else ''
+            if not raw_name or len(raw_name.strip()) < 2:
+                # Se nome muito curto ou vazio, gerar baseado no customer_user_id
+                unique_name = f"Cliente {customer_user_id[-6:]}" if customer_user_id and len(str(customer_user_id)) >= 6 else f"Cliente {unique_hash[:6]}"
+            else:
+                unique_name = raw_name.strip()
+            
+            # Limitar tamanho do nome (mínimo 2, máximo 30)
+            if len(unique_name) < 2:
+                unique_name = f"Cliente {unique_hash[:4]}"
             unique_name = unique_name[:30] if len(unique_name) > 30 else unique_name
+            
+            # ✅ VALIDAÇÃO CRÍTICA: Garantir que nome tem pelo menos 2 caracteres
+            if len(unique_name) < 2:
+                logger.error(f"❌ Paradise: Nome do cliente inválido (muito curto): '{unique_name}'")
+                logger.error(f"   Nome original: '{raw_name}' | Tamanho: {len(unique_name)}")
+                unique_name = f"Cliente {unique_hash[:4]}"
             
             customer_payload = {
                 "name": unique_name,
@@ -455,6 +470,67 @@ class ParadisePaymentGateway(PaymentGateway):
                     # ✅ Se for 200, sair do loop
                     if response.status_code == 200:
                         break
+                    
+                    # ✅ DIAGNÓSTICO IMEDIATO para erro 400 (na primeira tentativa)
+                    if response.status_code == 400 and attempt == 0:
+                        try:
+                            error_data = response.json()
+                            error_message = error_data.get('message', 'Erro desconhecido')
+                            acquirer = error_data.get('acquirer', 'N/A')
+                            
+                            logger.error(f"")
+                            logger.error(f"🔍 ===== DIAGNÓSTICO PARADISE 400 BAD REQUEST (TENTATIVA {attempt + 1}) =====")
+                            logger.error(f"   Mensagem da API: {error_message}")
+                            logger.error(f"   Acquirer: {acquirer}")
+                            logger.error(f"   ════════════════════════════════════════════════")
+                            logger.error(f"   🔑 CREDENCIAIS ENVIADAS:")
+                            logger.error(f"   - API Key: {self.api_key[:10]}...{self.api_key[-10:] if len(self.api_key) > 20 else ''} (len={len(self.api_key)})")
+                            logger.error(f"   - Product Hash: {self.product_hash} (valido={'✅' if self.product_hash.startswith('prod_') else '❌'})")
+                            logger.error(f"   - Store ID: {self.store_id}")
+                            logger.error(f"   ════════════════════════════════════════════════")
+                            logger.error(f"   📊 PAYLOAD ENVIADO:")
+                            logger.error(f"   - Valor: R$ {amount:.2f} ({amount_cents} centavos)")
+                            logger.error(f"   - Reference: {safe_reference}")
+                            split_amount = payload.get('split', {}).get('amount', 0) if 'split' in payload else 0
+                            logger.error(f"   - Split: {self.split_percentage}% ({split_amount} centavos)")
+                            customer_data_payload = payload.get('customer', {})
+                            customer_name_payload = customer_data_payload.get('name', '')
+                            logger.error(f"   - Cliente: '{customer_name_payload}' (len={len(customer_name_payload)}) | {customer_data_payload.get('email')}")
+                            doc = customer_data_payload.get('document', '')
+                            logger.error(f"   - CPF: {doc[:3]}*** (len={len(doc) if doc else 0})")
+                            phone = customer_data_payload.get('phone', '')
+                            logger.error(f"   - Telefone: {phone[:5]}*** (len={len(phone) if phone else 0})")
+                            logger.error(f"   ════════════════════════════════════════════════")
+                            logger.error(f"   🔍 POSSÍVEIS CAUSAS (em ordem de probabilidade):")
+                            logger.error(f"   1. ❌ NOME DO CLIENTE MUITO CURTO: '{customer_name_payload}' (len={len(customer_name_payload)})")
+                            logger.error(f"      → Paradise pode rejeitar nomes com menos de 2 caracteres")
+                            logger.error(f"      → AÇÃO: Validar nome do cliente antes de enviar")
+                            logger.error(f"   2. ❌ API Key inválida ou sem permissões")
+                            logger.error(f"      → Verificar se api_key começa com 'sk_' e está ativa no painel Paradise")
+                            logger.error(f"   3. ❌ Product Hash não existe ou foi deletado no painel Paradise")
+                            logger.error(f"      → Verificar se '{self.product_hash}' existe no painel Paradise")
+                            logger.error(f"   4. ❌ Store ID inválido ou sem permissão para split")
+                            logger.error(f"      → Verificar se store_id '{self.store_id}' existe e tem permissão para split")
+                            logger.error(f"   5. ❌ Split amount inválido (valor do split muito alto ou calculado incorretamente)")
+                            logger.error(f"      → Split: {split_amount} centavos de {amount_cents} total")
+                            logger.error(f"   6. ❌ Dados do cliente inválidos (CPF ou telefone)")
+                            logger.error(f"      → CPF: {len(doc) if doc else 0} dígitos | Telefone: {len(phone) if phone else 0} dígitos")
+                            logger.error(f"   7. ❌ Valor inválido (muito baixo < R$ 0,01 ou muito alto > R$ 1.000.000)")
+                            logger.error(f"      → Valor: R$ {amount:.2f} ({amount_cents} centavos)")
+                            logger.error(f"   8. ❌ Rate limit atingido (muitas requisições em pouco tempo)")
+                            logger.error(f"   9. ❌ Campos obrigatórios faltando no payload")
+                            logger.error(f"   ════════════════════════════════════════════════")
+                            logger.error(f"   ✅ AÇÕES RECOMENDADAS:")
+                            logger.error(f"   1. Verificar se nome do cliente tem pelo menos 2 caracteres")
+                            logger.error(f"   2. Verificar no painel Paradise se Product Hash '{self.product_hash}' existe")
+                            logger.error(f"   3. Verificar no painel Paradise se API Key está ativa e tem permissões")
+                            logger.error(f"   4. Verificar no painel Paradise se Store ID '{self.store_id}' existe e tem permissão para split")
+                            logger.error(f"   5. Reconfigurar gateway em /settings com credenciais corretas")
+                            logger.error(f"   ════════════════════════════════════════════════")
+                            logger.error(f"")
+                        except Exception as e:
+                            logger.error(f"   ❌ Erro ao processar resposta de erro: {e}")
+                            logger.error(f"   Response raw: {response.text[:500]}")
                     
                     # ✅ Se for erro não-retryável (exceto 500), não retentar
                     if response.status_code not in [400, 500, 502, 503, 504]:
