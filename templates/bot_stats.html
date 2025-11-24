@@ -584,7 +584,7 @@
         <div class="config-section-header">
             <i class="fas fa-bullhorn text-2xl text-blue-500"></i>
             <div>
-                <div class="config-section-title">📊 Campanhas de Remarketing</div>
+                <div class="config-section-title">Campanhas de Remarketing</div>
                 <div class="config-section-description">Vendas geradas por campanhas manuais de remarketing</div>
             </div>
         </div>
@@ -613,41 +613,6 @@
                 <div class="stat-value text-yellow-400" x-text="'R$ ' + (stats.remarketing.total_revenue || 0).toFixed(0)"></div>
                 <div class="stat-label">Receita</div>
                 <div class="text-xs text-gray-600 mt-1" x-text="'Ticket: R$ ' + (stats.remarketing.avg_ticket || 0).toFixed(2)"></div>
-            </div>
-        </div>
-        
-        <!-- Comparação: Downsells vs Remarketing -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-            <div class="p-4 bg-gray-900 rounded-lg border border-purple-500 border-opacity-30">
-                <div class="text-xs text-gray-400 mb-2">DOWNSELLS AUTOMÁTICOS</div>
-                <div class="flex justify-between items-center mb-2">
-                    <span class="text-white font-bold">Vendas:</span>
-                    <span class="text-purple-400 font-bold" x-text="stats.comparison?.downsells_auto?.sales || 0"></span>
-                </div>
-                <div class="flex justify-between items-center mb-2">
-                    <span class="text-white font-bold">Receita:</span>
-                    <span class="text-purple-400 font-bold" x-text="'R$ ' + (stats.comparison?.downsells_auto?.revenue || 0).toFixed(2)"></span>
-                </div>
-                <div class="flex justify-between items-center">
-                    <span class="text-white font-bold">Conversão:</span>
-                    <span class="text-purple-400 font-bold" x-text="(stats.comparison?.downsells_auto?.conversion_rate || 0) + '%'"></span>
-                </div>
-            </div>
-            
-            <div class="p-4 bg-gray-900 rounded-lg border border-blue-500 border-opacity-30">
-                <div class="text-xs text-gray-400 mb-2">REMARKETING MANUAL</div>
-                <div class="flex justify-between items-center mb-2">
-                    <span class="text-white font-bold">Vendas:</span>
-                    <span class="text-blue-400 font-bold" x-text="stats.comparison?.remarketing?.sales || 0"></span>
-                </div>
-                <div class="flex justify-between items-center mb-2">
-                    <span class="text-white font-bold">Receita:</span>
-                    <span class="text-blue-400 font-bold" x-text="'R$ ' + (stats.comparison?.remarketing?.revenue || 0).toFixed(2)"></span>
-                </div>
-                <div class="flex justify-between items-center">
-                    <span class="text-white font-bold">Conversão:</span>
-                    <span class="text-blue-400 font-bold" x-text="(stats.comparison?.remarketing?.conversion_rate || 0) + '%'"></span>
-                </div>
             </div>
         </div>
         
