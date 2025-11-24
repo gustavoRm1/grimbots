@@ -39,8 +39,11 @@ logging.basicConfig(
 
 # Silenciar logs desnecessários
 logging.getLogger('werkzeug').setLevel(logging.ERROR)
-logging.getLogger('apscheduler.scheduler').setLevel(logging.ERROR)
-logging.getLogger('apscheduler.executors').setLevel(logging.ERROR)
+# ✅ CORREÇÃO: Manter logs do APScheduler para debug de downsells
+# logging.getLogger('apscheduler.scheduler').setLevel(logging.ERROR)
+# logging.getLogger('apscheduler.executors').setLevel(logging.ERROR)
+logging.getLogger('apscheduler.scheduler').setLevel(logging.WARNING)  # Apenas WARNING e acima
+logging.getLogger('apscheduler.executors').setLevel(logging.WARNING)  # Apenas WARNING e acima
 
 logger = logging.getLogger(__name__)
 

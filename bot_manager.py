@@ -8034,14 +8034,27 @@ Seu pagamento ainda não foi confirmado.
                 logger.info(f"   - Job ID: {job_id}")
                 
                 try:
+                    # ✅ CRÍTICO: Criar wrapper para garantir Flask app context
+                    def _send_downsell_wrapper(*args, **kwargs):
+                        """Wrapper que garante Flask app context para execução do scheduler"""
+                        from app import app
+                        logger.info(f"🔍 [SCHEDULER WRAPPER] Job sendo executado - criando app context")
+                        with app.app_context():
+                            try:
+                                return self._send_downsell(*args, **kwargs)
+                            except Exception as e:
+                                logger.error(f"❌ Erro no wrapper do scheduler: {e}", exc_info=True)
+                                raise
+                    
                     # Agendar downsell com preço original para cálculo percentual
                     self.scheduler.add_job(
                         id=job_id,
-                        func=self._send_downsell,
+                        func=_send_downsell_wrapper,
                         args=[bot_id, payment_id, chat_id, downsell, i, original_price, original_button_index],
                         trigger='date',
                         run_date=run_time,
-                        replace_existing=True
+                        replace_existing=True,
+                        misfire_grace_time=300  # ✅ Permitir execução mesmo se atrasado até 5 minutos
                     )
                     
                     # ✅ VERIFICAR se job foi realmente agendado
@@ -8080,7 +8093,9 @@ Seu pagamento ainda não foi confirmado.
             original_price: Preço do botão original (para cálculo percentual)
             original_button_index: Índice do botão original clicado
         """
-        logger.info(f"🚨 ===== _SEND_DOWNSELL EXECUTADO =====")
+        import traceback
+        logger.info(f"🚨 ===== _SEND_DOWNSELL EXECUTADO ===== [ENTRADA DA FUNÇÃO]")
+        logger.info(f"   ⏰ Timestamp: {datetime.now()}")
         logger.info(f"   bot_id: {bot_id}")
         logger.info(f"   payment_id: {payment_id}")
         logger.info(f"   chat_id: {chat_id}")
@@ -8090,6 +8105,11 @@ Seu pagamento ainda não foi confirmado.
         logger.info(f"   downsell config: {downsell}")
         
         try:
+            # ✅ DIAGNÓSTICO CRÍTICO: Log imediato no início da função
+            logger.info(f"🔍 [DIAGNÓSTICO] Função _send_downsell chamada pelo scheduler")
+            logger.info(f"   Stack trace (primeiras 5 linhas):")
+            for line in traceback.format_stack()[-5:]:
+                logger.info(f"      {line.strip()}")
             # ✅ DIAGNÓSTICO CRÍTICO: Verificar pagamento ANTES de enviar
             logger.info(f"🔍 Verificando status do pagamento...")
             payment_status = None
@@ -8302,8 +8322,13 @@ Seu pagamento ainda não foi confirmado.
                     logger.info(f"✅ Downsell {index+1} ENVIADO COM SUCESSO para chat {chat_id}")
                 else:
                     logger.error(f"❌ Falha ao enviar downsell {index+1} para chat {chat_id}")
-            except Exception as e:
-                logger.error(f"❌ Erro ao enviar downsell {index+1}: {e}", exc_info=True)
+        except Exception as e:
+            import traceback
+            logger.error(f"❌ Erro CRÍTICO ao enviar downsell {index+1}: {e}")
+            logger.error(f"   Tipo do erro: {type(e).__name__}")
+            logger.error(f"   Stack trace completo:")
+            logger.error(traceback.format_exc())
+            logger.error(f"🚨 ===== FIM _SEND_DOWNSELL (COM ERRO) =====")
             
             logger.info(f"🚨 ===== FIM _SEND_DOWNSELL =====")
             
