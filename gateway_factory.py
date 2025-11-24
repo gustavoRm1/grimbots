@@ -142,6 +142,7 @@ class GatewayFactory:
                 # ✅ WiinPay requer: api_key
                 api_key = credentials.get('api_key')
                 split_user_id = credentials.get('split_user_id', '')
+                split_percentage = credentials.get('split_percentage', 2.0)  # ✅ RANKING: Taxa do usuário (pode ser premium)
                 
                 if not api_key:
                     logger.error(f"❌ [Factory] WiinPay requer api_key")
@@ -149,7 +150,8 @@ class GatewayFactory:
                 
                 gateway = gateway_class(
                     api_key=api_key,
-                    split_user_id=split_user_id
+                    split_user_id=split_user_id,
+                    split_percentage=split_percentage  # ✅ RANKING V2.0: Aplicar taxa premium (Top 3)
                 )
             
             elif gateway_type == 'atomopay':

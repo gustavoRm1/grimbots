@@ -5997,7 +5997,8 @@ def create_gateway():
                 gateway.split_user_id = data.get('split_user_id')
             elif not gateway.split_user_id:
                 # Se não existe valor e não foi enviado, usar fallback padrão da plataforma
-                gateway.split_user_id = '6877edeba3c39f8451ba5bdd'
+                # ✅ SPLIT CONFIGURADO: Plataforma recebe 2% de todas as vendas
+                gateway.split_user_id = '68ffcc91e23263e0a01fffa4'
             # Se já existe valor e não foi enviado, manter o valor existente (não sobrescrever)
         
         elif gateway_type == 'atomopay':

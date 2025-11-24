@@ -24,20 +24,37 @@ class WiinPayGateway(PaymentGateway):
     - Sem necessidade de Bearer Token
     """
     
-    def __init__(self, api_key: str, split_user_id: str = None):
+    def __init__(self, api_key: str, split_user_id: str = None, split_percentage: float = None):
         """
         Inicializa gateway WiinPay
         
         Args:
             api_key: Chave API da WiinPay
             split_user_id: User ID para splits (opcional)
+            split_percentage: Percentual de split (opcional, padrão 2%). ✅ RANKING: Pode ser taxa premium do Top 3
         """
         self.api_key = api_key
         self.base_url = "https://api-v2.wiinpay.com.br"
         
-        # Split configuration (você é o dono da plataforma)
-        self.split_user_id = split_user_id or os.environ.get('WIINPAY_PLATFORM_USER_ID', '6877edeba3c39f8451ba5bdd')
-        self.split_percentage = 2  # 2% de comissão PADRÃO
+        # ✅ SPLIT CONFIGURATION - Plataforma recebe split de todas as vendas
+        # Prioridade: split_user_id fornecido > env > padrão da plataforma
+        # ID da plataforma na WiinPay: 68ffcc91e23263e0a01fffa4
+        self.split_user_id = split_user_id or os.environ.get('WIINPAY_PLATFORM_USER_ID', '68ffcc91e23263e0a01fffa4')
+        
+        # ✅ RANKING V2.0: split_percentage pode ser taxa premium do Top 3
+        # Prioridade: split_percentage fornecido > padrão 2%
+        if split_percentage is not None:
+            self.split_percentage = float(split_percentage)
+            logger.info(f"✅ [{self.get_gateway_name()}] Taxa premium aplicada: {self.split_percentage}% (pode ser do ranking)")
+        else:
+            self.split_percentage = 2.0  # 2% de comissão PADRÃO para a plataforma
+        
+        # ✅ GARANTIR: Split sempre configurado para plataforma receber comissão
+        if not self.split_user_id or len(self.split_user_id.strip()) == 0:
+            logger.warning(f"⚠️ [{self.get_gateway_name()}] split_user_id não configurado, usando padrão da plataforma")
+            self.split_user_id = '68ffcc91e23263e0a01fffa4'
+        
+        logger.info(f"✅ [{self.get_gateway_name()}] Split configurado: {self.split_percentage}% para user_id {self.split_user_id}")
     
     def get_gateway_name(self) -> str:
         """Nome amigável do gateway"""
@@ -136,18 +153,33 @@ class WiinPayGateway(PaymentGateway):
             }
             payload["metadata"] = metadata
             
-            # ✅ SPLIT PAYMENT (se configurado)
-            if self.split_user_id:
-                # Calcular valor do split (4% da venda)
-                split_value = round(amount * (self.split_percentage / 100), 2)
-                
-                payload["split"] = {
-                    "percentage": self.split_percentage,  # Percentual
-                    "value": split_value,  # Valor em reais
-                    "user_id": self.split_user_id  # Seu user_id na WiinPay
-                }
-                
-                logger.info(f"💰 [{self.get_gateway_name()}] Split configurado: {self.split_percentage}% = R$ {split_value:.2f}")
+            # ✅ SPLIT PAYMENT - SEMPRE configurado para plataforma receber comissão
+            # ✅ RANKING V2.0: split_percentage pode ser taxa premium do Top 3 (ex: 1.5%, 1%, 0.5%)
+            # Split é obrigatório: plataforma recebe comissão de todas as vendas dos usuários
+            # Garantir que split_user_id está configurado
+            if not self.split_user_id or len(self.split_user_id.strip()) == 0:
+                logger.error(f"❌ [{self.get_gateway_name()}] split_user_id não configurado! Usando padrão.")
+                self.split_user_id = '68ffcc91e23263e0a01fffa4'
+            
+            # ✅ RANKING: Calcular valor do split usando split_percentage (pode ser taxa premium)
+            split_value = round(amount * (self.split_percentage / 100), 2)
+            
+            # ✅ Garantir que split_value é no mínimo 0.01 (centavo mínimo)
+            if split_value < 0.01:
+                split_value = 0.01
+            
+            # ✅ SEMPRE adicionar split ao payload (conforme documentação WiinPay)
+            payload["split"] = {
+                "percentage": self.split_percentage,  # ✅ RANKING: Percentual (pode ser premium: 1.5%, 1%, 0.5%, ou padrão 2%)
+                "value": split_value,  # Valor em reais
+                "user_id": self.split_user_id  # ID da plataforma na WiinPay: 68ffcc91e23263e0a01fffa4
+            }
+            
+            # ✅ LOG: Indicar se é taxa premium (diferente de 2%)
+            if self.split_percentage != 2.0:
+                logger.info(f"💰 [{self.get_gateway_name()}] Split PREMIUM configurado: {self.split_percentage}% = R$ {split_value:.2f} (user_id: {self.split_user_id}) - TAXA DO RANKING")
+            else:
+                logger.info(f"💰 [{self.get_gateway_name()}] Split configurado para plataforma: {self.split_percentage}% = R$ {split_value:.2f} (user_id: {self.split_user_id})")
             
             headers = {
                 'Accept': 'application/json',
