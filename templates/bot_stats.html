@@ -1495,31 +1495,49 @@ function botStatsApp() {
             // Forçar layout
             ctx.offsetHeight;
             
+            // ✅ Verificar se há dados
+            const chartData = this.stats.daily_chart || [];
+            const hasSinglePoint = chartData.length === 1;
+            
+            // ✅ Para gráficos com apenas 1 ponto, garantir que o ponto seja visível
+            const pointRadius = hasSinglePoint ? 6 : 3;
+            const pointHoverRadius = hasSinglePoint ? 8 : 5;
+            
             // RECRIAR com dados
             this.salesChart = new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: this.stats.daily_chart.map(d => d.date),
+                    labels: chartData.map(d => d.date),
                     datasets: [
                         {
                             label: 'Vendas',
-                            data: this.stats.daily_chart.map(d => d.sales),
+                            data: chartData.map(d => d.sales),
                             borderColor: '#3B82F6',
                             backgroundColor: 'rgba(59, 130, 246, 0.1)',
                             borderWidth: 2,
-                            tension: 0.4,
+                            tension: hasSinglePoint ? 0 : 0.4, // ✅ Sem curvatura se apenas 1 ponto
                             fill: true,
-                            yAxisID: 'y'
+                            yAxisID: 'y',
+                            pointRadius: pointRadius,
+                            pointHoverRadius: pointHoverRadius,
+                            pointBackgroundColor: '#3B82F6',
+                            pointBorderColor: '#FFFFFF',
+                            pointBorderWidth: 2
                         },
                         {
                             label: 'Receita (R$)',
-                            data: this.stats.daily_chart.map(d => d.revenue),
+                            data: chartData.map(d => d.revenue),
                             borderColor: '#FFB800',
                             backgroundColor: 'rgba(255, 184, 0, 0.1)',
                             borderWidth: 2,
-                            tension: 0.4,
+                            tension: hasSinglePoint ? 0 : 0.4, // ✅ Sem curvatura se apenas 1 ponto
                             fill: true,
-                            yAxisID: 'y1'
+                            yAxisID: 'y1',
+                            pointRadius: pointRadius,
+                            pointHoverRadius: pointHoverRadius,
+                            pointBackgroundColor: '#FFB800',
+                            pointBorderColor: '#FFFFFF',
+                            pointBorderWidth: 2
                         }
                     ]
                 },
@@ -1539,8 +1557,14 @@ function botStatsApp() {
                             type: 'linear',
                             position: 'left',
                             beginAtZero: true,
-                            ticks: { color: '#60A5FA', stepSize: 1 },
-                            grid: { color: 'rgba(255, 255, 255, 0.05)' }
+                            ticks: { 
+                                color: '#60A5FA', 
+                                stepSize: hasSinglePoint ? undefined : 1, // ✅ Auto step para 1 ponto
+                                precision: 0
+                            },
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            // ✅ Para 1 ponto, garantir que o valor seja visível
+                            min: hasSinglePoint ? 0 : undefined
                         },
                         y1: {
                             type: 'linear',
@@ -1548,13 +1572,23 @@ function botStatsApp() {
                             beginAtZero: true,
                             ticks: {
                                 color: '#FFB800',
-                                callback: (value) => 'R$ ' + value.toFixed(0)
+                                callback: (value) => 'R$ ' + value.toFixed(0),
+                                stepSize: hasSinglePoint ? undefined : undefined // ✅ Auto step
                             },
-                            grid: { drawOnChartArea: false }
+                            grid: { drawOnChartArea: false },
+                            // ✅ Para 1 ponto, garantir que o valor seja visível
+                            min: hasSinglePoint ? 0 : undefined
                         },
                         x: {
-                            ticks: { color: '#9CA3AF' },
-                            grid: { color: 'rgba(255, 255, 255, 0.05)' }
+                            ticks: { 
+                                color: '#9CA3AF',
+                                maxRotation: 0,
+                                autoSkip: false // ✅ Mostrar todos os labels, mesmo com 1 ponto
+                            },
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.05)',
+                                display: true
+                            }
                         }
                     }
                 }
