@@ -1306,11 +1306,23 @@ function botStatsApp() {
                     // ✅ Resetar página quando dados mudarem
                     this.currentSalePage = 1;
                     this.currentCampaignPage = 1;
-                    // ✅ Atualizar gráfico se existir
+                    // ✅ Garantir que gráfico exista e seja atualizado
                     this.$nextTick(() => {
-                        if (this.stats.daily_chart) {
-                            this.updateChart();
+                        // Se gráfico não existe, inicializar primeiro
+                        if (!this.salesChart) {
+                            console.log('🔨 Gráfico não existe, inicializando...');
+                            this.initChart();
                         }
+                        
+                        // Aguardar um pouco para garantir que o gráfico foi criado
+                        setTimeout(() => {
+                            if (this.stats.daily_chart) {
+                                console.log('📊 Atualizando gráfico com dados:', this.stats.daily_chart);
+                                this.updateChart();
+                            } else {
+                                console.warn('⚠️ daily_chart não disponível nos stats');
+                            }
+                        }, 200);
                     });
                 }
             } catch (error) {
@@ -1442,12 +1454,26 @@ function botStatsApp() {
         },
         
         updateChart() {
-            if (!this.salesChart || !this.stats.daily_chart) {
-                console.log('⏳ Gráfico ou dados ainda não prontos');
+            // ✅ Se gráfico não existe, criar primeiro
+            if (!this.salesChart) {
+                console.log('⚠️ Gráfico não existe, criando...');
+                this.initChart();
+                // Aguardar um pouco para garantir criação antes de atualizar
+                setTimeout(() => {
+                    if (this.salesChart) {
+                        this.updateChart();
+                    }
+                }, 300);
                 return;
             }
             
-            console.log('📊 Atualizando gráfico...');
+            // ✅ Aceitar array vazio (mostrar gráfico vazio)
+            if (!this.stats.daily_chart) {
+                console.log('⚠️ daily_chart não disponível, usando array vazio');
+                this.stats.daily_chart = [];
+            }
+            
+            console.log('📊 Atualizando gráfico com', this.stats.daily_chart.length, 'pontos de dados...');
             
             // ✅ SOLUÇÃO QI 300: DESTRUIR E RECRIAR (evita update() com bug)
             const ctx = document.getElementById('salesChart');
