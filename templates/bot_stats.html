@@ -413,6 +413,34 @@
     </div>
     
     <!-- ============================================================================ -->
+    <!-- FILTROS DE PERÍODO -->
+    <!-- ============================================================================ -->
+    <div class="config-section mb-4 sm:mb-6">
+        <div class="flex items-center gap-2 sm:gap-3 justify-center sm:justify-start flex-wrap">
+            <button @click="selectedPeriod = 'day'; loadStats()" 
+                    :class="selectedPeriod === 'day' ? 'bg-blue-600 text-white border-blue-500' : 'bg-gray-800 text-gray-400 border-gray-700 hover:border-gray-600'"
+                    class="flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg border transition-all text-sm sm:text-base font-medium">
+                <i class="fas fa-calendar-day"></i>
+                <span>Hoje</span>
+            </button>
+            
+            <button @click="selectedPeriod = 'month'; loadStats()" 
+                    :class="selectedPeriod === 'month' ? 'bg-blue-600 text-white border-blue-500' : 'bg-gray-800 text-gray-400 border-gray-700 hover:border-gray-600'"
+                    class="flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg border transition-all text-sm sm:text-base font-medium">
+                <i class="fas fa-calendar-alt"></i>
+                <span>Este Mês</span>
+            </button>
+            
+            <button @click="selectedPeriod = 'all'; loadStats()" 
+                    :class="selectedPeriod === 'all' ? 'bg-blue-600 text-white border-blue-500' : 'bg-gray-800 text-gray-400 border-gray-700 hover:border-gray-600'"
+                    class="flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg border transition-all text-sm sm:text-base font-medium">
+                <i class="fas fa-infinity"></i>
+                <span>Todos</span>
+            </button>
+        </div>
+    </div>
+    
+    <!-- ============================================================================ -->
     <!-- ANALYTICS V2.0 - DECISÕES EM 5 SEGUNDOS (QI 540) -->
     <!-- ============================================================================ -->
     
@@ -461,7 +489,7 @@
             <i class="fas fa-chart-area text-2xl text-blue-500"></i>
             <div>
                 <div class="config-section-title">Performance ao Longo do Tempo</div>
-                <div class="config-section-description">Vendas e receita dos últimos 7 dias</div>
+                <div class="config-section-description" x-text="'Vendas e receita ' + (stats.period_label ? stats.period_label.toLowerCase() : 'deste período')"></div>
             </div>
         </div>
         
@@ -1112,6 +1140,7 @@ function botStatsApp() {
         _initialized: false,
         botId: {{ bot.id }},
         loading: true,
+        selectedPeriod: 'month',  // ✅ FILTRO DE PERÍODO: day, month, all
         
         // ✅ ANALYTICS V2.0 (QI 540)
         analyticsV2: {
@@ -1268,13 +1297,21 @@ function botStatsApp() {
         async loadStats() {
             this.loading = true;
             try {
-                const response = await fetch(`/api/bots/${this.botId}/stats`);
+                // ✅ FILTRO DE PERÍODO: Adicionar parâmetro na URL
+                const periodParam = this.selectedPeriod ? `?period=${this.selectedPeriod}` : '';
+                const response = await fetch(`/api/bots/${this.botId}/stats${periodParam}`);
                 if (response.ok) {
                     this.stats = await response.json();
-                    console.log('✅ Stats carregados:', this.stats);
+                    console.log('✅ Stats carregados:', this.stats, 'Período:', this.selectedPeriod);
                     // ✅ Resetar página quando dados mudarem
                     this.currentSalePage = 1;
-                this.currentCampaignPage = 1;
+                    this.currentCampaignPage = 1;
+                    // ✅ Atualizar gráfico se existir
+                    this.$nextTick(() => {
+                        if (this.stats.daily_chart) {
+                            this.updateChart();
+                        }
+                    });
                 }
             } catch (error) {
                 console.error('Erro ao carregar stats:', error);

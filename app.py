@@ -3718,33 +3718,51 @@ def get_bot_stats(bot_id):
     
     bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
     
+    # ✅ FILTRO DE PERÍODO: day, month, all
+    period = request.args.get('period', 'month')  # Padrão: Este Mês
+    now_utc = get_brazil_time()
+    
+    # Definir filtro de data baseado no período
+    if period == 'day':
+        date_filter_start = now_utc.replace(hour=0, minute=0, second=0, microsecond=0)
+        date_filter_label = 'Hoje'
+    elif period == 'month':
+        date_filter_start = now_utc.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        date_filter_label = 'Este Mês'
+    else:  # 'all'
+        date_filter_start = None
+        date_filter_label = 'Todos'
+    
+    # ✅ FILTRO: Aplicar filtro de data nas queries se período não for 'all'
+    payment_filter = Payment.bot_id == bot_id
+    if date_filter_start:
+        payment_filter = db.and_(payment_filter, Payment.created_at >= date_filter_start)
+    
     # 1. ESTATÍSTICAS GERAIS
     # ✅ Contar apenas usuários ativos (não arquivados)
     total_users = BotUser.query.filter_by(bot_id=bot_id, archived=False).count()
     # ✅ Usuários arquivados (histórico de tokens antigos)
     archived_users = BotUser.query.filter_by(bot_id=bot_id, archived=True).count()
     
-    total_sales = Payment.query.filter_by(bot_id=bot_id, status='paid').count()
+    # ✅ VENDAS: Aplicar filtro de período
+    total_sales = Payment.query.filter(payment_filter, Payment.status == 'paid').count()
     total_revenue = db.session.query(func.sum(Payment.amount)).filter(
-        Payment.bot_id == bot_id, Payment.status == 'paid'
+        payment_filter, Payment.status == 'paid'
     ).scalar() or 0.0
-    pending_sales = Payment.query.filter_by(bot_id=bot_id, status='pending').count()
+    pending_sales = Payment.query.filter(payment_filter, Payment.status == 'pending').count()
     
     # Taxa de conversão
     conversion_rate = (total_sales / total_users * 100) if total_users > 0 else 0
     avg_ticket = (total_revenue / total_sales) if total_sales > 0 else 0
     
-    # 2. VENDAS POR PRODUTO (últimos 30 dias)
-    thirty_days_ago = get_brazil_time() - timedelta(days=30)
+    # 2. VENDAS POR PRODUTO (filtrado por período)
+    product_filter = db.and_(payment_filter, Payment.status == 'paid')
     sales_by_product = db.session.query(
         Payment.product_name,
         func.count(Payment.id).label('total_sales'),
         func.sum(Payment.amount).label('revenue')
-    ).filter(
-        Payment.bot_id == bot_id,
-        Payment.status == 'paid',
-        Payment.created_at >= thirty_days_ago
-    ).group_by(Payment.product_name)\
+    ).filter(product_filter)\
+     .group_by(Payment.product_name)\
      .order_by(func.count(Payment.id).desc())\
      .limit(10)\
      .all()
@@ -3755,40 +3773,32 @@ def get_bot_stats(bot_id):
         'revenue': float(p.revenue or 0)
     } for p in sales_by_product]
     
-    # 3. ORDER BUMPS
-    order_bump_shown = Payment.query.filter_by(
-        bot_id=bot_id, order_bump_shown=True
-    ).count()
-    order_bump_accepted = Payment.query.filter_by(
-        bot_id=bot_id, order_bump_accepted=True
-    ).count()
+    # 3. ORDER BUMPS (filtrado por período)
+    order_bump_filter = db.and_(payment_filter, Payment.order_bump_shown == True)
+    order_bump_shown = Payment.query.filter(order_bump_filter).count()
+    order_bump_accepted_filter = db.and_(payment_filter, Payment.order_bump_accepted == True)
+    order_bump_accepted = Payment.query.filter(order_bump_accepted_filter).count()
     order_bump_revenue = db.session.query(func.sum(Payment.order_bump_value)).filter(
-        Payment.bot_id == bot_id, Payment.order_bump_accepted == True, Payment.status == 'paid'
+        db.and_(payment_filter, Payment.order_bump_accepted == True, Payment.status == 'paid')
     ).scalar() or 0.0
     order_bump_rate = (order_bump_accepted / order_bump_shown * 100) if order_bump_shown > 0 else 0
     
-    # 4. DOWNSELLS
-    downsell_sent = Payment.query.filter_by(
-        bot_id=bot_id, is_downsell=True
-    ).count()
-    downsell_paid = Payment.query.filter_by(
-        bot_id=bot_id, is_downsell=True, status='paid'
-    ).count()
+    # 4. DOWNSELLS (filtrado por período)
+    downsell_filter = db.and_(payment_filter, Payment.is_downsell == True)
+    downsell_sent = Payment.query.filter(downsell_filter).count()
+    downsell_paid_filter = db.and_(downsell_filter, Payment.status == 'paid')
+    downsell_paid = Payment.query.filter(downsell_paid_filter).count()
     downsell_revenue = db.session.query(func.sum(Payment.amount)).filter(
-        Payment.bot_id == bot_id, Payment.is_downsell == True, Payment.status == 'paid'
+        db.and_(downsell_filter, Payment.status == 'paid')
     ).scalar() or 0.0
     downsell_rate = (downsell_paid / downsell_sent * 100) if downsell_sent > 0 else 0
     
-    # ✅ SEPARAR: Downsells automáticos vs Remarketing
+    # ✅ SEPARAR: Downsells automáticos vs Remarketing (filtrado por período)
     # Downsells automáticos (is_downsell=True, is_remarketing=False)
-    downsell_auto_paid = Payment.query.filter_by(
-        bot_id=bot_id, is_downsell=True, is_remarketing=False, status='paid'
-    ).count()
+    downsell_auto_filter = db.and_(downsell_filter, Payment.is_remarketing == False, Payment.status == 'paid')
+    downsell_auto_paid = Payment.query.filter(downsell_auto_filter).count()
     downsell_auto_revenue = db.session.query(func.sum(Payment.amount)).filter(
-        Payment.bot_id == bot_id,
-        Payment.is_downsell == True,
-        Payment.is_remarketing == False,
-        Payment.status == 'paid'
+        downsell_auto_filter
     ).scalar() or 0.0
     
     # 4.5. REMARKETING CAMPAIGNS (is_remarketing=True)
@@ -3799,17 +3809,12 @@ def get_bot_stats(bot_id):
     active_campaigns = RemarketingCampaign.query.filter_by(bot_id=bot_id, status='active').count()
     completed_campaigns = RemarketingCampaign.query.filter_by(bot_id=bot_id, status='completed').count()
     
-    # Vendas pagas de remarketing (Payment.is_remarketing=True)
-    remarketing_sales = Payment.query.filter_by(
-        bot_id=bot_id,
-        status='paid',
-        is_remarketing=True
-    ).count()
+    # Vendas pagas de remarketing (Payment.is_remarketing=True) - filtrado por período
+    remarketing_filter = db.and_(payment_filter, Payment.status == 'paid', Payment.is_remarketing == True)
+    remarketing_sales = Payment.query.filter(remarketing_filter).count()
     
     remarketing_revenue = db.session.query(func.sum(Payment.amount)).filter(
-        Payment.bot_id == bot_id,
-        Payment.status == 'paid',
-        Payment.is_remarketing == True
+        remarketing_filter
     ).scalar() or 0.0
     
     # Total enviado em campanhas (soma de todas as campanhas)
@@ -3951,48 +3956,92 @@ def get_bot_stats(bot_id):
         'buttons': get_valid_campaign_buttons(c.buttons)
     } for c in campaigns]
     
-    # 5. VENDAS POR DIA (últimos 7 dias)
-    seven_days_ago = get_brazil_time() - timedelta(days=7)
+    # 5. VENDAS POR DIA (filtrado por período)
+    # Determinar intervalo de dias baseado no período
+    if period == 'day':
+        days_back = 1
+        chart_start = now_utc.replace(hour=0, minute=0, second=0, microsecond=0)
+        chart_filter = db.and_(Payment.bot_id == bot_id, Payment.status == 'paid', Payment.created_at >= chart_start)
+    elif period == 'month':
+        days_back = (now_utc - now_utc.replace(day=1)).days + 1
+        chart_start = now_utc.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        chart_filter = db.and_(Payment.bot_id == bot_id, Payment.status == 'paid', Payment.created_at >= chart_start)
+    else:  # 'all'
+        # Para "Todos", buscar desde a primeira venda ou últimos 90 dias (o que for menor)
+        first_payment = Payment.query.filter_by(bot_id=bot_id).order_by(Payment.created_at.asc()).first()
+        if first_payment:
+            chart_start = first_payment.created_at.replace(hour=0, minute=0, second=0, microsecond=0)
+            days_back = (now_utc.date() - chart_start.date()).days + 1
+            # Limitar a no máximo 90 dias para performance
+            if days_back > 90:
+                chart_start = (now_utc - timedelta(days=89)).replace(hour=0, minute=0, second=0, microsecond=0)
+                days_back = 90
+        else:
+            # Se não há vendas, mostrar últimos 30 dias
+            chart_start = (now_utc - timedelta(days=29)).replace(hour=0, minute=0, second=0, microsecond=0)
+            days_back = 30
+        chart_filter = db.and_(Payment.bot_id == bot_id, Payment.status == 'paid', Payment.created_at >= chart_start)
     sales_by_day = db.session.query(
         func.date(Payment.created_at).label('date'),
         func.count(Payment.id).label('sales'),
         func.sum(Payment.amount).label('revenue')
-    ).filter(
-        Payment.bot_id == bot_id,
-        Payment.status == 'paid',
-        Payment.created_at >= seven_days_ago
-    ).group_by(func.date(Payment.created_at))\
+    ).filter(chart_filter)\
+     .group_by(func.date(Payment.created_at))\
      .order_by(func.date(Payment.created_at))\
      .all()
     
     # Preencher dias sem vendas
     daily_stats = []
-    for i in range(7):
-        date = (get_brazil_time() - timedelta(days=6-i)).date()
+    if period == 'day':
+        # Para "Hoje", mostrar apenas o dia atual (24 horas)
+        date = now_utc.date()
         day_data = next((s for s in sales_by_day if str(s.date) == str(date)), None)
         daily_stats.append({
             'date': date.strftime('%d/%m'),
             'sales': day_data.sales if day_data else 0,
             'revenue': float(day_data.revenue) if day_data else 0.0
         })
+    elif period == 'month':
+        # Para "Este Mês", mostrar todos os dias do mês atual
+        for i in range(days_back):
+            date = (chart_start + timedelta(days=i)).date()
+            if date > now_utc.date():
+                break  # Não mostrar dias futuros
+            day_data = next((s for s in sales_by_day if str(s.date) == str(date)), None)
+            daily_stats.append({
+                'date': date.strftime('%d/%m'),
+                'sales': day_data.sales if day_data else 0,
+                'revenue': float(day_data.revenue) if day_data else 0.0
+            })
+    else:  # 'all'
+        # Para "Todos", mostrar todos os dias desde chart_start até hoje (limitado a 90 dias)
+        for i in range(min(days_back, 90)):
+            date = (chart_start + timedelta(days=i)).date()
+            if date > now_utc.date():
+                break  # Não mostrar dias futuros
+            day_data = next((s for s in sales_by_day if str(s.date) == str(date)), None)
+            daily_stats.append({
+                'date': date.strftime('%d/%m'),
+                'sales': day_data.sales if day_data else 0,
+                'revenue': float(day_data.revenue) if day_data else 0.0
+            })
     
-    # 6. HORÁRIOS DE PICO
+    # 6. HORÁRIOS DE PICO (filtrado por período)
+    peak_hours_filter = db.and_(payment_filter, Payment.status == 'paid')
     peak_hours = db.session.query(
         extract('hour', Payment.created_at).label('hour'),
         func.count(Payment.id).label('sales')
-    ).filter(
-        Payment.bot_id == bot_id,
-        Payment.status == 'paid'
-    ).group_by(extract('hour', Payment.created_at))\
+    ).filter(peak_hours_filter)\
+     .group_by(extract('hour', Payment.created_at))\
      .order_by(func.count(Payment.id).desc())\
      .limit(5)\
      .all()
     
     hours_stats = [{'hour': f"{int(h.hour):02d}:00", 'sales': h.sales} for h in peak_hours]
     
-    # 7. ÚLTIMAS VENDAS (para lista de vendas)
+    # 7. ÚLTIMAS VENDAS (para lista de vendas) - filtrado por período
     recent_sales = db.session.query(Payment).filter(
-        Payment.bot_id == bot_id
+        payment_filter
     ).order_by(Payment.id.desc()).limit(20).all()
     
     sales_list = [{
@@ -4017,11 +4066,11 @@ def get_bot_stats(bot_id):
         'device_model': getattr(p, 'device_model', None)
     } for p in recent_sales]
     
-    # 8. ✅ DADOS DEMOGRÁFICOS (TODAS AS VENDAS PAGAS - não apenas recent_sales)
-    # Buscar todas as vendas pagas com dados demográficos para analytics
+    # 8. ✅ DADOS DEMOGRÁFICOS (VENDAS PAGAS DO PERÍODO - filtrado)
+    # Buscar todas as vendas pagas do período com dados demográficos para analytics
+    demographic_filter = db.and_(payment_filter, Payment.status == 'paid')
     all_paid_sales = db.session.query(Payment).filter(
-        Payment.bot_id == bot_id,
-        Payment.status == 'paid'
+        demographic_filter
     ).all()
     
     demographic_sales = [{
@@ -4036,6 +4085,8 @@ def get_bot_stats(bot_id):
     } for p in all_paid_sales]
     
     return jsonify({
+        'period': period,  # ✅ PERÍODO SELECIONADO: day, month, all
+        'period_label': date_filter_label,  # ✅ LABEL DO PERÍODO: Hoje, Este Mês, Todos
         'general': {
             'total_users': total_users,
             'archived_users': archived_users,  # ✅ Histórico de tokens antigos
