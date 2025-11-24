@@ -3709,7 +3709,7 @@ def get_bot_analytics_v2(bot_id):
 def get_bot_stats(bot_id):
     """API para estatísticas detalhadas de um bot específico"""
     from sqlalchemy import func, extract, case
-    from models import BotUser
+    from models import BotUser, get_brazil_time
     from datetime import datetime, timedelta
     
     bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
@@ -3888,7 +3888,6 @@ def get_bot_stats(bot_id):
         .order_by(RemarketingCampaign.created_at.desc()).limit(10).all()
     
     # ✅ CORREÇÃO: Atualizar status de campanhas "sending" que já foram completamente enviadas
-    from models import get_brazil_time
     for c in campaigns:
         if c.status == 'sending':
             # Calcular total processado (enviados + falhas + bloqueios)
