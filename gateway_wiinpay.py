@@ -49,7 +49,10 @@ class WiinPayGateway(PaymentGateway):
     
     def get_webhook_url(self) -> str:
         """URL do webhook WiinPay"""
-        webhook_base = os.environ.get('WEBHOOK_URL', '')
+        webhook_base = os.environ.get('WEBHOOK_URL', 'https://app.grimbots.online')
+        # Garantir que não tem barra dupla
+        if webhook_base.endswith('/'):
+            webhook_base = webhook_base[:-1]
         return f"{webhook_base}/webhook/payment/wiinpay"
     
     def generate_pix(
@@ -77,7 +80,7 @@ class WiinPayGateway(PaymentGateway):
             }
         """
         try:
-            # ✅ VALIDAÇÃO: Valor mínimo R$ 3,00
+            # ✅ VALIDAÇÃO: Valor mínimo R$ 3,00 (conforme documentação)
             if amount < 3.0:
                 logger.error(f"❌ [{self.get_gateway_name()}] Valor mínimo é R$ 3,00. Recebido: R$ {amount:.2f}")
                 return None
@@ -86,30 +89,52 @@ class WiinPayGateway(PaymentGateway):
                 logger.error(f"❌ [{self.get_gateway_name()}] Valor inválido: {amount}")
                 return None
             
+            # ✅ VALIDAÇÃO: API Key obrigatória
+            if not self.api_key or len(self.api_key.strip()) == 0:
+                logger.error(f"❌ [{self.get_gateway_name()}] API Key não configurada")
+                return None
+            
             # Extrair dados do cliente (ou usar defaults)
             customer_name = "Cliente"
             customer_email = "cliente@exemplo.com"
             
             if customer_data:
-                customer_name = customer_data.get('name', customer_name)
-                customer_email = customer_data.get('email', customer_email)
+                customer_name = customer_data.get('name', customer_name) or "Cliente"
+                customer_email = customer_data.get('email', customer_email) or "cliente@exemplo.com"
             
-            # ✅ ENDPOINT: https://api-v2.wiinpay.com.br/payment/create
+            # ✅ VALIDAÇÃO: Campos obrigatórios
+            if not customer_name or not customer_email:
+                logger.error(f"❌ [{self.get_gateway_name()}] Nome ou email do cliente não fornecido")
+                return None
+            
+            if not description:
+                description = "Pagamento via Telegram Bot"
+            
+            # ✅ VALIDAÇÃO: Webhook URL
+            webhook_url = self.get_webhook_url()
+            if not webhook_url or not webhook_url.startswith('http'):
+                logger.error(f"❌ [{self.get_gateway_name()}] Webhook URL inválida: {webhook_url}")
+                return None
+            
+            # ✅ ENDPOINT: https://api-v2.wiinpay.com.br/payment/create (conforme documentação)
             create_url = f"{self.base_url}/payment/create"
             
-            # ✅ PAYLOAD completo
+            # ✅ PAYLOAD completo (conforme documentação WiinPay)
             payload = {
-                "api_key": self.api_key,
-                "value": float(amount),  # Valor total
-                "name": customer_name,
-                "email": customer_email,
-                "description": description,
-                "webhook_url": self.get_webhook_url(),
-                "metadata": {
-                    "payment_id": payment_id,  # Para rastreamento
-                    "platform": "grimbots"
-                }
+                "api_key": self.api_key.strip(),  # Chave API no body (não no header)
+                "value": float(amount),  # Valor em reais (mínimo R$ 3,00)
+                "name": customer_name,  # Nome do pagador
+                "email": customer_email,  # Email do pagador
+                "description": description,  # Descrição do pagamento
+                "webhook_url": webhook_url  # URL do webhook (POST)
             }
+            
+            # ✅ METADATA (opcional conforme documentação)
+            metadata = {
+                "payment_id": payment_id,  # Para rastreamento
+                "platform": "grimbots"
+            }
+            payload["metadata"] = metadata
             
             # ✅ SPLIT PAYMENT (se configurado)
             if self.split_user_id:
@@ -130,40 +155,69 @@ class WiinPayGateway(PaymentGateway):
             }
             
             logger.info(f"💳 [{self.get_gateway_name()}] Gerando PIX de R$ {amount:.2f}...")
+            logger.info(f"📤 [{self.get_gateway_name()}] URL: {create_url}")
+            logger.info(f"📤 [{self.get_gateway_name()}] Payload: {payload}")
+            logger.info(f"📤 [{self.get_gateway_name()}] Headers: {headers}")
             
             response = requests.post(create_url, json=payload, headers=headers, timeout=15)
             
-            # ✅ SUCCESS: 201 Created OU 200 OK
-            if response.status_code in [200, 201]:
-                response_data = response.json()
+            logger.info(f"📡 [{self.get_gateway_name()}] Status: {response.status_code}")
+            logger.info(f"📡 [{self.get_gateway_name()}] Response Headers: {dict(response.headers)}")
+            logger.info(f"📡 [{self.get_gateway_name()}] Response Body: {response.text}")
+            
+            # ✅ SUCCESS: 201 Created (conforme documentação)
+            if response.status_code == 201:
+                try:
+                    response_data = response.json()
+                    logger.info(f"📥 [{self.get_gateway_name()}] Response JSON: {response_data}")
+                except Exception as e:
+                    logger.error(f"❌ [{self.get_gateway_name()}] Erro ao parsear JSON: {e}")
+                    logger.error(f"Response text: {response.text}")
+                    return None
                 
-                # ✅ CORREÇÃO: WiinPay retorna dentro de 'data' wrapper
+                # ✅ CORREÇÃO: WiinPay pode retornar dentro de 'data' wrapper ou diretamente
                 if 'data' in response_data:
                     data = response_data['data']
+                    logger.info(f"📥 [{self.get_gateway_name()}] Dados extraídos de 'data' wrapper: {data}")
                 else:
                     data = response_data
+                    logger.info(f"📥 [{self.get_gateway_name()}] Dados diretos da resposta: {data}")
                 
-                # ✅ PARSE RESPONSE
-                # WiinPay retorna: {qr_code, paymentId}
-                transaction_id = data.get('paymentId') or data.get('id') or data.get('transaction_id') or data.get('uuid')
-                pix_code = data.get('qr_code') or data.get('pix_code') or data.get('brcode') or data.get('emv')
-                qr_code_url = data.get('qr_code_url') or data.get('qrcode_url')
-                qr_code_base64 = data.get('qr_code_base64') or data.get('qrcode_base64')
+                # ✅ PARSE RESPONSE - conforme documentação WiinPay
+                # WiinPay retorna: {qr_code, paymentId} ou formato similar
+                transaction_id = data.get('paymentId') or data.get('id') or data.get('transaction_id') or data.get('uuid') or data.get('payment_id')
+                pix_code = data.get('qr_code') or data.get('pix_code') or data.get('brcode') or data.get('emv') or data.get('qrCode') or data.get('qrcode')
+                qr_code_url = data.get('qr_code_url') or data.get('qrcode_url') or data.get('qrCodeUrl')
+                qr_code_base64 = data.get('qr_code_base64') or data.get('qrcode_base64') or data.get('qrCodeBase64')
                 
-                if not transaction_id or not pix_code:
-                    logger.error(f"❌ [{self.get_gateway_name()}] Resposta inválida - faltando transaction_id ou pix_code")
-                    logger.error(f"Resposta: {data}")
+                logger.info(f"🔍 [{self.get_gateway_name()}] transaction_id: {transaction_id}")
+                logger.info(f"🔍 [{self.get_gateway_name()}] pix_code: {pix_code[:50] + '...' if pix_code and len(pix_code) > 50 else pix_code}")
+                
+                if not transaction_id:
+                    logger.error(f"❌ [{self.get_gateway_name()}] Resposta inválida - faltando transaction_id/paymentId")
+                    logger.error(f"Resposta completa: {response_data}")
+                    return None
+                
+                if not pix_code:
+                    logger.error(f"❌ [{self.get_gateway_name()}] Resposta inválida - faltando qr_code/pix_code")
+                    logger.error(f"Resposta completa: {response_data}")
                     return None
                 
                 logger.info(f"✅ [{self.get_gateway_name()}] PIX gerado! ID: {transaction_id}")
                 
+                # Gerar URL do QR Code se não fornecido
+                if not qr_code_url:
+                    import urllib.parse
+                    qr_code_url = f'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={urllib.parse.quote(pix_code)}'
+                
                 result = {
                     'pix_code': pix_code,
-                    'qr_code_url': qr_code_url or '',
+                    'qr_code_url': qr_code_url,
                     'transaction_id': str(transaction_id),
                     'payment_id': payment_id,
                     'gateway_type': self.get_gateway_type(),
-                    'amount': amount
+                    'amount': amount,
+                    'status': 'pending'
                 }
                 
                 # Adicionar QR Code base64 se disponível
@@ -172,24 +226,91 @@ class WiinPayGateway(PaymentGateway):
                 
                 return result
             
-            # ❌ ERRORS
+            # ✅ TAMBÉM ACEITAR 200 OK (alguns gateways retornam 200)
+            elif response.status_code == 200:
+                try:
+                    response_data = response.json()
+                    logger.info(f"📥 [{self.get_gateway_name()}] Response JSON (200): {response_data}")
+                except Exception as e:
+                    logger.error(f"❌ [{self.get_gateway_name()}] Erro ao parsear JSON: {e}")
+                    logger.error(f"Response text: {response.text}")
+                    return None
+                
+                # ✅ CORREÇÃO: WiinPay pode retornar dentro de 'data' wrapper ou diretamente
+                if 'data' in response_data:
+                    data = response_data['data']
+                else:
+                    data = response_data
+                
+                # ✅ PARSE RESPONSE
+                transaction_id = data.get('paymentId') or data.get('id') or data.get('transaction_id') or data.get('uuid') or data.get('payment_id')
+                pix_code = data.get('qr_code') or data.get('pix_code') or data.get('brcode') or data.get('emv') or data.get('qrCode') or data.get('qrcode')
+                qr_code_url = data.get('qr_code_url') or data.get('qrcode_url') or data.get('qrCodeUrl')
+                qr_code_base64 = data.get('qr_code_base64') or data.get('qrcode_base64') or data.get('qrCodeBase64')
+                
+                if not transaction_id or not pix_code:
+                    logger.error(f"❌ [{self.get_gateway_name()}] Resposta inválida (200) - faltando transaction_id ou pix_code")
+                    logger.error(f"Resposta: {response_data}")
+                    return None
+                
+                logger.info(f"✅ [{self.get_gateway_name()}] PIX gerado! ID: {transaction_id}")
+                
+                # Gerar URL do QR Code se não fornecido
+                if not qr_code_url:
+                    import urllib.parse
+                    qr_code_url = f'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={urllib.parse.quote(pix_code)}'
+                
+                result = {
+                    'pix_code': pix_code,
+                    'qr_code_url': qr_code_url,
+                    'transaction_id': str(transaction_id),
+                    'payment_id': payment_id,
+                    'gateway_type': self.get_gateway_type(),
+                    'amount': amount,
+                    'status': 'pending'
+                }
+                
+                if qr_code_base64:
+                    result['qr_code_base64'] = qr_code_base64
+                
+                return result
+            
+            # ❌ ERRORS - conforme documentação WiinPay
             elif response.status_code == 422:
-                logger.error(f"❌ [{self.get_gateway_name()}] Campo vazio ou inválido (422)")
-                logger.error(f"Resposta: {response.text}")
+                try:
+                    error_data = response.json()
+                    error_message = error_data.get('message') or error_data.get('error') or 'Campo vazio ou inválido'
+                    logger.error(f"❌ [{self.get_gateway_name()}] Campo vazio ou inválido (422): {error_message}")
+                    logger.error(f"📋 Payload enviado: {payload}")
+                    logger.error(f"📋 Resposta: {response.text}")
+                except:
+                    logger.error(f"❌ [{self.get_gateway_name()}] Campo vazio ou inválido (422)")
+                    logger.error(f"📋 Payload enviado: {payload}")
+                    logger.error(f"📋 Resposta: {response.text}")
                 return None
             
             elif response.status_code == 401:
-                logger.error(f"❌ [{self.get_gateway_name()}] API Key inválida (401)")
+                logger.error(f"❌ [{self.get_gateway_name()}] Não autorizado - Chave API inválida (401)")
+                logger.error(f"📋 API Key usada: {self.api_key[:10]}...{self.api_key[-5:] if len(self.api_key) > 15 else '***'}")
+                logger.error(f"📋 Resposta: {response.text}")
                 return None
             
             elif response.status_code == 500:
-                logger.error(f"❌ [{self.get_gateway_name()}] Erro interno do gateway (500)")
-                logger.error(f"Resposta: {response.text}")
+                logger.error(f"❌ [{self.get_gateway_name()}] Erro interno do servidor (500)")
+                logger.error(f"📋 Payload enviado: {payload}")
+                logger.error(f"📋 Resposta: {response.text}")
                 return None
             
             else:
                 logger.error(f"❌ [{self.get_gateway_name()}] Erro inesperado: Status {response.status_code}")
-                logger.error(f"Resposta: {response.text}")
+                logger.error(f"📋 Payload enviado: {payload}")
+                logger.error(f"📋 Headers enviados: {headers}")
+                logger.error(f"📋 Resposta: {response.text}")
+                try:
+                    error_data = response.json()
+                    logger.error(f"📋 Resposta JSON: {error_data}")
+                except:
+                    pass
                 return None
         
         except requests.exceptions.Timeout:
