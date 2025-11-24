@@ -3829,6 +3829,60 @@ def get_bot_stats(bot_id):
     remarketing_click_rate = (remarketing_total_clicks / remarketing_total_sent * 100) if remarketing_total_sent > 0 else 0
     remarketing_avg_ticket = (remarketing_revenue_final / remarketing_sales_final) if remarketing_sales_final > 0 else 0
     
+    # ✅ FUNÇÃO: Validar botões da campanha (apenas botões cadastrados, não downsells)
+    def get_valid_campaign_buttons(buttons_data):
+        """Valida e retorna apenas botões válidos da campanha de remarketing"""
+        if not buttons_data:
+            return []
+        
+        # Se for string JSON, parsear primeiro
+        if isinstance(buttons_data, str):
+            try:
+                import json
+                buttons_data = json.loads(buttons_data)
+            except (json.JSONDecodeError, ValueError, TypeError):
+                logger.warning(f"⚠️ Erro ao parsear buttons JSON: {buttons_data[:100] if buttons_data else 'None'}")
+                return []
+        
+        # Se não for lista, retornar vazio
+        if not isinstance(buttons_data, list):
+            logger.warning(f"⚠️ buttons não é uma lista: {type(buttons_data)}")
+            return []
+        
+        valid_buttons = []
+        for btn in buttons_data:
+            # Verificar se é um dicionário válido
+            if isinstance(btn, dict):
+                # Botões válidos devem ter 'text' e ('url' OU 'callback_data')
+                # IMPORTANTE: Não incluir botões que são de downsells ou outras estruturas
+                has_text = 'text' in btn and btn.get('text')
+                has_url = 'url' in btn and btn.get('url')
+                has_callback = 'callback_data' in btn and btn.get('callback_data')
+                
+                # Ignorar se for estrutura de downsell (tem 'delay_minutes', 'order_bump', 'price', etc)
+                # Também ignorar se for estrutura aninhada de downsells
+                is_downsell_structure = any(key in btn for key in ['delay_minutes', 'order_bump', 'description'])
+                
+                # Ignorar botões que são apenas placeholders ou estruturas internas
+                is_internal_structure = 'buttons' in btn  # Se tem 'buttons' dentro, é estrutura aninhada
+                
+                if has_text and (has_url or has_callback) and not is_downsell_structure and not is_internal_structure:
+                    valid_buttons.append({
+                        'text': btn.get('text', ''),
+                        'url': btn.get('url'),
+                        'callback_data': btn.get('callback_data')
+                    })
+            elif isinstance(btn, list):
+                # Se for lista aninhada (downsells podem ter arrays de botões), processar recursivamente
+                nested_buttons = get_valid_campaign_buttons(btn)
+                valid_buttons.extend(nested_buttons)
+        
+        # Log para debug
+        if len(valid_buttons) != len(buttons_data) if isinstance(buttons_data, list) else 0:
+            logger.info(f"🔍 Botões filtrados: {len(valid_buttons)} válidos de {len(buttons_data) if isinstance(buttons_data, list) else 0} totais")
+        
+        return valid_buttons
+    
     # Buscar campanhas com detalhes (últimas 10)
     campaigns = RemarketingCampaign.query.filter_by(bot_id=bot_id)\
         .order_by(RemarketingCampaign.created_at.desc()).limit(10).all()
@@ -3854,7 +3908,8 @@ def get_bot_stats(bot_id):
         'media_type': c.media_type or 'video',
         'audio_enabled': c.audio_enabled or False,
         'audio_url': c.audio_url or '',
-        'buttons': c.buttons or []
+        # ✅ VALIDAR E FILTRAR: Apenas botões válidos da campanha
+        'buttons': get_valid_campaign_buttons(c.buttons)
     } for c in campaigns]
     
     # 5. VENDAS POR DIA (últimos 7 dias)
