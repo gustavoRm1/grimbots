@@ -8022,15 +8022,16 @@ Seu pagamento ainda não foi confirmado.
                 delay_minutes = int(downsell.get('delay_minutes', 5))  # Converter para int
                 job_id = f"downsell_{bot_id}_{payment_id}_{i}"
                 
-                # Calcular data/hora de execução
-                from models import get_brazil_time
-                now = get_brazil_time()
-                run_time = now + timedelta(minutes=delay_minutes)
+                # ✅ CRÍTICO: Calcular data/hora de execução em UTC (scheduler usa UTC)
+                # PROBLEMA IDENTIFICADO: get_brazil_time() retorna UTC-3, mas scheduler espera UTC
+                from datetime import datetime, timezone
+                now_utc = datetime.now(timezone.utc)
+                run_time = now_utc + timedelta(minutes=delay_minutes)
                 
                 logger.info(f"📅 Downsell {i+1}:")
                 logger.info(f"   - Delay: {delay_minutes} minutos")
-                logger.info(f"   - Hora atual: {now}")
-                logger.info(f"   - Hora execução: {run_time}")
+                logger.info(f"   - Hora atual (UTC): {now_utc}")
+                logger.info(f"   - Hora execução (UTC): {run_time}")
                 logger.info(f"   - Job ID: {job_id}")
                 
                 try:
