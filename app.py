@@ -3847,7 +3847,14 @@ def get_bot_stats(bot_id):
         'click_rate': round((c.total_clicks / c.total_sent * 100) if c.total_sent > 0 else 0, 2),
         'created_at': c.created_at.isoformat() if c.created_at else None,
         'started_at': c.started_at.isoformat() if c.started_at else None,
-        'completed_at': c.completed_at.isoformat() if c.completed_at else None
+        'completed_at': c.completed_at.isoformat() if c.completed_at else None,
+        # ✅ DADOS PARA PRÉ-VISUALIZAÇÃO
+        'message': c.message or '',
+        'media_url': c.media_url or '',
+        'media_type': c.media_type or 'video',
+        'audio_enabled': c.audio_enabled or False,
+        'audio_url': c.audio_url or '',
+        'buttons': c.buttons or []
     } for c in campaigns]
     
     # 5. VENDAS POR DIA (últimos 7 dias)

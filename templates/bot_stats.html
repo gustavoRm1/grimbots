@@ -638,12 +638,12 @@
                     </thead>
                     <tbody>
                         <template x-for="campaign in stats.remarketing.campaigns.slice(0, 5)" :key="campaign.id">
-                            <tr>
+                            <tr @click="showCampaignPreview(campaign)" class="cursor-pointer hover:bg-gray-800 transition-colors">
                                 <td class="text-white font-medium" x-text="campaign.name"></td>
                                 <td>
                                     <span class="badge-status" 
                                           :class="campaign.status === 'active' ? 'badge-paid' : (campaign.status === 'completed' ? 'badge-paid' : 'badge-pending')">
-                                        <span x-text="campaign.status === 'active' ? 'Ativa' : (campaign.status === 'completed' ? 'Completa' : campaign.status)"></span>
+                                        <span x-text="campaign.status === 'active' ? 'Ativa' : (campaign.status === 'completed' ? 'Completa' : (campaign.status === 'sending' ? 'Enviando' : (campaign.status === 'paused' ? 'Pausada' : campaign.status)))"></span>
                                     </span>
                                 </td>
                                 <td class="text-gray-300" x-text="campaign.total_sent"></td>
@@ -663,6 +663,117 @@
                 <i class="fas fa-info-circle mr-2 text-blue-500"></i>
                 <strong>Nenhuma campanha criada ainda.</strong> Crie campanhas de remarketing para recuperar vendas perdidas!
             </p>
+        </div>
+    </div>
+    
+    <!-- ============================================================================ -->
+    <!-- MODAL: PRÉ-VISUALIZAÇÃO DE CAMPANHA DE REMARKETING -->
+    <!-- ============================================================================ -->
+    
+    <div x-show="showCampaignModal" 
+         x-cloak
+         class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4"
+         @click.self="showCampaignModal = false">
+        <div class="bg-gray-900 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-gray-700">
+            <!-- Header -->
+            <div class="sticky top-0 bg-gray-900 border-b border-gray-700 px-6 py-4 flex items-center justify-between">
+                <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                    <i class="fas fa-eye text-blue-500"></i>
+                    Pré-visualização da Campanha
+                </h2>
+                <button @click="showCampaignModal = false" class="text-gray-400 hover:text-white">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            
+            <!-- Content -->
+            <div class="p-6" x-show="selectedCampaign">
+                <!-- Nome da Campanha -->
+                <div class="mb-4">
+                    <div class="text-sm text-gray-400 mb-1">Nome da Campanha</div>
+                    <div class="text-lg font-bold text-white" x-text="selectedCampaign?.name"></div>
+                </div>
+                
+                <!-- Mensagem -->
+                <div class="mb-4 bg-gray-800 rounded-lg p-4">
+                    <div class="text-sm text-gray-400 mb-2">Mensagem Enviada</div>
+                    <div class="text-white whitespace-pre-wrap" x-text="selectedCampaign?.message || 'Sem mensagem'"></div>
+                </div>
+                
+                <!-- Mídia -->
+                <div class="mb-4" x-show="selectedCampaign?.media_url">
+                    <div class="text-sm text-gray-400 mb-2">
+                        <i class="fas" :class="selectedCampaign?.media_type === 'video' ? 'fa-video' : 'fa-image'"></i>
+                        <span x-text="selectedCampaign?.media_type === 'video' ? ' Vídeo' : ' Imagem'"></span>
+                    </div>
+                    <div class="bg-gray-800 rounded-lg overflow-hidden">
+                        <img x-show="selectedCampaign?.media_type === 'photo'" 
+                             :src="selectedCampaign?.media_url" 
+                             class="w-full max-h-96 object-contain"
+                             alt="Preview">
+                        <video x-show="selectedCampaign?.media_type === 'video'" 
+                               :src="selectedCampaign?.media_url" 
+                               class="w-full max-h-96"
+                               controls
+                               alt="Preview"></video>
+                    </div>
+                </div>
+                
+                <!-- Áudio -->
+                <div class="mb-4" x-show="selectedCampaign?.audio_enabled && selectedCampaign?.audio_url">
+                    <div class="text-sm text-gray-400 mb-2">
+                        <i class="fas fa-volume-up"></i> Áudio Complementar
+                    </div>
+                    <div class="bg-gray-800 rounded-lg p-4">
+                        <audio :src="selectedCampaign?.audio_url" controls class="w-full"></audio>
+                    </div>
+                </div>
+                
+                <!-- Botões -->
+                <div class="mb-4" x-show="selectedCampaign?.buttons && selectedCampaign?.buttons.length > 0">
+                    <div class="text-sm text-gray-400 mb-2">Botões</div>
+                    <div class="space-y-2">
+                        <template x-for="(button, index) in selectedCampaign?.buttons" :key="index">
+                            <div class="bg-gray-800 rounded-lg p-3 flex items-center justify-between">
+                                <span class="text-white font-medium" x-text="button.text || `Botão ${index + 1}`"></span>
+                                <span class="text-xs text-gray-400" x-text="button.url ? 'URL' : 'Callback'"></span>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+                
+                <!-- Performance -->
+                <div class="grid grid-cols-2 gap-4 mt-6 pt-6 border-t border-gray-700">
+                    <div class="bg-gray-800 rounded-lg p-4">
+                        <div class="text-xs text-gray-400 mb-1">Enviados</div>
+                        <div class="text-2xl font-bold text-blue-400" x-text="selectedCampaign?.total_sent || 0"></div>
+                    </div>
+                    <div class="bg-gray-800 rounded-lg p-4">
+                        <div class="text-xs text-gray-400 mb-1">Cliques</div>
+                        <div class="text-2xl font-bold text-green-400" x-text="selectedCampaign?.total_clicks || 0"></div>
+                    </div>
+                    <div class="bg-gray-800 rounded-lg p-4">
+                        <div class="text-xs text-gray-400 mb-1">Vendas</div>
+                        <div class="text-2xl font-bold text-yellow-400" x-text="selectedCampaign?.total_sales || 0"></div>
+                    </div>
+                    <div class="bg-gray-800 rounded-lg p-4">
+                        <div class="text-xs text-gray-400 mb-1">Receita</div>
+                        <div class="text-2xl font-bold text-yellow-400" x-text="'R$ ' + (selectedCampaign?.revenue_generated || 0).toFixed(2)"></div>
+                    </div>
+                </div>
+                
+                <!-- Taxa de Conversão -->
+                <div class="mt-4 bg-gray-800 rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-sm text-gray-400">Taxa de Conversão</span>
+                        <span class="text-lg font-bold text-yellow-400" x-text="(selectedCampaign?.conversion_rate || 0) + '%'"></span>
+                    </div>
+                    <div class="w-full bg-gray-700 rounded-full h-2">
+                        <div class="bg-yellow-500 h-2 rounded-full transition-all" 
+                             :style="`width: ${Math.min(selectedCampaign?.conversion_rate || 0, 100)}%`"></div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
     
@@ -1467,6 +1578,12 @@ function botStatsApp() {
                 });
             
             return Object.values(cities).sort((a, b) => b.count - a.count);
+        },
+        
+        // ✅ Método para mostrar pré-visualização da campanha
+        showCampaignPreview(campaign) {
+            this.selectedCampaign = campaign;
+            this.showCampaignModal = true;
         }
     };
 }
