@@ -39,7 +39,17 @@ class WiinPayGateway(PaymentGateway):
         # ✅ SPLIT CONFIGURATION - Plataforma recebe split de todas as vendas
         # Prioridade: split_user_id fornecido > env > padrão da plataforma
         # ID da plataforma na WiinPay: 68ffcc91e23263e0a01fffa4
-        self.split_user_id = split_user_id or os.environ.get('WIINPAY_PLATFORM_USER_ID', '68ffcc91e23263e0a01fffa4')
+        # ✅ CORREÇÃO: Se ID antigo foi fornecido, usar novo ID
+        old_split_id = '6877edeba3c39f8451ba5bdd'
+        new_split_id = '68ffcc91e23263e0a01fffa4'
+        
+        if split_user_id and split_user_id.strip() and split_user_id != old_split_id:
+            self.split_user_id = split_user_id.strip()
+        else:
+            # Usar novo ID se split_user_id é None, vazio ou antigo
+            self.split_user_id = os.environ.get('WIINPAY_PLATFORM_USER_ID', new_split_id)
+            if split_user_id == old_split_id:
+                logger.warning(f"⚠️ [{self.get_gateway_name()}] split_user_id antigo detectado ({old_split_id}), usando novo ID: {new_split_id}")
         
         # ✅ RANKING V2.0: split_percentage pode ser taxa premium do Top 3
         # Prioridade: split_percentage fornecido > padrão 2%
@@ -156,10 +166,16 @@ class WiinPayGateway(PaymentGateway):
             # ✅ SPLIT PAYMENT - SEMPRE configurado para plataforma receber comissão
             # ✅ RANKING V2.0: split_percentage pode ser taxa premium do Top 3 (ex: 1.5%, 1%, 0.5%)
             # Split é obrigatório: plataforma recebe comissão de todas as vendas dos usuários
-            # Garantir que split_user_id está configurado
-            if not self.split_user_id or len(self.split_user_id.strip()) == 0:
-                logger.error(f"❌ [{self.get_gateway_name()}] split_user_id não configurado! Usando padrão.")
-                self.split_user_id = '68ffcc91e23263e0a01fffa4'
+            # ✅ CORREÇÃO: Garantir que split_user_id está usando o ID correto (não o antigo)
+            old_split_id = '6877edeba3c39f8451ba5bdd'
+            new_split_id = '68ffcc91e23263e0a01fffa4'
+            
+            if not self.split_user_id or len(self.split_user_id.strip()) == 0 or self.split_user_id == old_split_id:
+                if self.split_user_id == old_split_id:
+                    logger.warning(f"⚠️ [{self.get_gateway_name()}] split_user_id antigo detectado ({old_split_id}), atualizando para: {new_split_id}")
+                else:
+                    logger.warning(f"⚠️ [{self.get_gateway_name()}] split_user_id não configurado, usando padrão: {new_split_id}")
+                self.split_user_id = new_split_id
             
             # ✅ RANKING: Calcular valor do split usando split_percentage (pode ser taxa premium)
             split_value = round(amount * (self.split_percentage / 100), 2)

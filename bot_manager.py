@@ -6087,9 +6087,20 @@ Seu pagamento ainda não foi confirmado.
                 
                 try:
                     split_user_id = gateway.split_user_id
+                    # ✅ CORREÇÃO: WiinPay - usar novo split_user_id da plataforma
+                    # Se está usando ID antigo ou está vazio, usar novo ID
+                    if gateway.gateway_type == 'wiinpay':
+                        old_id = '6877edeba3c39f8451ba5bdd'
+                        new_id = '68ffcc91e23263e0a01fffa4'
+                        if not split_user_id or split_user_id == old_id or split_user_id.strip() == '':
+                            logger.info(f"✅ [WiinPay] Atualizando split_user_id: {split_user_id} → {new_id}")
+                            split_user_id = new_id
                 except Exception as decrypt_error:
                     logger.error(f"❌ ERRO CRÍTICO ao acessar gateway.split_user_id (gateway {gateway.id}): {decrypt_error}")
                     split_user_id = None
+                    # ✅ CORREÇÃO: WiinPay - usar novo ID se descriptografia falhar
+                    if gateway.gateway_type == 'wiinpay':
+                        split_user_id = '68ffcc91e23263e0a01fffa4'
                 
                 # ✅ VALIDAÇÃO: Verificar se credenciais foram descriptografadas corretamente
                 # Se alguma propriedade retornar None mas o campo interno existir, significa erro de descriptografia
