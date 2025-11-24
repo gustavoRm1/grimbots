@@ -707,41 +707,68 @@
                         <span x-text="selectedCampaign?.media_type === 'video' ? ' Vídeo' : ' Imagem'"></span>
                     </div>
                     <div class="bg-gray-800 rounded-lg overflow-hidden">
-                        <img x-show="selectedCampaign?.media_type === 'photo'" 
-                             :src="'/api/chat/media/' + botId + '/' + selectedCampaign?.media_url" 
-                             class="w-full max-h-96 object-contain"
-                             alt="Preview"
-                             @error="$event.target.style.display='none'; $event.target.nextElementSibling.style.display='block';">
-                        <div x-show="selectedCampaign?.media_type === 'photo'" style="display: none;" class="p-8 text-center text-gray-400">
-                            <i class="fas fa-image text-4xl mb-2"></i>
-                            <p>Imagem não disponível</p>
-                            <p class="text-xs mt-2" x-text="selectedCampaign?.media_url"></p>
+                        <!-- URL do Telegram (t.me) - Não pode ser carregada diretamente -->
+                        <div x-show="selectedCampaign?.media_url && selectedCampaign?.media_url.includes('t.me/')" class="p-6 text-center">
+                            <i class="fas text-5xl text-blue-400 mb-3" :class="selectedCampaign?.media_type === 'video' ? 'fa-video' : 'fa-image'"></i>
+                            <p class="text-gray-300 mb-2 font-medium">Mídia do Telegram</p>
+                            <p class="text-xs text-gray-400 mb-3">Esta mídia está armazenada em um canal do Telegram</p>
+                            <p class="text-xs text-gray-500 mb-4 break-all" x-text="selectedCampaign?.media_url"></p>
+                            <a :href="selectedCampaign?.media_url" 
+                               target="_blank" 
+                               class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm">
+                                <i class="fab fa-telegram"></i> 
+                                Abrir no Telegram
+                            </a>
                         </div>
-                        <div x-show="selectedCampaign?.media_type === 'video'">
-                            <div x-show="selectedCampaign?.media_url && selectedCampaign?.media_url.startsWith('http')" class="bg-gray-800 rounded-lg p-4">
-                                <p class="text-sm text-gray-400 mb-2">Vídeo (URL externa)</p>
-                                <video 
-                                    :src="selectedCampaign?.media_url" 
-                                    class="w-full max-h-96"
-                                    controls
-                                    preload="metadata">
+                        
+                        <!-- URL HTTP externa -->
+                        <template x-if="selectedCampaign?.media_url && selectedCampaign?.media_url.startsWith('http') && !selectedCampaign?.media_url.includes('t.me/')">
+                            <div class="bg-gray-800 rounded-lg p-4">
+                                <img x-show="selectedCampaign?.media_type === 'photo'" 
+                                     :src="selectedCampaign?.media_url" 
+                                     class="w-full max-h-96 object-contain"
+                                     alt="Preview"
+                                     @error="$event.target.style.display='none'; $event.target.nextElementSibling.style.display='block';">
+                                <div x-show="selectedCampaign?.media_type === 'photo'" style="display: none;" class="p-8 text-center text-gray-400">
+                                    <i class="fas fa-image text-4xl mb-2"></i>
+                                    <p>Imagem não disponível</p>
+                                    <a :href="selectedCampaign?.media_url" target="_blank" class="text-blue-400 text-xs underline mt-2 inline-block">
+                                        Abrir URL diretamente
+                                    </a>
+                                </div>
+                                <video x-show="selectedCampaign?.media_type === 'video'" 
+                                       :src="selectedCampaign?.media_url" 
+                                       class="w-full max-h-96"
+                                       controls
+                                       preload="metadata"
+                                       @error="$event.target.style.display='none'; $event.target.nextElementSibling.style.display='block';">
                                     Seu navegador não suporta vídeo HTML5.
                                 </video>
-                            </div>
-                            <div x-show="selectedCampaign?.media_url && !selectedCampaign?.media_url.startsWith('http')">
-                                <div class="bg-gray-800 rounded-lg p-6 text-center">
-                                    <i class="fas fa-video text-5xl text-gray-500 mb-3"></i>
-                                    <p class="text-gray-300 mb-2 font-medium">Vídeo armazenado no Telegram</p>
-                                    <p class="text-xs text-gray-500 mb-4">O vídeo precisa ser acessado através do Telegram Bot API</p>
-                                    <a :href="'/api/chat/media/' + botId + '/' + encodeURIComponent(selectedCampaign?.media_url)" 
-                                       target="_blank" 
-                                       class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm">
-                                        <i class="fas fa-external-link-alt"></i> 
-                                        Abrir vídeo em nova aba
+                                <div x-show="selectedCampaign?.media_type === 'video'" style="display: none;" class="p-8 text-center text-gray-400">
+                                    <i class="fas fa-video text-4xl mb-2"></i>
+                                    <p>Vídeo não disponível</p>
+                                    <a :href="selectedCampaign?.media_url" target="_blank" class="text-blue-400 text-xs underline mt-2 inline-block">
+                                        Abrir URL diretamente
                                     </a>
                                 </div>
                             </div>
-                        </div>
+                        </template>
+                        
+                        <!-- File ID do Telegram (sem http, sem t.me) -->
+                        <template x-if="selectedCampaign?.media_url && !selectedCampaign?.media_url.startsWith('http') && !selectedCampaign?.media_url.includes('t.me/')">
+                            <div class="bg-gray-800 rounded-lg p-6 text-center">
+                                <i class="fas text-5xl text-gray-500 mb-3" :class="selectedCampaign?.media_type === 'video' ? 'fa-video' : 'fa-image'"></i>
+                                <p class="text-gray-300 mb-2 font-medium" x-text="selectedCampaign?.media_type === 'video' ? 'Vídeo armazenado no Telegram' : 'Imagem armazenada no Telegram'"></p>
+                                <p class="text-xs text-gray-500 mb-4">Esta mídia precisa ser acessada através da API do Telegram Bot</p>
+                                <p class="text-xs text-gray-600 mb-4 font-mono break-all" x-text="selectedCampaign?.media_url.substring(0, 50) + '...'"></p>
+                                <a :href="'/api/chat/media/' + botId + '/' + encodeURIComponent(selectedCampaign?.media_url)" 
+                                   target="_blank" 
+                                   class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors text-sm">
+                                    <i class="fas fa-external-link-alt"></i> 
+                                    Abrir mídia em nova aba
+                                </a>
+                            </div>
+                        </template>
                     </div>
                 </div>
                 
