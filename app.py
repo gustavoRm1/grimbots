@@ -3775,6 +3775,81 @@ def get_bot_stats(bot_id):
     ).scalar() or 0.0
     downsell_rate = (downsell_paid / downsell_sent * 100) if downsell_sent > 0 else 0
     
+    # ✅ SEPARAR: Downsells automáticos vs Remarketing
+    # Downsells automáticos (is_downsell=True, is_remarketing=False)
+    downsell_auto_paid = Payment.query.filter_by(
+        bot_id=bot_id, is_downsell=True, is_remarketing=False, status='paid'
+    ).count()
+    downsell_auto_revenue = db.session.query(func.sum(Payment.amount)).filter(
+        Payment.bot_id == bot_id,
+        Payment.is_downsell == True,
+        Payment.is_remarketing == False,
+        Payment.status == 'paid'
+    ).scalar() or 0.0
+    
+    # 4.5. REMARKETING CAMPAIGNS (is_remarketing=True)
+    from models import RemarketingCampaign
+    
+    # Estatísticas de campanhas
+    total_campaigns = RemarketingCampaign.query.filter_by(bot_id=bot_id).count()
+    active_campaigns = RemarketingCampaign.query.filter_by(bot_id=bot_id, status='active').count()
+    completed_campaigns = RemarketingCampaign.query.filter_by(bot_id=bot_id, status='completed').count()
+    
+    # Vendas pagas de remarketing (Payment.is_remarketing=True)
+    remarketing_sales = Payment.query.filter_by(
+        bot_id=bot_id,
+        status='paid',
+        is_remarketing=True
+    ).count()
+    
+    remarketing_revenue = db.session.query(func.sum(Payment.amount)).filter(
+        Payment.bot_id == bot_id,
+        Payment.status == 'paid',
+        Payment.is_remarketing == True
+    ).scalar() or 0.0
+    
+    # Total enviado em campanhas (soma de todas as campanhas)
+    campaign_totals = db.session.query(
+        func.sum(RemarketingCampaign.total_sent).label('total_sent'),
+        func.sum(RemarketingCampaign.total_clicks).label('total_clicks'),
+        func.sum(RemarketingCampaign.total_sales).label('total_sales'),
+        func.sum(RemarketingCampaign.revenue_generated).label('revenue_generated')
+    ).filter(RemarketingCampaign.bot_id == bot_id).first()
+    
+    remarketing_total_sent = int(campaign_totals.total_sent or 0)
+    remarketing_total_clicks = int(campaign_totals.total_clicks or 0)
+    remarketing_total_sales_from_campaigns = int(campaign_totals.total_sales or 0)
+    remarketing_revenue_from_campaigns = float(campaign_totals.revenue_generated or 0.0)
+    
+    # Usar dados mais precisos: revenue_generated das campanhas se disponível, senão somar payments
+    remarketing_revenue_final = remarketing_revenue_from_campaigns if remarketing_revenue_from_campaigns > 0 else remarketing_revenue
+    remarketing_sales_final = remarketing_total_sales_from_campaigns if remarketing_total_sales_from_campaigns > 0 else remarketing_sales
+    
+    remarketing_conversion_rate = (remarketing_sales_final / remarketing_total_sent * 100) if remarketing_total_sent > 0 else 0
+    remarketing_click_rate = (remarketing_total_clicks / remarketing_total_sent * 100) if remarketing_total_sent > 0 else 0
+    remarketing_avg_ticket = (remarketing_revenue_final / remarketing_sales_final) if remarketing_sales_final > 0 else 0
+    
+    # Buscar campanhas com detalhes (últimas 10)
+    campaigns = RemarketingCampaign.query.filter_by(bot_id=bot_id)\
+        .order_by(RemarketingCampaign.created_at.desc()).limit(10).all()
+    
+    campaigns_list = [{
+        'id': c.id,
+        'name': c.name or f'Campanha #{c.id}',
+        'status': c.status,
+        'total_sent': c.total_sent,
+        'total_clicks': c.total_clicks,
+        'total_failed': c.total_failed,
+        'total_blocked': c.total_blocked,
+        'total_sales': c.total_sales,
+        'revenue_generated': float(c.revenue_generated or 0.0),
+        'conversion_rate': round((c.total_sales / c.total_sent * 100) if c.total_sent > 0 else 0, 2),
+        'click_rate': round((c.total_clicks / c.total_sent * 100) if c.total_sent > 0 else 0, 2),
+        'created_at': c.created_at.isoformat() if c.created_at else None,
+        'started_at': c.started_at.isoformat() if c.started_at else None,
+        'completed_at': c.completed_at.isoformat() if c.completed_at else None
+    } for c in campaigns]
+    
     # 5. VENDAS POR DIA (últimos 7 dias)
     seven_days_ago = get_brazil_time() - timedelta(days=7)
     sales_by_day = db.session.query(
@@ -3880,7 +3955,42 @@ def get_bot_stats(bot_id):
             'sent': downsell_sent,
             'converted': downsell_paid,
             'conversion_rate': round(downsell_rate, 2),
-            'revenue': float(downsell_revenue)
+            'revenue': float(downsell_revenue),
+            # ✅ DADOS SEPARADOS: Downsells automáticos
+            'auto': {
+                'sales': downsell_auto_paid,
+                'revenue': float(downsell_auto_revenue),
+                'conversion_rate': round((downsell_auto_paid / downsell_sent * 100) if downsell_sent > 0 else 0, 2)
+            }
+        },
+        # ✅ REMARKETING CAMPAIGNS - DADOS COMPLETOS
+        'remarketing': {
+            'total_campaigns': total_campaigns,
+            'active_campaigns': active_campaigns,
+            'completed_campaigns': completed_campaigns,
+            'total_sent': remarketing_total_sent,
+            'total_clicks': remarketing_total_clicks,
+            'total_sales': remarketing_sales_final,
+            'total_revenue': float(remarketing_revenue_final),
+            'conversion_rate': round(remarketing_conversion_rate, 2),
+            'click_rate': round(remarketing_click_rate, 2),
+            'avg_ticket': round(float(remarketing_avg_ticket), 2),
+            'campaigns': campaigns_list
+        },
+        # ✅ COMPARAÇÃO: Downsells Automáticos vs Remarketing Manual
+        'comparison': {
+            'downsells_auto': {
+                'sales': downsell_auto_paid,
+                'revenue': float(downsell_auto_revenue),
+                'conversion_rate': round((downsell_auto_paid / downsell_sent * 100) if downsell_sent > 0 else 0, 2),
+                'avg_ticket': round(float(downsell_auto_revenue / downsell_auto_paid) if downsell_auto_paid > 0 else 0, 2)
+            },
+            'remarketing': {
+                'sales': remarketing_sales_final,
+                'revenue': float(remarketing_revenue_final),
+                'conversion_rate': round(remarketing_conversion_rate, 2),
+                'avg_ticket': round(float(remarketing_avg_ticket), 2)
+            }
         },
         'daily_chart': daily_stats,
         'peak_hours': hours_stats,
