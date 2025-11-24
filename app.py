@@ -3709,8 +3709,12 @@ def get_bot_analytics_v2(bot_id):
 def get_bot_stats(bot_id):
     """API para estatísticas detalhadas de um bot específico"""
     from sqlalchemy import func, extract, case
-    from models import BotUser, get_brazil_time
+    from models import BotUser
     from datetime import datetime, timedelta
+    
+    # ✅ GARANTIR: Usar get_brazil_time do escopo global (já importado no topo)
+    # Isso evita UnboundLocalError se houver alguma importação local posterior
+    global get_brazil_time
     
     bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
     
@@ -3888,6 +3892,7 @@ def get_bot_stats(bot_id):
         .order_by(RemarketingCampaign.created_at.desc()).limit(10).all()
     
     # ✅ CORREÇÃO: Atualizar status de campanhas "sending" que já foram completamente enviadas
+    now_time = get_brazil_time()
     for c in campaigns:
         if c.status == 'sending':
             # Calcular total processado (enviados + falhas + bloqueios)
@@ -3898,27 +3903,27 @@ def get_bot_stats(bot_id):
                 logger.info(f"✅ Corrigindo status da campanha {c.id}: 'sending' → 'completed' ({total_processed}/{c.total_targets} processados)")
                 c.status = 'completed'
                 if not c.completed_at:
-                    c.completed_at = get_brazil_time()
+                    c.completed_at = now_time
                 db.session.commit()
             # Se não há total_targets definido mas já passou tempo suficiente desde o início
             elif c.total_targets == 0 and c.total_sent > 0 and c.started_at:
                 # Se já passou mais de 1 hora desde o início e não há progresso, considerar completa
-                time_since_start = (get_brazil_time() - c.started_at).total_seconds()
+                time_since_start = (now_time - c.started_at).total_seconds()
                 if time_since_start > 3600:  # 1 hora
                     logger.info(f"✅ Corrigindo status da campanha {c.id}: 'sending' → 'completed' (sem alvos, {c.total_sent} enviados, {int(time_since_start/60)}min desde início)")
                     c.status = 'completed'
                     if not c.completed_at:
-                        c.completed_at = get_brazil_time()
+                        c.completed_at = now_time
                     db.session.commit()
             # Se started_at existe mas já passou muito tempo e não há mais progresso
             elif c.started_at and c.total_sent > 0:
-                time_since_start = (get_brazil_time() - c.started_at).total_seconds()
+                time_since_start = (now_time - c.started_at).total_seconds()
                 # Se passou mais de 2 horas desde o início e total_sent não mudou (assumindo que não há mais progresso)
                 if time_since_start > 7200:  # 2 horas
                     logger.info(f"✅ Corrigindo status da campanha {c.id}: 'sending' → 'completed' (timeout: {c.total_sent} enviados há {int(time_since_start/60)}min)")
                     c.status = 'completed'
                     if not c.completed_at:
-                        c.completed_at = get_brazil_time()
+                        c.completed_at = now_time
                     db.session.commit()
     
     campaigns_list = [{
