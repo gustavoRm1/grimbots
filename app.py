@@ -3739,9 +3739,17 @@ def get_bot_stats(bot_id):
         payment_filter = db.and_(payment_filter, Payment.created_at >= date_filter_start)
     
     # 1. ESTATÍSTICAS GERAIS
-    # ✅ Contar apenas usuários ativos (não arquivados)
-    total_users = BotUser.query.filter_by(bot_id=bot_id, archived=False).count()
-    # ✅ Usuários arquivados (histórico de tokens antigos)
+    # ✅ USUÁRIOS: Aplicar filtro de período (usuários que interagiram no período)
+    # Usar first_interaction para filtrar usuários que começaram a interagir no período
+    user_filter = db.and_(BotUser.bot_id == bot_id, BotUser.archived == False)
+    
+    # ✅ FILTRO DE PERÍODO PARA USUÁRIOS: Contar apenas usuários com first_interaction no período
+    if date_filter_start:
+        user_filter = db.and_(user_filter, BotUser.first_interaction >= date_filter_start)
+    
+    total_users = BotUser.query.filter(user_filter).count()
+    
+    # ✅ Usuários arquivados (histórico de tokens antigos) - sempre total histórico
     archived_users = BotUser.query.filter_by(bot_id=bot_id, archived=True).count()
     
     # ✅ VENDAS: Aplicar filtro de período
@@ -3751,7 +3759,7 @@ def get_bot_stats(bot_id):
     ).scalar() or 0.0
     pending_sales = Payment.query.filter(payment_filter, Payment.status == 'pending').count()
     
-    # Taxa de conversão
+    # ✅ Taxa de conversão: vendas do período / usuários do período
     conversion_rate = (total_sales / total_users * 100) if total_users > 0 else 0
     avg_ticket = (total_revenue / total_sales) if total_sales > 0 else 0
     

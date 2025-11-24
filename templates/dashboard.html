@@ -541,22 +541,25 @@
     
     <!-- Stats Grid V2.0 -->
     <div class="mb-8">
-        <!-- Filtros de Período (Responsivo) -->
-        <div class="flex flex-wrap justify-center sm:justify-end gap-2 mb-4">
+        <!-- Filtros de Período (Responsivo) - Estilo idêntico ao bot_stats.html -->
+        <div class="flex items-center gap-2 sm:gap-3 justify-center sm:justify-start flex-wrap mb-4">
             <button @click="period = 'today'" 
-                    :class="period === 'today' ? 'bg-gradient-to-r from-yellow-500 to-yellow-600 text-black font-bold' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'"
-                    class="px-3 sm:px-4 py-2 rounded-lg transition-all text-xs sm:text-sm font-semibold flex-1 sm:flex-initial min-w-[80px]">
-                <i class="fas fa-calendar-day mr-1"></i><span class="hidden sm:inline">Hoje</span><span class="sm:hidden">Hoje</span>
+                    :class="period === 'today' ? 'bg-blue-600 text-white border-blue-500' : 'bg-gray-800 text-gray-400 border-gray-700 hover:border-gray-600'"
+                    class="flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg border transition-all text-sm sm:text-base font-medium">
+                <i class="fas fa-calendar-day"></i>
+                <span>Hoje</span>
             </button>
             <button @click="period = 'month'" 
-                    :class="period === 'month' ? 'bg-gradient-to-r from-yellow-500 to-yellow-600 text-black font-bold' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'"
-                    class="px-3 sm:px-4 py-2 rounded-lg transition-all text-xs sm:text-sm font-semibold flex-1 sm:flex-initial min-w-[80px]">
-                <i class="fas fa-calendar-alt mr-1"></i><span class="hidden sm:inline">Este Mês</span><span class="sm:hidden">Mês</span>
+                    :class="period === 'month' ? 'bg-blue-600 text-white border-blue-500' : 'bg-gray-800 text-gray-400 border-gray-700 hover:border-gray-600'"
+                    class="flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg border transition-all text-sm sm:text-base font-medium">
+                <i class="fas fa-calendar-alt"></i>
+                <span>Este Mês</span>
             </button>
             <button @click="period = 'all'" 
-                    :class="period === 'all' ? 'bg-gradient-to-r from-yellow-500 to-yellow-600 text-black font-bold' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'"
-                    class="px-3 sm:px-4 py-2 rounded-lg transition-all text-xs sm:text-sm font-semibold flex-1 sm:flex-initial min-w-[80px]">
-                <i class="fas fa-infinity mr-1"></i><span>Todos</span>
+                    :class="period === 'all' ? 'bg-blue-600 text-white border-blue-500' : 'bg-gray-800 text-gray-400 border-gray-700 hover:border-gray-600'"
+                    class="flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg border transition-all text-sm sm:text-base font-medium">
+                <i class="fas fa-infinity"></i>
+                <span>Todos</span>
             </button>
         </div>
         
