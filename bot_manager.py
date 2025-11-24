@@ -8322,6 +8322,28 @@ Seu pagamento ainda não foi confirmado.
                     logger.info(f"✅ Downsell {index+1} ENVIADO COM SUCESSO para chat {chat_id}")
                 else:
                     logger.error(f"❌ Falha ao enviar downsell {index+1} para chat {chat_id}")
+            except Exception as send_error:
+                logger.error(f"❌ Erro ao enviar mensagem do downsell {index+1}: {send_error}", exc_info=True)
+            
+            # ✅ Enviar áudio adicional se habilitado
+            if audio_enabled and audio_url:
+                logger.info(f"🎤 Enviando áudio complementar do Downsell {index+1}...")
+                try:
+                    audio_result = self.send_telegram_message(
+                        token=token,
+                        chat_id=str(chat_id),
+                        message="",
+                        media_url=audio_url,
+                        media_type='audio',
+                        buttons=None
+                    )
+                    if audio_result:
+                        logger.info(f"✅ Áudio complementar do Downsell {index+1} enviado")
+                except Exception as audio_error:
+                    logger.error(f"❌ Erro ao enviar áudio complementar: {audio_error}")
+            
+            logger.info(f"🚨 ===== FIM _SEND_DOWNSELL =====")
+            
         except Exception as e:
             import traceback
             logger.error(f"❌ Erro CRÍTICO ao enviar downsell {index+1}: {e}")
@@ -8329,29 +8351,6 @@ Seu pagamento ainda não foi confirmado.
             logger.error(f"   Stack trace completo:")
             logger.error(traceback.format_exc())
             logger.error(f"🚨 ===== FIM _SEND_DOWNSELL (COM ERRO) =====")
-            
-            logger.info(f"🚨 ===== FIM _SEND_DOWNSELL =====")
-            
-            logger.info(f"✅ Downsell {index+1} enviado com sucesso!")
-            
-            # ✅ Enviar áudio adicional se habilitado
-            if audio_enabled and audio_url:
-                logger.info(f"🎤 Enviando áudio complementar do Downsell {index+1}...")
-                audio_result = self.send_telegram_message(
-                    token=token,
-                    chat_id=str(chat_id),
-                    message="",
-                    media_url=audio_url,
-                    media_type='audio',
-                    buttons=None
-                )
-                if audio_result:
-                    logger.info(f"✅ Áudio complementar do Downsell {index+1} enviado")
-            
-        except Exception as e:
-            logger.error(f"❌ Erro ao enviar downsell {index+1}: {e}")
-            import traceback
-            traceback.print_exc()
     
     def _is_payment_pending(self, payment_id: str) -> bool:
         """
