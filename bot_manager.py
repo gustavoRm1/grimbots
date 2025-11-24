@@ -5627,9 +5627,18 @@ Seu pagamento ainda não foi confirmado.
             
             logger.info(f"🎁 Finalizando sessão - Preço original: R$ {original_price:.2f}, Bumps aceitos: {len(accepted_bumps)}, Valor total: R$ {final_price:.2f}")
             
-            # ✅ CRÍTICO: Buscar BotUser para obter nome e username (necessário para tracking Meta Pixel)
+            # ✅ CRÍTICO: Buscar config do bot para agendar downsells depois
             from app import app, db
-            from models import BotUser
+            from models import Bot, BotUser
+            
+            # Buscar config do bot
+            bot_config = None
+            with app.app_context():
+                bot_model = Bot.query.get(bot_id)
+                if bot_model and bot_model.config:
+                    bot_config = bot_model.config.to_dict()
+            
+            # ✅ CRÍTICO: Buscar BotUser para obter nome e username (necessário para tracking Meta Pixel)
             customer_name = ""
             customer_username = ""
             with app.app_context():
@@ -5686,6 +5695,31 @@ Seu pagamento ainda não foi confirmado.
                 )
                 
                 logger.info(f"✅ PIX FINAL COM {len(accepted_bumps)} ORDER BUMPS ENVIADO! ID: {pix_data.get('payment_id')}")
+                
+                # ✅ CRÍTICO: Agendar downsells após gerar PIX (mesmo comportamento dos outros fluxos)
+                # PROBLEMA IDENTIFICADO: Esta função não estava agendando downsells!
+                if bot_config:
+                    try:
+                        if bot_config.get('downsells_enabled', False):
+                            downsells = bot_config.get('downsells', [])
+                            logger.info(f"🔍 DEBUG Downsells (_finalize_order_bump_session) - downsells encontrados: {len(downsells)}")
+                            if downsells and len(downsells) > 0:
+                                self.schedule_downsells(
+                                    bot_id=bot_id,
+                                    payment_id=pix_data.get('payment_id'),
+                                    chat_id=chat_id,
+                                    downsells=downsells,
+                                    original_price=original_price,  # ✅ Preço original (sem order bumps)
+                                    original_button_index=button_index
+                                )
+                            else:
+                                logger.warning(f"⚠️ Downsells habilitados mas lista vazia! (_finalize_order_bump_session)")
+                        else:
+                            logger.info(f"ℹ️ Downsells desabilitados ou não configurados (_finalize_order_bump_session)")
+                    except Exception as e:
+                        logger.error(f"❌ Erro ao agendar downsells em _finalize_order_bump_session: {e}", exc_info=True)
+                else:
+                    logger.warning(f"⚠️ Config do bot não encontrada - não é possível agendar downsells")
             else:
                 self.send_telegram_message(
                     token=token,
