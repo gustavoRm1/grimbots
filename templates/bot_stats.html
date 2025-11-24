@@ -1229,6 +1229,10 @@ function botStatsApp() {
         salesChart: null,
         deviceChart: null,
         
+        // ✅ Modal de pré-visualização de campanha
+        showCampaignModal: false,
+        selectedCampaign: null,
+        
         async init() {
             // ✅ FIX: Prevenir inicialização dupla
             if (this._initialized) {
