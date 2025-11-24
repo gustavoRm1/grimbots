@@ -5960,6 +5960,7 @@ Seu pagamento ainda não foi confirmado.
                     return None
                 
                 # Buscar gateway ativo e verificado do usuário
+                # ✅ CORREÇÃO: Filtrar também por gateway_type se necessário, mas permitir qualquer gateway ativo
                 gateway = Gateway.query.filter_by(
                     user_id=bot.user_id,
                     is_active=True,
@@ -5967,10 +5968,11 @@ Seu pagamento ainda não foi confirmado.
                 ).first()
                 
                 if not gateway:
-                    logger.error(f"Nenhum gateway ativo encontrado para usuário {bot.user_id}")
+                    logger.error(f"❌ Nenhum gateway ativo encontrado para usuário {bot.user_id} | Bot: {bot_id}")
+                    logger.error(f"   Verifique se há um gateway configurado e ativo em /settings")
                     return None
                 
-                logger.info(f"💳 Gateway: {gateway.gateway_type.upper()}")
+                logger.info(f"💳 Gateway: {gateway.gateway_type.upper()} | Gateway ID: {gateway.id} | User ID: {bot.user_id}")
                 
                 # ✅ PROTEÇÃO CONTRA MÚLTIPLOS PIX (SOLUÇÃO HÍBRIDA - SENIOR QI 500 + QI 502)
                 
@@ -6068,10 +6070,24 @@ Seu pagamento ainda não foi confirmado.
                 # IMPORTANTE: Acessar properties explicitamente para forçar descriptografia e capturar exceções
                 try:
                     api_key = gateway.api_key
+                    # ✅ LOG ESPECÍFICO PARA WIINPAY
+                    if gateway.gateway_type == 'wiinpay':
+                        if api_key:
+                            logger.info(f"✅ [WiinPay] api_key descriptografada com sucesso (len={len(api_key)})")
+                        else:
+                            logger.warning(f"⚠️ [WiinPay] api_key retornou None (campo interno existe: {bool(gateway._api_key)})")
                 except Exception as decrypt_error:
                     logger.error(f"❌ ERRO CRÍTICO ao acessar gateway.api_key (gateway {gateway.id}): {decrypt_error}")
+                    logger.error(f"   Tipo do gateway: {gateway.gateway_type}")
                     logger.error(f"   Isso indica que a descriptografia está FALHANDO com exceção")
                     api_key = None
+                    # ✅ LOG ESPECÍFICO PARA WIINPAY
+                    if gateway.gateway_type == 'wiinpay':
+                        logger.error(f"❌ [WiinPay] ERRO CRÍTICO na descriptografia da api_key!")
+                        logger.error(f"   Gateway ID: {gateway.id} | User ID: {gateway.user_id}")
+                        logger.error(f"   Campo interno existe: {bool(gateway._api_key)}")
+                        logger.error(f"   Exceção: {decrypt_error}")
+                        logger.error(f"   SOLUÇÃO: Reconfigure o gateway WiinPay com a api_key correta em /settings")
                 
                 try:
                     client_secret = gateway.client_secret
@@ -6188,11 +6204,21 @@ Seu pagamento ainda não foi confirmado.
                         return None
                 elif gateway.gateway_type in ['pushynpay', 'wiinpay']:
                     if not api_key:
-                        logger.error(f"❌ {gateway.gateway_type}: api_key ausente ou não descriptografado")
-                        logger.error(f"   Gateway ID: {gateway.id} | User: {gateway.user_id}")
+                        logger.error(f"❌ {gateway.gateway_type.upper()}: api_key ausente ou não descriptografado")
+                        logger.error(f"   Gateway ID: {gateway.id} | User: {gateway.user_id} | Tipo: {gateway.gateway_type}")
                         if gateway._api_key:
-                            logger.error(f"   Campo interno existe mas descriptografia falhou!")
+                            logger.error(f"   ❌ Campo interno existe mas descriptografia falhou!")
+                            logger.error(f"   Campo interno (primeiros 30 chars): {gateway._api_key[:30] if gateway._api_key else 'None'}...")
                             logger.error(f"   POSSÍVEL CAUSA: ENCRYPTION_KEY foi alterada após salvar credenciais")
+                            logger.error(f"   SOLUÇÃO CRÍTICA: Reconfigure o gateway {gateway.gateway_type.upper()} (ID: {gateway.id}) em /settings")
+                            logger.error(f"   Passo a passo:")
+                            logger.error(f"   1. Acesse /settings")
+                            logger.error(f"   2. Encontre o gateway {gateway.gateway_type.upper()} (ID: {gateway.id})")
+                            logger.error(f"   3. Reinsira a api_key do gateway")
+                            logger.error(f"   4. Salve as configurações")
+                        else:
+                            logger.error(f"   Campo interno (_api_key) também está vazio - gateway não foi configurado corretamente")
+                            logger.error(f"   SOLUÇÃO: Configure o gateway {gateway.gateway_type.upper()} em /settings")
                         return None
                 
                 # Log para auditoria (apenas se for premium)
@@ -6207,6 +6233,15 @@ Seu pagamento ainda não foi confirmado.
                 # Gerar PIX via gateway (usando Factory Pattern)
                 logger.info(f"🔧 Criando gateway {gateway.gateway_type} com credenciais...")
                 
+                # ✅ LOG DETALHADO PARA WIINPAY
+                if gateway.gateway_type == 'wiinpay':
+                    logger.info(f"🔍 [WiinPay Debug] Criando gateway com:")
+                    logger.info(f"   - api_key presente: {bool(api_key)}")
+                    logger.info(f"   - api_key length: {len(api_key) if api_key else 0}")
+                    logger.info(f"   - split_user_id: {split_user_id}")
+                    logger.info(f"   - split_percentage: {user_commission}%")
+                    logger.info(f"   - credentials keys: {list(credentials.keys())}")
+                
                 payment_gateway = GatewayFactory.create_gateway(
                     gateway_type=gateway.gateway_type,
                     credentials=credentials
@@ -6214,6 +6249,11 @@ Seu pagamento ainda não foi confirmado.
                 
                 if not payment_gateway:
                     logger.error(f"❌ Erro ao criar gateway {gateway.gateway_type}")
+                    if gateway.gateway_type == 'wiinpay':
+                        logger.error(f"   WIINPAY: Gateway não foi criado - verifique:")
+                        logger.error(f"   1. api_key foi descriptografada corretamente: {bool(api_key)}")
+                        logger.error(f"   2. Gateway está ativo e verificado: is_active={gateway.is_active}, is_verified={gateway.is_verified}")
+                        logger.error(f"   3. Verifique logs anteriores para erros de descriptografia")
                     return None
                 
                 logger.info(f"✅ Gateway {gateway.gateway_type} criado com sucesso!")
@@ -6245,6 +6285,16 @@ Seu pagamento ainda não foi confirmado.
                 
                 # ✅ CORREÇÃO ROBUSTA: Se Payment foi criado mas gateway retornou None, marcar como 'pending_verification'
                 if not pix_result:
+                    # ✅ Log detalhado para WiinPay especificamente
+                    if gateway.gateway_type == 'wiinpay':
+                        logger.error(f"❌ WIINPAY: generate_pix retornou None!")
+                        logger.error(f"   Bot ID: {bot_id} | Gateway ID: {gateway.id} | User ID: {bot.user_id}")
+                        logger.error(f"   Valor: R$ {amount:.2f} | Descrição: {description}")
+                        logger.error(f"   api_key presente: {bool(api_key)}")
+                        logger.error(f"   split_user_id: {split_user_id}")
+                        logger.error(f"   split_percentage: {user_commission}%")
+                        logger.error(f"   Verifique os logs acima para ver se a API da WiinPay retornou algum erro")
+                    
                     # ✅ Verificar se Payment foi criado antes de retornar None
                     if 'payment' in locals() and payment:
                         try:
