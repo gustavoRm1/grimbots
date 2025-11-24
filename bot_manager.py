@@ -7934,46 +7934,104 @@ Seu pagamento ainda não foi confirmado.
             original_price: Preço do botão original (para cálculo percentual)
             original_button_index: Índice do botão original clicado
         """
-        logger.info(f"🚨 FUNCAO SCHEDULE_DOWNSELLS CHAMADA! bot_id={bot_id}, payment_id={payment_id}")
+        logger.info(f"🚨 ===== SCHEDULE_DOWNSELLS CHAMADO =====")
+        logger.info(f"   bot_id: {bot_id}")
+        logger.info(f"   payment_id: {payment_id}")
+        logger.info(f"   chat_id: {chat_id}")
+        logger.info(f"   original_price: {original_price}")
+        logger.info(f"   original_button_index: {original_button_index}")
+        logger.info(f"   downsells count: {len(downsells) if downsells else 0}")
+        
         try:
-            logger.info(f"🔍 DEBUG Schedule - scheduler existe: {self.scheduler is not None}")
-            logger.info(f"🔍 DEBUG Schedule - downsells: {downsells}")
-            logger.info(f"🔍 DEBUG Schedule - downsells vazio: {not downsells}")
-            
+            # ✅ DIAGNÓSTICO CRÍTICO: Verificar scheduler
             if not self.scheduler:
-                logger.error(f"❌ Scheduler não está disponível!")
+                logger.error(f"❌ CRÍTICO: Scheduler não está disponível!")
+                logger.error(f"   Isso significa que downsells NÃO serão agendados!")
+                logger.error(f"   Verificar se APScheduler foi inicializado corretamente")
                 return
+            
+            # ✅ DIAGNÓSTICO: Verificar se scheduler está rodando
+            try:
+                scheduler_running = self.scheduler.running
+                logger.info(f"🔍 Scheduler está rodando: {scheduler_running}")
+                if not scheduler_running:
+                    logger.error(f"❌ CRÍTICO: Scheduler existe mas NÃO está rodando!")
+                    logger.error(f"   Jobs agendados NÃO serão executados!")
+            except Exception as e:
+                logger.warning(f"⚠️ Não foi possível verificar se scheduler está rodando: {e}")
             
             if not downsells:
                 logger.warning(f"⚠️ Lista de downsells está vazia!")
+                logger.warning(f"   Verificar se downsells estão configurados no bot")
                 return
             
             logger.info(f"📅 Agendando {len(downsells)} downsell(s) para pagamento {payment_id}")
             
+            # ✅ DIAGNÓSTICO: Verificar se pagamento existe e está pendente
+            try:
+                from app import app, db
+                from models import Payment
+                with app.app_context():
+                    payment = Payment.query.filter_by(payment_id=payment_id).first()
+                    if payment:
+                        logger.info(f"✅ Pagamento encontrado: status={payment.status}")
+                        if payment.status != 'pending':
+                            logger.warning(f"⚠️ Pagamento não está pendente (status={payment.status})")
+                            logger.warning(f"   Downsells podem ser cancelados se pagamento for aprovado antes do delay")
+                    else:
+                        logger.error(f"❌ Pagamento {payment_id} não encontrado no banco!")
+            except Exception as e:
+                logger.error(f"❌ Erro ao verificar pagamento: {e}")
+            
+            jobs_agendados = []
             for i, downsell in enumerate(downsells):
                 delay_minutes = int(downsell.get('delay_minutes', 5))  # Converter para int
                 job_id = f"downsell_{bot_id}_{payment_id}_{i}"
                 
                 # Calcular data/hora de execução
                 from models import get_brazil_time
-                run_time = get_brazil_time() + timedelta(minutes=delay_minutes)
-                logger.info(f"🔍 DEBUG Agendamento - Hora atual: {get_brazil_time()}")
-                logger.info(f"🔍 DEBUG Agendamento - Hora execução: {run_time}")
+                now = get_brazil_time()
+                run_time = now + timedelta(minutes=delay_minutes)
                 
-                # Agendar downsell com preço original para cálculo percentual
-                self.scheduler.add_job(
-                    id=job_id,
-                    func=self._send_downsell,
-                    args=[bot_id, payment_id, chat_id, downsell, i, original_price, original_button_index],
-                    trigger='date',
-                    run_date=run_time,
-                    replace_existing=True
-                )
+                logger.info(f"📅 Downsell {i+1}:")
+                logger.info(f"   - Delay: {delay_minutes} minutos")
+                logger.info(f"   - Hora atual: {now}")
+                logger.info(f"   - Hora execução: {run_time}")
+                logger.info(f"   - Job ID: {job_id}")
                 
-                logger.info(f"✅ Downsell {i+1} agendado para {delay_minutes} minutos")
+                try:
+                    # Agendar downsell com preço original para cálculo percentual
+                    self.scheduler.add_job(
+                        id=job_id,
+                        func=self._send_downsell,
+                        args=[bot_id, payment_id, chat_id, downsell, i, original_price, original_button_index],
+                        trigger='date',
+                        run_date=run_time,
+                        replace_existing=True
+                    )
+                    
+                    # ✅ VERIFICAR se job foi realmente agendado
+                    try:
+                        job = self.scheduler.get_job(job_id)
+                        if job:
+                            logger.info(f"✅ Downsell {i+1} AGENDADO COM SUCESSO")
+                            logger.info(f"   - Job ID: {job.id}")
+                            logger.info(f"   - Próxima execução: {job.next_run_time}")
+                            jobs_agendados.append(job_id)
+                        else:
+                            logger.error(f"❌ CRÍTICO: Job {job_id} NÃO foi encontrado após agendamento!")
+                            logger.error(f"   O job pode não ter sido criado corretamente")
+                    except Exception as e:
+                        logger.error(f"❌ Erro ao verificar job agendado: {e}")
+                        
+                except Exception as e:
+                    logger.error(f"❌ Erro ao agendar downsell {i+1}: {e}", exc_info=True)
+            
+            logger.info(f"✅ Total de {len(jobs_agendados)} downsell(s) agendado(s) com sucesso")
+            logger.info(f"🚨 ===== FIM SCHEDULE_DOWNSELLS =====")
                 
         except Exception as e:
-            logger.error(f"❌ Erro ao agendar downsells: {e}")
+            logger.error(f"❌ Erro ao agendar downsells: {e}", exc_info=True)
     
     def _send_downsell(self, bot_id: int, payment_id: str, chat_id: int, downsell: dict, index: int, original_price: float = 0, original_button_index: int = -1):
         """
@@ -7988,18 +8046,42 @@ Seu pagamento ainda não foi confirmado.
             original_price: Preço do botão original (para cálculo percentual)
             original_button_index: Índice do botão original clicado
         """
-        logger.info(f"🚨 FUNCAO _SEND_DOWNSELL CHAMADA! bot_id={bot_id}, payment_id={payment_id}, index={index}")
-        logger.info(f"🔍 DEBUG _send_downsell - downsell config: {downsell}")
-        logger.info(f"🔍 DEBUG _send_downsell - original_price: {original_price}")
-        logger.info(f"🔍 DEBUG _send_downsell - original_button_index: {original_button_index}")
+        logger.info(f"🚨 ===== _SEND_DOWNSELL EXECUTADO =====")
+        logger.info(f"   bot_id: {bot_id}")
+        logger.info(f"   payment_id: {payment_id}")
+        logger.info(f"   chat_id: {chat_id}")
+        logger.info(f"   index: {index}")
+        logger.info(f"   original_price: {original_price}")
+        logger.info(f"   original_button_index: {original_button_index}")
+        logger.info(f"   downsell config: {downsell}")
         
         try:
-            logger.info(f"🔍 DEBUG _send_downsell - Verificando pagamento...")
-            # Verificar se pagamento ainda está pendente
-            if not self._is_payment_pending(payment_id):
-                logger.info(f"💰 Pagamento {payment_id} já foi pago, cancelando downsell {index+1}")
+            # ✅ DIAGNÓSTICO CRÍTICO: Verificar pagamento ANTES de enviar
+            logger.info(f"🔍 Verificando status do pagamento...")
+            payment_status = None
+            try:
+                from app import app, db
+                from models import Payment
+                with app.app_context():
+                    payment = Payment.query.filter_by(payment_id=payment_id).first()
+                    if payment:
+                        payment_status = payment.status
+                        logger.info(f"✅ Pagamento encontrado: status={payment_status}")
+                    else:
+                        logger.error(f"❌ Pagamento {payment_id} NÃO encontrado no banco!")
+                        logger.error(f"   Downsell NÃO será enviado")
+                        return
+            except Exception as e:
+                logger.error(f"❌ Erro ao verificar pagamento: {e}", exc_info=True)
                 return
-            logger.info(f"✅ Pagamento ainda está pendente")
+            
+            # Verificar se pagamento ainda está pendente
+            if payment_status != 'pending':
+                logger.warning(f"💰 Pagamento {payment_id} já foi {payment_status}, cancelando downsell {index+1}")
+                logger.warning(f"   Isso é normal se o cliente pagou antes do delay configurado")
+                return
+            
+            logger.info(f"✅ Pagamento ainda está pendente - prosseguindo com downsell")
             
             # Verificar se bot ainda está ativo
             logger.info(f"🔍 DEBUG _send_downsell - Verificando bot...")
@@ -8148,32 +8230,48 @@ Seu pagamento ainda não foi confirmado.
             logger.info(f"  - order_bump_enabled: {order_bump.get('enabled', False)}")
             
             logger.info(f"📨 Enviando downsell {index+1} para chat {chat_id}")
+            logger.info(f"   - Mensagem: {message[:50]}..." if message else "   - Mensagem: (vazia)")
+            logger.info(f"   - Mídia: {media_url[:50] if media_url else 'Nenhuma'}...")
+            logger.info(f"   - Botões: {len(buttons)} botão(ões)")
             
             # Enviar mensagem com ou sem mídia
-            if media_url and '/c/' not in media_url and media_url.startswith('http'):
-                result = self.send_telegram_message(
-                    token=token,
-                    chat_id=str(chat_id),
-                    message=message,
-                    media_url=media_url,
-                    media_type=media_type,
-                    buttons=buttons
-                )
-                if not result:
-                    # Fallback sem mídia se falhar
-                    self.send_telegram_message(
+            try:
+                if media_url and '/c/' not in media_url and media_url.startswith('http'):
+                    logger.info(f"📤 Enviando downsell com mídia...")
+                    result = self.send_telegram_message(
+                        token=token,
+                        chat_id=str(chat_id),
+                        message=message,
+                        media_url=media_url,
+                        media_type=media_type,
+                        buttons=buttons
+                    )
+                    if not result:
+                        logger.warning(f"⚠️ Falha ao enviar com mídia, tentando sem mídia...")
+                        # Fallback sem mídia se falhar
+                        result = self.send_telegram_message(
+                            token=token,
+                            chat_id=str(chat_id),
+                            message=message,
+                            buttons=buttons
+                        )
+                else:
+                    logger.info(f"📤 Enviando downsell sem mídia...")
+                    result = self.send_telegram_message(
                         token=token,
                         chat_id=str(chat_id),
                         message=message,
                         buttons=buttons
                     )
-            else:
-                self.send_telegram_message(
-                    token=token,
-                    chat_id=str(chat_id),
-                    message=message,
-                    buttons=buttons
-                )
+                
+                if result:
+                    logger.info(f"✅ Downsell {index+1} ENVIADO COM SUCESSO para chat {chat_id}")
+                else:
+                    logger.error(f"❌ Falha ao enviar downsell {index+1} para chat {chat_id}")
+            except Exception as e:
+                logger.error(f"❌ Erro ao enviar downsell {index+1}: {e}", exc_info=True)
+            
+            logger.info(f"🚨 ===== FIM _SEND_DOWNSELL =====")
             
             logger.info(f"✅ Downsell {index+1} enviado com sucesso!")
             
@@ -8497,20 +8595,42 @@ Seu pagamento ainda não foi confirmado.
         Args:
             payment_id: ID do pagamento
         """
+        logger.info(f"🚫 ===== CANCEL_DOWNSELLS CHAMADO =====")
+        logger.info(f"   payment_id: {payment_id}")
+        
         try:
             if not self.scheduler:
+                logger.warning(f"⚠️ Scheduler não disponível - não é possível cancelar downsells")
                 return
             
             # Encontrar e remover jobs de downsell para este pagamento
             jobs_to_remove = []
-            for job_id in self.scheduler.get_jobs():
-                if job_id.id.startswith(f"downsell_") and payment_id in job_id.id:
-                    jobs_to_remove.append(job_id.id)
+            try:
+                all_jobs = self.scheduler.get_jobs()
+                logger.info(f"🔍 Total de jobs no scheduler: {len(all_jobs)}")
+                
+                for job in all_jobs:
+                    if job.id.startswith(f"downsell_") and payment_id in job.id:
+                        jobs_to_remove.append(job.id)
+                        logger.info(f"   - Job encontrado: {job.id} (próxima execução: {job.next_run_time})")
+            except Exception as e:
+                logger.error(f"❌ Erro ao listar jobs: {e}")
+                return
             
+            if not jobs_to_remove:
+                logger.info(f"ℹ️ Nenhum downsell agendado encontrado para payment {payment_id}")
+                return
+            
+            logger.info(f"🚫 Cancelando {len(jobs_to_remove)} downsell(s)...")
             for job_id in jobs_to_remove:
-                self.scheduler.remove_job(job_id)
-                logger.info(f"🚫 Downsell cancelado: {job_id}")
+                try:
+                    self.scheduler.remove_job(job_id)
+                    logger.info(f"✅ Downsell cancelado: {job_id}")
+                except Exception as e:
+                    logger.error(f"❌ Erro ao cancelar job {job_id}: {e}")
+            
+            logger.info(f"🚫 ===== FIM CANCEL_DOWNSELLS =====")
                 
         except Exception as e:
-            logger.error(f"Erro ao cancelar downsells para pagamento {payment_id}: {e}")
+            logger.error(f"❌ Erro ao cancelar downsells para pagamento {payment_id}: {e}", exc_info=True)
 
