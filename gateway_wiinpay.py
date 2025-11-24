@@ -39,17 +39,50 @@ class WiinPayGateway(PaymentGateway):
         # ✅ SPLIT CONFIGURATION - Plataforma recebe split de todas as vendas
         # Prioridade: split_user_id fornecido > env > padrão da plataforma
         # ID da plataforma na WiinPay: 68ffcc91e23263e0a01fffa4
-        # ✅ CORREÇÃO: Se ID antigo foi fornecido, usar novo ID
+        # ✅ CORREÇÃO CRÍTICA: Se ID antigo foi fornecido, usar novo ID
+        # ✅ VALIDAÇÃO: Split NUNCA pode ser para a mesma conta da api_key
         old_split_id = '6877edeba3c39f8451ba5bdd'
-        new_split_id = '68ffcc91e23263e0a01fffa4'
+        platform_split_id = '68ffcc91e23263e0a01fffa4'  # ID da plataforma (sempre usar este)
         
+        # ✅ Extrair user_id da api_key (JWT) para validar
+        api_key_user_id = None
+        try:
+            import jwt
+            # Decodificar JWT sem verificar assinatura (apenas para ler payload)
+            decoded = jwt.decode(api_key, options={"verify_signature": False})
+            api_key_user_id = decoded.get('userId') or decoded.get('user_id') or None
+            logger.info(f"🔍 [{self.get_gateway_name()}] user_id extraído da api_key (JWT): {api_key_user_id}")
+        except Exception as jwt_error:
+            logger.warning(f"⚠️ [{self.get_gateway_name()}] Não foi possível extrair user_id do JWT: {jwt_error}")
+        
+        # ✅ VALIDAÇÃO CRÍTICA: split_user_id NUNCA pode ser o mesmo user_id da api_key
+        # Isso causa erro 422: "A conta de split não pode ser a mesma conta de recebimento"
         if split_user_id and split_user_id.strip() and split_user_id != old_split_id:
-            self.split_user_id = split_user_id.strip()
+            provided_split_id = split_user_id.strip()
+            # ✅ FORÇAR: Se split_user_id for o mesmo da conta de recebimento, usar ID da plataforma
+            if api_key_user_id and provided_split_id == api_key_user_id:
+                logger.error(f"❌ [{self.get_gateway_name()}] split_user_id é o mesmo da conta de recebimento ({api_key_user_id})!")
+                logger.error(f"   Isso causará erro 422. Forçando ID da plataforma: {platform_split_id}")
+                self.split_user_id = platform_split_id
+            # ✅ FORÇAR: Se split_user_id não for o ID da plataforma, usar ID da plataforma
+            elif provided_split_id != platform_split_id:
+                logger.warning(f"⚠️ [{self.get_gateway_name()}] split_user_id diferente do ID da plataforma: {provided_split_id}")
+                logger.warning(f"   Esperado: {platform_split_id} | Recebido: {provided_split_id}")
+                logger.warning(f"   Forçando ID da plataforma para garantir split correto")
+                self.split_user_id = platform_split_id
+            else:
+                # split_user_id correto (ID da plataforma)
+                self.split_user_id = provided_split_id
         else:
-            # Usar novo ID se split_user_id é None, vazio ou antigo
-            self.split_user_id = os.environ.get('WIINPAY_PLATFORM_USER_ID', new_split_id)
+            # Usar ID da plataforma se split_user_id é None, vazio ou antigo
+            self.split_user_id = os.environ.get('WIINPAY_PLATFORM_USER_ID', platform_split_id)
             if split_user_id == old_split_id:
-                logger.warning(f"⚠️ [{self.get_gateway_name()}] split_user_id antigo detectado ({old_split_id}), usando novo ID: {new_split_id}")
+                logger.warning(f"⚠️ [{self.get_gateway_name()}] split_user_id antigo detectado ({old_split_id}), usando novo ID: {platform_split_id}")
+        
+        # ✅ GARANTIR FINAL: split_user_id sempre é ID da plataforma
+        if self.split_user_id != platform_split_id:
+            logger.error(f"❌ [{self.get_gateway_name()}] split_user_id final inválido ({self.split_user_id}), forçando ID da plataforma: {platform_split_id}")
+            self.split_user_id = platform_split_id
         
         # ✅ RANKING V2.0: split_percentage pode ser taxa premium do Top 3
         # Prioridade: split_percentage fornecido > padrão 2%
@@ -166,16 +199,36 @@ class WiinPayGateway(PaymentGateway):
             # ✅ SPLIT PAYMENT - SEMPRE configurado para plataforma receber comissão
             # ✅ RANKING V2.0: split_percentage pode ser taxa premium do Top 3 (ex: 1.5%, 1%, 0.5%)
             # Split é obrigatório: plataforma recebe comissão de todas as vendas dos usuários
-            # ✅ CORREÇÃO: Garantir que split_user_id está usando o ID correto (não o antigo)
+            # ✅ CORREÇÃO CRÍTICA: Validar que split_user_id NÃO é o mesmo user_id da api_key
+            platform_split_id = '68ffcc91e23263e0a01fffa4'  # ID da plataforma (SEMPRE usar este)
             old_split_id = '6877edeba3c39f8451ba5bdd'
-            new_split_id = '68ffcc91e23263e0a01fffa4'
             
+            # ✅ VALIDAÇÃO CRÍTICA: Extrair user_id da api_key (JWT) e validar
+            api_key_user_id = None
+            try:
+                import jwt
+                # Decodificar JWT sem verificar assinatura (apenas para ler payload)
+                decoded = jwt.decode(self.api_key, options={"verify_signature": False})
+                api_key_user_id = decoded.get('userId') or decoded.get('user_id') or None
+                logger.info(f"🔍 [{self.get_gateway_name()}] user_id extraído da api_key (JWT): {api_key_user_id}")
+            except Exception as jwt_error:
+                logger.warning(f"⚠️ [{self.get_gateway_name()}] Não foi possível extrair user_id do JWT: {jwt_error}")
+            
+            # ✅ VALIDAÇÃO FINAL: Garantir que split_user_id é ID da plataforma
+            # NUNCA pode ser o mesmo user_id da api_key (causa erro 422)
             if not self.split_user_id or len(self.split_user_id.strip()) == 0 or self.split_user_id == old_split_id:
-                if self.split_user_id == old_split_id:
-                    logger.warning(f"⚠️ [{self.get_gateway_name()}] split_user_id antigo detectado ({old_split_id}), atualizando para: {new_split_id}")
-                else:
-                    logger.warning(f"⚠️ [{self.get_gateway_name()}] split_user_id não configurado, usando padrão: {new_split_id}")
-                self.split_user_id = new_split_id
+                logger.info(f"✅ [{self.get_gateway_name()}] split_user_id vazio/antigo, usando ID da plataforma: {platform_split_id}")
+                self.split_user_id = platform_split_id
+            elif api_key_user_id and self.split_user_id == api_key_user_id:
+                logger.error(f"❌ [{self.get_gateway_name()}] split_user_id é o mesmo da conta de recebimento ({api_key_user_id})!")
+                logger.error(f"   Isso causará erro 422: 'A conta de split não pode ser a mesma conta de recebimento'")
+                logger.error(f"   Forçando ID da plataforma: {platform_split_id}")
+                self.split_user_id = platform_split_id
+            elif self.split_user_id != platform_split_id:
+                logger.warning(f"⚠️ [{self.get_gateway_name()}] split_user_id diferente do ID da plataforma: {self.split_user_id}")
+                logger.warning(f"   Esperado: {platform_split_id} | Recebido: {self.split_user_id}")
+                logger.warning(f"   Forçando ID da plataforma para garantir split correto")
+                self.split_user_id = platform_split_id
             
             # ✅ RANKING: Calcular valor do split usando split_percentage (pode ser taxa premium)
             split_value = round(amount * (self.split_percentage / 100), 2)
@@ -188,8 +241,14 @@ class WiinPayGateway(PaymentGateway):
             payload["split"] = {
                 "percentage": self.split_percentage,  # ✅ RANKING: Percentual (pode ser premium: 1.5%, 1%, 0.5%, ou padrão 2%)
                 "value": split_value,  # Valor em reais
-                "user_id": self.split_user_id  # ID da plataforma na WiinPay: 68ffcc91e23263e0a01fffa4
+                "user_id": self.split_user_id  # ✅ SEMPRE ID da plataforma: 68ffcc91e23263e0a01fffa4
             }
+            
+            # ✅ LOG FINAL: Confirmar que split_user_id está correto
+            if self.split_user_id == platform_split_id:
+                logger.info(f"✅ [{self.get_gateway_name()}] Split configurado corretamente: {self.split_percentage}% para plataforma (user_id: {self.split_user_id[:12]}...)")
+            else:
+                logger.error(f"❌ [{self.get_gateway_name()}] ATENÇÃO: split_user_id final ainda incorreto: {self.split_user_id}")
             
             # ✅ LOG: Indicar se é taxa premium (diferente de 2%)
             if self.split_percentage != 2.0:

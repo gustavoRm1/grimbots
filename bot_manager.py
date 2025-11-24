@@ -6103,20 +6103,44 @@ Seu pagamento ainda não foi confirmado.
                 
                 try:
                     split_user_id = gateway.split_user_id
-                    # ✅ CORREÇÃO: WiinPay - usar novo split_user_id da plataforma
-                    # Se está usando ID antigo ou está vazio, usar novo ID
-                    if gateway.gateway_type == 'wiinpay':
-                        old_id = '6877edeba3c39f8451ba5bdd'
-                        new_id = '68ffcc91e23263e0a01fffa4'
-                        if not split_user_id or split_user_id == old_id or split_user_id.strip() == '':
-                            logger.info(f"✅ [WiinPay] Atualizando split_user_id: {split_user_id} → {new_id}")
-                            split_user_id = new_id
                 except Exception as decrypt_error:
                     logger.error(f"❌ ERRO CRÍTICO ao acessar gateway.split_user_id (gateway {gateway.id}): {decrypt_error}")
                     split_user_id = None
-                    # ✅ CORREÇÃO: WiinPay - usar novo ID se descriptografia falhar
-                    if gateway.gateway_type == 'wiinpay':
-                        split_user_id = '68ffcc91e23263e0a01fffa4'
+                
+                # ✅ CORREÇÃO CRÍTICA: WiinPay - SEMPRE usar ID da plataforma para split
+                # O split_user_id NUNCA deve ser o mesmo user_id da api_key (conta de recebimento)
+                # Isso causa erro 422: "A conta de split não pode ser a mesma conta de recebimento"
+                if gateway.gateway_type == 'wiinpay':
+                    platform_split_id = '68ffcc91e23263e0a01fffa4'  # ID da plataforma
+                    old_id = '6877edeba3c39f8451ba5bdd'  # ID antigo (também inválido)
+                    
+                    # ✅ Extrair user_id da api_key (JWT) para validar
+                    try:
+                        import jwt
+                        import json
+                        # Decodificar JWT sem verificar assinatura (apenas para ler payload)
+                        decoded = jwt.decode(api_key, options={"verify_signature": False}) if api_key else {}
+                        api_key_user_id = decoded.get('userId') or decoded.get('user_id') or ''
+                        logger.info(f"🔍 [WiinPay] user_id da api_key (JWT): {api_key_user_id}")
+                    except Exception as jwt_error:
+                        api_key_user_id = None
+                        logger.warning(f"⚠️ [WiinPay] Não foi possível extrair user_id do JWT: {jwt_error}")
+                    
+                    # ✅ FORÇAR: Sempre usar ID da plataforma, nunca o user_id do usuário
+                    if not split_user_id or split_user_id == old_id or split_user_id.strip() == '':
+                        logger.info(f"✅ [WiinPay] split_user_id vazio/antigo, usando ID da plataforma: {platform_split_id}")
+                        split_user_id = platform_split_id
+                    elif split_user_id == api_key_user_id:
+                        logger.warning(f"⚠️ [WiinPay] split_user_id é o mesmo da conta de recebimento ({api_key_user_id})!")
+                        logger.warning(f"   Isso causará erro 422. Forçando ID da plataforma: {platform_split_id}")
+                        split_user_id = platform_split_id
+                    elif split_user_id != platform_split_id:
+                        logger.warning(f"⚠️ [WiinPay] split_user_id diferente do ID da plataforma: {split_user_id}")
+                        logger.warning(f"   Esperado: {platform_split_id} | Usando: {split_user_id}")
+                        logger.warning(f"   Forçando ID da plataforma para garantir split correto")
+                        split_user_id = platform_split_id
+                    else:
+                        logger.info(f"✅ [WiinPay] split_user_id correto (ID da plataforma): {split_user_id}")
                 
                 # ✅ VALIDAÇÃO: Verificar se credenciais foram descriptografadas corretamente
                 # Se alguma propriedade retornar None mas o campo interno existir, significa erro de descriptografia
