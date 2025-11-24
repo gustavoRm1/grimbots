@@ -620,7 +620,8 @@
         <div class="mt-4" x-show="stats.remarketing.campaigns && stats.remarketing.campaigns.length > 0">
             <div class="mb-3 flex items-center justify-between">
                 <h3 class="text-sm font-bold text-white">Campanhas Recentes</h3>
-                <span class="text-xs text-gray-500" x-text="'Mostrando ' + Math.min(stats.remarketing.campaigns.length, 10) + ' de ' + stats.remarketing.total_campaigns"></span>
+                <span class="text-xs text-gray-500" 
+                      x-text="'Página ' + currentCampaignPage + ' de ' + totalCampaignPages + ' (' + stats.remarketing.total_campaigns + ' total)'"></span>
             </div>
             
             <div class="overflow-x-auto">
@@ -637,7 +638,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        <template x-for="campaign in stats.remarketing.campaigns.slice(0, 5)" :key="campaign.id">
+                        <template x-for="campaign in paginatedCampaigns" :key="campaign.id">
                             <tr @click="showCampaignPreview(campaign)" class="cursor-pointer hover:bg-gray-800 transition-colors">
                                 <td class="text-white font-medium" x-text="campaign.name"></td>
                                 <td>
@@ -655,6 +656,39 @@
                         </template>
                     </tbody>
                 </table>
+            </div>
+            
+            <!-- ✅ Paginação de Campanhas -->
+            <div x-show="stats.remarketing.campaigns && stats.remarketing.campaigns.length > 0 && Math.ceil(stats.remarketing.campaigns.length / campaignsPerPage) > 1" 
+                 class="flex items-center justify-center gap-2 mt-4 sm:mt-6">
+                <!-- Botão Anterior -->
+                <button @click="prevCampaignPage()" 
+                        :disabled="currentCampaignPage === 1"
+                        :class="currentCampaignPage === 1 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-700'"
+                        class="px-3 sm:px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm font-medium transition-colors">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+                
+                <!-- Números das páginas -->
+                <div class="flex items-center gap-1 sm:gap-2">
+                    <template x-for="page in visibleCampaignPages" :key="page">
+                        <button x-show="page !== '...'" 
+                                @click="goToCampaignPage(page)"
+                                :class="currentCampaignPage === page ? 'bg-yellow-500 text-black border-yellow-500' : 'bg-gray-800 border-gray-700 text-white hover:bg-gray-700'"
+                                class="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center border rounded-lg text-sm font-bold transition-colors"
+                                x-text="page">
+                        </button>
+                        <span x-show="page === '...'" class="px-2 text-gray-500">...</span>
+                    </template>
+                </div>
+                
+                <!-- Botão Próximo -->
+                <button @click="nextCampaignPage()" 
+                        :disabled="currentCampaignPage === totalCampaignPages"
+                        :class="currentCampaignPage === totalCampaignPages ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-700'"
+                        class="px-3 sm:px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm font-medium transition-colors">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
             </div>
         </div>
         
@@ -1161,6 +1195,8 @@ function botStatsApp() {
         // ✅ Paginação de vendas
         currentSalePage: 1,
         salesPerPage: 10,
+        currentCampaignPage: 1,
+        campaignsPerPage: 5,
         salesChart: null,
         deviceChart: null,
         
@@ -1205,6 +1241,7 @@ function botStatsApp() {
             // ✅ Watcher: Resetar página quando recent_sales mudar
             this.$watch('stats.recent_sales', () => {
                 this.currentSalePage = 1;
+                this.currentCampaignPage = 1;
             });
             
             // Auto-refresh a cada 30 segundos
@@ -1237,6 +1274,7 @@ function botStatsApp() {
                     console.log('✅ Stats carregados:', this.stats);
                     // ✅ Resetar página quando dados mudarem
                     this.currentSalePage = 1;
+                this.currentCampaignPage = 1;
                 }
             } catch (error) {
                 console.error('Erro ao carregar stats:', error);
@@ -1531,6 +1569,81 @@ function botStatsApp() {
         prevSalePage() {
             if (this.currentSalePage > 1) {
                 this.currentSalePage--;
+            }
+        },
+        
+        // ✅ Computed Properties - Paginação de Campanhas
+        get paginatedCampaigns() {
+            if (!this.stats.remarketing.campaigns || this.stats.remarketing.campaigns.length === 0) return [];
+            const start = (this.currentCampaignPage - 1) * this.campaignsPerPage;
+            const end = start + this.campaignsPerPage;
+            return this.stats.remarketing.campaigns.slice(start, end);
+        },
+        
+        get totalCampaignPages() {
+            if (!this.stats.remarketing.campaigns || this.stats.remarketing.campaigns.length === 0) return 1;
+            return Math.ceil(this.stats.remarketing.campaigns.length / this.campaignsPerPage);
+        },
+        
+        get visibleCampaignPages() {
+            const total = this.totalCampaignPages || 1;
+            const current = this.currentCampaignPage || 1;
+            const pages = [];
+            
+            if (total === 0) return [1];
+            
+            // Mostrar no máximo 7 páginas
+            if (total <= 7) {
+                // Se tem 7 ou menos páginas, mostrar todas
+                for (let i = 1; i <= total; i++) {
+                    pages.push(i);
+                }
+            } else {
+                // Mostrar páginas inteligentemente
+                if (current <= 4) {
+                    // Páginas iniciais: 1, 2, 3, 4, 5, ..., última
+                    for (let i = 1; i <= 5; i++) {
+                        pages.push(i);
+                    }
+                    pages.push('...');
+                    pages.push(total);
+                } else if (current >= total - 3) {
+                    // Páginas finais: 1, ..., penúltimas, última
+                    pages.push(1);
+                    pages.push('...');
+                    for (let i = total - 4; i <= total; i++) {
+                        pages.push(i);
+                    }
+                } else {
+                    // Páginas do meio: 1, ..., anteriores, atual, próximas, ..., última
+                    pages.push(1);
+                    pages.push('...');
+                    for (let i = current - 1; i <= current + 1; i++) {
+                        pages.push(i);
+                    }
+                    pages.push('...');
+                    pages.push(total);
+                }
+            }
+            
+            return pages;
+        },
+        
+        goToCampaignPage(page) {
+            if (page !== '...' && page >= 1 && page <= this.totalCampaignPages) {
+                this.currentCampaignPage = page;
+            }
+        },
+        
+        nextCampaignPage() {
+            if (this.currentCampaignPage < this.totalCampaignPages) {
+                this.currentCampaignPage++;
+            }
+        },
+        
+        prevCampaignPage() {
+            if (this.currentCampaignPage > 1) {
+                this.currentCampaignPage--;
             }
         },
         
