@@ -8550,23 +8550,24 @@ Seu pagamento ainda não foi confirmado.
         
         def send_campaign():
             with app.app_context():
-                campaign = db.session.get(RemarketingCampaign, campaign_id)
-                if not campaign:
-                    return
-                
-                # Atualizar status
-                campaign.status = 'sending'
-                from models import get_brazil_time
-                campaign.started_at = get_brazil_time()
-                db.session.commit()
-                
-                logger.info(f"📢 Iniciando envio de remarketing: {campaign.name}")
-                
-                # Buscar leads elegíveis (apenas usuários ativos, não arquivados)
-                from models import get_brazil_time
-                contact_limit = get_brazil_time() - timedelta(days=campaign.days_since_last_contact)
-                
-                query = BotUser.query.filter_by(bot_id=campaign.bot_id, archived=False)
+                try:
+                    campaign = db.session.get(RemarketingCampaign, campaign_id)
+                    if not campaign:
+                        return
+                    
+                    # Atualizar status
+                    campaign.status = 'sending'
+                    from models import get_brazil_time
+                    campaign.started_at = get_brazil_time()
+                    db.session.commit()
+                    
+                    logger.info(f"📢 Iniciando envio de remarketing: {campaign.name}")
+                    
+                    # Buscar leads elegíveis (apenas usuários ativos, não arquivados)
+                    from models import get_brazil_time
+                    contact_limit = get_brazil_time() - timedelta(days=campaign.days_since_last_contact)
+                    
+                    query = BotUser.query.filter_by(bot_id=campaign.bot_id, archived=False)
                 
                 # Filtro de último contato
                 if campaign.days_since_last_contact > 0:
@@ -8711,21 +8712,43 @@ Seu pagamento ainda não foi confirmado.
                     # Rate limiting (20 msgs/segundo)
                     time.sleep(1)
                 
-                # Finalizar campanha
-                campaign.status = 'completed'
-                from models import get_brazil_time
-                campaign.completed_at = get_brazil_time()
-                db.session.commit()
-                
-                logger.info(f"✅ Campanha concluída: {campaign.total_sent}/{campaign.total_targets} enviados")
-                
-                # Emitir conclusão
-                socketio.emit('remarketing_completed', {
-                    'campaign_id': campaign.id,
-                    'total_sent': campaign.total_sent,
-                    'total_failed': campaign.total_failed,
-                    'total_blocked': campaign.total_blocked
-                })
+                    # Finalizar campanha
+                    campaign.status = 'completed'
+                    from models import get_brazil_time
+                    campaign.completed_at = get_brazil_time()
+                    db.session.commit()
+                    
+                    logger.info(f"✅ Campanha concluída: {campaign.total_sent}/{campaign.total_targets} enviados")
+                    
+                    # Emitir conclusão
+                    socketio.emit('remarketing_completed', {
+                        'campaign_id': campaign.id,
+                        'total_sent': campaign.total_sent,
+                        'total_failed': campaign.total_failed,
+                        'total_blocked': campaign.total_blocked
+                    })
+                except Exception as e:
+                    logger.error(f"❌ Erro ao enviar campanha de remarketing {campaign_id}: {e}", exc_info=True)
+                    # ✅ GARANTIR: Atualizar status mesmo em caso de erro
+                    try:
+                        campaign = db.session.get(RemarketingCampaign, campaign_id)
+                        if campaign and campaign.status == 'sending':
+                            # Se já enviou alguma mensagem, marcar como concluída
+                            if campaign.total_sent and campaign.total_sent > 0:
+                                campaign.status = 'completed'
+                                from models import get_brazil_time
+                                if not campaign.completed_at:
+                                    campaign.completed_at = get_brazil_time()
+                                db.session.commit()
+                                logger.info(f"✅ Status atualizado para 'completed' após erro (campanha {campaign_id}: {campaign.total_sent} enviados)")
+                            else:
+                                # Se não enviou nada, marcar como falha
+                                campaign.status = 'failed'
+                                db.session.commit()
+                                logger.info(f"✅ Status atualizado para 'failed' após erro (campanha {campaign_id})")
+                    except Exception as update_error:
+                        logger.error(f"❌ Erro ao atualizar status após falha: {update_error}", exc_info=True)
+                        db.session.rollback()
         
         # Executar em thread separada
         thread = threading.Thread(target=send_campaign)

@@ -3918,11 +3918,21 @@ def get_bot_stats(bot_id):
                 if not c.completed_at:
                     c.completed_at = now_time
                 db.session.commit()
+            # ✅ NOVO: Se total_sent > 0 e total_processed >= total_sent (todos foram processados mesmo sem total_targets)
+            elif c.total_sent > 0 and total_processed >= c.total_sent and c.started_at:
+                time_since_start = (now_time - c.started_at).total_seconds()
+                # Se passou mais de 5 minutos desde o início (tempo suficiente para concluir envio)
+                if time_since_start > 300:  # 5 minutos
+                    logger.info(f"✅ Corrigindo status da campanha {c.id}: 'sending' → 'completed' ({c.total_sent} enviados, {int(time_since_start/60)}min desde início)")
+                    c.status = 'completed'
+                    if not c.completed_at:
+                        c.completed_at = now_time
+                    db.session.commit()
             # Se não há total_targets definido mas já passou tempo suficiente desde o início
             elif c.total_targets == 0 and c.total_sent > 0 and c.started_at:
-                # Se já passou mais de 1 hora desde o início e não há progresso, considerar completa
                 time_since_start = (now_time - c.started_at).total_seconds()
-                if time_since_start > 3600:  # 1 hora
+                # ✅ REDUZIDO: Se já passou mais de 10 minutos desde o início e não há progresso, considerar completa
+                if time_since_start > 600:  # 10 minutos (reduzido de 1 hora)
                     logger.info(f"✅ Corrigindo status da campanha {c.id}: 'sending' → 'completed' (sem alvos, {c.total_sent} enviados, {int(time_since_start/60)}min desde início)")
                     c.status = 'completed'
                     if not c.completed_at:
@@ -3931,8 +3941,8 @@ def get_bot_stats(bot_id):
             # Se started_at existe mas já passou muito tempo e não há mais progresso
             elif c.started_at and c.total_sent > 0:
                 time_since_start = (now_time - c.started_at).total_seconds()
-                # Se passou mais de 2 horas desde o início e total_sent não mudou (assumindo que não há mais progresso)
-                if time_since_start > 7200:  # 2 horas
+                # ✅ REDUZIDO: Se passou mais de 15 minutos desde o início (reduzido de 2 horas)
+                if time_since_start > 900:  # 15 minutos
                     logger.info(f"✅ Corrigindo status da campanha {c.id}: 'sending' → 'completed' (timeout: {c.total_sent} enviados há {int(time_since_start/60)}min)")
                     c.status = 'completed'
                     if not c.completed_at:
