@@ -438,11 +438,10 @@
                 <button @click="saveDisplayName(true)"
                         :disabled="!displayNameInput || displayNameInput.trim() === ''"
                         :class="{
-                            'cursor-not-allowed bg-gray-600 text-gray-400': !displayNameInput || displayNameInput.trim() === '',
+                            'cursor-not-allowed bg-gray-600 text-gray-400 opacity-50': !displayNameInput || displayNameInput.trim() === '',
                             'bg-yellow-500 hover:bg-yellow-600 text-black': displayNameInput && displayNameInput.trim() !== ''
                         }"
-                        class="flex-1 px-4 py-3 rounded-lg font-bold transition-colors"
-                        :style="(displayNameInput && displayNameInput.trim() !== '') ? 'opacity: 1 !important;' : 'opacity: 0.5 !important;'">
+                        class="flex-1 px-4 py-3 rounded-lg font-bold transition-colors">
                     Salvar
                 </button>
             </div>
