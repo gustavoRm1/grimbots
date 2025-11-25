@@ -6961,9 +6961,13 @@ def ranking():
         premium_rate = premium_rates.get(idx, None)
         has_premium_rate = user.commission_percentage < 2.0
         
+        # ✅ Nome de exibição no ranking (LGPD compliant)
+        display_name = user.ranking_display_name if user.ranking_display_name else f"Usuário #{idx}"
+        
         ranking_data.append({
             'position': idx,
             'user': user,
+            'display_name': display_name,  # ✅ Nome escolhido ou padrão "Usuário #"
             'bots_count': bots_count,
             'sales': period_sales,
             'revenue': float(period_revenue),
@@ -7170,6 +7174,9 @@ def ranking():
     unlocked_count = sum(1 for award in revenue_awards if award['is_unlocked'])
     total_count = len(revenue_awards)
     
+    # ✅ Verificar se é a primeira visita ao ranking
+    show_name_modal = not current_user.ranking_first_visit_handled
+    
     return render_template('ranking.html',
                          ranking=ranking_data,
                          my_position=my_position_number,
@@ -7177,11 +7184,57 @@ def ranking():
                          period=period,
                          my_achievements=my_achievements,
                          all_achievements_data=achievements_data,
+                         show_name_modal=show_name_modal,
+                         current_ranking_display_name=current_user.ranking_display_name,
                          achievements_by_category=categories,
                          revenue_awards=revenue_awards,
                          total_revenue=total_revenue_float,
                          unlocked_awards_count=unlocked_count,
                          total_awards_count=total_count)
+
+@app.route('/api/ranking/save-display-name', methods=['POST'])
+@login_required
+@csrf.exempt
+def save_ranking_display_name():
+    """
+    ✅ Rota para salvar o nome de exibição escolhido pelo usuário no ranking
+    """
+    try:
+        data = request.get_json()
+        display_name = data.get('display_name', '').strip()
+        save_choice = data.get('save', False)  # True = salvar nome, False = não quero
+        
+        if save_choice and display_name:
+            # Validar nome (máximo 50 caracteres, apenas letras, números, espaços e alguns caracteres especiais)
+            if len(display_name) > 50:
+                return jsonify({'success': False, 'error': 'Nome muito longo (máximo 50 caracteres)'}), 400
+            
+            # Validar caracteres permitidos (apenas alfanuméricos, espaços e alguns especiais)
+            import re
+            if not re.match(r'^[a-zA-Z0-9\s\-_\.]+$', display_name):
+                return jsonify({'success': False, 'error': 'Nome contém caracteres inválidos. Use apenas letras, números, espaços e: - _ .'}), 400
+            
+            current_user.ranking_display_name = display_name
+            current_user.ranking_first_visit_handled = True
+            db.session.commit()
+            
+            logger.info(f"✅ Usuário {current_user.id} escolheu nome de exibição: {display_name}")
+            return jsonify({'success': True, 'message': 'Nome salvo com sucesso!', 'display_name': display_name}), 200
+        elif not save_choice:
+            # Usuário escolheu "Não quero" - apenas marcar como visitado
+            current_user.ranking_first_visit_handled = True
+            current_user.ranking_display_name = None  # Manter None para usar "usuário#"
+            db.session.commit()
+            
+            logger.info(f"✅ Usuário {current_user.id} optou por não escolher nome no ranking")
+            return jsonify({'success': True, 'message': 'Você continuará aparecendo como "usuário#" no ranking'}), 200
+        else:
+            return jsonify({'success': False, 'error': 'Nome não fornecido'}), 400
+            
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"❌ Erro ao salvar nome de exibição do ranking: {e}", exc_info=True)
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/api/debug-achievements', methods=['GET'])
 @login_required

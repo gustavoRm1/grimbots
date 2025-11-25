@@ -46,6 +46,10 @@ class User(UserMixin, db.Model):
     best_streak = db.Column(db.Integer, default=0)  # Maior streak já alcançado
     last_sale_date = db.Column(db.Date)  # Última venda (para calcular streak)
     
+    # ✅ RANKING - Nome de exibição (LGPD compliant)
+    ranking_display_name = db.Column(db.String(50), nullable=True)  # Nome escolhido pelo usuário para aparecer no ranking
+    ranking_first_visit_handled = db.Column(db.Boolean, default=False)  # Se já escolheu o nome na primeira visita
+    
     # Status
     is_active = db.Column(db.Boolean, default=True)
     is_verified = db.Column(db.Boolean, default=False)

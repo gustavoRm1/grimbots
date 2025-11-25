@@ -396,7 +396,54 @@
 {% endblock %}
 
 {% block content %}
-<div class="max-w-full mx-auto px-2 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 md:py-8">
+<div class="max-w-full mx-auto px-2 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 md:py-8" 
+     x-data="rankingApp()" 
+     x-init="init()">
+    
+    <!-- ✅ Modal para escolher nome na primeira visita -->
+    <div x-show="showNameModal" 
+         x-cloak
+         class="fixed inset-0 bg-black bg-opacity-75 z-50 flex items-center justify-center p-4"
+         style="display: none;">
+        <div class="bg-gray-900 border-2 border-yellow-500 rounded-xl p-6 sm:p-8 max-w-md w-full"
+             @click.away="showNameModal = false">
+            <div class="text-center mb-6">
+                <i class="fas fa-trophy text-5xl mb-4" style="color: #FFB800;"></i>
+                <h2 class="text-2xl font-black text-white mb-2">Escolha seu nome no ranking</h2>
+                <p class="text-sm text-gray-400">
+                    Por questões de privacidade (LGPD), você pode escolher como aparecer no ranking. Se não quiser, aparecerá como "usuário#".
+                </p>
+            </div>
+            
+            <div class="mb-6">
+                <label class="block text-sm font-bold text-gray-300 mb-2">
+                    Nome para exibição (máximo 50 caracteres)
+                </label>
+                <input type="text" 
+                       x-model="displayNameInput"
+                       maxlength="50"
+                       placeholder="Ex: Campeão2025"
+                       class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-yellow-500"
+                       @keyup.enter="saveDisplayName(true)">
+                <p class="text-xs text-gray-500 mt-2">
+                    Caracteres permitidos: letras, números, espaços, - _ .
+                </p>
+            </div>
+            
+            <div class="flex gap-3">
+                <button @click="saveDisplayName(false)"
+                        class="flex-1 px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white font-semibold hover:bg-gray-700 transition-colors">
+                    Não quero
+                </button>
+                <button @click="saveDisplayName(true)"
+                        :disabled="!displayNameInput || displayNameInput.trim() === ''"
+                        :class="(!displayNameInput || displayNameInput.trim() === '') ? 'opacity-50 cursor-not-allowed' : 'hover:bg-yellow-600'"
+                        class="flex-1 px-4 py-3 bg-yellow-500 rounded-lg text-black font-bold transition-colors">
+                    Salvar
+                </button>
+            </div>
+        </div>
+    </div>
     
     <!-- Header -->
     <div class="mb-4 sm:mb-6 md:mb-8">
@@ -441,9 +488,9 @@
                     </p>
                 </div>
                 
-            <!-- ✅ V2.0: Identificação Anonimizada (LGPD) - Responsivo -->
+                    <!-- ✅ V2.0: Identificação Anonimizada (LGPD) - Responsivo -->
             <div class="text-center mb-3 sm:mb-4 pb-3 sm:pb-4 border-b border-gray-800">
-                <p class="text-base sm:text-lg font-bold text-white truncate">Usuário #{{ item.position }}</p>
+                <p class="text-base sm:text-lg font-bold text-white truncate">{{ item.display_name }}</p>
                 <p class="text-xs sm:text-sm text-gray-500 mt-1">
                     {% if item.user.id == current_user.id %}
                     <span class="text-yellow-500 font-semibold">Você</span>
@@ -492,7 +539,9 @@
             <i class="fas fa-list-ol text-2xl text-blue-500"></i>
             <div>
                 <div class="config-section-title">Ranking Completo</div>
-                <div class="config-section-description">Posições 4-100</div>
+                <div class="config-section-description">
+                    <span x-text="'Posições ' + (4 + (currentRankingPage - 1) * rankingPerPage) + '-' + Math.min(4 + currentRankingPage * rankingPerPage - 1, totalRankingItems + 3) + ' (' + (totalRankingItems + 3) + ' total)'"></span>
+                </div>
             </div>
         </div>
 
@@ -508,7 +557,8 @@
                 </thead>
                 <tbody>
                     {% for item in ranking[3:] %}
-                    <tr {% if item.user.id == current_user.id %}style="background: rgba(255, 184, 0, 0.1); border-left: 3px solid #FFB800;"{% endif %}>
+                    <tr x-show="isItemVisible({{ loop.index0 }})"
+                        {% if item.user.id == current_user.id %}style="background: rgba(255, 184, 0, 0.1); border-left: 3px solid #FFB800;"{% endif %}>
                         <td>
                             <span class="text-lg font-bold" style="{% if item.position <= 10 %}color: #FFB800;{% else %}color: #9CA3AF;{% endif %}">
                                 #{{ item.position }}
@@ -523,7 +573,7 @@
                                 </div>
                                 <div class="flex-1 min-w-0">
                                     <p class="text-sm font-bold text-white flex items-center gap-2">
-                                        Usuário #{{ item.position }}
+                                        {{ item.display_name }}
                                         {% if item.user.id == current_user.id %}
                                         <span class="px-2 py-1 text-xs font-bold rounded" style="background: #FFB800; color: #000;">VOCÊ</span>
                                         {% endif %}
@@ -551,6 +601,39 @@
                     {% endfor %}
                 </tbody>
             </table>
+        </div>
+        
+        <!-- ✅ Paginação do Ranking -->
+        <div x-show="totalRankingPages > 1" 
+             class="flex items-center justify-center gap-2 mt-4 sm:mt-6">
+            <!-- Botão Anterior -->
+            <button @click="prevRankingPage()" 
+                    :disabled="currentRankingPage === 1"
+                    :class="currentRankingPage === 1 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-700'"
+                    class="px-3 sm:px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm font-medium transition-colors">
+                <i class="fas fa-chevron-left"></i>
+            </button>
+            
+            <!-- Números das páginas -->
+            <div class="flex items-center gap-1 sm:gap-2">
+                <template x-for="page in visibleRankingPages" :key="page">
+                    <button x-show="page !== '...'" 
+                            @click="goToRankingPage(page)"
+                            :class="currentRankingPage === page ? 'bg-yellow-500 text-black border-yellow-500' : 'bg-gray-800 border-gray-700 text-white hover:bg-gray-700'"
+                            class="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center border rounded-lg text-sm font-bold transition-colors"
+                            x-text="page">
+                    </button>
+                    <span x-show="page === '...'" class="px-2 text-gray-500">...</span>
+                </template>
+            </div>
+            
+            <!-- Botão Próximo -->
+            <button @click="nextRankingPage()" 
+                    :disabled="currentRankingPage === totalRankingPages"
+                    :class="currentRankingPage === totalRankingPages ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-700'"
+                    class="px-3 sm:px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm font-medium transition-colors">
+                <i class="fas fa-chevron-right"></i>
+            </button>
         </div>
     </div>
     
@@ -698,4 +781,138 @@
     </div>
     
 </div>
+
+<script>
+function rankingApp() {
+    return {
+        // ✅ Modal de escolha de nome
+        showNameModal: {{ 'true' if show_name_modal else 'false' }},
+        displayNameInput: '',
+        
+        // ✅ Dados do ranking (total de itens após posição 3)
+        totalRankingItems: {{ (ranking|length - 3) if ranking|length > 3 else 0 }},
+        
+        // ✅ Paginação
+        currentRankingPage: 1,
+        rankingPerPage: 5,  // Máximo 5 por página (igual últimas vendas)
+        
+        init() {
+            // Se é primeira visita, mostrar modal após um pequeno delay
+            if (this.showNameModal) {
+                setTimeout(() => {
+                    this.showNameModal = true;
+                }, 300);
+            }
+        },
+        
+        // ✅ Verificar se item deve ser visível na página atual
+        isItemVisible(index) {
+            const start = (this.currentRankingPage - 1) * this.rankingPerPage;
+            const end = start + this.rankingPerPage;
+            return index >= start && index < end;
+        },
+        
+        // ✅ Métodos do Modal
+        async saveDisplayName(save) {
+            if (save && (!this.displayNameInput || this.displayNameInput.trim() === '')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/ranking/save-display-name', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        display_name: this.displayNameInput.trim(),
+                        save: save
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    this.showNameModal = false;
+                    // Recarregar página para atualizar ranking com novo nome
+                    window.location.reload();
+                } else {
+                    alert('Erro: ' + (data.error || 'Não foi possível salvar o nome'));
+                }
+            } catch (error) {
+                console.error('Erro ao salvar nome:', error);
+                alert('Erro ao salvar nome. Tente novamente.');
+            }
+        },
+        
+        // ✅ Computed Properties - Paginação do Ranking
+        get totalRankingPages() {
+            if (this.totalRankingItems === 0) return 1;
+            return Math.ceil(this.totalRankingItems / this.rankingPerPage);
+        },
+        
+        get visibleRankingPages() {
+            const total = this.totalRankingPages || 1;
+            const current = this.currentRankingPage || 1;
+            const pages = [];
+            
+            if (total === 0) return [1];
+            
+            // Mostrar no máximo 7 páginas
+            if (total <= 7) {
+                for (let i = 1; i <= total; i++) {
+                    pages.push(i);
+                }
+            } else {
+                if (current <= 4) {
+                    for (let i = 1; i <= 5; i++) {
+                        pages.push(i);
+                    }
+                    pages.push('...');
+                    pages.push(total);
+                } else if (current >= total - 3) {
+                    pages.push(1);
+                    pages.push('...');
+                    for (let i = total - 4; i <= total; i++) {
+                        pages.push(i);
+                    }
+                } else {
+                    pages.push(1);
+                    pages.push('...');
+                    for (let i = current - 1; i <= current + 1; i++) {
+                        pages.push(i);
+                    }
+                    pages.push('...');
+                    pages.push(total);
+                }
+            }
+            
+            return pages;
+        },
+        
+        // ✅ Métodos de Navegação - Paginação do Ranking
+        goToRankingPage(page) {
+            if (page !== '...' && page >= 1 && page <= this.totalRankingPages) {
+                this.currentRankingPage = page;
+                // Scroll para o topo da tabela
+                document.querySelector('.config-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        },
+        
+        nextRankingPage() {
+            if (this.currentRankingPage < this.totalRankingPages) {
+                this.currentRankingPage++;
+                document.querySelector('.config-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        },
+        
+        prevRankingPage() {
+            if (this.currentRankingPage > 1) {
+                this.currentRankingPage--;
+                document.querySelector('.config-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }
+    }
+}
+</script>
 {% endblock %}
