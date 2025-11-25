@@ -1688,15 +1688,29 @@ function dashboardApp() {
             // ✅ LISTENER: Atualização de status de bot
             socket.on('bot_status_update', (data) => {
                 console.log('🔔 Status do bot atualizado:', data);
+                
+                // ✅ CORREÇÃO CRÍTICA: Validar que o bot pertence ao usuário logado
                 const bot = this.bots.find(b => b.id === data.bot_id);
-                if (bot) {
-                    bot.is_running = data.is_running;
-                    console.log(`✅ Bot ${bot.name} agora está ${data.is_running ? 'Online' : 'Offline'}`);
+                if (!bot) {
+                    console.warn(`⚠️ Atualização de status ignorada: bot ${data.bot_id} não pertence ao usuário logado`);
+                    return; // Ignorar atualizações de bots de outros usuários
                 }
+                
+                bot.is_running = data.is_running;
+                console.log(`✅ Bot ${bot.name} agora está ${data.is_running ? 'Online' : 'Offline'}`);
             });
             
             socket.on('payment_update', (data) => {
                 console.log('💰 Nova venda!', data);
+                
+                // ✅ CORREÇÃO CRÍTICA: Validar que o pagamento é de um bot do usuário logado
+                const botId = data.bot_id;
+                const isMyBot = this.bots.some(bot => bot.id === botId);
+                
+                if (!isMyBot) {
+                    console.warn(`⚠️ Notificação de pagamento ignorada: bot ${botId} não pertence ao usuário logado`);
+                    return; // Ignorar notificações de outros usuários
+                }
                 
                 // Atualizar estatísticas locais
                 if (data.status === 'paid') {
@@ -1728,6 +1742,15 @@ function dashboardApp() {
             // ✅ ESCUTAR VENDAS PENDENTES (quando cria PIX)
             socket.on('new_sale', (data) => {
                 console.log('🔄 Nova venda pendente!', data);
+                
+                // ✅ CORREÇÃO CRÍTICA: Validar que a venda é de um bot do usuário logado
+                const botId = data.bot_id;
+                const isMyBot = this.bots.some(bot => bot.id === botId);
+                
+                if (!isMyBot) {
+                    console.warn(`⚠️ Notificação de venda ignorada: bot ${botId} não pertence ao usuário logado`);
+                    return; // Ignorar notificações de outros usuários
+                }
                 
                 // Mostrar notificação in-app (se configuração permitir) - IMEDIATO!
                 if (this.notificationSettings.notify_pending_sales) {

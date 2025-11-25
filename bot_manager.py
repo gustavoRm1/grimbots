@@ -3552,13 +3552,21 @@ class BotManager:
                 # Não deve chegar aqui após reset, mas manter para segurança
                 logger.warning(f"⚠️ should_send_welcome=False após reset - isso não deveria acontecer")
             
-            # Emitir evento via WebSocket
-            self.socketio.emit('bot_interaction', {
-                'bot_id': bot_id,
-                'type': 'start',
-                'chat_id': chat_id,
-                'user': message.get('from', {}).get('first_name', 'Usuário')
-            })
+            # ✅ CORREÇÃO: Emitir evento via WebSocket apenas para o dono do bot
+            try:
+                from app import app, db
+                from models import Bot
+                with app.app_context():
+                    bot = db.session.get(Bot, bot_id)
+                    if bot:
+                        self.socketio.emit('bot_interaction', {
+                            'bot_id': bot_id,
+                            'type': 'start',
+                            'chat_id': chat_id,
+                            'user': message.get('from', {}).get('first_name', 'Usuário')
+                        }, room=f'user_{bot.user_id}')
+            except Exception as ws_error:
+                logger.warning(f"⚠️ Erro ao emitir WebSocket bot_interaction: {ws_error}")
             
             logger.info(f"{'='*60}\n")
             
@@ -6941,16 +6949,17 @@ Seu pagamento ainda não foi confirmado.
                         with app.app_context():
                             bot = db.session.get(Bot, bot_id)
                             if bot:
-                                # Emitir evento 'new_sale' (BROADCAST - sem room)
+                                # ✅ CORREÇÃO CRÍTICA: Emitir evento 'new_sale' APENAS para o usuário dono do bot
                                 socketio.emit('new_sale', {
                                     'id': payment.id,
                                     'customer_name': customer_name,
                                     'product_name': description,
                                     'amount': float(amount),
                                     'status': 'pending',
-                                    'created_at': payment.created_at.isoformat()
-                                })
-                                logger.info(f"📡 Evento 'new_sale' emitido - R$ {amount}")
+                                    'created_at': payment.created_at.isoformat(),
+                                    'bot_id': bot_id
+                                }, room=f'user_{bot.user_id}')
+                                logger.info(f"📡 Evento 'new_sale' emitido para user_{bot.user_id} - R$ {amount}")
                                 
                                 # ✅ NOTIFICAR VENDA PENDENTE (Push Notification - respeita configurações)
                                 send_sale_notification(
