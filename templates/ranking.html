@@ -437,7 +437,11 @@
                 </button>
                 <button @click="saveDisplayName(true)"
                         :disabled="!displayNameInput || displayNameInput.trim() === ''"
-                        :class="(!displayNameInput || displayNameInput.trim() === '') ? 'opacity-50 cursor-not-allowed bg-gray-600 text-gray-400' : 'bg-yellow-500 hover:bg-yellow-600 opacity-100 text-black'"
+                        :class="{
+                            'cursor-not-allowed bg-gray-600 text-gray-400': !displayNameInput || displayNameInput.trim() === '',
+                            'bg-yellow-500 hover:bg-yellow-600 text-black': displayNameInput && displayNameInput.trim() !== ''
+                        }"
+                        :style="(!displayNameInput || displayNameInput.trim() === '') ? 'opacity: 0.5;' : 'opacity: 1 !important;'"
                         class="flex-1 px-4 py-3 rounded-lg font-bold transition-all">
                     Salvar
                 </button>
