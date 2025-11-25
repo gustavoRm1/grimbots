@@ -8568,150 +8568,150 @@ Seu pagamento ainda não foi confirmado.
                     contact_limit = get_brazil_time() - timedelta(days=campaign.days_since_last_contact)
                     
                     query = BotUser.query.filter_by(bot_id=campaign.bot_id, archived=False)
-                
-                # Filtro de último contato
-                if campaign.days_since_last_contact > 0:
-                    query = query.filter(BotUser.last_interaction <= contact_limit)
-                
-                # Excluir blacklist
-                blacklist_ids = db.session.query(RemarketingBlacklist.telegram_user_id).filter_by(
-                    bot_id=campaign.bot_id
-                ).all()
-                blacklist_ids = [b[0] for b in blacklist_ids]
-                if blacklist_ids:
-                    query = query.filter(~BotUser.telegram_user_id.in_(blacklist_ids))
-                
-                # Excluir compradores
-                if campaign.exclude_buyers:
-                    buyer_ids = db.session.query(Payment.customer_user_id).filter(
-                        Payment.bot_id == campaign.bot_id,
-                        Payment.status == 'paid'
-                    ).distinct().all()
-                    buyer_ids = [b[0] for b in buyer_ids if b[0]]
-                    if buyer_ids:
-                        query = query.filter(~BotUser.telegram_user_id.in_(buyer_ids))
-                
-                # Segmentação por público
-                if campaign.target_audience == 'abandoned_cart':
-                    abandoned_ids = db.session.query(Payment.customer_user_id).filter(
-                        Payment.bot_id == campaign.bot_id,
-                        Payment.status == 'pending'
-                    ).distinct().all()
-                    abandoned_ids = [b[0] for b in abandoned_ids if b[0]]
-                    if abandoned_ids:
-                        query = query.filter(BotUser.telegram_user_id.in_(abandoned_ids))
-                
-                elif campaign.target_audience == 'inactive':
-                    from models import get_brazil_time
-                    inactive_limit = get_brazil_time() - timedelta(days=7)
-                    query = query.filter(BotUser.last_interaction <= inactive_limit)
-                
-                leads = query.all()
-                campaign.total_targets = len(leads)
-                db.session.commit()
-                
-                logger.info(f"🎯 {campaign.total_targets} leads elegíveis")
-                
-                # Enviar em batches (20 msgs/segundo)
-                batch_size = 20
-                for i in range(0, len(leads), batch_size):
-                    batch = leads[i:i+batch_size]
                     
-                    for lead in batch:
-                        try:
-                            # Personalizar mensagem
-                            message = campaign.message.replace('{nome}', lead.first_name or 'Cliente')
-                            message = message.replace('{primeiro_nome}', (lead.first_name or 'Cliente').split()[0])
-                            
-                            # Preparar botões (converter para formato de callback_data)
-                            remarketing_buttons = []
-                            if campaign.buttons:
-                                # ✅ CORREÇÃO: Parsear JSON se for string
-                                buttons_list = campaign.buttons
-                                if isinstance(campaign.buttons, str):
-                                    import json
-                                    try:
-                                        buttons_list = json.loads(campaign.buttons)
-                                    except:
-                                        buttons_list = []
-                                
-                                for btn_idx, btn in enumerate(buttons_list):
-                                    if btn.get('price') and btn.get('description'):
-                                        # Botão de compra - gera PIX
-                                        # ✅ NOVO FORMATO: rmkt_CAMPAIGN_BTN_INDEX (< 20 bytes)
-                                        remarketing_buttons.append({
-                                            'text': btn.get('text', 'Comprar'),
-                                            'callback_data': f"rmkt_{campaign.id}_{btn_idx}"
-                                        })
-                                    elif btn.get('url'):
-                                        # Botão de URL
-                                        remarketing_buttons.append({
-                                            'text': btn.get('text', 'Link'),
-                                            'url': btn.get('url')
-                                        })
-                            
-                            # Log dos botões para debug
-                            logger.info(f"📤 Enviando para {lead.first_name} com {len(remarketing_buttons)} botão(ões)")
-                            for btn in remarketing_buttons:
-                                logger.info(f"   🔘 Botão: {btn.get('text')} | callback: {btn.get('callback_data', 'N/A')[:50]}")
-                            
-                            # Enviar mensagem
-                            result = self.send_telegram_message(
-                                token=bot_token,
-                                chat_id=lead.telegram_user_id,
-                                message=message,
-                                media_url=campaign.media_url,
-                                media_type=campaign.media_type,
-                                buttons=remarketing_buttons
-                            )
-                            
-                            if result:
-                                campaign.total_sent += 1
-                                
-                                # ✅ Enviar áudio adicional se habilitado
-                                if campaign.audio_enabled and campaign.audio_url:
-                                    logger.info(f"🎤 Enviando áudio complementar para {lead.first_name}...")
-                                    audio_result = self.send_telegram_message(
-                                        token=bot_token,
-                                        chat_id=lead.telegram_user_id,
-                                        message="",
-                                        media_url=campaign.audio_url,
-                                        media_type='audio',
-                                        buttons=None
-                                    )
-                            else:
-                                campaign.total_failed += 1
-                                
-                        except Exception as e:
-                            logger.warning(f"⚠️ Erro ao enviar para {lead.telegram_user_id}: {e}")
-                            if "bot was blocked" in str(e).lower():
-                                campaign.total_blocked += 1
-                                # Adicionar na blacklist
-                                blacklist = RemarketingBlacklist(
-                                    bot_id=campaign.bot_id,
-                                    telegram_user_id=lead.telegram_user_id,
-                                    reason='bot_blocked'
-                                )
-                                db.session.add(blacklist)
-                            else:
-                                campaign.total_failed += 1
+                    # Filtro de último contato
+                    if campaign.days_since_last_contact > 0:
+                        query = query.filter(BotUser.last_interaction <= contact_limit)
                     
-                    # Commit do batch
+                    # Excluir blacklist
+                    blacklist_ids = db.session.query(RemarketingBlacklist.telegram_user_id).filter_by(
+                        bot_id=campaign.bot_id
+                    ).all()
+                    blacklist_ids = [b[0] for b in blacklist_ids]
+                    if blacklist_ids:
+                        query = query.filter(~BotUser.telegram_user_id.in_(blacklist_ids))
+                    
+                    # Excluir compradores
+                    if campaign.exclude_buyers:
+                        buyer_ids = db.session.query(Payment.customer_user_id).filter(
+                            Payment.bot_id == campaign.bot_id,
+                            Payment.status == 'paid'
+                        ).distinct().all()
+                        buyer_ids = [b[0] for b in buyer_ids if b[0]]
+                        if buyer_ids:
+                            query = query.filter(~BotUser.telegram_user_id.in_(buyer_ids))
+                    
+                    # Segmentação por público
+                    if campaign.target_audience == 'abandoned_cart':
+                        abandoned_ids = db.session.query(Payment.customer_user_id).filter(
+                            Payment.bot_id == campaign.bot_id,
+                            Payment.status == 'pending'
+                        ).distinct().all()
+                        abandoned_ids = [b[0] for b in abandoned_ids if b[0]]
+                        if abandoned_ids:
+                            query = query.filter(BotUser.telegram_user_id.in_(abandoned_ids))
+                    
+                    elif campaign.target_audience == 'inactive':
+                        from models import get_brazil_time
+                        inactive_limit = get_brazil_time() - timedelta(days=7)
+                        query = query.filter(BotUser.last_interaction <= inactive_limit)
+                    
+                    leads = query.all()
+                    campaign.total_targets = len(leads)
                     db.session.commit()
                     
-                    # Emitir progresso via WebSocket
-                    socketio.emit('remarketing_progress', {
-                        'campaign_id': campaign.id,
-                        'sent': campaign.total_sent,
-                        'failed': campaign.total_failed,
-                        'blocked': campaign.total_blocked,
-                        'total': campaign.total_targets,
-                        'percentage': round((campaign.total_sent / campaign.total_targets) * 100, 1) if campaign.total_targets > 0 else 0
-                    })
+                    logger.info(f"🎯 {campaign.total_targets} leads elegíveis")
                     
-                    # Rate limiting (20 msgs/segundo)
-                    time.sleep(1)
-                
+                    # Enviar em batches (20 msgs/segundo)
+                    batch_size = 20
+                    for i in range(0, len(leads), batch_size):
+                        batch = leads[i:i+batch_size]
+                        
+                        for lead in batch:
+                            try:
+                                # Personalizar mensagem
+                                message = campaign.message.replace('{nome}', lead.first_name or 'Cliente')
+                                message = message.replace('{primeiro_nome}', (lead.first_name or 'Cliente').split()[0])
+                                
+                                # Preparar botões (converter para formato de callback_data)
+                                remarketing_buttons = []
+                                if campaign.buttons:
+                                    # ✅ CORREÇÃO: Parsear JSON se for string
+                                    buttons_list = campaign.buttons
+                                    if isinstance(campaign.buttons, str):
+                                        import json
+                                        try:
+                                            buttons_list = json.loads(campaign.buttons)
+                                        except:
+                                            buttons_list = []
+                                    
+                                    for btn_idx, btn in enumerate(buttons_list):
+                                        if btn.get('price') and btn.get('description'):
+                                            # Botão de compra - gera PIX
+                                            # ✅ NOVO FORMATO: rmkt_CAMPAIGN_BTN_INDEX (< 20 bytes)
+                                            remarketing_buttons.append({
+                                                'text': btn.get('text', 'Comprar'),
+                                                'callback_data': f"rmkt_{campaign.id}_{btn_idx}"
+                                            })
+                                        elif btn.get('url'):
+                                            # Botão de URL
+                                            remarketing_buttons.append({
+                                                'text': btn.get('text', 'Link'),
+                                                'url': btn.get('url')
+                                            })
+                                
+                                # Log dos botões para debug
+                                logger.info(f"📤 Enviando para {lead.first_name} com {len(remarketing_buttons)} botão(ões)")
+                                for btn in remarketing_buttons:
+                                    logger.info(f"   🔘 Botão: {btn.get('text')} | callback: {btn.get('callback_data', 'N/A')[:50]}")
+                                
+                                # Enviar mensagem
+                                result = self.send_telegram_message(
+                                    token=bot_token,
+                                    chat_id=lead.telegram_user_id,
+                                    message=message,
+                                    media_url=campaign.media_url,
+                                    media_type=campaign.media_type,
+                                    buttons=remarketing_buttons
+                                )
+                                
+                                if result:
+                                    campaign.total_sent += 1
+                                    
+                                    # ✅ Enviar áudio adicional se habilitado
+                                    if campaign.audio_enabled and campaign.audio_url:
+                                        logger.info(f"🎤 Enviando áudio complementar para {lead.first_name}...")
+                                        audio_result = self.send_telegram_message(
+                                            token=bot_token,
+                                            chat_id=lead.telegram_user_id,
+                                            message="",
+                                            media_url=campaign.audio_url,
+                                            media_type='audio',
+                                            buttons=None
+                                        )
+                                else:
+                                    campaign.total_failed += 1
+                                    
+                            except Exception as e:
+                                logger.warning(f"⚠️ Erro ao enviar para {lead.telegram_user_id}: {e}")
+                                if "bot was blocked" in str(e).lower():
+                                    campaign.total_blocked += 1
+                                    # Adicionar na blacklist
+                                    blacklist = RemarketingBlacklist(
+                                        bot_id=campaign.bot_id,
+                                        telegram_user_id=lead.telegram_user_id,
+                                        reason='bot_blocked'
+                                    )
+                                    db.session.add(blacklist)
+                                else:
+                                    campaign.total_failed += 1
+                        
+                        # Commit do batch
+                        db.session.commit()
+                        
+                        # Emitir progresso via WebSocket
+                        socketio.emit('remarketing_progress', {
+                            'campaign_id': campaign.id,
+                            'sent': campaign.total_sent,
+                            'failed': campaign.total_failed,
+                            'blocked': campaign.total_blocked,
+                            'total': campaign.total_targets,
+                            'percentage': round((campaign.total_sent / campaign.total_targets) * 100, 1) if campaign.total_targets > 0 else 0
+                        })
+                        
+                        # Rate limiting (20 msgs/segundo)
+                        time.sleep(1)
+                    
                     # Finalizar campanha
                     campaign.status = 'completed'
                     from models import get_brazil_time
