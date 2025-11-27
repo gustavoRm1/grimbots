@@ -6957,6 +6957,9 @@ Seu pagamento ainda não foi confirmado.
                                 button_data_for_subscription = main_buttons[button_index].copy()
                                 has_subscription_flag = button_data_for_subscription.get('subscription', {}).get('enabled', False)
                     
+                    # ✅ CORREÇÃO: Importar json localmente para evitar UnboundLocalError
+                    import json as json_module
+                    
                     # Salvar pagamento no banco (incluindo código PIX para reenvio + analytics)
                     payment = Payment(
                         bot_id=bot_id,
@@ -7012,12 +7015,10 @@ Seu pagamento ainda não foi confirmado.
                         # ✅ CRÍTICO: fbp e fbc para fallback no Purchase se Redis expirar
                         fbp=fbp if fbp else None,
                         fbc=fbc if fbc else None,
-                    # ✅ SISTEMA DE ASSINATURAS - Campos de subscription
-                    # ✅ CORREÇÃO: Importar json localmente para evitar UnboundLocalError
-                    import json as json_module
-                    button_index=button_index,
-                    button_config=json_module.dumps(button_data_for_subscription, ensure_ascii=False) if button_data_for_subscription else None,
-                    has_subscription=has_subscription_flag
+                        # ✅ SISTEMA DE ASSINATURAS - Campos de subscription
+                        button_index=button_index,
+                        button_config=json_module.dumps(button_data_for_subscription, ensure_ascii=False) if button_data_for_subscription else None,
+                        has_subscription=has_subscription_flag
                     )
                     db.session.add(payment)
                     db.session.flush()  # ✅ Flush para obter payment.id antes do commit
