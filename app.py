@@ -1018,9 +1018,6 @@ if _scheduler_owner:
     except Exception as e:
         logger.error(f"❌ Erro ao registrar job retry_failed_subscription_removals: {e}")
 
-if _scheduler_owner:
-    try:
-        logger.warning(f"⚠️ Não foi possível importar job de sincronização UmbrellaPay: {e}")
 # ✅ JOB PERIÓDICO: Verificar e sincronizar status dos bots (desativado)
 def sync_bots_status():
     """
