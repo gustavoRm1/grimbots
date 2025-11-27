@@ -211,6 +211,26 @@ class WiinPayGateway(PaymentGateway):
                 decoded = jwt.decode(self.api_key, options={"verify_signature": False})
                 api_key_user_id = decoded.get('userId') or decoded.get('user_id') or None
                 logger.info(f"🔍 [{self.get_gateway_name()}] user_id extraído da api_key (JWT): {api_key_user_id}")
+            except ImportError:
+                # Módulo jwt não instalado, tentar decodificar manualmente (base64)
+                try:
+                    import base64
+                    import json
+                    # JWT tem 3 partes separadas por ponto: header.payload.signature
+                    parts = self.api_key.split('.')
+                    if len(parts) >= 2:
+                        # Decodificar payload (parte 2)
+                        payload_b64 = parts[1]
+                        # Adicionar padding se necessário
+                        padding = 4 - len(payload_b64) % 4
+                        if padding != 4:
+                            payload_b64 += '=' * padding
+                        payload_json = base64.urlsafe_b64decode(payload_b64)
+                        decoded = json.loads(payload_json)
+                        api_key_user_id = decoded.get('userId') or decoded.get('user_id') or None
+                        logger.info(f"🔍 [{self.get_gateway_name()}] user_id extraído da api_key (base64 manual): {api_key_user_id}")
+                except Exception as base64_error:
+                    logger.warning(f"⚠️ [{self.get_gateway_name()}] Não foi possível extrair user_id do JWT (base64): {base64_error}")
             except Exception as jwt_error:
                 logger.warning(f"⚠️ [{self.get_gateway_name()}] Não foi possível extrair user_id do JWT: {jwt_error}")
             
@@ -219,30 +239,38 @@ class WiinPayGateway(PaymentGateway):
             if not self.split_user_id or len(self.split_user_id.strip()) == 0 or self.split_user_id == old_split_id:
                 logger.info(f"✅ [{self.get_gateway_name()}] split_user_id vazio/antigo, usando ID da plataforma: {platform_split_id}")
                 self.split_user_id = platform_split_id
-            elif api_key_user_id and self.split_user_id == api_key_user_id:
-                logger.error(f"❌ [{self.get_gateway_name()}] split_user_id é o mesmo da conta de recebimento ({api_key_user_id})!")
-                logger.error(f"   Isso causará erro 422: 'A conta de split não pode ser a mesma conta de recebimento'")
-                logger.error(f"   Forçando ID da plataforma: {platform_split_id}")
-                self.split_user_id = platform_split_id
             elif self.split_user_id != platform_split_id:
                 logger.warning(f"⚠️ [{self.get_gateway_name()}] split_user_id diferente do ID da plataforma: {self.split_user_id}")
                 logger.warning(f"   Esperado: {platform_split_id} | Recebido: {self.split_user_id}")
                 logger.warning(f"   Forçando ID da plataforma para garantir split correto")
                 self.split_user_id = platform_split_id
             
+            # ✅ CORREÇÃO CRÍTICA: Se split_user_id for o mesmo da conta de recebimento, NÃO enviar split
+            # Isso previne erro 422: "A conta de split não pode ser a mesma conta de recebimento"
+            should_send_split = True
+            if api_key_user_id and self.split_user_id == api_key_user_id:
+                logger.warning(f"⚠️ [{self.get_gateway_name()}] split_user_id é o mesmo da conta de recebimento ({api_key_user_id})!")
+                logger.warning(f"   Removendo split do payload para evitar erro 422")
+                should_send_split = False
+            
             # ✅ RANKING: Calcular valor do split usando split_percentage (pode ser taxa premium)
-            split_value = round(amount * (self.split_percentage / 100), 2)
-            
-            # ✅ Garantir que split_value é no mínimo 0.01 (centavo mínimo)
-            if split_value < 0.01:
-                split_value = 0.01
-            
-            # ✅ SEMPRE adicionar split ao payload (conforme documentação WiinPay)
-            payload["split"] = {
-                "percentage": self.split_percentage,  # ✅ RANKING: Percentual (pode ser premium: 1.5%, 1%, 0.5%, ou padrão 2%)
-                "value": split_value,  # Valor em reais
-                "user_id": self.split_user_id  # ✅ SEMPRE ID da plataforma: 68ffcc91e23263e0a01fffa4
-            }
+            # Só adicionar split se não for a mesma conta
+            if should_send_split:
+                split_value = round(amount * (self.split_percentage / 100), 2)
+                
+                # ✅ Garantir que split_value é no mínimo 0.01 (centavo mínimo)
+                if split_value < 0.01:
+                    split_value = 0.01
+                
+                # ✅ Adicionar split ao payload apenas se não for a mesma conta
+                payload["split"] = {
+                    "percentage": self.split_percentage,  # ✅ RANKING: Percentual (pode ser premium: 1.5%, 1%, 0.5%, ou padrão 2%)
+                    "value": split_value,  # Valor em reais
+                    "user_id": self.split_user_id  # ✅ ID da plataforma: 68ffcc91e23263e0a01fffa4
+                }
+                logger.info(f"✅ [{self.get_gateway_name()}] Split configurado: {self.split_percentage}% para user_id {self.split_user_id}")
+            else:
+                logger.info(f"ℹ️ [{self.get_gateway_name()}] Split NÃO será enviado (mesma conta de recebimento)")
             
             # ✅ LOG FINAL: Confirmar que split_user_id está correto
             if self.split_user_id == platform_split_id:
