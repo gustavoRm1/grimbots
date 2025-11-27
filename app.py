@@ -252,7 +252,14 @@ def _is_pid_running(pid: int) -> bool:
         return True
 
 def _acquire_scheduler_lock() -> bool:
-    while True:
+    """
+    Tenta adquirir lock do scheduler com timeout para evitar travamento
+    """
+    import time
+    max_attempts = 5  # Máximo de 5 tentativas
+    attempt = 0
+    
+    while attempt < max_attempts:
         try:
             fd = os.open(str(SCHEDULER_LOCK_PATH), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
             os.write(fd, str(os.getpid()).encode())
@@ -265,13 +272,28 @@ def _acquire_scheduler_lock() -> bool:
                 existing_pid = None
 
             if existing_pid and not _is_pid_running(existing_pid):
+                # PID não está rodando - remover lock stale
                 try:
                     SCHEDULER_LOCK_PATH.unlink()
+                    # Tentar novamente imediatamente após remover lock stale
+                    continue
                 except FileNotFoundError:
                     pass
+                except Exception as e:
+                    logger.warning(f"⚠️ Erro ao remover lock stale: {e}")
+            
+            # Lock existe e PID está rodando (ou não conseguiu verificar)
+            attempt += 1
+            if attempt < max_attempts:
+                # Aguardar 0.5s antes de tentar novamente
+                time.sleep(0.5)
                 continue
-
-            return False
+            else:
+                # Timeout atingido - não é o owner
+                logger.debug(f"⚠️ Não foi possível adquirir scheduler lock após {max_attempts} tentativas")
+                return False
+    
+    return False
 
 scheduler = APScheduler()
 scheduler.init_app(app)
