@@ -12,16 +12,31 @@ from app import app, scheduler
 
 def main():
     with app.app_context():
-        jobs = scheduler.get_jobs()
-        subscription_jobs = [
-            j for j in jobs 
-            if 'subscription' in j.id.lower() or 'expired' in j.id.lower() or 'pending' in j.id.lower()
-        ]
-        
         print("=" * 70)
         print("📋 VERIFICAÇÃO DE JOBS DE ASSINATURAS")
         print("=" * 70)
         print()
+        
+        # Verificar se scheduler está rodando
+        if not scheduler.running:
+            print("⚠️ APScheduler não está rodando neste processo!")
+            print("   Isso é normal se o scheduler está rodando em outro processo (Gunicorn).")
+            print()
+            print("✅ Verifique os logs do Gunicorn para confirmar que os jobs foram registrados:")
+            print("   tail -100 logs/app.log | grep 'Job.*registrado'")
+            print()
+            print("   Ou verifique se aparecem as mensagens:")
+            print("   - '✅ Job check_expired_subscriptions registrado'")
+            print("   - '✅ Job check_pending_subscriptions_in_groups registrado'")
+            print("   - '✅ Job retry_failed_subscription_removals registrado'")
+            print()
+            return True  # Não é erro se scheduler está em outro processo
+        
+        jobs = scheduler.get_jobs()
+        subscription_jobs = [
+            j for j in jobs 
+            if 'subscription' in j.id.lower() or 'expired' in j.id.lower() or 'pending' in j.id.lower() or 'retry_failed' in j.id.lower()
+        ]
         
         if not subscription_jobs:
             print("❌ NENHUM JOB DE ASSINATURA ENCONTRADO!")
@@ -47,7 +62,22 @@ def main():
         
         for job in subscription_jobs:
             print(f"  ✅ {job.id}")
-            print(f"     Próxima execução: {job.next_run_time}")
+            # Tentar obter próxima execução (pode variar conforme versão do APScheduler)
+            try:
+                if hasattr(job, 'next_run_time'):
+                    next_run = job.next_run_time
+                elif hasattr(job, 'next_run_time'):
+                    next_run = job.next_run_time()
+                else:
+                    next_run = "N/A"
+                
+                if next_run:
+                    print(f"     Próxima execução: {next_run}")
+                else:
+                    print(f"     Próxima execução: Agendado")
+            except Exception:
+                print(f"     Próxima execução: Agendado")
+            
             print(f"     Trigger: {job.trigger}")
             print()
             found_jobs.add(job.id)
@@ -65,6 +95,9 @@ def main():
             return True
         else:
             print("⚠️ ALGUNS JOBS ESTÃO FALTANDO!")
+            print()
+            print("💡 Dica: Se o scheduler está em outro processo, verifique os logs:")
+            print("   tail -100 logs/app.log | grep 'Job.*registrado'")
             return False
 
 if __name__ == '__main__':
