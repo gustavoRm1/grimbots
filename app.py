@@ -890,34 +890,6 @@ if _scheduler_owner:
         pass
 
 # ✅ SISTEMA DE ASSINATURAS - Jobs Agendados
-if _scheduler_owner:
-    try:
-        scheduler.add_job(
-            id='check_expired_subscriptions',
-            func=check_expired_subscriptions,
-            trigger='interval',
-            minutes=5,  # Executar a cada 5 minutos
-            replace_existing=True,
-            max_instances=1
-        )
-        logger.info("✅ Job check_expired_subscriptions registrado (5 minutos)")
-    except Exception as e:
-        logger.error(f"❌ Erro ao registrar job check_expired_subscriptions: {e}")
-
-if _scheduler_owner:
-    try:
-        scheduler.add_job(
-            id='check_pending_subscriptions_in_groups',
-            func=check_pending_subscriptions_in_groups,
-            trigger='interval',
-            minutes=30,  # Executar a cada 30 minutos
-            replace_existing=True,
-            max_instances=1
-        )
-        logger.info("✅ Job check_pending_subscriptions_in_groups registrado (30 minutos)")
-    except Exception as e:
-        logger.error(f"❌ Erro ao registrar job check_pending_subscriptions_in_groups: {e}")
-
 # ✅ CORREÇÃO 11: Job de recuperação para resetar error_count após 7 dias
 def reset_high_error_count_subscriptions():
     """
@@ -1003,20 +975,6 @@ try:
     logger.info("✅ Job reset_error_count_subscriptions registrado (24 horas)")
 except Exception as e:
     logger.error(f"❌ Erro ao registrar job reset_error_count_subscriptions: {e}")
-
-if _scheduler_owner:
-    try:
-        scheduler.add_job(
-            id='retry_failed_subscription_removals',
-            func=retry_failed_subscription_removals,
-            trigger='interval',
-            minutes=30,
-            replace_existing=True,
-            max_instances=1
-        )
-        logger.info("✅ Job retry_failed_subscription_removals registrado (30 minutos)")
-    except Exception as e:
-        logger.error(f"❌ Erro ao registrar job retry_failed_subscription_removals: {e}")
 
 # ✅ JOB PERIÓDICO: Verificar e sincronizar status dos bots (desativado)
 def sync_bots_status():
@@ -11817,6 +11775,50 @@ def retry_failed_subscription_removals():
                     
     except Exception as e:
         logger.error(f"❌ Erro no job retry_failed_subscription_removals: {e}", exc_info=True)
+
+
+# ✅ REGISTRAR JOBS DE ASSINATURAS (APÓS DEFINIÇÕES DAS FUNÇÕES)
+if _scheduler_owner:
+    try:
+        scheduler.add_job(
+            id='check_expired_subscriptions',
+            func=check_expired_subscriptions,
+            trigger='interval',
+            minutes=5,  # Executar a cada 5 minutos
+            replace_existing=True,
+            max_instances=1
+        )
+        logger.info("✅ Job check_expired_subscriptions registrado (5 minutos)")
+    except Exception as e:
+        logger.error(f"❌ Erro ao registrar job check_expired_subscriptions: {e}")
+
+if _scheduler_owner:
+    try:
+        scheduler.add_job(
+            id='check_pending_subscriptions_in_groups',
+            func=check_pending_subscriptions_in_groups,
+            trigger='interval',
+            minutes=30,  # Executar a cada 30 minutos
+            replace_existing=True,
+            max_instances=1
+        )
+        logger.info("✅ Job check_pending_subscriptions_in_groups registrado (30 minutos)")
+    except Exception as e:
+        logger.error(f"❌ Erro ao registrar job check_pending_subscriptions_in_groups: {e}")
+
+if _scheduler_owner:
+    try:
+        scheduler.add_job(
+            id='retry_failed_subscription_removals',
+            func=retry_failed_subscription_removals,
+            trigger='interval',
+            minutes=30,
+            replace_existing=True,
+            max_instances=1
+        )
+        logger.info("✅ Job retry_failed_subscription_removals registrado (30 minutos)")
+    except Exception as e:
+        logger.error(f"❌ Erro ao registrar job retry_failed_subscription_removals: {e}")
 
 
 # ============================================================================
