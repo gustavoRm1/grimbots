@@ -5,7 +5,7 @@ Models - Sistema SaaS de Gerenciamento de Bots
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, date, timezone
 import json
 import logging
 
@@ -952,6 +952,11 @@ class Payment(db.Model):
     is_remarketing = db.Column(db.Boolean, default=False)
     remarketing_campaign_id = db.Column(db.Integer)
     
+    # ✅ SISTEMA DE ASSINATURAS - Campos adicionais
+    button_index = db.Column(db.Integer, nullable=True, index=True)  # Índice do botão clicado
+    button_config = db.Column(db.Text, nullable=True)  # JSON completo do botão no momento da compra
+    has_subscription = db.Column(db.Boolean, default=False, index=True)  # Flag rápida para filtrar
+    
     # Status
     status = db.Column(db.String(20), default='pending', index=True)  # pending, paid, failed, cancelled (indexado para queries frequentes)
     
@@ -1265,6 +1270,100 @@ class RemarketingBlacklist(db.Model):
     __table_args__ = (
         db.UniqueConstraint('bot_id', 'telegram_user_id', name='unique_blacklist'),
     )
+
+class Subscription(db.Model):
+    """Assinatura de acesso a grupo VIP"""
+    __tablename__ = 'subscriptions'
+    __table_args__ = (
+        db.UniqueConstraint('payment_id', name='uq_subscription_payment'),  # ✅ IDEMPOTÊNCIA
+        db.Index('idx_subscription_status_expires', 'status', 'expires_at'),  # ✅ PERFORMANCE
+        db.Index('idx_subscription_vip_chat', 'vip_chat_id', 'status'),  # ✅ PERFORMANCE
+    )
+    
+    id = db.Column(db.Integer, primary_key=True)
+    
+    # Relacionamentos (CASCADE para integridade referencial)
+    payment_id = db.Column(db.Integer, db.ForeignKey('payments.id', ondelete='CASCADE'), nullable=False, unique=True, index=True)
+    # ✅ CORREÇÃO 2 (ROBUSTA): CASCADE garante que subscriptions sejam deletadas quando bot é deletado
+    # Previne subscriptions órfãs e erros em cascata quando bot é removido
+    bot_id = db.Column(db.Integer, db.ForeignKey('bots.id', ondelete='CASCADE'), nullable=False, index=True)
+    
+    # Dados do usuário
+    telegram_user_id = db.Column(db.String(255), nullable=False, index=True)
+    customer_name = db.Column(db.String(255))
+    
+    # Configuração da assinatura
+    duration_type = db.Column(db.String(20), nullable=False)  # 'hours', 'days', 'weeks', 'months'
+    duration_value = db.Column(db.Integer, nullable=False)  # Ex: 30 (para 30 dias)
+    
+    # Grupo VIP (Chat ID direto - mais confiável)
+    vip_chat_id = db.Column(db.String(100), nullable=False, index=True)  # Chat ID do grupo (ex: -1001234567890)
+    vip_group_link = db.Column(db.String(500), nullable=True)  # Link original (opcional, para referência)
+    
+    # Datas (SEMPRE UTC para compatibilidade com APScheduler)
+    started_at = db.Column(db.DateTime(timezone=True), nullable=True)  # Quando começou (QUANDO ENTROU NO GRUPO - NULL se ainda não entrou)
+    expires_at = db.Column(db.DateTime(timezone=True), nullable=True, index=True)  # Quando expira (calculado quando started_at é definido)
+    removed_at = db.Column(db.DateTime(timezone=True), nullable=True)  # Quando foi removido do grupo
+    
+    # Status
+    status = db.Column(db.String(20), default='pending', index=True)  # 'pending', 'active', 'expired', 'removed', 'cancelled', 'error'
+    # 'pending' = Pagamento confirmado mas ainda não entrou no grupo
+    # 'active' = Entrou no grupo, contagem iniciada
+    # 'expired' = Tempo expirado mas ainda não removido (aguardando remoção)
+    # 'removed' = Removido do grupo automaticamente
+    # 'cancelled' = Cancelado (payment failed/refunded)
+    # 'error' = Erro ao remover (aguardando retry)
+    
+    # Metadata
+    removed_by = db.Column(db.String(50), default='system')  # 'system', 'manual', 'renewed'
+    error_count = db.Column(db.Integer, default=0)  # Contador de tentativas de remoção falhadas
+    last_error = db.Column(db.Text, nullable=True)  # Última mensagem de erro
+    
+    # Timestamps
+    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
+    updated_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    
+    # Relacionamentos
+    payment = db.relationship('Payment', backref='subscription')
+    bot = db.relationship('Bot', backref='subscriptions')
+    
+    def is_expired(self):
+        """Verifica se assinatura está expirada"""
+        if self.status != 'active' or not self.expires_at:
+            return False
+        return datetime.now(timezone.utc) > self.expires_at
+    
+    def days_remaining(self):
+        """Retorna dias restantes"""
+        if self.status != 'active' or not self.expires_at:
+            return 0
+        delta = self.expires_at - datetime.now(timezone.utc)
+        return max(0, delta.days)
+    
+    def to_dict(self):
+        """Retorna dict com dados da subscription"""
+        return {
+            'id': self.id,
+            'payment_id': self.payment_id,
+            'bot_id': self.bot_id,
+            'telegram_user_id': self.telegram_user_id,
+            'customer_name': self.customer_name,
+            'duration_type': self.duration_type,
+            'duration_value': self.duration_value,
+            'vip_chat_id': self.vip_chat_id,
+            'vip_group_link': self.vip_group_link,
+            'started_at': self.started_at.isoformat() if self.started_at else None,
+            'expires_at': self.expires_at.isoformat() if self.expires_at else None,
+            'removed_at': self.removed_at.isoformat() if self.removed_at else None,
+            'status': self.status,
+            'removed_by': self.removed_by,
+            'error_count': self.error_count,
+            'last_error': self.last_error,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+            'is_expired': self.is_expired(),
+            'days_remaining': self.days_remaining()
+        }
 
 class AuditLog(db.Model):
     """Log de auditoria para ações dos admins"""

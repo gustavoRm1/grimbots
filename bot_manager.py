@@ -1210,6 +1210,107 @@ class BotManager:
                 elif text and text.strip():  # Mensagem de texto não vazia
                     logger.info(f"💬 MENSAGEM DE TEXTO: '{text}' - Verificando se deve reiniciar funil...")
                     self._handle_text_message(bot_id, token, config, chat_id, message)
+                
+                # ✅ SISTEMA DE ASSINATURAS - Processar new_chat_member e left_chat_member
+                if 'new_chat_members' in message:
+                    # Lista de novos membros
+                    new_members = message['new_chat_members']
+                    chat_info = message.get('chat', {})
+                    chat_type = chat_info.get('type', '')
+                    
+                    # ✅ Processar apenas em grupos/supergrupos
+                    if chat_type in ['group', 'supergroup']:
+                        logger.info(f"👥 Novo(s) membro(s) adicionado(s) ao grupo {chat_info.get('id')} (tipo: {chat_type})")
+                        
+                        for new_member in new_members:
+                            member_id = str(new_member.get('id', ''))
+                            member_name = new_member.get('first_name', 'Usuário')
+                            
+                            # ✅ Verificar se não é o próprio bot
+                            try:
+                                bot_me = requests.post(
+                                    f"https://api.telegram.org/bot{token}/getMe",
+                                    timeout=5
+                                ).json()
+                                bot_user_id = str(bot_me.get('result', {}).get('id', ''))
+                                
+                                if member_id == bot_user_id:
+                                    logger.debug(f"Bot {bot_user_id} foi adicionado ao grupo (ignorando)")
+                                    continue
+                            except:
+                                pass  # Se falhar, continuar mesmo assim
+                            
+                            logger.info(f"   → Novo membro: {member_name} (ID: {member_id})")
+                            
+                            # ✅ CORREÇÃO 5: Detectar migrate_to_chat_id (grupo convertido)
+                            migrate_to_chat_id = message.get('migrate_to_chat_id')
+                            if migrate_to_chat_id:
+                                logger.info(f"🔄 CORREÇÃO 5: Grupo convertido! Chat ID antigo: {chat_info.get('id')} → Novo: {migrate_to_chat_id}")
+                                try:
+                                    from app import app, db
+                                    from models import Subscription
+                                    with app.app_context():
+                                        # Atualizar todas as subscriptions com chat_id antigo
+                                        from utils.subscriptions import normalize_vip_chat_id
+                                        old_chat_id_raw = str(chat_info.get('id'))
+                                        new_chat_id_raw = str(migrate_to_chat_id)
+                                        old_chat_id_str = normalize_vip_chat_id(old_chat_id_raw)
+                                        new_chat_id_str = normalize_vip_chat_id(new_chat_id_raw)
+                                        updated = Subscription.query.filter_by(
+                                            bot_id=bot_id,
+                                            vip_chat_id=old_chat_id_str
+                                        ).update({'vip_chat_id': new_chat_id_str})
+                                        db.session.commit()
+                                        if updated > 0:
+                                            logger.info(f"✅ CORREÇÃO 5: {updated} subscription(s) atualizada(s) com novo chat_id: {new_chat_id_str}")
+                                except Exception as migrate_error:
+                                    logger.error(f"❌ CORREÇÃO 5: Erro ao atualizar chat_id após migração: {migrate_error}")
+                            
+                            # ✅ Processar subscription (usar chat_id correto)
+                            final_chat_id = migrate_to_chat_id if migrate_to_chat_id else chat_info.get('id')
+                            self._handle_new_chat_member(
+                                bot_id=bot_id,
+                                chat_id=final_chat_id,
+                                telegram_user_id=member_id
+                            )
+                
+                if 'left_chat_member' in message:
+                    # Usuário saiu do grupo
+                    left_member = message['left_chat_member']
+                    chat_info = message.get('chat', {})
+                    chat_type = chat_info.get('type', '')
+                    
+                    if chat_type in ['group', 'supergroup']:
+                        member_id = str(left_member.get('id', ''))
+                        member_name = left_member.get('first_name', 'Usuário')
+                        
+                        logger.info(f"👋 Usuário {member_name} (ID: {member_id}) saiu do grupo {chat_info.get('id')}")
+                        # ✅ CORREÇÃO 12: Cancelar subscriptions ativas quando usuário sai do grupo
+                        try:
+                            from app import app, db
+                            from models import Subscription
+                            from datetime import datetime, timezone
+                            
+                            with app.app_context():
+                                from utils.subscriptions import normalize_vip_chat_id
+                                chat_id_raw = str(chat_info.get('id'))
+                                chat_id_str = normalize_vip_chat_id(chat_id_raw)
+                                active_subscriptions = Subscription.query.filter(
+                                    Subscription.bot_id == bot_id,
+                                    Subscription.telegram_user_id == member_id,
+                                    Subscription.vip_chat_id == chat_id_str,
+                                    Subscription.status == 'active'
+                                ).all()
+                                
+                                for sub in active_subscriptions:
+                                    logger.info(f"🔴 Cancelando subscription {sub.id} - usuário {member_id} saiu do grupo {chat_id_str}")
+                                    sub.status = 'cancelled'
+                                    sub.removed_at = datetime.now(timezone.utc)
+                                    sub.removed_by = 'system_user_left'
+                                    db.session.commit()
+                                    logger.info(f"✅ Subscription {sub.id} cancelada")
+                        except Exception as cancel_error:
+                            logger.error(f"❌ Erro ao cancelar subscriptions quando usuário saiu: {cancel_error}")
             
             # Processar callback (botões)
             elif 'callback_query' in update:
@@ -4581,7 +4682,9 @@ class BotManager:
                     description=description,
                     customer_name=user_info.get('first_name', ''),
                     customer_username=user_info.get('username', ''),
-                    customer_user_id=str(user_info.get('id', ''))
+                    customer_user_id=str(user_info.get('id', '')),
+                    button_index=button_index,  # ✅ SISTEMA DE ASSINATURAS
+                    button_config=button_data   # ✅ SISTEMA DE ASSINATURAS
                 )
                 
                 if pix_data and pix_data.get('pix_code'):
@@ -5934,7 +6037,9 @@ Seu pagamento ainda não foi confirmado.
                              customer_name: str, customer_username: str, customer_user_id: str,
                              order_bump_shown: bool = False, order_bump_accepted: bool = False, 
                              order_bump_value: float = 0.0, is_downsell: bool = False, 
-                             downsell_index: int = None) -> Optional[Dict[str, Any]]:
+                             downsell_index: int = None,
+                             button_index: int = None,  # ✅ NOVO - SISTEMA DE ASSINATURAS
+                             button_config: dict = None) -> Optional[Dict[str, Any]]:  # ✅ NOVO - SISTEMA DE ASSINATURAS
         """
         Gera pagamento PIX via gateway configurado
         
@@ -6835,6 +6940,23 @@ Seu pagamento ainda não foi confirmado.
                         # ✅ tracking_token é None - já foi logado como warning acima
                         logger.info(f"⚠️ [TOKEN AUSENTE] Payment será criado sem tracking_token (PIX já foi gerado)")
                     
+                    # ✅ SISTEMA DE ASSINATURAS - Preparar dados de subscription
+                    button_data_for_subscription = None
+                    has_subscription_flag = False
+                    
+                    if button_config:
+                        # Se button_config foi fornecido diretamente, usar
+                        button_data_for_subscription = button_config.copy()
+                        has_subscription_flag = button_config.get('subscription', {}).get('enabled', False)
+                    elif button_index is not None:
+                        # Se button_index foi fornecido, buscar do config do bot
+                        if bot and bot.config:
+                            config_dict = bot.config.to_dict()
+                            main_buttons = config_dict.get('main_buttons', [])
+                            if button_index < len(main_buttons):
+                                button_data_for_subscription = main_buttons[button_index].copy()
+                                has_subscription_flag = button_data_for_subscription.get('subscription', {}).get('enabled', False)
+                    
                     # Salvar pagamento no banco (incluindo código PIX para reenvio + analytics)
                     payment = Payment(
                         bot_id=bot_id,
@@ -6889,7 +7011,11 @@ Seu pagamento ainda não foi confirmado.
                         pageview_event_id=pageview_event_id if pageview_event_id else None,
                         # ✅ CRÍTICO: fbp e fbc para fallback no Purchase se Redis expirar
                         fbp=fbp if fbp else None,
-                        fbc=fbc if fbc else None
+                        fbc=fbc if fbc else None,
+                        # ✅ SISTEMA DE ASSINATURAS - Campos de subscription
+                        button_index=button_index,
+                        button_config=json.dumps(button_data_for_subscription, ensure_ascii=False) if button_data_for_subscription else None,
+                        has_subscription=has_subscription_flag
                     )
                     db.session.add(payment)
                     db.session.flush()  # ✅ Flush para obter payment.id antes do commit
@@ -8763,6 +8889,143 @@ Seu pagamento ainda não foi confirmado.
         thread = threading.Thread(target=send_campaign)
         thread.daemon = True
         thread.start()
+    
+    # ============================================================================
+    # ✅ SISTEMA DE ASSINATURAS - Ativação e Gerenciamento
+    # ============================================================================
+    
+    def _activate_subscription(self, subscription_id: int) -> bool:
+        """
+        Ativa subscription quando usuário entra no grupo VIP
+        
+        ✅ LOCK PESSIMISTA para evitar race condition
+        ✅ Calcula expires_at usando dateutil.relativedelta para meses
+        
+        Retorna: True se ativada com sucesso, False caso contrário
+        """
+        from app import app, db
+        from models import Subscription
+        from datetime import datetime, timezone
+        from dateutil.relativedelta import relativedelta
+        from sqlalchemy import select
+        import logging
+        
+        logger = logging.getLogger(__name__)
+        
+        try:
+            with app.app_context():
+                # ✅ LOCK PESSIMISTA: Selecionar subscription com lock
+                subscription = db.session.execute(
+                    select(Subscription)
+                    .where(Subscription.id == subscription_id)
+                    .where(Subscription.status == 'pending')
+                    .with_for_update()
+                ).scalar_one_or_none()
+                
+                if not subscription:
+                    # Subscription não existe ou já foi ativada
+                    logger.debug(f"Subscription {subscription_id} não encontrada ou já ativada")
+                    return False
+                
+                # ✅ CORREÇÃO 3 (ROBUSTA): Validação explícita de status após lock (defensive programming)
+                # Verificação redundante garante que status não foi alterado entre lock e update
+                # Previne race conditions e garante consistência mesmo em cenários edge case
+                if subscription.status != 'pending':
+                    logger.warning(
+                        f"⚠️ Subscription {subscription_id} não está em status 'pending' "
+                        f"(status atual: {subscription.status}) - abortando ativação"
+                    )
+                    return False
+                
+                # ✅ Validação adicional: Verificar se started_at já está definido (segunda camada de proteção)
+                if subscription.started_at is not None:
+                    logger.warning(
+                        f"⚠️ Subscription {subscription_id} já possui started_at definido "
+                        f"({subscription.started_at}) - subscription já foi ativada anteriormente"
+                    )
+                    return False
+                
+                # ✅ Calcular expires_at
+                now_utc = datetime.now(timezone.utc)
+                
+                duration_type = subscription.duration_type
+                duration_value = subscription.duration_value
+                
+                if duration_type == 'hours':
+                    expires_at = now_utc + relativedelta(hours=duration_value)
+                elif duration_type == 'days':
+                    expires_at = now_utc + relativedelta(days=duration_value)
+                elif duration_type == 'weeks':
+                    expires_at = now_utc + relativedelta(weeks=duration_value)
+                elif duration_type == 'months':
+                    # ✅ USAR relativedelta para meses corretos (30 dias ≠ 1 mês)
+                    expires_at = now_utc + relativedelta(months=duration_value)
+                else:
+                    logger.error(f"❌ Duration type inválido: {duration_type}")
+                    subscription.status = 'error'
+                    subscription.last_error = f"Duration type inválido: {duration_type}"
+                    db.session.commit()
+                    return False
+                
+                # ✅ Atualizar subscription
+                subscription.status = 'active'
+                subscription.started_at = now_utc
+                subscription.expires_at = expires_at
+                
+                db.session.commit()
+                
+                logger.info(f"✅ Subscription {subscription_id} ativada | Expira em: {expires_at} UTC ({duration_value} {duration_type})")
+                return True
+                
+        except Exception as e:
+            logger.error(f"❌ Erro ao ativar subscription {subscription_id}: {e}", exc_info=True)
+            db.session.rollback()
+            return False
+    
+    def _handle_new_chat_member(self, bot_id: int, chat_id: int, telegram_user_id: str):
+        """
+        Processa quando novo membro entra no grupo
+        
+        ✅ Ativa subscriptions pendentes para este usuário neste grupo
+        """
+        from app import app, db
+        from models import Subscription
+        from utils.subscriptions import normalize_vip_chat_id
+        import logging
+        
+        logger = logging.getLogger(__name__)
+        
+        try:
+            with app.app_context():
+                # ✅ Buscar subscriptions pendentes para este usuário neste grupo
+                pending_subscriptions = Subscription.query.filter(
+                    Subscription.bot_id == bot_id,
+                    Subscription.telegram_user_id == telegram_user_id,
+                    # ✅ CORREÇÃO 4 (ROBUSTA): Usar função centralizada de normalização
+                    Subscription.vip_chat_id == normalize_vip_chat_id(str(chat_id)),
+                    Subscription.status == 'pending'
+                ).all()
+                
+                if not pending_subscriptions:
+                    logger.debug(f"Nenhuma subscription pendente para user {telegram_user_id} no grupo {chat_id}")
+                    return
+                
+                logger.info(f"🎉 Usuário {telegram_user_id} entrou no grupo VIP {chat_id} | {len(pending_subscriptions)} subscription(s) pendente(s)")
+                
+                # ✅ Ativar cada subscription
+                for subscription in pending_subscriptions:
+                    try:
+                        success = self._activate_subscription(subscription.id)
+                        if success:
+                            logger.info(f"✅ Subscription {subscription.id} ativada quando usuário entrou no grupo")
+                        else:
+                            logger.warning(f"⚠️ Falha ao ativar subscription {subscription.id}")
+                    except Exception as e:
+                        logger.error(f"❌ Erro ao ativar subscription {subscription.id}: {e}")
+                        continue
+                        
+        except Exception as e:
+            logger.error(f"❌ Erro ao processar new_chat_member: {e}", exc_info=True)
     
     def cancel_downsells(self, payment_id: str):
         """

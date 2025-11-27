@@ -6,7 +6,7 @@ Sistema de gerenciamento de bots do Telegram com painel web
 from flask import Flask, render_template, request, jsonify, redirect, url_for, flash, abort, session, make_response, send_file
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from flask_socketio import SocketIO, emit, join_room, leave_room
-from models import db, User, Bot, BotConfig, Gateway, Payment, AuditLog, Achievement, UserAchievement, BotUser, BotMessage, RedirectPool, PoolBot, RemarketingCampaign, RemarketingBlacklist, Commission, PushSubscription, NotificationSettings, get_brazil_time
+from models import db, User, Bot, BotConfig, Gateway, Payment, AuditLog, Achievement, UserAchievement, BotUser, BotMessage, RedirectPool, PoolBot, RemarketingCampaign, RemarketingBlacklist, Commission, PushSubscription, NotificationSettings, get_brazil_time, Subscription
 from bot_manager import BotManager
 from datetime import datetime, timedelta
 from functools import wraps
@@ -887,6 +887,139 @@ if _scheduler_owner:
         )
         logger.info("✅ Job de sincronização UmbrellaPay agendado (5min)")
     except ImportError as e:
+        pass
+
+# ✅ SISTEMA DE ASSINATURAS - Jobs Agendados
+if _scheduler_owner:
+    try:
+        scheduler.add_job(
+            id='check_expired_subscriptions',
+            func=check_expired_subscriptions,
+            trigger='interval',
+            minutes=5,  # Executar a cada 5 minutos
+            replace_existing=True,
+            max_instances=1
+        )
+        logger.info("✅ Job check_expired_subscriptions registrado (5 minutos)")
+    except Exception as e:
+        logger.error(f"❌ Erro ao registrar job check_expired_subscriptions: {e}")
+
+if _scheduler_owner:
+    try:
+        scheduler.add_job(
+            id='check_pending_subscriptions_in_groups',
+            func=check_pending_subscriptions_in_groups,
+            trigger='interval',
+            minutes=30,  # Executar a cada 30 minutos
+            replace_existing=True,
+            max_instances=1
+        )
+        logger.info("✅ Job check_pending_subscriptions_in_groups registrado (30 minutos)")
+    except Exception as e:
+        logger.error(f"❌ Erro ao registrar job check_pending_subscriptions_in_groups: {e}")
+
+# ✅ CORREÇÃO 11: Job de recuperação para resetar error_count após 7 dias
+def reset_high_error_count_subscriptions():
+    """
+    Reset subscriptions com error_count alto após 7 dias
+    
+    ✅ Executado a cada 24 horas
+    ✅ Permite retry mesmo com error_count alto após tempo
+    """
+    from models import Subscription
+    from datetime import datetime, timezone, timedelta
+    import logging
+    import os
+    import redis
+    
+    logger = logging.getLogger(__name__)
+    
+    redis_conn = None
+    lock_key = 'lock:reset_error_count_subscriptions'
+    
+    try:
+        # ✅ LOCK DISTRIBUÍDO
+        try:
+            redis_conn = redis.from_url(os.environ.get('REDIS_URL', 'redis://localhost:6379/0'))
+            lock_acquired = redis_conn.set(lock_key, '1', ex=3600, nx=True)  # TTL 1 hora
+            
+            if not lock_acquired:
+                logger.debug("⚠️ Job reset_error_count_subscriptions já está sendo executado")
+                return
+        except Exception as redis_error:
+            logger.error(f"❌ Redis indisponível - job NÃO será executado: {redis_error}")
+            return
+        
+        with app.app_context():
+            # ✅ Buscar subscriptions com error_count >= 5 e atualizadas há mais de 7 dias
+            cutoff_date = datetime.now(timezone.utc) - timedelta(days=7)
+            
+            high_error_subscriptions = Subscription.query.filter(
+                Subscription.error_count >= 5,
+                Subscription.updated_at <= cutoff_date,
+                Subscription.status == 'error'
+            ).limit(50).all()
+            
+            if not high_error_subscriptions:
+                logger.debug("🔍 Nenhuma subscription com error_count alto encontrada para resetar")
+                return
+            
+            logger.info(f"🔄 Resetando error_count de {len(high_error_subscriptions)} subscription(s)")
+            
+            reset_count = 0
+            for subscription in high_error_subscriptions:
+                try:
+                    old_error_count = subscription.error_count
+                    subscription.error_count = 0
+                    subscription.last_error = f"Error count resetado após 7 dias (era {old_error_count})"
+                    db.session.commit()
+                    reset_count += 1
+                    logger.info(f"✅ Subscription {subscription.id} - error_count resetado de {old_error_count} para 0")
+                except Exception as e:
+                    logger.error(f"❌ Erro ao resetar subscription {subscription.id}: {e}")
+                    db.session.rollback()
+                    continue
+            
+            logger.info(f"✅ {reset_count} subscription(s) com error_count resetado")
+            
+    except Exception as e:
+        logger.error(f"❌ Erro no job reset_error_count_subscriptions: {e}", exc_info=True)
+    finally:
+        try:
+            if redis_conn:
+                redis_conn.delete(lock_key)
+        except Exception as e:
+            logger.debug(f"⚠️ Erro ao liberar lock: {e}")
+
+# ✅ CORREÇÃO 11: Registrar job de recuperação
+try:
+    scheduler.add_job(
+        id='reset_error_count_subscriptions',
+        func=reset_high_error_count_subscriptions,
+        trigger='interval',
+        hours=24,  # Executar a cada 24 horas
+        replace_existing=True
+    )
+    logger.info("✅ Job reset_error_count_subscriptions registrado (24 horas)")
+except Exception as e:
+    logger.error(f"❌ Erro ao registrar job reset_error_count_subscriptions: {e}")
+
+if _scheduler_owner:
+    try:
+        scheduler.add_job(
+            id='retry_failed_subscription_removals',
+            func=retry_failed_subscription_removals,
+            trigger='interval',
+            minutes=30,
+            replace_existing=True,
+            max_instances=1
+        )
+        logger.info("✅ Job retry_failed_subscription_removals registrado (30 minutos)")
+    except Exception as e:
+        logger.error(f"❌ Erro ao registrar job retry_failed_subscription_removals: {e}")
+
+if _scheduler_owner:
+    try:
         logger.warning(f"⚠️ Não foi possível importar job de sincronização UmbrellaPay: {e}")
 # ✅ JOB PERIÓDICO: Verificar e sincronizar status dos bots (desativado)
 def sync_bots_status():
@@ -4301,6 +4434,55 @@ def get_bot_config(bot_id):
     except Exception as e:
         logger.error(f"❌ Erro ao buscar config do bot {bot_id}: {e}", exc_info=True)
         return jsonify({'error': f'Erro ao buscar configuração: {str(e)}'}), 500
+@app.route('/api/bots/<int:bot_id>/validate-subscription', methods=['POST'])
+@login_required
+@csrf.exempt
+def validate_subscription(bot_id):
+    """
+    Valida chat_id e permissões do bot para subscription
+    
+    Retorna: chat_id validado ou erro
+    """
+    from models import Bot
+    from utils.subscriptions import extract_or_validate_chat_id, validate_bot_is_admin_and_in_group, normalize_vip_chat_id
+    
+    bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
+    
+    data = request.json
+    # ✅ CORREÇÃO 4 (ROBUSTA): Usar função centralizada de normalização
+    vip_chat_id_raw = data.get('vip_chat_id', '').strip()
+    vip_chat_id = normalize_vip_chat_id(vip_chat_id_raw) if vip_chat_id_raw else None
+    vip_group_link = data.get('vip_group_link', '').strip()
+    
+    if not vip_chat_id and not vip_group_link:
+        return jsonify({
+            'error': 'vip_chat_id ou vip_group_link é obrigatório'
+        }), 400
+    
+    # ✅ Extrair ou validar chat_id
+    chat_id, is_valid = extract_or_validate_chat_id(
+        vip_chat_id or vip_group_link,
+        bot.token
+    )
+    
+    if not is_valid:
+        return jsonify({
+            'error': f'Chat ID inválido ou grupo não encontrado: {vip_chat_id or vip_group_link}'
+        }), 400
+    
+    # ✅ Validar permissões do bot
+    is_admin, error_msg = validate_bot_is_admin_and_in_group(bot, chat_id)
+    if not is_admin:
+        return jsonify({
+            'error': f'Bot não é admin do grupo ou não tem permissão: {error_msg}'
+        }), 400
+    
+    return jsonify({
+        'success': True,
+        'chat_id': chat_id,
+        'message': 'Validação bem-sucedida!'
+    })
+
 @app.route('/api/bots/<int:bot_id>/config', methods=['PUT'])
 @login_required
 @csrf.exempt
@@ -8009,6 +8191,10 @@ def delivery_page(delivery_token):
         has_meta_pixel = pool and pool.meta_pixel_id  # ✅ SIMPLIFICADO: Apenas verificar se tem pixel_id
         
         # ✅ Link final para redirecionar (configurado pelo usuário)
+        # ✅ Link final para redirecionar (configurado pelo usuário)
+        # ✅ IMPORTANTE: Mantemos access_link intacto para não afetar o Meta Pixel
+        # ✅ Para assinaturas: vip_chat_id e vip_group_link são usados apenas para controle interno
+        # ✅ O sistema detecta automaticamente quando o usuário entra no grupo VIP (via new_chat_member)
         redirect_url = payment.bot.config.access_link if payment.bot.config and payment.bot.config.access_link else None
         
         # ✅ RECUPERAR tracking_data do Redis (para matching perfeito)
@@ -9996,6 +10182,156 @@ def send_meta_pixel_purchase_event(payment, pageview_event_id=None):
         db.session.rollback()  # ✅ Rollback se falhar
         # Não impedir o commit do pagamento se Meta falhar
 
+# ============================================================================
+# ✅ SISTEMA DE ASSINATURAS - Criação de Subscription
+# ============================================================================
+
+def create_subscription_for_payment(payment):
+    """
+    Cria subscription de forma idempotente quando payment é confirmado
+    
+    ✅ VALIDAÇÕES:
+    1. Verifica se já existe (evita duplicação)
+    2. Verifica se payment tem subscription config
+    3. Cria com tratamento de race condition
+    
+    Retorna: Subscription object ou None
+    """
+    from models import Subscription
+    from datetime import datetime, timezone
+    from sqlalchemy.exc import IntegrityError
+    from utils.subscriptions import normalize_vip_chat_id
+    import json
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    
+    try:
+        # ✅ VERIFICAÇÃO 1: Já existe subscription para este payment?
+        existing = Subscription.query.filter_by(payment_id=payment.id).first()
+        if existing:
+            logger.info(f"✅ Subscription já existe para payment {payment.id} (idempotência)")
+            return existing
+        
+        # ✅ VERIFICAÇÃO 2: Payment tem subscription config?
+        if not payment.has_subscription or not payment.button_config:
+            logger.debug(f"Payment {payment.id} não tem subscription config")
+            return None
+        
+        # ✅ VERIFICAÇÃO 3: Parsear button_config e validar
+        # ✅ CORREÇÃO 13: Validar JSON ANTES de processar (100% IMPLEMENTADO)
+        try:
+            if payment.button_config:
+                try:
+                    button_config = json.loads(payment.button_config)
+                    if not isinstance(button_config, dict):
+                        logger.error(f"❌ CORREÇÃO 13: button_config não é um dict válido para payment {payment.id}")
+                        return None
+                except json.JSONDecodeError as json_error:
+                    logger.error(f"❌ CORREÇÃO 13: button_config JSON corrompido para payment {payment.id}: {json_error}")
+                    logger.error(f"   button_config: {payment.button_config[:200]}...")
+                    return None
+            else:
+                button_config = {}
+            
+            subscription_config = button_config.get('subscription', {})
+            if not isinstance(subscription_config, dict):
+                logger.error(f"❌ CORREÇÃO 13: subscription_config não é um dict válido para payment {payment.id}")
+                return None
+            
+            if not subscription_config.get('enabled'):
+                logger.debug(f"Payment {payment.id} tem button_config mas subscription.enabled = False")
+                return None
+            
+            vip_chat_id = subscription_config.get('vip_chat_id')
+            if not vip_chat_id:
+                logger.error(f"❌ Payment {payment.id} tem subscription.enabled mas sem vip_chat_id")
+                return None
+            
+            duration_type = subscription_config.get('duration_type', 'days')
+            duration_value = int(subscription_config.get('duration_value', 30))
+            
+            if duration_type not in ['hours', 'days', 'weeks', 'months']:
+                logger.error(f"❌ Payment {payment.id} tem duration_type inválido: {duration_type}")
+                return None
+            
+            if duration_value <= 0:
+                logger.error(f"❌ Payment {payment.id} tem duration_value inválido: {duration_value}")
+                return None
+            
+            # ✅ CORREÇÃO 1 (ROBUSTA): Validar máximo de duration_value (120 meses = 10 anos)
+            # ✅ Validação única e centralizada para evitar duplicação e inconsistências
+            max_duration = {
+                'hours': 87600,  # 10 anos em horas
+                'days': 3650,    # 10 anos em dias
+                'weeks': 520,    # 10 anos em semanas
+                'months': 120    # 10 anos em meses
+            }
+            max_allowed = max_duration.get(duration_type, 120)
+            if duration_value > max_allowed:
+                logger.error(
+                    f"❌ Payment {payment.id} tem duration_value muito grande: "
+                    f"{duration_value} {duration_type} (máximo permitido: {max_allowed} {duration_type})"
+                )
+                return None
+            
+        except json.JSONDecodeError as e:
+            logger.error(f"❌ Erro ao parsear button_config do payment {payment.id}: {e}")
+            return None
+        except (ValueError, TypeError) as e:
+            logger.error(f"❌ Erro ao validar subscription config do payment {payment.id}: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"❌ Erro ao validar subscription config do payment {payment.id}: {e}")
+            return None
+        
+            # ✅ CORREÇÃO CRÍTICA: Validar retorno de normalize_vip_chat_id() ANTES de criar subscription
+            # Previne IntegrityError se vip_chat_id for inválido (string vazia, apenas espaços, etc.)
+            normalized_vip_chat_id = normalize_vip_chat_id(vip_chat_id) if vip_chat_id else None
+            if not normalized_vip_chat_id:
+                logger.error(
+                    f"❌ Payment {payment.id} tem vip_chat_id inválido após normalização "
+                    f"(vip_chat_id original: '{vip_chat_id}'). Subscription não será criada."
+                )
+                return None  # Não criar subscription se vip_chat_id for inválido
+            
+            # ✅ CRIAR SUBSCRIPTION (pending - será ativada quando entrar no grupo)
+        subscription = Subscription(
+            payment_id=payment.id,
+            bot_id=payment.bot_id,
+            telegram_user_id=payment.customer_user_id,
+            customer_name=payment.customer_name,
+            duration_type=duration_type,
+            duration_value=duration_value,
+            # ✅ CORREÇÃO 4 (ROBUSTA): Usar função centralizada de normalização + validação
+            # ✅ AGORA: Sempre será string válida (nunca None) devido à validação acima
+            vip_chat_id=normalized_vip_chat_id,
+            vip_group_link=subscription_config.get('vip_group_link'),
+            status='pending',
+            started_at=None,  # ✅ NULL até entrar no grupo
+            expires_at=None   # ✅ NULL até ativar
+        )
+        
+        db.session.add(subscription)
+        db.session.commit()
+        
+        logger.info(f"✅ Subscription criada (pending) para payment {payment.id} | Chat ID: {vip_chat_id[:20]}... | Duração: {duration_value} {duration_type}")
+        return subscription
+        
+    except IntegrityError as e:
+        # ✅ RACE CONDITION: Outro processo criou entre verificação e criação
+        db.session.rollback()
+        logger.warning(f"⚠️ Subscription já criada por outro processo (race condition) para payment {payment.id}")
+        existing = Subscription.query.filter_by(payment_id=payment.id).first()
+        if existing:
+            return existing
+        logger.error(f"❌ IntegrityError mas subscription não encontrada: {e}")
+        return None
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"❌ Erro ao criar subscription para payment {payment.id}: {e}", exc_info=True)
+        return None
+
 # ==================== WEBHOOKS E NOTIFICAÇÕES EM TEMPO REAL ====================
 
 @app.route('/webhook/telegram/<int:bot_id>', methods=['POST'])
@@ -10469,6 +10805,48 @@ def payment_webhook(gateway_type):
                 # Garantir que payment.status='paid' está persistido antes de processar entregável/Meta
                 db.session.commit()
                 logger.info(f"🔔 Webhook -> payment {payment.payment_id} atualizado para paid e commitado")
+                
+                # ✅ CORREÇÃO 1: SISTEMA DE ASSINATURAS - Criar subscription quando payment confirmado
+                # ✅ CORREÇÃO 3: Criar subscription DENTRO da transação para evitar estado inconsistente
+                if status == 'paid' and payment.has_subscription:
+                    try:
+                        subscription = create_subscription_for_payment(payment)
+                        if subscription:
+                            logger.info(f"✅ Subscription criada para payment {payment.payment_id}")
+                            # ✅ Commit subscription junto com payment para garantir atomicidade
+                            db.session.commit()
+                        else:
+                            logger.debug(f"Subscription não foi criada para payment {payment.payment_id} (não tem config válida)")
+                    except Exception as subscription_error:
+                        logger.error(f"❌ Erro ao criar subscription para payment {payment.payment_id}: {subscription_error}", exc_info=True)
+                        db.session.rollback()
+                        # ✅ NÃO bloquear envio de entregável se subscription falhar
+                
+                # ✅ CORREÇÃO 1: SISTEMA DE ASSINATURAS - Cancelar subscription quando payment refunded/failed
+                if status in ['refunded', 'failed', 'cancelled']:
+                    try:
+                        from models import Subscription
+                        subscription = Subscription.query.filter_by(payment_id=payment.id).first()
+                        if subscription and subscription.status in ['pending', 'active']:
+                            logger.info(f"🔴 Cancelando subscription {subscription.id} - payment {payment.payment_id} refunded/failed")
+                            old_status = subscription.status  # ✅ CORREÇÃO: Salvar status antes de mudar
+                            subscription.status = 'cancelled'
+                            subscription.removed_at = datetime.now(timezone.utc)
+                            subscription.removed_by = 'system_refunded'
+                            
+                            # ✅ Tentar remover usuário do grupo se subscription estava ativa
+                            if old_status == 'active' and subscription.vip_chat_id:
+                                try:
+                                    from app import remove_user_from_vip_group
+                                    remove_user_from_vip_group(subscription, max_retries=1)
+                                except Exception as remove_error:
+                                    logger.warning(f"⚠️ Não foi possível remover usuário do grupo: {remove_error}")
+                            
+                            db.session.commit()
+                            logger.info(f"✅ Subscription {subscription.id} cancelada")
+                    except Exception as cancel_error:
+                        logger.error(f"❌ Erro ao cancelar subscription para payment {payment.payment_id}: {cancel_error}", exc_info=True)
+                        db.session.rollback()
                 
                 # ✅ ENVIAR ENTREGÁVEL E META PIXEL SEMPRE QUE STATUS VIRA 'paid' (CRÍTICO!)
                 # Isso garante que mesmo se estatísticas já foram processadas, o entregável e Meta Pixel são enviados
@@ -11171,6 +11549,462 @@ def init_db():
     with app.app_context():
         db.create_all()
         logger.info("Banco de dados inicializado")
+
+
+# ============================================================================
+# ✅ SISTEMA DE ASSINATURAS - Jobs Agendados
+# ============================================================================
+
+def check_expired_subscriptions():
+    """
+    Remove usuários de grupos VIP quando subscription expira
+    
+    ✅ Executado a cada 5 minutos
+    ✅ Lock distribuído (Redis) para evitar processamento duplicado
+    ✅ Processa batch pequeno para evitar timeout
+    """
+    from models import Subscription
+    from datetime import datetime, timezone
+    import redis
+    import logging
+    import os
+    
+    logger = logging.getLogger(__name__)
+    
+    # ✅ CORREÇÃO: Inicializar variáveis antes do try
+    redis_conn = None
+    lock_key = 'lock:check_expired_subscriptions'
+    
+    try:
+        # ✅ LOCK DISTRIBUÍDO (Redis)
+        try:
+            redis_conn = redis.from_url(os.environ.get('REDIS_URL', 'redis://localhost:6379/0'))
+            lock_acquired = redis_conn.set(lock_key, '1', ex=300, nx=True)  # TTL 5 minutos
+            
+            if not lock_acquired:
+                logger.debug("⚠️ Job check_expired_subscriptions já está sendo executado por outro worker")
+                return
+        except Exception as redis_error:
+            logger.warning(f"⚠️ Erro ao adquirir lock Redis (continuando mesmo assim): {redis_error}")
+            # Fail-open: continuar mesmo se Redis falhar
+        
+        with app.app_context():
+            now_utc = datetime.now(timezone.utc)
+            
+            # ✅ Buscar subscriptions ativas e expiradas (batch pequeno)
+            expired = Subscription.query.filter(
+                Subscription.status == 'active',
+                Subscription.expires_at.isnot(None),
+                Subscription.expires_at <= now_utc
+            ).limit(20).all()  # ✅ Processar apenas 20 por vez
+            
+            if not expired:
+                logger.debug("🔍 Nenhuma subscription expirada encontrada")
+                return
+            
+            logger.info(f"⏰ Encontradas {len(expired)} subscription(s) expirada(s) para remover")
+            
+            for subscription in expired:
+                try:
+                    # ✅ Verificar se ainda está expirada (pode ter sido atualizada)
+                    if subscription.expires_at and subscription.expires_at > now_utc:
+                        continue
+                    
+                    logger.info(f"🔴 Removendo subscription {subscription.id} (expirada em {subscription.expires_at})")
+                    
+                    # ✅ CORREÇÃO: Verificar se usuário ainda está no grupo antes de tentar remover
+                    from models import Bot
+                    bot = Bot.query.get(subscription.bot_id)
+                    if bot and bot.token:
+                        from utils.subscriptions import check_user_in_group
+                        is_in_group = check_user_in_group(
+                            bot_token=bot.token,
+                            chat_id=subscription.vip_chat_id,
+                            telegram_user_id=subscription.telegram_user_id
+                        )
+                        if not is_in_group:
+                            logger.info(f"⚠️ Usuário {subscription.telegram_user_id} já não está no grupo {subscription.vip_chat_id} - marcando como removed")
+                            subscription.status = 'removed'
+                            subscription.removed_at = datetime.now(timezone.utc)
+                            subscription.removed_by = 'system_already_removed'
+                            db.session.commit()
+                            continue
+                    
+                    # Marcar como expired antes de remover
+                    subscription.status = 'expired'
+                    db.session.commit()
+                    
+                    # Tentar remover do grupo
+                    success = remove_user_from_vip_group(subscription, max_retries=3)
+                    
+                    if not success:
+                        logger.warning(f"⚠️ Falha ao remover subscription {subscription.id} - será retentado")
+                    else:
+                        logger.info(f"✅ Subscription {subscription.id} removida com sucesso")
+                    
+                except Exception as e:
+                    logger.error(f"❌ Erro ao processar subscription {subscription.id}: {e}", exc_info=True)
+                    db.session.rollback()
+                    continue
+                    
+    except Exception as e:
+        logger.error(f"❌ Erro no job check_expired_subscriptions: {e}", exc_info=True)
+    finally:
+        # ✅ Liberar lock (só se redis_conn foi criado)
+        try:
+            if redis_conn:
+                redis_conn.delete(lock_key)
+        except Exception as e:
+            logger.debug(f"⚠️ Erro ao liberar lock (normal se não foi adquirido): {e}")
+
+
+def check_pending_subscriptions_in_groups():
+    """
+    Verifica subscriptions pendentes e ativa se usuário já está no grupo
+    
+    ✅ Executado a cada 30 minutos
+    ✅ Fallback caso evento new_chat_member não seja recebido
+    ✅ Processa em batch para evitar rate limit
+    """
+    from models import Subscription, Bot
+    from utils.subscriptions import check_user_in_group
+    import logging
+    import os
+    import time
+    import redis
+    
+    logger = logging.getLogger(__name__)
+    
+    # ✅ CORREÇÃO: Inicializar variáveis antes do try
+    redis_conn = None
+    lock_key = 'lock:check_pending_subscriptions'
+    
+    try:
+        # ✅ LOCK DISTRIBUÍDO
+        try:
+            redis_conn = redis.from_url(os.environ.get('REDIS_URL', 'redis://localhost:6379/0'))
+            lock_acquired = redis_conn.set(lock_key, '1', ex=1800, nx=True)  # TTL 30 minutos
+            
+            if not lock_acquired:
+                logger.debug("⚠️ Job check_pending_subscriptions já está sendo executado")
+                return
+        except Exception as redis_error:
+            logger.warning(f"⚠️ Erro ao adquirir lock Redis (continuando mesmo assim): {redis_error}")
+            # Fail-open: continuar mesmo se Redis falhar
+        
+        with app.app_context():
+            # ✅ Buscar subscriptions pendentes (batch pequeno)
+            pending = Subscription.query.filter(
+                Subscription.status == 'pending'
+            ).limit(50).all()
+            
+            if not pending:
+                logger.debug("🔍 Nenhuma subscription pendente encontrada")
+                return
+            
+            logger.info(f"🔍 Verificando {len(pending)} subscription(s) pendente(s)")
+            
+            # ✅ Agrupar por (bot_id, vip_chat_id) para reduzir chamadas
+            grouped = {}
+            for sub in pending:
+                key = (sub.bot_id, sub.vip_chat_id)
+                if key not in grouped:
+                    grouped[key] = []
+                grouped[key].append(sub)
+            
+            logger.info(f"📊 Agrupadas em {len(grouped)} grupo(s) de (bot_id, chat_id)")
+            
+            # Processar cada grupo
+            for (bot_id, chat_id), subscriptions in grouped.items():
+                try:
+                    bot = Bot.query.get(bot_id)
+                    if not bot or not bot.token:
+                        logger.error(f"❌ Bot {bot_id} não encontrado")
+                        continue
+                    
+                    # Verificar usuários neste grupo
+                    for subscription in subscriptions:
+                        try:
+                            # ✅ Verificar se usuário está no grupo
+                            is_in_group = check_user_in_group(
+                                bot_token=bot.token,
+                                chat_id=chat_id,
+                                telegram_user_id=subscription.telegram_user_id
+                            )
+                            
+                            if is_in_group:
+                                logger.info(f"✅ Usuário {subscription.telegram_user_id} já está no grupo {chat_id[:20]}... - ativando subscription {subscription.id}")
+                                
+                                # ✅ Ativar subscription
+                                success = bot_manager._activate_subscription(subscription.id)
+                                if success:
+                                    logger.info(f"✅ Subscription {subscription.id} ativada via job de fallback")
+                                else:
+                                    logger.warning(f"⚠️ Falha ao ativar subscription {subscription.id}")
+                            
+                            # ✅ Delay para evitar rate limit (500ms entre usuários)
+                            time.sleep(0.5)
+                            
+                        except Exception as e:
+                            logger.error(f"❌ Erro ao verificar subscription {subscription.id}: {e}")
+                            continue
+                    
+                    # ✅ Delay entre grupos (2 segundos)
+                    time.sleep(2)
+                    
+                except Exception as e:
+                    logger.error(f"❌ Erro ao processar grupo (bot_id={bot_id}, chat_id={chat_id}): {e}")
+                    continue
+                    
+    except Exception as e:
+        logger.error(f"❌ Erro no job check_pending_subscriptions: {e}", exc_info=True)
+    finally:
+        # ✅ Liberar lock (só se redis_conn foi criado)
+        try:
+            if redis_conn:
+                redis_conn.delete(lock_key)
+        except Exception as e:
+            logger.debug(f"⚠️ Erro ao liberar lock (normal se não foi adquirido): {e}")
+
+
+def retry_failed_subscription_removals():
+    """
+    Retenta remover subscriptions que falharam anteriormente
+    
+    ✅ Executado a cada 30 minutos
+    ✅ Processa apenas subscriptions com error_count < 5
+    """
+    from models import Subscription
+    from datetime import datetime, timezone, timedelta
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    
+    try:
+        with app.app_context():
+            # ✅ Buscar subscriptions com erro (últimas 24 horas, error_count < 5)
+            cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+            failed = Subscription.query.filter(
+                Subscription.status == 'error',
+                Subscription.updated_at >= cutoff,
+                Subscription.error_count < 5
+            ).limit(20).all()
+            
+            if not failed:
+                logger.debug("🔍 Nenhuma subscription com erro para retentar")
+                return
+            
+            logger.info(f"🔄 Retentando {len(failed)} subscription(s) com erro...")
+            
+            for subscription in failed:
+                try:
+                    # ✅ Verificar se ainda está expirada
+                    if subscription.expires_at and subscription.expires_at > datetime.now(timezone.utc):
+                        logger.debug(f"Subscription {subscription.id} ainda não expirou - aguardando...")
+                        continue
+                    
+                    # ✅ Tentar remover novamente
+                    success = remove_user_from_vip_group(subscription, max_retries=2)
+                    
+                    if success:
+                        logger.info(f"✅ Subscription {subscription.id} removida com sucesso no retry")
+                    else:
+                        logger.warning(f"⚠️ Subscription {subscription.id} falhou novamente (tentativa {subscription.error_count + 1})")
+                    
+                    db.session.commit()
+                    
+                except Exception as e:
+                    logger.error(f"❌ Erro ao retentar subscription {subscription.id}: {e}")
+                    db.session.rollback()
+                    continue
+                    
+    except Exception as e:
+        logger.error(f"❌ Erro no job retry_failed_subscription_removals: {e}", exc_info=True)
+
+
+# ============================================================================
+# ✅ SISTEMA DE ASSINATURAS - Função de Remoção de Usuário do Grupo VIP
+# ============================================================================
+
+def remove_user_from_vip_group(subscription, max_retries: int = 3) -> bool:
+    """
+    Remove usuário do grupo VIP via Telegram API
+    
+    ✅ Retry com exponential backoff
+    ✅ Trata rate limit (429) atualizando expires_at
+    ✅ Detecta bot removido do grupo
+    
+    Retorna: True se removido com sucesso, False caso contrário
+    """
+    from models import Bot, Subscription, db
+    from datetime import datetime, timezone, timedelta
+    import requests
+    import time
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    
+    try:
+        # Buscar bot
+        # ✅ CORREÇÃO 7: Buscar bot e verificar se existe
+        bot = Bot.query.get(subscription.bot_id)
+        if not bot:
+            logger.error(f"❌ CORREÇÃO 7: Bot {subscription.bot_id} não encontrado - subscription órfã")
+            subscription.status = 'error'
+            subscription.last_error = "Bot não encontrado (deletado)"
+            subscription.error_count = 999  # Marcar como erro permanente
+            db.session.commit()
+            return False
+        
+        if not bot.token:
+            logger.error(f"❌ Bot {subscription.bot_id} não tem token")
+            subscription.status = 'error'
+            subscription.last_error = "Bot sem token"
+            subscription.error_count += 1
+            db.session.commit()
+            return False
+        
+        # ✅ CORREÇÃO CRÍTICA: Verificar outras subscriptions com LOCK PESSIMISTA para evitar race condition
+        from sqlalchemy import select
+        other_active = db.session.execute(
+            select(Subscription)
+            .where(Subscription.id != subscription.id)
+            .where(Subscription.telegram_user_id == subscription.telegram_user_id)
+            .where(Subscription.vip_chat_id == subscription.vip_chat_id)
+            .where(Subscription.status == 'active')
+            .with_for_update()
+        ).scalar_one_or_none()
+        
+        # ✅ Também verificar subscriptions pending que podem ser ativadas em breve
+        other_pending_recent = db.session.execute(
+            select(Subscription)
+            .where(Subscription.id != subscription.id)
+            .where(Subscription.telegram_user_id == subscription.telegram_user_id)
+            .where(Subscription.vip_chat_id == subscription.vip_chat_id)
+            .where(Subscription.status == 'pending')
+            .where(Subscription.created_at >= datetime.now(timezone.utc) - timedelta(minutes=5))
+            .with_for_update()
+        ).scalar_one_or_none()
+        
+        if other_active or other_pending_recent:
+            reason = "subscriptions ativas" if other_active else "subscription pendente recente"
+            logger.info(f"⚠️ Usuário {subscription.telegram_user_id} tem outras {reason} no grupo {subscription.vip_chat_id} - não removendo")
+            subscription.status = 'removed'
+            subscription.removed_at = datetime.now(timezone.utc)
+            subscription.removed_by = 'system_skipped'
+            db.session.commit()
+            return True
+        
+        # ✅ Tentar remover com retry
+        for attempt in range(max_retries):
+            try:
+                url = f"https://api.telegram.org/bot{bot.token}/banChatMember"
+                # ✅ CORREÇÃO CRÍTICA: Usar until_date futuro (1 ano) ao invés de 0 (permanente)
+                # Isso permite que usuário reentre se comprar novamente
+                # ✅ CORREÇÃO 10: Calcular until_date baseado na duração real da subscription
+                if subscription.expires_at:
+                    # Ban até data de expiração + 1 dia de margem
+                    until_date = int((subscription.expires_at + timedelta(days=1)).timestamp())
+                else:
+                    # Fallback: 1 ano se expires_at não estiver definido
+                    until_date = int((datetime.now(timezone.utc) + timedelta(days=365)).timestamp())
+                response = requests.post(url, json={
+                    'chat_id': subscription.vip_chat_id,
+                    'user_id': subscription.telegram_user_id,
+                    'until_date': until_date  # Ban por 1 ano (permite reentrada após)
+                }, timeout=10)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    if data.get('ok'):
+                        logger.info(f"✅ Usuário {subscription.telegram_user_id} removido do grupo {subscription.vip_chat_id}")
+                        subscription.status = 'removed'
+                        subscription.removed_at = datetime.now(timezone.utc)
+                        subscription.removed_by = 'system'
+                        subscription.error_count = 0
+                        subscription.last_error = None
+                        db.session.commit()
+                        return True
+                    else:
+                        error_desc = data.get('description', 'Unknown error')
+                        # ✅ Verificar se bot foi removido do grupo
+                        if 'bot was kicked' in error_desc.lower() or 'not in the chat' in error_desc.lower():
+                            logger.error(f"❌ Bot foi removido do grupo {subscription.vip_chat_id}")
+                            subscription.status = 'error'
+                            subscription.last_error = f"Bot removido do grupo: {error_desc}"
+                            subscription.error_count = 999  # Marcar como erro permanente
+                            db.session.commit()
+                            return False
+                        raise Exception(f"API retornou ok=False: {error_desc}")
+                
+                elif response.status_code == 429:
+                    # ✅ RATE LIMIT - Atualizar expires_at para refletir o atraso
+                    retry_after = int(response.headers.get('Retry-After', 60))
+                    logger.warning(f"⚠️ Rate limit detectado. Aguardando {retry_after}s...")
+                    
+                    # Atualizar expires_at para refletir o atraso
+                    if subscription.expires_at:
+                        subscription.expires_at = subscription.expires_at + timedelta(seconds=retry_after)
+                        db.session.commit()
+                    
+                    if attempt < max_retries - 1:
+                        time.sleep(retry_after)
+                        continue
+                    else:
+                        subscription.error_count += 1
+                        subscription.last_error = f"Rate limit após {max_retries} tentativas"
+                        db.session.commit()
+                        return False
+                
+                elif response.status_code == 400:
+                    error_desc = response.json().get('description', 'Bad request')
+                    logger.error(f"❌ HTTP 400 ao remover usuário: {error_desc}")
+                    subscription.status = 'error'
+                    subscription.last_error = f"HTTP 400: {error_desc}"
+                    subscription.error_count += 1
+                    db.session.commit()
+                    return False
+                
+                else:
+                    raise Exception(f"HTTP {response.status_code}: {response.text}")
+                    
+            except requests.exceptions.Timeout:
+                timeout_seconds = (attempt + 1) * 5  # Timeout progressivo: 5s, 10s, 15s
+                logger.warning(f"⚠️ Timeout ao remover usuário (tentativa {attempt + 1}/{max_retries}). Aguardando {timeout_seconds}s...")
+                
+                if attempt < max_retries - 1:
+                    time.sleep(timeout_seconds)
+                    continue
+                else:
+                    subscription.error_count += 1
+                    subscription.last_error = f"Timeout após {max_retries} tentativas"
+                    db.session.commit()
+                    return False
+            
+            except Exception as e:
+                logger.error(f"❌ Erro na tentativa {attempt + 1}/{max_retries}: {e}")
+                if attempt < max_retries - 1:
+                    time.sleep(2 ** attempt)  # Exponential backoff: 1s, 2s, 4s
+                    continue
+                else:
+                    subscription.error_count += 1
+                    subscription.last_error = str(e)
+                    db.session.commit()
+                    return False
+        
+        # Se chegou aqui, todas as tentativas falharam
+        subscription.status = 'error'
+        subscription.error_count += 1
+        db.session.commit()
+        return False
+        
+    except Exception as e:
+        logger.error(f"❌ Erro crítico ao remover usuário do grupo: {e}", exc_info=True)
+        subscription.status = 'error'
+        subscription.last_error = f"Erro crítico: {str(e)}"
+        subscription.error_count += 1
+        db.session.commit()
+        return False
 
 
 # ==================== HEALTH CHECK DE POOLS (Background Job) ====================
