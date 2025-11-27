@@ -236,3 +236,4 @@ if __name__ == '__main__':
     success = create_subscriptions_table()
     sys.exit(0 if success else 1)
 
+

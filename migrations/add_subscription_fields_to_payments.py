@@ -187,3 +187,4 @@ if __name__ == '__main__':
     success = add_subscription_fields_to_payments()
     sys.exit(0 if success else 1)
 
+

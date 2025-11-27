@@ -649,3 +649,4 @@ grep "check_pending_subscriptions_in_groups" logs/app.log | tail -20
 
 **FIM DO GUIA DE DEPLOYMENT**
 
+

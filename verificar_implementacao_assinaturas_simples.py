@@ -233,3 +233,4 @@ if __name__ == '__main__':
     sucesso = verificar_modelos()
     sys.exit(0 if sucesso else 1)
 
+
