@@ -6,12 +6,41 @@ echo "📋 VERIFICAÇÃO DE JOBS DE ASSINATURAS (via logs)"
 echo "======================================================================"
 echo ""
 
-LOG_FILE="${1:-logs/app.log}"
+# Tentar encontrar o arquivo de log correto
+LOG_FILE=""
 
-if [ ! -f "$LOG_FILE" ]; then
-    echo "❌ Arquivo de log não encontrado: $LOG_FILE"
+# Possíveis locais de logs
+POSSIBLE_LOGS=(
+    "${1:-}"  # Passado como parâmetro
+    "logs/gunicorn.log"
+    "logs/error.log"
+    "logs/app.log"
+    "logs/access.log"
+)
+
+# Procurar o primeiro arquivo que exista
+for log in "${POSSIBLE_LOGS[@]}"; do
+    if [ -n "$log" ] && [ -f "$log" ]; then
+        LOG_FILE="$log"
+        break
+    fi
+done
+
+if [ -z "$LOG_FILE" ]; then
+    echo "❌ Nenhum arquivo de log encontrado!"
+    echo ""
+    echo "📁 Procurado em:"
+    for log in "${POSSIBLE_LOGS[@]}"; do
+        [ -n "$log" ] && echo "   - $log"
+    done
+    echo ""
+    echo "💡 Dica: Especifique o arquivo de log como parâmetro:"
+    echo "   $0 logs/gunicorn.log"
     exit 1
 fi
+
+echo "✅ Usando log: $LOG_FILE"
+echo ""
 
 echo "🔍 Verificando logs: $LOG_FILE"
 echo ""

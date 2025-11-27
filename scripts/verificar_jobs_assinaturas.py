@@ -23,9 +23,13 @@ def main():
             print("   Isso é normal se o scheduler está rodando em outro processo (Gunicorn).")
             print()
             print("✅ Verifique os logs do Gunicorn para confirmar que os jobs foram registrados:")
-            print("   tail -100 logs/app.log | grep 'Job.*registrado'")
+            print("   ./scripts/verificar_jobs_logs.sh")
             print()
-            print("   Ou verifique se aparecem as mensagens:")
+            print("   Ou manualmente:")
+            print("   tail -100 logs/gunicorn.log | grep 'Job.*registrado'")
+            print("   tail -100 logs/error.log | grep 'Job.*registrado'")
+            print()
+            print("   As seguintes mensagens devem aparecer:")
             print("   - '✅ Job check_expired_subscriptions registrado'")
             print("   - '✅ Job check_pending_subscriptions_in_groups registrado'")
             print("   - '✅ Job retry_failed_subscription_removals registrado'")
@@ -97,7 +101,9 @@ def main():
             print("⚠️ ALGUNS JOBS ESTÃO FALTANDO!")
             print()
             print("💡 Dica: Se o scheduler está em outro processo, verifique os logs:")
-            print("   tail -100 logs/app.log | grep 'Job.*registrado'")
+            print("   ./scripts/verificar_jobs_logs.sh")
+            print("   ou:")
+            print("   tail -100 logs/gunicorn.log | grep 'Job.*registrado'")
             return False
 
 if __name__ == '__main__':
