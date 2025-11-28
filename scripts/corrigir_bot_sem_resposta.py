@@ -16,7 +16,6 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from app import app, db
 from models import Bot, BotConfig
-from bot_manager import BotManager
 
 def corrigir_bot(bot_id=None, bot_username=None):
     """Corrige bot que não responde ao /start"""
@@ -54,7 +53,7 @@ def corrigir_bot(bot_id=None, bot_username=None):
         print()
         
         # 2. Parar o bot se estiver rodando incorretamente
-        bot_manager = BotManager()
+        from app import bot_manager
         if bot.id in bot_manager.active_bots:
             print("🛑 Parando bot antes de reiniciar...")
             try:

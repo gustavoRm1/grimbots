@@ -1,24 +1,38 @@
 #!/usr/bin/env python3
 """
-🔍 SCRIPT DE DIAGNÓSTICO: Bot que não responde ao /start
+🔍 SCRIPT DE DIAGNÓSTICO SIMPLIFICADO: Bot que não responde ao /start
 
-Este script verifica:
-1. Status do bot no banco de dados (is_running)
-2. Se o bot está em active_bots do BotManager
-3. Configuração do webhook no Telegram
-4. Últimos erros nos logs
-5. Configuração do bot (welcome_message, etc)
+Versão simplificada que não depende do app completo (evita problemas de SocketIO no Windows)
 """
 
 import sys
 import os
+import requests
 
 # Adicionar diretório raiz ao path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from app import app, db
+# Importar apenas o necessário (sem app completo)
+from flask import Flask
+from flask_sqlalchemy import SQLAlchemy
+
+# Criar app mínimo para acessar banco
+app = Flask(__name__)
+
+# Carregar configuração do banco (mesma lógica do app.py)
+from dotenv import load_dotenv
+load_dotenv()
+
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get(
+    'DATABASE_URL', 
+    'sqlite:///grimbots.db'
+)
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+db = SQLAlchemy(app)
+
+# Importar modelos (sem dependências do app completo)
 from models import Bot, BotConfig
-import requests
 
 def diagnosticar_bot(bot_id=None, bot_username=None):
     """Diagnostica problema de bot que não responde ao /start"""
@@ -28,7 +42,9 @@ def diagnosticar_bot(bot_id=None, bot_username=None):
         if bot_id:
             bot = Bot.query.get(bot_id)
         elif bot_username:
-            bot = Bot.query.filter_by(username=bot_username).first()
+            # Remover @ se presente
+            username = bot_username.lstrip('@')
+            bot = Bot.query.filter_by(username=username).first()
         else:
             print("❌ ERRO: Forneça bot_id ou bot_username")
             return
@@ -53,25 +69,8 @@ def diagnosticar_bot(bot_id=None, bot_username=None):
             print(f"   • last_error: {bot.last_error[:200]}")
         print()
         
-        # 2. Verificar se está em active_bots
-        print("2️⃣ STATUS NO BOTMANAGER:")
-        # Tentar acessar a instância global do BotManager
-        try:
-            from app import bot_manager
-            if bot.id in bot_manager.active_bots:
-                status = bot_manager.active_bots[bot.id]
-                print(f"   • ✅ Bot está em active_bots")
-                print(f"   • Status: {status.get('status')}")
-                print(f"   • Started at: {status.get('started_at')}")
-            else:
-                print(f"   • ❌ Bot NÃO está em active_bots (não está rodando)")
-        except Exception as e:
-            print(f"   • ⚠️ Não foi possível verificar active_bots: {e}")
-            print(f"   • Isso é normal se o script não estiver rodando no mesmo processo do app")
-        print()
-        
-        # 3. Verificar webhook no Telegram
-        print("3️⃣ CONFIGURAÇÃO DO WEBHOOK (Telegram API):")
+        # 2. Verificar webhook no Telegram
+        print("2️⃣ CONFIGURAÇÃO DO WEBHOOK (Telegram API):")
         try:
             webhook_url = f"https://api.telegram.org/bot{bot.token}/getWebhookInfo"
             response = requests.get(webhook_url, timeout=10)
@@ -103,8 +102,8 @@ def diagnosticar_bot(bot_id=None, bot_username=None):
             print(f"   • ❌ Erro ao consultar webhook: {e}")
         print()
         
-        # 4. Verificar configuração
-        print("4️⃣ CONFIGURAÇÃO DO BOT:")
+        # 3. Verificar configuração
+        print("3️⃣ CONFIGURAÇÃO DO BOT:")
         if bot.config:
             config_dict = bot.config.to_dict()
             welcome_message = config_dict.get('welcome_message', '')
@@ -130,8 +129,8 @@ def diagnosticar_bot(bot_id=None, bot_username=None):
             print(f"   • ❌ Configuração não encontrada!")
         print()
         
-        # 5. Verificar getMe (validação do token)
-        print("5️⃣ VALIDAÇÃO DO TOKEN:")
+        # 4. Verificar getMe (validação do token)
+        print("4️⃣ VALIDAÇÃO DO TOKEN:")
         try:
             getme_url = f"https://api.telegram.org/bot{bot.token}/getMe"
             response = requests.get(getme_url, timeout=10)
@@ -150,7 +149,7 @@ def diagnosticar_bot(bot_id=None, bot_username=None):
             print(f"   • ❌ Erro ao validar token: {e}")
         print()
         
-        # 6. Diagnóstico e recomendações
+        # 5. Diagnóstico e recomendações
         print("=" * 70)
         print("💡 DIAGNÓSTICO E RECOMENDAÇÕES:")
         print("=" * 70)
@@ -161,19 +160,7 @@ def diagnosticar_bot(bot_id=None, bot_username=None):
         # Verificar se está rodando
         if not bot.is_running:
             problemas.append("Bot marcado como não rodando no banco")
-            solucoes.append("Execute: python3 scripts/corrigir_bot_sem_resposta.py --username " + bot.username)
-        
-        if not bot.is_active:
-            problemas.append("Bot marcado como inativo (is_active=False)")
-            solucoes.append("Ative o bot pelo painel ou execute o script de correção")
-        
-        try:
-            from app import bot_manager
-            if bot.id not in bot_manager.active_bots:
-                problemas.append("Bot não está em active_bots (não iniciado pelo BotManager)")
-                solucoes.append("Reinicie o bot - ele será adicionado ao active_bots")
-        except:
-            pass  # Se não conseguir acessar bot_manager, pular esta verificação
+            solucoes.append("Execute: python scripts/corrigir_bot_simples.py --username " + bot.username)
         
         # Verificar webhook
         try:
@@ -187,6 +174,9 @@ def diagnosticar_bot(bot_id=None, bot_username=None):
                     if not webhook_url_telegram:
                         problemas.append("Webhook não configurado no Telegram")
                         solucoes.append("Reinicie o bot - o webhook será configurado automaticamente")
+                    elif result.get('last_error_message'):
+                        problemas.append(f"Webhook com erro: {result.get('last_error_message')}")
+                        solucoes.append("Verifique se o servidor está acessível e reinicie o bot")
         except:
             pass
         
@@ -194,10 +184,15 @@ def diagnosticar_bot(bot_id=None, bot_username=None):
         if not bot.config or not bot.config.welcome_message:
             if not bot.config:
                 problemas.append("Configuração do bot não existe")
-                solucoes.append("Crie a configuração do bot")
-            elif not bot.config.welcome_message and not config_dict.get('flow_enabled'):
-                problemas.append("Welcome message não configurada e fluxo desativado")
-                solucoes.append("Configure welcome_message ou ative o fluxo visual")
+                solucoes.append("Crie a configuração do bot pelo painel")
+            elif not bot.config.welcome_message:
+                try:
+                    config_dict = bot.config.to_dict()
+                    if not config_dict.get('flow_enabled'):
+                        problemas.append("Welcome message não configurada e fluxo desativado")
+                        solucoes.append("Configure welcome_message ou ative o fluxo visual no painel")
+                except:
+                    pass
         
         if problemas:
             print("\n⚠️ PROBLEMAS IDENTIFICADOS:")
@@ -208,9 +203,9 @@ def diagnosticar_bot(bot_id=None, bot_username=None):
             for i, solucao in enumerate(solucoes, 1):
                 print(f"   {i}. {solucao}")
         else:
-            print("\n✅ Nenhum problema crítico identificado!")
+            print("\n✅ Nenhum problema crítico identificado no banco!")
             print("   O bot pode estar funcionando corretamente.")
-            print("   Verifique os logs do sistema para erros específicos.")
+            print("   Verifique se está rodando no servidor (active_bots).")
         
         print()
         print("=" * 70)
@@ -220,7 +215,7 @@ if __name__ == '__main__':
     
     parser = argparse.ArgumentParser(description='Diagnostica bot que não responde ao /start')
     parser.add_argument('--bot-id', type=int, help='ID do bot')
-    parser.add_argument('--username', type=str, help='Username do bot (sem @)')
+    parser.add_argument('--username', type=str, help='Username do bot (com ou sem @)')
     
     args = parser.parse_args()
     
@@ -229,4 +224,5 @@ if __name__ == '__main__':
         sys.exit(1)
     
     diagnosticar_bot(bot_id=args.bot_id, bot_username=args.username)
+
 
