@@ -1584,13 +1584,7 @@ body {
 }
 
 /* Guia de Como Encontrar Chat ID */
-.subscription-guide-card {
-    background: rgba(59, 130, 246, 0.1);
-    border: 1px solid rgba(59, 130, 246, 0.3);
-    border-radius: 8px;
-    padding: 16px;
-    margin-top: 12px;
-}
+/* CSS antigo removido - usando versão colapsável abaixo */
 
 .subscription-guide-title {
     font-size: 0.875rem;
@@ -1695,6 +1689,142 @@ body {
     .subscription-flow-step {
         width: 100%;
     }
+}
+
+/* ✅ Tutorial Visual de Como Encontrar ID do Grupo - Colapsável */
+.subscription-guide-card {
+    background: rgba(59, 130, 246, 0.08);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    border-radius: 8px;
+    padding: 0;
+    margin-top: 12px;
+    overflow: hidden;
+}
+
+/* Header do Card Colapsável */
+.subscription-guide-header-button {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: left;
+}
+
+.subscription-guide-header-button:hover {
+    background: rgba(59, 130, 246, 0.12);
+}
+
+.subscription-guide-header-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+}
+
+.subscription-guide-header-icon {
+    color: #FCD34D;
+    font-size: 1.125rem;
+}
+
+.subscription-guide-header-title {
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: #FFFFFF;
+}
+
+.subscription-guide-header-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+.subscription-guide-header-hint {
+    font-size: 0.75rem;
+    color: #9CA3AF;
+    font-weight: 500;
+}
+
+.subscription-guide-chevron {
+    color: #9CA3AF;
+    font-size: 0.875rem;
+    transition: transform 0.3s ease;
+}
+
+.subscription-guide-chevron.rotated {
+    transform: rotate(180deg);
+}
+
+.subscription-guide-content {
+    padding: 16px;
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* CSS duplicado removido - usando versão acima */
+
+.subscription-guide-header-button:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.subscription-guide-header-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.subscription-guide-header-icon {
+    color: #60A5FA;
+    font-size: 1.125rem;
+}
+
+.subscription-guide-header-title {
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: #FFFFFF;
+}
+
+.subscription-guide-header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.subscription-guide-header-hint {
+    font-size: 0.75rem;
+    color: #9CA3AF;
+}
+
+.subscription-guide-chevron {
+    color: #9CA3AF;
+    font-size: 0.875rem;
+    transition: transform 0.3s ease;
+}
+
+.subscription-guide-chevron.rotated {
+    transform: rotate(180deg);
+}
+
+.subscription-guide-content {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 /* ✅ Tutorial Visual de Como Encontrar ID do Grupo */
@@ -3004,15 +3134,32 @@ body {
                                                 </div>
                                             </template>
 
-                                            <!-- ✅ Guia Visual Melhorado: Como Encontrar o ID -->
+                                            <!-- ✅ Guia Visual Melhorado: Como Encontrar o ID (Colapsável) -->
                                             <div class="subscription-guide-card">
-                                                <div class="subscription-guide-title mb-4">
-                                                    <i class="fas fa-lightbulb text-yellow-400"></i>
-                                                    📋 Como Encontrar o ID do Grupo/Canal?
-                                                </div>
+                                                <!-- Header Colapsável -->
+                                                <button @click="subscriptionGuideExpanded = !subscriptionGuideExpanded"
+                                                        class="subscription-guide-header-button">
+                                                    <div class="subscription-guide-header-left">
+                                                        <i class="fas fa-lightbulb subscription-guide-header-icon"></i>
+                                                        <span class="subscription-guide-header-title">
+                                                            📋 Como Encontrar o ID do Grupo/Canal?
+                                                        </span>
+                                                    </div>
+                                                    <div class="subscription-guide-header-right">
+                                                        <span class="subscription-guide-header-hint" x-show="!subscriptionGuideExpanded">
+                                                            Clique para ver o tutorial
+                                                        </span>
+                                                        <i class="fas fa-chevron-down subscription-guide-chevron"
+                                                           :class="{'rotated': subscriptionGuideExpanded}"></i>
+                                                    </div>
+                                                </button>
                                                 
-                                                <!-- Tabs: Grupo ou Canal -->
-                                                <div class="subscription-guide-tabs">
+                                                <!-- Conteúdo Expansível -->
+                                                <div x-show="subscriptionGuideExpanded" 
+                                                     x-collapse
+                                                     class="subscription-guide-content">
+                                                    <!-- Tabs: Grupo ou Canal -->
+                                                    <div class="subscription-guide-tabs">
                                                     <button @click="subscriptionGuideTab = 'group'" 
                                                             :class="{'active': subscriptionGuideTab === 'group'}"
                                                             class="subscription-guide-tab">
@@ -3211,6 +3358,8 @@ body {
                                                         </div>
                                                     </div>
                                                 </div>
+                                                </div>
+                                                <!-- Fim do Conteúdo Expansível -->
                                             </div>
                                         </div>
 
@@ -4608,6 +4757,7 @@ body {
         activeTab: 'welcome',
         loading: false,
         subscriptionGuideTab: 'group', // Tab padrão do tutorial de assinatura (group ou channel)
+        subscriptionGuideExpanded: false, // Controla se o tutorial está expandido ou não
         newBotToken: '',  // ✅ NOVO: Para trocar token
         flowViewMode: 'visual',  // ✅ Sempre Visual (Lista removida)
         jsPlumbInstance: null,  // ✅ Instância do jsPlumb
