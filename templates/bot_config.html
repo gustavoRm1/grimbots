@@ -704,6 +704,218 @@ body {
 
 /* ✅ UX MELHORIAS: Estilos para campos essenciais, preview e validação inline */
 
+/* ✅ UX ORDER BUMPS: Estilos específicos para melhor experiência */
+
+/* Layout Order Bump: Configuração + Preview */
+.order-bump-layout {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 24px;
+    align-items: start;
+}
+
+@media (max-width: 1024px) {
+    .order-bump-layout {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Preview Order Bump no Telegram */
+.order-bump-preview-card {
+    position: sticky;
+    top: 20px;
+    background: #FFFFFF;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    min-height: 400px;
+}
+
+.order-bump-banner-preview {
+    background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+    position: relative;
+}
+
+.order-bump-badge-preview {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background: #F59E0B;
+    color: #FFFFFF;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 4px 8px;
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.order-bump-message-preview {
+    color: #78350F;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    margin-bottom: 12px;
+}
+
+.order-bump-price-preview {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(146, 64, 14, 0.2);
+}
+
+.order-bump-price-label {
+    color: #92400E;
+    font-weight: 600;
+    font-size: 0.875rem;
+}
+
+.order-bump-price-value {
+    color: #92400E;
+    font-weight: 700;
+    font-size: 1.125rem;
+}
+
+.order-bump-buttons-preview {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.order-bump-btn-accept-preview {
+    padding: 10px 16px;
+    background: #10B981;
+    color: #FFFFFF;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.875rem;
+    text-align: center;
+    cursor: default;
+}
+
+.order-bump-btn-decline-preview {
+    padding: 10px 16px;
+    background: #F3F4F6;
+    color: #374151;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.875rem;
+    text-align: center;
+    cursor: default;
+}
+
+.order-bump-media-preview {
+    width: 100%;
+    height: 150px;
+    background: #F3F4F6;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #9CA3AF;
+    font-size: 0.875rem;
+    margin-bottom: 12px;
+}
+
+.order-bump-description-preview {
+    color: #92400E;
+    font-weight: 600;
+    font-size: 0.875rem;
+    margin-bottom: 8px;
+}
+
+/* Indicador de Ordem Sequencial */
+.order-bump-sequence-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: rgba(245, 158, 11, 0.1);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    border-radius: 6px;
+    margin-bottom: 16px;
+}
+
+.order-bump-sequence-badge {
+    background: #F59E0B;
+    color: #FFFFFF;
+    font-weight: 700;
+    font-size: 0.75rem;
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+
+.order-bump-sequence-text {
+    font-size: 0.75rem;
+    color: #FCD34D;
+}
+
+/* Estatísticas de Conversão */
+.order-bump-stats {
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    border-radius: 8px;
+    padding: 12px;
+    margin-top: 16px;
+}
+
+.order-bump-stats-title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #6EE7B7;
+    margin-bottom: 8px;
+}
+
+.order-bump-stats-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.875rem;
+    color: #FFFFFF;
+    margin-bottom: 6px;
+}
+
+.order-bump-stats-value {
+    font-weight: 700;
+    color: #10B981;
+}
+
+/* Card de Order Bump Melhorado */
+.order-bump-card-enhanced {
+    background: rgba(255, 184, 0, 0.05);
+    border: 2px solid rgba(255, 184, 0, 0.2);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.order-bump-card-enhanced:hover {
+    border-color: rgba(255, 184, 0, 0.4);
+    box-shadow: 0 4px 12px rgba(255, 184, 0, 0.2);
+}
+
+.order-bump-card-enhanced.disabled {
+    opacity: 0.6;
+    border-color: rgba(107, 114, 128, 0.3);
+    background: rgba(107, 114, 128, 0.05);
+}
+
+.order-bump-card-enhanced.disabled:hover {
+    border-color: rgba(107, 114, 128, 0.3);
+    box-shadow: none;
+}
+
 /* Layout 2 Colunas: Informações + Preview */
 .product-config-layout {
     display: grid;
@@ -1862,166 +2074,328 @@ body {
                                     </div>
                                 </div>
 
-                                <!-- Order Bumps -->
+                                <!-- ✅ UX MELHORADO: Order Bumps com Preview Visual -->
                                 <div class="order-bump-section mt-6">
-                                        <div class="flex justify-between items-center mb-4">
-                                            <div class="info-banner">
-                                                <i class="fas fa-lightbulb"></i>
-                                                <span><strong>Dica:</strong> Ofereça bônus complementares para aumentar sua receita em até 80%!</span>
+                                    <div class="flex justify-between items-center mb-6">
+                                        <div class="flex items-center gap-3">
+                                            <div class="info-banner" style="flex: 1;">
+                                                <i class="fas fa-gift text-yellow-500"></i>
+                                                <span><strong>🎁 Ofertas Bônus:</strong> Aumente sua receita em até 80% oferecendo bônus complementares!</span>
                                             </div>
-                                            <button @click="addOrderBump(index)" 
-                                                    class="ob-button ob-button-default">
-                                                <i class="fas fa-plus mr-1"></i>
-                                                Adicionar Oferta
-                                            </button>
                                         </div>
+                                        <button @click="addOrderBump(index)" 
+                                                class="btn-action btn-action-success">
+                                            <i class="fas fa-plus mr-2"></i>
+                                            Adicionar Oferta
+                                        </button>
+                                    </div>
 
-                            <!-- Lista de Order Bumps -->
-                            <template x-if="button.order_bumps && button.order_bumps.length > 0">
-                                <div class="space-y-4">
-                                    <template x-for="(orderBump, bumpIndex) in button.order_bumps" :key="bumpIndex">
-                                        <div class="order-bump-card">
-                                            <div class="order-bump-header">
-                                                <div class="flex items-center gap-3">
-                                                    <div class="order-bump-index" x-text="bumpIndex + 1"></div>
-                                                    <div>
-                                                        <h4 class="text-sm font-bold text-white">Order Bump <span x-text="bumpIndex + 1"></span></h4>
-                                                        <p class="text-xs text-gray-500">Oferta sequencial</p>
-                                                    </div>
-                                                </div>
-                                                <div class="flex items-center gap-2">
-                                                    <label class="flex items-center gap-2 cursor-pointer">
-                                                        <input type="checkbox" 
-                                                               x-model="orderBump.enabled"
-                                                               class="w-4 h-4 rounded border-gray-600 bg-gray-800 text-yellow-500">
-                                                        <span class="text-xs text-white">Ativo</span>
-                                                    </label>
-                                                    <button @click="removeOrderBump(index, bumpIndex)" 
-                                                            class="w-8 h-8 flex items-center justify-center rounded-lg border border-red-500 text-red-400 hover:bg-red-500 hover:bg-opacity-10 transition-all">
-                                                        <i class="fas fa-trash text-xs"></i>
-                                                    </button>
-                                                </div>
-                                            </div>
-
-                                            <div x-show="orderBump.enabled" class="space-y-4">
-                                                <div class="form-group">
-                                                    <label class="form-label">Mensagem da Oferta</label>
-                                                    <textarea x-model="orderBump.message"
-                                                              class="form-textarea"
-                                                              maxlength="900"
-                                                              @input="orderBump.message = stripSurrogateChars(orderBump.message || '').slice(0, 900)"
-                                                              placeholder="🎁 Oferta Especial!&#10;&#10;Adicione este bônus por apenas +R$ 5!"></textarea>
-                                                    <p class="text-[11px] text-gray-400 mt-1">Máximo 900 caracteres. O campo bloqueia novos caracteres ao atingir o limite.</p>
-                                                </div>
-
-                                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                    <div class="form-group">
-                                                        <label class="form-label">Preço Adicional (R$)</label>
-                                                        <input type="number" 
-                                                               x-model="orderBump.price" 
-                                                               step="0.01"
-                                                               class="form-input text-center font-mono"
-                                                               placeholder="5.00">
-                                                    </div>
-
-                                                    <div class="form-group">
-                                                        <label class="form-label">Descrição do Bônus</label>
-                                                        <input type="text" 
-                                                               x-model="orderBump.description" 
-                                                               class="form-input"
-                                                               placeholder="Acesso Vitalício">
-                                                    </div>
-                                                </div>
-
-                                                <!-- Mídia do Order Bump -->
-                                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                    <div class="form-group">
-                                                        <label class="form-label">
-                                                            <i class="fas fa-link mr-2 text-blue-500"></i>
-                                                            URL da Mídia (opcional)
-                                                        </label>
-                                                        <input type="url" 
-                                                               x-model="orderBump.media_url" 
-                                                               class="form-input"
-                                                               placeholder="https://t.me/canal/789">
-                                                        <p class="text-xs text-gray-500 mt-2">Link do Telegram</p>
-                                                    </div>
-
-                                                    <div class="form-group">
-                                                        <label class="form-label">
-                                                            <i class="fas fa-image mr-2 text-blue-500"></i>
-                                                            Tipo de Mídia
-                                                        </label>
-                                                        <div class="flex gap-3 mt-2">
-                                                            <label class="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer hover:border-blue-500 transition-colors flex-1"
-                                                                   :class="{'border-blue-500 bg-blue-500 bg-opacity-10': orderBump.media_type === 'video'}">
-                                                                <input type="radio" x-model="orderBump.media_type" value="video" class="text-blue-500">
-                                                                <i class="fas fa-video text-blue-500"></i>
-                                                                <span class="text-sm text-white">Vídeo</span>
+                                    <!-- Lista de Order Bumps com Preview -->
+                                    <template x-if="button.order_bumps && button.order_bumps.length > 0">
+                                        <div class="space-y-6">
+                                            <template x-for="(orderBump, bumpIndex) in button.order_bumps" :key="bumpIndex">
+                                                <div class="order-bump-card-enhanced" 
+                                                     :class="{'disabled': !orderBump.enabled}">
+                                                    <!-- Header do Order Bump -->
+                                                    <div class="flex justify-between items-start mb-4">
+                                                        <div class="flex items-center gap-3">
+                                                            <div class="order-bump-sequence-indicator">
+                                                                <span class="order-bump-sequence-badge" x-text="bumpIndex + 1"></span>
+                                                                <span class="order-bump-sequence-text">
+                                                                    <span x-show="bumpIndex === 0">Primeira Oferta</span>
+                                                                    <span x-show="bumpIndex > 0">Oferta Sequencial (após recusa da anterior)</span>
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                        <div class="flex items-center gap-2">
+                                                            <label class="flex items-center gap-2 cursor-pointer px-3 py-1.5 bg-gray-800 border rounded-lg transition-all"
+                                                                   :class="orderBump.enabled ? 'border-green-500 bg-green-500 bg-opacity-10' : 'border-gray-600'">
+                                                                <input type="checkbox" 
+                                                                       x-model="orderBump.enabled"
+                                                                       class="w-4 h-4 rounded border-gray-600 bg-gray-800 text-yellow-500">
+                                                                <span class="text-xs font-bold"
+                                                                      :class="orderBump.enabled ? 'text-green-400' : 'text-gray-500'">
+                                                                    <span x-show="orderBump.enabled">✓ Ativo</span>
+                                                                    <span x-show="!orderBump.enabled">Inativo</span>
+                                                                </span>
                                                             </label>
-                                                            <label class="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer hover:border-blue-500 transition-colors flex-1"
-                                                                   :class="{'border-blue-500 bg-blue-500 bg-opacity-10': orderBump.media_type === 'photo'}">
-                                                                <input type="radio" x-model="orderBump.media_type" value="photo" class="text-blue-500">
-                                                                <i class="fas fa-camera text-blue-500"></i>
-                                                                <span class="text-sm text-white">Foto</span>
-                                                            </label>
+                                                            <button @click="removeOrderBump(index, bumpIndex)" 
+                                                                    class="w-10 h-10 flex items-center justify-center rounded-lg border border-red-500 text-red-400 hover:bg-red-500 hover:bg-opacity-10 transition-all"
+                                                                    title="Remover order bump">
+                                                                <i class="fas fa-trash"></i>
+                                                            </button>
+                                                        </div>
+                                                    </div>
+
+                                                    <!-- Layout: Configuração + Preview -->
+                                                    <div x-show="orderBump.enabled" class="order-bump-layout">
+                                                        <!-- Coluna Esquerda: Configuração -->
+                                                        <div class="flex-1 space-y-4">
+                                                            <!-- Mensagem da Oferta -->
+                                                            <div class="essential-field-group">
+                                                                <h4 class="text-sm font-bold text-white mb-4 flex items-center gap-2">
+                                                                    <i class="fas fa-comment-alt text-yellow-500"></i>
+                                                                    Mensagem da Oferta
+                                                                    <span class="required-badge">*</span>
+                                                                </h4>
+                                                                <div class="form-group">
+                                                                    <label class="form-label">
+                                                                        <span class="field-help-tooltip" title="Mensagem que aparece no banner amarelo do Telegram">
+                                                                            <i class="fas fa-question-circle tooltip-icon"></i>
+                                                                        </span>
+                                                                    </label>
+                                                                    <textarea x-model="orderBump.message"
+                                                                              class="form-textarea"
+                                                                              maxlength="900"
+                                                                              @input="orderBump.message = stripSurrogateChars(orderBump.message || '').slice(0, 900)"
+                                                                              placeholder="🎁 Oferta Especial!&#10;&#10;Adicione este bônus por apenas +R$ 5!&#10;&#10;Ganhe acesso vitalício a conteúdos exclusivos!"
+                                                                              rows="5"
+                                                                              :class="{
+                                                                                  'border-green-500': orderBump.message && orderBump.message.trim().length >= 10,
+                                                                                  'border-red-500': orderBump.message && orderBump.message.trim().length > 0 && orderBump.message.trim().length < 10,
+                                                                                  'border-gray-600': !orderBump.message
+                                                                              }"></textarea>
+                                                                    <div class="char-counter-wrapper mt-2">
+                                                                        <p class="field-help-text">
+                                                                            <i class="fas fa-lightbulb mr-1"></i>
+                                                                            Use emojis e texto atrativo! Mínimo 10 caracteres recomendado.
+                                                                        </p>
+                                                                        <span class="char-counter"
+                                                                              :class="{
+                                                                                  'warning': orderBump.message && orderBump.message.length > 800,
+                                                                                  'error': orderBump.message && orderBump.message.length > 900
+                                                                              }"
+                                                                              x-text="(orderBump.message?.length || 0) + '/900'">
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            <!-- Preço e Descrição -->
+                                                            <div class="essential-field-group">
+                                                                <h4 class="text-sm font-bold text-white mb-4 flex items-center gap-2">
+                                                                    <i class="fas fa-dollar-sign text-green-400"></i>
+                                                                    Preço e Descrição
+                                                                </h4>
+                                                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                                    <div class="form-group">
+                                                                        <label class="form-label label-with-badge">
+                                                                            Preço Adicional
+                                                                            <span class="required-badge">*</span>
+                                                                        </label>
+                                                                        <div class="price-input-wrapper">
+                                                                            <span class="price-currency-symbol">+R$</span>
+                                                                            <input type="number" 
+                                                                                   x-model="orderBump.price" 
+                                                                                   step="0.01"
+                                                                                   min="0.01"
+                                                                                   class="form-input"
+                                                                                   placeholder="5.00"
+                                                                                   :class="{
+                                                                                       'border-green-500': orderBump.price && orderBump.price > 0,
+                                                                                       'border-red-500': orderBump.price !== null && orderBump.price <= 0,
+                                                                                       'border-gray-600': !orderBump.price
+                                                                                   }">
+                                                                        </div>
+                                                                        <p class="field-help-text mt-1">
+                                                                            <i class="fas fa-info-circle mr-1"></i>
+                                                                            Valor adicional que o cliente pagará pelo bônus
+                                                                        </p>
+                                                                    </div>
+
+                                                                    <div class="form-group">
+                                                                        <label class="form-label">
+                                                                            Descrição do Bônus
+                                                                            <span class="field-help-tooltip" title="Nome curto do bônus (ex: Acesso Vitalício)">
+                                                                                <i class="fas fa-question-circle tooltip-icon"></i>
+                                                                            </span>
+                                                                        </label>
+                                                                        <input type="text" 
+                                                                               x-model="orderBump.description" 
+                                                                               class="form-input"
+                                                                               placeholder="Ex: Acesso Vitalício, Bônus Exclusivo, etc.">
+                                                                        <p class="field-help-text mt-1">
+                                                                            <i class="fas fa-lightbulb mr-1"></i>
+                                                                            Nome curto e atrativo do bônus
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            <!-- Mídia (Opcional) -->
+                                                            <div class="essential-field-group">
+                                                                <h4 class="text-sm font-bold text-white mb-4 flex items-center gap-2">
+                                                                    <i class="fas fa-image text-blue-400"></i>
+                                                                    Mídia (Opcional)
+                                                                </h4>
+                                                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                                    <div class="form-group">
+                                                                        <label class="form-label">
+                                                                            <i class="fas fa-link mr-2 text-blue-500"></i>
+                                                                            URL da Mídia
+                                                                        </label>
+                                                                        <input type="url" 
+                                                                               x-model="orderBump.media_url" 
+                                                                               class="form-input"
+                                                                               placeholder="https://t.me/canal/789">
+                                                                        <p class="field-help-text mt-1">Link do Telegram (vídeo ou foto)</p>
+                                                                    </div>
+
+                                                                    <div class="form-group">
+                                                                        <label class="form-label">
+                                                                            <i class="fas fa-image mr-2 text-blue-500"></i>
+                                                                            Tipo de Mídia
+                                                                        </label>
+                                                                        <div class="flex gap-3 mt-2">
+                                                                            <label class="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer hover:border-blue-500 transition-colors flex-1"
+                                                                                   :class="{'border-blue-500 bg-blue-500 bg-opacity-10': orderBump.media_type === 'video'}">
+                                                                                <input type="radio" x-model="orderBump.media_type" value="video" class="text-blue-500">
+                                                                                <i class="fas fa-video text-blue-500"></i>
+                                                                                <span class="text-sm text-white">Vídeo</span>
+                                                                            </label>
+                                                                            <label class="flex items-center gap-2 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg cursor-pointer hover:border-blue-500 transition-colors flex-1"
+                                                                                   :class="{'border-blue-500 bg-blue-500 bg-opacity-10': orderBump.media_type === 'photo'}">
+                                                                                <input type="radio" x-model="orderBump.media_type" value="photo" class="text-blue-500">
+                                                                                <i class="fas fa-camera text-blue-500"></i>
+                                                                                <span class="text-sm text-white">Foto</span>
+                                                                            </label>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            <!-- Botões Personalizados (Opcional) -->
+                                                            <div class="essential-field-group">
+                                                                <h4 class="text-sm font-bold text-white mb-4 flex items-center gap-2">
+                                                                    <i class="fas fa-mouse-pointer text-purple-400"></i>
+                                                                    Botões Personalizados (Opcional)
+                                                                </h4>
+                                                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                                    <div class="form-group">
+                                                                        <label class="form-label">
+                                                                            <i class="fas fa-check-circle mr-2 text-green-400"></i>
+                                                                            Texto do Botão Aceitar
+                                                                        </label>
+                                                                        <input type="text" 
+                                                                               x-model="orderBump.accept_text" 
+                                                                               class="form-input"
+                                                                               placeholder="SIM! Quero esse bônus!">
+                                                                        <p class="field-help-text mt-1">Deixe vazio para usar: "SIM! Quero esse bônus!"</p>
+                                                                    </div>
+
+                                                                    <div class="form-group">
+                                                                        <label class="form-label">
+                                                                            <i class="fas fa-times-circle mr-2 text-red-400"></i>
+                                                                            Texto do Botão Recusar
+                                                                        </label>
+                                                                        <input type="text" 
+                                                                               x-model="orderBump.decline_text" 
+                                                                               class="form-input"
+                                                                               placeholder="Não, obrigado">
+                                                                        <p class="field-help-text mt-1">Deixe vazio para usar: "Não, obrigado"</p>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        <!-- Coluna Direita: Preview do Telegram -->
+                                                        <div class="order-bump-preview-card">
+                                                            <div class="telegram-preview-header">
+                                                                <div class="telegram-avatar-preview">
+                                                                    <i class="fas fa-robot"></i>
+                                                                </div>
+                                                                <div class="telegram-info-preview">
+                                                                    <div class="telegram-name-preview">Seu Bot</div>
+                                                                    <div class="telegram-time-preview">Agora</div>
+                                                                </div>
+                                                            </div>
+
+                                                            <!-- Preview do Order Bump -->
+                                                            <template x-if="orderBump.message && orderBump.message.trim().length >= 10">
+                                                                <div>
+                                                                    <!-- Banner Amarelo -->
+                                                                    <div class="order-bump-banner-preview">
+                                                                        <div class="order-bump-badge-preview" x-text="'OFERTA ' + (bumpIndex + 1)"></div>
+                                                                        <div class="order-bump-message-preview" x-text="orderBump.message"></div>
+                                                                        
+                                                                        <template x-if="orderBump.description && orderBump.description.trim()">
+                                                                            <div class="order-bump-description-preview" x-text="orderBump.description"></div>
+                                                                        </template>
+
+                                                                        <template x-if="orderBump.price && orderBump.price > 0">
+                                                                            <div class="order-bump-price-preview">
+                                                                                <span class="order-bump-price-label">Preço adicional:</span>
+                                                                                <span class="order-bump-price-value">+R$ <span x-text="(orderBump.price || 0).toFixed(2).replace('.', ',')"></span></span>
+                                                                            </div>
+                                                                        </template>
+
+                                                                        <template x-if="orderBump.media_url">
+                                                                            <div class="order-bump-media-preview">
+                                                                                <i class="fas" :class="orderBump.media_type === 'video' ? 'fa-video' : 'fa-image'"></i>
+                                                                                <span class="ml-2" x-text="orderBump.media_type === 'video' ? 'Vídeo' : 'Foto'"></span>
+                                                                            </div>
+                                                                        </template>
+
+                                                                        <!-- Botões -->
+                                                                        <div class="order-bump-buttons-preview">
+                                                                            <button class="order-bump-btn-accept-preview">
+                                                                                <span x-text="orderBump.accept_text || 'SIM! Quero esse bônus!'"></span>
+                                                                            </button>
+                                                                            <button class="order-bump-btn-decline-preview">
+                                                                                <span x-text="orderBump.decline_text || 'Não, obrigado'"></span>
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    <!-- Estatísticas Estimadas -->
+                                                                    <div class="order-bump-stats">
+                                                                        <div class="order-bump-stats-title">
+                                                                            <i class="fas fa-chart-line mr-1"></i>
+                                                                            Estatísticas Estimadas
+                                                                        </div>
+                                                                        <div class="order-bump-stats-item">
+                                                                            <span>Ticket Médio:</span>
+                                                                            <span class="order-bump-stats-value">
+                                                                                R$ <span x-text="((button.price || 0) + (orderBump.price || 0)).toFixed(2).replace('.', ',')"></span>
+                                                                            </span>
+                                                                        </div>
+                                                                        <div class="order-bump-stats-item">
+                                                                            <span>Taxa de Conversão:</span>
+                                                                            <span class="order-bump-stats-value">~30-50%</span>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </template>
+                                                            <template x-if="!orderBump.message || orderBump.message.trim().length < 10">
+                                                                <div class="empty-state-preview">
+                                                                    <div class="empty-state-preview-icon">🎁</div>
+                                                                    <div class="empty-state-preview-text">
+                                                                        Configure a mensagem da oferta para ver o preview
+                                                                    </div>
+                                                                </div>
+                                                            </template>
                                                         </div>
                                                     </div>
                                                 </div>
+                                            </template>
+                                        </div>
+                                    </template>
 
-                                                <!-- Botões Personalizados -->
-                                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                    <div class="form-group">
-                                                        <label class="form-label">
-                                                            <i class="fas fa-check-circle mr-2 text-green-400"></i>
-                                                            Botão Aceitar (opcional)
-                                                        </label>
-                                                        <input type="text" 
-                                                               x-model="orderBump.accept_text" 
-                                                               class="form-input"
-                                                               placeholder="SIM! Quero esse bônus!">
-                                                        <p class="text-xs text-gray-500 mt-1">Deixe vazio para texto padrão</p>
-                                                    </div>
-
-                                                    <div class="form-group">
-                                                        <label class="form-label">
-                                                            <i class="fas fa-times-circle mr-2 text-red-400"></i>
-                                                            Botão Recusar (opcional)
-                                                        </label>
-                                                        <input type="text" 
-                                                               x-model="orderBump.decline_text" 
-                                                               class="form-input"
-                                                               placeholder="Não, obrigado">
-                                                        <p class="text-xs text-gray-500 mt-1">Deixe vazio para texto padrão</p>
-                                                    </div>
-                                                </div>
-                                            </div>
+                                    <!-- Empty State Melhorado -->
+                                    <template x-if="!button.order_bumps || button.order_bumps.length === 0">
+                                        <div class="text-center py-12 border-2 border-dashed border-gray-700 rounded-xl bg-gray-900 bg-opacity-50">
+                                            <div class="text-6xl mb-4">🎁</div>
+                                            <h4 class="text-xl font-bold text-white mb-2">Nenhum Order Bump Configurado</h4>
+                                            <p class="text-gray-400 mb-2">Ofertas bônus aparecem após o cliente escolher o produto</p>
+                                            <p class="text-sm text-gray-500 mb-6">Adicione ofertas sequenciais para aumentar o ticket médio em até 80%!</p>
+                                            <button @click="addOrderBump(index)" 
+                                                    class="px-6 py-3 bg-yellow-500 bg-opacity-25 border-2 border-yellow-400 rounded-lg text-base font-bold text-yellow-300 hover:bg-yellow-500 hover:bg-opacity-50 transition-all">
+                                                <i class="fas fa-plus mr-2"></i>
+                                                Adicionar Primeiro Order Bump
+                                            </button>
                                         </div>
                                     </template>
                                 </div>
-                            </template>
-
-                            <!-- Empty State -->
-                            <template x-if="!button.order_bumps || button.order_bumps.length === 0">
-                                <div class="text-center py-8 border-2 border-dashed border-gray-700 rounded-lg">
-                                    <div class="text-4xl mb-3">🎁</div>
-                                    <h4 class="text-lg font-bold text-white mb-2">Nenhum Order Bump</h4>
-                                    <p class="text-gray-500 mb-4">Adicione ofertas sequenciais para aumentar o ticket médio</p>
-                                    <button @click="addOrderBump(index)" 
-                                            class="px-4 py-2 bg-yellow-500 bg-opacity-25 border border-yellow-400 rounded-lg text-sm font-bold text-yellow-300 hover:bg-yellow-500 hover:bg-opacity-50 transition-all">
-                                        <i class="fas fa-plus mr-2"></i>
-                                        Adicionar Primeiro Order Bump
-                                    </button>
-                                </div>
-                            </template>
-
-                            <div class="info-box-warning info-box">
-                                <p class="text-sm text-gray-300">
-                                    <i class="fas fa-chart-line mr-2 text-yellow-500"></i>
-                                    <strong>Conversão:</strong> Múltiplos order bumps convertem até 80% mais! Se o usuário recusar um, receberá o próximo automaticamente.
-                                </p>
-                            </div>
-                        </div>
 
                         <!-- ✅ SISTEMA DE ASSINATURAS -->
                         <div class="subscription-section mt-6 border-t border-gray-800 pt-6" x-show="button.subscription && button.subscription.enabled">
