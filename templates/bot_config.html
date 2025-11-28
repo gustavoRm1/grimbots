@@ -815,7 +815,7 @@ body {
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 12px;
     padding: 20px;
-    margin-left: 24px;
+    /* ✅ Removido margin-left - grid já controla o espaçamento */
 }
 
 @media (max-width: 1024px) {
@@ -823,7 +823,6 @@ body {
         position: relative;
         top: 0;
         max-width: 100%;
-        margin-left: 0;
         margin-top: 24px;
     }
 }
@@ -1457,6 +1456,7 @@ body {
     display: grid;
     grid-template-columns: 1fr 360px;
     gap: 24px;
+    align-items: start;
 }
 
 @media (max-width: 1024px) {
@@ -2066,58 +2066,6 @@ body {
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-
-                            <!-- ✅ PREVIEW EM TEMPO REAL (Sidebar) -->
-                            <div class="preview-sidebar" x-show="showPreview">
-                                <div class="telegram-preview">
-                                    <div class="telegram-header">
-                                        <div class="telegram-avatar">👤</div>
-                                        <div>
-                                            <div class="telegram-name">Bot do Telegram</div>
-                                            <div class="telegram-time">agora</div>
-                                        </div>
-                                    </div>
-                                    <div class="telegram-message">
-                                        <div x-show="button.description" class="telegram-text" x-text="button.description || 'Descrição do produto aparecerá aqui...'"></div>
-                                        <div class="telegram-buttons">
-                                            <div class="telegram-button" x-show="button.text || button.price">
-                                                <span x-text="button.text || 'Nome do produto'"></span>
-                                                <span class="telegram-price" x-show="button.price && button.price > 0">
-                                                    por R$ <span x-text="formatPriceBR(button.price)"></span>
-                                                </span>
-                                            </div>
-                                        </div>
-                                        <div x-show="button.immediate_access" class="telegram-badge-access mt-2">
-                                            <i class="fas fa-bolt text-xs"></i>
-                                            <span class="text-xs">Acesso Imediato</span>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <!-- Estatísticas do Produto -->
-                                <div class="preview-stats">
-                                    <div class="stat-item">
-                                        <span class="stat-label">Preço Base:</span>
-                                        <span class="stat-value">R$ <span x-text="parseFloat(button.price || 0).toFixed(2)"></span></span>
-                                    </div>
-                                    <div class="stat-item" x-show="getActiveOrderBumpsCount(index) > 0">
-                                        <span class="stat-label">Bônus Total:</span>
-                                        <span class="stat-value">+R$ <span x-text="calculateTotalBonusPrice(index).toFixed(2)"></span></span>
-                                    </div>
-                                    <div class="stat-item" x-show="getActiveOrderBumpsCount(index) > 0">
-                                        <div>
-                                            <span class="stat-label">Ticket Médio (estimado):</span>
-                                            <span class="text-xs text-gray-400 block mt-0.5">Média com 30% de aceite nos bônus</span>
-                                        </div>
-                                        <span class="stat-value highlight">R$ <span x-text="calculateAverageTicket(index).toFixed(2)"></span></span>
-                                    </div>
-                                    <div class="stat-item" x-show="getActiveOrderBumpsCount(index) > 0">
-                                        <span class="stat-label">Ofertas Bônus:</span>
-                                        <span class="stat-value"><span x-text="getActiveOrderBumpsCount(index)"></span> ativa(s)</span>
-                                    </div>
-                                </div>
-                            </div>
 
                                 <!-- ✅ SEÇÃO COLAPSÁVEL: Ofertas Bônus -->
                                 <div class="collapsible-section">
@@ -2410,6 +2358,57 @@ body {
                                 </div>
                             </div>
                         </div>
+                        </div>
+
+                        <!-- ✅ PREVIEW EM TEMPO REAL (Sidebar) - AO LADO -->
+                        <div class="preview-sidebar" x-show="showPreview">
+                            <div class="telegram-preview">
+                                <div class="telegram-header">
+                                    <div class="telegram-avatar">👤</div>
+                                    <div>
+                                        <div class="telegram-name">Bot do Telegram</div>
+                                        <div class="telegram-time">agora</div>
+                                    </div>
+                                </div>
+                                <div class="telegram-message">
+                                    <div x-show="button.description" class="telegram-text" x-text="button.description || 'Descrição do produto aparecerá aqui...'"></div>
+                                    <div class="telegram-buttons">
+                                        <div class="telegram-button" x-show="button.text || button.price">
+                                            <span x-text="button.text || 'Nome do produto'"></span>
+                                            <span class="telegram-price" x-show="button.price && button.price > 0">
+                                                por R$ <span x-text="formatPriceBR(button.price)"></span>
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div x-show="button.immediate_access" class="telegram-badge-access mt-2">
+                                        <i class="fas fa-bolt text-xs"></i>
+                                        <span class="text-xs">Acesso Imediato</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Estatísticas do Produto -->
+                            <div class="preview-stats">
+                                <div class="stat-item">
+                                    <span class="stat-label">Preço Base:</span>
+                                    <span class="stat-value">R$ <span x-text="parseFloat(button.price || 0).toFixed(2)"></span></span>
+                                </div>
+                                <div class="stat-item" x-show="getActiveOrderBumpsCount(index) > 0">
+                                    <span class="stat-label">Bônus Total:</span>
+                                    <span class="stat-value">+R$ <span x-text="calculateTotalBonusPrice(index).toFixed(2)"></span></span>
+                                </div>
+                                <div class="stat-item" x-show="getActiveOrderBumpsCount(index) > 0">
+                                    <div>
+                                        <span class="stat-label">Ticket Médio (estimado):</span>
+                                        <span class="text-xs text-gray-400 block mt-0.5">Média com 30% de aceite nos bônus</span>
+                                    </div>
+                                    <span class="stat-value highlight">R$ <span x-text="calculateAverageTicket(index).toFixed(2)"></span></span>
+                                </div>
+                                <div class="stat-item" x-show="getActiveOrderBumpsCount(index) > 0">
+                                    <span class="stat-label">Ofertas Bônus:</span>
+                                    <span class="stat-value"><span x-text="getActiveOrderBumpsCount(index)"></span> ativa(s)</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </template>
