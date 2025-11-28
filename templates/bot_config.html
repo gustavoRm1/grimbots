@@ -4061,6 +4061,20 @@ body {
                                     </p>
                                 </div>
                             </div>
+
+                            <div class="form-group">
+                                <label class="form-label">
+                                    <i class="fas fa-link mr-2 text-blue-400"></i>
+                                    Link do Entregável
+                                </label>
+                                <input type="url" 
+                                       x-model="upsell.access_link" 
+                                       class="form-input" 
+                                       placeholder="https://t.me/+seugrupo ou https://seusite.com/produto">
+                                <p class="text-xs text-gray-500 mt-1">
+                                    Link para onde o cliente será redirecionado após pagar este upsell
+                                </p>
+                            </div>
                         </div>
                     </div>
                 </template>
@@ -5315,6 +5329,7 @@ body {
         
         addUpsell() {
             this.config.upsells.push({
+                access_link: '',
                 trigger_product: '',
                 delay_minutes: 0,
                 message: '',
