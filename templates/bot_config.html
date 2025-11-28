@@ -864,32 +864,37 @@ body {
 
 /* Estatísticas de Conversão */
 .order-bump-stats {
-    background: rgba(16, 185, 129, 0.1);
-    border: 1px solid rgba(16, 185, 129, 0.3);
+    background: rgba(16, 185, 129, 0.15);
+    border: 1px solid rgba(16, 185, 129, 0.5);
     border-radius: 8px;
-    padding: 12px;
+    padding: 14px;
     margin-top: 16px;
 }
 
 .order-bump-stats-title {
-    font-size: 0.75rem;
+    font-size: 0.875rem;
     font-weight: 700;
-    color: #6EE7B7;
-    margin-bottom: 8px;
+    color: #10B981;
+    margin-bottom: 10px;
+    opacity: 1;
 }
 
 .order-bump-stats-item {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-size: 0.875rem;
+    font-size: 0.9rem;
     color: #FFFFFF;
-    margin-bottom: 6px;
+    margin-bottom: 8px;
+    opacity: 1;
+    font-weight: 500;
 }
 
 .order-bump-stats-value {
     font-weight: 700;
     color: #10B981;
+    font-size: 0.95rem;
+    opacity: 1;
 }
 
 /* Card de Order Bump Melhorado */
@@ -2132,7 +2137,8 @@ body {
                                                                        x-model="orderBump.enabled"
                                                                        class="w-4 h-4 rounded border-gray-600 bg-gray-800 text-yellow-500">
                                                                 <span class="text-xs font-bold"
-                                                                      :class="orderBump.enabled ? 'text-green-400' : 'text-gray-500'">
+                                                                      :class="orderBump.enabled ? 'text-green-500' : 'text-gray-400'"
+                                                                      style="opacity: 1 !important;">
                                                                     <span x-show="orderBump.enabled">✓ Ativo</span>
                                                                     <span x-show="!orderBump.enabled">Inativo</span>
                                                                 </span>
@@ -2372,13 +2378,13 @@ body {
                                                                             Estatísticas Estimadas
                                                                         </div>
                                                                         <div class="order-bump-stats-item">
-                                                                            <span>Ticket Médio:</span>
+                                                                            <span style="opacity: 1 !important; font-weight: 600;">Ticket Médio:</span>
                                                                             <span class="order-bump-stats-value">
                                                                                 R$ <span x-text="((button.price || 0) + (orderBump.price || 0)).toFixed(2).replace('.', ',')"></span>
                                                                             </span>
                                                                         </div>
                                                                         <div class="order-bump-stats-item">
-                                                                            <span>Taxa de Conversão:</span>
+                                                                            <span style="opacity: 1 !important; font-weight: 600;">Taxa de Conversão:</span>
                                                                             <span class="order-bump-stats-value">~30-50%</span>
                                                                         </div>
                                                                     </div>
