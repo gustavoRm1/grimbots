@@ -2922,23 +2922,6 @@ body {
                                                                         </div>
                                                                     </div>
 
-                                                                    <!-- Estatísticas Estimadas -->
-                                                                    <div class="order-bump-stats">
-                                                                        <div class="order-bump-stats-title">
-                                                                            <i class="fas fa-chart-line mr-1"></i>
-                                                                            Estatísticas Estimadas
-                                                                        </div>
-                                                                        <div class="order-bump-stats-item">
-                                                                            <span style="opacity: 1 !important; font-weight: 600;">Ticket Médio:</span>
-                                                                            <span class="order-bump-stats-value">
-                                                                                R$ <span x-text="((button.price || 0) + (orderBump.price || 0)).toFixed(2).replace('.', ',')"></span>
-                                                                            </span>
-                                                                        </div>
-                                                                        <div class="order-bump-stats-item">
-                                                                            <span style="opacity: 1 !important; font-weight: 600;">Taxa de Conversão:</span>
-                                                                            <span class="order-bump-stats-value">~30-50%</span>
-                                                                        </div>
-                                                                    </div>
                                                                 </div>
                                                             </template>
                                                             <template x-if="!orderBump.message || orderBump.message.trim().length < 10">
