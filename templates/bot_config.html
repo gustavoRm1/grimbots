@@ -2482,10 +2482,8 @@ body {
                                     </div>
                                 </div>
 
-                                <!-- ✅ UX MELHORADO: Campos do Produto com Preview -->
-                                <div class="product-config-layout">
-                                    <!-- Coluna Esquerda: Campos de Configuração -->
-                                    <div class="flex-1 space-y-4">
+                                <!-- Campos do Produto -->
+                                <div class="space-y-4">
                                         <!-- Grupo de Campos Essenciais -->
                                         <div class="essential-field-group">
                                             <h4 class="text-sm font-bold text-white mb-4 flex items-center gap-2">
@@ -2592,68 +2590,6 @@ body {
                                             </div>
                                         </div>
                                     </div>
-
-                                    <!-- Coluna Direita: Preview do Telegram -->
-                                    <div class="telegram-preview-card">
-                                        <div class="telegram-preview-header">
-                                            <div class="telegram-avatar-preview">
-                                                <i class="fas fa-robot"></i>
-                                            </div>
-                                            <div class="telegram-info-preview">
-                                                <div class="telegram-name-preview">Seu Bot</div>
-                                                <div class="telegram-time-preview">Agora</div>
-                                            </div>
-                                        </div>
-
-                                        <div class="telegram-message-preview">
-                                            <template x-if="!button.text || button.text.trim().length < 3">
-                                                <div class="empty-state-preview">
-                                                    <div class="empty-state-preview-icon">📦</div>
-                                                    <div class="empty-state-preview-text">
-                                                        Configure o nome do produto para ver o preview
-                                                    </div>
-                                                </div>
-                                            </template>
-                                            <template x-if="button.text && button.text.trim().length >= 3">
-                                                <div>
-                                                    <div class="product-name-preview" x-text="button.text || 'Nome do Produto'"></div>
-                                                    
-                                                    <template x-if="button.description && button.description.trim()">
-                                                        <div class="product-description-preview" x-text="button.description"></div>
-                                                    </template>
-                                                    <template x-if="!button.description || !button.description.trim()">
-                                                        <div class="product-description-preview" style="color: #9CA3AF; font-style: italic;">
-                                                            Descrição do produto aparecerá aqui...
-                                                        </div>
-                                                    </template>
-
-                                                    <template x-if="button.price && button.price > 0">
-                                                        <div class="product-price-preview">
-                                                            R$ <span x-text="(button.price || 0).toFixed(2).replace('.', ',')"></span>
-                                                        </div>
-                                                    </template>
-                                                    <template x-if="!button.price || button.price <= 0">
-                                                        <div class="product-price-preview" style="color: #9CA3AF; font-size: 1rem;">
-                                                            Configure o preço
-                                                        </div>
-                                                    </template>
-                                                </div>
-                                            </template>
-                                        </div>
-
-                                        <template x-if="button.text && button.text.trim().length >= 3 && button.price && button.price > 0">
-                                            <button class="telegram-button-preview">
-                                                <i class="fas fa-shopping-cart"></i>
-                                                <span x-text="button.text || 'Comprar'"></span>
-                                            </button>
-                                        </template>
-                                        <template x-if="!button.text || button.text.trim().length < 3 || !button.price || button.price <= 0">
-                                            <button class="telegram-button-preview" style="opacity: 0.8; cursor: not-allowed; background: #9CA3AF;">
-                                                <i class="fas fa-shopping-cart"></i>
-                                                Configure o produto para ver o botão
-                                            </button>
-                                        </template>
-                                    </div>
                                 </div>
 
                                 <!-- ✅ UX MELHORADO: Order Bumps com Preview Visual -->
@@ -2695,12 +2631,6 @@ body {
                                                                 <input type="checkbox" 
                                                                        x-model="orderBump.enabled"
                                                                        class="w-4 h-4 rounded border-gray-600 bg-gray-800 text-yellow-500">
-                                                                <span class="text-xs font-bold"
-                                                                      :class="orderBump.enabled ? 'text-green-500' : 'text-gray-400'"
-                                                                      style="opacity: 1 !important;">
-                                                                    <span x-show="orderBump.enabled">✓ Ativo</span>
-                                                                    <span x-show="!orderBump.enabled">Inativo</span>
-                                                                </span>
                                                             </label>
                                                             <button @click="removeOrderBump(index, bumpIndex)" 
                                                                     class="w-10 h-10 flex items-center justify-center rounded-lg border border-red-500 text-red-400 hover:bg-red-500 hover:bg-opacity-10 transition-all"
