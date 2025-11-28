@@ -702,6 +702,755 @@ body {
     margin-top: 12px;
 }
 
+/* ✅ UX MELHORIAS: Estilos para campos essenciais, preview e validação inline */
+
+/* Campos Essenciais */
+.essential-fields {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 24px;
+}
+
+.field-group {
+    margin-bottom: 20px;
+}
+
+.field-label-essential {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    color: #FFFFFF;
+    margin-bottom: 8px;
+    font-size: 0.875rem;
+}
+
+.label-icon {
+    font-size: 1.125rem;
+}
+
+.required-badge {
+    color: #EF4444;
+    font-weight: bold;
+    margin-left: 2px;
+}
+
+.field-help {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin-top: 6px;
+    font-size: 13px;
+    color: #9CA3AF;
+    line-height: 1.5;
+}
+
+.field-help i {
+    color: #3B82F6;
+    margin-top: 2px;
+    flex-shrink: 0;
+}
+
+.field-error {
+    margin-top: 6px;
+    padding: 8px 12px;
+    background: rgba(239, 68, 68, 0.1);
+    border-left: 3px solid #EF4444;
+    border-radius: 4px;
+    color: #FCA5A5;
+    font-size: 13px;
+}
+
+.field-status {
+    margin-top: 6px;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.field-status.valid {
+    color: #10B981;
+}
+
+.field-status.invalid {
+    color: #F59E0B;
+}
+
+.price-input-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.price-currency {
+    color: #10B981;
+    font-weight: 600;
+    font-size: 1rem;
+}
+
+.field-input-price {
+    flex: 1;
+    text-align: center;
+    font-weight: 600;
+    font-size: 1.125rem;
+}
+
+.char-counter {
+    text-align: right;
+    font-size: 12px;
+    color: #6B7280;
+    margin-top: 4px;
+}
+
+/* Preview Sidebar */
+.preview-sidebar {
+    position: sticky;
+    top: 80px;
+    width: 100%;
+    max-width: 360px;
+    max-height: calc(100vh - 100px);
+    overflow-y: auto;
+    background: rgba(17, 24, 39, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 20px;
+    margin-left: 24px;
+}
+
+@media (max-width: 1024px) {
+    .preview-sidebar {
+        position: relative;
+        top: 0;
+        max-width: 100%;
+        margin-left: 0;
+        margin-top: 24px;
+    }
+}
+
+.preview-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.preview-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #FFFFFF;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.preview-content {
+    position: relative;
+}
+
+/* Telegram Preview Simulation */
+.telegram-preview {
+    background: #FFFFFF;
+    border-radius: 8px;
+    padding: 16px;
+    min-height: 400px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    margin-bottom: 16px;
+}
+
+/* Preview Stats */
+.preview-stats {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 12px;
+}
+
+.stat-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.stat-item:last-child {
+    border-bottom: none;
+}
+
+.stat-label {
+    font-size: 0.75rem;
+    color: #9CA3AF;
+    font-weight: 500;
+}
+
+.stat-value {
+    font-size: 0.875rem;
+    color: #FFFFFF;
+    font-weight: 600;
+}
+
+.stat-value.highlight {
+    color: #10B981;
+    font-size: 1rem;
+}
+
+.telegram-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #E5E7EB;
+}
+
+.telegram-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #0088CC;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #FFFFFF;
+    font-size: 1.25rem;
+}
+
+.telegram-name {
+    font-weight: 600;
+    color: #111827;
+    font-size: 0.875rem;
+}
+
+.telegram-time {
+    font-size: 0.75rem;
+    color: #6B7280;
+}
+
+.telegram-message {
+    margin-bottom: 12px;
+}
+
+.message-content {
+    background: #E5E7EB;
+    padding: 10px 14px;
+    border-radius: 8px;
+    color: #111827;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    max-width: 80%;
+    word-wrap: break-word;
+}
+
+.message-time {
+    font-size: 0.75rem;
+    color: #6B7280;
+    margin-top: 4px;
+    margin-left: 4px;
+}
+
+.telegram-media {
+    margin-bottom: 12px;
+}
+
+.media-placeholder {
+    width: 200px;
+    height: 150px;
+    background: #F3F4F6;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: #9CA3AF;
+    font-size: 0.875rem;
+}
+
+.telegram-button-wrapper {
+    margin-top: 16px;
+}
+
+.telegram-button {
+    width: 100%;
+    padding: 12px 20px;
+    background: #0088CC;
+    color: #FFFFFF;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.telegram-button:hover {
+    background: #006BA3;
+}
+
+.button-price {
+    font-weight: 700;
+    font-size: 1.125rem;
+}
+
+.telegram-order-bump {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid #E5E7EB;
+}
+
+.order-bump-banner {
+    background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 12px;
+}
+
+.banner-content {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.banner-icon {
+    font-size: 1.5rem;
+    flex-shrink: 0;
+}
+
+.banner-text {
+    flex: 1;
+}
+
+.banner-title {
+    font-weight: 700;
+    color: #92400E;
+    font-size: 0.875rem;
+    margin-bottom: 4px;
+}
+
+.banner-message {
+    color: #78350F;
+    font-size: 0.75rem;
+    line-height: 1.4;
+}
+
+.banner-price {
+    font-weight: 700;
+    color: #92400E;
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+
+.order-bump-buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.ob-button {
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+}
+
+.ob-accept {
+    background: #10B981;
+    color: #FFFFFF;
+}
+
+.ob-accept:hover {
+    background: #059669;
+}
+
+.ob-decline {
+    background: #F3F4F6;
+    color: #374151;
+}
+
+.ob-decline:hover {
+    background: #E5E7EB;
+}
+
+.preview-requirements {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.requirement-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: 0.875rem;
+}
+
+.requirement-item.valid {
+    color: #10B981;
+}
+
+.requirement-item.invalid {
+    color: #F59E0B;
+}
+
+/* Seções Colapsáveis */
+.collapsible-section {
+    margin-bottom: 16px;
+}
+
+.section-toggle {
+    width: 100%;
+    padding: 16px 20px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: left;
+}
+
+.section-toggle:hover {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.12);
+}
+
+.section-toggle-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.section-toggle-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.section-icon {
+    font-size: 1.5rem;
+}
+
+.section-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: #FFFFFF;
+    margin-bottom: 4px;
+}
+
+.section-subtitle {
+    font-size: 0.875rem;
+    color: #9CA3AF;
+}
+
+.section-toggle-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.section-badge {
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #6EE7B7;
+}
+
+.section-chevron {
+    transition: transform 0.3s;
+    color: #9CA3AF;
+}
+
+.section-chevron.rotate-180 {
+    transform: rotate(180deg);
+}
+
+.section-content {
+    margin-top: 16px;
+    padding: 20px;
+    background: rgba(255, 255, 255, 0.01);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+}
+
+/* Order Bump Cards Compactos */
+.order-bumps-list {
+    margin-bottom: 16px;
+}
+
+.order-bump-card-compact {
+    background: rgba(255, 184, 0, 0.05);
+    border: 1px solid rgba(255, 184, 0, 0.2);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 8px;
+}
+
+.order-bump-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.order-bump-card-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+}
+
+.order-bump-badge {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.875rem;
+    flex-shrink: 0;
+}
+
+.order-bump-badge.enabled {
+    background: rgba(255, 184, 0, 0.2);
+    border: 2px solid rgba(255, 184, 0, 0.5);
+    color: #FFB800;
+}
+
+.order-bump-badge.disabled {
+    background: rgba(107, 114, 128, 0.2);
+    border: 2px solid rgba(107, 114, 128, 0.3);
+    color: #9CA3AF;
+}
+
+.order-bump-name {
+    font-weight: 600;
+    color: #FFFFFF;
+    font-size: 0.875rem;
+    margin-bottom: 2px;
+}
+
+.order-bump-price {
+    font-size: 0.75rem;
+    color: #9CA3AF;
+}
+
+.order-bump-card-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 24px;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #374151;
+    transition: 0.3s;
+    border-radius: 24px;
+}
+
+.toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: 0.3s;
+    border-radius: 50%;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+    background-color: #FFB800;
+}
+
+.toggle-switch input:checked + .toggle-slider:before {
+    transform: translateX(20px);
+}
+
+.btn-icon {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.02);
+    color: #9CA3AF;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-icon:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.2);
+    color: #FFFFFF;
+}
+
+.btn-icon-danger {
+    border-color: rgba(239, 68, 68, 0.3);
+    color: #FCA5A5;
+}
+
+.btn-icon-danger:hover {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: #EF4444;
+    color: #FFFFFF;
+}
+
+.btn-add-item {
+    width: 100%;
+    padding: 12px;
+    background: rgba(255, 184, 0, 0.1);
+    border: 2px dashed rgba(255, 184, 0, 0.3);
+    border-radius: 8px;
+    color: #FFB800;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.btn-add-item:hover {
+    background: rgba(255, 184, 0, 0.15);
+    border-color: rgba(255, 184, 0, 0.5);
+}
+
+.stats-box {
+    margin-top: 16px;
+    padding: 16px;
+    background: rgba(16, 185, 129, 0.05);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+    border-radius: 8px;
+    display: flex;
+    gap: 24px;
+}
+
+.stat-item {
+    flex: 1;
+}
+
+.stat-label {
+    display: block;
+    font-size: 0.75rem;
+    color: #9CA3AF;
+    margin-bottom: 4px;
+}
+
+.stat-value {
+    display: block;
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: #6EE7B7;
+}
+
+.info-banner {
+    display: flex;
+    gap: 12px;
+    padding: 16px;
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    border-radius: 8px;
+    margin-bottom: 16px;
+}
+
+.info-banner i {
+    color: #60A5FA;
+    font-size: 1.25rem;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.info-banner strong {
+    display: block;
+    color: #93C5FD;
+    margin-bottom: 4px;
+    font-size: 0.875rem;
+}
+
+.info-banner p {
+    color: #DBEAFE;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    margin: 0;
+}
+
+/* Auto-save Indicator */
+.save-status {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    padding: 12px 20px;
+    background: rgba(17, 24, 39, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #FFFFFF;
+    z-index: 1000;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.save-status.saving {
+    color: #F59E0B;
+}
+
+.save-status.saved {
+    color: #10B981;
+}
+
+.save-status.error {
+    color: #EF4444;
+}
+
+/* Layout com Preview */
+.layout-with-preview {
+    display: grid;
+    grid-template-columns: 1fr 360px;
+    gap: 24px;
+}
+
+@media (max-width: 1024px) {
+    .layout-with-preview {
+        grid-template-columns: 1fr;
+    }
+}
+
 .info-box-success {
     background: rgba(16, 185, 129, 0.05);
     border-left-color: #10B981;
@@ -863,6 +1612,17 @@ body {
         </div>
     </div>
 
+    <!-- ✅ UX MELHORIAS: Indicador de Auto-save -->
+    <div x-show="getSaveStatusText()" 
+         x-cloak
+         class="save-status"
+         :class="{
+             'saving': saveStatus === 'saving',
+             'saved': saveStatus === 'saved',
+             'error': saveStatus === 'error'
+         }"
+         x-text="getSaveStatusText()"></div>
+    
     <!-- Tabs -->
     <div class="tab-nav overflow-x-auto -mx-2 sm:-mx-4 md:-mx-6 lg:-mx-8 px-2 sm:px-4 md:px-6 lg:px-8">
         <div class="flex gap-1 sm:gap-2 min-w-max">
@@ -1152,99 +1912,214 @@ body {
     <div x-show="activeTab === 'buttons'" x-cloak>
         <div class="flex justify-between items-center mb-6">
             <div>
-                <h2 class="text-2xl font-bold text-white">Botões de Venda</h2>
-                <p class="text-sm text-gray-500 mt-1">Botões que geram PIX automaticamente</p>
+                <h2 class="text-2xl font-bold text-white">🛍️ Botões de Venda</h2>
+                <p class="text-sm text-gray-500 mt-1">Configure seus produtos e ofertas</p>
             </div>
             <button @click="addButton()" class="btn-action btn-action-success">
                 <i class="fas fa-plus mr-2"></i>
-                Adicionar Botão
+                Adicionar Produto
             </button>
         </div>
 
-        <!-- Lista de Botões -->
+        <!-- Lista de Botões com Preview -->
         <template x-if="config.main_buttons.length > 0">
-            <div class="space-y-4">
+            <div class="space-y-6">
                 <template x-for="(button, index) in config.main_buttons" :key="index">
-                    <div class="button-card">
-                        <!-- Header -->
-                        <div class="button-card-header">
-                            <div class="flex items-center gap-3">
-                                <div class="button-index" x-text="index + 1"></div>
-                                <div>
-                                    <h3 class="text-sm font-bold text-white">Botão <span x-text="index + 1"></span></h3>
-                                    <p class="text-xs text-gray-500">Configure preço e order bump</p>
+                    <div class="layout-with-preview">
+                        <!-- Lado Esquerdo: Configuração -->
+                        <div class="flex-1">
+                            <div class="button-card">
+                                <!-- Header -->
+                                <div class="button-card-header">
+                                    <div class="flex items-center gap-3">
+                                        <div class="button-index" x-text="index + 1"></div>
+                                        <div>
+                                            <h3 class="text-sm font-bold text-white">Produto <span x-text="index + 1"></span></h3>
+                                            <p class="text-xs text-gray-500">Configure preço e ofertas bônus</p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center gap-4">
+                                        <!-- ✅ Toggle de Assinatura no Header -->
+                                        <label class="flex items-center gap-2 cursor-pointer" 
+                                               :title="(button.subscription && button.subscription.enabled) ? 'Este produto é uma assinatura' : 'Este produto é uma assinatura?'">
+                                            <input type="checkbox" 
+                                                   x-model="button.subscription.enabled"
+                                                   @change="if (!button.subscription) button.subscription = {enabled: true, duration_type: 'days', duration_value: 30, vip_chat_id: '', vip_group_link: '', validation_status: null}"
+                                                   class="w-4 h-4 rounded border-gray-600 bg-gray-800 text-yellow-500 focus:ring-yellow-500 focus:ring-2">
+                                            <span class="text-xs font-bold" 
+                                                  :class="(button.subscription && button.subscription.enabled) ? 'text-yellow-400' : 'text-gray-500'">
+                                                <i class="fas fa-calendar-times mr-1"></i>Assinatura
+                                            </span>
+                                        </label>
+                                        <button @click="removeButton(index)" 
+                                                class="w-10 h-10 flex items-center justify-center rounded-lg border border-red-500 text-red-400 hover:bg-red-500 hover:bg-opacity-10 transition-all"
+                                                title="Remover produto">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- ✅ CAMPOS ESSENCIAIS (Sempre Visíveis) -->
+                                <div class="essential-fields">
+                                    <div class="field-group">
+                                        <label class="field-label-essential">
+                                            <span class="label-icon">📝</span>
+                                            <span>Nome do Produto</span>
+                                            <span class="required-badge">*</span>
+                                        </label>
+                                        <input type="text" 
+                                               x-model="button.text" 
+                                               class="field-input"
+                                               placeholder="Ex: Curso Completo de INSS"
+                                               @input="validateField('text', button.text, index); updatePreviewDebounced()"
+                                               @blur="validateField('text', button.text, index)">
+                                        <div class="field-help">
+                                            <i class="fas fa-info-circle"></i>
+                                            <span>Este nome aparecerá no botão. Seja claro e direto.</span>
+                                        </div>
+                                        <div x-show="fieldErrors[`text_${index}`]" 
+                                             x-cloak
+                                             class="field-error"
+                                             x-text="fieldErrors[`text_${index}`]"></div>
+                                    </div>
+
+                                    <div class="field-group">
+                                        <label class="field-label-essential">
+                                            <span class="label-icon">💰</span>
+                                            <span>Preço de Venda</span>
+                                            <span class="required-badge">*</span>
+                                        </label>
+                                        <div class="price-input-wrapper">
+                                            <span class="price-currency">R$</span>
+                                            <input type="number" 
+                                                   x-model.number="button.price" 
+                                                   step="0.01"
+                                                   min="0.01"
+                                                   class="field-input field-input-price"
+                                                   placeholder="19.97"
+                                                   @input="validateField('price', button.price, index); updatePreviewDebounced()"
+                                                   @blur="validateField('price', button.price, index)">
+                                        </div>
+                                        <div class="field-help">
+                                            <i class="fas fa-lightbulb"></i>
+                                            <span><strong>Dica:</strong> Preços terminados em .97 convertem melhor!</span>
+                                        </div>
+                                        <div class="field-status" 
+                                             :class="{'valid': isValidPrice(button.price), 'invalid': !isValidPrice(button.price)}">
+                                            <span x-show="isValidPrice(button.price)">✅ Preço válido</span>
+                                            <span x-show="!isValidPrice(button.price)">⚠️ Preço inválido (mínimo R$ 3,00)</span>
+                                        </div>
+                                        <div x-show="fieldErrors[`price_${index}`]" 
+                                             x-cloak
+                                             class="field-error"
+                                             x-text="fieldErrors[`price_${index}`]"></div>
+                                    </div>
+
+                                    <div class="field-group">
+                                        <label class="field-label">
+                                            <span class="label-icon">📦</span>
+                                            <span>Descrição do Produto</span>
+                                        </label>
+                                        <textarea x-model="button.description" 
+                                                  class="field-textarea"
+                                                  placeholder="O que está incluído neste produto?"
+                                                  rows="3"
+                                                  maxlength="200"
+                                                  @input="updateCharCount('description', button.description, 200, index); updatePreviewDebounced()"></textarea>
+                                        <div class="field-help">
+                                            <i class="fas fa-info-circle"></i>
+                                            <span>Esta descrição aparecerá na mensagem de boas-vindas.</span>
+                                        </div>
+                                        <div class="char-counter">
+                                            <span x-text="charCounts[`description_${index}`] || (button.description ? button.description.length : 0)"></span>/200 caracteres
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="flex items-center gap-4">
-                                <!-- ✅ Toggle de Assinatura no Header -->
-                                <label class="flex items-center gap-2 cursor-pointer" 
-                                       :title="(button.subscription && button.subscription.enabled) ? 'Este botão é uma assinatura' : 'Marcar como assinatura'">
-                                    <input type="checkbox" 
-                                           x-model="button.subscription.enabled"
-                                           @change="if (!button.subscription) button.subscription = {enabled: true, duration_type: 'days', duration_value: 30, vip_chat_id: '', vip_group_link: '', validation_status: null}"
-                                           class="w-4 h-4 rounded border-gray-600 bg-gray-800 text-yellow-500 focus:ring-yellow-500 focus:ring-2">
-                                    <span class="text-xs font-bold" 
-                                          :class="(button.subscription && button.subscription.enabled) ? 'text-yellow-400' : 'text-gray-500'">
-                                        <i class="fas fa-calendar-times mr-1"></i>Assinatura
-                                    </span>
-                                </label>
-                                <button @click="removeButton(index)" 
-                                        class="w-10 h-10 flex items-center justify-center rounded-lg border border-red-500 text-red-400 hover:bg-red-500 hover:bg-opacity-10 transition-all">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            </div>
-                        </div>
 
-                        <!-- Campos Principais -->
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                            <div class="form-group">
-                                <label class="form-label">
-                                    <i class="fas fa-tag mr-2 text-yellow-500"></i>
-                                    Texto do Botão
-                                </label>
-                                <input type="text" 
-                                       x-model="button.text" 
-                                       class="form-input"
-                                       placeholder="Comprar por R$ 19,97">
-                            </div>
-
-                            <div class="form-group">
-                                <label class="form-label">
-                                    <i class="fas fa-dollar-sign mr-2 text-green-500"></i>
-                                    Preço (R$)
-                                </label>
-                                <input type="number" 
-                                       x-model="button.price" 
-                                       step="0.01"
-                                       class="form-input text-center font-mono"
-                                       placeholder="19.97">
-                            </div>
-
-                            <div class="form-group md:col-span-2">
-                                <label class="form-label">
-                                    <i class="fas fa-box mr-2 text-blue-500"></i>
-                                    Descrição
-                                </label>
-                                <input type="text" 
-                                       x-model="button.description" 
-                                       class="form-input"
-                                       placeholder="Curso Completo de...">
-                            </div>
-                        </div>
-
-                        <!-- Múltiplos Order Bumps -->
-                        <div class="order-bumps-section">
-                            <div class="flex items-center justify-between mb-4">
-                                <div class="flex items-center gap-2">
-                                    <i class="fas fa-gift text-yellow-500"></i>
-                                    <span class="text-sm font-bold text-white">Order Bumps (Ofertas Sequenciais)</span>
+                            <!-- ✅ PREVIEW EM TEMPO REAL (Sidebar) -->
+                            <div class="preview-sidebar" x-show="showPreview">
+                                <div class="telegram-preview">
+                                    <div class="telegram-header">
+                                        <div class="telegram-avatar">👤</div>
+                                        <div>
+                                            <div class="telegram-name">Bot do Telegram</div>
+                                            <div class="telegram-time">agora</div>
+                                        </div>
+                                    </div>
+                                    <div class="telegram-message">
+                                        <div x-show="button.description" class="telegram-text" x-text="button.description || 'Descrição do produto aparecerá aqui...'"></div>
+                                        <div class="telegram-buttons">
+                                            <div class="telegram-button" x-show="button.text || button.price">
+                                                <span x-text="button.text || 'Nome do produto'"></span>
+                                                <span class="telegram-price" x-show="button.price && button.price > 0">
+                                                    R$ <span x-text="parseFloat(button.price || 0).toFixed(2)"></span>
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
-                                <button @click="addOrderBump(index)" 
-                                        class="px-3 py-1.5 bg-yellow-500 bg-opacity-25 border border-yellow-400 rounded-lg text-xs font-bold text-yellow-300 hover:bg-yellow-500 hover:bg-opacity-50 transition-all">
-                                    <i class="fas fa-plus mr-1"></i>
-                                    Adicionar Order Bump
-                                </button>
+                                
+                                <!-- Estatísticas do Produto -->
+                                <div class="preview-stats">
+                                    <div class="stat-item">
+                                        <span class="stat-label">Preço Base:</span>
+                                        <span class="stat-value">R$ <span x-text="parseFloat(button.price || 0).toFixed(2)"></span></span>
+                                    </div>
+                                    <div class="stat-item" x-show="getActiveOrderBumpsCount(index) > 0">
+                                        <span class="stat-label">Bônus Total:</span>
+                                        <span class="stat-value">+R$ <span x-text="calculateTotalBonusPrice(index).toFixed(2)"></span></span>
+                                    </div>
+                                    <div class="stat-item" x-show="getActiveOrderBumpsCount(index) > 0">
+                                        <span class="stat-label">Ticket Médio (estimado):</span>
+                                        <span class="stat-value highlight">R$ <span x-text="calculateAverageTicket(index).toFixed(2)"></span></span>
+                                    </div>
+                                    <div class="stat-item" x-show="getActiveOrderBumpsCount(index) > 0">
+                                        <span class="stat-label">Ofertas Bônus:</span>
+                                        <span class="stat-value"><span x-text="getActiveOrderBumpsCount(index)"></span> ativa(s)</span>
+                                    </div>
+                                </div>
                             </div>
+
+                                <!-- ✅ SEÇÃO COLAPSÁVEL: Ofertas Bônus -->
+                                <div class="collapsible-section">
+                                    <button type="button" 
+                                            @click="toggleSection(`order_bumps_${index}`)"
+                                            class="section-toggle">
+                                        <div class="flex items-center gap-3">
+                                            <i class="fas fa-gift text-yellow-500 text-lg"></i>
+                                            <div class="flex-1 text-left">
+                                                <h4 class="text-sm font-bold text-white">
+                                                    Ofertas Bônus <span x-text="getActiveOrderBumpsCount(index)"></span>
+                                                    <span class="text-xs text-gray-500" x-show="getActiveOrderBumpsCount(index) > 0">(ativo)</span>
+                                                </h4>
+                                                <p class="text-xs text-gray-500">Aumente o ticket médio com ofertas complementares</p>
+                                            </div>
+                                            <div class="flex items-center gap-2">
+                                                <span class="text-xs text-gray-500" 
+                                                      x-show="getActiveOrderBumpsCount(index) > 0">
+                                                    +R$ <span x-text="calculateTotalBonusPrice(index).toFixed(2)"></span>
+                                                </span>
+                                                <i class="fas fa-chevron-down transition-transform duration-200"
+                                                   :class="{'rotate-180': expandedSections[`order_bumps_${index}`]}"></i>
+                                            </div>
+                                        </div>
+                                    </button>
+                                    
+                                    <div x-show="expandedSections[`order_bumps_${index}`]" 
+                                         x-collapse
+                                         class="collapsible-content">
+                                        <div class="flex justify-between items-center mb-4">
+                                            <div class="info-banner">
+                                                <i class="fas fa-lightbulb"></i>
+                                                <span><strong>Dica:</strong> Ofereça bônus complementares para aumentar sua receita em até 80%!</span>
+                                            </div>
+                                            <button @click="addOrderBump(index)" 
+                                                    class="ob-button ob-button-default">
+                                                <i class="fas fa-plus mr-1"></i>
+                                                Adicionar Oferta
+                                            </button>
+                                        </div>
 
                             <!-- Lista de Order Bumps -->
                             <template x-if="button.order_bumps && button.order_bumps.length > 0">
@@ -2816,6 +3691,16 @@ body {
         flowViewMode: 'visual',  // ✅ Sempre Visual (Lista removida)
         jsPlumbInstance: null,  // ✅ Instância do jsPlumb
         
+        // ✅ UX MELHORIAS: Validação inline, preview e auto-save
+        fieldErrors: {},
+        charCounts: {},
+        expandedSections: {},
+        saveStatus: '', // 'saving', 'saved', 'error', ''
+        showPreview: true,
+        lastSavedData: null,
+        autoSaveTimer: null,
+        previewUpdateTimeout: null,
+        
         config: {
             welcome_message: '',
             welcome_media_url: '',
@@ -2842,6 +3727,9 @@ body {
             console.log('🔧 Bot Config V2.0 inicializando...');
             await this.loadConfig();
             console.log('✅ Config carregado!');
+            // ✅ UX MELHORIAS: Iniciar auto-save
+            this.lastSavedData = JSON.stringify(this.config);
+            this.startAutoSave();
         },
         
         async loadConfig() {
@@ -3001,6 +3889,9 @@ body {
                     
                     console.log('✅ Config final carregado com sucesso!');
                     console.log('📊 Config completo:', this.config);
+                    
+                    // ✅ UX MELHORIAS: Salvar dados iniciais para auto-save
+                    this.lastSavedData = JSON.stringify(this.config);
                 } else {
                     console.error('❌ Erro na resposta da API:', data);
                     alert('❌ Erro ao carregar configuração. Verifique o console do navegador (F12).');
@@ -3038,16 +3929,20 @@ body {
             return this.config.welcome_message.length;
         },
         
-        async saveConfig() {
-            console.log('🔄 Iniciando salvamento de configuração...');
-            this.loading = true;
+        async saveConfig(isAutoSave = false) {
+            if (!isAutoSave) {
+                console.log('🔄 Iniciando salvamento de configuração...');
+                this.loading = true;
+            }
             
             try {
                 // ✅ VALIDAÇÃO: Apenas verificar limite absoluto do Telegram (4096)
                 if (this.config.welcome_message && this.config.welcome_message.length > 4096) {
-                    alert(`❌ Mensagem muito longa! O máximo é 4096 caracteres (Telegram). Você tem ${this.config.welcome_message.length} caracteres.`);
-                    this.loading = false;
-                    return;
+                    if (!isAutoSave) {
+                        alert(`❌ Mensagem muito longa! O máximo é 4096 caracteres (Telegram). Você tem ${this.config.welcome_message.length} caracteres.`);
+                        this.loading = false;
+                    }
+                    return false;
                 }
                 
                 // ✅ AVISO: Se tem mídia e texto > 1024, apenas avisar (não bloquear)
@@ -3055,7 +3950,9 @@ body {
                     console.warn(`⚠️ Testando: Mensagem com mídia tem ${this.config.welcome_message.length} caracteres (recomendado: 1024 para caption)`);
                 }
                 
-                console.log('📊 Dados a serem enviados:', this.config);
+                if (!isAutoSave) {
+                    console.log('📊 Dados a serem enviados:', this.config);
+                }
                 
                 const response = await fetch('/api/bots/{{ bot.id }}/config', {
                     method: 'PUT',
@@ -3063,25 +3960,214 @@ body {
                     body: JSON.stringify(this.config)
                 });
                 
-                console.log('📡 Resposta recebida:', response.status, response.statusText);
+                if (!isAutoSave) {
+                    console.log('📡 Resposta recebida:', response.status, response.statusText);
+                }
                 
                 const data = await response.json();
-                console.log('📊 Dados da resposta:', data);
+                
+                if (!isAutoSave) {
+                    console.log('📊 Dados da resposta:', data);
+                }
                 
                 if (response.ok) {
-                    console.log('✅ Configurações salvas com sucesso!');
-                    this.showNotification('✅ Configurações salvas!', 'success');
+                    if (!isAutoSave) {
+                        console.log('✅ Configurações salvas com sucesso!');
+                        this.showNotification('✅ Configurações salvas!', 'success');
+                    }
+                    return true;
                 } else {
-                    console.error('❌ Erro na resposta:', data);
-                    alert('Erro: ' + data.error);
+                    if (!isAutoSave) {
+                        console.error('❌ Erro na resposta:', data);
+                        alert('Erro: ' + data.error);
+                    }
+                    return false;
                 }
             } catch (error) {
-                console.error('💥 Erro na requisição:', error);
-                alert('Erro: ' + error.message);
+                if (!isAutoSave) {
+                    console.error('💥 Erro na requisição:', error);
+                    alert('Erro: ' + error.message);
+                }
+                return false;
             } finally {
-                console.log('🏁 Finalizando salvamento...');
-                this.loading = false;
+                if (!isAutoSave) {
+                    console.log('🏁 Finalizando salvamento...');
+                    this.loading = false;
+                }
             }
+        },
+        
+        // ✅ UX MELHORIAS: Funções de validação inline
+        validateField(fieldName, value, buttonIndex) {
+            const errorKey = `${fieldName}_${buttonIndex}`;
+            
+            switch(fieldName) {
+                case 'text':
+                    if (!value || value.trim().length === 0) {
+                        this.$set(this.fieldErrors, errorKey, 'Nome do produto é obrigatório');
+                        return false;
+                    }
+                    if (value.length > 40) {
+                        this.$set(this.fieldErrors, errorKey, 'Nome muito longo (máximo 40 caracteres)');
+                        return false;
+                    }
+                    this.$set(this.fieldErrors, errorKey, null);
+                    return true;
+                    
+                case 'price':
+                    if (!value || value <= 0) {
+                        this.$set(this.fieldErrors, errorKey, 'Preço deve ser maior que zero');
+                        return false;
+                    }
+                    if (value < 3) {
+                        this.$set(this.fieldErrors, errorKey, 'Preço mínimo é R$ 3,00');
+                        return false;
+                    }
+                    this.$set(this.fieldErrors, errorKey, null);
+                    return true;
+                    
+                default:
+                    return true;
+            }
+        },
+        
+        isValidPrice(price) {
+            return price && price > 0 && price >= 3;
+        },
+        
+        updateCharCount(fieldName, value, maxLength, index) {
+            const countKey = `${fieldName}_${index}`;
+            this.$set(this.charCounts, countKey, (value || '').length);
+        },
+        
+        formatPrice(price) {
+            if (!price) return '0.00';
+            return parseFloat(price).toFixed(2);
+        },
+        
+        toggleSection(sectionKey) {
+            this.$set(this.expandedSections, sectionKey, !this.expandedSections[sectionKey]);
+        },
+        
+        // ✅ UX MELHORIAS: Auto-save
+        startAutoSave() {
+            clearInterval(this.autoSaveTimer);
+            this.autoSaveTimer = setInterval(async () => {
+                const currentData = JSON.stringify(this.config);
+                if (currentData !== this.lastSavedData) {
+                    this.saveStatus = 'saving';
+                    const success = await this.saveConfig(true);
+                    if (success) {
+                        this.saveStatus = 'saved';
+                        this.lastSavedData = currentData;
+                        setTimeout(() => {
+                            if (this.saveStatus === 'saved') this.saveStatus = '';
+                        }, 2000);
+                    } else {
+                        this.saveStatus = 'error';
+                    }
+                }
+            }, 5000);
+        },
+        
+        stopAutoSave() {
+            if (this.autoSaveTimer) {
+                clearInterval(this.autoSaveTimer);
+                this.autoSaveTimer = null;
+            }
+        },
+        
+        getSaveStatusText() {
+            switch(this.saveStatus) {
+                case 'saving': return '💾 Salvando...';
+                case 'saved': return '✅ Salvo';
+                case 'error': return '❌ Erro ao salvar';
+                default: return '';
+            }
+        },
+        
+        // ✅ UX MELHORIAS: Funções para Preview e Cálculos
+        calculateTotalBonusPrice(buttonIndex) {
+            const button = this.config.main_buttons[buttonIndex];
+            if (!button || !button.order_bumps) return 0;
+            return button.order_bumps
+                .filter(ob => ob.enabled)
+                .reduce((sum, ob) => sum + (parseFloat(ob.price) || 0), 0);
+        },
+        
+        calculateAverageTicket(buttonIndex) {
+            const button = this.config.main_buttons[buttonIndex];
+            if (!button) return 0;
+            const basePrice = parseFloat(button.price) || 0;
+            const bonusPrice = this.calculateTotalBonusPrice(buttonIndex);
+            // Estimativa: 30% de conversão nos order bumps
+            return basePrice + (bonusPrice * 0.3);
+        },
+        
+        getActiveOrderBumpsCount(buttonIndex) {
+            const button = this.config.main_buttons[buttonIndex];
+            if (!button || !button.order_bumps) return 0;
+            return button.order_bumps.filter(ob => ob.enabled).length;
+        },
+        
+        // ✅ UX MELHORIAS: Validação completa de botão
+        validateButtonComplete(button, index) {
+            const errors = [];
+            
+            // Validações básicas
+            if (!button.text || button.text.trim().length === 0) {
+                errors.push('Nome do produto é obrigatório');
+            }
+            if (!button.price || button.price <= 0) {
+                errors.push('Preço deve ser maior que zero');
+            }
+            if (button.price && button.price < 3) {
+                errors.push('Preço mínimo é R$ 3,00 (limite dos gateways)');
+            }
+            
+            // Validações de relacionamento
+            if (button.order_bumps && button.order_bumps.length > 0) {
+                const activeBumps = button.order_bumps.filter(ob => ob.enabled);
+                const totalBonus = activeBumps.reduce((sum, ob) => sum + (parseFloat(ob.price) || 0), 0);
+                const totalPrice = (parseFloat(button.price) || 0) + totalBonus;
+                
+                if (totalPrice > 1000) {
+                    errors.push(`Preço total (R$ ${totalPrice.toFixed(2)}) é muito alto. Considere reduzir para melhor conversão.`);
+                }
+                
+                activeBumps.forEach((bump, bumpIndex) => {
+                    if (parseFloat(bump.price) > parseFloat(button.price)) {
+                        errors.push(`Oferta Bônus ${bumpIndex + 1}: Preço do bônus (R$ ${parseFloat(bump.price).toFixed(2)}) não pode ser maior que o produto principal (R$ ${parseFloat(button.price).toFixed(2)})`);
+                    }
+                    if (!bump.description || bump.description.trim().length === 0) {
+                        errors.push(`Oferta Bônus ${bumpIndex + 1}: Descrição do bônus é obrigatória`);
+                    }
+                });
+            }
+            
+            // Validação de assinatura
+            if (button.subscription && button.subscription.enabled) {
+                if (!button.subscription.vip_chat_id && !button.subscription.vip_group_link) {
+                    errors.push('Assinatura: Chat ID ou link do grupo VIP é obrigatório');
+                }
+                if (!button.subscription.duration_value || button.subscription.duration_value <= 0) {
+                    errors.push('Assinatura: Duração deve ser maior que zero');
+                }
+            }
+            
+            return {
+                isValid: errors.length === 0,
+                errors: errors
+            };
+        },
+        
+        // ✅ UX MELHORIAS: Debounce para preview (performance)
+        updatePreviewDebounced() {
+            clearTimeout(this.previewUpdateTimeout);
+            this.previewUpdateTimeout = setTimeout(() => {
+                // Preview atualiza automaticamente via Alpine.js reatividade
+                // Esta função pode ser usada para cálculos pesados se necessário
+            }, 500);
         },
         
         addButton() {
