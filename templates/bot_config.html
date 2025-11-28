@@ -929,6 +929,20 @@ body {
     color: #6B7280;
 }
 
+.telegram-badge-access {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    background: rgba(34, 197, 94, 0.1);
+    border: 1px solid rgba(34, 197, 94, 0.3);
+    border-radius: 6px;
+    color: #22C55E;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-top: 8px;
+}
+
 .telegram-message {
     margin-bottom: 12px;
 }
@@ -2015,6 +2029,23 @@ body {
                                              x-text="fieldErrors[`price_${index}`]"></div>
                                     </div>
 
+                                    <!-- ✅ ACESSO IMEDIATO (Campo visível na interface) -->
+                                    <div class="field-group">
+                                        <label class="flex items-center gap-2 cursor-pointer">
+                                            <input type="checkbox" 
+                                                   x-model="button.immediate_access"
+                                                   class="w-4 h-4 rounded border-gray-600 bg-gray-800 text-yellow-500 focus:ring-yellow-500 focus:ring-2">
+                                            <span class="field-label">
+                                                <span class="label-icon">⚡</span>
+                                                <span>Acesso Imediato</span>
+                                            </span>
+                                        </label>
+                                        <div class="field-help">
+                                            <i class="fas fa-info-circle"></i>
+                                            <span>Cliente recebe o acesso instantaneamente após o pagamento (sem entrar em grupo VIP).</span>
+                                        </div>
+                                    </div>
+
                                     <div class="field-group">
                                         <label class="field-label">
                                             <span class="label-icon">📦</span>
@@ -2053,9 +2084,13 @@ body {
                                             <div class="telegram-button" x-show="button.text || button.price">
                                                 <span x-text="button.text || 'Nome do produto'"></span>
                                                 <span class="telegram-price" x-show="button.price && button.price > 0">
-                                                    R$ <span x-text="parseFloat(button.price || 0).toFixed(2)"></span>
+                                                    por R$ <span x-text="formatPriceBR(button.price)"></span>
                                                 </span>
                                             </div>
+                                        </div>
+                                        <div x-show="button.immediate_access" class="telegram-badge-access mt-2">
+                                            <i class="fas fa-bolt text-xs"></i>
+                                            <span class="text-xs">Acesso Imediato</span>
                                         </div>
                                     </div>
                                 </div>
@@ -2071,7 +2106,10 @@ body {
                                         <span class="stat-value">+R$ <span x-text="calculateTotalBonusPrice(index).toFixed(2)"></span></span>
                                     </div>
                                     <div class="stat-item" x-show="getActiveOrderBumpsCount(index) > 0">
-                                        <span class="stat-label">Ticket Médio (estimado):</span>
+                                        <div>
+                                            <span class="stat-label">Ticket Médio (estimado):</span>
+                                            <span class="text-xs text-gray-400 block mt-0.5">Média com 30% de aceite nos bônus</span>
+                                        </div>
                                         <span class="stat-value highlight">R$ <span x-text="calculateAverageTicket(index).toFixed(2)"></span></span>
                                     </div>
                                     <div class="stat-item" x-show="getActiveOrderBumpsCount(index) > 0">
@@ -4045,6 +4083,11 @@ body {
             return parseFloat(price).toFixed(2);
         },
         
+        formatPriceBR(price) {
+            if (!price) return '0,00';
+            return parseFloat(price).toFixed(2).replace('.', ',');
+        },
+        
         toggleSection(sectionKey) {
             this.$set(this.expandedSections, sectionKey, !this.expandedSections[sectionKey]);
         },
@@ -4175,6 +4218,7 @@ body {
                 text: '',
                 price: 0,
                 description: '',
+                immediate_access: false,  // ✅ ACESSO IMEDIATO
                 order_bumps: [],  // ✅ ARRAY DE ORDER BUMPS
                 subscription: {   // ✅ SISTEMA DE ASSINATURAS
                     enabled: false,
