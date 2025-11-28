@@ -2830,17 +2830,6 @@ body {
                                                                         <div class="order-bump-badge-preview" x-text="'ORDER BUMP ' + (bumpIndex + 1)"></div>
                                                                         <div class="order-bump-message-preview" x-text="orderBump.message"></div>
                                                                         
-                                                                        <template x-if="orderBump.description && orderBump.description.trim()">
-                                                                            <div class="order-bump-description-preview" x-text="orderBump.description"></div>
-                                                                        </template>
-
-                                                                        <template x-if="orderBump.price && orderBump.price > 0">
-                                                                            <div class="order-bump-price-preview">
-                                                                                <span class="order-bump-price-label">Preço adicional:</span>
-                                                                                <span class="order-bump-price-value">+R$ <span x-text="(orderBump.price || 0).toFixed(2).replace('.', ',')"></span></span>
-                                                                            </div>
-                                                                        </template>
-
                                                                         <template x-if="orderBump.media_url">
                                                                             <div class="order-bump-media-preview">
                                                                                 <i class="fas" :class="orderBump.media_type === 'video' ? 'fa-video' : 'fa-image'"></i>
