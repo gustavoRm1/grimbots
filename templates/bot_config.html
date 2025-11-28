@@ -704,6 +704,269 @@ body {
 
 /* ✅ UX MELHORIAS: Estilos para campos essenciais, preview e validação inline */
 
+/* Layout 2 Colunas: Informações + Preview */
+.product-config-layout {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 24px;
+    align-items: start;
+}
+
+@media (max-width: 1024px) {
+    .product-config-layout {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Campos Essenciais - Destaque Visual */
+.essential-field-group {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+}
+
+.field-with-validation {
+    position: relative;
+}
+
+.field-validation-icon {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 1.125rem;
+    pointer-events: none;
+}
+
+.field-validation-icon.valid {
+    color: #10B981;
+}
+
+.field-validation-icon.warning {
+    color: #F59E0B;
+}
+
+.field-validation-icon.error {
+    color: #EF4444;
+}
+
+/* Input com validação - padding ajustado via inline styles no HTML */
+
+/* Preço Destaque Visual */
+.price-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.price-currency-symbol {
+    position: absolute;
+    left: 16px;
+    color: #10B981;
+    font-weight: 700;
+    font-size: 1.125rem;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.price-input-wrapper .form-input {
+    padding-left: 36px;
+    text-align: right;
+    font-weight: 600;
+    font-size: 1.125rem;
+}
+
+/* Contador de Caracteres */
+.char-counter-wrapper {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 6px;
+}
+
+.char-counter {
+    font-size: 0.75rem;
+    color: #9CA3AF;
+}
+
+.char-counter.warning {
+    color: #F59E0B;
+}
+
+.char-counter.error {
+    color: #EF4444;
+}
+
+/* Preview Telegram */
+.telegram-preview-card {
+    position: sticky;
+    top: 20px;
+    background: #FFFFFF;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    min-height: 400px;
+}
+
+.telegram-preview-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #E5E7EB;
+    margin-bottom: 16px;
+}
+
+.telegram-avatar-preview {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #FFFFFF;
+    font-weight: 700;
+    font-size: 1.125rem;
+}
+
+.telegram-info-preview {
+    flex: 1;
+}
+
+.telegram-name-preview {
+    font-weight: 600;
+    color: #111827;
+    font-size: 0.875rem;
+}
+
+.telegram-time-preview {
+    font-size: 0.75rem;
+    color: #6B7280;
+}
+
+.telegram-message-preview {
+    background: #F3F4F6;
+    padding: 12px 16px;
+    border-radius: 12px;
+    margin-bottom: 16px;
+    min-height: 100px;
+}
+
+.product-name-preview {
+    font-weight: 700;
+    color: #111827;
+    font-size: 1rem;
+    margin-bottom: 8px;
+}
+
+.product-description-preview {
+    color: #4B5563;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+.product-price-preview {
+    font-weight: 700;
+    color: #10B981;
+    font-size: 1.5rem;
+    margin: 12px 0;
+}
+
+.telegram-button-preview {
+    width: 100%;
+    padding: 14px 20px;
+    background: #0088CC;
+    color: #FFFFFF;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.875rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    cursor: default;
+}
+
+.telegram-button-preview:hover {
+    background: #006BA3;
+}
+
+.empty-state-preview {
+    text-align: center;
+    padding: 40px 20px;
+    color: #9CA3AF;
+}
+
+.empty-state-preview-icon {
+    font-size: 3rem;
+    margin-bottom: 12px;
+    opacity: 0.5;
+}
+
+.empty-state-preview-text {
+    font-size: 0.875rem;
+}
+
+/* Tooltip Contextual */
+.field-help-tooltip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: 8px;
+    cursor: help;
+}
+
+.tooltip-icon {
+    color: #6B7280;
+    font-size: 0.875rem;
+}
+
+.field-help-text {
+    margin-top: 6px;
+    font-size: 0.75rem;
+    color: #9CA3AF;
+    line-height: 1.4;
+}
+
+/* Label com Badge Obrigatório */
+.label-with-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.required-badge {
+    color: #EF4444;
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+/* Animações Suaves */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.field-validation-icon {
+    animation: fadeIn 0.2s ease;
+}
+
+.product-config-layout {
+    animation: fadeIn 0.3s ease;
+}
+
 
 /* Order Bump Cards Compactos */
 .order-bumps-list {
@@ -1425,32 +1688,177 @@ body {
                                     </div>
                                 </div>
 
-                                <!-- Campos do Produto -->
-                                <div class="space-y-4">
-                                    <div class="form-group">
-                                        <label class="form-label">Nome do Produto</label>
-                                        <input type="text" 
-                                               x-model="button.text" 
-                                               class="form-input"
-                                               placeholder="Ex: Curso Completo de INSS">
+                                <!-- ✅ UX MELHORADO: Campos do Produto com Preview -->
+                                <div class="product-config-layout">
+                                    <!-- Coluna Esquerda: Campos de Configuração -->
+                                    <div class="flex-1 space-y-4">
+                                        <!-- Grupo de Campos Essenciais -->
+                                        <div class="essential-field-group">
+                                            <h4 class="text-sm font-bold text-white mb-4 flex items-center gap-2">
+                                                <i class="fas fa-info-circle text-blue-400"></i>
+                                                Informações Essenciais
+                                            </h4>
+                                            
+                                            <!-- Nome do Produto -->
+                                            <div class="form-group">
+                                                <label class="form-label label-with-badge">
+                                                    Nome do Produto
+                                                    <span class="required-badge">*</span>
+                                                    <span class="field-help-tooltip" title="Nome que aparece no botão do Telegram">
+                                                        <i class="fas fa-question-circle tooltip-icon"></i>
+                                                    </span>
+                                                </label>
+                                                <div class="field-with-validation">
+                                                    <input type="text" 
+                                                           x-model="button.text" 
+                                                           @input="validateProductField(index, 'text')"
+                                                           class="form-input"
+                                                           placeholder="Ex: Curso Completo de INSS"
+                                                           :style="(button.text && button.text.trim().length >= 3) || (button.text && button.text.trim().length > 0 && button.text.trim().length < 3) ? 'padding-right: 40px;' : ''"
+                                                           :class="{
+                                                               'border-green-500': button.text && button.text.trim().length >= 3,
+                                                               'border-red-500': button.text && button.text.trim().length > 0 && button.text.trim().length < 3,
+                                                               'border-gray-600': !button.text
+                                                           }">
+                                                    <i class="fas fa-check-circle field-validation-icon valid" 
+                                                       x-show="button.text && button.text.trim().length >= 3"></i>
+                                                    <i class="fas fa-exclamation-circle field-validation-icon error" 
+                                                       x-show="button.text && button.text.trim().length > 0 && button.text.trim().length < 3"></i>
+                                                </div>
+                                                <p class="field-help-text" x-show="!button.text || button.text.trim().length < 3">
+                                                    <i class="fas fa-lightbulb mr-1"></i>
+                                                    Use um nome claro e atrativo. Mínimo 3 caracteres.
+                                                </p>
+                                            </div>
+
+                                            <!-- Preço de Venda -->
+                                            <div class="form-group">
+                                                <label class="form-label label-with-badge">
+                                                    Preço de Venda
+                                                    <span class="required-badge">*</span>
+                                                    <span class="field-help-tooltip" title="Valor que o cliente pagará pelo produto">
+                                                        <i class="fas fa-question-circle tooltip-icon"></i>
+                                                    </span>
+                                                </label>
+                                                <div class="price-input-wrapper">
+                                                    <span class="price-currency-symbol">R$</span>
+                                                    <div class="field-with-validation flex-1">
+                                                        <input type="number" 
+                                                               x-model.number="button.price" 
+                                                               @input="validateProductField(index, 'price')"
+                                                               step="0.01"
+                                                               min="0.01"
+                                                               class="form-input"
+                                                               placeholder="19.97"
+                                                               :style="(button.price && button.price > 0) || (button.price !== null && button.price <= 0) ? 'padding-right: 40px;' : ''"
+                                                               :class="{
+                                                                   'border-green-500': button.price && button.price > 0,
+                                                                   'border-red-500': button.price !== null && button.price <= 0,
+                                                                   'border-gray-600': !button.price
+                                                               }">
+                                                        <i class="fas fa-check-circle field-validation-icon valid" 
+                                                           x-show="button.price && button.price > 0"></i>
+                                                        <i class="fas fa-exclamation-circle field-validation-icon error" 
+                                                           x-show="button.price !== null && button.price <= 0"></i>
+                                                    </div>
+                                                </div>
+                                                <p class="field-help-text" x-show="!button.price || button.price <= 0">
+                                                    <i class="fas fa-lightbulb mr-1"></i>
+                                                    Preço deve ser maior que zero. Use ponto (.) para decimais.
+                                                </p>
+                                            </div>
+
+                                            <!-- Descrição do Produto -->
+                                            <div class="form-group">
+                                                <label class="form-label">
+                                                    Descrição do Produto
+                                                    <span class="field-help-tooltip" title="Texto que aparece na mensagem do Telegram explicando o produto">
+                                                        <i class="fas fa-question-circle tooltip-icon"></i>
+                                                    </span>
+                                                </label>
+                                                <textarea x-model="button.description" 
+                                                          @input="validateProductField(index, 'description')"
+                                                          class="form-textarea"
+                                                          placeholder="Descreva o que está incluído neste produto..."
+                                                          rows="4"
+                                                          maxlength="500"></textarea>
+                                                <div class="char-counter-wrapper">
+                                                    <p class="field-help-text">
+                                                        <i class="fas fa-info-circle mr-1"></i>
+                                                        Explique claramente o valor do produto. Use quebras de linha para organizar.
+                                                    </p>
+                                                    <span class="char-counter" 
+                                                          :class="{
+                                                              'warning': button.description && button.description.length > 400,
+                                                              'error': button.description && button.description.length > 500
+                                                          }"
+                                                          x-text="(button.description?.length || 0) + '/500'">
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
 
-                                    <div class="form-group">
-                                        <label class="form-label">Preço de Venda (R$)</label>
-                                        <input type="number" 
-                                               x-model.number="button.price" 
-                                               step="0.01"
-                                               min="0.01"
-                                               class="form-input"
-                                               placeholder="19.97">
-                                    </div>
+                                    <!-- Coluna Direita: Preview do Telegram -->
+                                    <div class="telegram-preview-card">
+                                        <div class="telegram-preview-header">
+                                            <div class="telegram-avatar-preview">
+                                                <i class="fas fa-robot"></i>
+                                            </div>
+                                            <div class="telegram-info-preview">
+                                                <div class="telegram-name-preview">Seu Bot</div>
+                                                <div class="telegram-time-preview">Agora</div>
+                                            </div>
+                                        </div>
 
-                                    <div class="form-group">
-                                        <label class="form-label">Descrição do Produto</label>
-                                        <textarea x-model="button.description" 
-                                                  class="form-textarea"
-                                                  placeholder="O que está incluído neste produto?"
-                                                  rows="3"></textarea>
+                                        <div class="telegram-message-preview">
+                                            <template x-if="!button.text || button.text.trim().length < 3">
+                                                <div class="empty-state-preview">
+                                                    <div class="empty-state-preview-icon">📦</div>
+                                                    <div class="empty-state-preview-text">
+                                                        Configure o nome do produto para ver o preview
+                                                    </div>
+                                                </div>
+                                            </template>
+                                            <template x-if="button.text && button.text.trim().length >= 3">
+                                                <div>
+                                                    <div class="product-name-preview" x-text="button.text || 'Nome do Produto'"></div>
+                                                    
+                                                    <template x-if="button.description && button.description.trim()">
+                                                        <div class="product-description-preview" x-text="button.description"></div>
+                                                    </template>
+                                                    <template x-if="!button.description || !button.description.trim()">
+                                                        <div class="product-description-preview" style="color: #9CA3AF; font-style: italic;">
+                                                            Descrição do produto aparecerá aqui...
+                                                        </div>
+                                                    </template>
+
+                                                    <template x-if="button.price && button.price > 0">
+                                                        <div class="product-price-preview">
+                                                            R$ <span x-text="(button.price || 0).toFixed(2).replace('.', ',')"></span>
+                                                        </div>
+                                                    </template>
+                                                    <template x-if="!button.price || button.price <= 0">
+                                                        <div class="product-price-preview" style="color: #9CA3AF; font-size: 1rem;">
+                                                            Configure o preço
+                                                        </div>
+                                                    </template>
+                                                </div>
+                                            </template>
+                                        </div>
+
+                                        <template x-if="button.text && button.text.trim().length >= 3 && button.price && button.price > 0">
+                                            <button class="telegram-button-preview">
+                                                <i class="fas fa-shopping-cart"></i>
+                                                <span x-text="button.text || 'Comprar'"></span>
+                                            </button>
+                                        </template>
+                                        <template x-if="!button.text || button.text.trim().length < 3 || !button.price || button.price <= 0">
+                                            <button class="telegram-button-preview" style="opacity: 0.5; cursor: not-allowed;">
+                                                <i class="fas fa-shopping-cart"></i>
+                                                Configure o produto para ver o botão
+                                            </button>
+                                        </template>
                                     </div>
                                 </div>
 
@@ -3378,6 +3786,15 @@ body {
             if (confirm('Remover este produto?')) {
                 this.config.main_buttons.splice(index, 1);
             }
+        },
+        
+        // ✅ UX MELHORADO: Validação visual de campos do produto
+        validateProductField(buttonIndex, fieldName) {
+            const button = this.config.main_buttons[buttonIndex];
+            if (!button) return;
+            
+            // Validação será feita automaticamente via binding de classes no HTML
+            // Esta função pode ser expandida para validações mais complexas no futuro
         },
         
         addRedirectButton() {
