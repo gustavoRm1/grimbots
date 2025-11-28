@@ -1697,6 +1697,183 @@ body {
     }
 }
 
+/* ✅ Tutorial Visual de Como Encontrar ID do Grupo */
+.subscription-guide-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    border-bottom: 2px solid rgba(59, 130, 246, 0.2);
+}
+
+.subscription-guide-tab {
+    padding: 10px 16px;
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    color: #9CA3AF;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    bottom: -2px;
+}
+
+.subscription-guide-tab:hover {
+    color: #60A5FA;
+}
+
+.subscription-guide-tab.active {
+    color: #60A5FA;
+    border-bottom-color: #3B82F6;
+}
+
+.subscription-guide-step-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 12px;
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+}
+
+.subscription-guide-step-number {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%);
+    color: #FFFFFF;
+    font-weight: 700;
+    font-size: 0.875rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.subscription-guide-step-content {
+    flex: 1;
+}
+
+.subscription-guide-step-title {
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: #FFFFFF;
+    margin-bottom: 6px;
+    line-height: 1.4;
+}
+
+.subscription-guide-step-desc {
+    font-size: 0.75rem;
+    color: #D1D5DB;
+    line-height: 1.5;
+}
+
+.subscription-guide-step-highlight {
+    background: rgba(59, 130, 246, 0.15);
+    border-left: 3px solid #3B82F6;
+    padding: 8px 12px;
+    border-radius: 4px;
+    margin-top: 8px;
+    font-size: 0.75rem;
+    color: #DBEAFE;
+}
+
+.subscription-guide-important-tips {
+    background: rgba(245, 158, 11, 0.1);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    border-radius: 8px;
+    padding: 16px;
+    margin-top: 16px;
+}
+
+.subscription-guide-tips-title {
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: #FCD34D;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.subscription-guide-tip-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 10px;
+    font-size: 0.75rem;
+    color: #FDE68A;
+    line-height: 1.5;
+}
+
+.subscription-guide-tip-icon {
+    color: #F59E0B;
+    font-size: 0.875rem;
+    margin-top: 2px;
+    flex-shrink: 0;
+}
+
+.subscription-guide-bot-name {
+    background: rgba(0, 136, 204, 0.2);
+    border: 1px solid rgba(0, 136, 204, 0.4);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-family: monospace;
+    font-weight: 600;
+    color: #7DD3FC;
+    display: inline-block;
+    font-size: 0.75rem;
+}
+
+.subscription-guide-example-id {
+    background: rgba(17, 24, 39, 0.6);
+    border: 1px dashed rgba(255, 255, 255, 0.3);
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-family: monospace;
+    font-size: 0.8rem;
+    color: #10B981;
+    margin-top: 8px;
+    display: inline-block;
+    font-weight: 600;
+}
+
+.subscription-guide-tutorial {
+    margin-top: 16px;
+}
+
+/* Ajustes de Responsividade para o Tutorial */
+@media (max-width: 640px) {
+    .subscription-guide-step-card {
+        flex-direction: column;
+        text-align: center;
+    }
+    
+    .subscription-guide-step-number {
+        margin: 0 auto 12px;
+    }
+    
+    .subscription-guide-tabs {
+        flex-direction: column;
+    }
+    
+    .subscription-guide-tab {
+        width: 100%;
+        border-bottom: none;
+        border-left: 3px solid transparent;
+        text-align: left;
+    }
+    
+    .subscription-guide-tab.active {
+        border-left-color: #3B82F6;
+        border-bottom-color: transparent;
+    }
+}
+
 /* Botões de Ação - IDÊNTICO ao Dashboard */
 .btn-action {
     display: inline-flex;
@@ -2772,21 +2949,6 @@ body {
                                                 </p>
                                             </div>
                                         </div>
-                                        
-                                        <!-- Preview do Tempo -->
-                                        <div class="mt-4 p-3 bg-gray-900 border border-gray-700 rounded-lg">
-                                            <p class="text-xs text-gray-400 mb-1">Preview:</p>
-                                            <p class="text-sm font-bold text-white" x-show="button.subscription.duration_value && button.subscription.duration_value > 0">
-                                                <i class="fas fa-check-circle text-green-400 mr-1"></i>
-                                                Acesso válido por 
-                                                <span x-text="button.subscription.duration_value"></span> 
-                                                <span x-text="button.subscription.duration_type === 'hours' ? 'horas' : button.subscription.duration_type === 'days' ? 'dias' : button.subscription.duration_type === 'weeks' ? 'semanas' : 'meses'"></span>
-                                            </p>
-                                            <p class="text-sm text-gray-500" x-show="!button.subscription.duration_value || button.subscription.duration_value <= 0">
-                                                <i class="fas fa-exclamation-circle text-yellow-400 mr-1"></i>
-                                                Configure o tempo de acesso
-                                            </p>
-                                        </div>
                                     </div>
 
                                     <!-- Card: Grupo VIP -->
@@ -2842,20 +3004,212 @@ body {
                                                 </div>
                                             </template>
 
-                                            <!-- Guia: Como Encontrar o Chat ID -->
+                                            <!-- ✅ Guia Visual Melhorado: Como Encontrar o ID -->
                                             <div class="subscription-guide-card">
-                                                <div class="subscription-guide-title">
-                                                    <i class="fas fa-lightbulb"></i>
-                                                    Como encontrar o ID do grupo?
+                                                <div class="subscription-guide-title mb-4">
+                                                    <i class="fas fa-lightbulb text-yellow-400"></i>
+                                                    📋 Como Encontrar o ID do Grupo/Canal?
                                                 </div>
-                                                <ol class="subscription-guide-steps">
-                                                    <li>Abra o grupo VIP no Telegram</li>
-                                                    <li>Vá em <strong>Configurações</strong> do grupo</li>
-                                                    <li>Role até o final e clique em <strong>ID do Grupo</strong></li>
-                                                    <li>Copie o ID (ex: -1001234567890) ou link do grupo</li>
-                                                </ol>
-                                                <div class="subscription-chat-id-example mt-3">
-                                                    Exemplo de ID: -1001234567890
+                                                
+                                                <!-- Tabs: Grupo ou Canal -->
+                                                <div class="subscription-guide-tabs">
+                                                    <button @click="subscriptionGuideTab = 'group'" 
+                                                            :class="{'active': subscriptionGuideTab === 'group'}"
+                                                            class="subscription-guide-tab">
+                                                        <i class="fas fa-users mr-2"></i>
+                                                        Grupo
+                                                    </button>
+                                                    <button @click="subscriptionGuideTab = 'channel'" 
+                                                            :class="{'active': subscriptionGuideTab === 'channel'}"
+                                                            class="subscription-guide-tab">
+                                                        <i class="fas fa-bullhorn mr-2"></i>
+                                                        Canal
+                                                    </button>
+                                                </div>
+
+                                                <!-- Tutorial para GRUPO -->
+                                                <div x-show="subscriptionGuideTab === 'group'" class="subscription-guide-tutorial">
+                                                    <div class="subscription-guide-step-card">
+                                                        <div class="subscription-guide-step-number">1</div>
+                                                        <div class="subscription-guide-step-content">
+                                                            <div class="subscription-guide-step-title">
+                                                                Entre no grupo e clique no ícone de editar
+                                                            </div>
+                                                            <div class="subscription-guide-step-desc">
+                                                                Abra o grupo VIP no Telegram e clique no ícone de <strong>editar</strong> (⚙️) no canto superior direito
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="subscription-guide-step-card">
+                                                        <div class="subscription-guide-step-number">2</div>
+                                                        <div class="subscription-guide-step-content">
+                                                            <div class="subscription-guide-step-title">
+                                                                Clique em "Administradores"
+                                                            </div>
+                                                            <div class="subscription-guide-step-desc">
+                                                                No menu de configurações, selecione a opção <strong>Administradores</strong>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="subscription-guide-step-card">
+                                                        <div class="subscription-guide-step-number">3</div>
+                                                        <div class="subscription-guide-step-content">
+                                                            <div class="subscription-guide-step-title">
+                                                                Adicione o bot @ScanIDBot como administrador
+                                                            </div>
+                                                            <div class="subscription-guide-step-desc">
+                                                                Clique no botão de <strong>adicionar administrador</strong> e busque pelo bot:
+                                                                <div class="subscription-guide-bot-name mt-2">@ScanIDBot</div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="subscription-guide-step-card">
+                                                        <div class="subscription-guide-step-number">4</div>
+                                                        <div class="subscription-guide-step-content">
+                                                            <div class="subscription-guide-step-title">
+                                                                Dê as permissões necessárias ao bot
+                                                            </div>
+                                                            <div class="subscription-guide-step-desc">
+                                                                Ative as permissões:
+                                                                <div class="subscription-guide-step-highlight mt-2">
+                                                                    ✅ Enviar mensagens<br>
+                                                                    ✅ Gerenciar mensagens<br>
+                                                                    ✅ Ver mensagens anteriores
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="subscription-guide-step-card">
+                                                        <div class="subscription-guide-step-number">5</div>
+                                                        <div class="subscription-guide-step-content">
+                                                            <div class="subscription-guide-step-title">
+                                                                Copie o ID que o bot enviar
+                                                            </div>
+                                                            <div class="subscription-guide-step-desc">
+                                                                Após adicionar o bot, ele enviará automaticamente uma mensagem com o ID do grupo:
+                                                                <div class="subscription-guide-example-id mt-2">
+                                                                    Forwarded from chat: -1002456312807
+                                                                </div>
+                                                                <div class="text-xs text-gray-400 mt-2">
+                                                                    Copie apenas o número (ex: -1002456312807)
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <!-- Dicas Importantes para Grupo -->
+                                                    <div class="subscription-guide-important-tips">
+                                                        <div class="subscription-guide-tips-title">
+                                                            <i class="fas fa-star"></i>
+                                                            Dicas Importantes
+                                                        </div>
+                                                        <div class="subscription-guide-tip-item">
+                                                            <i class="fas fa-circle subscription-guide-tip-icon" style="font-size: 0.5rem;"></i>
+                                                            <span>IDs de grupos geralmente começam com <strong>-100</strong></span>
+                                                        </div>
+                                                        <div class="subscription-guide-tip-item">
+                                                            <i class="fas fa-circle subscription-guide-tip-icon" style="font-size: 0.5rem;"></i>
+                                                            <span><strong>Importante:</strong> Deixe o histórico do grupo visível nas configurações!</span>
+                                                        </div>
+                                                        <div class="subscription-guide-tip-item">
+                                                            <i class="fas fa-circle subscription-guide-tip-icon" style="font-size: 0.5rem;"></i>
+                                                            <span>Certifique-se de que o bot tenha permissões para enviar mensagens</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <!-- Tutorial para CANAL -->
+                                                <div x-show="subscriptionGuideTab === 'channel'" class="subscription-guide-tutorial">
+                                                    <div class="subscription-guide-step-card">
+                                                        <div class="subscription-guide-step-number">1</div>
+                                                        <div class="subscription-guide-step-content">
+                                                            <div class="subscription-guide-step-title">
+                                                                Busque o bot @ScanIDBot
+                                                            </div>
+                                                            <div class="subscription-guide-step-desc">
+                                                                Na barra de pesquisa do Telegram, busque por:
+                                                                <div class="subscription-guide-bot-name mt-2">@ScanIDBot</div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="subscription-guide-step-card">
+                                                        <div class="subscription-guide-step-number">2</div>
+                                                        <div class="subscription-guide-step-content">
+                                                            <div class="subscription-guide-step-title">
+                                                                Encaminhe uma mensagem do canal
+                                                            </div>
+                                                            <div class="subscription-guide-step-desc">
+                                                                Abra o canal e pegue <strong>qualquer mensagem</strong> que esteja lá. Depois, encaminhe essa mensagem para o bot @ScanIDBot
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="subscription-guide-step-card">
+                                                        <div class="subscription-guide-step-number">3</div>
+                                                        <div class="subscription-guide-step-content">
+                                                            <div class="subscription-guide-step-title">
+                                                                Selecione o @ScanIDBot como destino
+                                                            </div>
+                                                            <div class="subscription-guide-step-desc">
+                                                                Após clicar em encaminhar, selecione o <strong>@ScanIDBot</strong> como destino da mensagem
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="subscription-guide-step-card">
+                                                        <div class="subscription-guide-step-number">4</div>
+                                                        <div class="subscription-guide-step-content">
+                                                            <div class="subscription-guide-step-title">
+                                                                Envie a mensagem para o bot
+                                                            </div>
+                                                            <div class="subscription-guide-step-desc">
+                                                                Clique no botão de <strong>enviar</strong> para encaminhar a mensagem. O bot processará e responderá com o ID do canal
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div class="subscription-guide-step-card">
+                                                        <div class="subscription-guide-step-number">5</div>
+                                                        <div class="subscription-guide-step-content">
+                                                            <div class="subscription-guide-step-title">
+                                                                Copie o ID que o bot enviar
+                                                            </div>
+                                                            <div class="subscription-guide-step-desc">
+                                                                O bot responderá com uma mensagem como:
+                                                                <div class="subscription-guide-example-id mt-2">
+                                                                    Forwarded from chat: -1002271015104
+                                                                </div>
+                                                                <div class="text-xs text-gray-400 mt-2">
+                                                                    Copie apenas o número (ex: -1002271015104)
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <!-- Dicas Importantes para Canal -->
+                                                    <div class="subscription-guide-important-tips">
+                                                        <div class="subscription-guide-tips-title">
+                                                            <i class="fas fa-star"></i>
+                                                            Dicas Importantes
+                                                        </div>
+                                                        <div class="subscription-guide-tip-item">
+                                                            <i class="fas fa-circle subscription-guide-tip-icon" style="font-size: 0.5rem;"></i>
+                                                            <span>IDs de canais geralmente começam com <strong>-100</strong></span>
+                                                        </div>
+                                                        <div class="subscription-guide-tip-item">
+                                                            <i class="fas fa-circle subscription-guide-tip-icon" style="font-size: 0.5rem;"></i>
+                                                            <span>Certifique-se de que o bot tenha permissão para enviar mensagens no seu canal</span>
+                                                        </div>
+                                                        <div class="subscription-guide-tip-item">
+                                                            <i class="fas fa-circle subscription-guide-tip-icon" style="font-size: 0.5rem;"></i>
+                                                            <span>Você pode usar qualquer mensagem do canal para encaminhar</span>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
@@ -2934,7 +3288,7 @@ body {
 
                                     <div class="subscription-preview-info">
                                         <i class="fas fa-info-circle mr-1"></i>
-                                        <strong>Importante:</strong> A contagem de tempo começa quando você entrar no grupo. Após o tempo expirar, você será removido automaticamente.
+                                        <strong>Importante:</strong> A contagem de tempo começa quando o cliente entrar no grupo. Após o tempo expirar, ele será removido automaticamente pelo sistema.
                                     </div>
                                 </div>
                             </div>
@@ -4253,6 +4607,7 @@ body {
         Alpine.data('botConfigApp', () => ({
         activeTab: 'welcome',
         loading: false,
+        subscriptionGuideTab: 'group', // Tab padrão do tutorial de assinatura (group ou channel)
         newBotToken: '',  // ✅ NOVO: Para trocar token
         flowViewMode: 'visual',  // ✅ Sempre Visual (Lista removida)
         jsPlumbInstance: null,  // ✅ Instância do jsPlumb
