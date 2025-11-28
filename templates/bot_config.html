@@ -1453,6 +1453,250 @@ body {
     padding: 20px;
 }
 
+/* ✅ UX ASSINATURAS: Estilos para melhor experiência */
+
+/* Layout Assinatura: Configuração + Preview */
+.subscription-layout {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 24px;
+    align-items: start;
+}
+
+@media (max-width: 1024px) {
+    .subscription-layout {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Card de Explicação Visual */
+.subscription-explanation-card {
+    background: linear-gradient(135deg, rgba(255, 184, 0, 0.1) 0%, rgba(245, 158, 11, 0.05) 100%);
+    border: 2px solid rgba(255, 184, 0, 0.3);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 24px;
+}
+
+.subscription-flow-steps {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 16px;
+}
+
+.subscription-flow-step {
+    flex: 1;
+    text-align: center;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    position: relative;
+}
+
+.subscription-flow-step-number {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: #F59E0B;
+    color: #FFFFFF;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 8px;
+}
+
+.subscription-flow-step-title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #FFFFFF;
+    margin-bottom: 4px;
+}
+
+.subscription-flow-step-desc {
+    font-size: 0.625rem;
+    color: #9CA3AF;
+}
+
+.subscription-flow-arrow {
+    color: #F59E0B;
+    font-size: 1.5rem;
+    flex-shrink: 0;
+}
+
+/* Preview do Cliente */
+.subscription-preview-card {
+    position: sticky;
+    top: 20px;
+    background: #FFFFFF;
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    min-height: 400px;
+}
+
+.subscription-preview-message {
+    background: #E5E7EB;
+    padding: 16px;
+    border-radius: 12px;
+    margin-bottom: 16px;
+}
+
+.subscription-preview-title {
+    font-weight: 700;
+    color: #111827;
+    font-size: 1rem;
+    margin-bottom: 8px;
+}
+
+.subscription-preview-duration {
+    color: #4B5563;
+    font-size: 0.875rem;
+    margin-bottom: 12px;
+}
+
+.subscription-preview-button {
+    width: 100%;
+    padding: 14px 20px;
+    background: #0088CC;
+    color: #FFFFFF;
+    border: none;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.875rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    cursor: default;
+    margin-bottom: 16px;
+}
+
+.subscription-preview-info {
+    background: rgba(255, 184, 0, 0.1);
+    border-left: 4px solid #F59E0B;
+    padding: 12px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    color: #78350F;
+}
+
+/* Guia de Como Encontrar Chat ID */
+.subscription-guide-card {
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    border-radius: 8px;
+    padding: 16px;
+    margin-top: 12px;
+}
+
+.subscription-guide-title {
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: #60A5FA;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.subscription-guide-steps {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.subscription-guide-steps li {
+    font-size: 0.75rem;
+    color: #DBEAFE;
+    margin-bottom: 6px;
+    padding-left: 20px;
+    position: relative;
+}
+
+.subscription-guide-steps li:before {
+    content: counter(step-counter);
+    counter-increment: step-counter;
+    position: absolute;
+    left: 0;
+    background: #3B82F6;
+    color: #FFFFFF;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.625rem;
+    font-weight: 700;
+}
+
+.subscription-guide-steps {
+    counter-reset: step-counter;
+}
+
+/* Validação Visual */
+.subscription-validation-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-top: 8px;
+}
+
+.subscription-validation-badge.valid {
+    background: rgba(16, 185, 129, 0.2);
+    border: 1px solid rgba(16, 185, 129, 0.4);
+    color: #10B981;
+}
+
+.subscription-validation-badge.invalid {
+    background: rgba(239, 68, 68, 0.2);
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    color: #EF4444;
+}
+
+.subscription-validation-badge.pending {
+    background: rgba(245, 158, 11, 0.2);
+    border: 1px solid rgba(245, 158, 11, 0.4);
+    color: #F59E0B;
+}
+
+/* Exemplo de Chat ID */
+.subscription-chat-id-example {
+    background: rgba(17, 24, 39, 0.5);
+    border: 1px dashed rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-family: monospace;
+    font-size: 0.75rem;
+    color: #9CA3AF;
+    margin-top: 8px;
+    display: inline-block;
+}
+
+/* Responsividade para Fluxo Visual */
+@media (max-width: 768px) {
+    .subscription-flow-steps {
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    .subscription-flow-arrow {
+        transform: rotate(90deg);
+        margin: 4px 0;
+    }
+    
+    .subscription-flow-step {
+        width: 100%;
+    }
+}
+
 /* Botões de Ação - IDÊNTICO ao Dashboard */
 .btn-action {
     display: inline-flex;
@@ -2421,107 +2665,277 @@ body {
                                     </template>
                                 </div>
 
-                        <!-- ✅ SISTEMA DE ASSINATURAS -->
+                        <!-- ✅ UX MELHORADO: SISTEMA DE ASSINATURAS Auto-Intuitivo -->
                         <div class="subscription-section mt-6 border-t border-gray-800 pt-6" x-show="button.subscription && button.subscription.enabled">
-                            <div class="flex items-center justify-between mb-4">
-                                <div class="flex items-center gap-2">
-                                    <i class="fas fa-calendar-times text-yellow-500"></i>
-                                    <span class="text-sm font-bold text-white">Configuração de Assinatura (Acesso Temporário ao Grupo VIP)</span>
+                            <!-- Header -->
+                            <div class="flex items-center justify-between mb-6">
+                                <div>
+                                    <h3 class="text-lg font-bold text-white flex items-center gap-2 mb-1">
+                                        <i class="fas fa-calendar-times text-yellow-500"></i>
+                                        Sistema de Assinatura
+                                    </h3>
+                                    <p class="text-sm text-gray-400">Configure acesso temporário ao grupo VIP</p>
                                 </div>
-                                <div class="flex items-center gap-2 px-3 py-1 bg-yellow-500 bg-opacity-20 border border-yellow-400 rounded-lg">
-                                    <i class="fas fa-check-circle text-yellow-400 text-xs"></i>
-                                    <span class="text-xs font-bold text-yellow-300">Ativo</span>
+                                <div class="flex items-center gap-2 px-4 py-2 bg-yellow-500 bg-opacity-20 border border-yellow-400 rounded-lg">
+                                    <i class="fas fa-check-circle text-yellow-400"></i>
+                                    <span class="text-sm font-bold text-yellow-300">Ativo</span>
                                 </div>
                             </div>
 
-                            <div class="space-y-4">
-                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    <div class="form-group">
-                                        <label class="form-label">
-                                            <i class="fas fa-clock mr-2 text-yellow-500"></i>
-                                            Tipo de Duração
-                                        </label>
-                                        <select x-model="button.subscription.duration_type" class="form-input">
-                                            <option value="hours">Horas</option>
-                                            <option value="days">Dias</option>
-                                            <option value="weeks">Semanas</option>
-                                            <option value="months">Meses</option>
-                                        </select>
+                            <!-- Card de Explicação Visual do Fluxo -->
+                            <div class="subscription-explanation-card mb-6">
+                                <h4 class="text-base font-bold text-white mb-3 flex items-center gap-2">
+                                    <i class="fas fa-question-circle text-yellow-500"></i>
+                                    O que é Assinatura?
+                                </h4>
+                                <p class="text-sm text-gray-300 mb-4">
+                                    Ao comprar este produto, o cliente recebe acesso temporário a um grupo VIP no Telegram. O tempo de acesso é contado a partir do momento que ele entra no grupo e expira automaticamente.
+                                </p>
+                                
+                                <!-- Fluxo Visual -->
+                                <div class="subscription-flow-steps">
+                                    <div class="subscription-flow-step">
+                                        <div class="subscription-flow-step-number">1</div>
+                                        <div class="subscription-flow-step-title">Cliente Compra</div>
+                                        <div class="subscription-flow-step-desc">Pagamento aprovado</div>
+                                    </div>
+                                    <div class="subscription-flow-arrow">→</div>
+                                    <div class="subscription-flow-step">
+                                        <div class="subscription-flow-step-number">2</div>
+                                        <div class="subscription-flow-step-title">Recebe Acesso</div>
+                                        <div class="subscription-flow-step-desc">Link para o grupo VIP</div>
+                                    </div>
+                                    <div class="subscription-flow-arrow">→</div>
+                                    <div class="subscription-flow-step">
+                                        <div class="subscription-flow-step-number">3</div>
+                                        <div class="subscription-flow-step-title">Entra no Grupo</div>
+                                        <div class="subscription-flow-step-desc">Contagem inicia</div>
+                                    </div>
+                                    <div class="subscription-flow-arrow">→</div>
+                                    <div class="subscription-flow-step">
+                                        <div class="subscription-flow-step-number">4</div>
+                                        <div class="subscription-flow-step-title">Tempo Expira</div>
+                                        <div class="subscription-flow-step-desc">Removido automaticamente</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Layout: Configuração + Preview -->
+                            <div class="subscription-layout">
+                                <!-- Coluna Esquerda: Configuração -->
+                                <div class="flex-1 space-y-4">
+                                    <!-- Card: Tempo de Acesso -->
+                                    <div class="essential-field-group">
+                                        <h4 class="text-sm font-bold text-white mb-4 flex items-center gap-2">
+                                            <i class="fas fa-clock text-yellow-500"></i>
+                                            ⏱️ Tempo de Acesso
+                                            <span class="required-badge">*</span>
+                                        </h4>
+                                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div class="form-group">
+                                                <label class="form-label">
+                                                    Tipo de Período
+                                                    <span class="field-help-tooltip" title="Escolha como o tempo será medido">
+                                                        <i class="fas fa-question-circle tooltip-icon"></i>
+                                                    </span>
+                                                </label>
+                                                <select x-model="button.subscription.duration_type" class="form-input">
+                                                    <option value="hours">Horas</option>
+                                                    <option value="days">Dias</option>
+                                                    <option value="weeks">Semanas</option>
+                                                    <option value="months">Meses</option>
+                                                </select>
+                                                <p class="field-help-text mt-1">
+                                                    <i class="fas fa-info-circle mr-1"></i>
+                                                    Escolha a unidade de tempo
+                                                </p>
+                                            </div>
+
+                                            <div class="form-group">
+                                                <label class="form-label label-with-badge">
+                                                    Quantidade
+                                                    <span class="required-badge">*</span>
+                                                </label>
+                                                <input type="number" 
+                                                       x-model.number="button.subscription.duration_value"
+                                                       min="1"
+                                                       class="form-input text-center font-mono"
+                                                       placeholder="30"
+                                                       :class="{
+                                                           'border-green-500': button.subscription.duration_value && button.subscription.duration_value > 0,
+                                                           'border-red-500': button.subscription.duration_value !== null && button.subscription.duration_value <= 0,
+                                                           'border-gray-600': !button.subscription.duration_value
+                                                       }">
+                                                <p class="field-help-text mt-1">
+                                                    <i class="fas fa-lightbulb mr-1"></i>
+                                                    Exemplos: 30 dias, 7 dias, 1 mês, 48 horas
+                                                </p>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Preview do Tempo -->
+                                        <div class="mt-4 p-3 bg-gray-900 border border-gray-700 rounded-lg">
+                                            <p class="text-xs text-gray-400 mb-1">Preview:</p>
+                                            <p class="text-sm font-bold text-white" x-show="button.subscription.duration_value && button.subscription.duration_value > 0">
+                                                <i class="fas fa-check-circle text-green-400 mr-1"></i>
+                                                Acesso válido por 
+                                                <span x-text="button.subscription.duration_value"></span> 
+                                                <span x-text="button.subscription.duration_type === 'hours' ? 'horas' : button.subscription.duration_type === 'days' ? 'dias' : button.subscription.duration_type === 'weeks' ? 'semanas' : 'meses'"></span>
+                                            </p>
+                                            <p class="text-sm text-gray-500" x-show="!button.subscription.duration_value || button.subscription.duration_value <= 0">
+                                                <i class="fas fa-exclamation-circle text-yellow-400 mr-1"></i>
+                                                Configure o tempo de acesso
+                                            </p>
+                                        </div>
                                     </div>
 
-                                    <div class="form-group">
-                                        <label class="form-label">
-                                            <i class="fas fa-hashtag mr-2 text-yellow-500"></i>
-                                            Valor
-                                        </label>
-                                        <input type="number" 
-                                               x-model.number="button.subscription.duration_value"
-                                               min="1"
-                                               class="form-input text-center font-mono"
-                                               placeholder="30">
-                                        <p class="text-xs text-gray-500 mt-1">Ex: 30 dias, 2 semanas, 1 mês</p>
-                                    </div>
+                                    <!-- Card: Grupo VIP -->
+                                    <div class="essential-field-group">
+                                        <h4 class="text-sm font-bold text-white mb-4 flex items-center gap-2">
+                                            <i class="fas fa-users text-yellow-500"></i>
+                                            👥 Grupo VIP
+                                            <span class="required-badge">*</span>
+                                        </h4>
+                                        
+                                        <div class="form-group">
+                                            <label class="form-label label-with-badge">
+                                                ID do Grupo ou Link
+                                                <span class="required-badge">*</span>
+                                                <span class="field-help-tooltip" title="ID do grupo no Telegram ou link completo do grupo">
+                                                    <i class="fas fa-question-circle tooltip-icon"></i>
+                                                </span>
+                                            </label>
+                                            <input type="text" 
+                                                   x-model="button.subscription.vip_chat_id"
+                                                   class="form-input font-mono"
+                                                   placeholder="Cole aqui o ID (-1001234567890) ou link do grupo"
+                                                   :class="{
+                                                       'border-green-500': button.subscription.validation_status === 'valid',
+                                                       'border-red-500': button.subscription.validation_status === 'invalid',
+                                                       'border-yellow-500': button.subscription.validation_status === 'validating',
+                                                       'border-gray-600': !button.subscription.validation_status
+                                                   }">
+                                            
+                                            <!-- Status de Validação -->
+                                            <template x-if="button.subscription.validation_status === 'valid'">
+                                                <div class="subscription-validation-badge valid">
+                                                    <i class="fas fa-check-circle"></i>
+                                                    Grupo válido e acessível
+                                                </div>
+                                            </template>
+                                            <template x-if="button.subscription.validation_status === 'invalid'">
+                                                <div class="subscription-validation-badge invalid">
+                                                    <i class="fas fa-times-circle"></i>
+                                                    Grupo inválido ou inacessível
+                                                </div>
+                                            </template>
+                                            <template x-if="button.subscription.validation_status === 'validating'">
+                                                <div class="subscription-validation-badge pending">
+                                                    <i class="fas fa-spinner fa-spin"></i>
+                                                    Validando grupo...
+                                                </div>
+                                            </template>
+                                            <template x-if="!button.subscription.validation_status && button.subscription.vip_chat_id">
+                                                <div class="subscription-validation-badge pending">
+                                                    <i class="fas fa-exclamation-circle"></i>
+                                                    Clique em "Verificar Grupo" para validar
+                                                </div>
+                                            </template>
 
-                                    <div class="form-group">
-                                        <label class="form-label">
-                                            <i class="fas fa-users mr-2 text-yellow-500"></i>
-                                            Status
-                                        </label>
-                                        <div class="flex items-center gap-2 mt-2">
-                                            <span x-show="!button.subscription.validation_status" class="text-xs text-gray-500">Não validado</span>
-                                            <span x-show="button.subscription.validation_status === 'validating'" class="text-xs text-yellow-500">
-                                                <i class="fas fa-spinner fa-spin mr-1"></i> Validando...
-                                            </span>
-                                            <span x-show="button.subscription.validation_status === 'valid'" class="text-xs text-green-500">
-                                                <i class="fas fa-check-circle mr-1"></i> Válido
-                                            </span>
-                                            <span x-show="button.subscription.validation_status === 'invalid'" class="text-xs text-red-500">
-                                                <i class="fas fa-times-circle mr-1"></i> Inválido
-                                            </span>
+                                            <!-- Guia: Como Encontrar o Chat ID -->
+                                            <div class="subscription-guide-card">
+                                                <div class="subscription-guide-title">
+                                                    <i class="fas fa-lightbulb"></i>
+                                                    Como encontrar o ID do grupo?
+                                                </div>
+                                                <ol class="subscription-guide-steps">
+                                                    <li>Abra o grupo VIP no Telegram</li>
+                                                    <li>Vá em <strong>Configurações</strong> do grupo</li>
+                                                    <li>Role até o final e clique em <strong>ID do Grupo</strong></li>
+                                                    <li>Copie o ID (ex: -1001234567890) ou link do grupo</li>
+                                                </ol>
+                                                <div class="subscription-chat-id-example mt-3">
+                                                    Exemplo de ID: -1001234567890
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="form-group mt-4">
+                                            <label class="form-label">
+                                                <i class="fas fa-link mr-2 text-blue-400"></i>
+                                                Link do Grupo (Opcional)
+                                            </label>
+                                            <input type="text" 
+                                                   x-model="button.subscription.vip_group_link"
+                                                   class="form-input"
+                                                   placeholder="https://t.me/joinchat/... ou https://t.me/c/...">
+                                            <p class="field-help-text mt-1">
+                                                <i class="fas fa-info-circle mr-1"></i>
+                                                Link completo do grupo (para referência e acesso direto)
+                                            </p>
+                                        </div>
+
+                                        <!-- Botão de Validação -->
+                                        <div class="mt-4">
+                                            <button @click="validateSubscription(index)" 
+                                                    :disabled="button.subscription.validation_status === 'validating' || (!button.subscription.vip_chat_id && !button.subscription.vip_group_link)"
+                                                    class="w-full px-4 py-3 bg-yellow-500 bg-opacity-25 border-2 border-yellow-400 rounded-lg text-sm font-bold text-yellow-300 hover:bg-yellow-500 hover:bg-opacity-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                                                <i class="fas fa-shield-check mr-2"></i>
+                                                Verificar se o Grupo está Acessível
+                                            </button>
+                                            <p class="field-help-text mt-2 text-center">
+                                                <i class="fas fa-lightbulb mr-1"></i>
+                                                Verifica se o grupo existe e está acessível antes de ativar
+                                            </p>
                                         </div>
                                     </div>
                                 </div>
 
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div class="form-group">
-                                        <label class="form-label">
-                                            <i class="fas fa-id-card mr-2 text-yellow-500"></i>
-                                            Chat ID do Grupo VIP
-                                        </label>
-                                        <input type="text" 
-                                               x-model="button.subscription.vip_chat_id"
-                                               class="form-input font-mono"
-                                               placeholder="-1001234567890 ou link t.me/c/...">
-                                        <p class="text-xs text-gray-500 mt-1">ID do grupo (ex: -1001234567890) ou link do Telegram</p>
+                                <!-- Coluna Direita: Preview do Cliente -->
+                                <div class="subscription-preview-card">
+                                    <div class="telegram-preview-header">
+                                        <div class="telegram-avatar-preview">
+                                            <i class="fas fa-robot"></i>
+                                        </div>
+                                        <div class="telegram-info-preview">
+                                            <div class="telegram-name-preview">Seu Bot</div>
+                                            <div class="telegram-time-preview">Após pagamento</div>
+                                        </div>
                                     </div>
 
-                                    <div class="form-group">
-                                        <label class="form-label">
-                                            <i class="fas fa-link mr-2 text-yellow-500"></i>
-                                            Link do Grupo (opcional)
-                                        </label>
-                                        <input type="text" 
-                                               x-model="button.subscription.vip_group_link"
-                                               class="form-input"
-                                               placeholder="https://t.me/...">
-                                        <p class="text-xs text-gray-500 mt-1">Link completo do grupo (para referência)</p>
+                                    <div class="subscription-preview-message">
+                                        <div class="subscription-preview-title">
+                                            ✅ Pagamento Aprovado!
+                                        </div>
+                                        <div class="subscription-preview-duration" x-show="button.subscription.duration_value && button.subscription.duration_value > 0">
+                                            🎉 Parabéns! Você ganhou acesso ao <strong>Grupo VIP</strong> por 
+                                            <strong x-text="button.subscription.duration_value"></strong> 
+                                            <span x-text="button.subscription.duration_type === 'hours' ? 'horas' : button.subscription.duration_type === 'days' ? 'dias' : button.subscription.duration_type === 'weeks' ? 'semanas' : 'meses'"></span>
+                                            !
+                                        </div>
+                                        <div class="subscription-preview-duration" x-show="!button.subscription.duration_value || button.subscription.duration_value <= 0">
+                                            🎉 Parabéns! Você ganhou acesso ao <strong>Grupo VIP</strong>!
+                                            <br><span class="text-xs text-gray-500">Configure o tempo de acesso para ver o preview completo</span>
+                                        </div>
                                     </div>
-                                </div>
 
-                                <div class="flex gap-3">
-                                    <button @click="validateSubscription(index)" 
-                                            :disabled="button.subscription.validation_status === 'validating' || (!button.subscription.vip_chat_id && !button.subscription.vip_group_link)"
-                                            class="px-4 py-2 bg-yellow-500 bg-opacity-25 border border-yellow-400 rounded-lg text-sm font-bold text-yellow-300 hover:bg-yellow-500 hover:bg-opacity-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
-                                        <i class="fas fa-check-circle mr-2"></i>
-                                        Validar Configuração
-                                    </button>
-                                </div>
+                                    <template x-if="button.subscription.vip_chat_id || button.subscription.vip_group_link">
+                                        <button class="subscription-preview-button">
+                                            <i class="fas fa-users"></i>
+                                            <span>Entrar no Grupo VIP</span>
+                                        </button>
+                                    </template>
+                                    <template x-if="!button.subscription.vip_chat_id && !button.subscription.vip_group_link">
+                                        <button class="subscription-preview-button" style="opacity: 0.6; background: #9CA3AF; cursor: not-allowed;">
+                                            <i class="fas fa-users"></i>
+                                            <span>Configure o grupo VIP</span>
+                                        </button>
+                                    </template>
 
-                                <div class="info-box-warning info-box">
-                                    <p class="text-sm text-gray-300">
-                                        <i class="fas fa-info-circle mr-2 text-yellow-500"></i>
-                                        <strong>Como funciona:</strong> Após o pagamento, o lead recebe acesso ao grupo VIP. A contagem de tempo começa quando ele entrar no grupo. Quando o tempo expirar, ele será removido automaticamente.
-                                    </p>
+                                    <div class="subscription-preview-info">
+                                        <i class="fas fa-info-circle mr-1"></i>
+                                        <strong>Importante:</strong> A contagem de tempo começa quando você entrar no grupo. Após o tempo expirar, você será removido automaticamente.
+                                    </div>
                                 </div>
                             </div>
                         </div>
