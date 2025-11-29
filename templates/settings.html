@@ -580,6 +580,12 @@
                                              class="w-12 h-12 object-contain"
                                              onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'48\' height=\'48\'%3E%3Crect width=\'48\' height=\'48\' fill=\'%238B5CF6\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' text-anchor=\'middle\' dy=\'.3em\' fill=\'white\' font-size=\'10\' font-weight=\'bold\'%3EOP%3C/text%3E%3C/svg%3E';">
                                     </template>
+                                    <template x-if="gateway.gateway_type === 'babylon'">
+                                        <img src="{{ url_for('static', filename='img/babylon.png') }}" 
+                                             alt="Babylon" 
+                                             class="w-12 h-12 object-contain"
+                                             onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'48\' height=\'48\'%3E%3Crect width=\'48\' height=\'48\' fill=\'%23006699\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' text-anchor=\'middle\' dy=\'.3em\' fill=\'white\' font-size=\'10\' font-weight=\'bold\'%3EBY%3C/text%3E%3C/svg%3E';">
+                                    </template>
                                 </div>
                                 <div class="flex-1 min-w-0">
                                     <h3 class="text-xs sm:text-sm font-bold text-white truncate" x-text="gateway.gateway_type.toUpperCase()"></h3>
@@ -840,6 +846,34 @@
                                                 <i class="fas" :class="show ? 'fa-eye-slash' : 'fa-eye'"></i>
                                             </button>
                                         </div>
+                                    </div>
+                                    <button type="submit" :disabled="loading" class="btn-action btn-action-primary w-full">
+                                        <i class="fas fa-save mr-2"></i>
+                                        <span x-text="loading ? 'Salvando...' : 'Atualizar'"></span>
+                                    </button>
+                                </form>
+                            </template>
+
+                            <!-- Babylon -->
+                            <template x-if="gateway.gateway_type === 'babylon'">
+                                <form @submit.prevent="updateGateway(gateway.id, 'babylon')" class="space-y-3">
+                                    <div x-data="{ show: false }">
+                                        <label class="text-xs font-bold text-gray-400 block mb-1">API Key</label>
+                                        <div class="relative">
+                                            <input :type="show ? 'text' : 'password'" 
+                                                   x-model="editGateway.api_key" 
+                                                   class="form-input pr-10"
+                                                   placeholder="Bearer token...">
+                                            <button type="button" @click="show = !show" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">
+                                                <i class="fas" :class="show ? 'fa-eye-slash' : 'fa-eye'"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="info-box-warning info-box p-2">
+                                        <p class="text-xs text-gray-300">
+                                            <i class="fas fa-info-circle mr-1"></i>
+                                            Autenticação via Bearer Token. Split configurado internamente pela plataforma.
+                                        </p>
                                     </div>
                                     <button type="submit" :disabled="loading" class="btn-action btn-action-primary w-full">
                                         <i class="fas fa-save mr-2"></i>
@@ -1279,6 +1313,56 @@
                     </form>
                 </div>
 
+                <!-- Babylon -->
+                <div class="gateway-card" x-show="!getGatewayStatus('babylon')?.is_verified">
+                    <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
+                        <div class="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+                            <div class="w-10 h-10 sm:w-12 sm:h-12 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0" 
+                                 style="background: linear-gradient(135deg, rgba(0, 102, 153, 0.1), rgba(0, 102, 153, 0.05));">
+                                <img src="{{ url_for('static', filename='img/babylon.png') }}" 
+                                     alt="Babylon" 
+                                     class="w-12 h-12 object-contain"
+                                     onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'48\' height=\'48\'%3E%3Crect width=\'48\' height=\'48\' fill=\'%23006699\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' text-anchor=\'middle\' dy=\'.3em\' fill=\'white\' font-size=\'10\' font-weight=\'bold\'%3EBY%3C/text%3E%3C/svg%3E';">
+                            </div>
+                            <div class="min-w-0 flex-1">
+                                <h3 class="text-xs sm:text-sm font-bold text-white truncate">Babylon</h3>
+                                <p class="text-xs text-gray-500 truncate">Gateway Rápido</p>
+                            </div>
+                        </div>
+                        <span class="gateway-status-unconfigured flex-shrink-0 text-xs">
+                            <i class="fas fa-exclamation-circle"></i>
+                            Novo
+                        </span>
+                    </div>
+
+                    <form @submit.prevent="saveGateway('babylon')" class="space-y-3">
+                        <div x-data="{ show: false }">
+                            <label class="text-xs font-bold text-gray-400 block mb-1">API Key</label>
+                            <div class="relative">
+                                <input :type="show ? 'text' : 'password'" 
+                                       x-model="gateways.babylon.api_key" 
+                                       class="form-input pr-10"
+                                       placeholder="Bearer token...">
+                                <button type="button" @click="show = !show" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">
+                                    <i class="fas" :class="show ? 'fa-eye-slash' : 'fa-eye'"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="info-box-warning info-box p-2">
+                            <p class="text-xs text-gray-300">
+                                <i class="fas fa-info-circle mr-1"></i>
+                                Autenticação via Bearer Token. Split configurado internamente pela plataforma.
+                            </p>
+                        </div>
+                        <button type="submit" 
+                                :disabled="loading"
+                                class="btn-action btn-action-primary w-full">
+                            <i class="fas fa-save mr-2"></i>
+                            <span x-text="loading ? 'Salvando...' : 'Salvar'"></span>
+                        </button>
+                    </form>
+                </div>
+
                 <!-- UmbrellaPag -->
                 <div class="gateway-card" x-show="!getGatewayStatus('umbrellapag')?.is_verified">
                     <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
@@ -1676,7 +1760,8 @@ function settingsApp() {
             paradise: { api_key: '', offer_hash: '', product_hash: '' },
             wiinpay: { api_key: '' }, // ✅ split_user_id removido: configuração interna da plataforma
             atomopay: { api_token: '', product_hash: '' },
-            umbrellapag: { api_key: '', product_hash: '' }
+            umbrellapag: { api_key: '', product_hash: '' },
+            babylon: { api_key: '' }
         },
         editGateway: {},
         gatewaysList: [],
@@ -1828,6 +1913,8 @@ function settingsApp() {
                         this.gateways[type] = { api_token: '', product_hash: '' };
                     } else if (type === 'umbrellapag') {
                         this.gateways[type] = { api_key: '', product_hash: '' };
+                    } else if (type === 'babylon') {
+                        this.gateways[type] = { api_key: '' };
                     } else {
                         this.gateways[type] = { api_key: '' };
                     }
