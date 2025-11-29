@@ -5388,6 +5388,112 @@ Desculpe, não foi possível processar seu pagamento.
                                                 logger.info(f"🏆 {len(new_achievements)} conquista(s) desbloqueada(s)!")
                                         except Exception as e:
                                             logger.warning(f"⚠️ Erro ao verificar conquistas: {e}")
+                                        
+                                        # ============================================================================
+                                        # ✅ UPSELLS AUTOMÁTICOS - APÓS VERIFICAÇÃO MANUAL (OUTROS GATEWAYS)
+                                        # ✅ CORREÇÃO CRÍTICA QI 500: Processar upsells quando pagamento é confirmado via verificação manual (outros gateways)
+                                        # ============================================================================
+                                        logger.info(f"🔍 [UPSELLS VERIFY OTHER] Verificando condições: status='paid', has_config={payment.bot.config is not None if payment.bot else False}, upsells_enabled={payment.bot.config.upsells_enabled if (payment.bot and payment.bot.config) else 'N/A'}")
+                                        
+                                        if payment.status == 'paid' and payment.bot.config and payment.bot.config.upsells_enabled:
+                                            logger.info(f"✅ [UPSELLS VERIFY OTHER] Condições atendidas! Processando upsells para payment {payment.payment_id}")
+                                            try:
+                                                # ✅ ANTI-DUPLICAÇÃO: Verificar se upsells já foram agendados para este payment
+                                                from models import Payment as PaymentModel
+                                                payment_check = PaymentModel.query.filter_by(payment_id=payment.payment_id).first()
+                                                
+                                                # ✅ CORREÇÃO CRÍTICA QI 500: Verificar scheduler ANTES de verificar jobs
+                                                if not self.scheduler:
+                                                    logger.error(f"❌ CRÍTICO: Scheduler não está disponível! Upsells NÃO serão agendados!")
+                                                    logger.error(f"   Payment ID: {payment.payment_id}")
+                                                    logger.error(f"   Verificar se APScheduler foi inicializado corretamente")
+                                                else:
+                                                    # ✅ DIAGNÓSTICO: Verificar se scheduler está rodando
+                                                    try:
+                                                        scheduler_running = self.scheduler.running
+                                                        if not scheduler_running:
+                                                            logger.error(f"❌ CRÍTICO: Scheduler existe mas NÃO está rodando!")
+                                                            logger.error(f"   Payment ID: {payment.payment_id}")
+                                                            logger.error(f"   Upsells NÃO serão executados se scheduler não estiver rodando!")
+                                                    except Exception as scheduler_check_error:
+                                                        logger.warning(f"⚠️ Não foi possível verificar se scheduler está rodando: {scheduler_check_error}")
+                                                    
+                                                    # ✅ ANTI-DUPLICAÇÃO: Verificar se upsells já foram agendados para este payment
+                                                    upsells_already_scheduled = False
+                                                    try:
+                                                        # Verificar se já existe job de upsell para este payment
+                                                        for i in range(10):  # Verificar até 10 upsells possíveis
+                                                            job_id = f"upsell_{payment.bot_id}_{payment.payment_id}_{i}"
+                                                            existing_job = self.scheduler.get_job(job_id)
+                                                            if existing_job:
+                                                                upsells_already_scheduled = True
+                                                                logger.info(f"ℹ️ Upsells já foram agendados para payment {payment.payment_id} (job {job_id} existe)")
+                                                                logger.info(f"   Job encontrado: {job_id}, próxima execução: {existing_job.next_run_time}")
+                                                                break
+                                                    except Exception as check_error:
+                                                        logger.error(f"❌ ERRO ao verificar jobs existentes: {check_error}", exc_info=True)
+                                                        logger.warning(f"⚠️ Continuando mesmo com erro na verificação (pode causar duplicação)")
+                                                        # ✅ Não bloquear se houver erro na verificação - deixar tentar agendar
+                                                
+                                                if self.scheduler and not upsells_already_scheduled:
+                                                    upsells = payment.bot.config.get_upsells()
+                                                    
+                                                    if upsells:
+                                                        logger.info(f"🎯 [UPSELLS VERIFY OTHER] Verificando upsells para produto: {payment.product_name}")
+                                                        
+                                                        # Filtrar upsells que fazem match com o produto comprado
+                                                        matched_upsells = []
+                                                        for upsell in upsells:
+                                                            trigger_product = upsell.get('trigger_product', '')
+                                                            
+                                                            # Match: trigger vazio (todas compras) OU produto específico
+                                                            if not trigger_product or trigger_product == payment.product_name:
+                                                                matched_upsells.append(upsell)
+                                                        
+                                                        if matched_upsells:
+                                                            logger.info(f"✅ [UPSELLS VERIFY OTHER] {len(matched_upsells)} upsell(s) encontrado(s) para '{payment.product_name}'")
+                                                            
+                                                            # ✅ CORREÇÃO: Usar função específica para upsells (não downsells)
+                                                            self.schedule_upsells(
+                                                                bot_id=payment.bot_id,
+                                                                payment_id=payment.payment_id,
+                                                                chat_id=int(payment.customer_user_id),
+                                                                upsells=matched_upsells,
+                                                                original_price=payment.amount,
+                                                                original_button_index=-1
+                                                            )
+                                                            
+                                                            logger.info(f"📅 [UPSELLS VERIFY OTHER] Upsells agendados com sucesso para payment {payment.payment_id}!")
+                                                        else:
+                                                            logger.info(f"ℹ️ [UPSELLS VERIFY OTHER] Nenhum upsell configurado para '{payment.product_name}' (trigger_product não faz match)")
+                                                    else:
+                                                        logger.info(f"ℹ️ [UPSELLS VERIFY OTHER] Lista de upsells vazia no config do bot")
+                                                else:
+                                                    if not self.scheduler:
+                                                        logger.error(f"❌ [UPSELLS VERIFY OTHER] Scheduler não disponível - upsells não serão agendados")
+                                                    else:
+                                                        logger.info(f"ℹ️ [UPSELLS VERIFY OTHER] Upsells já foram agendados anteriormente para payment {payment.payment_id} (evitando duplicação)")
+                                                    
+                                            except Exception as e:
+                                                logger.error(f"❌ [UPSELLS VERIFY OTHER] Erro ao processar upsells: {e}", exc_info=True)
+                                                import traceback
+                                                traceback.print_exc()
+                                        
+                                        # ✅ ENVIAR ENTREGÁVEL após confirmar pagamento (outros gateways)
+                                        try:
+                                            from app import send_payment_delivery
+                                            logger.info(f"📦 [VERIFY OTHER] Enviando entregável via send_payment_delivery para {payment.payment_id}")
+                                            
+                                            db.session.refresh(payment)
+                                            
+                                            if payment.status == 'paid':
+                                                resultado = send_payment_delivery(payment, self)
+                                                if resultado:
+                                                    logger.info(f"✅ [VERIFY OTHER] Entregável enviado com sucesso via send_payment_delivery")
+                                                else:
+                                                    logger.warning(f"⚠️ [VERIFY OTHER] send_payment_delivery retornou False para {payment.payment_id}")
+                                        except Exception as e:
+                                            logger.error(f"❌ [VERIFY OTHER] Erro ao enviar entregável via send_payment_delivery: {e}", exc_info=True)
                                 elif api_status:
                                     logger.info(f"⏳ API retornou status: {api_status.get('status')}")
                 
@@ -5512,6 +5618,96 @@ Desculpe, não foi possível processar seu pagamento.
                                 resultado = send_payment_delivery(payment, self)
                                 if resultado:
                                     logger.info(f"✅ [VERIFY] Entregável enviado com sucesso via send_payment_delivery")
+                                    
+                                    # ============================================================================
+                                    # ✅ UPSELLS AUTOMÁTICOS - APÓS VERIFICAÇÃO MANUAL (PAGAMENTO JÁ PAID)
+                                    # ✅ CORREÇÃO CRÍTICA QI 500: Processar upsells quando pagamento já está paid
+                                    # ============================================================================
+                                    logger.info(f"🔍 [UPSELLS VERIFY] Verificando condições: status='{payment.status}', has_config={payment.bot.config is not None if payment.bot else False}, upsells_enabled={payment.bot.config.upsells_enabled if (payment.bot and payment.bot.config) else 'N/A'}")
+                                    
+                                    if payment.status == 'paid' and payment.bot.config and payment.bot.config.upsells_enabled:
+                                        logger.info(f"✅ [UPSELLS VERIFY] Condições atendidas! Processando upsells para payment {payment.payment_id}")
+                                        try:
+                                            # ✅ ANTI-DUPLICAÇÃO: Verificar se upsells já foram agendados para este payment
+                                            from models import Payment as PaymentModel
+                                            payment_check = PaymentModel.query.filter_by(payment_id=payment.payment_id).first()
+                                            
+                                            # ✅ CORREÇÃO CRÍTICA QI 500: Verificar scheduler ANTES de verificar jobs
+                                            if not self.scheduler:
+                                                logger.error(f"❌ CRÍTICO: Scheduler não está disponível! Upsells NÃO serão agendados!")
+                                                logger.error(f"   Payment ID: {payment.payment_id}")
+                                                logger.error(f"   Verificar se APScheduler foi inicializado corretamente")
+                                            else:
+                                                # ✅ DIAGNÓSTICO: Verificar se scheduler está rodando
+                                                try:
+                                                    scheduler_running = self.scheduler.running
+                                                    if not scheduler_running:
+                                                        logger.error(f"❌ CRÍTICO: Scheduler existe mas NÃO está rodando!")
+                                                        logger.error(f"   Payment ID: {payment.payment_id}")
+                                                        logger.error(f"   Upsells NÃO serão executados se scheduler não estiver rodando!")
+                                                except Exception as scheduler_check_error:
+                                                    logger.warning(f"⚠️ Não foi possível verificar se scheduler está rodando: {scheduler_check_error}")
+                                                
+                                                # ✅ ANTI-DUPLICAÇÃO: Verificar se upsells já foram agendados para este payment
+                                                upsells_already_scheduled = False
+                                                try:
+                                                    # Verificar se já existe job de upsell para este payment
+                                                    for i in range(10):  # Verificar até 10 upsells possíveis
+                                                        job_id = f"upsell_{payment.bot_id}_{payment.payment_id}_{i}"
+                                                        existing_job = self.scheduler.get_job(job_id)
+                                                        if existing_job:
+                                                            upsells_already_scheduled = True
+                                                            logger.info(f"ℹ️ Upsells já foram agendados para payment {payment.payment_id} (job {job_id} existe)")
+                                                            logger.info(f"   Job encontrado: {job_id}, próxima execução: {existing_job.next_run_time}")
+                                                            break
+                                                except Exception as check_error:
+                                                    logger.error(f"❌ ERRO ao verificar jobs existentes: {check_error}", exc_info=True)
+                                                    logger.warning(f"⚠️ Continuando mesmo com erro na verificação (pode causar duplicação)")
+                                                    # ✅ Não bloquear se houver erro na verificação - deixar tentar agendar
+                                            
+                                            if self.scheduler and not upsells_already_scheduled:
+                                                upsells = payment.bot.config.get_upsells()
+                                                
+                                                if upsells:
+                                                    logger.info(f"🎯 [UPSELLS VERIFY] Verificando upsells para produto: {payment.product_name}")
+                                                    
+                                                    # Filtrar upsells que fazem match com o produto comprado
+                                                    matched_upsells = []
+                                                    for upsell in upsells:
+                                                        trigger_product = upsell.get('trigger_product', '')
+                                                        
+                                                        # Match: trigger vazio (todas compras) OU produto específico
+                                                        if not trigger_product or trigger_product == payment.product_name:
+                                                            matched_upsells.append(upsell)
+                                                    
+                                                    if matched_upsells:
+                                                        logger.info(f"✅ [UPSELLS VERIFY] {len(matched_upsells)} upsell(s) encontrado(s) para '{payment.product_name}'")
+                                                        
+                                                        # ✅ CORREÇÃO: Usar função específica para upsells (não downsells)
+                                                        self.schedule_upsells(
+                                                            bot_id=payment.bot_id,
+                                                            payment_id=payment.payment_id,
+                                                            chat_id=int(payment.customer_user_id),
+                                                            upsells=matched_upsells,
+                                                            original_price=payment.amount,
+                                                            original_button_index=-1
+                                                        )
+                                                        
+                                                        logger.info(f"📅 [UPSELLS VERIFY] Upsells agendados com sucesso para payment {payment.payment_id}!")
+                                                    else:
+                                                        logger.info(f"ℹ️ [UPSELLS VERIFY] Nenhum upsell configurado para '{payment.product_name}' (trigger_product não faz match)")
+                                                else:
+                                                    logger.info(f"ℹ️ [UPSELLS VERIFY] Lista de upsells vazia no config do bot")
+                                            else:
+                                                if not self.scheduler:
+                                                    logger.error(f"❌ [UPSELLS VERIFY] Scheduler não disponível - upsells não serão agendados")
+                                                else:
+                                                    logger.info(f"ℹ️ [UPSELLS VERIFY] Upsells já foram agendados anteriormente para payment {payment.payment_id} (evitando duplicação)")
+                                                
+                                        except Exception as e:
+                                            logger.error(f"❌ [UPSELLS VERIFY] Erro ao processar upsells: {e}", exc_info=True)
+                                            import traceback
+                                            traceback.print_exc()
                                 else:
                                     logger.warning(f"⚠️ [VERIFY] send_payment_delivery retornou False para {payment.payment_id}")
                             else:
