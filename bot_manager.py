@@ -6339,7 +6339,7 @@ Seu pagamento ainda não foi confirmado.
                         logger.error(f"❌ SyncPay: client_id ausente")
                         logger.error(f"   Gateway ID: {gateway.id} | User: {gateway.user_id}")
                         return None
-                elif gateway.gateway_type in ['pushynpay', 'wiinpay']:
+                elif gateway.gateway_type in ['pushynpay', 'wiinpay', 'babylon']:
                     if not api_key:
                         logger.error(f"❌ {gateway.gateway_type.upper()}: api_key ausente ou não descriptografado")
                         logger.error(f"   Gateway ID: {gateway.id} | User: {gateway.user_id} | Tipo: {gateway.gateway_type}")

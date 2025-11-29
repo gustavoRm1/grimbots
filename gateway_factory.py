@@ -13,6 +13,7 @@ from gateway_wiinpay import WiinPayGateway
 from gateway_atomopay import AtomPayGateway
 from gateway_umbrellapag import UmbrellaPagGateway
 from gateway_orionpay import OrionPayGateway
+from gateway_babylon import BabylonGateway
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,7 @@ class GatewayFactory:
         'atomopay': AtomPayGateway,  # ✅ Átomo Pay
         'umbrellapag': UmbrellaPagGateway,  # ✅ UmbrellaPag
         'orionpay': OrionPayGateway,  # ✅ OrionPay
+        'babylon': BabylonGateway,  # ✅ Babylon
     }
     
     @classmethod
@@ -204,6 +206,22 @@ class GatewayFactory:
                 gateway = gateway_class(
                     api_key=api_key,
                     environment='production'  # Sempre production
+                )
+            
+            elif gateway_type == 'babylon':
+                # ✅ Babylon requer: api_key
+                api_key = credentials.get('api_key')
+                split_percentage = credentials.get('split_percentage', 2.0)
+                split_user_id = credentials.get('split_user_id', '')
+                
+                if not api_key:
+                    logger.error(f"❌ [Factory] Babylon requer api_key")
+                    return None
+                
+                gateway = gateway_class(
+                    api_key=api_key,
+                    split_percentage=split_percentage,
+                    split_user_id=split_user_id if split_user_id else None
                 )
             
             else:

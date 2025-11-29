@@ -10434,6 +10434,8 @@ def payment_webhook(gateway_type):
             dummy_credentials = {'api_key': 'dummy'}
         elif gateway_type == 'orionpay':
             dummy_credentials = {'api_key': 'dummy'}
+        elif gateway_type == 'babylon':
+            dummy_credentials = {'api_key': 'dummy'}
         
         # ✅ Criar gateway com adapter (use_adapter=True por padrão)
         gateway_instance = GatewayFactory.create_gateway(gateway_type, dummy_credentials, use_adapter=True)
