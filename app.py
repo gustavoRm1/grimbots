@@ -10889,45 +10889,68 @@ def payment_webhook(gateway_type):
                     logger.info(f"✅ Purchase será disparado apenas quando lead acessar link de entrega: /delivery/<token>")
                     
                     # ============================================================================
-                    # ✅ UPSELLS AUTOMÁTICOS - APÓS COMPRA APROVADA (só se estatísticas foram processadas)
+                    # ✅ UPSELLS AUTOMÁTICOS - APÓS COMPRA APROVADA
+                    # ✅ CORREÇÃO CRÍTICA: Processar SEMPRE que status='paid' (não depende de deve_processar_estatisticas)
                     # ============================================================================
-                    if deve_processar_estatisticas and payment.bot.config and payment.bot.config.upsells_enabled:
+                    if status == 'paid' and payment.bot.config and payment.bot.config.upsells_enabled:
                         try:
-                            upsells = payment.bot.config.get_upsells()
+                            # ✅ ANTI-DUPLICAÇÃO: Verificar se upsells já foram agendados para este payment
+                            from models import Payment
+                            payment_check = Payment.query.filter_by(payment_id=payment.payment_id).first()
                             
-                            if upsells:
-                                logger.info(f"🎯 Verificando upsells para produto: {payment.product_name}")
+                            # Verificar se já há jobs de upsell agendados
+                            upsells_already_scheduled = False
+                            if bot_manager.scheduler:
+                                try:
+                                    # Verificar se já existe job de upsell para este payment
+                                    for i in range(10):  # Verificar até 10 upsells possíveis
+                                        job_id = f"upsell_{payment.bot_id}_{payment.payment_id}_{i}"
+                                        existing_job = bot_manager.scheduler.get_job(job_id)
+                                        if existing_job:
+                                            upsells_already_scheduled = True
+                                            logger.info(f"ℹ️ Upsells já foram agendados para payment {payment.payment_id} (job {job_id} existe)")
+                                            break
+                                except Exception as check_error:
+                                    logger.warning(f"⚠️ Erro ao verificar jobs existentes: {check_error}")
+                            
+                            if not upsells_already_scheduled:
+                                upsells = payment.bot.config.get_upsells()
                                 
-                                # Filtrar upsells que fazem match com o produto comprado
-                                matched_upsells = []
-                                for upsell in upsells:
-                                    trigger_product = upsell.get('trigger_product', '')
+                                if upsells:
+                                    logger.info(f"🎯 Verificando upsells para produto: {payment.product_name}")
                                     
-                                    # Match: trigger vazio (todas compras) OU produto específico
-                                    if not trigger_product or trigger_product == payment.product_name:
-                                        matched_upsells.append(upsell)
-                                
-                                if matched_upsells:
-                                    logger.info(f"✅ {len(matched_upsells)} upsell(s) encontrado(s)")
+                                    # Filtrar upsells que fazem match com o produto comprado
+                                    matched_upsells = []
+                                    for upsell in upsells:
+                                        trigger_product = upsell.get('trigger_product', '')
+                                        
+                                        # Match: trigger vazio (todas compras) OU produto específico
+                                        if not trigger_product or trigger_product == payment.product_name:
+                                            matched_upsells.append(upsell)
                                     
-                                    # ✅ REUTILIZAR função de downsell (mesma lógica, só muda o nome)
-                                    bot_manager.schedule_downsells(
-                                        bot_id=payment.bot_id,
-                                        payment_id=payment.payment_id,
-                                        chat_id=int(payment.customer_user_id),
-                                        downsells=matched_upsells,  # Formato idêntico ao downsell
-                                        original_price=payment.amount,
-                                        original_button_index=-1
-                                    )
-                                    
-                                    logger.info(f"📅 Upsells agendados com sucesso!")
+                                    if matched_upsells:
+                                        logger.info(f"✅ {len(matched_upsells)} upsell(s) encontrado(s) para '{payment.product_name}'")
+                                        
+                                        # ✅ CORREÇÃO: Usar função específica para upsells (não downsells)
+                                        bot_manager.schedule_upsells(
+                                            bot_id=payment.bot_id,
+                                            payment_id=payment.payment_id,
+                                            chat_id=int(payment.customer_user_id),
+                                            upsells=matched_upsells,
+                                            original_price=payment.amount,
+                                            original_button_index=-1
+                                        )
+                                        
+                                        logger.info(f"📅 Upsells agendados com sucesso para payment {payment.payment_id}!")
+                                    else:
+                                        logger.info(f"ℹ️ Nenhum upsell configurado para '{payment.product_name}' (trigger_product não faz match)")
                                 else:
-                                    logger.info(f"ℹ️ Nenhum upsell configurado para '{payment.product_name}'")
+                                    logger.info(f"ℹ️ Lista de upsells vazia no config do bot")
                             else:
-                                logger.info(f"ℹ️ Lista de upsells vazia")
+                                logger.info(f"ℹ️ Upsells já foram agendados anteriormente para payment {payment.payment_id} (evitando duplicação)")
                                 
                         except Exception as e:
-                            logger.error(f"❌ Erro ao processar upsells: {e}")
+                            logger.error(f"❌ Erro ao processar upsells: {e}", exc_info=True)
                             import traceback
                             traceback.print_exc()
                 

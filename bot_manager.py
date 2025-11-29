@@ -4615,6 +4615,188 @@ class BotManager:
                         message="❌ Erro ao gerar PIX. Entre em contato com o suporte."
                     )
             
+            elif callback_data.startswith('upsell_'):
+                # ✅ UPSELL: Formato idêntico ao downsell: upsell_INDEX_PRICE_CENTAVOS_BUTTON_INDEX
+                parts = callback_data.replace('upsell_', '').split('_')
+                logger.info(f"🔍 DEBUG upsell callback_data: {callback_data}")
+                logger.info(f"🔍 DEBUG upsell parts: {parts}")
+                
+                upsell_idx = int(parts[0])
+                
+                # ✅ CORREÇÃO: Detectar formato antigo vs novo (similar ao downsell)
+                if len(parts) == 4:
+                    # Formato antigo: upsell_INDEX_BUTTON_PRICE_BUTTON
+                    original_button_idx = int(parts[1])
+                    price_cents = int(parts[2])
+                    logger.info(f"🔍 Formato ANTIGO detectado: idx={upsell_idx}, btn={original_button_idx}, price_cents={price_cents}")
+                elif len(parts) == 3:
+                    # Formato novo: upsell_INDEX_PRICE_BUTTON
+                    price_cents = int(parts[1])
+                    original_button_idx = int(parts[2])
+                    logger.info(f"🔍 Formato NOVO detectado: idx={upsell_idx}, price_cents={price_cents}, btn={original_button_idx}")
+                else:
+                    logger.error(f"❌ Formato de callback_data inválido: {callback_data}")
+                    return
+                
+                price = float(price_cents) / 100  # Converter centavos para reais
+                
+                logger.info(f"🔍 DEBUG upsell parsed: idx={upsell_idx}, price_cents={price_cents}, price={price:.2f}, original_button={original_button_idx}")
+                
+                # ✅ VALIDAÇÃO: Preço deve ser > 0
+                if price <= 0:
+                    logger.error(f"❌ Upsell com preço inválido: R$ {price:.2f} (centavos: {price_cents})")
+                    logger.error(f"❌ CALLBACK_DATA PROBLEMÁTICO: {callback_data}")
+                    logger.error(f"❌ PARTS PROBLEMÁTICAS: {parts}")
+                    return
+                
+                # ✅ CORREÇÃO CRÍTICA: Se preço for muito baixo, calcular valor real do upsell
+                if price < 1.00:  # Menos de R$ 1,00
+                    logger.warning(f"⚠️ Upsell com preço muito baixo (R$ {price:.2f}), calculando valor real")
+                    
+                    # ✅ CORREÇÃO: Buscar configuração do upsell para calcular valor real
+                    from app import app, db
+                    from models import Bot as BotModel
+                    
+                    with app.app_context():
+                        bot = db.session.get(BotModel, bot_id)
+                        if bot and bot.config:
+                            config = bot.config.to_dict()
+                            upsells = config.get('upsells', [])
+                            
+                            if upsell_idx < len(upsells):
+                                upsell_config = upsells[upsell_idx]
+                                discount_percentage = float(upsell_config.get('discount_percentage', 50))
+                                
+                                # ✅ CORREÇÃO: Usar preço original do botão clicado
+                                main_buttons = config.get('main_buttons', [])
+                                if original_button_idx < len(main_buttons):
+                                    original_button = main_buttons[original_button_idx]
+                                    original_price = float(original_button.get('price', 0))
+                                    
+                                    if original_price > 0:
+                                        price = original_price * (1 - discount_percentage / 100)
+                                        logger.info(f"✅ Valor real calculado: R$ {original_price:.2f} com {discount_percentage}% OFF = R$ {price:.2f}")
+                                    else:
+                                        price = 97.00  # Fallback para upsell
+                                        logger.warning(f"⚠️ Preço original não encontrado, usando fallback R$ {price:.2f}")
+                                else:
+                                    price = 97.00  # Fallback para upsell
+                                    logger.warning(f"⚠️ Botão original não encontrado, usando fallback R$ {price:.2f}")
+                            else:
+                                price = 97.00  # Fallback para upsell
+                                logger.warning(f"⚠️ Configuração de upsell não encontrada, usando fallback R$ {price:.2f}")
+                        else:
+                            price = 97.00  # Fallback para upsell
+                            logger.warning(f"⚠️ Configuração do bot não encontrada, usando fallback R$ {price:.2f}")
+                
+                # ✅ QI 500 FIX V2: Buscar descrição do BOTÃO ORIGINAL que gerou o upsell
+                from app import app, db
+                from models import Bot as BotModel
+                
+                # Default seguro (sem índice de upsell)
+                description = "Oferta Especial"
+                
+                with app.app_context():
+                    bot = db.session.get(BotModel, bot_id)
+                    if bot and bot.config:
+                        fresh_config = bot.config.to_dict()
+                        main_buttons = fresh_config.get('main_buttons', [])
+                        
+                        # Buscar o botão ORIGINAL (não o índice do upsell)
+                        if original_button_idx >= 0 and original_button_idx < len(main_buttons):
+                            button_data = main_buttons[original_button_idx]
+                            product_name = button_data.get('description') or button_data.get('text') or f'Produto {original_button_idx + 1}'
+                            description = f"{product_name} (Upsell)"
+                            logger.info(f"✅ Descrição do produto original encontrada: {product_name}")
+                        else:
+                            # Fallback: Se não encontrar o botão, usar genérico
+                            description = "Oferta Especial (Upsell)"
+                            logger.warning(f"⚠️ Botão original {original_button_idx} não encontrado em {len(main_buttons)} botões")
+                
+                button_index = -1  # Sinalizar que é upsell
+                
+                logger.info(f"💙 UPSELL CLICADO | Upsell: {upsell_idx} | Botão Original: {original_button_idx} | Produto: {description} | Valor: R$ {price:.2f}")
+                
+                # ✅ VERIFICAR SE TEM ORDER BUMP PARA ESTE UPSELL
+                from app import app, db
+                from models import Bot as BotModel
+                
+                order_bump = None
+                with app.app_context():
+                    bot = db.session.get(BotModel, bot_id)
+                    if bot and bot.config:
+                        config = bot.config.to_dict()
+                        upsells = config.get('upsells', [])
+                        
+                        if upsell_idx < len(upsells):
+                            upsell_config = upsells[upsell_idx]
+                            order_bump = upsell_config.get('order_bump', {})
+                
+                if order_bump and order_bump.get('enabled'):
+                    # Responder callback - AGUARDANDO order bump
+                    requests.post(url, json={
+                        'callback_query_id': callback_id,
+                        'text': '🎁 Oferta especial para você!'
+                    }, timeout=3)
+                    
+                    logger.info(f"🎁 Order Bump detectado para upsell {upsell_idx + 1}!")
+                    # ✅ TODO: Criar função _show_upsell_order_bump similar ao _show_downsell_order_bump
+                    # Por ora, processar sem order bump
+                    logger.warning(f"⚠️ Order bump para upsell ainda não implementado, processando direto")
+                
+                # SEM ORDER BUMP - Gerar PIX direto
+                # Responder callback
+                requests.post(url, json={
+                    'callback_query_id': callback_id,
+                    'text': '🔄 Gerando pagamento PIX...'
+                }, timeout=3)
+                
+                # Gerar PIX do upsell
+                pix_data = self._generate_pix_payment(
+                    bot_id=bot_id,
+                    amount=price,
+                    description=description,
+                    customer_name=user_info.get('first_name', ''),
+                    customer_username=user_info.get('username', ''),
+                    customer_user_id=str(user_info.get('id', '')),
+                    is_upsell=True,  # ✅ Marcar como upsell
+                    upsell_index=upsell_idx  # ✅ Passar índice do upsell
+                )
+                
+                if pix_data and pix_data.get('pix_code'):
+                    # ✅ PIX em linha única dentro de <code> para copiar com um toque
+                    payment_message = f"""🎯 <b>Produto:</b> {description}
+💰 <b>Valor:</b> R$ {price:.2f}
+
+📱 <b>PIX Copia e Cola:</b>
+<code>{pix_data['pix_code']}</code>
+
+<i>👆 Toque no código acima para copiar</i>
+
+⏰ <b>Válido por:</b> 30 minutos
+
+💡 <b>Após pagar, clique no botão abaixo para verificar e receber seu acesso!</b>"""
+                    
+                    buttons = [{
+                        'text': '✅ Verificar Pagamento',
+                        'callback_data': f'verify_{pix_data.get("payment_id")}'
+                    }]
+                    
+                    self.send_telegram_message(
+                        token=token,
+                        chat_id=str(chat_id),
+                        message=payment_message.strip(),
+                        buttons=buttons
+                    )
+                    
+                    logger.info(f"✅ PIX UPSELL ENVIADO! ID: {pix_data.get('payment_id')}")
+                else:
+                    self.send_telegram_message(
+                        token=token,
+                        chat_id=str(chat_id),
+                        message="❌ Erro ao gerar PIX. Entre em contato com o suporte."
+                    )
+            
             # Botão de compra (VERIFICAR SE TEM ORDER BUMP)
             elif callback_data.startswith('buy_'):
                 # ✅ NOVO FORMATO: buy_INDEX (mais simples, evita BUTTON_DATA_INVALID)
@@ -6038,6 +6220,8 @@ Seu pagamento ainda não foi confirmado.
                              order_bump_shown: bool = False, order_bump_accepted: bool = False, 
                              order_bump_value: float = 0.0, is_downsell: bool = False, 
                              downsell_index: int = None,
+                             is_upsell: bool = False,  # ✅ NOVO - UPSELLS
+                             upsell_index: int = None,  # ✅ NOVO - UPSELLS
                              button_index: int = None,  # ✅ NOVO - SISTEMA DE ASSINATURAS
                              button_config: dict = None) -> Optional[Dict[str, Any]]:  # ✅ NOVO - SISTEMA DE ASSINATURAS
         """
@@ -6961,6 +7145,11 @@ Seu pagamento ainda não foi confirmado.
                     import json as json_module
                     
                     # Salvar pagamento no banco (incluindo código PIX para reenvio + analytics)
+                    # ✅ CRÍTICO: Preparar dados para Payment
+                    # Determinar se é downsell, upsell ou normal
+                    is_downsell_final = is_downsell or False
+                    is_upsell_final = is_upsell or False
+                    
                     payment = Payment(
                         bot_id=bot_id,
                         payment_id=payment_id,
@@ -6984,6 +7173,8 @@ Seu pagamento ainda não foi confirmado.
                         order_bump_value=order_bump_value,
                         is_downsell=is_downsell,
                         downsell_index=downsell_index,
+                        is_upsell=is_upsell_final,  # ✅ NOVO - UPSELLS
+                        upsell_index=upsell_index,  # ✅ NOVO - UPSELLS
                         # ✅ DEMOGRAPHIC DATA (Copiar de bot_user se disponível, com fallback seguro)
                         customer_age=getattr(bot_user, 'customer_age', None) if bot_user else None,
                         customer_city=getattr(bot_user, 'customer_city', None) if bot_user else None,
@@ -8575,6 +8766,413 @@ Seu pagamento ainda não foi confirmado.
             logger.error(f"   Stack trace completo:")
             logger.error(traceback.format_exc())
             logger.error(f"🚨 ===== FIM _SEND_DOWNSELL (COM ERRO) =====")
+    
+    def schedule_upsells(self, bot_id: int, payment_id: str, chat_id: int, upsells: list, original_price: float = 0, original_button_index: int = -1):
+        """
+        Agenda upsells para um pagamento aprovado
+        
+        ✅ DIFERENÇA CRÍTICA vs downsells:
+        - Upsells são enviados quando payment.status == 'paid'
+        - Downsells são enviados quando payment.status == 'pending'
+        
+        Args:
+            bot_id: ID do bot
+            payment_id: ID do pagamento
+            chat_id: ID do chat
+            upsells: Lista de upsells configurados
+            original_price: Preço do botão original (para cálculo percentual)
+            original_button_index: Índice do botão original clicado
+        """
+        logger.info(f"🚨 ===== SCHEDULE_UPSELLS CHAMADO =====")
+        logger.info(f"   bot_id: {bot_id}")
+        logger.info(f"   payment_id: {payment_id}")
+        logger.info(f"   chat_id: {chat_id}")
+        logger.info(f"   original_price: {original_price}")
+        logger.info(f"   original_button_index: {original_button_index}")
+        logger.info(f"   upsells count: {len(upsells) if upsells else 0}")
+        
+        try:
+            # ✅ DIAGNÓSTICO CRÍTICO: Verificar scheduler
+            if not self.scheduler:
+                logger.error(f"❌ CRÍTICO: Scheduler não está disponível!")
+                logger.error(f"   Isso significa que upsells NÃO serão agendados!")
+                logger.error(f"   Verificar se APScheduler foi inicializado corretamente")
+                return
+            
+            # ✅ DIAGNÓSTICO: Verificar se scheduler está rodando
+            try:
+                scheduler_running = self.scheduler.running
+                logger.info(f"🔍 Scheduler está rodando: {scheduler_running}")
+                if not scheduler_running:
+                    logger.error(f"❌ CRÍTICO: Scheduler existe mas NÃO está rodando!")
+                    logger.error(f"   Jobs agendados NÃO serão executados!")
+            except Exception as e:
+                logger.warning(f"⚠️ Não foi possível verificar se scheduler está rodando: {e}")
+            
+            if not upsells:
+                logger.warning(f"⚠️ Lista de upsells está vazia!")
+                logger.warning(f"   Verificar se upsells estão configurados no bot")
+                return
+            
+            logger.info(f"📅 Agendando {len(upsells)} upsell(s) para pagamento {payment_id}")
+            
+            # ✅ DIAGNÓSTICO: Verificar se pagamento existe e está pago
+            try:
+                from app import app, db
+                from models import Payment
+                with app.app_context():
+                    payment = Payment.query.filter_by(payment_id=payment_id).first()
+                    if payment:
+                        logger.info(f"✅ Pagamento encontrado: status={payment.status}")
+                        if payment.status != 'paid':
+                            logger.warning(f"⚠️ Pagamento não está pago (status={payment.status})")
+                            logger.warning(f"   Upsells devem ser enviados apenas para pagamentos aprovados")
+                            logger.warning(f"   Upsells NÃO serão agendados")
+                            return
+                    else:
+                        logger.error(f"❌ Pagamento {payment_id} não encontrado no banco!")
+                        return
+            except Exception as e:
+                logger.error(f"❌ Erro ao verificar pagamento: {e}")
+                return
+            
+            jobs_agendados = []
+            for i, upsell in enumerate(upsells):
+                delay_minutes = int(upsell.get('delay_minutes', 0))  # Converter para int
+                job_id = f"upsell_{bot_id}_{payment_id}_{i}"
+                
+                # ✅ CRÍTICO: Calcular data/hora de execução em UTC (scheduler usa UTC)
+                from datetime import datetime, timezone, timedelta
+                now_utc = datetime.now(timezone.utc)
+                run_time = now_utc + timedelta(minutes=delay_minutes)
+                
+                logger.info(f"📅 Upsell {i+1}:")
+                logger.info(f"   - Delay: {delay_minutes} minutos")
+                logger.info(f"   - Hora atual (UTC): {now_utc}")
+                logger.info(f"   - Hora execução (UTC): {run_time}")
+                logger.info(f"   - Job ID: {job_id}")
+                
+                try:
+                    # ✅ CRÍTICO: Criar wrapper para garantir Flask app context
+                    def _send_upsell_wrapper(*args, **kwargs):
+                        """Wrapper que garante Flask app context para execução do scheduler"""
+                        from app import app
+                        logger.info(f"🔍 [SCHEDULER WRAPPER] Job sendo executado - criando app context")
+                        with app.app_context():
+                            try:
+                                return self._send_upsell(*args, **kwargs)
+                            except Exception as e:
+                                logger.error(f"❌ Erro no wrapper do scheduler: {e}", exc_info=True)
+                                raise
+                    
+                    # Agendar upsell com preço original para cálculo percentual
+                    self.scheduler.add_job(
+                        id=job_id,
+                        func=_send_upsell_wrapper,
+                        args=[bot_id, payment_id, chat_id, upsell, i, original_price, original_button_index],
+                        trigger='date',
+                        run_date=run_time,
+                        replace_existing=True,
+                        misfire_grace_time=300  # ✅ Permitir execução mesmo se atrasado até 5 minutos
+                    )
+                    
+                    # ✅ VERIFICAR se job foi realmente agendado
+                    try:
+                        job = self.scheduler.get_job(job_id)
+                        if job:
+                            logger.info(f"✅ Upsell {i+1} AGENDADO COM SUCESSO")
+                            logger.info(f"   - Job ID: {job.id}")
+                            logger.info(f"   - Próxima execução: {job.next_run_time}")
+                            jobs_agendados.append(job_id)
+                        else:
+                            logger.error(f"❌ CRÍTICO: Job {job_id} NÃO foi encontrado após agendamento!")
+                            logger.error(f"   O job pode não ter sido criado corretamente")
+                    except Exception as e:
+                        logger.error(f"❌ Erro ao verificar job agendado: {e}")
+                        
+                except Exception as e:
+                    logger.error(f"❌ Erro ao agendar upsell {i+1}: {e}", exc_info=True)
+            
+            logger.info(f"✅ Total de {len(jobs_agendados)} upsell(s) agendado(s) com sucesso")
+            logger.info(f"🚨 ===== FIM SCHEDULE_UPSELLS =====")
+                
+        except Exception as e:
+            logger.error(f"❌ Erro ao agendar upsells: {e}", exc_info=True)
+    
+    def _send_upsell(self, bot_id: int, payment_id: str, chat_id: int, upsell: dict, index: int, original_price: float = 0, original_button_index: int = -1):
+        """
+        Envia upsell agendado
+        
+        ✅ DIFERENÇA CRÍTICA vs downsell:
+        - Upsells são enviados quando payment.status == 'paid'
+        - Downsells são enviados quando payment.status == 'pending'
+        
+        Args:
+            bot_id: ID do bot
+            payment_id: ID do pagamento
+            chat_id: ID do chat
+            upsell: Configuração do upsell
+            index: Índice do upsell
+            original_price: Preço do botão original (para cálculo percentual)
+            original_button_index: Índice do botão original clicado
+        """
+        import traceback
+        logger.info(f"🚨 ===== _SEND_UPSELL EXECUTADO ===== [ENTRADA DA FUNÇÃO]")
+        logger.info(f"   ⏰ Timestamp: {datetime.now()}")
+        logger.info(f"   bot_id: {bot_id}")
+        logger.info(f"   payment_id: {payment_id}")
+        logger.info(f"   chat_id: {chat_id}")
+        logger.info(f"   index: {index}")
+        logger.info(f"   original_price: {original_price}")
+        logger.info(f"   original_button_index: {original_button_index}")
+        logger.info(f"   upsell config: {upsell}")
+        
+        try:
+            # ✅ DIAGNÓSTICO CRÍTICO: Log imediato no início da função
+            logger.info(f"🔍 [DIAGNÓSTICO] Função _send_upsell chamada pelo scheduler")
+            logger.info(f"   Stack trace (primeiras 5 linhas):")
+            for line in traceback.format_stack()[-5:]:
+                logger.info(f"      {line.strip()}")
+            # ✅ DIAGNÓSTICO CRÍTICO: Verificar pagamento ANTES de enviar
+            logger.info(f"🔍 Verificando status do pagamento...")
+            payment_status = None
+            try:
+                from app import app, db
+                from models import Payment
+                with app.app_context():
+                    payment = Payment.query.filter_by(payment_id=payment_id).first()
+                    if payment:
+                        payment_status = payment.status
+                        logger.info(f"✅ Pagamento encontrado: status={payment_status}")
+                    else:
+                        logger.error(f"❌ Pagamento {payment_id} NÃO encontrado no banco!")
+                        logger.error(f"   Upsell NÃO será enviado")
+                        return
+            except Exception as e:
+                logger.error(f"❌ Erro ao verificar pagamento: {e}", exc_info=True)
+                return
+            
+            # ✅ CRÍTICO: Verificar se pagamento está pago (upsells só para pagamentos aprovados)
+            if payment_status != 'paid':
+                logger.warning(f"💰 Pagamento {payment_id} não está pago (status={payment_status}), cancelando upsell {index+1}")
+                logger.warning(f"   Upsells devem ser enviados apenas para pagamentos aprovados")
+                return
+            
+            logger.info(f"✅ Pagamento está pago - prosseguindo com upsell")
+            
+            # Verificar se bot ainda está ativo
+            logger.info(f"🔍 DEBUG _send_upsell - Verificando bot...")
+            if bot_id not in self.active_bots:
+                logger.warning(f"🤖 Bot {bot_id} não está mais ativo, cancelando upsell {index+1}")
+                return
+            logger.info(f"✅ Bot está ativo")
+            
+            # ✅ CORREÇÃO: Acessar com LOCK
+            with self._bots_lock:
+                if bot_id not in self.active_bots:
+                    return
+                bot_info = self.active_bots[bot_id].copy()
+            
+            token = bot_info['token']
+            
+            # ✅ CRÍTICO: Buscar config atualizada do BANCO (não usar cache da memória)
+            from app import app, db
+            from models import Bot as BotModel
+            
+            with app.app_context():
+                bot = BotModel.query.get(bot_id)
+                if bot and bot.config:
+                    config = bot.config.to_dict()
+                    logger.info(f"🔄 Config recarregada do banco para upsell")
+                else:
+                    # Fallback: usar config da memória se não encontrar no banco
+                    config = bot_info.get('config', {})
+                    logger.warning(f"⚠️ Usando config da memória para upsell")
+            
+            # Verificar se upsells ainda estão habilitados
+            logger.info(f"🔍 DEBUG _send_upsell - Verificando se upsells estão habilitados...")
+            if not config.get('upsells_enabled', False):
+                logger.info(f"📵 Upsells desabilitados, cancelando upsell {index+1}")
+                return
+            logger.info(f"✅ Upsells estão habilitados")
+            
+            message = upsell.get('message', '')
+            media_url = upsell.get('media_url', '')
+            media_type = upsell.get('media_type', 'video')
+            audio_enabled = upsell.get('audio_enabled', False)
+            audio_url = upsell.get('audio_url', '')
+            
+            # ✅ NOVO: Calcular preço baseado no modo (fixo ou percentual)
+            pricing_mode = upsell.get('pricing_mode', 'fixed')
+            logger.info(f"🔍 DEBUG pricing_mode: {pricing_mode}")
+            
+            # 🎯 ESTRATÉGIA DE CONVERSÃO: MODO PERCENTUAL = TODOS OS BOTÕES COM DESCONTO
+            if pricing_mode == 'percentage':
+                discount_percentage = float(upsell.get('discount_percentage', 50))
+                discount_percentage = max(1, min(95, discount_percentage))  # Validar 1-95%
+                
+                # Buscar TODOS os botões principais do config
+                main_buttons = config.get('main_buttons', [])
+                
+                if main_buttons and len(main_buttons) > 0:
+                    # ✅ MÚLTIPLOS BOTÕES: Aplicar desconto em cada produto
+                    buttons = []
+                    logger.info(f"💜 MODO PERCENTUAL: {discount_percentage}% OFF em TODOS os produtos!")
+                    
+                    for btn_index, btn in enumerate(main_buttons):
+                        original_btn_price = float(btn.get('price', 0))
+                        logger.info(f"🔍 DEBUG btn_index={btn_index}, btn={btn}, original_btn_price={original_btn_price}")
+                        
+                        if original_btn_price <= 0:
+                            logger.warning(f"⚠️ Botão {btn_index} sem preço válido: {original_btn_price}")
+                            continue  # Pular botões sem preço
+                        
+                        # Calcular preço com desconto
+                        discounted_price = original_btn_price * (1 - discount_percentage / 100)
+                        logger.info(f"🔍 DEBUG cálculo: {original_btn_price} * (1 - {discount_percentage}/100) = {discounted_price}")
+                        
+                        # Validar mínimo
+                        if discounted_price < 0.50:
+                            logger.warning(f"⚠️ Preço {btn.get('text', 'Produto')} muito baixo após desconto, pulando")
+                            continue
+                        
+                        # Texto do botão: Nome + Percentual (sem mostrar valor)
+                        btn_text = f"🔥 {btn.get('text', 'Produto')} ({int(discount_percentage)}% OFF)"
+                        
+                        buttons.append({
+                            'text': btn_text,
+                            'callback_data': f'upsell_{index}_{int(discounted_price*100)}_{btn_index}'  # ✅ Formato: upsell_INDEX_PRICE_ORIGINAL_BTN
+                        })
+                        
+                        logger.info(f"  ✅ {btn.get('text')}: R$ {original_btn_price:.2f} → R$ {discounted_price:.2f} ({discount_percentage}% OFF)")
+                    
+                    if len(buttons) == 0:
+                        logger.error(f"❌ Nenhum botão válido após aplicar desconto percentual")
+                        return
+                    
+                    logger.info(f"🎯 Total de {len(buttons)} opções de compra com desconto")
+                    
+                else:
+                    # Fallback: se não tiver main_buttons, usar preço original (comportamento antigo)
+                    logger.info(f"🔍 DEBUG fallback - original_price: {original_price}")
+                    logger.info(f"🔍 DEBUG fallback - discount_percentage: {discount_percentage}")
+                    
+                    if original_price > 0:
+                        price = original_price * (1 - discount_percentage / 100)
+                        logger.info(f"💜 MODO PERCENTUAL (fallback): {discount_percentage}% OFF de R$ {original_price:.2f} = R$ {price:.2f}")
+                    else:
+                        # ✅ CORREÇÃO CRÍTICA: Se original_price for 0, usar preço padrão de upsell
+                        logger.warning(f"⚠️ original_price é 0! Usando preço padrão para upsell")
+                        price = 97.00  # Preço padrão para upsells
+                        logger.info(f"💜 MODO PERCENTUAL (corrigido): Usando preço padrão R$ {price:.2f}")
+                    
+                    if price < 0.50:
+                        logger.error(f"❌ Preço muito baixo (R$ {price:.2f}), mínimo R$ 0,50")
+                        return
+                    
+                    button_text = upsell.get('button_text', '').strip()
+                    if not button_text:
+                        button_text = f'🛒 Comprar por R$ {price:.2f} ({int(discount_percentage)}% OFF)'
+                    
+                    buttons = [{
+                        'text': button_text,
+                        'callback_data': f'upsell_{index}_{int(price*100)}_{0}'  # ✅ Formato: upsell_INDEX_PRICE_ORIGINAL_BTN
+                    }]
+            
+            else:
+                # 💙 MODO FIXO: Um único botão com preço fixo (comportamento original)
+                price = float(upsell.get('price', 0))
+                logger.info(f"💙 MODO FIXO: R$ {price:.2f}")
+                
+                if price < 0.50:
+                    logger.error(f"❌ Preço muito baixo (R$ {price:.2f}), mínimo R$ 0,50")
+                    return
+                
+                button_text = upsell.get('button_text', '').strip()
+                if not button_text:
+                    button_text = f'🛒 Comprar por R$ {price:.2f}'
+                
+                buttons = [{
+                    'text': button_text,
+                    'callback_data': f'upsell_{index}_{int(price*100)}_{0}'  # ✅ Formato: upsell_INDEX_PRICE_ORIGINAL_BTN
+                }]
+            
+            # ✅ VERIFICAR SE TEM ORDER BUMP PARA ESTE UPSELL
+            order_bump = upsell.get('order_bump', {})
+            
+            logger.info(f"🔍 DEBUG _send_upsell - Botões criados: {len(buttons)}")
+            logger.info(f"  - message: {message}")
+            logger.info(f"  - media_url: {media_url}")
+            logger.info(f"  - order_bump_enabled: {order_bump.get('enabled', False)}")
+            
+            logger.info(f"📨 Enviando upsell {index+1} para chat {chat_id}")
+            logger.info(f"   - Mensagem: {message[:50]}..." if message else "   - Mensagem: (vazia)")
+            logger.info(f"   - Mídia: {media_url[:50] if media_url else 'Nenhuma'}...")
+            logger.info(f"   - Botões: {len(buttons)} botão(ões)")
+            
+            # Enviar mensagem com ou sem mídia
+            try:
+                if media_url and '/c/' not in media_url and media_url.startswith('http'):
+                    logger.info(f"📤 Enviando upsell com mídia...")
+                    result = self.send_telegram_message(
+                        token=token,
+                        chat_id=str(chat_id),
+                        message=message,
+                        media_url=media_url,
+                        media_type=media_type,
+                        buttons=buttons
+                    )
+                    if not result:
+                        logger.warning(f"⚠️ Falha ao enviar com mídia, tentando sem mídia...")
+                        # Fallback sem mídia se falhar
+                        result = self.send_telegram_message(
+                            token=token,
+                            chat_id=str(chat_id),
+                            message=message,
+                            buttons=buttons
+                        )
+                else:
+                    logger.info(f"📤 Enviando upsell sem mídia...")
+                    result = self.send_telegram_message(
+                        token=token,
+                        chat_id=str(chat_id),
+                        message=message,
+                        buttons=buttons
+                    )
+                
+                if result:
+                    logger.info(f"✅ Upsell {index+1} ENVIADO COM SUCESSO para chat {chat_id}")
+                else:
+                    logger.error(f"❌ Falha ao enviar upsell {index+1} para chat {chat_id}")
+            except Exception as send_error:
+                logger.error(f"❌ Erro ao enviar mensagem do upsell {index+1}: {send_error}", exc_info=True)
+            
+            # ✅ Enviar áudio adicional se habilitado
+            if audio_enabled and audio_url:
+                logger.info(f"🎤 Enviando áudio complementar do Upsell {index+1}...")
+                try:
+                    audio_result = self.send_telegram_message(
+                        token=token,
+                        chat_id=str(chat_id),
+                        message="",
+                        media_url=audio_url,
+                        media_type='audio',
+                        buttons=None
+                    )
+                    if audio_result:
+                        logger.info(f"✅ Áudio complementar do Upsell {index+1} enviado")
+                except Exception as audio_error:
+                    logger.error(f"❌ Erro ao enviar áudio complementar: {audio_error}")
+            
+            logger.info(f"🚨 ===== FIM _SEND_UPSELL =====")
+            
+        except Exception as e:
+            import traceback
+            logger.error(f"❌ Erro CRÍTICO ao enviar upsell {index+1}: {e}")
+            logger.error(f"   Tipo do erro: {type(e).__name__}")
+            logger.error(f"   Stack trace completo:")
+            logger.error(traceback.format_exc())
+            logger.error(f"🚨 ===== FIM _SEND_UPSELL (COM ERRO) =====")
     
     def _is_payment_pending(self, payment_id: str) -> bool:
         """
