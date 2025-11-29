@@ -10704,6 +10704,50 @@ def payment_webhook(gateway_type):
                             f"❌ ERRO GRAVE: send_payment_delivery chamado com payment.status != 'paid' "
                             f"(status atual: {payment.status}, payment_id: {payment.payment_id})"
                         )
+                    
+                    # ✅ CORREÇÃO CRÍTICA QI 500: Processar upsells ANTES do return (webhook duplicado)
+                    # Upsells podem não ter sido agendados no primeiro webhook se houve algum erro
+                    logger.info(f"🔍 [UPSELLS WEBHOOK DUPLICADO] Verificando upsells para payment {payment.payment_id}")
+                    if payment.bot.config and payment.bot.config.upsells_enabled:
+                        logger.info(f"✅ [UPSELLS WEBHOOK DUPLICADO] Upsells habilitados - verificando se já foram agendados...")
+                        # Verificar se upsells já foram agendados (anti-duplicação)
+                        upsells_already_scheduled = False
+                        if bot_manager.scheduler:
+                            try:
+                                for i in range(10):
+                                    job_id = f"upsell_{payment.bot_id}_{payment.payment_id}_{i}"
+                                    existing_job = bot_manager.scheduler.get_job(job_id)
+                                    if existing_job:
+                                        upsells_already_scheduled = True
+                                        logger.info(f"ℹ️ [UPSELLS WEBHOOK DUPLICADO] Upsells já agendados (job {job_id} existe)")
+                                        break
+                            except Exception as check_error:
+                                logger.warning(f"⚠️ Erro ao verificar jobs no webhook duplicado: {check_error}")
+                        
+                        # Se não foram agendados, agendar agora
+                        if bot_manager.scheduler and not upsells_already_scheduled:
+                            try:
+                                upsells = payment.bot.config.get_upsells()
+                                if upsells:
+                                    matched_upsells = []
+                                    for upsell in upsells:
+                                        trigger_product = upsell.get('trigger_product', '')
+                                        if not trigger_product or trigger_product == payment.product_name:
+                                            matched_upsells.append(upsell)
+                                    
+                                    if matched_upsells:
+                                        logger.info(f"✅ [UPSELLS WEBHOOK DUPLICADO] Agendando {len(matched_upsells)} upsell(s) para payment {payment.payment_id}")
+                                        bot_manager.schedule_upsells(
+                                            bot_id=payment.bot_id,
+                                            payment_id=payment.payment_id,
+                                            chat_id=int(payment.customer_user_id),
+                                            upsells=matched_upsells,
+                                            original_price=payment.amount,
+                                            original_button_index=-1
+                                        )
+                            except Exception as upsell_error:
+                                logger.error(f"❌ Erro ao processar upsells no webhook duplicado: {upsell_error}", exc_info=True)
+                    
                     return jsonify({'status': 'already_processed'}), 200
                 
                 # ✅ ATUALIZA STATUS DO PAGAMENTO APENAS SE NÃO ERA PAID (SEM COMMIT AINDA!)
@@ -10893,8 +10937,11 @@ def payment_webhook(gateway_type):
                 # ✅ CORREÇÃO CRÍTICA QI 500: Processar SEMPRE que status='paid' (INDEPENDENTE de deve_enviar_entregavel)
                 # ✅ CORREÇÃO CRÍTICA: Bloco movido para FORA do else para garantir execução sempre
                 # ============================================================================
+                logger.info(f"🔍 [UPSELLS] Verificando condições: status='{status}', has_config={payment.bot.config is not None if payment.bot else False}, upsells_enabled={payment.bot.config.upsells_enabled if (payment.bot and payment.bot.config) else 'N/A'}")
+                
                 if status == 'paid' and payment.bot.config and payment.bot.config.upsells_enabled:
-                        try:
+                    logger.info(f"✅ [UPSELLS] Condições atendidas! Processando upsells para payment {payment.payment_id}")
+                    try:
                             # ✅ ANTI-DUPLICAÇÃO: Verificar se upsells já foram agendados para este payment
                             from models import Payment
                             payment_check = Payment.query.filter_by(payment_id=payment.payment_id).first()
