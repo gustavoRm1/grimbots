@@ -8884,10 +8884,23 @@ Seu pagamento ainda não foi confirmado.
         try:
             # ✅ DIAGNÓSTICO CRÍTICO: Verificar scheduler
             if not self.scheduler:
-                logger.error(f"❌ CRÍTICO: Scheduler não está disponível!")
+                logger.error(f"❌ CRÍTICO: Scheduler não está disponível no bot_manager!")
                 logger.error(f"   Isso significa que upsells NÃO serão agendados!")
                 logger.error(f"   Verificar se APScheduler foi inicializado corretamente")
-                return
+                logger.error(f"   Payment ID: {payment_id} | Bot ID: {bot_id}")
+                # ✅ CORREÇÃO CRÍTICA QI 500: Tentar recuperar scheduler do app
+                try:
+                    from app import scheduler as app_scheduler
+                    if app_scheduler:
+                        logger.warning(f"⚠️ Scheduler não disponível no bot_manager, tentando usar scheduler do app...")
+                        self.scheduler = app_scheduler
+                        logger.info(f"✅ Scheduler recuperado do app!")
+                    else:
+                        logger.error(f"❌ Scheduler também não está disponível no app!")
+                        return
+                except Exception as recover_error:
+                    logger.error(f"❌ Erro ao recuperar scheduler: {recover_error}", exc_info=True)
+                    return
             
             # ✅ DIAGNÓSTICO: Verificar se scheduler está rodando
             try:
@@ -8899,8 +8912,20 @@ Seu pagamento ainda não foi confirmado.
                     logger.error(f"   Payment ID: {payment_id}")
                     logger.error(f"   Bot ID: {bot_id}")
                     logger.error(f"   AÇÃO NECESSÁRIA: Reiniciar aplicação ou verificar APScheduler")
-                    # ✅ CRÍTICO: NÃO retornar - tentar agendar mesmo assim (pode ser iniciado depois)
-                    logger.warning(f"⚠️ Tentando agendar upsells mesmo com scheduler parado (pode ser iniciado depois)")
+                    # ✅ CORREÇÃO CRÍTICA QI 500: Tentar iniciar scheduler se não estiver rodando
+                    try:
+                        logger.warning(f"⚠️ Tentando iniciar scheduler manualmente...")
+                        self.scheduler.start()
+                        logger.info(f"✅ Scheduler iniciado manualmente!")
+                        # Verificar novamente após iniciar
+                        scheduler_running = self.scheduler.running
+                        if scheduler_running:
+                            logger.info(f"✅ Scheduler confirmado rodando após início manual")
+                        else:
+                            logger.error(f"❌ Scheduler ainda não está rodando após tentativa de início")
+                    except Exception as start_error:
+                        logger.error(f"❌ Erro ao tentar iniciar scheduler: {start_error}", exc_info=True)
+                        logger.warning(f"⚠️ Continuando com agendamento mesmo assim (pode ser iniciado depois)")
             except Exception as e:
                 logger.error(f"❌ ERRO ao verificar se scheduler está rodando: {e}", exc_info=True)
                 logger.warning(f"⚠️ Continuando com agendamento mesmo com erro na verificação")
