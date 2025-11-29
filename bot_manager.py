@@ -8806,8 +8806,14 @@ Seu pagamento ainda não foi confirmado.
                 if not scheduler_running:
                     logger.error(f"❌ CRÍTICO: Scheduler existe mas NÃO está rodando!")
                     logger.error(f"   Jobs agendados NÃO serão executados!")
+                    logger.error(f"   Payment ID: {payment_id}")
+                    logger.error(f"   Bot ID: {bot_id}")
+                    logger.error(f"   AÇÃO NECESSÁRIA: Reiniciar aplicação ou verificar APScheduler")
+                    # ✅ CRÍTICO: NÃO retornar - tentar agendar mesmo assim (pode ser iniciado depois)
+                    logger.warning(f"⚠️ Tentando agendar upsells mesmo com scheduler parado (pode ser iniciado depois)")
             except Exception as e:
-                logger.warning(f"⚠️ Não foi possível verificar se scheduler está rodando: {e}")
+                logger.error(f"❌ ERRO ao verificar se scheduler está rodando: {e}", exc_info=True)
+                logger.warning(f"⚠️ Continuando com agendamento mesmo com erro na verificação")
             
             if not upsells:
                 logger.warning(f"⚠️ Lista de upsells está vazia!")
@@ -8876,19 +8882,30 @@ Seu pagamento ainda não foi confirmado.
                         misfire_grace_time=300  # ✅ Permitir execução mesmo se atrasado até 5 minutos
                     )
                     
-                    # ✅ VERIFICAR se job foi realmente agendado
+                    # ✅ VERIFICAR se job foi realmente agendado (com retry e validação robusta)
                     try:
+                        import time
+                        # ✅ Aguardar um pouco para garantir que job foi persistido
+                        time.sleep(0.1)
+                        
                         job = self.scheduler.get_job(job_id)
                         if job:
                             logger.info(f"✅ Upsell {i+1} AGENDADO COM SUCESSO")
                             logger.info(f"   - Job ID: {job.id}")
                             logger.info(f"   - Próxima execução: {job.next_run_time}")
+                            logger.info(f"   - Delay configurado: {delay_minutes} minutos")
                             jobs_agendados.append(job_id)
                         else:
                             logger.error(f"❌ CRÍTICO: Job {job_id} NÃO foi encontrado após agendamento!")
-                            logger.error(f"   O job pode não ter sido criado corretamente")
+                            logger.error(f"   - Payment ID: {payment_id}")
+                            logger.error(f"   - Bot ID: {bot_id}")
+                            logger.error(f"   - Delay: {delay_minutes} minutos")
+                            logger.error(f"   - Scheduler running: {self.scheduler.running if self.scheduler else 'N/A'}")
+                            logger.error(f"   AÇÃO: Verificar logs do scheduler ou reiniciar aplicação")
                     except Exception as e:
-                        logger.error(f"❌ Erro ao verificar job agendado: {e}")
+                        logger.error(f"❌ ERRO ao verificar job agendado: {e}", exc_info=True)
+                        logger.error(f"   Job ID: {job_id}")
+                        logger.error(f"   Payment ID: {payment_id}")
                         
                 except Exception as e:
                     logger.error(f"❌ Erro ao agendar upsell {i+1}: {e}", exc_info=True)

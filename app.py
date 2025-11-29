@@ -10859,8 +10859,6 @@ def payment_webhook(gateway_type):
                     # ✅ CRÍTICO: Refresh antes de validar status
                     db.session.refresh(payment)
                     logger.info(f"✅ [DIAGNÓSTICO] payment {payment.payment_id}: deve_enviar_entregavel=True - VAI ENVIAR ENTREGÁVEL")
-                else:
-                    logger.error(f"❌ [DIAGNÓSTICO] payment {payment.payment_id}: deve_enviar_entregavel=False - NÃO VAI ENVIAR ENTREGÁVEL! (status='{status}')")
                     
                     # ✅ CRÍTICO: Validar status ANTES de chamar send_payment_delivery
                     if payment.status == 'paid':
@@ -10878,29 +10876,47 @@ def payment_webhook(gateway_type):
                             f"❌ ERRO GRAVE: send_payment_delivery chamado com payment.status != 'paid' "
                             f"(status atual: {payment.status}, payment_id: {payment.payment_id})"
                         )
+                else:
+                    logger.error(f"❌ [DIAGNÓSTICO] payment {payment.payment_id}: deve_enviar_entregavel=False - NÃO VAI ENVIAR ENTREGÁVEL! (status='{status}')")
                     
-                    # ============================================================================
-                    # ✅ META PIXEL: Purchase NÃO é disparado aqui (webhook/reconciliador)
-                    # ============================================================================
-                    # ✅ NOVA ARQUITETURA: Purchase é disparado APENAS quando lead acessa link de entrega
-                    # ✅ Purchase NÃO dispara quando pagamento é confirmado (PIX pago)
-                    # ✅ Purchase dispara quando lead RECEBE entregável no Telegram e clica no link (/delivery/<token>)
-                    # ✅ Isso garante tracking 100% preciso: Purchase = conversão REAL (lead acessou produto)
-                    logger.info(f"✅ Purchase será disparado apenas quando lead acessar link de entrega: /delivery/<token>")
-                    
-                    # ============================================================================
-                    # ✅ UPSELLS AUTOMÁTICOS - APÓS COMPRA APROVADA
-                    # ✅ CORREÇÃO CRÍTICA: Processar SEMPRE que status='paid' (não depende de deve_processar_estatisticas)
-                    # ============================================================================
-                    if status == 'paid' and payment.bot.config and payment.bot.config.upsells_enabled:
+                # ============================================================================
+                # ✅ META PIXEL: Purchase NÃO é disparado aqui (webhook/reconciliador)
+                # ============================================================================
+                # ✅ NOVA ARQUITETURA: Purchase é disparado APENAS quando lead acessa link de entrega
+                # ✅ Purchase NÃO dispara quando pagamento é confirmado (PIX pago)
+                # ✅ Purchase dispara quando lead RECEBE entregável no Telegram e clica no link (/delivery/<token>)
+                # ✅ Isso garante tracking 100% preciso: Purchase = conversão REAL (lead acessou produto)
+                logger.info(f"✅ Purchase será disparado apenas quando lead acessar link de entrega: /delivery/<token>")
+                
+                # ============================================================================
+                # ✅ UPSELLS AUTOMÁTICOS - APÓS COMPRA APROVADA
+                # ✅ CORREÇÃO CRÍTICA QI 500: Processar SEMPRE que status='paid' (INDEPENDENTE de deve_enviar_entregavel)
+                # ✅ CORREÇÃO CRÍTICA: Bloco movido para FORA do else para garantir execução sempre
+                # ============================================================================
+                if status == 'paid' and payment.bot.config and payment.bot.config.upsells_enabled:
                         try:
                             # ✅ ANTI-DUPLICAÇÃO: Verificar se upsells já foram agendados para este payment
                             from models import Payment
                             payment_check = Payment.query.filter_by(payment_id=payment.payment_id).first()
                             
-                            # Verificar se já há jobs de upsell agendados
-                            upsells_already_scheduled = False
-                            if bot_manager.scheduler:
+                            # ✅ CORREÇÃO CRÍTICA QI 500: Verificar scheduler ANTES de verificar jobs
+                            if not bot_manager.scheduler:
+                                logger.error(f"❌ CRÍTICO: Scheduler não está disponível! Upsells NÃO serão agendados!")
+                                logger.error(f"   Payment ID: {payment.payment_id}")
+                                logger.error(f"   Verificar se APScheduler foi inicializado corretamente")
+                            else:
+                                # ✅ DIAGNÓSTICO: Verificar se scheduler está rodando
+                                try:
+                                    scheduler_running = bot_manager.scheduler.running
+                                    if not scheduler_running:
+                                        logger.error(f"❌ CRÍTICO: Scheduler existe mas NÃO está rodando!")
+                                        logger.error(f"   Payment ID: {payment.payment_id}")
+                                        logger.error(f"   Upsells NÃO serão executados se scheduler não estiver rodando!")
+                                except Exception as scheduler_check_error:
+                                    logger.warning(f"⚠️ Não foi possível verificar se scheduler está rodando: {scheduler_check_error}")
+                                
+                                # ✅ ANTI-DUPLICAÇÃO: Verificar se upsells já foram agendados para este payment
+                                upsells_already_scheduled = False
                                 try:
                                     # Verificar se já existe job de upsell para este payment
                                     for i in range(10):  # Verificar até 10 upsells possíveis
@@ -10909,11 +10925,14 @@ def payment_webhook(gateway_type):
                                         if existing_job:
                                             upsells_already_scheduled = True
                                             logger.info(f"ℹ️ Upsells já foram agendados para payment {payment.payment_id} (job {job_id} existe)")
+                                            logger.info(f"   Job encontrado: {job_id}, próxima execução: {existing_job.next_run_time}")
                                             break
                                 except Exception as check_error:
-                                    logger.warning(f"⚠️ Erro ao verificar jobs existentes: {check_error}")
+                                    logger.error(f"❌ ERRO ao verificar jobs existentes: {check_error}", exc_info=True)
+                                    logger.warning(f"⚠️ Continuando mesmo com erro na verificação (pode causar duplicação)")
+                                    # ✅ Não bloquear se houver erro na verificação - deixar tentar agendar
                             
-                            if not upsells_already_scheduled:
+                            if bot_manager.scheduler and not upsells_already_scheduled:
                                 upsells = payment.bot.config.get_upsells()
                                 
                                 if upsells:
