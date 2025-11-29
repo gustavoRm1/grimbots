@@ -10942,83 +10942,83 @@ def payment_webhook(gateway_type):
                 if status == 'paid' and payment.bot.config and payment.bot.config.upsells_enabled:
                     logger.info(f"✅ [UPSELLS] Condições atendidas! Processando upsells para payment {payment.payment_id}")
                     try:
+                        # ✅ ANTI-DUPLICAÇÃO: Verificar se upsells já foram agendados para este payment
+                        from models import Payment
+                        payment_check = Payment.query.filter_by(payment_id=payment.payment_id).first()
+                        
+                        # ✅ CORREÇÃO CRÍTICA QI 500: Verificar scheduler ANTES de verificar jobs
+                        if not bot_manager.scheduler:
+                            logger.error(f"❌ CRÍTICO: Scheduler não está disponível! Upsells NÃO serão agendados!")
+                            logger.error(f"   Payment ID: {payment.payment_id}")
+                            logger.error(f"   Verificar se APScheduler foi inicializado corretamente")
+                        else:
+                            # ✅ DIAGNÓSTICO: Verificar se scheduler está rodando
+                            try:
+                                scheduler_running = bot_manager.scheduler.running
+                                if not scheduler_running:
+                                    logger.error(f"❌ CRÍTICO: Scheduler existe mas NÃO está rodando!")
+                                    logger.error(f"   Payment ID: {payment.payment_id}")
+                                    logger.error(f"   Upsells NÃO serão executados se scheduler não estiver rodando!")
+                            except Exception as scheduler_check_error:
+                                logger.warning(f"⚠️ Não foi possível verificar se scheduler está rodando: {scheduler_check_error}")
+                            
                             # ✅ ANTI-DUPLICAÇÃO: Verificar se upsells já foram agendados para este payment
-                            from models import Payment
-                            payment_check = Payment.query.filter_by(payment_id=payment.payment_id).first()
+                            upsells_already_scheduled = False
+                            try:
+                                # Verificar se já existe job de upsell para este payment
+                                for i in range(10):  # Verificar até 10 upsells possíveis
+                                    job_id = f"upsell_{payment.bot_id}_{payment.payment_id}_{i}"
+                                    existing_job = bot_manager.scheduler.get_job(job_id)
+                                    if existing_job:
+                                        upsells_already_scheduled = True
+                                        logger.info(f"ℹ️ Upsells já foram agendados para payment {payment.payment_id} (job {job_id} existe)")
+                                        logger.info(f"   Job encontrado: {job_id}, próxima execução: {existing_job.next_run_time}")
+                                        break
+                            except Exception as check_error:
+                                logger.error(f"❌ ERRO ao verificar jobs existentes: {check_error}", exc_info=True)
+                                logger.warning(f"⚠️ Continuando mesmo com erro na verificação (pode causar duplicação)")
+                                # ✅ Não bloquear se houver erro na verificação - deixar tentar agendar
+                        
+                        if bot_manager.scheduler and not upsells_already_scheduled:
+                            upsells = payment.bot.config.get_upsells()
                             
-                            # ✅ CORREÇÃO CRÍTICA QI 500: Verificar scheduler ANTES de verificar jobs
-                            if not bot_manager.scheduler:
-                                logger.error(f"❌ CRÍTICO: Scheduler não está disponível! Upsells NÃO serão agendados!")
-                                logger.error(f"   Payment ID: {payment.payment_id}")
-                                logger.error(f"   Verificar se APScheduler foi inicializado corretamente")
-                            else:
-                                # ✅ DIAGNÓSTICO: Verificar se scheduler está rodando
-                                try:
-                                    scheduler_running = bot_manager.scheduler.running
-                                    if not scheduler_running:
-                                        logger.error(f"❌ CRÍTICO: Scheduler existe mas NÃO está rodando!")
-                                        logger.error(f"   Payment ID: {payment.payment_id}")
-                                        logger.error(f"   Upsells NÃO serão executados se scheduler não estiver rodando!")
-                                except Exception as scheduler_check_error:
-                                    logger.warning(f"⚠️ Não foi possível verificar se scheduler está rodando: {scheduler_check_error}")
+                            if upsells:
+                                logger.info(f"🎯 Verificando upsells para produto: {payment.product_name}")
                                 
-                                # ✅ ANTI-DUPLICAÇÃO: Verificar se upsells já foram agendados para este payment
-                                upsells_already_scheduled = False
-                                try:
-                                    # Verificar se já existe job de upsell para este payment
-                                    for i in range(10):  # Verificar até 10 upsells possíveis
-                                        job_id = f"upsell_{payment.bot_id}_{payment.payment_id}_{i}"
-                                        existing_job = bot_manager.scheduler.get_job(job_id)
-                                        if existing_job:
-                                            upsells_already_scheduled = True
-                                            logger.info(f"ℹ️ Upsells já foram agendados para payment {payment.payment_id} (job {job_id} existe)")
-                                            logger.info(f"   Job encontrado: {job_id}, próxima execução: {existing_job.next_run_time}")
-                                            break
-                                except Exception as check_error:
-                                    logger.error(f"❌ ERRO ao verificar jobs existentes: {check_error}", exc_info=True)
-                                    logger.warning(f"⚠️ Continuando mesmo com erro na verificação (pode causar duplicação)")
-                                    # ✅ Não bloquear se houver erro na verificação - deixar tentar agendar
-                            
-                            if bot_manager.scheduler and not upsells_already_scheduled:
-                                upsells = payment.bot.config.get_upsells()
+                                # Filtrar upsells que fazem match com o produto comprado
+                                matched_upsells = []
+                                for upsell in upsells:
+                                    trigger_product = upsell.get('trigger_product', '')
+                                    
+                                    # Match: trigger vazio (todas compras) OU produto específico
+                                    if not trigger_product or trigger_product == payment.product_name:
+                                        matched_upsells.append(upsell)
                                 
-                                if upsells:
-                                    logger.info(f"🎯 Verificando upsells para produto: {payment.product_name}")
+                                if matched_upsells:
+                                    logger.info(f"✅ {len(matched_upsells)} upsell(s) encontrado(s) para '{payment.product_name}'")
                                     
-                                    # Filtrar upsells que fazem match com o produto comprado
-                                    matched_upsells = []
-                                    for upsell in upsells:
-                                        trigger_product = upsell.get('trigger_product', '')
-                                        
-                                        # Match: trigger vazio (todas compras) OU produto específico
-                                        if not trigger_product or trigger_product == payment.product_name:
-                                            matched_upsells.append(upsell)
+                                    # ✅ CORREÇÃO: Usar função específica para upsells (não downsells)
+                                    bot_manager.schedule_upsells(
+                                        bot_id=payment.bot_id,
+                                        payment_id=payment.payment_id,
+                                        chat_id=int(payment.customer_user_id),
+                                        upsells=matched_upsells,
+                                        original_price=payment.amount,
+                                        original_button_index=-1
+                                    )
                                     
-                                    if matched_upsells:
-                                        logger.info(f"✅ {len(matched_upsells)} upsell(s) encontrado(s) para '{payment.product_name}'")
-                                        
-                                        # ✅ CORREÇÃO: Usar função específica para upsells (não downsells)
-                                        bot_manager.schedule_upsells(
-                                            bot_id=payment.bot_id,
-                                            payment_id=payment.payment_id,
-                                            chat_id=int(payment.customer_user_id),
-                                            upsells=matched_upsells,
-                                            original_price=payment.amount,
-                                            original_button_index=-1
-                                        )
-                                        
-                                        logger.info(f"📅 Upsells agendados com sucesso para payment {payment.payment_id}!")
-                                    else:
-                                        logger.info(f"ℹ️ Nenhum upsell configurado para '{payment.product_name}' (trigger_product não faz match)")
+                                    logger.info(f"📅 Upsells agendados com sucesso para payment {payment.payment_id}!")
                                 else:
-                                    logger.info(f"ℹ️ Lista de upsells vazia no config do bot")
+                                    logger.info(f"ℹ️ Nenhum upsell configurado para '{payment.product_name}' (trigger_product não faz match)")
                             else:
-                                logger.info(f"ℹ️ Upsells já foram agendados anteriormente para payment {payment.payment_id} (evitando duplicação)")
-                                
-                        except Exception as e:
-                            logger.error(f"❌ Erro ao processar upsells: {e}", exc_info=True)
-                            import traceback
-                            traceback.print_exc()
+                                logger.info(f"ℹ️ Lista de upsells vazia no config do bot")
+                        else:
+                            logger.info(f"ℹ️ Upsells já foram agendados anteriormente para payment {payment.payment_id} (evitando duplicação)")
+                            
+                    except Exception as e:
+                        logger.error(f"❌ Erro ao processar upsells: {e}", exc_info=True)
+                        import traceback
+                        traceback.print_exc()
                 
                 # ✅ COMMIT JÁ FOI FEITO ANTES (linha 7973) - não duplicar
                 # db.session.commit() removido - commit já ocorreu antes de enviar entregável/Meta
