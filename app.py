@@ -373,30 +373,55 @@ def send_payment_delivery(payment, bot_manager):
             db.session.commit()
             logger.info(f"✅ delivery_token gerado para payment {payment.id}: {delivery_token[:20]}...")
         
-        # ✅ Buscar pool para configurar pixel (se habilitado)
+        # ✅ Buscar pool para verificar Meta Pixel
         from models import PoolBot
         pool_bot = PoolBot.query.filter_by(bot_id=payment.bot_id).first()
         pool = pool_bot.pool if pool_bot else None
         has_meta_pixel = pool and pool.meta_tracking_enabled and pool.meta_pixel_id
         
-        # ✅ URL de entrega (Purchase disparado aqui)
-        from flask import url_for
-        try:
-            delivery_url = url_for('delivery_page', delivery_token=payment.delivery_token, _external=True)
-        except:
-            delivery_url = f"https://app.grimbots.online/delivery/{payment.delivery_token}"
-        
-        # Verificar se bot tem config e access_link (link final após Purchase)
+        # Verificar se bot tem config e access_link (link final configurado pelo usuário)
         has_access_link = payment.bot.config and payment.bot.config.access_link
-        final_link = payment.bot.config.access_link if has_access_link else None
+        access_link = payment.bot.config.access_link if has_access_link else None
         
-        # ✅ CRÍTICO: SEMPRE enviar delivery_url para garantir Purchase tracking
-        # Mesmo sem meta_pixel, deve enviar delivery_url para manter consistência
-        # Purchase será enviado quando usuário acessar /delivery/<token>
-        # Se has_meta_pixel = True, Purchase será enviado com tracking
-        # Se has_meta_pixel = False, Purchase não será enviado mas link funciona normalmente
-        if has_access_link:
-            # ✅ SEMPRE enviar delivery_url para garantir Purchase tracking
+        # ✅ DECISÃO CRÍTICA: Qual link enviar baseado em Meta Pixel?
+        # Se Meta Pixel ATIVO → usar /delivery para disparar Purchase tracking
+        # Se Meta Pixel INATIVO → usar access_link direto (sem passar por /delivery)
+        link_to_send = None
+        
+        if has_meta_pixel:
+            # ✅ Meta Pixel ATIVO → usar /delivery para disparar Purchase tracking
+            # Gerar delivery_token se não existir (necessário para /delivery)
+            if not payment.delivery_token:
+                import uuid
+                import hashlib
+                import time
+                timestamp = int(time.time())
+                secret = f"{payment.id}_{payment.payment_id}_{timestamp}"
+                delivery_token = hashlib.sha256(secret.encode()).hexdigest()[:64]
+                payment.delivery_token = delivery_token
+                db.session.commit()
+                logger.info(f"✅ delivery_token gerado para Meta Pixel tracking: {delivery_token[:20]}...")
+            
+            # Gerar URL de delivery
+            from flask import url_for
+            try:
+                link_to_send = url_for('delivery_page', delivery_token=payment.delivery_token, _external=True)
+            except:
+                link_to_send = f"https://app.grimbots.online/delivery/{payment.delivery_token}"
+            
+            logger.info(f"✅ Meta Pixel ativo → enviando /delivery para disparar Purchase tracking (payment {payment.id})")
+        else:
+            # ✅ Meta Pixel INATIVO → usar access_link direto (sem passar por /delivery)
+            if has_access_link:
+                link_to_send = access_link
+                logger.info(f"✅ Meta Pixel inativo → enviando access_link direto: {access_link[:50]}... (payment {payment.id})")
+            else:
+                # Sem Meta Pixel E sem access_link → sem link (mensagem genérica)
+                link_to_send = None
+                logger.warning(f"⚠️ Meta Pixel inativo E sem access_link → enviando mensagem genérica (payment {payment.id})")
+        
+        # ✅ Montar mensagem baseada no link disponível
+        if link_to_send:
             access_message = f"""
 ✅ <b>Pagamento Confirmado!</b>
 
@@ -406,13 +431,13 @@ def send_payment_delivery(payment, bot_manager):
 💰 <b>Valor:</b> R$ {payment.amount:.2f}
 
 🔗 <b>Clique aqui para acessar:</b>
-{delivery_url}
+{link_to_send}
 
 Aproveite! 🚀
             """
-            logger.info(f"✅ Delivery URL enviado para payment {payment.id} (delivery_token: {payment.delivery_token[:20]}...)")
+            logger.info(f"✅ Link de acesso enviado para payment {payment.id} (Meta Pixel: {'✅' if has_meta_pixel else '❌'})")
         else:
-            # Mensagem genérica sem link (bot não configurou access_link)
+            # Mensagem genérica sem link (bot não configurou access_link e não tem Meta Pixel)
             access_message = f"""
 ✅ <b>Pagamento Confirmado!</b>
 
@@ -423,7 +448,7 @@ Aproveite! 🚀
 
 📧 Entre em contato com o suporte para receber seu acesso.
             """
-            logger.warning(f"⚠️ Bot {payment.bot_id} não tem access_link configurado - enviando mensagem genérica (Purchase não será enviado)")
+            logger.warning(f"⚠️ Bot {payment.bot_id} não tem access_link configurado e Meta Pixel inativo - enviando mensagem genérica")
         
         # Enviar via bot manager e capturar exceção se falhar
         try:
