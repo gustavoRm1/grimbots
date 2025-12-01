@@ -3864,7 +3864,9 @@ class BotManager:
                     description=description,
                     customer_name=user_info.get('first_name', ''),
                     customer_username=user_info.get('username', ''),
-                    customer_user_id=str(user_info.get('id', ''))
+                    customer_user_id=str(user_info.get('id', '')),
+                    is_remarketing=True,  # ✅ CORREÇÃO CRÍTICA: Marcar como remarketing
+                    remarketing_campaign_id=campaign_id  # ✅ Salvar ID da campanha
                 )
                 
                 if pix_data and pix_data.get('pix_code'):
@@ -6508,6 +6510,8 @@ Seu pagamento ainda não foi confirmado.
                              downsell_index: int = None,
                              is_upsell: bool = False,  # ✅ NOVO - UPSELLS
                              upsell_index: int = None,  # ✅ NOVO - UPSELLS
+                             is_remarketing: bool = False,  # ✅ NOVO - REMARKETING
+                             remarketing_campaign_id: int = None,  # ✅ NOVO - REMARKETING
                              button_index: int = None,  # ✅ NOVO - SISTEMA DE ASSINATURAS
                              button_config: dict = None) -> Optional[Dict[str, Any]]:  # ✅ NOVO - SISTEMA DE ASSINATURAS
         """
@@ -7461,6 +7465,8 @@ Seu pagamento ainda não foi confirmado.
                         downsell_index=downsell_index,
                         is_upsell=is_upsell_final,  # ✅ NOVO - UPSELLS
                         upsell_index=upsell_index,  # ✅ NOVO - UPSELLS
+                        is_remarketing=is_remarketing,  # ✅ NOVO - REMARKETING
+                        remarketing_campaign_id=remarketing_campaign_id,  # ✅ NOVO - REMARKETING
                         # ✅ DEMOGRAPHIC DATA (Copiar de bot_user se disponível, com fallback seguro)
                         customer_age=getattr(bot_user, 'customer_age', None) if bot_user else None,
                         customer_city=getattr(bot_user, 'customer_city', None) if bot_user else None,

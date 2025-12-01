@@ -560,6 +560,16 @@ def reconcile_paradise_payments():
                                 if user:
                                     user.total_sales += 1
                                     user.total_revenue += p.amount
+                        
+                        # ✅ ATUALIZAR ESTATÍSTICAS DE REMARKETING
+                        if p.is_remarketing and p.remarketing_campaign_id:
+                            from models import RemarketingCampaign
+                            campaign = RemarketingCampaign.query.get(p.remarketing_campaign_id)
+                            if campaign:
+                                campaign.total_sales += 1
+                                campaign.revenue_generated += float(p.amount)
+                                logger.info(f"✅ Estatísticas de remarketing atualizadas (Paradise): Campanha {campaign.id} | Vendas: {campaign.total_sales} | Receita: R$ {campaign.revenue_generated:.2f}")
+                        
                         db.session.commit()
                         logger.info(f"✅ Paradise: Payment {p.id} atualizado para paid via reconciliação")
                         
@@ -745,6 +755,16 @@ def reconcile_pushynpay_payments():
                                 if user:
                                     user.total_sales += 1
                                     user.total_revenue += p.amount
+                        
+                        # ✅ ATUALIZAR ESTATÍSTICAS DE REMARKETING
+                        if p.is_remarketing and p.remarketing_campaign_id:
+                            from models import RemarketingCampaign
+                            campaign = RemarketingCampaign.query.get(p.remarketing_campaign_id)
+                            if campaign:
+                                campaign.total_sales += 1
+                                campaign.revenue_generated += float(p.amount)
+                                logger.info(f"✅ Estatísticas de remarketing atualizadas (PushynPay): Campanha {campaign.id} | Vendas: {campaign.total_sales} | Receita: R$ {campaign.revenue_generated:.2f}")
+                        
                         db.session.commit()
                         logger.info(f"✅ PushynPay: Payment {p.id} atualizado para paid via reconciliação")
                         
@@ -944,6 +964,16 @@ def reconcile_atomopay_payments():
                                 if user:
                                     user.total_sales += 1
                                     user.total_revenue += p.amount
+                        
+                        # ✅ ATUALIZAR ESTATÍSTICAS DE REMARKETING
+                        if p.is_remarketing and p.remarketing_campaign_id:
+                            from models import RemarketingCampaign
+                            campaign = RemarketingCampaign.query.get(p.remarketing_campaign_id)
+                            if campaign:
+                                campaign.total_sales += 1
+                                campaign.revenue_generated += float(p.amount)
+                                logger.info(f"✅ Estatísticas de remarketing atualizadas (Atomopay): Campanha {campaign.id} | Vendas: {campaign.total_sales} | Receita: R$ {campaign.revenue_generated:.2f}")
+                        
                         db.session.commit()
                         logger.info(f"✅ Atomopay: Payment {p.id} atualizado para paid via reconciliação")
                         
@@ -11241,6 +11271,17 @@ def payment_webhook(gateway_type):
                             gateway.total_transactions += 1
                             gateway.successful_transactions += 1
                             logger.info(f"✅ Estatísticas do gateway {gateway.gateway_type} atualizadas: {gateway.total_transactions} transações, {gateway.successful_transactions} bem-sucedidas")
+                    
+                    # ✅ ATUALIZAR ESTATÍSTICAS DE REMARKETING
+                    if payment.is_remarketing and payment.remarketing_campaign_id:
+                        from models import RemarketingCampaign
+                        campaign = RemarketingCampaign.query.get(payment.remarketing_campaign_id)
+                        if campaign:
+                            campaign.total_sales += 1
+                            campaign.revenue_generated += float(payment.amount)
+                            logger.info(f"✅ Estatísticas de remarketing atualizadas: Campanha {campaign.id} | Vendas: {campaign.total_sales} | Receita: R$ {campaign.revenue_generated:.2f}")
+                        else:
+                            logger.warning(f"⚠️ Campanha de remarketing {payment.remarketing_campaign_id} não encontrada para payment {payment.id}")
                     
                     # REGISTRAR COMISSÃO
                     from models import Commission

@@ -2566,24 +2566,16 @@ window.botStatsApp = function botStatsApp() {
                     full_campaign: campaign
                 });
                 
-                // ✅ ALERTA TEMPORÁRIO PARA DEBUG
+                // ✅ LOG: Verificar se campanha tem botões
                 if (!campaign.buttons || (Array.isArray(campaign.buttons) && campaign.buttons.length === 0)) {
-                    console.error('🚨 ALERTA: Campanha não tem botões ou array está vazio!', {
+                    console.warn('⚠️ Campanha não tem botões configurados:', {
                         campaign_id: campaign.id,
                         campaign_name: campaign.name,
                         buttons: campaign.buttons,
                         buttons_type: typeof campaign.buttons,
                         buttons_is_array: Array.isArray(campaign.buttons),
-                        buttons_length: Array.isArray(campaign.buttons) ? campaign.buttons.length : 'N/A',
-                        full_campaign_object: campaign
+                        buttons_length: Array.isArray(campaign.buttons) ? campaign.buttons.length : 'N/A'
                     });
-                    
-                    // ✅ Mostrar alerta ao usuário para debug
-                    alert(`⚠️ ATENÇÃO: Esta campanha (ID: ${campaign.id}) não tem botões configurados no banco de dados.\n\n` +
-                          `Isso pode acontecer se:\n` +
-                          `1. A campanha foi criada sem botões\n` +
-                          `2. Os botões foram perdidos durante o salvamento\n\n` +
-                          `Verifique o console para mais detalhes.`);
                 }
                 
                 // Carregar dados da campanha no modal de edição (COM DADOS COMPLETOS)
