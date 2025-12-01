@@ -968,64 +968,73 @@ if (typeof window.botStatsApp === 'undefined') {
     
     <div x-show="showEditModal" 
          x-cloak
-         class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4"
-         @click.self="showEditModal = false">
-        <div class="bg-gray-900 rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto border border-gray-700">
-            <!-- Header -->
-            <div class="sticky top-0 bg-gray-900 border-b border-gray-700 px-6 py-4 flex items-center justify-between">
-                <h2 class="text-xl font-bold text-white flex items-center gap-2">
-                    <i class="fas fa-edit text-blue-500"></i>
-                    Editar Campanha de Remarketing
-                </h2>
-                <button @click="showEditModal = false" class="text-gray-400 hover:text-white">
-                    <i class="fas fa-times text-xl"></i>
-                </button>
-            </div>
-            
-            <!-- Content -->
-            <div class="p-6" x-show="editCampaignData">
+         class="fixed inset-0 z-50 overflow-y-auto"
+         style="background: rgba(0, 0, 0, 0.95); backdrop-filter: blur(8px);">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div @click.away="showEditModal = false" 
+                 class="relative bg-bg900 rounded-2xl shadow-2xl max-w-4xl w-full"
+                 style="border: 2px solid var(--border-accent);">
+                
+                <!-- Header -->
+                <div class="px-8 py-6 border-b border-white border-opacity-5" style="background: var(--border-subtle);">
+                    <h3 class="text-2xl font-bold flex items-center gap-3 text-accent500">
+                        <i class="fas fa-edit"></i>
+                        Editar Campanha de Remarketing
+                    </h3>
+                    <p class="text-sm text-textSecondary mt-1">Ajuste as configurações da sua campanha</p>
+                </div>
+                
+                <!-- Body -->
+                <div class="px-8 py-6 max-h-[70vh] overflow-y-auto">
                 <form @submit.prevent="saveCampaignEdit()">
                     <!-- Mensagem -->
                     <div class="mb-6">
-                        <label class="block text-sm font-bold text-white mb-2">
-                            <i class="fas fa-comment-alt mr-2 text-yellow-500"></i>
+                        <label class="block text-sm font-bold text-textPrimary mb-2">
+                            <i class="fas fa-comment-alt mr-2 text-accent500"></i>
                             Mensagem do Remarketing
                         </label>
                         <textarea x-model="editCampaignData.message" 
                                   rows="6"
-                                  class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                                  class="w-full px-4 py-3 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary placeholder-textSecondary focus:outline-none focus:ring-2 focus:ring-accent500"
                                   placeholder="Digite a mensagem que será enviada para os usuários..."></textarea>
+                        <p class="text-xs text-textSecondary mt-2">
+                            <i class="fas fa-lightbulb mr-1 text-accent500"></i>
+                            Use emojis e seja persuasivo para aumentar a conversão
+                        </p>
                     </div>
                     
-                    <!-- Mídia -->
+                    <!-- Mídia (Opcional) -->
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                         <div>
-                            <label class="block text-sm font-bold text-white mb-2">
-                                <i class="fas fa-link mr-2 text-yellow-500"></i>
+                            <label class="block text-sm font-bold text-textPrimary mb-2">
+                                <i class="fas fa-link mr-2 text-accent500"></i>
                                 URL da Mídia (opcional)
                             </label>
                             <input type="url" 
                                    x-model="editCampaignData.media_url" 
-                                   class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                                   class="w-full px-4 py-3 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary placeholder-textSecondary focus:outline-none focus:ring-2 focus:ring-accent500"
                                    placeholder="https://t.me/canal/123">
+                            <p class="text-xs text-textSecondary mt-2">Link do Telegram (vídeo ou foto)</p>
                         </div>
                         <div>
-                            <label class="block text-sm font-bold text-white mb-2">
-                                <i class="fas fa-image mr-2 text-yellow-500"></i>
-                                Tipo de Mídia
+                            <label class="block text-sm font-bold text-textPrimary mb-2">
+                                <i class="fas fa-image mr-2 text-accent500"></i>
+                                Tipo de Mídia Principal
                             </label>
                             <div class="grid grid-cols-2 gap-3 mt-2">
-                                <label class="flex items-center gap-2 px-4 py-3 bg-gray-800 border rounded-lg cursor-pointer transition-colors"
-                                       :class="editCampaignData.media_type === 'video' ? 'border-yellow-500' : 'border-gray-700'">
-                                    <input type="radio" x-model="editCampaignData.media_type" value="video" class="text-yellow-500">
-                                    <i class="fas fa-video text-yellow-500"></i>
-                                    <span class="text-sm text-white">Vídeo</span>
+                                <label class="flex items-center gap-2 px-4 py-3 bg-bg900 border rounded-lg cursor-pointer transition-colors"
+                                       :class="editCampaignData.media_type === 'video' ? 'border-accent500' : 'border-white border-opacity-10'"
+                                       :style="editCampaignData.media_type === 'video' ? 'background: var(--border-subtle);' : ''">
+                                    <input type="radio" x-model="editCampaignData.media_type" value="video" style="accent-color: var(--brand-gold-500);">
+                                    <i class="fas fa-video text-accent500"></i>
+                                    <span class="text-sm text-textPrimary">Vídeo</span>
                                 </label>
-                                <label class="flex items-center gap-2 px-4 py-3 bg-gray-800 border rounded-lg cursor-pointer transition-colors"
-                                       :class="editCampaignData.media_type === 'photo' ? 'border-yellow-500' : 'border-gray-700'">
-                                    <input type="radio" x-model="editCampaignData.media_type" value="photo" class="text-yellow-500">
-                                    <i class="fas fa-camera text-yellow-500"></i>
-                                    <span class="text-sm text-white">Foto</span>
+                                <label class="flex items-center gap-2 px-4 py-3 bg-bg900 border rounded-lg cursor-pointer transition-colors"
+                                       :class="editCampaignData.media_type === 'photo' ? 'border-accent500' : 'border-white border-opacity-10'"
+                                       :style="editCampaignData.media_type === 'photo' ? 'background: var(--border-subtle);' : ''">
+                                    <input type="radio" x-model="editCampaignData.media_type" value="photo" style="accent-color: var(--brand-gold-500);">
+                                    <i class="fas fa-camera text-accent500"></i>
+                                    <span class="text-sm text-textPrimary">Foto</span>
                                 </label>
                             </div>
                         </div>
