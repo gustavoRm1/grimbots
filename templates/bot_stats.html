@@ -2558,8 +2558,12 @@ window.botStatsApp = function botStatsApp() {
                     name: campaign.name,
                     buttons_type: typeof campaign.buttons,
                     buttons_is_array: Array.isArray(campaign.buttons),
+                    buttons_is_null: campaign.buttons === null,
+                    buttons_is_undefined: campaign.buttons === undefined,
+                    buttons_value: campaign.buttons,
                     buttons_count: Array.isArray(campaign.buttons) ? campaign.buttons.length : (campaign.buttons ? 'N/A' : 'null'),
-                    buttons_raw: campaign.buttons
+                    buttons_raw: JSON.stringify(campaign.buttons),
+                    full_campaign: campaign
                 });
                 
                 // Carregar dados da campanha no modal de edição (COM DADOS COMPLETOS)
@@ -2596,35 +2600,62 @@ window.botStatsApp = function botStatsApp() {
             }
             
             // ✅ SOLUÇÃO CRÍTICA #4: VALIDAÇÃO COMPLETA NO FRONTEND
+            console.log('🔍 DEBUG: Processando buttons da campanha:', {
+                buttons_original: campaign.buttons,
+                buttons_type: typeof campaign.buttons,
+                buttons_is_null: campaign.buttons === null,
+                buttons_is_undefined: campaign.buttons === undefined,
+                buttons_is_array: Array.isArray(campaign.buttons),
+                buttons_stringified: JSON.stringify(campaign.buttons)
+            });
+            
             let buttonsArray = null; // Iniciar como null para distinguir de array vazio
             
+            // ✅ CORREÇÃO CRÍTICA: Verificar se buttons existe e não é null/undefined
             if (campaign.buttons !== null && campaign.buttons !== undefined) {
                 if (Array.isArray(campaign.buttons)) {
                     // ✅ Deep copy do array para garantir independência
                     buttonsArray = JSON.parse(JSON.stringify(campaign.buttons));
+                    console.log('✅ Buttons é array, processado:', buttonsArray);
                 } else if (typeof campaign.buttons === 'string') {
                     // Se for string JSON, fazer parse
+                    console.log('⚠️ Buttons é string, tentando parsear:', campaign.buttons);
                     try {
                         const parsed = JSON.parse(campaign.buttons);
                         buttonsArray = Array.isArray(parsed) ? parsed : (parsed ? [parsed] : null);
+                        console.log('✅ String parseada com sucesso:', buttonsArray);
                     } catch (e) {
                         console.error('❌ Erro ao parsear buttons como JSON string:', e, 'Valor:', campaign.buttons);
                         buttonsArray = null; // Manter null em caso de erro
                     }
                 } else if (typeof campaign.buttons === 'object') {
                     // Se for objeto único, converter para array
+                    console.log('⚠️ Buttons é objeto único, convertendo para array:', campaign.buttons);
                     buttonsArray = [JSON.parse(JSON.stringify(campaign.buttons))];
                 } else {
                     // Qualquer outro tipo (number, boolean, etc), usar null
                     console.warn('⚠️ Tipo inesperado de buttons:', typeof campaign.buttons, campaign.buttons);
                     buttonsArray = null;
                 }
+            } else {
+                console.warn('⚠️ Buttons é null ou undefined na campanha:', {
+                    buttons: campaign.buttons,
+                    is_null: campaign.buttons === null,
+                    is_undefined: campaign.buttons === undefined
+                });
             }
             
             // ✅ GARANTIR: Sempre array (não null)
             if (buttonsArray === null || !Array.isArray(buttonsArray)) {
+                console.warn('⚠️ buttonsArray não é array válido, usando array vazio:', buttonsArray);
                 buttonsArray = [];
             }
+            
+            console.log('✅ buttonsArray final antes de carregar no form:', {
+                is_array: Array.isArray(buttonsArray),
+                length: buttonsArray.length,
+                buttons: buttonsArray
+            });
             
             console.log('✅ Botões carregados para edição:', {
                 buttons_count: buttonsArray.length,

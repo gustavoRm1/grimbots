@@ -4418,19 +4418,44 @@ def get_bot_stats(bot_id):
                 has_url = 'url' in btn and btn.get('url')
                 has_callback = 'callback_data' in btn and btn.get('callback_data')
                 
-                # Ignorar se for estrutura de downsell (tem 'delay_minutes', 'order_bump', 'price', etc)
-                # Também ignorar se for estrutura aninhada de downsells
-                is_downsell_structure = any(key in btn for key in ['delay_minutes', 'order_bump', 'description'])
+                # ✅ CORREÇÃO CRÍTICA: Botões de remarketing podem ter 'price' + 'description' (botão de compra)
+                # ou 'url' ou 'callback_data'. NÃO remover botões com 'description' se também têm 'price'!
+                has_price = 'price' in btn and btn.get('price') is not None
+                has_description = 'description' in btn and btn.get('description')
+                
+                # Ignorar se for estrutura de downsell (tem 'delay_minutes' ou 'order_bump', mas NÃO 'description' sozinha)
+                # Botões de remarketing com price+description são VÁLIDOS
+                is_downsell_structure = any(key in btn for key in ['delay_minutes', 'order_bump'])
                 
                 # Ignorar botões que são apenas placeholders ou estruturas internas
                 is_internal_structure = 'buttons' in btn  # Se tem 'buttons' dentro, é estrutura aninhada
                 
-                if has_text and (has_url or has_callback) and not is_downsell_structure and not is_internal_structure:
-                    valid_buttons.append({
-                        'text': btn.get('text', ''),
-                        'url': btn.get('url'),
-                        'callback_data': btn.get('callback_data')
-                    })
+                # ✅ Botão válido se:
+                # 1. Tem text E (url OU callback_data OU (price E description))
+                # 2. NÃO é estrutura de downsell (sem delay_minutes/order_bump)
+                # 3. NÃO é estrutura interna aninhada
+                is_valid_button = (
+                    has_text and 
+                    (has_url or has_callback or (has_price and has_description)) and
+                    not is_downsell_structure and 
+                    not is_internal_structure
+                )
+                
+                if is_valid_button:
+                    # ✅ Preservar TODOS os campos do botão (price, description, url, callback_data)
+                    button_copy = {
+                        'text': btn.get('text', '')
+                    }
+                    if has_price:
+                        button_copy['price'] = btn.get('price')
+                    if has_description:
+                        button_copy['description'] = btn.get('description')
+                    if has_url:
+                        button_copy['url'] = btn.get('url')
+                    if has_callback:
+                        button_copy['callback_data'] = btn.get('callback_data')
+                    
+                    valid_buttons.append(button_copy)
             elif isinstance(btn, list):
                 # Se for lista aninhada (downsells podem ter arrays de botões), processar recursivamente
                 nested_buttons = get_valid_campaign_buttons(btn)
