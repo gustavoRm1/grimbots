@@ -2668,21 +2668,62 @@ window.botStatsApp = function botStatsApp() {
             this.resendingCampaign = true;
             
             try {
+                // ✅ CORREÇÃO CRÍTICA: Garantir que botões sejam sempre um array
+                // Se buttons for null, undefined, ou não for array, usar array vazio
+                // Se for array, fazer deep copy para garantir independência
+                let buttonsArray = [];
+                if (campaign.buttons) {
+                    if (Array.isArray(campaign.buttons)) {
+                        // Deep copy do array para garantir independência
+                        buttonsArray = JSON.parse(JSON.stringify(campaign.buttons));
+                    } else if (typeof campaign.buttons === 'string') {
+                        // Se for string JSON, fazer parse
+                        try {
+                            buttonsArray = JSON.parse(campaign.buttons);
+                            if (!Array.isArray(buttonsArray)) {
+                                buttonsArray = [];
+                            }
+                        } catch (e) {
+                            console.error('❌ Erro ao parsear buttons como JSON string:', e);
+                            buttonsArray = [];
+                        }
+                    }
+                }
+                
+                // ✅ CORREÇÃO CRÍTICA: Preservar mídia exatamente como está (não converter string vazia para null)
+                const mediaUrl = campaign.media_url !== null && campaign.media_url !== undefined 
+                    ? campaign.media_url 
+                    : null;
+                
                 // Criar nova campanha com mesmas configurações
                 const campaignData = {
                     name: `${campaign.name} (Reenvio)`,
-                    message: campaign.message,
-                    media_url: campaign.media_url || null,
+                    message: campaign.message || '',
+                    media_url: mediaUrl,
                     media_type: campaign.media_type || 'video',
                     audio_enabled: campaign.audio_enabled || false,
                     audio_url: campaign.audio_url || '',
-                    buttons: campaign.buttons ? JSON.parse(JSON.stringify(campaign.buttons)) : [],
-                    target_audience: campaign.target_audience,
-                    days_since_last_contact: campaign.days_since_last_contact || 0,
+                    buttons: buttonsArray,  // ✅ SEMPRE um array (nunca null)
+                    target_audience: campaign.target_audience || 'all',
+                    days_since_last_contact: campaign.days_since_last_contact !== null && campaign.days_since_last_contact !== undefined 
+                        ? campaign.days_since_last_contact 
+                        : 0,
                     exclude_buyers: campaign.exclude_buyers || false,
                     cooldown_hours: campaign.cooldown_hours || 24,
                     scheduled_at: null  // Envio imediato
                 };
+                
+                // ✅ DEBUG: Log dos dados antes de enviar (remover em produção se necessário)
+                console.log('🔄 Reenviando campanha com dados:', {
+                    name: campaignData.name,
+                    message_length: campaignData.message.length,
+                    media_url: campaignData.media_url,
+                    media_type: campaignData.media_type,
+                    buttons_count: campaignData.buttons.length,
+                    buttons: campaignData.buttons,
+                    audio_enabled: campaignData.audio_enabled,
+                    audio_url: campaignData.audio_url
+                });
                 
                 const csrfToken = this.getCsrfToken();
                 const headers = {
