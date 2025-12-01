@@ -2517,20 +2517,60 @@ window.botStatsApp = function botStatsApp() {
                 return;
             }
             
-            const campaign = this.stats.remarketing.campaigns.find(c => c.id === campaignId);
-            if (!campaign) {
-                alert('❌ Erro: Campanha não encontrada');
-                return;
-            }
-            
             // Fechar modal de preview
             this.showCampaignModal = false;
             
-            // Carregar dados da campanha no modal de edição
-            await this.loadCampaignForEdit(campaign);
-            
-            // Abrir modal de edição
-            this.showEditModal = true;
+            // ✅ CORREÇÃO CRÍTICA: Buscar dados COMPLETOS do backend (não usar cache filtrado!)
+            try {
+                const csrfToken = this.getCsrfToken();
+                const headers = {
+                    'Content-Type': 'application/json'
+                };
+                if (csrfToken) {
+                    headers['X-CSRF-Token'] = csrfToken;
+                }
+                
+                // Buscar TODAS as campanhas do backend (retorna via to_dict() completo, SEM FILTROS)
+                const campaignsResponse = await fetch(`/api/bots/${this.botId}/remarketing/campaigns`, {
+                    method: 'GET',
+                    headers: headers,
+                    credentials: 'same-origin'
+                });
+                
+                if (!campaignsResponse.ok) {
+                    throw new Error(`Erro ao buscar campanhas: ${campaignsResponse.status}`);
+                }
+                
+                const allCampaigns = await campaignsResponse.json();
+                
+                // Encontrar a campanha específica pelo ID (com dados COMPLETOS do banco)
+                const campaign = Array.isArray(allCampaigns) 
+                    ? allCampaigns.find(c => c.id === campaignId)
+                    : null;
+                
+                if (!campaign || !campaign.id) {
+                    alert('❌ Erro: Campanha não encontrada no backend');
+                    return;
+                }
+                
+                console.log('✅ Campanha carregada para edição (DADOS COMPLETOS do backend):', {
+                    id: campaign.id,
+                    name: campaign.name,
+                    buttons_type: typeof campaign.buttons,
+                    buttons_is_array: Array.isArray(campaign.buttons),
+                    buttons_count: Array.isArray(campaign.buttons) ? campaign.buttons.length : (campaign.buttons ? 'N/A' : 'null'),
+                    buttons_raw: campaign.buttons
+                });
+                
+                // Carregar dados da campanha no modal de edição (COM DADOS COMPLETOS)
+                await this.loadCampaignForEdit(campaign);
+                
+                // Abrir modal de edição
+                this.showEditModal = true;
+            } catch (error) {
+                console.error('❌ Erro ao carregar campanha para edição:', error);
+                alert('❌ Erro ao carregar campanha: ' + error.message);
+            }
         },
         
         // ✅ Carregar dados da campanha para edição
@@ -2555,6 +2595,50 @@ window.botStatsApp = function botStatsApp() {
                 audience_segment = 'all_users'; // Será tratado com exclude_buyers
             }
             
+            // ✅ SOLUÇÃO CRÍTICA #4: VALIDAÇÃO COMPLETA NO FRONTEND
+            let buttonsArray = null; // Iniciar como null para distinguir de array vazio
+            
+            if (campaign.buttons !== null && campaign.buttons !== undefined) {
+                if (Array.isArray(campaign.buttons)) {
+                    // ✅ Deep copy do array para garantir independência
+                    buttonsArray = JSON.parse(JSON.stringify(campaign.buttons));
+                } else if (typeof campaign.buttons === 'string') {
+                    // Se for string JSON, fazer parse
+                    try {
+                        const parsed = JSON.parse(campaign.buttons);
+                        buttonsArray = Array.isArray(parsed) ? parsed : (parsed ? [parsed] : null);
+                    } catch (e) {
+                        console.error('❌ Erro ao parsear buttons como JSON string:', e, 'Valor:', campaign.buttons);
+                        buttonsArray = null; // Manter null em caso de erro
+                    }
+                } else if (typeof campaign.buttons === 'object') {
+                    // Se for objeto único, converter para array
+                    buttonsArray = [JSON.parse(JSON.stringify(campaign.buttons))];
+                } else {
+                    // Qualquer outro tipo (number, boolean, etc), usar null
+                    console.warn('⚠️ Tipo inesperado de buttons:', typeof campaign.buttons, campaign.buttons);
+                    buttonsArray = null;
+                }
+            }
+            
+            // ✅ GARANTIR: Sempre array (não null)
+            if (buttonsArray === null || !Array.isArray(buttonsArray)) {
+                buttonsArray = [];
+            }
+            
+            console.log('✅ Botões carregados para edição:', {
+                buttons_count: buttonsArray.length,
+                buttons: buttonsArray,
+                buttons_details: buttonsArray.map((btn, idx) => ({
+                    index: idx,
+                    has_text: !!btn.text,
+                    has_price: !!btn.price,
+                    has_description: !!btn.description,
+                    has_url: !!btn.url,
+                    has_callback: !!btn.callback_data
+                }))
+            });
+            
             // Carregar dados no formulário
             this.editCampaignData = {
                 campaignId: campaign.id,
@@ -2563,7 +2647,7 @@ window.botStatsApp = function botStatsApp() {
                 media_type: campaign.media_type || 'video',
                 audio_enabled: campaign.audio_enabled || false,
                 audio_url: campaign.audio_url || '',
-                buttons: campaign.buttons ? JSON.parse(JSON.stringify(campaign.buttons)) : [],
+                buttons: buttonsArray,  // ✅ Array completo com todos os campos (price, description, url, etc)
                 audience_segment: audience_segment,
                 days_since_last_contact: campaign.days_since_last_contact || 0
             };
@@ -2597,6 +2681,45 @@ window.botStatsApp = function botStatsApp() {
                 
                 const target_audience = mapping[this.editCampaignData.audience_segment] || 'all';
                 
+                // ✅ CORREÇÃO CRÍTICA: Garantir que botões sejam sempre um array com todos os campos
+                let buttonsToSave = [];
+                if (this.editCampaignData.buttons && Array.isArray(this.editCampaignData.buttons)) {
+                    // Deep copy e validar cada botão
+                    // ✅ SOLUÇÃO CRÍTICA #2: PRESERVAÇÃO COMPLETA DE DADOS (Deep copy de TODOS os campos)
+                    buttonsToSave = this.editCampaignData.buttons.map(btn => {
+                        // ✅ Deep copy preservando TODOS os campos originais (não apenas os conhecidos)
+                        const buttonCopy = JSON.parse(JSON.stringify(btn));
+                        
+                        // ✅ Validações (não removem campos, apenas garantem obrigatórios)
+                        if (!buttonCopy.text || !buttonCopy.text.toString().trim()) {
+                            return null; // Filtrar depois
+                        }
+                        
+                        // ✅ Garantir tipos corretos (preservar todos os outros campos)
+                        if (buttonCopy.price !== undefined && buttonCopy.price !== null) {
+                            buttonCopy.price = parseFloat(buttonCopy.price) || 0;
+                        }
+                        
+                        // ✅ Garantir que text seja string
+                        buttonCopy.text = buttonCopy.text.toString().trim();
+                        
+                        return buttonCopy;
+                    }).filter(btn => btn !== null && btn.text && btn.text.trim()); // Filtrar apenas botões com texto válido
+                }
+                
+                console.log('💾 Salvando campanha com botões:', {
+                    buttons_count: buttonsToSave.length,
+                    buttons: buttonsToSave,
+                    buttons_details: buttonsToSave.map((btn, idx) => ({
+                        index: idx,
+                        text: btn.text,
+                        has_price: !!btn.price,
+                        has_description: !!btn.description,
+                        has_url: !!btn.url,
+                        has_callback: !!btn.callback_data
+                    }))
+                });
+                
                 // Preparar dados para envio
                 const campaignData = {
                     message: this.editCampaignData.message.trim(),
@@ -2604,7 +2727,7 @@ window.botStatsApp = function botStatsApp() {
                     media_type: this.editCampaignData.media_type || 'video',
                     audio_enabled: this.editCampaignData.audio_enabled || false,
                     audio_url: this.editCampaignData.audio_url || '',
-                    buttons: this.editCampaignData.buttons || [],
+                    buttons: buttonsToSave,  // ✅ Array completo com TODOS os campos preservados
                     target_audience: target_audience,
                     days_since_last_contact: parseInt(this.editCampaignData.days_since_last_contact) || 0,
                     exclude_buyers: false  // Será determinado pelo target_audience

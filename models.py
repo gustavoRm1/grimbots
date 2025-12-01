@@ -1227,7 +1227,37 @@ class RemarketingCampaign(db.Model):
     bot = db.relationship('Bot', backref='remarketing_campaigns')
     
     def to_dict(self):
-        """Retorna dados da campanha em formato dict"""
+        """Retorna dados da campanha em formato dict com validação robusta"""
+        import json
+        
+        # ✅ SOLUÇÃO CRÍTICA #3: TRATAMENTO ROBUSTO DE SERIALIZAÇÃO
+        buttons_value = self.buttons
+        
+        # Se for None, retornar None (não array vazio)
+        if buttons_value is None:
+            buttons_final = None
+        # Se for string JSON, parsear
+        elif isinstance(buttons_value, str):
+            try:
+                parsed = json.loads(buttons_value)
+                buttons_final = parsed if isinstance(parsed, list) else ([] if parsed is None else [parsed])
+            except Exception as e:
+                # Se falhar o parse, retornar None e logar erro
+                import logging
+                logging.getLogger(__name__).error(f"❌ Erro ao parsear buttons JSON da campanha {self.id}: {e}")
+                buttons_final = None
+        # Se for array, usar direto
+        elif isinstance(buttons_value, list):
+            buttons_final = buttons_value
+        # Se for dict (único botão), converter para array
+        elif isinstance(buttons_value, dict):
+            buttons_final = [buttons_value]
+        # Qualquer outro tipo, usar None (preservar original)
+        else:
+            import logging
+            logging.getLogger(__name__).warning(f"⚠️ Tipo inesperado de buttons na campanha {self.id}: {type(buttons_value)}")
+            buttons_final = None
+        
         return {
             'id': self.id,
             'bot_id': self.bot_id,
@@ -1237,7 +1267,7 @@ class RemarketingCampaign(db.Model):
             'media_type': self.media_type,
             'audio_enabled': self.audio_enabled or False,
             'audio_url': self.audio_url or '',
-            'buttons': self.buttons,
+            'buttons': buttons_final,  # ✅ Sempre array ou None (nunca tipo inesperado)
             'target_audience': self.target_audience,
             'days_since_last_contact': self.days_since_last_contact,
             'exclude_buyers': self.exclude_buyers,

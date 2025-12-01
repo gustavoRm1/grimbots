@@ -2719,7 +2719,68 @@ def update_remarketing_campaign(bot_id, campaign_id):
     
     data = request.json
     
-    # Atualizar campos
+    # ✅ SOLUÇÃO CRÍTICA #1: VALIDAÇÃO ROBUSTA DE BOTÕES
+    if 'buttons' in data:
+        buttons_data = data.get('buttons')
+        
+        # Sempre deve ser array ou None
+        if buttons_data is not None and not isinstance(buttons_data, list):
+            logger.error(f"❌ Botões inválidos recebidos: tipo {type(buttons_data).__name__}, valor: {buttons_data}")
+            return jsonify({
+                'error': f'Botões devem ser um array ou null. Recebido: {type(buttons_data).__name__}'
+            }), 400
+        
+        # Validar cada botão se for array
+        if buttons_data is not None:
+            import json
+            for idx, btn in enumerate(buttons_data):
+                if not isinstance(btn, dict):
+                    logger.error(f"❌ Botão {idx} inválido: tipo {type(btn).__name__}, valor: {btn}")
+                    return jsonify({
+                        'error': f'Botão {idx} deve ser um objeto. Recebido: {type(btn).__name__}'
+                    }), 400
+                
+                # Validar campos obrigatórios
+                if 'text' not in btn or not btn.get('text') or not str(btn.get('text')).strip():
+                    logger.error(f"❌ Botão {idx} sem texto válido: {btn}")
+                    return jsonify({
+                        'error': f'Botão {idx} deve ter campo "text" não vazio'
+                    }), 400
+                
+                # Validar que tem pelo menos um tipo válido: price+description OU url OU callback_data
+                has_price = 'price' in btn and btn.get('price') is not None
+                has_description = 'description' in btn and btn.get('description')
+                has_url = 'url' in btn and btn.get('url')
+                has_callback = 'callback_data' in btn and btn.get('callback_data')
+                
+                # Botão de compra precisa de price E description
+                if has_price and not has_description:
+                    logger.error(f"❌ Botão {idx} tem price mas não tem description: {json.dumps(btn)}")
+                    return jsonify({
+                        'error': f'Botão {idx} tem "price" mas não tem "description"'
+                    }), 400
+                
+                if has_description and not has_price:
+                    logger.error(f"❌ Botão {idx} tem description mas não tem price: {json.dumps(btn)}")
+                    return jsonify({
+                        'error': f'Botão {idx} tem "description" mas não tem "price"'
+                    }), 400
+                
+                # Deve ter pelo menos um tipo válido
+                if not (has_url or has_callback or (has_price and has_description)):
+                    logger.error(f"❌ Botão {idx} sem tipo válido: {json.dumps(btn)}")
+                    return jsonify({
+                        'error': f'Botão {idx} deve ter "url", "callback_data" ou "price"+"description"'
+                    }), 400
+        
+        # ✅ LOG ANTES DE SALVAR
+        logger.info(f"📝 Editando campanha {campaign_id}: buttons antes = {json.dumps(campaign.buttons) if campaign.buttons else 'None'}")
+        logger.info(f"📥 Dados recebidos: buttons = {json.dumps(buttons_data) if buttons_data else 'None'}")
+        
+        # ✅ GARANTIR: Sempre salvar como array ou None
+        campaign.buttons = buttons_data if buttons_data else None
+    
+    # Atualizar outros campos
     if 'message' in data:
         campaign.message = data.get('message')
     if 'media_url' in data:
@@ -2730,8 +2791,6 @@ def update_remarketing_campaign(bot_id, campaign_id):
         campaign.audio_enabled = data.get('audio_enabled', False)
     if 'audio_url' in data:
         campaign.audio_url = data.get('audio_url', '')
-    if 'buttons' in data:
-        campaign.buttons = data.get('buttons', [])
     if 'target_audience' in data:
         campaign.target_audience = data.get('target_audience')
     if 'days_since_last_contact' in data:
@@ -2758,10 +2817,24 @@ def update_remarketing_campaign(bot_id, campaign_id):
             if campaign.status == 'scheduled':
                 campaign.status = 'draft'
     
-    db.session.commit()
-    logger.info(f"✅ Campanha de remarketing atualizada: {campaign.name} (Bot {bot.name})")
-    
-    return jsonify(campaign.to_dict()), 200
+    try:
+        db.session.commit()
+        
+        # ✅ RECARREGAR PARA GARANTIR DADOS ATUAIS
+        db.session.refresh(campaign)
+        
+        # ✅ LOG APÓS SALVAR
+        import json
+        saved_buttons = json.dumps(campaign.buttons) if campaign.buttons else 'None'
+        logger.info(f"✅ Campanha {campaign_id} atualizada: buttons salvo = {saved_buttons}")
+        logger.info(f"✅ Campanha de remarketing atualizada: {campaign.name} (Bot {bot.name})")
+        
+        return jsonify(campaign.to_dict()), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"❌ Erro ao salvar campanha {campaign_id}: {e}", exc_info=True)
+        return jsonify({'error': f'Erro interno ao salvar alterações: {str(e)}'}), 500
 
 @app.route('/api/bots/<int:bot_id>/remarketing/campaigns/<int:campaign_id>/send', methods=['POST'])
 @login_required
