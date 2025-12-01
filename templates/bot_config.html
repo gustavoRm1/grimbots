@@ -4166,7 +4166,261 @@ body {
 
 {% block extra_scripts %}
 <script>
-// O JavaScript completo do botConfigApp será carregado aqui
-// Por enquanto, apenas fechamos o bloco para corrigir o erro de sintaxe
+function botConfigApp() {
+    return {
+        bot_id: {{ bot.id }},
+        loading: false,
+        activeTab: 'welcome',
+        config: {
+            id: null,
+            welcome_message: '',
+            welcome_media_url: '',
+            welcome_media_type: 'video',
+            welcome_audio_enabled: false,
+            welcome_audio_url: '',
+            main_buttons: [],
+            redirect_buttons: [],
+            downsells_enabled: false,
+            downsells: [],
+            upsells_enabled: false,
+            upsells: [],
+            access_link: '',
+            success_message: '',
+            pending_message: '',
+            flow_enabled: false,
+            flow_steps: [],
+            flow_start_step_id: null,
+            has_meta_pixel: false
+        },
+        new_bot_token: '',
+        subscriptionGuideExpanded: false,
+        subscriptionGuideTab: 'telegram',
+
+        async init() {
+            await this.loadConfig();
+        },
+
+        async loadConfig() {
+            this.loading = true;
+            try {
+                const response = await fetch(`/api/bots/${this.bot_id}/config`);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                const data = await response.json();
+                if (data.success) {
+                    Object.assign(this.config, data.config);
+                }
+            } catch (error) {
+                console.error('Erro ao carregar configuração:', error);
+                alert('Erro ao carregar configuração. Recarregue a página.');
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async saveConfig() {
+            this.loading = true;
+            try {
+                const response = await fetch(`/api/bots/${this.bot_id}/config`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(this.config)
+                });
+                const data = await response.json();
+                if (data.success) {
+                    alert('Configuração salva com sucesso!');
+                    Object.assign(this.config, data.config);
+                } else {
+                    alert(data.error || 'Erro ao salvar configuração');
+                }
+            } catch (error) {
+                console.error('Erro ao salvar configuração:', error);
+                alert('Erro ao salvar configuração');
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        addButton() {
+            if (!this.config.main_buttons) {
+                this.config.main_buttons = [];
+            }
+            this.config.main_buttons.push({
+                text: '',
+                price: null,
+                description: '',
+                order_bumps: [],
+                subscription: null
+            });
+        },
+
+        removeButton(index) {
+            if (this.config.main_buttons && this.config.main_buttons[index]) {
+                this.config.main_buttons.splice(index, 1);
+            }
+        },
+
+        addOrderBump(buttonIndex) {
+            if (!this.config.main_buttons || !this.config.main_buttons[buttonIndex]) return;
+            if (!this.config.main_buttons[buttonIndex].order_bumps) {
+                this.config.main_buttons[buttonIndex].order_bumps = [];
+            }
+            this.config.main_buttons[buttonIndex].order_bumps.push({
+                enabled: false,
+                message: '',
+                price: null,
+                description: '',
+                media_url: '',
+                media_type: 'video',
+                accept_text: 'Sim, eu quero!',
+                decline_text: 'Não, obrigado'
+            });
+        },
+
+        removeOrderBump(buttonIndex, bumpIndex) {
+            if (this.config.main_buttons && 
+                this.config.main_buttons[buttonIndex] && 
+                this.config.main_buttons[buttonIndex].order_bumps) {
+                this.config.main_buttons[buttonIndex].order_bumps.splice(bumpIndex, 1);
+            }
+        },
+
+        getAvailableOrderBumps() {
+            if (!this.config.main_buttons) return [];
+            const allBumps = [];
+            this.config.main_buttons.forEach((button, btnIndex) => {
+                if (button.order_bumps) {
+                    button.order_bumps.forEach((bump, bumpIndex) => {
+                        allBumps.push({
+                            buttonIndex: btnIndex,
+                            bumpIndex: bumpIndex,
+                            buttonText: button.text || 'Botão sem nome',
+                            ...bump
+                        });
+                    });
+                }
+            });
+            return allBumps;
+        },
+
+        validateWelcomeMessage() {
+            // Validação já feita via getWelcomeMessageLength()
+        },
+
+        getWelcomeMessageLength() {
+            const baseLength = (this.config.welcome_message || '').length;
+            const mediaLength = this.config.welcome_media_url ? 200 : 0;
+            return baseLength + mediaLength;
+        },
+
+        validateProductField(index, field) {
+            if (!this.config.main_buttons || !this.config.main_buttons[index]) return;
+            const button = this.config.main_buttons[index];
+            if (field === 'text' && button.text) {
+                button.text = button.text.trim().slice(0, 64);
+            } else if (field === 'price' && button.price !== null) {
+                button.price = Math.max(0, parseFloat(button.price) || 0);
+            }
+        },
+
+        async validateSubscription(buttonIndex) {
+            if (!this.config.main_buttons || !this.config.main_buttons[buttonIndex]) return;
+            const button = this.config.main_buttons[buttonIndex];
+            if (!button.subscription || !button.subscription.enabled) return;
+
+            const vipChatId = button.subscription.vip_chat_id;
+            if (!vipChatId) {
+                button.subscription.validation_status = 'invalid';
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/bots/${this.bot_id}/validate-subscription`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        vip_chat_id: vipChatId
+                    })
+                });
+                const data = await response.json();
+                if (data.success && data.is_valid) {
+                    button.subscription.validation_status = 'valid';
+                } else {
+                    button.subscription.validation_status = 'invalid';
+                }
+            } catch (error) {
+                console.error('Erro ao validar assinatura:', error);
+                button.subscription.validation_status = 'invalid';
+            }
+        },
+
+        addFlowStep() {
+            if (!this.config.flow_steps) {
+                this.config.flow_steps = [];
+            }
+            const stepId = Date.now();
+            this.config.flow_steps.push({
+                id: stepId,
+                order: this.config.flow_steps.length,
+                message: '',
+                buttons: []
+            });
+        },
+
+        setFlowStartStep(stepId) {
+            this.config.flow_start_step_id = stepId;
+        },
+
+        get sortedFlowSteps() {
+            if (!this.config.flow_steps) return [];
+            return [...this.config.flow_steps].sort((a, b) => (a.order || 0) - (b.order || 0));
+        },
+
+        async changeBotToken() {
+            if (!this.new_bot_token || !this.isValidBotToken(this.new_bot_token)) {
+                alert('Token inválido');
+                return;
+            }
+            this.loading = true;
+            try {
+                const response = await fetch(`/api/bots/${this.bot_id}/token`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        token: this.new_bot_token
+                    })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    alert('Token atualizado com sucesso!');
+                    this.new_bot_token = '';
+                    location.reload();
+                } else {
+                    alert(data.error || 'Erro ao atualizar token');
+                }
+            } catch (error) {
+                console.error('Erro ao atualizar token:', error);
+                alert('Erro ao atualizar token');
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        isValidBotToken(token) {
+            return token && token.length >= 30 && token.length <= 45 && token.includes(':');
+        },
+
+        stripSurrogateChars(value) {
+            return window.stripSurrogateChars ? window.stripSurrogateChars(value) : (value || '');
+        }
+    };
+}
 </script>
 {% endblock %}
