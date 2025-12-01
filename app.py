@@ -2637,10 +2637,23 @@ def get_remarketing_campaigns(bot_id):
     """Lista campanhas de remarketing"""
     bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
     from models import RemarketingCampaign
+    import json
     campaigns = RemarketingCampaign.query.filter_by(bot_id=bot_id).order_by(
         RemarketingCampaign.created_at.desc()
     ).all()
-    return jsonify([c.to_dict() for c in campaigns])
+    
+    # ✅ LOG: Verificar botões antes de retornar
+    campaigns_dicts = []
+    for c in campaigns:
+        campaign_dict = c.to_dict()
+        # ✅ LOG detalhado para debug
+        logger.info(f"📤 Retornando campanha {c.id} ({c.name}): buttons = {campaign_dict.get('buttons')}")
+        logger.info(f"📤 Tipo dos buttons: {type(campaign_dict.get('buttons'))}")
+        if campaign_dict.get('buttons'):
+            logger.info(f"📤 Quantidade de botões: {len(campaign_dict.get('buttons')) if isinstance(campaign_dict.get('buttons'), list) else 'N/A'}")
+        campaigns_dicts.append(campaign_dict)
+    
+    return jsonify(campaigns_dicts)
 
 @app.route('/api/bots/<int:bot_id>/remarketing/campaigns', methods=['POST'])
 @login_required
@@ -2675,6 +2688,13 @@ def create_remarketing_campaign(bot_id):
             logger.error(f"❌ Erro ao processar scheduled_at: {e}")
             return jsonify({'error': f'Data/hora inválida: {str(e)}'}), 400
     
+    # ✅ LOG: Verificar botões antes de salvar
+    buttons_data = data.get('buttons', [])
+    logger.info(f"📝 Criando campanha de remarketing: {data.get('name', 'Sem nome')}")
+    logger.info(f"📋 Botões recebidos na criação: {len(buttons_data) if isinstance(buttons_data, list) else 'N/A'} botões")
+    if buttons_data:
+        logger.info(f"📋 Detalhes dos botões: {json.dumps(buttons_data) if isinstance(buttons_data, list) else buttons_data}")
+    
     campaign = RemarketingCampaign(
         bot_id=bot_id,
         name=data.get('name'),
@@ -2683,7 +2703,7 @@ def create_remarketing_campaign(bot_id):
         media_type=data.get('media_type'),
         audio_enabled=data.get('audio_enabled', False),
         audio_url=data.get('audio_url', ''),
-        buttons=data.get('buttons', []),
+        buttons=buttons_data if buttons_data else None,  # ✅ Salvar como None se vazio, não array vazio
         target_audience=data.get('target_audience', 'non_buyers'),
         days_since_last_contact=data.get('days_since_last_contact', 3),
         exclude_buyers=data.get('exclude_buyers', True),
@@ -2694,6 +2714,14 @@ def create_remarketing_campaign(bot_id):
     
     db.session.add(campaign)
     db.session.commit()
+    
+    # ✅ LOG: Verificar botões após salvar
+    db.session.refresh(campaign)
+    logger.info(f"💾 Campanha salva com ID: {campaign.id}")
+    logger.info(f"💾 Botões no banco após salvar: {campaign.buttons}")
+    logger.info(f"💾 Tipo dos botões no banco: {type(campaign.buttons)}")
+    if campaign.buttons:
+        logger.info(f"💾 Quantidade de botões: {len(campaign.buttons) if isinstance(campaign.buttons, list) else 'N/A'}")
     
     if status == 'scheduled':
         logger.info(f"📅 Campanha de remarketing agendada: {campaign.name} para {scheduled_at} (Bot {bot.name})")

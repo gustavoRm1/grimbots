@@ -996,10 +996,10 @@ if (typeof window.botStatsApp === 'undefined') {
                                 <i class="fas fa-tag mr-2 text-accent500"></i>
                                 Nome da Campanha
                             </label>
-                            <input type="text" 
-                                   x-model="selectedCampaign?.name" 
-                                   class="w-full px-4 py-3 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary placeholder-textSecondary focus:outline-none focus:ring-2 focus:ring-accent500 cursor-not-allowed"
-                                   readonly>
+                                <input type="text" 
+                                       :value="selectedCampaign?.name || ''" 
+                                       class="w-full px-4 py-3 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary placeholder-textSecondary focus:outline-none focus:ring-2 focus:ring-accent500 cursor-not-allowed"
+                                       readonly>
                             <p class="text-xs text-textSecondary mt-2">O nome da campanha é gerado automaticamente e não pode ser editado diretamente aqui.</p>
                         </div>
                         
@@ -2574,9 +2574,16 @@ window.botStatsApp = function botStatsApp() {
                         buttons: campaign.buttons,
                         buttons_type: typeof campaign.buttons,
                         buttons_is_array: Array.isArray(campaign.buttons),
-                        buttons_length: Array.isArray(campaign.buttons) ? campaign.buttons.length : 'N/A'
+                        buttons_length: Array.isArray(campaign.buttons) ? campaign.buttons.length : 'N/A',
+                        full_campaign_object: campaign
                     });
-                    // Não mostrar alert para o usuário, apenas log
+                    
+                    // ✅ Mostrar alerta ao usuário para debug
+                    alert(`⚠️ ATENÇÃO: Esta campanha (ID: ${campaign.id}) não tem botões configurados no banco de dados.\n\n` +
+                          `Isso pode acontecer se:\n` +
+                          `1. A campanha foi criada sem botões\n` +
+                          `2. Os botões foram perdidos durante o salvamento\n\n` +
+                          `Verifique o console para mais detalhes.`);
                 }
                 
                 // Carregar dados da campanha no modal de edição (COM DADOS COMPLETOS)
