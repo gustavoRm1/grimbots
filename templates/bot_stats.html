@@ -2566,6 +2566,19 @@ window.botStatsApp = function botStatsApp() {
                     full_campaign: campaign
                 });
                 
+                // ✅ ALERTA TEMPORÁRIO PARA DEBUG
+                if (!campaign.buttons || (Array.isArray(campaign.buttons) && campaign.buttons.length === 0)) {
+                    console.error('🚨 ALERTA: Campanha não tem botões ou array está vazio!', {
+                        campaign_id: campaign.id,
+                        campaign_name: campaign.name,
+                        buttons: campaign.buttons,
+                        buttons_type: typeof campaign.buttons,
+                        buttons_is_array: Array.isArray(campaign.buttons),
+                        buttons_length: Array.isArray(campaign.buttons) ? campaign.buttons.length : 'N/A'
+                    });
+                    // Não mostrar alert para o usuário, apenas log
+                }
+                
                 // Carregar dados da campanha no modal de edição (COM DADOS COMPLETOS)
                 await this.loadCampaignForEdit(campaign);
                 
@@ -2651,10 +2664,37 @@ window.botStatsApp = function botStatsApp() {
                 buttonsArray = [];
             }
             
+            // ✅ CORREÇÃO CRÍTICA: Garantir que cada botão tem estrutura válida
+            buttonsArray = buttonsArray.filter(btn => {
+                if (!btn || typeof btn !== 'object') {
+                    console.warn('⚠️ Botão inválido removido:', btn);
+                    return false;
+                }
+                // Manter botão mesmo se não tiver todos os campos (pode ser preenchido depois)
+                return true;
+            }).map(btn => {
+                // ✅ Garantir que todos os campos existem (mesmo que vazios)
+                return {
+                    text: btn.text || '',
+                    price: btn.price !== undefined ? btn.price : 0,
+                    description: btn.description || '',
+                    url: btn.url || '',
+                    callback_data: btn.callback_data || ''
+                };
+            });
+            
             console.log('✅ buttonsArray final antes de carregar no form:', {
                 is_array: Array.isArray(buttonsArray),
                 length: buttonsArray.length,
-                buttons: buttonsArray
+                buttons: buttonsArray,
+                buttons_details: buttonsArray.map((btn, idx) => ({
+                    index: idx,
+                    text: btn.text,
+                    has_price: !!btn.price,
+                    has_description: !!btn.description,
+                    has_url: !!btn.url,
+                    has_callback: !!btn.callback_data
+                }))
             });
             
             console.log('✅ Botões carregados para edição:', {

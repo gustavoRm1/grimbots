@@ -1233,9 +1233,10 @@ class RemarketingCampaign(db.Model):
         # ✅ SOLUÇÃO CRÍTICA #3: TRATAMENTO ROBUSTO DE SERIALIZAÇÃO
         buttons_value = self.buttons
         
-        # Se for None, retornar None (não array vazio)
+        # ✅ CORREÇÃO CRÍTICA: Se for None, retornar array vazio (não None)
+        # Isso garante que o frontend sempre recebe um array, facilitando o processamento
         if buttons_value is None:
-            buttons_final = None
+            buttons_final = []
         # Se for string JSON, parsear
         elif isinstance(buttons_value, str):
             try:
@@ -1267,7 +1268,7 @@ class RemarketingCampaign(db.Model):
             'media_type': self.media_type,
             'audio_enabled': self.audio_enabled or False,
             'audio_url': self.audio_url or '',
-            'buttons': buttons_final,  # ✅ Sempre array ou None (nunca tipo inesperado)
+            'buttons': buttons_final if buttons_final is not None else [],  # ✅ Sempre array (nunca None ou tipo inesperado)
             'target_audience': self.target_audience,
             'days_since_last_contact': self.days_since_last_contact,
             'exclude_buyers': self.exclude_buyers,
