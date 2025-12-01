@@ -3739,17 +3739,17 @@ body {
                                                             <i class="fas fa-check-circle"></i>
                                                         </span>
                                                     </div>
-                                                    <p class="text-xs text-gray-400 mb-1 line-clamp-2" x-text="(orderBumpRef.orderBump.message || 'Sem mensagem').substring(0, 60) + '...'"></p>
+                                                    <p class="text-xs text-gray-400 mb-1 line-clamp-2" x-text="(orderBumpRef.message || 'Sem mensagem').substring(0, 60) + '...'"></p>
                                                     <div class="flex items-center justify-between mt-2 pt-2 border-t border-gray-700">
                                                         <div>
-                                                            <span class="text-xs font-bold text-yellow-500" x-show="orderBumpRef.orderBump.price > 0">
-                                                                R$ <span x-text="parseFloat(orderBumpRef.orderBump.price || 0).toFixed(2)"></span>
+                                                            <span class="text-xs font-bold text-yellow-500" x-show="orderBumpRef.price > 0">
+                                                                R$ <span x-text="parseFloat(orderBumpRef.price || 0).toFixed(2)"></span>
                                                             </span>
-                                                            <span class="text-xs text-gray-500" x-show="orderBumpRef.orderBump.price === 0">
+                                                            <span class="text-xs text-gray-500" x-show="orderBumpRef.price === 0 || !orderBumpRef.price">
                                                                 Sem preço
                                                             </span>
                                                         </div>
-                                                        <span class="text-xs text-gray-400 truncate max-w-[60%]" x-text="orderBumpRef.orderBump.description || 'Sem descrição'"></span>
+                                                        <span class="text-xs text-gray-400 truncate max-w-[60%]" x-text="orderBumpRef.description || 'Sem descrição'"></span>
                                                     </div>
                                                 </button>
                                             </template>
@@ -4208,11 +4208,39 @@ function botConfigApp() {
                     throw new Error(`HTTP ${response.status}`);
                 }
                 const data = await response.json();
-                if (data.success) {
-                    Object.assign(this.config, data.config);
+                console.log('📦 Dados carregados da API:', data);
+                
+                // ✅ CORREÇÃO: A API retorna o config diretamente, não dentro de {success: true, config: {...}}
+                if (data && typeof data === 'object') {
+                    // Atribuir todas as propriedades, incluindo arrays aninhados
+                    this.config.id = data.id || null;
+                    this.config.welcome_message = data.welcome_message || '';
+                    this.config.welcome_media_url = data.welcome_media_url || '';
+                    this.config.welcome_media_type = data.welcome_media_type || 'video';
+                    this.config.welcome_audio_enabled = data.welcome_audio_enabled || false;
+                    this.config.welcome_audio_url = data.welcome_audio_url || '';
+                    this.config.main_buttons = data.main_buttons || [];
+                    this.config.redirect_buttons = data.redirect_buttons || [];
+                    this.config.downsells_enabled = data.downsells_enabled || false;
+                    this.config.downsells = data.downsells || [];
+                    this.config.upsells_enabled = data.upsells_enabled || false;
+                    this.config.upsells = data.upsells || [];
+                    this.config.access_link = data.access_link || '';
+                    this.config.success_message = data.success_message || '';
+                    this.config.pending_message = data.pending_message || '';
+                    this.config.flow_enabled = data.flow_enabled || false;
+                    this.config.flow_steps = data.flow_steps || [];
+                    this.config.flow_start_step_id = data.flow_start_step_id || null;
+                    this.config.has_meta_pixel = data.has_meta_pixel || false;
+                    
+                    console.log('✅ Configuração carregada:', {
+                        buttons: this.config.main_buttons?.length || 0,
+                        downsells: this.config.downsells?.length || 0,
+                        upsells: this.config.upsells?.length || 0
+                    });
                 }
             } catch (error) {
-                console.error('Erro ao carregar configuração:', error);
+                console.error('❌ Erro ao carregar configuração:', error);
                 alert('Erro ao carregar configuração. Recarregue a página.');
             } finally {
                 this.loading = false;
@@ -4229,16 +4257,23 @@ function botConfigApp() {
                     },
                     body: JSON.stringify(this.config)
                 });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `HTTP ${response.status}`);
+                }
+                
                 const data = await response.json();
-                if (data.success) {
+                // ✅ CORREÇÃO: A API retorna o config diretamente após salvar, não dentro de {success: true, config: {...}}
+                if (data && typeof data === 'object' && !data.error) {
                     alert('Configuração salva com sucesso!');
-                    Object.assign(this.config, data.config);
+                    Object.assign(this.config, data);
                 } else {
                     alert(data.error || 'Erro ao salvar configuração');
                 }
             } catch (error) {
                 console.error('Erro ao salvar configuração:', error);
-                alert('Erro ao salvar configuração');
+                alert(error.message || 'Erro ao salvar configuração');
             } finally {
                 this.loading = false;
             }
@@ -4419,6 +4454,124 @@ function botConfigApp() {
 
         stripSurrogateChars(value) {
             return window.stripSurrogateChars ? window.stripSurrogateChars(value) : (value || '');
+        },
+
+        // Funções para Downsells
+        addDownsell() {
+            if (!this.config.downsells) {
+                this.config.downsells = [];
+            }
+            this.config.downsells.push({
+                delay_minutes: 5,
+                message: '',
+                price: null,
+                pricing_mode: 'fixed',
+                discount_percentage: null,
+                media_url: '',
+                media_type: 'video',
+                audio_enabled: false,
+                audio_url: '',
+                button_text: '',
+                order_bump: {
+                    enabled: false,
+                    message: '',
+                    price: null,
+                    description: '',
+                    media_url: '',
+                    media_type: 'video',
+                    accept_text: 'Sim, eu quero!',
+                    decline_text: 'Não, obrigado',
+                    button_index: null,
+                    bump_index: null
+                }
+            });
+        },
+
+        removeDownsell(index) {
+            if (this.config.downsells && this.config.downsells[index]) {
+                this.config.downsells.splice(index, 1);
+            }
+        },
+
+        // Funções para Upsells
+        addUpsell() {
+            if (!this.config.upsells) {
+                this.config.upsells = [];
+            }
+            this.config.upsells.push({
+                trigger_product: '',
+                delay_minutes: 0,
+                message: '',
+                price: null,
+                product_name: '',
+                media_url: '',
+                media_type: 'video',
+                audio_enabled: false,
+                audio_url: '',
+                button_text: '',
+                access_link: ''
+            });
+        },
+
+        removeUpsell(index) {
+            if (this.config.upsells && this.config.upsells[index]) {
+                this.config.upsells.splice(index, 1);
+            }
+        },
+
+        // Funções para Botões de Redirecionamento
+        addRedirectButton() {
+            if (!this.config.redirect_buttons) {
+                this.config.redirect_buttons = [];
+            }
+            this.config.redirect_buttons.push({
+                text: '',
+                url: ''
+            });
+        },
+
+        removeRedirectButton(index) {
+            if (this.config.redirect_buttons && this.config.redirect_buttons[index]) {
+                this.config.redirect_buttons.splice(index, 1);
+            }
+        },
+
+        // Função para usar Order Bump dos Botões nos Downsells
+        useOrderBumpFromButtons(downsell, buttonIndex, bumpIndex) {
+            if (!this.config.main_buttons || !this.config.main_buttons[buttonIndex]) return;
+            const button = this.config.main_buttons[buttonIndex];
+            if (!button.order_bumps || !button.order_bumps[bumpIndex]) return;
+            
+            const orderBump = button.order_bumps[bumpIndex];
+            
+            // Copiar dados do order bump para o downsell
+            if (!downsell.order_bump) {
+                downsell.order_bump = {};
+            }
+            
+            downsell.order_bump.enabled = true;
+            downsell.order_bump.message = orderBump.message || '';
+            downsell.order_bump.price = orderBump.price || null;
+            downsell.order_bump.description = orderBump.description || '';
+            downsell.order_bump.media_url = orderBump.media_url || '';
+            downsell.order_bump.media_type = orderBump.media_type || 'video';
+            downsell.order_bump.accept_text = orderBump.accept_text || 'Sim, eu quero!';
+            downsell.order_bump.decline_text = orderBump.decline_text || 'Não, obrigado';
+            downsell.order_bump.button_index = buttonIndex;
+            downsell.order_bump.bump_index = bumpIndex;
+        },
+
+        // Função para toggle do Flow
+        onFlowToggle() {
+            // Pode adicionar lógica adicional se necessário
+            console.log('Flow enabled:', this.config.flow_enabled);
+        },
+
+        // Função para inicializar o editor visual de fluxo
+        initVisualFlowEditor() {
+            // Placeholder - implementação completa do jsPlumb será feita depois
+            console.log('Inicializando editor visual de fluxo...');
+            // TODO: Implementar lógica do jsPlumb aqui
         }
     };
 }
