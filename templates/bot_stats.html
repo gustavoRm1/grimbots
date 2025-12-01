@@ -963,13 +963,16 @@ if (typeof window.botStatsApp === 'undefined') {
         </div>
     </div>
     
-    <!-- ✅ MODAL: EDIÇÃO DE CAMPANHA DE REMARKETING -->
+    <!-- ============================================================================ -->
+    <!-- MODAL: EDIÇÃO DE CAMPANHA DE REMARKETING -->
     <!-- ============================================================================ -->
     
     <div x-show="showEditModal" 
          x-cloak
-         class="fixed inset-0 z-50 overflow-y-auto"
-         style="background: rgba(0, 0, 0, 0.95); backdrop-filter: blur(8px);">
+         x-transition
+         class="fixed inset-0 z-[9999] overflow-y-auto"
+         style="background: rgba(0, 0, 0, 0.95); backdrop-filter: blur(8px);"
+         @click.self="showEditModal = false">
         <div class="flex items-center justify-center min-h-screen p-4">
             <div @click.away="showEditModal = false" 
                  class="relative bg-bg900 rounded-2xl shadow-2xl max-w-4xl w-full"
@@ -986,184 +989,444 @@ if (typeof window.botStatsApp === 'undefined') {
                 
                 <!-- Body -->
                 <div class="px-8 py-6 max-h-[70vh] overflow-y-auto">
-                <form @submit.prevent="saveCampaignEdit()">
-                    <!-- Mensagem -->
-                    <div class="mb-6">
-                        <label class="block text-sm font-bold text-textPrimary mb-2">
-                            <i class="fas fa-comment-alt mr-2 text-accent500"></i>
-                            Mensagem do Remarketing
-                        </label>
-                        <textarea x-model="editCampaignData.message" 
-                                  rows="6"
-                                  class="w-full px-4 py-3 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary placeholder-textSecondary focus:outline-none focus:ring-2 focus:ring-accent500"
-                                  placeholder="Digite a mensagem que será enviada para os usuários..."></textarea>
-                        <p class="text-xs text-textSecondary mt-2">
-                            <i class="fas fa-lightbulb mr-1 text-accent500"></i>
-                            Use emojis e seja persuasivo para aumentar a conversão
-                        </p>
-                    </div>
-                    
-                    <!-- Mídia (Opcional) -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                        <div>
-                            <label class="block text-sm font-bold text-textPrimary mb-2">
-                                <i class="fas fa-link mr-2 text-accent500"></i>
-                                URL da Mídia (opcional)
+                    <form @submit.prevent="saveCampaignEdit()">
+                        <!-- Nome da Campanha (apenas para visualização, não editável aqui) -->
+                        <div class="mb-6 p-4 rounded-xl" style="background: var(--border-subtle); border: 1px solid var(--border-accent);">
+                            <label class="block text-sm font-bold text-textPrimary mb-3">
+                                <i class="fas fa-tag mr-2 text-accent500"></i>
+                                Nome da Campanha
                             </label>
-                            <input type="url" 
-                                   x-model="editCampaignData.media_url" 
-                                   class="w-full px-4 py-3 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary placeholder-textSecondary focus:outline-none focus:ring-2 focus:ring-accent500"
-                                   placeholder="https://t.me/canal/123">
-                            <p class="text-xs text-textSecondary mt-2">Link do Telegram (vídeo ou foto)</p>
+                            <input type="text" 
+                                   x-model="selectedCampaign?.name" 
+                                   class="w-full px-4 py-3 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary placeholder-textSecondary focus:outline-none focus:ring-2 focus:ring-accent500 cursor-not-allowed"
+                                   readonly>
+                            <p class="text-xs text-textSecondary mt-2">O nome da campanha é gerado automaticamente e não pode ser editado diretamente aqui.</p>
                         </div>
-                        <div>
+                        
+                        <!-- Mensagem -->
+                        <div class="mb-6">
                             <label class="block text-sm font-bold text-textPrimary mb-2">
-                                <i class="fas fa-image mr-2 text-accent500"></i>
-                                Tipo de Mídia Principal
+                                <i class="fas fa-comment-alt mr-2 text-accent500"></i>
+                                Mensagem do Remarketing
                             </label>
-                            <div class="grid grid-cols-2 gap-3 mt-2">
-                                <label class="flex items-center gap-2 px-4 py-3 bg-bg900 border rounded-lg cursor-pointer transition-colors"
-                                       :class="editCampaignData.media_type === 'video' ? 'border-accent500' : 'border-white border-opacity-10'"
-                                       :style="editCampaignData.media_type === 'video' ? 'background: var(--border-subtle);' : ''">
-                                    <input type="radio" x-model="editCampaignData.media_type" value="video" style="accent-color: var(--brand-gold-500);">
-                                    <i class="fas fa-video text-accent500"></i>
-                                    <span class="text-sm text-textPrimary">Vídeo</span>
+                            <textarea x-model="editCampaignData.message" 
+                                      rows="6"
+                                      class="w-full px-4 py-3 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary placeholder-textSecondary focus:outline-none focus:ring-2 focus:ring-accent500"
+                                      placeholder="Digite a mensagem que será enviada para os usuários..."></textarea>
+                            <p class="text-xs text-textSecondary mt-2">
+                                <i class="fas fa-lightbulb mr-1 text-accent500"></i>
+                                Use emojis e seja persuasivo para aumentar a conversão
+                            </p>
+                        </div>
+                        
+                        <!-- Mídia (Opcional) -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                            <div>
+                                <label class="block text-sm font-bold text-textPrimary mb-2">
+                                    <i class="fas fa-link mr-2 text-accent500"></i>
+                                    URL da Mídia (opcional)
                                 </label>
-                                <label class="flex items-center gap-2 px-4 py-3 bg-bg900 border rounded-lg cursor-pointer transition-colors"
-                                       :class="editCampaignData.media_type === 'photo' ? 'border-accent500' : 'border-white border-opacity-10'"
-                                       :style="editCampaignData.media_type === 'photo' ? 'background: var(--border-subtle);' : ''">
-                                    <input type="radio" x-model="editCampaignData.media_type" value="photo" style="accent-color: var(--brand-gold-500);">
-                                    <i class="fas fa-camera text-accent500"></i>
-                                    <span class="text-sm text-textPrimary">Foto</span>
+                                <input type="url" 
+                                       x-model="editCampaignData.media_url" 
+                                       class="w-full px-4 py-3 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary placeholder-textSecondary focus:outline-none focus:ring-2 focus:ring-accent500"
+                                       placeholder="https://t.me/canal/123">
+                                <p class="text-xs text-textSecondary mt-2">Link do Telegram (vídeo ou foto)</p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-bold text-textPrimary mb-2">
+                                    <i class="fas fa-image mr-2 text-accent500"></i>
+                                    Tipo de Mídia Principal
                                 </label>
+                                <div class="grid grid-cols-2 gap-3 mt-2">
+                                    <label class="flex items-center gap-2 px-4 py-3 bg-bg900 border rounded-lg cursor-pointer transition-colors"
+                                           :class="editCampaignData.media_type === 'video' ? 'border-accent500' : 'border-white border-opacity-10'"
+                                           :style="editCampaignData.media_type === 'video' ? 'background: var(--border-subtle);' : ''">
+                                        <input type="radio" x-model="editCampaignData.media_type" value="video" style="accent-color: var(--brand-gold-500);">
+                                        <i class="fas fa-video text-accent500"></i>
+                                        <span class="text-sm text-textPrimary">Vídeo</span>
+                                    </label>
+                                    <label class="flex items-center gap-2 px-4 py-3 bg-bg900 border rounded-lg cursor-pointer transition-colors"
+                                           :class="editCampaignData.media_type === 'photo' ? 'border-accent500' : 'border-white border-opacity-10'"
+                                           :style="editCampaignData.media_type === 'photo' ? 'background: var(--border-subtle);' : ''">
+                                        <input type="radio" x-model="editCampaignData.media_type" value="photo" style="accent-color: var(--brand-gold-500);">
+                                        <i class="fas fa-camera text-accent500"></i>
+                                        <span class="text-sm text-textPrimary">Foto</span>
+                                    </label>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                    
-                    <!-- Áudio Adicional -->
-                    <div class="mb-6 p-4 bg-gray-800 rounded-lg border border-gray-700">
-                        <label class="flex items-center gap-3 cursor-pointer mb-3">
-                            <input type="checkbox" 
-                                   x-model="editCampaignData.audio_enabled"
-                                   class="w-5 h-5 text-yellow-500">
-                            <span class="text-sm font-bold text-white">Adicionar Áudio Complementar (opcional)</span>
-                        </label>
-                        <div x-show="editCampaignData.audio_enabled" x-cloak>
-                            <input type="url" 
-                                   x-model="editCampaignData.audio_url" 
-                                   class="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-yellow-500"
-                                   placeholder="https://t.me/canal/audio">
-                        </div>
-                    </div>
-                    
-                    <!-- Botões de Produto -->
-                    <div class="mb-6 p-4 bg-gray-800 rounded-lg border border-gray-700">
-                        <div class="flex items-center justify-between mb-3">
-                            <label class="block text-sm font-bold text-white">
-                                <i class="fas fa-tag mr-2 text-yellow-500"></i>
-                                Botões de Produto
+                        
+                        <!-- Áudio Adicional -->
+                        <div class="mb-6 p-4 rounded-xl" style="background: var(--border-subtle); border: 1px solid var(--border-accent);">
+                            <label class="flex items-center gap-3 cursor-pointer mb-3">
+                                <input type="checkbox" 
+                                       x-model="editCampaignData.audio_enabled"
+                                       class="w-5 h-5 bg-bg900 border-white border-opacity-10 rounded focus:ring-accent500"
+                                       style="accent-color: var(--brand-gold-500);">
+                                <div class="flex items-center gap-2">
+                                    <i class="fas fa-microphone text-accent500 text-lg"></i>
+                                    <span class="text-sm font-bold text-textPrimary">Adicionar Áudio Complementar (opcional)</span>
+                                </div>
                             </label>
-                            <button type="button" 
-                                    @click="editCampaignData.buttons.push({ text: '', price: 0, description: '' })"
-                                    class="px-3 py-1 text-xs font-bold rounded-lg text-black bg-yellow-500 hover:bg-yellow-600">
-                                <i class="fas fa-plus mr-1"></i>
-                                Adicionar Botão
-                            </button>
+                            <div x-show="editCampaignData.audio_enabled" x-cloak>
+                                <input type="url" 
+                                       x-model="editCampaignData.audio_url" 
+                                       class="w-full px-4 py-3 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary placeholder-textSecondary focus:outline-none focus:ring-2 focus:ring-accent500"
+                                       placeholder="https://t.me/canal/audio">
+                                <p class="text-xs text-textSecondary mt-2">O áudio será enviado após a mídia principal</p>
+                            </div>
                         </div>
                         
-                        <div class="space-y-3" x-show="editCampaignData.buttons.length > 0">
-                            <template x-for="(button, index) in editCampaignData.buttons" :key="index">
-                                <div class="p-4 bg-gray-700 rounded-lg border border-gray-600">
-                                    <div class="flex items-center justify-between mb-3">
-                                        <span class="text-xs font-bold text-yellow-500">Botão <span x-text="index + 1"></span></span>
-                                        <button type="button" 
-                                                @click="editCampaignData.buttons.splice(index, 1)"
-                                                class="text-xs text-red-400 hover:text-red-300">
-                                            <i class="fas fa-trash mr-1"></i>Remover
-                                        </button>
-                                    </div>
-                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                        <div class="md:col-span-2">
-                                            <label class="block text-xs text-gray-400 mb-1">Texto do Botão</label>
-                                            <input type="text" 
-                                                   x-model="button.text"
-                                                   class="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-lg text-white text-sm">
-                                        </div>
-                                        <div>
-                                            <label class="block text-xs text-gray-400 mb-1">Preço (R$)</label>
-                                            <input type="number" 
-                                                   x-model.number="button.price"
-                                                   step="0.01"
-                                                   min="0"
-                                                   class="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-lg text-white text-sm">
-                                        </div>
-                                    </div>
-                                    <div class="mt-3">
-                                        <label class="block text-xs text-gray-400 mb-1">Descrição</label>
-                                        <input type="text" 
-                                               x-model="button.description"
-                                               class="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-lg text-white text-sm">
-                                    </div>
+                        <!-- Botões de Produto -->
+                        <div class="mb-6 p-4 rounded-xl" style="background: var(--border-subtle); border: 1px solid var(--border-accent);">
+                            <div class="flex items-center justify-between mb-3">
+                                <label class="block text-sm font-bold text-textPrimary">
+                                    <i class="fas fa-tag mr-2 text-accent500"></i>
+                                    Botões de Produto
+                                </label>
+                                <button type="button" 
+                                        @click="editCampaignData.buttons.push({ text: '', price: 0, description: '' })"
+                                        class="px-3 py-1 text-xs font-bold rounded-lg text-black"
+                                        style="background: linear-gradient(to right, var(--brand-gold-500), var(--brand-gold-700));">
+                                    <i class="fas fa-plus mr-1"></i>
+                                    Adicionar Botão
+                                </button>
+                            </div>
+                            
+                            <template x-if="editCampaignData.buttons.length === 0">
+                                <div class="text-center py-6 text-textSecondary text-sm">
+                                    <i class="fas fa-hand-pointer text-2xl mb-2 text-accent500"></i>
+                                    <p>Nenhum botão adicionado</p>
+                                    <p class="text-xs mt-1">Clique em "Adicionar Botão" para criar opções de produtos</p>
                                 </div>
                             </template>
+                            
+                            <div class="space-y-3" x-show="editCampaignData.buttons.length > 0">
+                                <template x-for="(button, index) in editCampaignData.buttons" :key="index">
+                                    <div class="p-4 bg-bg900 rounded-lg border border-white border-opacity-10">
+                                        <div class="flex items-center justify-between mb-3">
+                                            <span class="text-xs font-bold text-accent500">
+                                                <i class="fas fa-tag mr-1"></i>
+                                                Botão <span x-text="index + 1"></span>
+                                            </span>
+                                            <button type="button" 
+                                                    @click="editCampaignData.buttons.splice(index, 1)"
+                                                    class="text-xs text-red-400 hover:text-red-300">
+                                                <i class="fas fa-trash mr-1"></i>Remover
+                                            </button>
+                                        </div>
+                                        
+                                        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                            <div class="md:col-span-2">
+                                                <label class="block text-xs text-textSecondary mb-1">Texto do Botão</label>
+                                                <input type="text" 
+                                                       x-model="button.text"
+                                                       class="w-full px-3 py-2 bg-surface-800 border border-white border-opacity-10 rounded-lg text-textPrimary text-sm focus:outline-none focus:ring-2 focus:ring-accent500"
+                                                       placeholder="Ex: Comprar Produto Premium">
+                                            </div>
+                                            <div>
+                                                <label class="block text-xs text-textSecondary mb-1">Preço (R$)</label>
+                                                <input type="number" 
+                                                       x-model.number="button.price"
+                                                       step="0.01"
+                                                       min="0"
+                                                       class="w-full px-3 py-2 bg-surface-800 border border-white border-opacity-10 rounded-lg text-textPrimary text-sm font-mono font-bold focus:outline-none focus:ring-2 focus:ring-accent500"
+                                                       placeholder="19.97">
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="mt-3">
+                                            <label class="block text-xs text-textSecondary mb-1">Descrição do Produto</label>
+                                            <input type="text" 
+                                                   x-model="button.description"
+                                                   class="w-full px-3 py-2 bg-surface-800 border border-white border-opacity-10 rounded-lg text-textPrimary text-sm focus:outline-none focus:ring-2 focus:ring-accent500"
+                                                   placeholder="Acesso completo + Bônus exclusivos">
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
                         </div>
-                    </div>
-                    
-                    <!-- Segmentação de Público - Versão Simplificada -->
-                    <div class="mb-6 p-4 bg-gray-800 rounded-lg border border-gray-700">
-                        <label class="block text-sm font-bold text-white mb-3">
-                            <i class="fas fa-filter mr-2 text-yellow-500"></i>
-                            Segmentação de Público
-                        </label>
                         
-                        <select x-model="editCampaignData.audience_segment" 
-                                class="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-yellow-500">
-                            <option value="all_users">Todos os Usuários</option>
-                            <option value="buyers">Todos que Comprou</option>
-                            <option value="pix_generated">Todos que Gerou PIX</option>
-                            <option value="downsell_buyers">Comprou pelo Downsell</option>
-                            <option value="order_bump_buyers">Comprou com Order Bump</option>
-                            <option value="upsell_buyers">Comprou Upsell</option>
-                            <option value="remarketing_buyers">Comprou por Remarketing</option>
-                        </select>
-                        
-                        <!-- Dias desde último contato -->
-                        <div class="mt-4">
-                            <label class="block text-sm font-bold text-white mb-2">
-                                <i class="fas fa-calendar-clock mr-2 text-yellow-500"></i>
-                                Dias desde Último Contato (0 = Sem filtro)
+                        <!-- Segmentação de Público -->
+                        <div class="mb-6 p-4 rounded-xl" style="background: var(--border-subtle); border: 1px solid var(--border-accent);">
+                            <label class="block text-sm font-bold text-textPrimary mb-3">
+                                <i class="fas fa-filter mr-2 text-accent500"></i>
+                                Segmentação de Público
                             </label>
-                            <input type="number" 
-                                   x-model.number="editCampaignData.days_since_last_contact"
-                                   min="0"
-                                   max="365"
-                                   class="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-yellow-500">
+                            
+                            <div class="mb-4">
+                                <label class="block text-xs font-semibold text-textSecondary mb-3">
+                                    <i class="fas fa-users mr-1 text-accent500"></i>
+                                    Selecione o público-alvo:
+                                </label>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <!-- Todos Usuários -->
+                                    <label class="flex items-start gap-3 p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 shadow-md"
+                                           :class="editCampaignData.audience_segment === 'all_users' ? 'border-yellow-400 bg-yellow-500 bg-opacity-30 shadow-lg shadow-yellow-500/60' : 'border-gray-600 bg-gray-700 hover:border-gray-500 hover:bg-gray-650'"
+                                           :style="editCampaignData.audience_segment === 'all_users' ? 'box-shadow: 0 0 25px rgba(250, 204, 21, 0.5), 0 0 0 3px rgba(250, 204, 21, 0.7), 0 4px 12px rgba(0, 0, 0, 0.4); background: rgba(250, 204, 21, 0.15);' : 'background: rgba(55, 65, 81, 0.9); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);'">
+                                        <input type="radio" 
+                                               x-model="editCampaignData.audience_segment" 
+                                               value="all_users"
+                                               class="mt-1 w-4 h-4"
+                                               style="accent-color: #facc15;">
+                                        <div class="flex-1">
+                                            <div class="flex items-center gap-2 mb-1">
+                                                <i class="fas fa-users text-lg" :class="editCampaignData.audience_segment === 'all_users' ? 'text-yellow-300' : 'text-yellow-400'"></i>
+                                                <span class="text-sm font-black" :class="editCampaignData.audience_segment === 'all_users' ? 'text-yellow-200' : 'text-gray-100'">Todos os Usuários</span>
+                                            </div>
+                                            <p class="text-xs font-semibold" :class="editCampaignData.audience_segment === 'all_users' ? 'text-yellow-100' : 'text-gray-200'">Enviar para todos os usuários do bot</p>
+                                        </div>
+                                    </label>
+                                    
+                                    <!-- Usuários que Comprou -->
+                                    <label class="flex items-start gap-3 p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 shadow-md"
+                                           :class="editCampaignData.audience_segment === 'buyers' ? 'border-green-400 bg-green-500 bg-opacity-30 shadow-lg shadow-green-500/60' : 'border-gray-600 bg-gray-700 hover:border-gray-500 hover:bg-gray-650'"
+                                           :style="editCampaignData.audience_segment === 'buyers' ? 'box-shadow: 0 0 25px rgba(74, 222, 128, 0.5), 0 0 0 3px rgba(74, 222, 128, 0.7), 0 4px 12px rgba(0, 0, 0, 0.4); background: rgba(74, 222, 128, 0.15);' : 'background: rgba(55, 65, 81, 0.9); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);'">
+                                        <input type="radio" 
+                                               x-model="editCampaignData.audience_segment" 
+                                               value="buyers"
+                                               class="mt-1 w-4 h-4"
+                                               style="accent-color: #4ade80;">
+                                        <div class="flex-1">
+                                            <div class="flex items-center gap-2 mb-1">
+                                                <i class="fas fa-check-circle text-lg" :class="editCampaignData.audience_segment === 'buyers' ? 'text-green-300' : 'text-green-400'"></i>
+                                                <span class="text-sm font-black" :class="editCampaignData.audience_segment === 'buyers' ? 'text-green-200' : 'text-gray-100'">Todos que Comprou</span>
+                                            </div>
+                                            <p class="text-xs font-semibold" :class="editCampaignData.audience_segment === 'buyers' ? 'text-green-100' : 'text-gray-200'">Apenas usuários que já efetivaram compras</p>
+                                        </div>
+                                    </label>
+                                    
+                                    <!-- Usuários que Gerou PIX -->
+                                    <label class="flex items-start gap-3 p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 shadow-md"
+                                           :class="editCampaignData.audience_segment === 'pix_generated' ? 'border-amber-400 bg-amber-500 bg-opacity-30 shadow-lg shadow-amber-500/60' : 'border-gray-600 bg-gray-700 hover:border-gray-500 hover:bg-gray-650'"
+                                           :style="editCampaignData.audience_segment === 'pix_generated' ? 'box-shadow: 0 0 25px rgba(251, 191, 36, 0.5), 0 0 0 3px rgba(251, 191, 36, 0.7), 0 4px 12px rgba(0, 0, 0, 0.4); background: rgba(251, 191, 36, 0.15);' : 'background: rgba(55, 65, 81, 0.9); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);'">
+                                        <input type="radio" 
+                                               x-model="editCampaignData.audience_segment" 
+                                               value="pix_generated"
+                                               class="mt-1 w-4 h-4"
+                                               style="accent-color: #fbbf24;">
+                                        <div class="flex-1">
+                                            <div class="flex items-center gap-2 mb-1">
+                                                <i class="fas fa-qrcode text-lg" :class="editCampaignData.audience_segment === 'pix_generated' ? 'text-amber-300' : 'text-amber-400'"></i>
+                                                <span class="text-sm font-black" :class="editCampaignData.audience_segment === 'pix_generated' ? 'text-amber-200' : 'text-gray-100'">Todos que Gerou PIX</span>
+                                            </div>
+                                            <p class="text-xs font-semibold" :class="editCampaignData.audience_segment === 'pix_generated' ? 'text-amber-100' : 'text-gray-200'">Usuários que geraram PIX mas não pagaram</p>
+                                        </div>
+                                    </label>
+                                    
+                                    <!-- Comprou pelo Downsell -->
+                                    <label class="flex items-start gap-3 p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 shadow-md"
+                                           :class="editCampaignData.audience_segment === 'downsell_buyers' ? 'border-red-400 bg-red-500 bg-opacity-30 shadow-lg shadow-red-500/60' : 'border-gray-600 bg-gray-700 hover:border-gray-500 hover:bg-gray-650'"
+                                           :style="editCampaignData.audience_segment === 'downsell_buyers' ? 'box-shadow: 0 0 25px rgba(248, 113, 113, 0.5), 0 0 0 3px rgba(248, 113, 113, 0.7), 0 4px 12px rgba(0, 0, 0, 0.4); background: rgba(248, 113, 113, 0.15);' : 'background: rgba(55, 65, 81, 0.9); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);'">
+                                        <input type="radio" 
+                                               x-model="editCampaignData.audience_segment" 
+                                               value="downsell_buyers"
+                                               class="mt-1 w-4 h-4"
+                                               style="accent-color: #f87171;">
+                                        <div class="flex-1">
+                                            <div class="flex items-center gap-2 mb-1">
+                                                <i class="fas fa-arrow-down text-lg" :class="editCampaignData.audience_segment === 'downsell_buyers' ? 'text-red-300' : 'text-red-400'"></i>
+                                                <span class="text-sm font-black" :class="editCampaignData.audience_segment === 'downsell_buyers' ? 'text-red-200' : 'text-gray-100'">Comprou pelo Downsell</span>
+                                            </div>
+                                            <p class="text-xs font-semibold" :class="editCampaignData.audience_segment === 'downsell_buyers' ? 'text-red-100' : 'text-gray-200'">Usuários que compraram via downsell</p>
+                                        </div>
+                                    </label>
+                                    
+                                    <!-- Comprou com Order Bump -->
+                                    <label class="flex items-start gap-3 p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 shadow-md"
+                                           :class="editCampaignData.audience_segment === 'order_bump_buyers' ? 'border-purple-400 bg-purple-500 bg-opacity-30 shadow-lg shadow-purple-500/60' : 'border-gray-600 bg-gray-700 hover:border-gray-500 hover:bg-gray-650'"
+                                           :style="editCampaignData.audience_segment === 'order_bump_buyers' ? 'box-shadow: 0 0 25px rgba(192, 132, 252, 0.5), 0 0 0 3px rgba(192, 132, 252, 0.7), 0 4px 12px rgba(0, 0, 0, 0.4); background: rgba(192, 132, 252, 0.15);' : 'background: rgba(55, 65, 81, 0.9); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);'">
+                                        <input type="radio" 
+                                               x-model="editCampaignData.audience_segment" 
+                                               value="order_bump_buyers"
+                                               class="mt-1 w-4 h-4"
+                                               style="accent-color: #c084fc;">
+                                        <div class="flex-1">
+                                            <div class="flex items-center gap-2 mb-1">
+                                                <i class="fas fa-gift text-lg" :class="editCampaignData.audience_segment === 'order_bump_buyers' ? 'text-purple-300' : 'text-purple-400'"></i>
+                                                <span class="text-sm font-black" :class="editCampaignData.audience_segment === 'order_bump_buyers' ? 'text-purple-200' : 'text-gray-100'">Comprou com Order Bump</span>
+                                            </div>
+                                            <p class="text-xs font-semibold" :class="editCampaignData.audience_segment === 'order_bump_buyers' ? 'text-purple-100' : 'text-gray-200'">Usuários que aceitaram order bump na compra</p>
+                                        </div>
+                                    </label>
+                                    
+                                    <!-- Comprou Upsell -->
+                                    <label class="flex items-start gap-3 p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 shadow-md"
+                                           :class="editCampaignData.audience_segment === 'upsell_buyers' ? 'border-emerald-400 bg-emerald-500 bg-opacity-30 shadow-lg shadow-emerald-500/60' : 'border-gray-600 bg-gray-700 hover:border-gray-500 hover:bg-gray-650'"
+                                           :style="editCampaignData.audience_segment === 'upsell_buyers' ? 'box-shadow: 0 0 25px rgba(52, 211, 153, 0.5), 0 0 0 3px rgba(52, 211, 153, 0.7), 0 4px 12px rgba(0, 0, 0, 0.4); background: rgba(52, 211, 153, 0.15);' : 'background: rgba(55, 65, 81, 0.9); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);'">
+                                        <input type="radio" 
+                                               x-model="editCampaignData.audience_segment" 
+                                               value="upsell_buyers"
+                                               class="mt-1 w-4 h-4"
+                                               style="accent-color: #34d399;">
+                                        <div class="flex-1">
+                                            <div class="flex items-center gap-2 mb-1">
+                                                <i class="fas fa-arrow-up text-lg" :class="editCampaignData.audience_segment === 'upsell_buyers' ? 'text-emerald-300' : 'text-emerald-400'"></i>
+                                                <span class="text-sm font-black" :class="editCampaignData.audience_segment === 'upsell_buyers' ? 'text-emerald-200' : 'text-gray-100'">Comprou Upsell</span>
+                                            </div>
+                                            <p class="text-xs font-semibold" :class="editCampaignData.audience_segment === 'upsell_buyers' ? 'text-emerald-100' : 'text-gray-200'">Usuários que compraram upsells</p>
+                                        </div>
+                                    </label>
+                                    
+                                    <!-- Comprou por Remarketing -->
+                                    <label class="flex items-start gap-3 p-4 border-2 rounded-lg cursor-pointer transition-all duration-200 shadow-md"
+                                           :class="editCampaignData.audience_segment === 'remarketing_buyers' ? 'border-blue-400 bg-blue-500 bg-opacity-30 shadow-lg shadow-blue-500/60' : 'border-gray-600 bg-gray-700 hover:border-gray-500 hover:bg-gray-650'"
+                                           :style="editCampaignData.audience_segment === 'remarketing_buyers' ? 'box-shadow: 0 0 25px rgba(96, 165, 250, 0.5), 0 0 0 3px rgba(96, 165, 250, 0.7), 0 4px 12px rgba(0, 0, 0, 0.4); background: rgba(96, 165, 250, 0.15);' : 'background: rgba(55, 65, 81, 0.9); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);'">
+                                        <input type="radio" 
+                                               x-model="editCampaignData.audience_segment" 
+                                               value="remarketing_buyers"
+                                               class="mt-1 w-4 h-4"
+                                               style="accent-color: #60a5fa;">
+                                        <div class="flex-1">
+                                            <div class="flex items-center gap-2 mb-1">
+                                                <i class="fas fa-bullhorn text-lg" :class="editCampaignData.audience_segment === 'remarketing_buyers' ? 'text-blue-300' : 'text-blue-400'"></i>
+                                                <span class="text-sm font-black" :class="editCampaignData.audience_segment === 'remarketing_buyers' ? 'text-blue-200' : 'text-gray-100'">Comprou por Remarketing</span>
+                                            </div>
+                                            <p class="text-xs font-semibold" :class="editCampaignData.audience_segment === 'remarketing_buyers' ? 'text-blue-100' : 'text-gray-200'">Usuários que compraram após campanha de remarketing</p>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <!-- Filtro de Inatividade (Opcional) -->
+                            <div class="mt-4 pt-4 border-t border-white border-opacity-10">
+                                <div class="mb-4">
+                                    <label class="block text-sm font-bold text-textPrimary mb-1">
+                                        <i class="fas fa-calendar-clock mr-2 text-accent500"></i>
+                                        Filtro de Inatividade (Opcional)
+                                    </label>
+                                    <p class="text-xs text-textSecondary mb-4">
+                                        Filtre usuários que não interagiram com o bot há um determinado tempo
+                                    </p>
+                                </div>
+                                
+                                <!-- Botões Rápidos (Presets) -->
+                                <div class="mb-4">
+                                    <label class="block text-xs font-semibold text-textSecondary mb-3">
+                                        <i class="fas fa-bolt mr-1 text-accent500"></i>
+                                        Opções Rápidas:
+                                    </label>
+                                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                        <button type="button"
+                                                @click="editCampaignData.days_since_last_contact = 0"
+                                                :class="editCampaignData.days_since_last_contact == 0 ? 'bg-blue-500 bg-opacity-30 border-blue-400 text-blue-300 shadow-lg shadow-blue-500/50' : 'bg-bg900 border-white border-opacity-20 hover:border-white hover:border-opacity-40 text-textSecondary'"
+                                                class="px-4 py-2.5 border-2 rounded-lg transition-all duration-200 text-sm font-semibold">
+                                            <i class="fas fa-infinity mr-1"></i>
+                                            Sem Filtro
+                                        </button>
+                                        <button type="button"
+                                                @click="editCampaignData.days_since_last_contact = 7"
+                                                :class="editCampaignData.days_since_last_contact == 7 ? 'bg-blue-500 bg-opacity-30 border-blue-400 text-blue-300 shadow-lg shadow-blue-500/50' : 'bg-bg900 border-white border-opacity-20 hover:border-white hover:border-opacity-40 text-textSecondary'"
+                                                class="px-4 py-2.5 border-2 rounded-lg transition-all duration-200 text-sm font-semibold">
+                                            <i class="fas fa-calendar-week mr-1"></i>
+                                            7 Dias
+                                        </button>
+                                        <button type="button"
+                                                @click="editCampaignData.days_since_last_contact = 15"
+                                                :class="editCampaignData.days_since_last_contact == 15 ? 'bg-blue-500 bg-opacity-30 border-blue-400 text-blue-300 shadow-lg shadow-blue-500/50' : 'bg-bg900 border-white border-opacity-20 hover:border-white hover:border-opacity-40 text-textSecondary'"
+                                                class="px-4 py-2.5 border-2 rounded-lg transition-all duration-200 text-sm font-semibold">
+                                            <i class="fas fa-calendar-alt mr-1"></i>
+                                            15 Dias
+                                        </button>
+                                        <button type="button"
+                                                @click="editCampaignData.days_since_last_contact = 30"
+                                                :class="editCampaignData.days_since_last_contact == 30 ? 'bg-blue-500 bg-opacity-30 border-blue-400 text-blue-300 shadow-lg shadow-blue-500/50' : 'bg-bg900 border-white border-opacity-20 hover:border-white hover:border-opacity-40 text-textSecondary'"
+                                                class="px-4 py-2.5 border-2 rounded-lg transition-all duration-200 text-sm font-semibold">
+                                            <i class="fas fa-calendar mr-1"></i>
+                                            30 Dias
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <!-- Campo Numérico Personalizado -->
+                                <div class="mb-4">
+                                    <label class="block text-xs font-semibold text-textSecondary mb-2">
+                                        <i class="fas fa-sliders-h mr-1 text-accent500"></i>
+                                        Ou digite um valor personalizado:
+                                    </label>
+                                    <div class="relative">
+                                        <input type="number" 
+                                               x-model.number="editCampaignData.days_since_last_contact" 
+                                               min="0"
+                                               max="365"
+                                               class="w-full px-4 py-3 bg-bg900 border-2 rounded-lg text-textPrimary text-base font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                                               :class="editCampaignData.days_since_last_contact == 0 ? 'border-white border-opacity-20' : 'border-blue-400 focus:border-blue-400'"
+                                               placeholder="0">
+                                        <div class="absolute right-4 top-1/2 transform -translate-y-1/2 text-textSecondary text-sm font-medium">
+                                            dia(s)
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Preview Visual Dinâmico e Super Claro -->
+                                <div class="p-4 rounded-xl transition-all duration-300 shadow-lg"
+                                     :class="editCampaignData.days_since_last_contact == 0 ? 'bg-green-600 border-2 border-green-400' : 'bg-blue-600 border-2 border-blue-400'"
+                                     :style="editCampaignData.days_since_last_contact == 0 ? 'box-shadow: 0 0 20px rgba(74, 222, 128, 0.5), 0 0 0 2px rgba(74, 222, 128, 0.7); background: rgba(22, 163, 74, 0.9);' : 'box-shadow: 0 0 20px rgba(96, 165, 250, 0.5), 0 0 0 2px rgba(96, 165, 250, 0.7); background: rgba(37, 99, 235, 0.9);'">
+                                    <div class="flex items-start gap-3">
+                                        <div class="flex-shrink-0 mt-0.5">
+                                            <i class="fas text-2xl"
+                                               :class="editCampaignData.days_since_last_contact == 0 ? 'fa-check-circle text-green-200' : 'fa-filter text-blue-200'"
+                                               :style="editCampaignData.days_since_last_contact == 0 ? 'filter: drop-shadow(0 0 8px rgba(187, 247, 208, 0.8));' : 'filter: drop-shadow(0 0 8px rgba(191, 219, 254, 0.8));'"></i>
+                                        </div>
+                                        <div class="flex-1">
+                                            <div class="text-base font-black mb-2"
+                                                 :class="editCampaignData.days_since_last_contact == 0 ? 'text-green-100' : 'text-blue-100'"
+                                                 :style="editCampaignData.days_since_last_contact == 0 ? 'text-shadow: 0 0 10px rgba(187, 247, 208, 0.6);' : 'text-shadow: 0 0 10px rgba(191, 219, 254, 0.6);'">
+                                                <span x-text="editCampaignData.days_since_last_contact == 0 ? '✅ Sem Filtro de Inatividade' : '🎯 Filtro Ativo'"></span>
+                                            </div>
+                                            <div class="text-sm leading-relaxed font-semibold"
+                                                 :class="editCampaignData.days_since_last_contact == 0 ? 'text-green-50' : 'text-blue-50'"
+                                                 :style="editCampaignData.days_since_last_contact == 0 ? 'text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);' : 'text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);'">
+                                                <span x-show="editCampaignData.days_since_last_contact == 0">
+                                                    <strong class="text-green-100 font-black">Todos os usuários</strong> do segmento "<span class="text-green-200 font-bold" x-text="getSegmentLabel(editCampaignData.audience_segment)"></span>" receberão a campanha, independente de quando foi a última interação.
+                                                </span>
+                                                <span x-show="editCampaignData.days_since_last_contact > 0">
+                                                    Apenas usuários do segmento "<span class="text-blue-200 font-bold" x-text="getSegmentLabel(editCampaignData.audience_segment)"></span>" que <strong class="text-blue-100 font-black">não interagiram com o bot há <span class="text-blue-200 font-black" x-text="editCampaignData.days_since_last_contact"></span> dia(s) ou mais</strong> receberão a campanha.
+                                                    <br><br>
+                                                    <strong class="text-blue-100 font-black">Exemplo:</strong> <span class="text-blue-50">Se configurar 7 dias, apenas usuários que não enviaram mensagem, clicaram em botões ou interagiram de qualquer forma há pelo menos 7 dias receberão o remarketing.</span>
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Dica Adicional -->
+                                <div class="mt-3 p-3 rounded-lg bg-bg900 border border-white border-opacity-5">
+                                    <p class="text-xs text-textSecondary flex items-start gap-2">
+                                        <i class="fas fa-lightbulb text-accent500 mt-0.5"></i>
+                                        <span>
+                                            <strong>Dica:</strong> Use este filtro para reativar usuários inativos ou criar campanhas de reengajamento. 
+                                            Um valor de 0 dias significa que o filtro está desativado.
+                                        </span>
+                                    </p>
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                    
-                    <!-- Botões de Ação -->
-                    <div class="flex gap-3 pt-4 border-t border-gray-700">
-                        <button type="button" 
-                                @click="showEditModal = false"
-                                class="flex-1 px-6 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-semibold transition-colors">
-                            Cancelar
-                        </button>
-                        <button type="submit"
-                                :disabled="editingCampaign"
-                                class="flex-1 px-6 py-3 rounded-lg font-semibold text-white transition-colors"
-                                :class="editingCampaign ? 'bg-gray-600 cursor-not-allowed' : 'bg-yellow-500 hover:bg-yellow-600'"
-                                style="background: linear-gradient(135deg, var(--brand-gold-500), var(--brand-gold-700));">
-                            <span x-show="!editingCampaign">Salvar Alterações</span>
-                            <span x-show="editingCampaign">
-                                <i class="fas fa-spinner fa-spin mr-2"></i>Salvando...
-                            </span>
-                        </button>
-                    </div>
-                </form>
+                        
+                        <!-- Botões de Ação do Modal -->
+                        <div class="mt-6 pt-6 border-t border-gray-700 flex justify-end gap-3">
+                            <button type="button" 
+                                    @click="showEditModal = false" 
+                                    class="px-6 py-3 bg-transparent border border-gray-700 rounded-lg text-gray-400 font-bold hover:bg-gray-800 transition-colors">
+                                Cancelar
+                            </button>
+                            <button type="submit" 
+                                    :disabled="editingCampaign"
+                                    :class="editingCampaign ? 'opacity-50 cursor-not-allowed' : ''"
+                                    class="px-6 py-3 rounded-lg font-bold text-sm transition-all duration-200 flex items-center justify-center gap-2 text-black"
+                                    style="background: linear-gradient(to right, var(--brand-gold-500), var(--brand-gold-700));">
+                                <i class="fas" :class="editingCampaign ? 'fa-spinner fa-spin' : 'fa-save'"></i>
+                                <span x-text="editingCampaign ? 'Salvando...' : 'Salvar Alterações'"></span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
     </div>
     
+    <!-- ✅ Conteúdo Principal - Ocultar quando qualquer modal estiver aberto -->
+    <div x-show="!showEditModal && !showCampaignModal" x-cloak>
     <!-- Top Produtos e Horários de Pico - Responsivo -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6">
         <!-- Top Produtos -->
@@ -1386,6 +1649,8 @@ if (typeof window.botStatsApp === 'undefined') {
         </div>
         </template>
     </div>
+    </div>
+    <!-- ✅ Fim do wrapper que oculta conteúdo quando modal de edição estiver aberto -->
     
 </div>
 {% endblock %}
@@ -2468,6 +2733,20 @@ window.botStatsApp = function botStatsApp() {
                 // Reabilitar botão
                 this.resendingCampaign = false;
             }
+        },
+        
+        // ✅ Método helper para obter label do segmento
+        getSegmentLabel(segment) {
+            const segmentLabels = {
+                'all_users': 'Todos os Usuários',
+                'buyers': 'Todos que Comprou',
+                'pix_generated': 'Todos que Gerou PIX',
+                'downsell_buyers': 'Todos que Comprou pelo Downsell',
+                'order_bump_buyers': 'Todos que Comprou com Order Bump',
+                'upsell_buyers': 'Todos que Comprou Upsell',
+                'remarketing_buyers': 'Todos que Comprou por Remarketing'
+            };
+            return segmentLabels[segment] || 'Todos os Usuários';
         },
         
         // ✅ Método helper para obter CSRF token
