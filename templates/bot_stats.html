@@ -378,6 +378,43 @@
 {% endblock %}
 
 {% block content %}
+<!-- ✅ CRÍTICO: Script inline para garantir que função esteja disponível antes do Alpine inicializar -->
+<script>
+// ✅ Garantir que a função seja definida no escopo global ANTES do Alpine inicializar
+// Esta é uma função stub que será sobrescrita quando o script completo carregar
+if (typeof window.botStatsApp === 'undefined') {
+    window.botStatsApp = function() {
+        return {
+            loading: true,
+            botId: {{ bot.id }},
+            selectedPeriod: 'month',
+            stats: {
+                general: { total_users: 0, total_sales: 0, total_revenue: 0, pending_sales: 0, conversion_rate: 0, avg_ticket: 0 },
+                products: [],
+                order_bumps: { shown: 0, accepted: 0, acceptance_rate: 0, revenue: 0 },
+                downsells: { sent: 0, converted: 0, conversion_rate: 0, revenue: 0 },
+                remarketing: { total_campaigns: 0, active_campaigns: 0, completed_campaigns: 0, total_sent: 0, total_clicks: 0, total_sales: 0, total_revenue: 0, conversion_rate: 0, click_rate: 0, avg_ticket: 0, campaigns: [] },
+                comparison: { downsells_auto: { sales: 0, revenue: 0, conversion_rate: 0, avg_ticket: 0 }, remarketing: { sales: 0, revenue: 0, conversion_rate: 0, avg_ticket: 0 } },
+                daily_chart: [],
+                peak_hours: [],
+                recent_sales: []
+            },
+            currentSalePage: 1,
+            salesPerPage: 10,
+            currentCampaignPage: 1,
+            campaignsPerPage: 5,
+            showCampaignModal: false,
+            selectedCampaign: null,
+            resendingCampaign: false,
+            showEditModal: false,
+            editingCampaign: false,
+            editCampaignData: { message: '', media_url: '', media_type: 'video', audio_enabled: false, audio_url: '', buttons: [], audience_segment: 'all_users', days_since_last_contact: 0 },
+            init: function() { console.log('⏳ Carregando dados...'); }
+        };
+    };
+}
+</script>
+
 <div class="max-w-full mx-auto px-2 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 md:py-8" x-data="botStatsApp()" x-init="init()">
     
     <!-- Header - Responsivo -->
@@ -1346,7 +1383,9 @@
 
 {% block extra_scripts %}
 <script>
-function botStatsApp() {
+// ✅ CRÍTICO: Garantir que a função esteja disponível no escopo global
+// ANTES do Alpine.js tentar inicializar o componente
+window.botStatsApp = function botStatsApp() {
     return {
         // ✅ FIX: Prevenir inicialização dupla
         _initialized: false,
@@ -1458,7 +1497,7 @@ function botStatsApp() {
             buttons: [],
             audience_segment: 'all_users',
             days_since_last_contact: 0
-        }
+        },
         
         async init() {
             // ✅ FIX: Prevenir inicialização dupla
@@ -2439,7 +2478,7 @@ function botStatsApp() {
             return null;
         }
     };
-}
+};
 </script>
 {% endblock %}
 
