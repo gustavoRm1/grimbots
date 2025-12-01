@@ -2744,33 +2744,70 @@ def update_remarketing_campaign(bot_id, campaign_id):
                 if 'text' not in btn or not btn.get('text') or not str(btn.get('text')).strip():
                     logger.error(f"❌ Botão {idx} sem texto válido: {btn}")
                     return jsonify({
-                        'error': f'Botão {idx} deve ter campo "text" não vazio'
+                        'error': f'Botão {idx} deve ter campo "text" não vazio',
+                        'details': f'Botão recebido: {json.dumps(btn)}',
+                        'buttons_error': f'Botão {idx + 1} está sem texto. Adicione um texto ao botão.'
                     }), 400
                 
-                # Validar que tem pelo menos um tipo válido: price+description OU url OU callback_data
-                has_price = 'price' in btn and btn.get('price') is not None
-                has_description = 'description' in btn and btn.get('description')
-                has_url = 'url' in btn and btn.get('url')
-                has_callback = 'callback_data' in btn and btn.get('callback_data')
+                # ✅ CORREÇÃO: Validar que tem pelo menos um tipo válido: price+description OU url OU callback_data
+                # Considerar price válido apenas se > 0 (não 0, None ou negativo)
+                price_value = btn.get('price')
+                has_price = price_value is not None and isinstance(price_value, (int, float)) and float(price_value) > 0
                 
-                # Botão de compra precisa de price E description
+                # Considerar description válido apenas se string não vazia
+                description_value = btn.get('description')
+                has_description = description_value and isinstance(description_value, str) and description_value.strip()
+                
+                # URL válido se string não vazia
+                url_value = btn.get('url')
+                has_url = url_value and isinstance(url_value, str) and url_value.strip()
+                
+                # Callback válido se string não vazia
+                callback_value = btn.get('callback_data')
+                has_callback = callback_value and isinstance(callback_value, str) and callback_value.strip()
+                
+                # ✅ VALIDAÇÃO: Botão de compra precisa de price > 0 E description não vazio
+                # Se tem price mas não é válido (> 0), ou se tem description mas não é válido (não vazio)
+                # mas um deles está presente, é um erro de configuração
+                if price_value is not None and price_value != 0 and not has_price:
+                    # Price existe mas não é válido (negativo ou tipo errado)
+                    logger.error(f"❌ Botão {idx} tem price inválido: {price_value}")
+                    return jsonify({
+                        'error': f'Botão {idx} tem "price" inválido. Deve ser um número maior que 0'
+                    }), 400
+                
+                if description_value and not has_description:
+                    # Description existe mas está vazio
+                    logger.error(f"❌ Botão {idx} tem description vazio: {json.dumps(btn)}")
+                    return jsonify({
+                        'error': f'Botão {idx} tem "description" mas está vazio. Preencha a descrição ou remova o campo'
+                    }), 400
+                
+                # ✅ VALIDAÇÃO: Se tem price válido, DEVE ter description válido
                 if has_price and not has_description:
-                    logger.error(f"❌ Botão {idx} tem price mas não tem description: {json.dumps(btn)}")
+                    logger.error(f"❌ Botão {idx} tem price válido ({price_value}) mas não tem description válido: {json.dumps(btn)}")
                     return jsonify({
-                        'error': f'Botão {idx} tem "price" mas não tem "description"'
+                        'error': f'Botão {idx} tem "price" ({price_value}) mas não tem "description" preenchido',
+                        'details': f'Botão recebido: {json.dumps(btn)}',
+                        'buttons_error': f'Botão {idx + 1} tem preço configurado mas falta a descrição do produto. Adicione uma descrição ou remova o preço.'
                     }), 400
                 
+                # ✅ VALIDAÇÃO: Se tem description válido, DEVE ter price válido
                 if has_description and not has_price:
-                    logger.error(f"❌ Botão {idx} tem description mas não tem price: {json.dumps(btn)}")
+                    logger.error(f"❌ Botão {idx} tem description válido mas não tem price válido: {json.dumps(btn)}")
                     return jsonify({
-                        'error': f'Botão {idx} tem "description" mas não tem "price"'
+                        'error': f'Botão {idx} tem "description" mas não tem "price" válido (deve ser > 0)',
+                        'details': f'Botão recebido: {json.dumps(btn)}',
+                        'buttons_error': f'Botão {idx + 1} tem descrição mas falta o preço. Adicione um preço maior que 0 ou remova a descrição.'
                     }), 400
                 
-                # Deve ter pelo menos um tipo válido
+                # ✅ VALIDAÇÃO: Deve ter pelo menos um tipo válido
                 if not (has_url or has_callback or (has_price and has_description)):
                     logger.error(f"❌ Botão {idx} sem tipo válido: {json.dumps(btn)}")
                     return jsonify({
-                        'error': f'Botão {idx} deve ter "url", "callback_data" ou "price"+"description"'
+                        'error': f'Botão {idx} deve ter "url", "callback_data" ou "price" (> 0) + "description" (não vazio)',
+                        'details': f'Botão recebido: {json.dumps(btn)}',
+                        'buttons_error': f'Botão {idx + 1} está inválido. Verifique se tem texto e pelo menos um tipo válido (URL, callback ou preço + descrição).'
                     }), 400
         
         # ✅ LOG ANTES DE SALVAR
@@ -2782,21 +2819,61 @@ def update_remarketing_campaign(bot_id, campaign_id):
     
     # Atualizar outros campos
     if 'message' in data:
-        campaign.message = data.get('message')
+        message = data.get('message', '').strip()
+        if len(message) > 10000:  # ✅ VALIDAÇÃO: Limite razoável para mensagem
+            return jsonify({'error': 'Mensagem muito longa (máximo 10000 caracteres)'}), 400
+        campaign.message = message
+    
     if 'media_url' in data:
-        campaign.media_url = data.get('media_url')
+        media_url = data.get('media_url')
+        # ✅ VALIDAÇÃO: Se fornecido, deve ser URL válida
+        if media_url and media_url.strip() and not media_url.startswith(('http://', 'https://', 'tg://')):
+            return jsonify({'error': 'URL de mídia inválida. Deve começar com http://, https:// ou tg://'}), 400
+        campaign.media_url = media_url if media_url and media_url.strip() else None
+    
     if 'media_type' in data:
-        campaign.media_type = data.get('media_type')
+        media_type = data.get('media_type')
+        # ✅ VALIDAÇÃO: Tipo deve ser válido
+        if media_type and media_type not in ['photo', 'video', 'audio']:
+            return jsonify({'error': 'Tipo de mídia inválido. Deve ser: photo, video ou audio'}), 400
+        campaign.media_type = media_type or 'video'
+    
     if 'audio_enabled' in data:
-        campaign.audio_enabled = data.get('audio_enabled', False)
+        campaign.audio_enabled = bool(data.get('audio_enabled', False))
+    
     if 'audio_url' in data:
-        campaign.audio_url = data.get('audio_url', '')
+        audio_url = data.get('audio_url', '')
+        # ✅ VALIDAÇÃO: Se fornecido, deve ser URL válida
+        if audio_url and audio_url.strip() and not audio_url.startswith(('http://', 'https://', 'tg://')):
+            return jsonify({'error': 'URL de áudio inválida. Deve começar com http://, https:// ou tg://'}), 400
+        campaign.audio_url = audio_url.strip() if audio_url else ''
+    
     if 'target_audience' in data:
         campaign.target_audience = data.get('target_audience')
+    
     if 'days_since_last_contact' in data:
-        campaign.days_since_last_contact = int(data.get('days_since_last_contact', 0))
+        days_value = data.get('days_since_last_contact', 0)
+        try:
+            days_int = int(days_value)
+            if days_int < 0 or days_int > 365:
+                return jsonify({'error': 'Dias desde último contato deve ser entre 0 e 365'}), 400
+            campaign.days_since_last_contact = days_int
+        except (ValueError, TypeError):
+            return jsonify({'error': 'Dias desde último contato deve ser um número válido'}), 400
+    
     if 'exclude_buyers' in data:
-        campaign.exclude_buyers = data.get('exclude_buyers', False)
+        campaign.exclude_buyers = bool(data.get('exclude_buyers', False))
+    
+    # ✅ CORREÇÃO: Processar cooldown_hours se fornecido
+    if 'cooldown_hours' in data:
+        cooldown_value = data.get('cooldown_hours', 24)
+        try:
+            cooldown_int = int(cooldown_value)
+            if cooldown_int < 1 or cooldown_int > 720:  # Entre 1 hora e 30 dias
+                return jsonify({'error': 'Cooldown deve ser entre 1 e 720 horas (30 dias)'}), 400
+            campaign.cooldown_hours = cooldown_int
+        except (ValueError, TypeError):
+            return jsonify({'error': 'Cooldown deve ser um número válido'}), 400
     
     # ✅ V2.0: Processar scheduled_at se fornecido
     if 'scheduled_at' in data:

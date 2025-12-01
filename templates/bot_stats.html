@@ -408,7 +408,7 @@ if (typeof window.botStatsApp === 'undefined') {
             resendingCampaign: false,
             showEditModal: false,
             editingCampaign: false,
-            editCampaignData: { message: '', media_url: '', media_type: 'video', audio_enabled: false, audio_url: '', buttons: [], audience_segment: 'all_users', days_since_last_contact: 0 },
+            editCampaignData: { message: '', media_url: '', media_type: 'video', audio_enabled: false, audio_url: '', buttons: [], audience_segment: 'all_users', days_since_last_contact: 0, cooldown_hours: 24 },
             init: function() { console.log('⏳ Carregando dados...'); }
         };
     };
@@ -2649,7 +2649,8 @@ window.botStatsApp = function botStatsApp() {
                 audio_url: campaign.audio_url || '',
                 buttons: buttonsArray,  // ✅ Array completo com todos os campos (price, description, url, etc)
                 audience_segment: audience_segment,
-                days_since_last_contact: campaign.days_since_last_contact || 0
+                days_since_last_contact: campaign.days_since_last_contact || 0,
+                cooldown_hours: campaign.cooldown_hours || 24  // ✅ CORREÇÃO: Carregar cooldown_hours
             };
         },
         
@@ -2695,16 +2696,75 @@ window.botStatsApp = function botStatsApp() {
                             return null; // Filtrar depois
                         }
                         
-                        // ✅ Garantir tipos corretos (preservar todos os outros campos)
-                        if (buttonCopy.price !== undefined && buttonCopy.price !== null) {
-                            buttonCopy.price = parseFloat(buttonCopy.price) || 0;
-                        }
-                        
                         // ✅ Garantir que text seja string
                         buttonCopy.text = buttonCopy.text.toString().trim();
                         
+                        // ✅ CORREÇÃO CRÍTICA: Remover campos vazios/inválidos antes de enviar
+                        // Se price é 0 ou inválido, remover do objeto (não é botão de compra)
+                        if (buttonCopy.price !== undefined && buttonCopy.price !== null) {
+                            const priceFloat = parseFloat(buttonCopy.price);
+                            if (isNaN(priceFloat) || priceFloat <= 0) {
+                                // Price inválido ou zero - remover (não é botão de compra)
+                                delete buttonCopy.price;
+                            } else {
+                                // Price válido - manter
+                                buttonCopy.price = priceFloat;
+                            }
+                        }
+                        
+                        // Se description está vazio, remover do objeto
+                        if (buttonCopy.description !== undefined && buttonCopy.description !== null) {
+                            const descStr = buttonCopy.description.toString().trim();
+                            if (!descStr) {
+                                // Description vazio - remover
+                                delete buttonCopy.description;
+                            } else {
+                                // Description válido - manter
+                                buttonCopy.description = descStr;
+                            }
+                        }
+                        
+                        // ✅ Limpar campos vazios de URL e callback também
+                        if (buttonCopy.url !== undefined && (!buttonCopy.url || !buttonCopy.url.toString().trim())) {
+                            delete buttonCopy.url;
+                        } else if (buttonCopy.url) {
+                            buttonCopy.url = buttonCopy.url.toString().trim();
+                        }
+                        
+                        if (buttonCopy.callback_data !== undefined && (!buttonCopy.callback_data || !buttonCopy.callback_data.toString().trim())) {
+                            delete buttonCopy.callback_data;
+                        } else if (buttonCopy.callback_data) {
+                            buttonCopy.callback_data = buttonCopy.callback_data.toString().trim();
+                        }
+                        
                         return buttonCopy;
-                    }).filter(btn => btn !== null && btn.text && btn.text.trim()); // Filtrar apenas botões com texto válido
+                    }).filter(btn => {
+                        // ✅ FILTRO 1: Remover botões nulos ou sem texto
+                        if (btn === null || !btn.text || !btn.text.trim()) {
+                            return false;
+                        }
+                        
+                        // ✅ FILTRO 2: Validar que botão tem pelo menos um tipo válido APÓS limpeza
+                        const hasPrice = btn.price && typeof btn.price === 'number' && btn.price > 0;
+                        const hasDescription = btn.description && typeof btn.description === 'string' && btn.description.trim();
+                        const hasUrl = btn.url && typeof btn.url === 'string' && btn.url.trim();
+                        const hasCallback = btn.callback_data && typeof btn.callback_data === 'string' && btn.callback_data.trim();
+                        
+                        // Deve ter pelo menos um tipo válido: URL, callback_data ou price+description
+                        const isValid = hasUrl || hasCallback || (hasPrice && hasDescription);
+                        
+                        if (!isValid) {
+                            console.warn('⚠️ Botão sem tipo válido será ignorado:', {
+                                text: btn.text,
+                                hasPrice: hasPrice,
+                                hasDescription: hasDescription,
+                                hasUrl: hasUrl,
+                                hasCallback: hasCallback
+                            });
+                        }
+                        
+                        return isValid;
+                    });
                 }
                 
                 console.log('💾 Salvando campanha com botões:', {
@@ -2730,7 +2790,8 @@ window.botStatsApp = function botStatsApp() {
                     buttons: buttonsToSave,  // ✅ Array completo com TODOS os campos preservados
                     target_audience: target_audience,
                     days_since_last_contact: parseInt(this.editCampaignData.days_since_last_contact) || 0,
-                    exclude_buyers: false  // Será determinado pelo target_audience
+                    exclude_buyers: false,  // Será determinado pelo target_audience
+                    cooldown_hours: this.editCampaignData.cooldown_hours || 24  // ✅ CORREÇÃO: Preservar cooldown_hours
                 };
                 
                 const csrfToken = this.getCsrfToken();
@@ -2748,7 +2809,16 @@ window.botStatsApp = function botStatsApp() {
                     body: JSON.stringify(campaignData)
                 });
                 
-                const data = await response.json();
+                // ✅ CORREÇÃO CRÍTICA: Tratamento robusto de resposta
+                let data;
+                try {
+                    const responseText = await response.text();
+                    data = responseText ? JSON.parse(responseText) : {};
+                } catch (parseError) {
+                    console.error('❌ Erro ao parsear resposta JSON:', parseError, 'Resposta:', response);
+                    alert('❌ Erro ao processar resposta do servidor. Tente novamente.');
+                    return;
+                }
                 
                 if (response.ok) {
                     alert('✅ Campanha atualizada com sucesso!');
@@ -2756,14 +2826,37 @@ window.botStatsApp = function botStatsApp() {
                     // Fechar modal
                     this.showEditModal = false;
                     
-                    // Recarregar dados
+                    // Recarregar dados para garantir sincronização
                     await this.loadStats();
                 } else {
-                    alert('❌ Erro ao atualizar campanha: ' + (data.error || 'Erro desconhecido'));
+                    // ✅ CORREÇÃO: Mensagem de erro mais clara e detalhada
+                    const errorMsg = data.error || `Erro HTTP ${response.status}`;
+                    const errorDetails = data.details ? `\n\nDetalhes: ${data.details}` : '';
+                    const buttonsError = data.buttons_error ? `\n\nErro nos botões: ${data.buttons_error}` : '';
+                    
+                    alert(`❌ Erro ao atualizar campanha:\n${errorMsg}${errorDetails}${buttonsError}`);
+                    
+                    console.error('❌ Erro detalhado:', {
+                        status: response.status,
+                        statusText: response.statusText,
+                        error: data.error,
+                        details: data.details,
+                        buttons_error: data.buttons_error,
+                        fullResponse: data
+                    });
                 }
             } catch (error) {
+                // ✅ CORREÇÃO: Tratamento de erro de rede ou sistema
                 console.error('❌ Erro ao salvar edições:', error);
-                alert('❌ Erro ao salvar edições: ' + error.message);
+                
+                let errorMessage = 'Erro ao salvar edições';
+                if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                    errorMessage = 'Erro de conexão. Verifique sua internet e tente novamente.';
+                } else if (error.message) {
+                    errorMessage = `Erro: ${error.message}`;
+                }
+                
+                alert(`❌ ${errorMessage}`);
             } finally {
                 this.editingCampaign = false;
             }
