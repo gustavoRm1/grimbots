@@ -2799,7 +2799,8 @@ def general_remarketing():
         audio_url = data.get('audio_url', '')
         buttons = data.get('buttons', [])
         days_since_last_contact = int(data.get('days_since_last_contact', 7))
-        exclude_buyers = data.get('exclude_buyers', False)
+        exclude_buyers = data.get('exclude_buyers', False)  # Mantido para compatibilidade
+        audience_segment = data.get('audience_segment', 'all_users')  # ✅ V2.0: Nova segmentação avançada
         
         # Validar botões (se fornecidos)
         if buttons:
@@ -2845,15 +2846,29 @@ def general_remarketing():
         
         # Preparar todas as campanhas primeiro
         for bot in bots:
-            # Contar usuários elegíveis
+            # ✅ V2.0: Contar usuários elegíveis usando nova segmentação
             eligible_count = bot_manager.count_eligible_leads(
                 bot_id=bot.id,
-                target_audience='non_buyers' if exclude_buyers else 'all',
+                target_audience='non_buyers' if exclude_buyers else 'all',  # Mantido para compatibilidade
                 days_since_last_contact=days_since_last_contact,
-                exclude_buyers=exclude_buyers
+                exclude_buyers=exclude_buyers,  # Mantido para compatibilidade
+                audience_segment=audience_segment  # ✅ V2.0: Nova segmentação avançada
             )
             
             if eligible_count > 0:
+                # ✅ V2.0: Converter audience_segment para target_audience (compatibilidade)
+                # O campo target_audience será usado internamente, mas audience_segment é o novo padrão
+                target_audience_mapping = {
+                    'all_users': 'all',
+                    'buyers': 'buyers',
+                    'pix_generated': 'abandoned_cart',
+                    'downsell_buyers': 'downsell_buyers',
+                    'order_bump_buyers': 'order_bump_buyers',
+                    'upsell_buyers': 'upsell_buyers',
+                    'remarketing_buyers': 'remarketing_buyers'
+                }
+                target_audience = target_audience_mapping.get(audience_segment, 'all')
+                
                 campaign = RemarketingCampaign(
                     bot_id=bot.id,
                     name=f"Remarketing Geral - {get_brazil_time().strftime('%d/%m/%Y %H:%M')}",
@@ -2863,13 +2878,17 @@ def general_remarketing():
                     audio_enabled=audio_enabled,
                     audio_url=audio_url,
                     buttons=buttons_json,
-                    target_audience='non_buyers' if exclude_buyers else 'all',
+                    target_audience=target_audience,  # ✅ V2.0: Mapeado de audience_segment
                     days_since_last_contact=days_since_last_contact,
-                    exclude_buyers=exclude_buyers,
+                    exclude_buyers=exclude_buyers,  # Mantido para compatibilidade
                     cooldown_hours=6,  # Fixo em 6 horas
                     scheduled_at=scheduled_at,  # ✅ V2.0
                     status=status  # ✅ V2.0: 'draft' ou 'scheduled'
                 )
+                
+                # ✅ V2.0: Armazenar audience_segment como metadata (usando campo existente ou JSON)
+                # Nota: Se houver campo específico para isso no futuro, usar aqui
+                logger.info(f"📊 Campanha criada com segmentação: {audience_segment} → {target_audience}")
                 campaigns_to_create.append((campaign, bot, eligible_count))
         
         # ✅ CORREÇÃO: Salvar todas as campanhas com retry logic para database locked

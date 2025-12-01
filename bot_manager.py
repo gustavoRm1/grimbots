@@ -9531,15 +9531,24 @@ Seu pagamento ainda não foi confirmado.
             return False
     
     def count_eligible_leads(self, bot_id: int, target_audience: str = 'non_buyers', 
-                            days_since_last_contact: int = 3, exclude_buyers: bool = True) -> int:
+                            days_since_last_contact: int = 3, exclude_buyers: bool = True,
+                            audience_segment: str = None) -> int:
         """
         Conta quantos leads são elegíveis para remarketing
         
         Args:
             bot_id: ID do bot
-            target_audience: Tipo de público (all, non_buyers, abandoned_cart, inactive)
+            target_audience: Tipo de público (all, non_buyers, abandoned_cart, inactive) - LEGADO
             days_since_last_contact: Dias mínimos sem contato
-            exclude_buyers: Excluir quem já comprou
+            exclude_buyers: Excluir quem já comprou - LEGADO
+            audience_segment: ✅ V2.0 - Nova segmentação avançada:
+                - 'all_users': Todos os usuários
+                - 'buyers': Todos que compraram
+                - 'pix_generated': Todos que geraram PIX
+                - 'downsell_buyers': Todos que compraram via downsell
+                - 'order_bump_buyers': Todos que compraram com order bump
+                - 'upsell_buyers': Todos que compraram via upsell
+                - 'remarketing_buyers': Todos que compraram via remarketing
             
         Returns:
             Quantidade de leads elegíveis
@@ -9568,34 +9577,123 @@ Seu pagamento ainda não foi confirmado.
             if blacklist_ids:
                 query = query.filter(~BotUser.telegram_user_id.in_(blacklist_ids))
             
-            # Filtro: excluir compradores
-            if exclude_buyers:
-                buyer_ids = db.session.query(Payment.customer_user_id).filter(
-                    Payment.bot_id == bot_id,
-                    Payment.status == 'paid'
-                ).distinct().all()
-                buyer_ids = [b[0] for b in buyer_ids if b[0]]
-                if buyer_ids:
-                    query = query.filter(~BotUser.telegram_user_id.in_(buyer_ids))
-            
-            # Filtro por tipo de público
-            if target_audience == 'abandoned_cart':
-                # Usuários que geraram PIX mas não pagaram
-                abandoned_ids = db.session.query(Payment.customer_user_id).filter(
-                    Payment.bot_id == bot_id,
-                    Payment.status == 'pending'
-                ).distinct().all()
-                abandoned_ids = [b[0] for b in abandoned_ids if b[0]]
-                if abandoned_ids:
-                    query = query.filter(BotUser.telegram_user_id.in_(abandoned_ids))
+            # ✅ V2.0: NOVA SEGMENTAÇÃO AVANÇADA
+            if audience_segment:
+                if audience_segment == 'all_users':
+                    # Todos os usuários (sem filtro adicional de compra)
+                    pass  # Usa query base
+                
+                elif audience_segment == 'buyers':
+                    # Todos que compraram (status = 'paid')
+                    buyer_ids = db.session.query(Payment.customer_user_id).filter(
+                        Payment.bot_id == bot_id,
+                        Payment.status == 'paid'
+                    ).distinct().all()
+                    buyer_ids = [b[0] for b in buyer_ids if b[0]]
+                    if buyer_ids:
+                        query = query.filter(BotUser.telegram_user_id.in_(buyer_ids))
+                    else:
+                        return 0
+                
+                elif audience_segment == 'pix_generated':
+                    # Todos que geraram PIX (status = 'pending')
+                    pix_ids = db.session.query(Payment.customer_user_id).filter(
+                        Payment.bot_id == bot_id,
+                        Payment.status == 'pending'
+                    ).distinct().all()
+                    pix_ids = [b[0] for b in pix_ids if b[0]]
+                    if pix_ids:
+                        query = query.filter(BotUser.telegram_user_id.in_(pix_ids))
+                    else:
+                        return 0
+                
+                elif audience_segment == 'downsell_buyers':
+                    # Todos que compraram via downsell
+                    downsell_ids = db.session.query(Payment.customer_user_id).filter(
+                        Payment.bot_id == bot_id,
+                        Payment.status == 'paid',
+                        Payment.is_downsell == True
+                    ).distinct().all()
+                    downsell_ids = [b[0] for b in downsell_ids if b[0]]
+                    if downsell_ids:
+                        query = query.filter(BotUser.telegram_user_id.in_(downsell_ids))
+                    else:
+                        return 0
+                
+                elif audience_segment == 'order_bump_buyers':
+                    # Todos que compraram com order bump
+                    orderbump_ids = db.session.query(Payment.customer_user_id).filter(
+                        Payment.bot_id == bot_id,
+                        Payment.status == 'paid',
+                        Payment.order_bump_accepted == True
+                    ).distinct().all()
+                    orderbump_ids = [b[0] for b in orderbump_ids if b[0]]
+                    if orderbump_ids:
+                        query = query.filter(BotUser.telegram_user_id.in_(orderbump_ids))
+                    else:
+                        return 0
+                
+                elif audience_segment == 'upsell_buyers':
+                    # Todos que compraram via upsell
+                    upsell_ids = db.session.query(Payment.customer_user_id).filter(
+                        Payment.bot_id == bot_id,
+                        Payment.status == 'paid',
+                        Payment.is_upsell == True
+                    ).distinct().all()
+                    upsell_ids = [b[0] for b in upsell_ids if b[0]]
+                    if upsell_ids:
+                        query = query.filter(BotUser.telegram_user_id.in_(upsell_ids))
+                    else:
+                        return 0
+                
+                elif audience_segment == 'remarketing_buyers':
+                    # Todos que compraram via remarketing
+                    remarketing_ids = db.session.query(Payment.customer_user_id).filter(
+                        Payment.bot_id == bot_id,
+                        Payment.status == 'paid',
+                        Payment.is_remarketing == True
+                    ).distinct().all()
+                    remarketing_ids = [b[0] for b in remarketing_ids if b[0]]
+                    if remarketing_ids:
+                        query = query.filter(BotUser.telegram_user_id.in_(remarketing_ids))
+                    else:
+                        return 0
+                
                 else:
+                    # Segmento desconhecido - retorna 0
+                    logger.warning(f"⚠️ Segmento desconhecido: {audience_segment}")
                     return 0
             
-            elif target_audience == 'inactive':
-                # Inativos há 7+ dias
-                from models import get_brazil_time
-                inactive_limit = get_brazil_time() - timedelta(days=7)
-                query = query.filter(BotUser.last_interaction <= inactive_limit)
+            else:
+                # ✅ COMPATIBILIDADE: Lógica antiga (legado)
+                # Filtro: excluir compradores
+                if exclude_buyers:
+                    buyer_ids = db.session.query(Payment.customer_user_id).filter(
+                        Payment.bot_id == bot_id,
+                        Payment.status == 'paid'
+                    ).distinct().all()
+                    buyer_ids = [b[0] for b in buyer_ids if b[0]]
+                    if buyer_ids:
+                        query = query.filter(~BotUser.telegram_user_id.in_(buyer_ids))
+                
+                # Filtro por tipo de público
+                if target_audience == 'abandoned_cart':
+                    # Usuários que geraram PIX mas não pagaram
+                    abandoned_ids = db.session.query(Payment.customer_user_id).filter(
+                        Payment.bot_id == bot_id,
+                        Payment.status == 'pending'
+                    ).distinct().all()
+                    abandoned_ids = [b[0] for b in abandoned_ids if b[0]]
+                    if abandoned_ids:
+                        query = query.filter(BotUser.telegram_user_id.in_(abandoned_ids))
+                    else:
+                        return 0
+                
+                elif target_audience == 'inactive':
+                    # Inativos há 7+ dias
+                    from models import get_brazil_time
+                    inactive_limit = get_brazil_time() - timedelta(days=7)
+                    query = query.filter(BotUser.last_interaction <= inactive_limit)
             
             return query.count()
     
@@ -9645,8 +9743,126 @@ Seu pagamento ainda não foi confirmado.
                     if blacklist_ids:
                         query = query.filter(~BotUser.telegram_user_id.in_(blacklist_ids))
                     
-                    # Excluir compradores
-                    if campaign.exclude_buyers:
+                    # ✅ V2.0: NOVA SEGMENTAÇÃO AVANÇADA
+                    # Verificar se é segmentação nova (valores mapeados do app.py) ou legado
+                    target_audience = campaign.target_audience
+                    
+                    # Mapeamento reverso: target_audience → audience_segment
+                    # Valores novos: buyers, downsell_buyers, order_bump_buyers, upsell_buyers, remarketing_buyers
+                    # Valores legado: all, non_buyers, abandoned_cart, inactive
+                    
+                    if target_audience == 'all':
+                        # Todos os usuários (sem filtro adicional de compra)
+                        pass  # Usa query base
+                    
+                    elif target_audience == 'buyers':
+                        # Todos que compraram (status = 'paid')
+                        buyer_ids = db.session.query(Payment.customer_user_id).filter(
+                            Payment.bot_id == campaign.bot_id,
+                            Payment.status == 'paid'
+                        ).distinct().all()
+                        buyer_ids = [b[0] for b in buyer_ids if b[0]]
+                        if buyer_ids:
+                            query = query.filter(BotUser.telegram_user_id.in_(buyer_ids))
+                        else:
+                            leads = []
+                            campaign.total_targets = 0
+                            db.session.commit()
+                            logger.info(f"🎯 0 leads elegíveis (nenhum comprador encontrado)")
+                            return
+                    
+                    elif target_audience == 'downsell_buyers':
+                        # Todos que compraram via downsell
+                        downsell_ids = db.session.query(Payment.customer_user_id).filter(
+                            Payment.bot_id == campaign.bot_id,
+                            Payment.status == 'paid',
+                            Payment.is_downsell == True
+                        ).distinct().all()
+                        downsell_ids = [b[0] for b in downsell_ids if b[0]]
+                        if downsell_ids:
+                            query = query.filter(BotUser.telegram_user_id.in_(downsell_ids))
+                        else:
+                            leads = []
+                            campaign.total_targets = 0
+                            db.session.commit()
+                            logger.info(f"🎯 0 leads elegíveis (nenhum comprador via downsell encontrado)")
+                            return
+                    
+                    elif target_audience == 'order_bump_buyers':
+                        # Todos que compraram com order bump
+                        orderbump_ids = db.session.query(Payment.customer_user_id).filter(
+                            Payment.bot_id == campaign.bot_id,
+                            Payment.status == 'paid',
+                            Payment.order_bump_accepted == True
+                        ).distinct().all()
+                        orderbump_ids = [b[0] for b in orderbump_ids if b[0]]
+                        if orderbump_ids:
+                            query = query.filter(BotUser.telegram_user_id.in_(orderbump_ids))
+                        else:
+                            leads = []
+                            campaign.total_targets = 0
+                            db.session.commit()
+                            logger.info(f"🎯 0 leads elegíveis (nenhum comprador com order bump encontrado)")
+                            return
+                    
+                    elif target_audience == 'upsell_buyers':
+                        # Todos que compraram via upsell
+                        upsell_ids = db.session.query(Payment.customer_user_id).filter(
+                            Payment.bot_id == campaign.bot_id,
+                            Payment.status == 'paid',
+                            Payment.is_upsell == True
+                        ).distinct().all()
+                        upsell_ids = [b[0] for b in upsell_ids if b[0]]
+                        if upsell_ids:
+                            query = query.filter(BotUser.telegram_user_id.in_(upsell_ids))
+                        else:
+                            leads = []
+                            campaign.total_targets = 0
+                            db.session.commit()
+                            logger.info(f"🎯 0 leads elegíveis (nenhum comprador via upsell encontrado)")
+                            return
+                    
+                    elif target_audience == 'remarketing_buyers':
+                        # Todos que compraram via remarketing
+                        remarketing_ids = db.session.query(Payment.customer_user_id).filter(
+                            Payment.bot_id == campaign.bot_id,
+                            Payment.status == 'paid',
+                            Payment.is_remarketing == True
+                        ).distinct().all()
+                        remarketing_ids = [b[0] for b in remarketing_ids if b[0]]
+                        if remarketing_ids:
+                            query = query.filter(BotUser.telegram_user_id.in_(remarketing_ids))
+                        else:
+                            leads = []
+                            campaign.total_targets = 0
+                            db.session.commit()
+                            logger.info(f"🎯 0 leads elegíveis (nenhum comprador via remarketing encontrado)")
+                            return
+                    
+                    elif target_audience == 'abandoned_cart':
+                        # ✅ COMPATIBILIDADE LEGADO: Usuários que geraram PIX mas não pagaram
+                        abandoned_ids = db.session.query(Payment.customer_user_id).filter(
+                            Payment.bot_id == campaign.bot_id,
+                            Payment.status == 'pending'
+                        ).distinct().all()
+                        abandoned_ids = [b[0] for b in abandoned_ids if b[0]]
+                        if abandoned_ids:
+                            query = query.filter(BotUser.telegram_user_id.in_(abandoned_ids))
+                        else:
+                            leads = []
+                            campaign.total_targets = 0
+                            db.session.commit()
+                            logger.info(f"🎯 0 leads elegíveis (nenhum PIX gerado encontrado)")
+                            return
+                    
+                    elif target_audience == 'inactive':
+                        # ✅ COMPATIBILIDADE LEGADO: Inativos há 7+ dias
+                        from models import get_brazil_time
+                        inactive_limit = get_brazil_time() - timedelta(days=7)
+                        query = query.filter(BotUser.last_interaction <= inactive_limit)
+                    
+                    elif target_audience == 'non_buyers':
+                        # ✅ COMPATIBILIDADE LEGADO: Excluir compradores
                         buyer_ids = db.session.query(Payment.customer_user_id).filter(
                             Payment.bot_id == campaign.bot_id,
                             Payment.status == 'paid'
@@ -9655,20 +9871,16 @@ Seu pagamento ainda não foi confirmado.
                         if buyer_ids:
                             query = query.filter(~BotUser.telegram_user_id.in_(buyer_ids))
                     
-                    # Segmentação por público
-                    if campaign.target_audience == 'abandoned_cart':
-                        abandoned_ids = db.session.query(Payment.customer_user_id).filter(
-                            Payment.bot_id == campaign.bot_id,
-                            Payment.status == 'pending'
-                        ).distinct().all()
-                        abandoned_ids = [b[0] for b in abandoned_ids if b[0]]
-                        if abandoned_ids:
-                            query = query.filter(BotUser.telegram_user_id.in_(abandoned_ids))
-                    
-                    elif campaign.target_audience == 'inactive':
-                        from models import get_brazil_time
-                        inactive_limit = get_brazil_time() - timedelta(days=7)
-                        query = query.filter(BotUser.last_interaction <= inactive_limit)
+                    else:
+                        # ✅ COMPATIBILIDADE: Se exclude_buyers estiver marcado, aplicar filtro antigo
+                        if campaign.exclude_buyers:
+                            buyer_ids = db.session.query(Payment.customer_user_id).filter(
+                                Payment.bot_id == campaign.bot_id,
+                                Payment.status == 'paid'
+                            ).distinct().all()
+                            buyer_ids = [b[0] for b in buyer_ids if b[0]]
+                            if buyer_ids:
+                                query = query.filter(~BotUser.telegram_user_id.in_(buyer_ids))
                     
                     leads = query.all()
                     campaign.total_targets = len(leads)

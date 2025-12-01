@@ -1365,35 +1365,157 @@
                         </div>
                     </div>
                     
-                    <!-- Filtros de Segmentação -->
+                    <!-- ✅ V2.0: Filtros de Segmentação Avançada -->
                     <div class="mb-6 p-4 rounded-xl" style="background: var(--border-subtle); border: 1px solid var(--border-accent);">
                         <label class="block text-sm font-bold text-textPrimary mb-3">
                             <i class="fas fa-filter mr-2 text-accent500"></i>
                             Segmentação de Público
                         </label>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-xs text-textSecondary mb-2">Dias desde último contato</label>
-                                <input type="number" 
-                                       x-model.number="generalRemarketing.days_since_last_contact" 
-                                       min="0"
-                                       class="w-full px-4 py-2 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary focus:outline-none focus:ring-2 focus:ring-accent500"
-                                       placeholder="7">
-                                <div class="mt-2 p-2 rounded-lg bg-bg900 border border-white border-opacity-5">
-                                    <p class="text-xs text-textSecondary">
-                                        <i class="fas fa-info-circle mr-1 text-accent500"></i>
-                                        <span x-text="generalRemarketing.days_since_last_contact == 0 ? 'Todos os usuários (sem filtro de inatividade)' : 'Apenas usuários inativos há ' + generalRemarketing.days_since_last_contact + ' dia(s)'"></span>
-                                    </p>
-                                </div>
-                            </div>
-                            <div class="flex items-center">
-                                <label class="flex items-center gap-3 cursor-pointer">
-                                    <input type="checkbox" 
-                                           x-model="generalRemarketing.exclude_buyers"
-                                           class="w-4 h-4 bg-bg900 border-white border-opacity-10 rounded focus:ring-accent500"
+                        
+                        <!-- Opções de Segmentação (Radio Buttons) -->
+                        <div class="mb-4">
+                            <label class="block text-xs font-semibold text-textSecondary mb-3">
+                                <i class="fas fa-users mr-1 text-accent500"></i>
+                                Selecione o público-alvo:
+                            </label>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <!-- Todos Usuários -->
+                                <label class="flex items-start gap-3 p-3 bg-bg900 border-2 rounded-lg cursor-pointer transition-all"
+                                       :class="generalRemarketing.audience_segment === 'all_users' ? 'border-accent500 bg-accent500 bg-opacity-10' : 'border-white border-opacity-10'">
+                                    <input type="radio" 
+                                           x-model="generalRemarketing.audience_segment" 
+                                           value="all_users"
+                                           class="mt-1 w-4 h-4"
                                            style="accent-color: var(--brand-gold-500);">
-                                    <span class="text-sm text-textPrimary">Excluir quem já comprou</span>
+                                    <div class="flex-1">
+                                        <div class="flex items-center gap-2 mb-1">
+                                            <i class="fas fa-users text-accent500"></i>
+                                            <span class="text-sm font-bold text-textPrimary">Todos os Usuários</span>
+                                        </div>
+                                        <p class="text-xs text-textSecondary">Enviar para todos os usuários do bot</p>
+                                    </div>
                                 </label>
+
+                                <!-- Usuários que Comprou -->
+                                <label class="flex items-start gap-3 p-3 bg-bg900 border-2 rounded-lg cursor-pointer transition-all"
+                                       :class="generalRemarketing.audience_segment === 'buyers' ? 'border-accent500 bg-accent500 bg-opacity-10' : 'border-white border-opacity-10'">
+                                    <input type="radio" 
+                                           x-model="generalRemarketing.audience_segment" 
+                                           value="buyers"
+                                           class="mt-1 w-4 h-4"
+                                           style="accent-color: var(--brand-gold-500);">
+                                    <div class="flex-1">
+                                        <div class="flex items-center gap-2 mb-1">
+                                            <i class="fas fa-check-circle text-green-500"></i>
+                                            <span class="text-sm font-bold text-textPrimary">Todos que Comprou</span>
+                                        </div>
+                                        <p class="text-xs text-textSecondary">Apenas usuários que já efetivaram compras</p>
+                                    </div>
+                                </label>
+
+                                <!-- Usuários que Gerou PIX -->
+                                <label class="flex items-start gap-3 p-3 bg-bg900 border-2 rounded-lg cursor-pointer transition-all"
+                                       :class="generalRemarketing.audience_segment === 'pix_generated' ? 'border-accent500 bg-accent500 bg-opacity-10' : 'border-white border-opacity-10'">
+                                    <input type="radio" 
+                                           x-model="generalRemarketing.audience_segment" 
+                                           value="pix_generated"
+                                           class="mt-1 w-4 h-4"
+                                           style="accent-color: var(--brand-gold-500);">
+                                    <div class="flex-1">
+                                        <div class="flex items-center gap-2 mb-1">
+                                            <i class="fas fa-qrcode text-yellow-500"></i>
+                                            <span class="text-sm font-bold text-textPrimary">Todos que Gerou PIX</span>
+                                        </div>
+                                        <p class="text-xs text-textSecondary">Usuários que geraram PIX mas não pagaram</p>
+                                    </div>
+                                </label>
+
+                                <!-- Comprou pelo Downsell -->
+                                <label class="flex items-start gap-3 p-3 bg-bg900 border-2 rounded-lg cursor-pointer transition-all"
+                                       :class="generalRemarketing.audience_segment === 'downsell_buyers' ? 'border-accent500 bg-accent500 bg-opacity-10' : 'border-white border-opacity-10'">
+                                    <input type="radio" 
+                                           x-model="generalRemarketing.audience_segment" 
+                                           value="downsell_buyers"
+                                           class="mt-1 w-4 h-4"
+                                           style="accent-color: var(--brand-gold-500);">
+                                    <div class="flex-1">
+                                        <div class="flex items-center gap-2 mb-1">
+                                            <i class="fas fa-arrow-down text-red-500"></i>
+                                            <span class="text-sm font-bold text-textPrimary">Comprou pelo Downsell</span>
+                                        </div>
+                                        <p class="text-xs text-textSecondary">Usuários que compraram via downsell</p>
+                                    </div>
+                                </label>
+
+                                <!-- Comprou com Order Bump -->
+                                <label class="flex items-start gap-3 p-3 bg-bg900 border-2 rounded-lg cursor-pointer transition-all"
+                                       :class="generalRemarketing.audience_segment === 'order_bump_buyers' ? 'border-accent500 bg-accent500 bg-opacity-10' : 'border-white border-opacity-10'">
+                                    <input type="radio" 
+                                           x-model="generalRemarketing.audience_segment" 
+                                           value="order_bump_buyers"
+                                           class="mt-1 w-4 h-4"
+                                           style="accent-color: var(--brand-gold-500);">
+                                    <div class="flex-1">
+                                        <div class="flex items-center gap-2 mb-1">
+                                            <i class="fas fa-gift text-purple-500"></i>
+                                            <span class="text-sm font-bold text-textPrimary">Comprou com Order Bump</span>
+                                        </div>
+                                        <p class="text-xs text-textSecondary">Usuários que aceitaram order bump na compra</p>
+                                    </div>
+                                </label>
+
+                                <!-- Comprou Upsell -->
+                                <label class="flex items-start gap-3 p-3 bg-bg900 border-2 rounded-lg cursor-pointer transition-all"
+                                       :class="generalRemarketing.audience_segment === 'upsell_buyers' ? 'border-accent500 bg-accent500 bg-opacity-10' : 'border-white border-opacity-10'">
+                                    <input type="radio" 
+                                           x-model="generalRemarketing.audience_segment" 
+                                           value="upsell_buyers"
+                                           class="mt-1 w-4 h-4"
+                                           style="accent-color: var(--brand-gold-500);">
+                                    <div class="flex-1">
+                                        <div class="flex items-center gap-2 mb-1">
+                                            <i class="fas fa-arrow-up text-green-500"></i>
+                                            <span class="text-sm font-bold text-textPrimary">Comprou Upsell</span>
+                                        </div>
+                                        <p class="text-xs text-textSecondary">Usuários que compraram upsells</p>
+                                    </div>
+                                </label>
+
+                                <!-- Comprou por Remarketing -->
+                                <label class="flex items-start gap-3 p-3 bg-bg900 border-2 rounded-lg cursor-pointer transition-all"
+                                       :class="generalRemarketing.audience_segment === 'remarketing_buyers' ? 'border-accent500 bg-accent500 bg-opacity-10' : 'border-white border-opacity-10'">
+                                    <input type="radio" 
+                                           x-model="generalRemarketing.audience_segment" 
+                                           value="remarketing_buyers"
+                                           class="mt-1 w-4 h-4"
+                                           style="accent-color: var(--brand-gold-500);">
+                                    <div class="flex-1">
+                                        <div class="flex items-center gap-2 mb-1">
+                                            <i class="fas fa-bullhorn text-blue-500"></i>
+                                            <span class="text-sm font-bold text-textPrimary">Comprou por Remarketing</span>
+                                        </div>
+                                        <p class="text-xs text-textSecondary">Usuários que compraram após campanha de remarketing</p>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Filtro de Dias desde Último Contato (Condicional) -->
+                        <div class="mt-4 pt-4 border-t border-white border-opacity-10">
+                            <label class="block text-xs font-semibold text-textSecondary mb-2">
+                                <i class="fas fa-clock mr-1 text-accent500"></i>
+                                Dias desde último contato (opcional)
+                            </label>
+                            <input type="number" 
+                                   x-model.number="generalRemarketing.days_since_last_contact" 
+                                   min="0"
+                                   class="w-full px-4 py-2 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary focus:outline-none focus:ring-2 focus:ring-accent500"
+                                   placeholder="0 = Sem filtro de inatividade">
+                            <div class="mt-2 p-2 rounded-lg bg-bg900 border border-white border-opacity-5">
+                                <p class="text-xs text-textSecondary">
+                                    <i class="fas fa-info-circle mr-1 text-accent500"></i>
+                                    <span x-text="generalRemarketing.days_since_last_contact == 0 ? 'Sem filtro de inatividade - todos os usuários do segmento selecionado' : 'Apenas usuários inativos há ' + generalRemarketing.days_since_last_contact + ' dia(s) ou mais'"></span>
+                                </p>
                             </div>
                         </div>
                     </div>
@@ -1545,7 +1667,8 @@ function dashboardApp() {
             audio_enabled: false,
             audio_url: '',
             days_since_last_contact: 7,  // Número, não string
-            exclude_buyers: false,
+            exclude_buyers: false,  // Mantido para compatibilidade
+            audience_segment: 'all_users',  // ✅ V2.0: Nova segmentação avançada
             buttons: [],  // Botões de produto
             send_mode: 'immediate',  // ✅ V2.0: 'immediate' ou 'scheduled'
             scheduled_date: '',      // ✅ V2.0: Data no formato YYYY-MM-DD
@@ -2459,15 +2582,29 @@ function dashboardApp() {
                 }
             }
             
+            // ✅ V2.0: Mapear segmentação para texto amigável
+            const segmentLabels = {
+                'all_users': 'Todos os Usuários',
+                'buyers': 'Todos que Comprou',
+                'pix_generated': 'Todos que Gerou PIX',
+                'downsell_buyers': 'Todos que Comprou pelo Downsell',
+                'order_bump_buyers': 'Todos que Comprou com Order Bump',
+                'upsell_buyers': 'Todos que Comprou Upsell',
+                'remarketing_buyers': 'Todos que Comprou por Remarketing'
+            };
+            const selectedSegment = segmentLabels[this.generalRemarketing.audience_segment] || 'Todos os Usuários';
+            
             const sendMode = this.generalRemarketing.send_mode;
             const confirmMsg = sendMode === 'scheduled' 
                 ? `📅 Agendar remarketing para ${this.generalRemarketing.selectedBots.length} bot(s)?\n\n` +
                   `Data/Hora: ${this.formatGeneralRemarketingScheduledDateTime()}\n\n` +
-                  `Usuários afetados: Todos que atendam aos critérios de segmentação\n\n` +
-                  `Confirmar agendamento?`
+                  `Segmento: ${selectedSegment}\n` +
+                  (this.generalRemarketing.days_since_last_contact > 0 ? `Filtro de inatividade: ${this.generalRemarketing.days_since_last_contact} dia(s)\n` : '') +
+                  `\nConfirmar agendamento?`
                 : `🚀 Enviar remarketing para ${this.generalRemarketing.selectedBots.length} bot(s)?\n\n` +
-                  `Usuários afetados: Todos que atendam aos critérios de segmentação\n\n` +
-                  `Confirmar envio?`;
+                  `Segmento: ${selectedSegment}\n` +
+                  (this.generalRemarketing.days_since_last_contact > 0 ? `Filtro de inatividade: ${this.generalRemarketing.days_since_last_contact} dia(s)\n` : '') +
+                  `\nConfirmar envio?`;
             
             if (!confirm(confirmMsg)) {
                 return;
@@ -2488,7 +2625,8 @@ function dashboardApp() {
                     audio_url: this.generalRemarketing.audio_url || '',
                     buttons: this.generalRemarketing.buttons,
                     days_since_last_contact: parseInt(this.generalRemarketing.days_since_last_contact) || 0,
-                    exclude_buyers: this.generalRemarketing.exclude_buyers
+                    exclude_buyers: this.generalRemarketing.exclude_buyers,  // Mantido para compatibilidade
+                    audience_segment: this.generalRemarketing.audience_segment || 'all_users'  // ✅ V2.0: Nova segmentação avançada
                 };
                 
                 if (sendMode === 'scheduled') {
@@ -2531,7 +2669,8 @@ function dashboardApp() {
                     audio_url: '',
                     buttons: [],
                     days_since_last_contact: 7,
-                    exclude_buyers: false,
+                    exclude_buyers: false,  // Mantido para compatibilidade
+                    audience_segment: 'all_users',  // ✅ V2.0: Nova segmentação
                     send_mode: 'immediate',  // ✅ V2.0
                     scheduled_date: '',      // ✅ V2.0
                     scheduled_time: ''      // ✅ V2.0
