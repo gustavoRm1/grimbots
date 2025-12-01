@@ -902,6 +902,26 @@
                              :style="`width: ${Math.min(selectedCampaign?.conversion_rate || 0, 100)}%`"></div>
                     </div>
                 </div>
+                
+                <!-- ✅ Botões de Ação: Editar e Reenviar -->
+                <div class="mt-6 pt-6 border-t border-gray-700 flex flex-col sm:flex-row gap-3">
+                    <!-- Botão Editar -->
+                    <button @click="editCampaign(selectedCampaign?.id)" 
+                            class="btn-action flex-1 flex items-center justify-center gap-2 px-6 py-3 text-sm font-semibold">
+                        <i class="fas fa-edit"></i>
+                        <span>Editar Campanha</span>
+                    </button>
+                    
+                    <!-- Botão Reenviar -->
+                    <button @click="resendCampaign(selectedCampaign?.id)" 
+                            :disabled="resendingCampaign"
+                            class="flex-1 px-6 py-3 rounded-lg font-semibold text-sm transition-all duration-200 flex items-center justify-center gap-2"
+                            :class="resendingCampaign ? 'bg-gray-700 text-gray-400 cursor-not-allowed opacity-60' : 'text-white hover:shadow-lg hover:-translate-y-0.5'"
+                            :style="!resendingCampaign ? 'background: linear-gradient(135deg, var(--brand-green-500), var(--brand-green-700)); box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);' : ''">
+                        <i class="fas" :class="resendingCampaign ? 'fa-spinner fa-spin' : 'fa-paper-plane'"></i>
+                        <span x-text="resendingCampaign ? 'Reenviando...' : 'Reenviar Campanha'"></span>
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -1232,6 +1252,7 @@ function botStatsApp() {
         // ✅ Modal de pré-visualização de campanha
         showCampaignModal: false,
         selectedCampaign: null,
+        resendingCampaign: false,  // Estado para controle de reenvio
         
         async init() {
             // ✅ FIX: Prevenir inicialização dupla
@@ -1865,6 +1886,92 @@ function botStatsApp() {
         showCampaignPreview(campaign) {
             this.selectedCampaign = campaign;
             this.showCampaignModal = true;
+            this.resendingCampaign = false; // Resetar estado de reenvio
+        },
+        
+        // ✅ Método para editar campanha - redireciona para página de remarketing
+        editCampaign(campaignId) {
+            if (!campaignId) {
+                alert('❌ Erro: ID da campanha não encontrado');
+                return;
+            }
+            
+            // Fechar modal
+            this.showCampaignModal = false;
+            
+            // Redirecionar para página de remarketing do bot
+            window.location.href = `/bots/${this.botId}/remarketing`;
+        },
+        
+        // ✅ Método para reenviar campanha
+        async resendCampaign(campaignId) {
+            if (!campaignId) {
+                alert('❌ Erro: ID da campanha não encontrado');
+                return;
+            }
+            
+            // Confirmação
+            if (!confirm('🔄 Deseja reenviar esta campanha de remarketing?\n\nA campanha será enviada novamente para todos os usuários elegíveis.')) {
+                return;
+            }
+            
+            // Desabilitar botão e mostrar loading
+            this.resendingCampaign = true;
+            
+            try {
+                const csrfToken = this.getCsrfToken();
+                const headers = {
+                    'Content-Type': 'application/json'
+                };
+                if (csrfToken) {
+                    headers['X-CSRF-Token'] = csrfToken;
+                }
+                
+                const response = await fetch(`/api/bots/${this.botId}/remarketing/campaigns/${campaignId}/send`, {
+                    method: 'POST',
+                    headers: headers,
+                    credentials: 'same-origin'
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    // Sucesso
+                    alert('✅ Campanha reenviada com sucesso!\n\nA campanha está sendo enviada em background.');
+                    
+                    // Fechar modal
+                    this.showCampaignModal = false;
+                    
+                    // Recarregar dados para atualizar estatísticas
+                    this.loadStats();
+                } else {
+                    // Erro
+                    alert('❌ Erro ao reenviar campanha: ' + (data.error || 'Erro desconhecido'));
+                }
+            } catch (error) {
+                console.error('❌ Erro ao reenviar campanha:', error);
+                alert('❌ Erro ao reenviar campanha: ' + error.message);
+            } finally {
+                // Reabilitar botão
+                this.resendingCampaign = false;
+            }
+        },
+        
+        // ✅ Método helper para obter CSRF token
+        getCsrfToken() {
+            const cookies = document.cookie.split(';');
+            for (let cookie of cookies) {
+                const [name, value] = cookie.trim().split('=');
+                if (name === 'csrftoken' || name === 'csrf_token') {
+                    return value;
+                }
+            }
+            // Tentar pegar de meta tag
+            const metaTag = document.querySelector('meta[name="csrf-token"]');
+            if (metaTag) {
+                return metaTag.getAttribute('content');
+            }
+            return null;
         }
     };
 }
