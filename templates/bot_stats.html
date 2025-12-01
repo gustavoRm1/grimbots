@@ -2653,12 +2653,6 @@ window.botStatsApp = function botStatsApp() {
                 return;
             }
             
-            const campaign = this.stats.remarketing.campaigns.find(c => c.id === campaignId);
-            if (!campaign) {
-                alert('❌ Erro: Campanha não encontrada');
-                return;
-            }
-            
             // Confirmação
             if (!confirm('🔄 Deseja reenviar esta campanha de remarketing?\n\nSerá criada uma nova campanha com as mesmas configurações e enviada imediatamente para todos os usuários elegíveis.')) {
                 return;
@@ -2668,6 +2662,50 @@ window.botStatsApp = function botStatsApp() {
             this.resendingCampaign = true;
             
             try {
+                // ✅ CORREÇÃO CRÍTICA: Buscar dados COMPLETOS diretamente do backend
+                // Não usar cache do frontend, pois pode ter dados filtrados!
+                const csrfToken = this.getCsrfToken();
+                const headers = {
+                    'Content-Type': 'application/json'
+                };
+                if (csrfToken) {
+                    headers['X-CSRF-Token'] = csrfToken;
+                }
+                
+                // Buscar TODAS as campanhas do backend (retorna via to_dict() completo)
+                const campaignsResponse = await fetch(`/api/bots/${this.botId}/remarketing/campaigns`, {
+                    method: 'GET',
+                    headers: headers,
+                    credentials: 'same-origin'
+                });
+                
+                if (!campaignsResponse.ok) {
+                    throw new Error(`Erro ao buscar campanhas: ${campaignsResponse.status}`);
+                }
+                
+                const allCampaigns = await campaignsResponse.json();
+                
+                // Encontrar a campanha específica pelo ID
+                const campaign = Array.isArray(allCampaigns) 
+                    ? allCampaigns.find(c => c.id === campaignId)
+                    : null;
+                
+                if (!campaign || !campaign.id) {
+                    throw new Error('Campanha não encontrada no backend');
+                }
+                
+                console.log('✅ Campanha carregada do backend (DADOS COMPLETOS):', {
+                    id: campaign.id,
+                    name: campaign.name,
+                    buttons_type: typeof campaign.buttons,
+                    buttons_is_array: Array.isArray(campaign.buttons),
+                    buttons_count: Array.isArray(campaign.buttons) ? campaign.buttons.length : (campaign.buttons ? 'N/A (não é array)' : 'null/undefined'),
+                    buttons_original: campaign.buttons,
+                    media_url: campaign.media_url,
+                    media_type: campaign.media_type,
+                    audio_enabled: campaign.audio_enabled,
+                    audio_url: campaign.audio_url
+                });
                 // ✅ CORREÇÃO CRÍTICA: Garantir que botões sejam sempre um array
                 // Se buttons for null, undefined, ou não for array, usar array vazio
                 // Se for array, fazer deep copy para garantir independência
@@ -2725,13 +2763,7 @@ window.botStatsApp = function botStatsApp() {
                     audio_url: campaignData.audio_url
                 });
                 
-                const csrfToken = this.getCsrfToken();
-                const headers = {
-                    'Content-Type': 'application/json'
-                };
-                if (csrfToken) {
-                    headers['X-CSRF-Token'] = csrfToken;
-                }
+                // ✅ Usar mesmo headers já criados anteriormente
                 
                 // Criar nova campanha
                 const createResponse = await fetch(`/api/bots/${this.botId}/remarketing/campaigns`, {
