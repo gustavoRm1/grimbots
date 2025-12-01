@@ -2582,6 +2582,23 @@ window.botStatsApp = function botStatsApp() {
                 // Carregar dados da campanha no modal de edição (COM DADOS COMPLETOS)
                 await this.loadCampaignForEdit(campaign);
                 
+                // ✅ CORREÇÃO CRÍTICA: Forçar atualização do Alpine.js após carregar dados
+                this.$nextTick(() => {
+                    // Verificar se botões foram carregados
+                    console.log('✅ Após loadCampaignForEdit, editCampaignData.buttons:', {
+                        is_array: Array.isArray(this.editCampaignData.buttons),
+                        length: this.editCampaignData.buttons ? this.editCampaignData.buttons.length : 0,
+                        buttons: this.editCampaignData.buttons
+                    });
+                    
+                    // Se ainda estiver vazio, forçar atualização
+                    if (!this.editCampaignData.buttons || this.editCampaignData.buttons.length === 0) {
+                        console.warn('⚠️ Botões não foram carregados corretamente, tentando novamente...');
+                        // Tentar recarregar
+                        this.loadCampaignForEdit(campaign);
+                    }
+                });
+                
                 // Abrir modal de edição
                 this.showEditModal = true;
             } catch (error) {
@@ -2710,19 +2727,31 @@ window.botStatsApp = function botStatsApp() {
                 }))
             });
             
-            // Carregar dados no formulário
-            this.editCampaignData = {
-                campaignId: campaign.id,
-                message: campaign.message || '',
-                media_url: campaign.media_url || '',
-                media_type: campaign.media_type || 'video',
-                audio_enabled: campaign.audio_enabled || false,
-                audio_url: campaign.audio_url || '',
-                buttons: buttonsArray,  // ✅ Array completo com todos os campos (price, description, url, etc)
-                audience_segment: audience_segment,
-                days_since_last_contact: campaign.days_since_last_contact || 0,
-                cooldown_hours: campaign.cooldown_hours || 24  // ✅ CORREÇÃO: Carregar cooldown_hours
-            };
+            // ✅ CORREÇÃO CRÍTICA: Usar splice para garantir reatividade do Alpine.js
+            // Limpar array existente primeiro
+            this.editCampaignData.buttons.splice(0, this.editCampaignData.buttons.length);
+            
+            // Adicionar cada botão individualmente (Alpine.js detecta melhor)
+            buttonsArray.forEach(btn => {
+                this.editCampaignData.buttons.push(btn);
+            });
+            
+            // Atualizar outros campos
+            this.editCampaignData.campaignId = campaign.id;
+            this.editCampaignData.message = campaign.message || '';
+            this.editCampaignData.media_url = campaign.media_url || '';
+            this.editCampaignData.media_type = campaign.media_type || 'video';
+            this.editCampaignData.audio_enabled = campaign.audio_enabled || false;
+            this.editCampaignData.audio_url = campaign.audio_url || '';
+            this.editCampaignData.audience_segment = audience_segment;
+            this.editCampaignData.days_since_last_contact = campaign.days_since_last_contact || 0;
+            this.editCampaignData.cooldown_hours = campaign.cooldown_hours || 24;
+            
+            console.log('✅ Dados carregados no editCampaignData:', {
+                campaignId: this.editCampaignData.campaignId,
+                buttons_count: this.editCampaignData.buttons.length,
+                buttons: this.editCampaignData.buttons
+            });
         },
         
         // ✅ Salvar edições da campanha
