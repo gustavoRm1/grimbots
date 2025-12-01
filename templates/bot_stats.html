@@ -926,6 +926,198 @@
         </div>
     </div>
     
+    <!-- ✅ MODAL: EDIÇÃO DE CAMPANHA DE REMARKETING -->
+    <!-- ============================================================================ -->
+    
+    <div x-show="showEditModal" 
+         x-cloak
+         class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4"
+         @click.self="showEditModal = false">
+        <div class="bg-gray-900 rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto border border-gray-700">
+            <!-- Header -->
+            <div class="sticky top-0 bg-gray-900 border-b border-gray-700 px-6 py-4 flex items-center justify-between">
+                <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                    <i class="fas fa-edit text-blue-500"></i>
+                    Editar Campanha de Remarketing
+                </h2>
+                <button @click="showEditModal = false" class="text-gray-400 hover:text-white">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            
+            <!-- Content -->
+            <div class="p-6" x-show="editCampaignData">
+                <form @submit.prevent="saveCampaignEdit()">
+                    <!-- Mensagem -->
+                    <div class="mb-6">
+                        <label class="block text-sm font-bold text-white mb-2">
+                            <i class="fas fa-comment-alt mr-2 text-yellow-500"></i>
+                            Mensagem do Remarketing
+                        </label>
+                        <textarea x-model="editCampaignData.message" 
+                                  rows="6"
+                                  class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                                  placeholder="Digite a mensagem que será enviada para os usuários..."></textarea>
+                    </div>
+                    
+                    <!-- Mídia -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                        <div>
+                            <label class="block text-sm font-bold text-white mb-2">
+                                <i class="fas fa-link mr-2 text-yellow-500"></i>
+                                URL da Mídia (opcional)
+                            </label>
+                            <input type="url" 
+                                   x-model="editCampaignData.media_url" 
+                                   class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                                   placeholder="https://t.me/canal/123">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold text-white mb-2">
+                                <i class="fas fa-image mr-2 text-yellow-500"></i>
+                                Tipo de Mídia
+                            </label>
+                            <div class="grid grid-cols-2 gap-3 mt-2">
+                                <label class="flex items-center gap-2 px-4 py-3 bg-gray-800 border rounded-lg cursor-pointer transition-colors"
+                                       :class="editCampaignData.media_type === 'video' ? 'border-yellow-500' : 'border-gray-700'">
+                                    <input type="radio" x-model="editCampaignData.media_type" value="video" class="text-yellow-500">
+                                    <i class="fas fa-video text-yellow-500"></i>
+                                    <span class="text-sm text-white">Vídeo</span>
+                                </label>
+                                <label class="flex items-center gap-2 px-4 py-3 bg-gray-800 border rounded-lg cursor-pointer transition-colors"
+                                       :class="editCampaignData.media_type === 'photo' ? 'border-yellow-500' : 'border-gray-700'">
+                                    <input type="radio" x-model="editCampaignData.media_type" value="photo" class="text-yellow-500">
+                                    <i class="fas fa-camera text-yellow-500"></i>
+                                    <span class="text-sm text-white">Foto</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Áudio Adicional -->
+                    <div class="mb-6 p-4 bg-gray-800 rounded-lg border border-gray-700">
+                        <label class="flex items-center gap-3 cursor-pointer mb-3">
+                            <input type="checkbox" 
+                                   x-model="editCampaignData.audio_enabled"
+                                   class="w-5 h-5 text-yellow-500">
+                            <span class="text-sm font-bold text-white">Adicionar Áudio Complementar (opcional)</span>
+                        </label>
+                        <div x-show="editCampaignData.audio_enabled" x-cloak>
+                            <input type="url" 
+                                   x-model="editCampaignData.audio_url" 
+                                   class="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                                   placeholder="https://t.me/canal/audio">
+                        </div>
+                    </div>
+                    
+                    <!-- Botões de Produto -->
+                    <div class="mb-6 p-4 bg-gray-800 rounded-lg border border-gray-700">
+                        <div class="flex items-center justify-between mb-3">
+                            <label class="block text-sm font-bold text-white">
+                                <i class="fas fa-tag mr-2 text-yellow-500"></i>
+                                Botões de Produto
+                            </label>
+                            <button type="button" 
+                                    @click="editCampaignData.buttons.push({ text: '', price: 0, description: '' })"
+                                    class="px-3 py-1 text-xs font-bold rounded-lg text-black bg-yellow-500 hover:bg-yellow-600">
+                                <i class="fas fa-plus mr-1"></i>
+                                Adicionar Botão
+                            </button>
+                        </div>
+                        
+                        <div class="space-y-3" x-show="editCampaignData.buttons.length > 0">
+                            <template x-for="(button, index) in editCampaignData.buttons" :key="index">
+                                <div class="p-4 bg-gray-700 rounded-lg border border-gray-600">
+                                    <div class="flex items-center justify-between mb-3">
+                                        <span class="text-xs font-bold text-yellow-500">Botão <span x-text="index + 1"></span></span>
+                                        <button type="button" 
+                                                @click="editCampaignData.buttons.splice(index, 1)"
+                                                class="text-xs text-red-400 hover:text-red-300">
+                                            <i class="fas fa-trash mr-1"></i>Remover
+                                        </button>
+                                    </div>
+                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                        <div class="md:col-span-2">
+                                            <label class="block text-xs text-gray-400 mb-1">Texto do Botão</label>
+                                            <input type="text" 
+                                                   x-model="button.text"
+                                                   class="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-lg text-white text-sm">
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs text-gray-400 mb-1">Preço (R$)</label>
+                                            <input type="number" 
+                                                   x-model.number="button.price"
+                                                   step="0.01"
+                                                   min="0"
+                                                   class="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-lg text-white text-sm">
+                                        </div>
+                                    </div>
+                                    <div class="mt-3">
+                                        <label class="block text-xs text-gray-400 mb-1">Descrição</label>
+                                        <input type="text" 
+                                               x-model="button.description"
+                                               class="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded-lg text-white text-sm">
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                    
+                    <!-- Segmentação de Público - Versão Simplificada -->
+                    <div class="mb-6 p-4 bg-gray-800 rounded-lg border border-gray-700">
+                        <label class="block text-sm font-bold text-white mb-3">
+                            <i class="fas fa-filter mr-2 text-yellow-500"></i>
+                            Segmentação de Público
+                        </label>
+                        
+                        <select x-model="editCampaignData.audience_segment" 
+                                class="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-yellow-500">
+                            <option value="all_users">Todos os Usuários</option>
+                            <option value="buyers">Todos que Comprou</option>
+                            <option value="pix_generated">Todos que Gerou PIX</option>
+                            <option value="downsell_buyers">Comprou pelo Downsell</option>
+                            <option value="order_bump_buyers">Comprou com Order Bump</option>
+                            <option value="upsell_buyers">Comprou Upsell</option>
+                            <option value="remarketing_buyers">Comprou por Remarketing</option>
+                        </select>
+                        
+                        <!-- Dias desde último contato -->
+                        <div class="mt-4">
+                            <label class="block text-sm font-bold text-white mb-2">
+                                <i class="fas fa-calendar-clock mr-2 text-yellow-500"></i>
+                                Dias desde Último Contato (0 = Sem filtro)
+                            </label>
+                            <input type="number" 
+                                   x-model.number="editCampaignData.days_since_last_contact"
+                                   min="0"
+                                   max="365"
+                                   class="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-yellow-500">
+                        </div>
+                    </div>
+                    
+                    <!-- Botões de Ação -->
+                    <div class="flex gap-3 pt-4 border-t border-gray-700">
+                        <button type="button" 
+                                @click="showEditModal = false"
+                                class="flex-1 px-6 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-semibold transition-colors">
+                            Cancelar
+                        </button>
+                        <button type="submit"
+                                :disabled="editingCampaign"
+                                class="flex-1 px-6 py-3 rounded-lg font-semibold text-white transition-colors"
+                                :class="editingCampaign ? 'bg-gray-600 cursor-not-allowed' : 'bg-yellow-500 hover:bg-yellow-600'"
+                                style="background: linear-gradient(135deg, var(--brand-gold-500), var(--brand-gold-700));">
+                            <span x-show="!editingCampaign">Salvar Alterações</span>
+                            <span x-show="editingCampaign">
+                                <i class="fas fa-spinner fa-spin mr-2"></i>Salvando...
+                            </span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
     <!-- Top Produtos e Horários de Pico - Responsivo -->
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6">
         <!-- Top Produtos -->
@@ -1253,6 +1445,20 @@ function botStatsApp() {
         showCampaignModal: false,
         selectedCampaign: null,
         resendingCampaign: false,  // Estado para controle de reenvio
+        
+        // ✅ Modal de edição de campanha
+        showEditModal: false,
+        editingCampaign: false,
+        editCampaignData: {
+            message: '',
+            media_url: '',
+            media_type: 'video',
+            audio_enabled: false,
+            audio_url: '',
+            buttons: [],
+            audience_segment: 'all_users',
+            days_since_last_contact: 0
+        }
         
         async init() {
             // ✅ FIX: Prevenir inicialização dupla
@@ -1889,36 +2095,106 @@ function botStatsApp() {
             this.resendingCampaign = false; // Resetar estado de reenvio
         },
         
-        // ✅ Método para editar campanha - redireciona para página de remarketing
-        editCampaign(campaignId) {
+        // ✅ Método para abrir modal de edição da campanha
+        async editCampaign(campaignId) {
             if (!campaignId) {
                 alert('❌ Erro: ID da campanha não encontrado');
                 return;
             }
             
-            // Fechar modal
+            const campaign = this.stats.remarketing.campaigns.find(c => c.id === campaignId);
+            if (!campaign) {
+                alert('❌ Erro: Campanha não encontrada');
+                return;
+            }
+            
+            // Fechar modal de preview
             this.showCampaignModal = false;
             
-            // Redirecionar para página de remarketing do bot
-            window.location.href = `/bots/${this.botId}/remarketing`;
+            // Carregar dados da campanha no modal de edição
+            await this.loadCampaignForEdit(campaign);
+            
+            // Abrir modal de edição
+            this.showEditModal = true;
         },
         
-        // ✅ Método para reenviar campanha
-        async resendCampaign(campaignId) {
-            if (!campaignId) {
+        // ✅ Carregar dados da campanha para edição
+        async loadCampaignForEdit(campaign) {
+            // Mapear target_audience de volta para audience_segment
+            const reverseMapping = {
+                'all': 'all_users',
+                'buyers': 'buyers',
+                'abandoned_cart': 'pix_generated',
+                'downsell_buyers': 'downsell_buyers',
+                'order_bump_buyers': 'order_bump_buyers',
+                'upsell_buyers': 'upsell_buyers',
+                'remarketing_buyers': 'remarketing_buyers',
+                'non_buyers': 'all_users'  // Fallback
+            };
+            
+            // Determinar audience_segment baseado em target_audience
+            let audience_segment = reverseMapping[campaign.target_audience] || 'all_users';
+            
+            // Se exclude_buyers é true e target_audience é 'all', significa que era 'non_buyers'
+            if (campaign.exclude_buyers && campaign.target_audience === 'all') {
+                audience_segment = 'all_users'; // Será tratado com exclude_buyers
+            }
+            
+            // Carregar dados no formulário
+            this.editCampaignData = {
+                campaignId: campaign.id,
+                message: campaign.message || '',
+                media_url: campaign.media_url || '',
+                media_type: campaign.media_type || 'video',
+                audio_enabled: campaign.audio_enabled || false,
+                audio_url: campaign.audio_url || '',
+                buttons: campaign.buttons ? JSON.parse(JSON.stringify(campaign.buttons)) : [],
+                audience_segment: audience_segment,
+                days_since_last_contact: campaign.days_since_last_contact || 0
+            };
+        },
+        
+        // ✅ Salvar edições da campanha
+        async saveCampaignEdit() {
+            if (!this.editCampaignData.campaignId) {
                 alert('❌ Erro: ID da campanha não encontrado');
                 return;
             }
             
-            // Confirmação
-            if (!confirm('🔄 Deseja reenviar esta campanha de remarketing?\n\nA campanha será enviada novamente para todos os usuários elegíveis.')) {
+            if (!this.editCampaignData.message || !this.editCampaignData.message.trim()) {
+                alert('❌ Por favor, preencha a mensagem da campanha');
                 return;
             }
             
-            // Desabilitar botão e mostrar loading
-            this.resendingCampaign = true;
+            this.editingCampaign = true;
             
             try {
+                // Mapear audience_segment para target_audience
+                const mapping = {
+                    'all_users': 'all',
+                    'buyers': 'buyers',
+                    'pix_generated': 'abandoned_cart',
+                    'downsell_buyers': 'downsell_buyers',
+                    'order_bump_buyers': 'order_bump_buyers',
+                    'upsell_buyers': 'upsell_buyers',
+                    'remarketing_buyers': 'remarketing_buyers'
+                };
+                
+                const target_audience = mapping[this.editCampaignData.audience_segment] || 'all';
+                
+                // Preparar dados para envio
+                const campaignData = {
+                    message: this.editCampaignData.message.trim(),
+                    media_url: this.editCampaignData.media_url || null,
+                    media_type: this.editCampaignData.media_type || 'video',
+                    audio_enabled: this.editCampaignData.audio_enabled || false,
+                    audio_url: this.editCampaignData.audio_url || '',
+                    buttons: this.editCampaignData.buttons || [],
+                    target_audience: target_audience,
+                    days_since_last_contact: parseInt(this.editCampaignData.days_since_last_contact) || 0,
+                    exclude_buyers: false  // Será determinado pelo target_audience
+                };
+                
                 const csrfToken = this.getCsrfToken();
                 const headers = {
                     'Content-Type': 'application/json'
@@ -1927,26 +2203,113 @@ function botStatsApp() {
                     headers['X-CSRF-Token'] = csrfToken;
                 }
                 
-                const response = await fetch(`/api/bots/${this.botId}/remarketing/campaigns/${campaignId}/send`, {
-                    method: 'POST',
+                const response = await fetch(`/api/bots/${this.botId}/remarketing/campaigns/${this.editCampaignData.campaignId}`, {
+                    method: 'PUT',
                     headers: headers,
-                    credentials: 'same-origin'
+                    credentials: 'same-origin',
+                    body: JSON.stringify(campaignData)
                 });
                 
                 const data = await response.json();
                 
                 if (response.ok) {
-                    // Sucesso
-                    alert('✅ Campanha reenviada com sucesso!\n\nA campanha está sendo enviada em background.');
+                    alert('✅ Campanha atualizada com sucesso!');
                     
                     // Fechar modal
-                    this.showCampaignModal = false;
+                    this.showEditModal = false;
                     
-                    // Recarregar dados para atualizar estatísticas
-                    this.loadStats();
+                    // Recarregar dados
+                    await this.loadStats();
                 } else {
-                    // Erro
-                    alert('❌ Erro ao reenviar campanha: ' + (data.error || 'Erro desconhecido'));
+                    alert('❌ Erro ao atualizar campanha: ' + (data.error || 'Erro desconhecido'));
+                }
+            } catch (error) {
+                console.error('❌ Erro ao salvar edições:', error);
+                alert('❌ Erro ao salvar edições: ' + error.message);
+            } finally {
+                this.editingCampaign = false;
+            }
+        },
+        
+        // ✅ Método para reenviar campanha - cria nova campanha com mesmas configurações
+        async resendCampaign(campaignId) {
+            if (!campaignId) {
+                alert('❌ Erro: ID da campanha não encontrado');
+                return;
+            }
+            
+            const campaign = this.stats.remarketing.campaigns.find(c => c.id === campaignId);
+            if (!campaign) {
+                alert('❌ Erro: Campanha não encontrada');
+                return;
+            }
+            
+            // Confirmação
+            if (!confirm('🔄 Deseja reenviar esta campanha de remarketing?\n\nSerá criada uma nova campanha com as mesmas configurações e enviada imediatamente para todos os usuários elegíveis.')) {
+                return;
+            }
+            
+            // Desabilitar botão e mostrar loading
+            this.resendingCampaign = true;
+            
+            try {
+                // Criar nova campanha com mesmas configurações
+                const campaignData = {
+                    name: `${campaign.name} (Reenvio)`,
+                    message: campaign.message,
+                    media_url: campaign.media_url || null,
+                    media_type: campaign.media_type || 'video',
+                    audio_enabled: campaign.audio_enabled || false,
+                    audio_url: campaign.audio_url || '',
+                    buttons: campaign.buttons ? JSON.parse(JSON.stringify(campaign.buttons)) : [],
+                    target_audience: campaign.target_audience,
+                    days_since_last_contact: campaign.days_since_last_contact || 0,
+                    exclude_buyers: campaign.exclude_buyers || false,
+                    cooldown_hours: campaign.cooldown_hours || 24,
+                    scheduled_at: null  // Envio imediato
+                };
+                
+                const csrfToken = this.getCsrfToken();
+                const headers = {
+                    'Content-Type': 'application/json'
+                };
+                if (csrfToken) {
+                    headers['X-CSRF-Token'] = csrfToken;
+                }
+                
+                // Criar nova campanha
+                const createResponse = await fetch(`/api/bots/${this.botId}/remarketing/campaigns`, {
+                    method: 'POST',
+                    headers: headers,
+                    credentials: 'same-origin',
+                    body: JSON.stringify(campaignData)
+                });
+                
+                const newCampaign = await createResponse.json();
+                
+                if (createResponse.ok && newCampaign.id) {
+                    // Enviar imediatamente
+                    const sendResponse = await fetch(`/api/bots/${this.botId}/remarketing/campaigns/${newCampaign.id}/send`, {
+                        method: 'POST',
+                        headers: headers,
+                        credentials: 'same-origin'
+                    });
+                    
+                    const sendData = await sendResponse.json();
+                    
+                    if (sendResponse.ok) {
+                        alert('✅ Campanha reenviada com sucesso!\n\nUma nova campanha foi criada e está sendo enviada em background.');
+                        
+                        // Fechar modal
+                        this.showCampaignModal = false;
+                        
+                        // Recarregar dados para atualizar estatísticas
+                        await this.loadStats();
+                    } else {
+                        alert('⚠️ Campanha criada, mas houve erro ao iniciar envio: ' + (sendData.error || 'Erro desconhecido'));
+                    }
+                } else {
+                    alert('❌ Erro ao criar nova campanha: ' + (newCampaign.error || 'Erro desconhecido'));
                 }
             } catch (error) {
                 console.error('❌ Erro ao reenviar campanha:', error);

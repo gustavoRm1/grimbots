@@ -2702,6 +2702,67 @@ def create_remarketing_campaign(bot_id):
     
     return jsonify(campaign.to_dict()), 201
 
+@app.route('/api/bots/<int:bot_id>/remarketing/campaigns/<int:campaign_id>', methods=['PUT'])
+@login_required
+@csrf.exempt
+def update_remarketing_campaign(bot_id, campaign_id):
+    """✅ Atualiza campanha de remarketing existente"""
+    bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
+    from models import RemarketingCampaign
+    from datetime import datetime
+    
+    campaign = RemarketingCampaign.query.filter_by(id=campaign_id, bot_id=bot_id).first_or_404()
+    
+    # Não permitir editar se estiver enviando
+    if campaign.status == 'sending':
+        return jsonify({'error': 'Não é possível editar uma campanha que está sendo enviada'}), 400
+    
+    data = request.json
+    
+    # Atualizar campos
+    if 'message' in data:
+        campaign.message = data.get('message')
+    if 'media_url' in data:
+        campaign.media_url = data.get('media_url')
+    if 'media_type' in data:
+        campaign.media_type = data.get('media_type')
+    if 'audio_enabled' in data:
+        campaign.audio_enabled = data.get('audio_enabled', False)
+    if 'audio_url' in data:
+        campaign.audio_url = data.get('audio_url', '')
+    if 'buttons' in data:
+        campaign.buttons = data.get('buttons', [])
+    if 'target_audience' in data:
+        campaign.target_audience = data.get('target_audience')
+    if 'days_since_last_contact' in data:
+        campaign.days_since_last_contact = int(data.get('days_since_last_contact', 0))
+    if 'exclude_buyers' in data:
+        campaign.exclude_buyers = data.get('exclude_buyers', False)
+    
+    # ✅ V2.0: Processar scheduled_at se fornecido
+    if 'scheduled_at' in data:
+        scheduled_at_str = data.get('scheduled_at')
+        if scheduled_at_str:
+            try:
+                scheduled_at = datetime.fromisoformat(scheduled_at_str.replace('Z', '+00:00'))
+                now = get_brazil_time()
+                if scheduled_at <= now:
+                    return jsonify({'error': 'A data e hora devem ser no futuro'}), 400
+                campaign.scheduled_at = scheduled_at
+                campaign.status = 'scheduled'
+            except Exception as e:
+                logger.error(f"❌ Erro ao processar scheduled_at: {e}")
+                return jsonify({'error': f'Data/hora inválida: {str(e)}'}), 400
+        else:
+            campaign.scheduled_at = None
+            if campaign.status == 'scheduled':
+                campaign.status = 'draft'
+    
+    db.session.commit()
+    logger.info(f"✅ Campanha de remarketing atualizada: {campaign.name} (Bot {bot.name})")
+    
+    return jsonify(campaign.to_dict()), 200
+
 @app.route('/api/bots/<int:bot_id>/remarketing/campaigns/<int:campaign_id>/send', methods=['POST'])
 @login_required
 @csrf.exempt
