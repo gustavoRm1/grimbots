@@ -1380,8 +1380,8 @@
                             </label>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                                 <!-- Todos Usuários -->
-                                <label class="flex items-start gap-3 p-3 bg-bg900 border-2 rounded-lg cursor-pointer transition-all duration-200"
-                                       :class="generalRemarketing.audience_segment === 'all_users' ? 'border-yellow-400 bg-yellow-500 bg-opacity-20 shadow-lg shadow-yellow-500/50' : 'border-white border-opacity-20 hover:border-white hover:border-opacity-40'"
+                                <label class="flex items-start gap-3 p-4 border-2 rounded-lg cursor-pointer transition-all duration-200"
+                                       :class="generalRemarketing.audience_segment === 'all_users' ? 'border-yellow-400 bg-yellow-500 bg-opacity-20 shadow-lg shadow-yellow-500/50' : 'border-gray-500 bg-gray-800 hover:border-gray-400 hover:bg-gray-700'"
                                        :style="generalRemarketing.audience_segment === 'all_users' ? 'box-shadow: 0 0 20px rgba(250, 204, 21, 0.4), 0 0 0 2px rgba(250, 204, 21, 0.6);' : ''">
                                     <input type="radio" 
                                            x-model="generalRemarketing.audience_segment" 
@@ -1390,16 +1390,16 @@
                                            style="accent-color: #facc15;">
                                     <div class="flex-1">
                                         <div class="flex items-center gap-2 mb-1">
-                                            <i class="fas fa-users" :class="generalRemarketing.audience_segment === 'all_users' ? 'text-yellow-400' : 'text-accent500'"></i>
-                                            <span class="text-sm font-bold" :class="generalRemarketing.audience_segment === 'all_users' ? 'text-yellow-400' : 'text-textPrimary'">Todos os Usuários</span>
+                                            <i class="fas fa-users" :class="generalRemarketing.audience_segment === 'all_users' ? 'text-yellow-400' : 'text-yellow-400'"></i>
+                                            <span class="text-sm font-bold" :class="generalRemarketing.audience_segment === 'all_users' ? 'text-yellow-400' : 'text-gray-200'">Todos os Usuários</span>
                                         </div>
-                                        <p class="text-xs" :class="generalRemarketing.audience_segment === 'all_users' ? 'text-yellow-300' : 'text-textSecondary'">Enviar para todos os usuários do bot</p>
+                                        <p class="text-xs" :class="generalRemarketing.audience_segment === 'all_users' ? 'text-yellow-300' : 'text-gray-300'">Enviar para todos os usuários do bot</p>
                                     </div>
                                 </label>
 
                                 <!-- Usuários que Comprou -->
-                                <label class="flex items-start gap-3 p-3 bg-bg900 border-2 rounded-lg cursor-pointer transition-all duration-200"
-                                       :class="generalRemarketing.audience_segment === 'buyers' ? 'border-green-400 bg-green-500 bg-opacity-20 shadow-lg shadow-green-500/50' : 'border-white border-opacity-20 hover:border-white hover:border-opacity-40'"
+                                <label class="flex items-start gap-3 p-4 border-2 rounded-lg cursor-pointer transition-all duration-200"
+                                       :class="generalRemarketing.audience_segment === 'buyers' ? 'border-green-400 bg-green-500 bg-opacity-20 shadow-lg shadow-green-500/50' : 'border-gray-500 bg-gray-800 hover:border-gray-400 hover:bg-gray-700'"
                                        :style="generalRemarketing.audience_segment === 'buyers' ? 'box-shadow: 0 0 20px rgba(74, 222, 128, 0.4), 0 0 0 2px rgba(74, 222, 128, 0.6);' : ''">
                                     <input type="radio" 
                                            x-model="generalRemarketing.audience_segment" 
@@ -1408,16 +1408,16 @@
                                            style="accent-color: #4ade80;">
                                     <div class="flex-1">
                                         <div class="flex items-center gap-2 mb-1">
-                                            <i class="fas fa-check-circle" :class="generalRemarketing.audience_segment === 'buyers' ? 'text-green-400' : 'text-green-500'"></i>
-                                            <span class="text-sm font-bold" :class="generalRemarketing.audience_segment === 'buyers' ? 'text-green-400' : 'text-textPrimary'">Todos que Comprou</span>
+                                            <i class="fas fa-check-circle" :class="generalRemarketing.audience_segment === 'buyers' ? 'text-green-400' : 'text-green-400'"></i>
+                                            <span class="text-sm font-bold" :class="generalRemarketing.audience_segment === 'buyers' ? 'text-green-400' : 'text-gray-200'">Todos que Comprou</span>
                                         </div>
-                                        <p class="text-xs" :class="generalRemarketing.audience_segment === 'buyers' ? 'text-green-300' : 'text-textSecondary'">Apenas usuários que já efetivaram compras</p>
+                                        <p class="text-xs" :class="generalRemarketing.audience_segment === 'buyers' ? 'text-green-300' : 'text-gray-300'">Apenas usuários que já efetivaram compras</p>
                                     </div>
                                 </label>
 
                                 <!-- Usuários que Gerou PIX -->
-                                <label class="flex items-start gap-3 p-3 bg-bg900 border-2 rounded-lg cursor-pointer transition-all duration-200"
-                                       :class="generalRemarketing.audience_segment === 'pix_generated' ? 'border-amber-400 bg-amber-500 bg-opacity-20 shadow-lg shadow-amber-500/50' : 'border-white border-opacity-20 hover:border-white hover:border-opacity-40'"
+                                <label class="flex items-start gap-3 p-4 border-2 rounded-lg cursor-pointer transition-all duration-200"
+                                       :class="generalRemarketing.audience_segment === 'pix_generated' ? 'border-amber-400 bg-amber-500 bg-opacity-20 shadow-lg shadow-amber-500/50' : 'border-gray-500 bg-gray-800 hover:border-gray-400 hover:bg-gray-700'"
                                        :style="generalRemarketing.audience_segment === 'pix_generated' ? 'box-shadow: 0 0 20px rgba(251, 191, 36, 0.4), 0 0 0 2px rgba(251, 191, 36, 0.6);' : ''">
                                     <input type="radio" 
                                            x-model="generalRemarketing.audience_segment" 
@@ -1426,16 +1426,16 @@
                                            style="accent-color: #fbbf24;">
                                     <div class="flex-1">
                                         <div class="flex items-center gap-2 mb-1">
-                                            <i class="fas fa-qrcode" :class="generalRemarketing.audience_segment === 'pix_generated' ? 'text-amber-400' : 'text-yellow-500'"></i>
-                                            <span class="text-sm font-bold" :class="generalRemarketing.audience_segment === 'pix_generated' ? 'text-amber-400' : 'text-textPrimary'">Todos que Gerou PIX</span>
+                                            <i class="fas fa-qrcode" :class="generalRemarketing.audience_segment === 'pix_generated' ? 'text-amber-400' : 'text-amber-400'"></i>
+                                            <span class="text-sm font-bold" :class="generalRemarketing.audience_segment === 'pix_generated' ? 'text-amber-400' : 'text-gray-200'">Todos que Gerou PIX</span>
                                         </div>
-                                        <p class="text-xs" :class="generalRemarketing.audience_segment === 'pix_generated' ? 'text-amber-300' : 'text-textSecondary'">Usuários que geraram PIX mas não pagaram</p>
+                                        <p class="text-xs" :class="generalRemarketing.audience_segment === 'pix_generated' ? 'text-amber-300' : 'text-gray-300'">Usuários que geraram PIX mas não pagaram</p>
                                     </div>
                                 </label>
 
                                 <!-- Comprou pelo Downsell -->
-                                <label class="flex items-start gap-3 p-3 bg-bg900 border-2 rounded-lg cursor-pointer transition-all duration-200"
-                                       :class="generalRemarketing.audience_segment === 'downsell_buyers' ? 'border-red-400 bg-red-500 bg-opacity-20 shadow-lg shadow-red-500/50' : 'border-white border-opacity-20 hover:border-white hover:border-opacity-40'"
+                                <label class="flex items-start gap-3 p-4 border-2 rounded-lg cursor-pointer transition-all duration-200"
+                                       :class="generalRemarketing.audience_segment === 'downsell_buyers' ? 'border-red-400 bg-red-500 bg-opacity-20 shadow-lg shadow-red-500/50' : 'border-gray-500 bg-gray-800 hover:border-gray-400 hover:bg-gray-700'"
                                        :style="generalRemarketing.audience_segment === 'downsell_buyers' ? 'box-shadow: 0 0 20px rgba(248, 113, 113, 0.4), 0 0 0 2px rgba(248, 113, 113, 0.6);' : ''">
                                     <input type="radio" 
                                            x-model="generalRemarketing.audience_segment" 
@@ -1444,16 +1444,16 @@
                                            style="accent-color: #f87171;">
                                     <div class="flex-1">
                                         <div class="flex items-center gap-2 mb-1">
-                                            <i class="fas fa-arrow-down" :class="generalRemarketing.audience_segment === 'downsell_buyers' ? 'text-red-400' : 'text-red-500'"></i>
-                                            <span class="text-sm font-bold" :class="generalRemarketing.audience_segment === 'downsell_buyers' ? 'text-red-400' : 'text-textPrimary'">Comprou pelo Downsell</span>
+                                            <i class="fas fa-arrow-down" :class="generalRemarketing.audience_segment === 'downsell_buyers' ? 'text-red-400' : 'text-red-400'"></i>
+                                            <span class="text-sm font-bold" :class="generalRemarketing.audience_segment === 'downsell_buyers' ? 'text-red-400' : 'text-gray-200'">Comprou pelo Downsell</span>
                                         </div>
-                                        <p class="text-xs" :class="generalRemarketing.audience_segment === 'downsell_buyers' ? 'text-red-300' : 'text-textSecondary'">Usuários que compraram via downsell</p>
+                                        <p class="text-xs" :class="generalRemarketing.audience_segment === 'downsell_buyers' ? 'text-red-300' : 'text-gray-300'">Usuários que compraram via downsell</p>
                                     </div>
                                 </label>
 
                                 <!-- Comprou com Order Bump -->
-                                <label class="flex items-start gap-3 p-3 bg-bg900 border-2 rounded-lg cursor-pointer transition-all duration-200"
-                                       :class="generalRemarketing.audience_segment === 'order_bump_buyers' ? 'border-purple-400 bg-purple-500 bg-opacity-20 shadow-lg shadow-purple-500/50' : 'border-white border-opacity-20 hover:border-white hover:border-opacity-40'"
+                                <label class="flex items-start gap-3 p-4 border-2 rounded-lg cursor-pointer transition-all duration-200"
+                                       :class="generalRemarketing.audience_segment === 'order_bump_buyers' ? 'border-purple-400 bg-purple-500 bg-opacity-20 shadow-lg shadow-purple-500/50' : 'border-gray-500 bg-gray-800 hover:border-gray-400 hover:bg-gray-700'"
                                        :style="generalRemarketing.audience_segment === 'order_bump_buyers' ? 'box-shadow: 0 0 20px rgba(192, 132, 252, 0.4), 0 0 0 2px rgba(192, 132, 252, 0.6);' : ''">
                                     <input type="radio" 
                                            x-model="generalRemarketing.audience_segment" 
@@ -1462,16 +1462,16 @@
                                            style="accent-color: #c084fc;">
                                     <div class="flex-1">
                                         <div class="flex items-center gap-2 mb-1">
-                                            <i class="fas fa-gift" :class="generalRemarketing.audience_segment === 'order_bump_buyers' ? 'text-purple-400' : 'text-purple-500'"></i>
-                                            <span class="text-sm font-bold" :class="generalRemarketing.audience_segment === 'order_bump_buyers' ? 'text-purple-400' : 'text-textPrimary'">Comprou com Order Bump</span>
+                                            <i class="fas fa-gift" :class="generalRemarketing.audience_segment === 'order_bump_buyers' ? 'text-purple-400' : 'text-purple-400'"></i>
+                                            <span class="text-sm font-bold" :class="generalRemarketing.audience_segment === 'order_bump_buyers' ? 'text-purple-400' : 'text-gray-200'">Comprou com Order Bump</span>
                                         </div>
-                                        <p class="text-xs" :class="generalRemarketing.audience_segment === 'order_bump_buyers' ? 'text-purple-300' : 'text-textSecondary'">Usuários que aceitaram order bump na compra</p>
+                                        <p class="text-xs" :class="generalRemarketing.audience_segment === 'order_bump_buyers' ? 'text-purple-300' : 'text-gray-300'">Usuários que aceitaram order bump na compra</p>
                                     </div>
                                 </label>
 
                                 <!-- Comprou Upsell -->
-                                <label class="flex items-start gap-3 p-3 bg-bg900 border-2 rounded-lg cursor-pointer transition-all duration-200"
-                                       :class="generalRemarketing.audience_segment === 'upsell_buyers' ? 'border-emerald-400 bg-emerald-500 bg-opacity-20 shadow-lg shadow-emerald-500/50' : 'border-white border-opacity-20 hover:border-white hover:border-opacity-40'"
+                                <label class="flex items-start gap-3 p-4 border-2 rounded-lg cursor-pointer transition-all duration-200"
+                                       :class="generalRemarketing.audience_segment === 'upsell_buyers' ? 'border-emerald-400 bg-emerald-500 bg-opacity-20 shadow-lg shadow-emerald-500/50' : 'border-gray-500 bg-gray-800 hover:border-gray-400 hover:bg-gray-700'"
                                        :style="generalRemarketing.audience_segment === 'upsell_buyers' ? 'box-shadow: 0 0 20px rgba(52, 211, 153, 0.4), 0 0 0 2px rgba(52, 211, 153, 0.6);' : ''">
                                     <input type="radio" 
                                            x-model="generalRemarketing.audience_segment" 
@@ -1480,16 +1480,16 @@
                                            style="accent-color: #34d399;">
                                     <div class="flex-1">
                                         <div class="flex items-center gap-2 mb-1">
-                                            <i class="fas fa-arrow-up" :class="generalRemarketing.audience_segment === 'upsell_buyers' ? 'text-emerald-400' : 'text-green-500'"></i>
-                                            <span class="text-sm font-bold" :class="generalRemarketing.audience_segment === 'upsell_buyers' ? 'text-emerald-400' : 'text-textPrimary'">Comprou Upsell</span>
+                                            <i class="fas fa-arrow-up" :class="generalRemarketing.audience_segment === 'upsell_buyers' ? 'text-emerald-400' : 'text-emerald-400'"></i>
+                                            <span class="text-sm font-bold" :class="generalRemarketing.audience_segment === 'upsell_buyers' ? 'text-emerald-400' : 'text-gray-200'">Comprou Upsell</span>
                                         </div>
-                                        <p class="text-xs" :class="generalRemarketing.audience_segment === 'upsell_buyers' ? 'text-emerald-300' : 'text-textSecondary'">Usuários que compraram upsells</p>
+                                        <p class="text-xs" :class="generalRemarketing.audience_segment === 'upsell_buyers' ? 'text-emerald-300' : 'text-gray-300'">Usuários que compraram upsells</p>
                                     </div>
                                 </label>
 
                                 <!-- Comprou por Remarketing -->
-                                <label class="flex items-start gap-3 p-3 bg-bg900 border-2 rounded-lg cursor-pointer transition-all duration-200"
-                                       :class="generalRemarketing.audience_segment === 'remarketing_buyers' ? 'border-blue-400 bg-blue-500 bg-opacity-20 shadow-lg shadow-blue-500/50' : 'border-white border-opacity-20 hover:border-white hover:border-opacity-40'"
+                                <label class="flex items-start gap-3 p-4 border-2 rounded-lg cursor-pointer transition-all duration-200"
+                                       :class="generalRemarketing.audience_segment === 'remarketing_buyers' ? 'border-blue-400 bg-blue-500 bg-opacity-20 shadow-lg shadow-blue-500/50' : 'border-gray-500 bg-gray-800 hover:border-gray-400 hover:bg-gray-700'"
                                        :style="generalRemarketing.audience_segment === 'remarketing_buyers' ? 'box-shadow: 0 0 20px rgba(96, 165, 250, 0.4), 0 0 0 2px rgba(96, 165, 250, 0.6);' : ''">
                                     <input type="radio" 
                                            x-model="generalRemarketing.audience_segment" 
@@ -1498,10 +1498,10 @@
                                            style="accent-color: #60a5fa;">
                                     <div class="flex-1">
                                         <div class="flex items-center gap-2 mb-1">
-                                            <i class="fas fa-bullhorn" :class="generalRemarketing.audience_segment === 'remarketing_buyers' ? 'text-blue-400' : 'text-blue-500'"></i>
-                                            <span class="text-sm font-bold" :class="generalRemarketing.audience_segment === 'remarketing_buyers' ? 'text-blue-400' : 'text-textPrimary'">Comprou por Remarketing</span>
+                                            <i class="fas fa-bullhorn" :class="generalRemarketing.audience_segment === 'remarketing_buyers' ? 'text-blue-400' : 'text-blue-400'"></i>
+                                            <span class="text-sm font-bold" :class="generalRemarketing.audience_segment === 'remarketing_buyers' ? 'text-blue-400' : 'text-gray-200'">Comprou por Remarketing</span>
                                         </div>
-                                        <p class="text-xs" :class="generalRemarketing.audience_segment === 'remarketing_buyers' ? 'text-blue-300' : 'text-textSecondary'">Usuários que compraram após campanha de remarketing</p>
+                                        <p class="text-xs" :class="generalRemarketing.audience_segment === 'remarketing_buyers' ? 'text-blue-300' : 'text-gray-300'">Usuários que compraram após campanha de remarketing</p>
                                     </div>
                                 </label>
                             </div>
