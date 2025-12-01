@@ -1577,28 +1577,32 @@
                                 </div>
                             </div>
                             
-                            <!-- ✅ Preview Visual Dinâmico e Super Claro -->
-                            <div class="p-4 rounded-xl transition-all duration-300"
-                                 :class="generalRemarketing.days_since_last_contact == 0 ? 'bg-green-500 bg-opacity-10 border-2 border-green-400' : 'bg-blue-500 bg-opacity-10 border-2 border-blue-400'">
+                            <!-- ✅ Preview Visual Dinâmico e Super Claro - CORES VIBRANTES -->
+                            <div class="p-4 rounded-xl transition-all duration-300 shadow-lg"
+                                 :class="generalRemarketing.days_since_last_contact == 0 ? 'bg-green-600 border-2 border-green-400' : 'bg-blue-600 border-2 border-blue-400'"
+                                 :style="generalRemarketing.days_since_last_contact == 0 ? 'box-shadow: 0 0 20px rgba(74, 222, 128, 0.5), 0 0 0 2px rgba(74, 222, 128, 0.7); background: rgba(22, 163, 74, 0.9);' : 'box-shadow: 0 0 20px rgba(96, 165, 250, 0.5), 0 0 0 2px rgba(96, 165, 250, 0.7); background: rgba(37, 99, 235, 0.9);'">
                                 <div class="flex items-start gap-3">
                                     <div class="flex-shrink-0 mt-0.5">
-                                        <i class="fas text-xl"
-                                           :class="generalRemarketing.days_since_last_contact == 0 ? 'fa-check-circle text-green-400' : 'fa-filter text-blue-400'"></i>
+                                        <i class="fas text-2xl"
+                                           :class="generalRemarketing.days_since_last_contact == 0 ? 'fa-check-circle text-green-200' : 'fa-filter text-blue-200'"
+                                           :style="generalRemarketing.days_since_last_contact == 0 ? 'filter: drop-shadow(0 0 8px rgba(187, 247, 208, 0.8));' : 'filter: drop-shadow(0 0 8px rgba(191, 219, 254, 0.8));'"></i>
                                     </div>
                                     <div class="flex-1">
-                                        <div class="text-sm font-bold mb-1"
-                                             :class="generalRemarketing.days_since_last_contact == 0 ? 'text-green-400' : 'text-blue-400'">
+                                        <div class="text-base font-black mb-2"
+                                             :class="generalRemarketing.days_since_last_contact == 0 ? 'text-green-100' : 'text-blue-100'"
+                                             :style="generalRemarketing.days_since_last_contact == 0 ? 'text-shadow: 0 0 10px rgba(187, 247, 208, 0.6);' : 'text-shadow: 0 0 10px rgba(191, 219, 254, 0.6);'">
                                             <span x-text="generalRemarketing.days_since_last_contact == 0 ? '✅ Sem Filtro de Inatividade' : '🎯 Filtro Ativo'"></span>
                                         </div>
-                                        <div class="text-xs leading-relaxed"
-                                             :class="generalRemarketing.days_since_last_contact == 0 ? 'text-green-300' : 'text-blue-300'">
+                                        <div class="text-sm leading-relaxed font-semibold"
+                                             :class="generalRemarketing.days_since_last_contact == 0 ? 'text-green-50' : 'text-blue-50'"
+                                             :style="generalRemarketing.days_since_last_contact == 0 ? 'text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);' : 'text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);'">
                                             <span x-show="generalRemarketing.days_since_last_contact == 0">
-                                                <strong>Todos os usuários</strong> do segmento "<span x-text="getSegmentLabel(generalRemarketing.audience_segment)"></span>" receberão a campanha, independente de quando foi a última interação.
+                                                <strong class="text-green-100 font-black">Todos os usuários</strong> do segmento "<span class="text-green-200 font-bold" x-text="getSegmentLabel(generalRemarketing.audience_segment)"></span>" receberão a campanha, independente de quando foi a última interação.
                                             </span>
                                             <span x-show="generalRemarketing.days_since_last_contact > 0">
-                                                Apenas usuários do segmento "<span x-text="getSegmentLabel(generalRemarketing.audience_segment)"></span>" que <strong>não interagiram com o bot há <span x-text="generalRemarketing.days_since_last_contact"></span> dia(s) ou mais</strong> receberão a campanha.
+                                                Apenas usuários do segmento "<span class="text-blue-200 font-bold" x-text="getSegmentLabel(generalRemarketing.audience_segment)"></span>" que <strong class="text-blue-100 font-black">não interagiram com o bot há <span class="text-blue-200 font-black" x-text="generalRemarketing.days_since_last_contact"></span> dia(s) ou mais</strong> receberão a campanha.
                                                 <br><br>
-                                                <strong>Exemplo:</strong> Se configurar 7 dias, apenas usuários que não enviaram mensagem, clicaram em botões ou interagiram de qualquer forma há pelo menos 7 dias receberão o remarketing.
+                                                <strong class="text-blue-100 font-black">Exemplo:</strong> <span class="text-blue-50">Se configurar 7 dias, apenas usuários que não enviaram mensagem, clicaram em botões ou interagiram de qualquer forma há pelo menos 7 dias receberão o remarketing.</span>
                                             </span>
                                         </div>
                                     </div>
