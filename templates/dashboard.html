@@ -1747,11 +1747,23 @@
 <!-- Modal: Importar/Exportar Bot -->
 <div x-show="showImportExportModal" 
      x-cloak
-     class="fixed inset-0 z-50 overflow-y-auto"
+     x-transition:enter="ease-out duration-300"
+     x-transition:enter-start="opacity-0"
+     x-transition:enter-end="opacity-100"
+     x-transition:leave="ease-in duration-200"
+     x-transition:leave-start="opacity-100"
+     x-transition:leave-end="opacity-0"
+     class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto"
      style="background: rgba(0, 0, 0, 0.95); backdrop-filter: blur(8px);">
-    <div class="flex items-center justify-center min-h-screen p-4">
-        <div @click.away="showImportExportModal = false" 
-             class="relative bg-bg900 rounded-2xl shadow-2xl max-w-4xl w-full"
+    <div class="flex items-center justify-center min-h-screen w-full p-4">
+        <div @click.away="showImportExportModal = false"
+             x-transition:enter="ease-out duration-300"
+             x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+             x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100"
+             x-transition:leave="ease-in duration-200"
+             x-transition:leave-start="opacity-100 translate-y-0 sm:scale-100"
+             x-transition:leave-end="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
+             class="relative bg-bg900 rounded-2xl shadow-2xl max-w-4xl w-full my-8"
              style="border: 2px solid var(--border-accent);">
             
             <!-- Header -->
@@ -2187,10 +2199,32 @@ function dashboardApp() {
                 // Forçar atualização visual após Alpine processar
                 this.$nextTick(() => {
                     const modal = document.querySelector('[x-show*="showImportExportModal"]');
-                    if (modal && value) {
-                        console.log('🔍 Modal encontrado, forçando display');
-                        modal.style.setProperty('display', 'flex', 'important');
-                        console.log('🔍 Display após força:', window.getComputedStyle(modal).display);
+                    if (modal) {
+                        if (value) {
+                            console.log('🔍 Modal encontrado, forçando display flex e centralização');
+                            modal.style.setProperty('display', 'flex', 'important');
+                            modal.style.setProperty('align-items', 'center', 'important');
+                            modal.style.setProperty('justify-content', 'center', 'important');
+                            modal.style.setProperty('position', 'fixed', 'important');
+                            modal.style.setProperty('z-index', '50', 'important');
+                            modal.style.setProperty('top', '0', 'important');
+                            modal.style.setProperty('left', '0', 'important');
+                            modal.style.setProperty('right', '0', 'important');
+                            modal.style.setProperty('bottom', '0', 'important');
+                            modal.style.setProperty('width', '100%', 'important');
+                            modal.style.setProperty('height', '100%', 'important');
+                            console.log('🔍 Display:', window.getComputedStyle(modal).display);
+                            console.log('🔍 Position:', window.getComputedStyle(modal).position);
+                            console.log('🔍 Z-index:', window.getComputedStyle(modal).zIndex);
+                            console.log('🔍 Top:', window.getComputedStyle(modal).top);
+                            console.log('🔍 Left:', window.getComputedStyle(modal).left);
+                            console.log('🔍 Width:', window.getComputedStyle(modal).width);
+                            console.log('🔍 Height:', window.getComputedStyle(modal).height);
+                        } else {
+                            modal.style.removeProperty('display');
+                        }
+                    } else {
+                        console.error('❌ Modal não encontrado no DOM!');
                     }
                 });
             });
