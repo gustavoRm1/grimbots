@@ -2775,8 +2775,12 @@ def import_bot_config():
             if not new_bot_token:
                 return jsonify({'error': 'Token do novo bot é obrigatório'}), 400
             
-            # Validar formato básico do token
-            if ':' not in new_bot_token or len(new_bot_token) < 20:
+            # ✅ VALIDAÇÃO DE FORMATO DE TOKEN NO BACKEND (segurança)
+            import re
+            TOKEN_REGEX = re.compile(r'^\d+:[A-Za-z0-9_-]+$')
+            TOKEN_MIN_LENGTH = 20
+            
+            if not TOKEN_REGEX.match(new_bot_token) or len(new_bot_token) < TOKEN_MIN_LENGTH:
                 return jsonify({'error': 'Formato de token inválido. Deve ser no formato: 123456789:ABC...'}), 400
             
             # Validar token único
