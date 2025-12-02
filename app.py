@@ -2436,6 +2436,509 @@ def duplicate_bot(bot_id):
         logger.error(f"Erro ao duplicar bot {bot_id}: {e}")
         return jsonify({'error': str(e)}), 400
 
+@app.route('/api/bots/<int:bot_id>/export', methods=['GET'])
+@login_required
+@csrf.exempt
+def export_bot_config(bot_id):
+    """
+    Exporta configurações de um bot em formato JSON
+    
+    Retorna todas as configurações do bot (BotConfig) em formato estruturado
+    para importação posterior em outro bot ou conta.
+    """
+    try:
+        bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
+        
+        # Buscar configuração do bot
+        config = bot.config
+        if not config:
+            return jsonify({
+                'error': 'Bot não possui configurações para exportar'
+            }), 400
+        
+        # Buscar gateway ativo do usuário (referência apenas)
+        from models import Gateway
+        active_gateway = Gateway.query.filter_by(
+            user_id=current_user.id,
+            is_active=True,
+            is_verified=True
+        ).first()
+        gateway_type = active_gateway.gateway_type if active_gateway else None
+        
+        # Buscar configurações de assinatura (se houver)
+        # Nota: As configurações de assinatura são passadas via update_bot_config,
+        # então não estão diretamente no BotConfig. Vamos incluir apenas referência.
+        subscription_config = None
+        # Se houver subscriptions ativas, podemos inferir configurações
+        from models import Subscription
+        active_subscription = Subscription.query.filter_by(
+            bot_id=bot.id,
+            status='active'
+        ).first()
+        if active_subscription:
+            subscription_config = {
+                'vip_chat_id': active_subscription.vip_chat_id,
+                'vip_group_link': active_subscription.vip_group_link,
+                'duration_hours': None  # Não armazenado diretamente, precisa ser configurado
+            }
+        
+        # Montar estrutura de exportação
+        export_data = {
+            'version': '1.0',
+            'bot_name': bot.name,
+            'exported_at': get_brazil_time().isoformat(),
+            'config': {
+                # Mensagem inicial
+                'welcome_message': config.welcome_message or '',
+                'welcome_media_url': config.welcome_media_url or '',
+                'welcome_media_type': config.welcome_media_type or 'video',
+                'welcome_audio_enabled': config.welcome_audio_enabled or False,
+                'welcome_audio_url': config.welcome_audio_url or '',
+                
+                # Botões principais
+                'main_buttons': config.get_main_buttons(),
+                
+                # Botões de redirecionamento
+                'redirect_buttons': config.get_redirect_buttons(),
+                
+                # Downsells
+                'downsells_enabled': config.downsells_enabled or False,
+                'downsells': config.get_downsells(),
+                
+                # Upsells
+                'upsells_enabled': config.upsells_enabled or False,
+                'upsells': config.get_upsells(),
+                
+                # Link de acesso
+                'access_link': config.access_link or '',
+                
+                # Mensagens personalizadas
+                'success_message': getattr(config, 'success_message', None) or '',
+                'pending_message': getattr(config, 'pending_message', None) or '',
+                
+                # Fluxo visual
+                'flow_enabled': config.flow_enabled or False,
+                'flow_steps': config.get_flow_steps(),
+                'flow_start_step_id': config.flow_start_step_id or None,
+                
+                # Gateway (referência apenas, sem credenciais)
+                'gateway_type': gateway_type,
+                
+                # Configurações de assinatura (se houver)
+                'subscription': subscription_config
+            }
+        }
+        
+        logger.info(f"✅ Configurações do bot {bot_id} exportadas por {current_user.email}")
+        
+        return jsonify({
+            'success': True,
+            'export': export_data
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Erro ao exportar configurações do bot {bot_id}: {e}", exc_info=True)
+        return jsonify({'error': f'Erro ao exportar configurações: {str(e)}'}), 500
+
+def _validate_import_config(config_data):
+    """
+    Valida estrutura completa de configuração antes de importar
+    
+    Retorna: (is_valid, errors, warnings)
+    """
+    errors = []
+    warnings = []
+    
+    # Validar tipos básicos
+    if not isinstance(config_data, dict):
+        errors.append('Config deve ser um objeto JSON')
+        return False, errors, warnings
+    
+    # Validar welcome_message
+    if 'welcome_message' in config_data:
+        welcome_msg = config_data['welcome_message']
+        if welcome_msg is not None:
+            if not isinstance(welcome_msg, str):
+                errors.append('welcome_message deve ser uma string')
+            elif len(welcome_msg) > 4096:
+                errors.append(f'welcome_message muito longo: {len(welcome_msg)} caracteres (máximo: 4096)')
+    
+    # Validar welcome_media_type
+    if 'welcome_media_type' in config_data:
+        media_type = config_data.get('welcome_media_type')
+        if media_type not in ['video', 'photo', None]:
+            errors.append(f'welcome_media_type inválido: {media_type} (deve ser "video" ou "photo")')
+    
+    # Validar URLs
+    url_fields = ['welcome_media_url', 'welcome_audio_url', 'access_link']
+    for field in url_fields:
+        if field in config_data and config_data[field]:
+            url_value = config_data[field]
+            if not isinstance(url_value, str):
+                errors.append(f'{field} deve ser uma string')
+            elif len(url_value) > 500:
+                errors.append(f'{field} muito longo: {len(url_value)} caracteres (máximo: 500)')
+            elif url_value and not (url_value.startswith('http://') or url_value.startswith('https://') or url_value.startswith('tg://')):
+                warnings.append(f'{field} não parece ser uma URL válida: {url_value[:50]}...')
+    
+    # Validar main_buttons
+    if 'main_buttons' in config_data:
+        main_buttons = config_data['main_buttons']
+        if main_buttons is not None:
+            if not isinstance(main_buttons, list):
+                errors.append('main_buttons deve ser um array')
+            else:
+                for idx, btn in enumerate(main_buttons):
+                    if not isinstance(btn, dict):
+                        errors.append(f'main_buttons[{idx}] deve ser um objeto')
+                        continue
+                    if 'text' not in btn or not btn.get('text'):
+                        errors.append(f'main_buttons[{idx}] deve ter campo "text"')
+                    if 'price' in btn:
+                        try:
+                            price = float(btn['price'])
+                            if price < 0:
+                                errors.append(f'main_buttons[{idx}].price não pode ser negativo')
+                        except (ValueError, TypeError):
+                            errors.append(f'main_buttons[{idx}].price deve ser um número')
+    
+    # Validar redirect_buttons
+    if 'redirect_buttons' in config_data:
+        redirect_buttons = config_data['redirect_buttons']
+        if redirect_buttons is not None:
+            if not isinstance(redirect_buttons, list):
+                errors.append('redirect_buttons deve ser um array')
+            else:
+                for idx, btn in enumerate(redirect_buttons):
+                    if not isinstance(btn, dict):
+                        errors.append(f'redirect_buttons[{idx}] deve ser um objeto')
+                        continue
+                    if 'text' not in btn or not btn.get('text'):
+                        errors.append(f'redirect_buttons[{idx}] deve ter campo "text"')
+                    if 'url' not in btn or not btn.get('url'):
+                        errors.append(f'redirect_buttons[{idx}] deve ter campo "url"')
+    
+    # Validar downsells
+    if 'downsells' in config_data:
+        downsells = config_data['downsells']
+        if downsells is not None:
+            if not isinstance(downsells, list):
+                errors.append('downsells deve ser um array')
+            else:
+                for idx, ds in enumerate(downsells):
+                    if not isinstance(ds, dict):
+                        errors.append(f'downsells[{idx}] deve ser um objeto')
+                        continue
+                    if 'delay_minutes' in ds:
+                        try:
+                            delay = int(ds['delay_minutes'])
+                            if delay < 0:
+                                errors.append(f'downsells[{idx}].delay_minutes não pode ser negativo')
+                        except (ValueError, TypeError):
+                            errors.append(f'downsells[{idx}].delay_minutes deve ser um número inteiro')
+    
+    # Validar upsells
+    if 'upsells' in config_data:
+        upsells = config_data['upsells']
+        if upsells is not None:
+            if not isinstance(upsells, list):
+                errors.append('upsells deve ser um array')
+            else:
+                for idx, us in enumerate(upsells):
+                    if not isinstance(us, dict):
+                        errors.append(f'upsells[{idx}] deve ser um objeto')
+                        continue
+                    if 'delay_minutes' in us:
+                        try:
+                            delay = int(us['delay_minutes'])
+                            if delay < 0:
+                                errors.append(f'upsells[{idx}].delay_minutes não pode ser negativo')
+                        except (ValueError, TypeError):
+                            errors.append(f'upsells[{idx}].delay_minutes deve ser um número inteiro')
+    
+    # Validar flow_steps e flow_start_step_id
+    if 'flow_steps' in config_data:
+        flow_steps = config_data['flow_steps']
+        if flow_steps is not None:
+            if not isinstance(flow_steps, list):
+                errors.append('flow_steps deve ser um array')
+            else:
+                step_ids = set()
+                for idx, step in enumerate(flow_steps):
+                    if not isinstance(step, dict):
+                        errors.append(f'flow_steps[{idx}] deve ser um objeto')
+                        continue
+                    if 'id' not in step:
+                        errors.append(f'flow_steps[{idx}] deve ter campo "id"')
+                    else:
+                        step_id = step['id']
+                        if step_id in step_ids:
+                            errors.append(f'flow_steps[{idx}]: ID duplicado "{step_id}"')
+                        step_ids.add(step_id)
+                
+                # Validar flow_start_step_id
+                if 'flow_start_step_id' in config_data and config_data['flow_start_step_id']:
+                    start_id = config_data['flow_start_step_id']
+                    if start_id not in step_ids:
+                        errors.append(f'flow_start_step_id "{start_id}" não existe em flow_steps')
+    
+    # Validar booleanos
+    bool_fields = ['welcome_audio_enabled', 'downsells_enabled', 'upsells_enabled', 'flow_enabled']
+    for field in bool_fields:
+        if field in config_data:
+            value = config_data[field]
+            if value is not None and not isinstance(value, bool):
+                errors.append(f'{field} deve ser true ou false')
+    
+    return len(errors) == 0, errors, warnings
+
+@app.route('/api/bots/import', methods=['POST'])
+@login_required
+@csrf.exempt
+def import_bot_config():
+    """
+    Importa configurações de um bot exportado
+    
+    Pode criar um novo bot ou aplicar em um bot existente.
+    
+    ✅ CORREÇÕES APLICADAS:
+    - Validação completa antes de aplicar qualquer configuração
+    - Rollback completo (bot criado apenas após validação)
+    - Validação de tipos, tamanhos e estruturas
+    - Validação de referências (flow_start_step_id)
+    """
+    bot_created = False
+    bot = None
+    
+    try:
+        data = request.get_json()
+        
+        # ✅ VALIDAÇÃO 1: Estrutura básica
+        if 'export_data' not in data:
+            return jsonify({'error': 'Dados de exportação não fornecidos'}), 400
+        
+        export_data = data['export_data']
+        
+        if not isinstance(export_data, dict):
+            return jsonify({'error': 'export_data deve ser um objeto JSON'}), 400
+        
+        # ✅ VALIDAÇÃO 2: Versão
+        if export_data.get('version') != '1.0':
+            return jsonify({
+                'error': f'Versão de exportação incompatível: {export_data.get("version")}. Versão suportada: 1.0'
+            }), 400
+        
+        # ✅ VALIDAÇÃO 3: Estrutura de config
+        if 'config' not in export_data:
+            return jsonify({'error': 'Estrutura de configuração inválida: campo "config" não encontrado'}), 400
+        
+        config_data = export_data['config']
+        if not isinstance(config_data, dict):
+            return jsonify({'error': 'config deve ser um objeto JSON'}), 400
+        
+        # ✅ VALIDAÇÃO 4: Validar estrutura completa ANTES de criar bot
+        is_valid, validation_errors, validation_warnings = _validate_import_config(config_data)
+        if not is_valid:
+            return jsonify({
+                'error': 'Dados de configuração inválidos',
+                'details': validation_errors
+            }), 400
+        
+        warnings = validation_warnings.copy()
+        
+        # ✅ VALIDAÇÃO 5: Gateway (se referenciado)
+        gateway_type = config_data.get('gateway_type')
+        if gateway_type:
+            from models import Gateway
+            user_gateway = Gateway.query.filter_by(
+                user_id=current_user.id,
+                gateway_type=gateway_type,
+                is_active=True,
+                is_verified=True
+            ).first()
+            if not user_gateway:
+                warnings.append(f"Gateway '{gateway_type}' não encontrado. Configure manualmente em /settings")
+        
+        # ✅ VALIDAÇÃO 6: Determinar bot destino
+        target_bot_id = data.get('target_bot_id')  # null = criar novo, int = aplicar em existente
+        new_bot_token = data.get('new_bot_token', '').strip()
+        new_bot_name = data.get('new_bot_name', '').strip()
+        
+        if target_bot_id:
+            # Aplicar em bot existente
+            bot = Bot.query.filter_by(id=target_bot_id, user_id=current_user.id).first()
+            if not bot:
+                return jsonify({'error': 'Bot não encontrado ou não pertence ao seu usuário'}), 404
+            logger.info(f"📥 Importando configurações para bot existente: {bot.name} (ID: {bot.id})")
+        else:
+            # Criar novo bot - VALIDAR ANTES DE CRIAR
+            if not new_bot_token:
+                return jsonify({'error': 'Token do novo bot é obrigatório'}), 400
+            
+            # Validar formato básico do token
+            if ':' not in new_bot_token or len(new_bot_token) < 20:
+                return jsonify({'error': 'Formato de token inválido. Deve ser no formato: 123456789:ABC...'}), 400
+            
+            # Validar token único
+            if Bot.query.filter_by(token=new_bot_token).first():
+                return jsonify({'error': 'Este token já está cadastrado no sistema'}), 400
+            
+            # Validar token com Telegram (com tratamento de erro de rede)
+            try:
+                validation_result = bot_manager.validate_token(new_bot_token)
+                bot_info = validation_result.get('bot_info')
+                
+                if not bot_info:
+                    error_type = validation_result.get('error_type', 'unknown')
+                    if error_type == 'network':
+                        return jsonify({
+                            'error': 'Erro ao validar token com Telegram. Tente novamente mais tarde.',
+                            'error_type': 'network'
+                        }), 503
+                    else:
+                        return jsonify({'error': 'Token inválido ou não autorizado pelo Telegram'}), 400
+            except Exception as token_error:
+                logger.error(f"❌ Erro ao validar token: {token_error}", exc_info=True)
+                return jsonify({
+                    'error': 'Erro ao validar token com Telegram. Verifique sua conexão e tente novamente.'
+                }), 503
+            
+            # Criar nome automático se não fornecido
+            if not new_bot_name:
+                new_bot_name = export_data.get('bot_name', 'Bot Importado')
+            
+            # ✅ CRÍTICO: Criar bot APENAS APÓS todas as validações passarem
+            bot = Bot(
+                user_id=current_user.id,
+                token=new_bot_token,
+                name=new_bot_name,
+                username=bot_info.get('username'),
+                bot_id=str(bot_info.get('id')),
+                is_active=True,
+                is_running=False
+            )
+            db.session.add(bot)
+            db.session.flush()
+            bot_created = True
+            logger.info(f"✅ Novo bot criado: {bot.name} (ID: {bot.id})")
+        
+        # ✅ VALIDAÇÃO 7: Criar ou atualizar configuração
+        if not bot.config:
+            config = BotConfig(bot_id=bot.id)
+            db.session.add(config)
+        else:
+            config = bot.config
+        
+        # ✅ APLICAR CONFIGURAÇÕES (já validadas)
+        # Usar verificação explícita de existência para diferenciar "não presente" de "presente mas None"
+        if 'welcome_message' in config_data:
+            welcome_msg = config_data['welcome_message']
+            config.welcome_message = welcome_msg if welcome_msg else None
+        
+        if 'welcome_media_url' in config_data:
+            config.welcome_media_url = config_data['welcome_media_url'] or None
+        
+        if 'welcome_media_type' in config_data:
+            media_type = config_data.get('welcome_media_type')
+            if media_type in ['video', 'photo']:
+                config.welcome_media_type = media_type
+        
+        if 'welcome_audio_enabled' in config_data:
+            config.welcome_audio_enabled = bool(config_data.get('welcome_audio_enabled', False))
+        
+        if 'welcome_audio_url' in config_data:
+            config.welcome_audio_url = config_data['welcome_audio_url'] or None
+        
+        if 'main_buttons' in config_data:
+            main_buttons = config_data.get('main_buttons')
+            if main_buttons is not None:
+                config.set_main_buttons(main_buttons if isinstance(main_buttons, list) else [])
+        
+        if 'redirect_buttons' in config_data:
+            redirect_buttons = config_data.get('redirect_buttons')
+            if redirect_buttons is not None:
+                config.set_redirect_buttons(redirect_buttons if isinstance(redirect_buttons, list) else [])
+        
+        if 'downsells_enabled' in config_data:
+            config.downsells_enabled = bool(config_data.get('downsells_enabled', False))
+        
+        if 'downsells' in config_data:
+            downsells = config_data.get('downsells')
+            if downsells is not None:
+                config.set_downsells(downsells if isinstance(downsells, list) else [])
+        
+        if 'upsells_enabled' in config_data:
+            config.upsells_enabled = bool(config_data.get('upsells_enabled', False))
+        
+        if 'upsells' in config_data:
+            upsells = config_data.get('upsells')
+            if upsells is not None:
+                config.set_upsells(upsells if isinstance(upsells, list) else [])
+        
+        if 'access_link' in config_data:
+            config.access_link = config_data['access_link'] or None
+        
+        if 'success_message' in config_data:
+            config.success_message = config_data['success_message'] or None
+        
+        if 'pending_message' in config_data:
+            config.pending_message = config_data['pending_message'] or None
+        
+        if 'flow_enabled' in config_data:
+            config.flow_enabled = bool(config_data.get('flow_enabled', False))
+        
+        if 'flow_steps' in config_data:
+            flow_steps = config_data.get('flow_steps')
+            if flow_steps is not None:
+                config.set_flow_steps(flow_steps if isinstance(flow_steps, list) else [])
+        
+        if 'flow_start_step_id' in config_data:
+            start_id = config_data.get('flow_start_step_id')
+            config.flow_start_step_id = start_id if start_id else None
+        
+        # ✅ COMMIT apenas se tudo passou
+        db.session.commit()
+        
+        logger.info(f"✅ Configurações importadas com sucesso para bot {bot.id} por {current_user.email}")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Configurações importadas com sucesso',
+            'bot_id': bot.id,
+            'bot_name': bot.name,
+            'warnings': warnings
+        })
+        
+    except ValueError as ve:
+        # Erro de validação dos métodos set_* (ex: set_main_buttons)
+        db.session.rollback()
+        if bot_created and bot:
+            # ✅ CLEANUP: Remover bot criado se erro ocorreu
+            try:
+                db.session.delete(bot)
+                db.session.commit()
+                logger.info(f"🧹 Bot {bot.id} removido devido a erro na importação")
+            except:
+                db.session.rollback()
+        logger.error(f"❌ Erro de validação ao importar configurações: {ve}", exc_info=True)
+        return jsonify({
+            'error': 'Erro ao validar configurações',
+            'details': str(ve)
+        }), 400
+        
+    except Exception as e:
+        db.session.rollback()
+        if bot_created and bot:
+            # ✅ CLEANUP: Remover bot criado se erro ocorreu
+            try:
+                db.session.delete(bot)
+                db.session.commit()
+                logger.info(f"🧹 Bot {bot.id} removido devido a erro na importação")
+            except:
+                db.session.rollback()
+        logger.error(f"❌ Erro ao importar configurações: {e}", exc_info=True)
+        return jsonify({'error': f'Erro ao importar configurações: {str(e)}'}), 500
+
 @app.route('/api/bots/<int:bot_id>/start', methods=['POST'])
 @login_required
 @csrf.exempt

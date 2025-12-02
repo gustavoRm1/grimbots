@@ -750,6 +750,13 @@
                     <span class="hidden sm:inline">Adicionar Bot</span>
                     <span class="sm:hidden">Novo Bot</span>
                 </button>
+                <button @click="showImportExportModal = true" 
+                        class="btn-action flex items-center justify-center flex-1 sm:flex-initial text-sm sm:text-base px-4 py-2.5 sm:py-3 whitespace-nowrap"
+                        style="background: rgba(59, 130, 246, 0.1); color: #3B82F6; border: 1px solid rgba(59, 130, 246, 0.3);">
+                    <i class="fas fa-exchange-alt mr-1.5 sm:mr-2"></i>
+                    <span class="hidden sm:inline">Importar/Exportar Bot</span>
+                    <span class="sm:hidden">Import/Export</span>
+                </button>
             </div>
         </div>
 
@@ -1737,6 +1744,296 @@
         </div>
     </div>
 
+    <!-- Modal: Importar/Exportar Bot -->
+    <div x-show="showImportExportModal" 
+         x-cloak
+         class="fixed inset-0 z-50 overflow-y-auto"
+         style="background: rgba(0, 0, 0, 0.95); backdrop-filter: blur(8px);">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div @click.away="showImportExportModal = false" 
+                 class="relative bg-bg900 rounded-2xl shadow-2xl max-w-4xl w-full"
+                 style="border: 2px solid var(--border-accent);">
+                
+                <!-- Header -->
+                <div class="px-8 py-6 border-b border-white border-opacity-5" style="background: var(--border-subtle);">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-2xl font-bold flex items-center gap-3 text-accent500">
+                            <i class="fas fa-exchange-alt"></i>
+                            Importar/Exportar Bot
+                        </h3>
+                        <button @click="showImportExportModal = false" 
+                                class="text-textSecondary hover:text-textPrimary transition-colors">
+                            <i class="fas fa-times text-xl"></i>
+                        </button>
+                    </div>
+                    <p class="text-sm text-textSecondary mt-1">Exporte configurações de um bot ou importe para outro</p>
+                </div>
+                
+                <!-- Tabs -->
+                <div class="px-8 pt-6 border-b border-white border-opacity-5">
+                    <div class="flex gap-2">
+                        <button @click="importExportTab = 'export'; exportData = null; exportJson = ''; selectedExportBot = null"
+                                :class="importExportTab === 'export' ? 'border-accent500 text-accent500' : 'border-transparent text-textSecondary'"
+                                class="px-6 py-3 border-b-2 font-bold transition-colors">
+                            <i class="fas fa-download mr-2"></i>Exportar
+                        </button>
+                        <button @click="importExportTab = 'import'; importJson = ''; importPreview = null; importFile = null; importTargetType = 'new'; importTargetBotId = null; importNewBotToken = ''; importNewBotName = ''"
+                                :class="importExportTab === 'import' ? 'border-accent500 text-accent500' : 'border-transparent text-textSecondary'"
+                                class="px-6 py-3 border-b-2 font-bold transition-colors">
+                            <i class="fas fa-upload mr-2"></i>Importar
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Body -->
+                <div class="px-8 py-6 max-h-[70vh] overflow-y-auto">
+                    <!-- Aba Exportar -->
+                    <div x-show="importExportTab === 'export'" x-cloak>
+                        <template x-if="!exportData">
+                            <div>
+                                <label class="block text-sm font-bold text-textPrimary mb-3">
+                                    <i class="fas fa-robot mr-2 text-accent500"></i>
+                                    Selecione o bot para exportar:
+                                </label>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
+                                    <template x-for="bot in bots" :key="bot.id">
+                                        <label class="flex items-center gap-3 p-4 bg-bg900 rounded-lg cursor-pointer hover:bg-surface-800 transition-colors border-2"
+                                               :class="selectedExportBot?.id === bot.id ? 'border-accent500' : 'border-transparent'"
+                                               :style="selectedExportBot?.id === bot.id ? 'background: var(--border-subtle);' : ''">
+                                            <input type="radio" 
+                                                   :value="bot.id"
+                                                   x-model="selectedExportBot"
+                                                   @change="selectedExportBot = bot"
+                                                   class="w-4 h-4"
+                                                   style="accent-color: var(--brand-gold-500);">
+                                            <div class="flex items-center gap-2 flex-1">
+                                                <i class="fas fa-robot text-accent500"></i>
+                                                <div>
+                                                    <div class="text-sm font-bold text-textPrimary" x-text="bot.name"></div>
+                                                    <div class="text-xs text-textSecondary">@<span x-text="bot.username || 'N/A'"></span></div>
+                                                </div>
+                                            </div>
+                                        </label>
+                                    </template>
+                                </div>
+                                <button @click="exportBot()"
+                                        :disabled="!selectedExportBot || loading"
+                                        :class="!selectedExportBot || loading ? 'opacity-50 cursor-not-allowed' : ''"
+                                        class="w-full btn-action btn-action-primary">
+                                    <i class="fas fa-download mr-2"></i>
+                                    <span x-text="loading ? 'Exportando...' : 'Exportar Configurações'"></span>
+                                </button>
+                            </div>
+                        </template>
+                        
+                        <template x-if="exportData">
+                            <div>
+                                <div class="mb-4 p-4 bg-green-500 bg-opacity-10 border border-green-500 rounded-lg">
+                                    <div class="flex items-center gap-2 text-green-400 font-bold">
+                                        <i class="fas fa-check-circle"></i>
+                                        <span>Configurações exportadas com sucesso!</span>
+                                    </div>
+                                </div>
+                                
+                                <label class="block text-sm font-bold text-textPrimary mb-2">
+                                    <i class="fas fa-code mr-2 text-accent500"></i>
+                                    JSON Exportado:
+                                </label>
+                                <textarea x-model="exportJson" 
+                                          readonly
+                                          rows="15"
+                                          class="w-full px-4 py-3 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary font-mono text-xs focus:outline-none"></textarea>
+                                
+                                <div class="flex gap-3 mt-4">
+                                    <button @click="copyExportJson()"
+                                            class="flex-1 px-6 py-3 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary font-bold hover:bg-surface-800 transition-colors">
+                                        <i class="fas fa-copy mr-2"></i>Copiar JSON
+                                    </button>
+                                    <button @click="downloadExportJson()"
+                                            class="flex-1 btn-action btn-action-primary">
+                                        <i class="fas fa-download mr-2"></i>Download
+                                    </button>
+                                </div>
+                                
+                                <button @click="exportData = null; exportJson = ''; selectedExportBot = null"
+                                        class="w-full mt-3 px-6 py-3 bg-bg900 border border-white border-opacity-10 rounded-lg text-textSecondary font-bold hover:bg-surface-800 transition-colors">
+                                    <i class="fas fa-redo mr-2"></i>Exportar Outro Bot
+                                </button>
+                            </div>
+                        </template>
+                    </div>
+                    
+                    <!-- Aba Importar -->
+                    <div x-show="importExportTab === 'import'" x-cloak>
+                        <div class="space-y-6">
+                            <!-- Opção 1: Colar JSON -->
+                            <div>
+                                <label class="block text-sm font-bold text-textPrimary mb-2">
+                                    <i class="fas fa-paste mr-2 text-accent500"></i>
+                                    Opção 1: Colar JSON
+                                </label>
+                                <textarea x-model="importJson" 
+                                          @input="validateImportJson()"
+                                          rows="10"
+                                          class="w-full px-4 py-3 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary font-mono text-xs focus:outline-none focus:ring-2 focus:ring-accent500"
+                                          placeholder='Cole aqui o JSON exportado...&#10;&#10;Exemplo:&#10;{&#10;  "version": "1.0",&#10;  "bot_name": "Bot 1",&#10;  "config": { ... }&#10;}'
+                                          maxlength="5242880"></textarea>
+                                <p class="text-xs text-textSecondary mt-1">
+                                    <i class="fas fa-info-circle mr-1"></i>
+                                    Tamanho máximo: 5MB. Validação automática em tempo real.
+                                </p>
+                            </div>
+                            
+                            <!-- Opção 2: Upload arquivo -->
+                            <div>
+                                <label class="block text-sm font-bold text-textPrimary mb-2">
+                                    <i class="fas fa-file-upload mr-2 text-accent500"></i>
+                                    Opção 2: Upload arquivo
+                                </label>
+                                <input type="file" 
+                                       @change="handleImportFile($event)"
+                                       accept=".json,application/json"
+                                       class="w-full px-4 py-3 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary focus:outline-none focus:ring-2 focus:ring-accent500">
+                            </div>
+                            
+                            <!-- Preview -->
+                            <template x-if="importPreview">
+                                <div :class="importPreview.valid ? 'bg-green-500 bg-opacity-10 border-green-500' : 'bg-red-500 bg-opacity-10 border-red-500'"
+                                     class="p-4 border rounded-lg">
+                                    <template x-if="importPreview.valid">
+                                        <div>
+                                            <div class="flex items-center gap-2 text-green-400 font-bold mb-3">
+                                                <i class="fas fa-check-circle"></i>
+                                                <span>JSON válido</span>
+                                            </div>
+                                            <div class="text-sm text-textPrimary space-y-1">
+                                                <!-- ✅ bot_name já foi sanitizado em validateImportJson -->
+                                                <div><strong>Bot:</strong> <span x-text="importPreview.bot_name"></span></div>
+                                                <div><strong>Exportado em:</strong> <span x-text="importPreview.exported_at"></span></div>
+                                                <div class="mt-3"><strong>Configurações:</strong></div>
+                                                <div class="ml-4 space-y-1 text-textSecondary">
+                                                    <div>Mensagem inicial: <span x-text="importPreview.config_summary.welcome_message"></span></div>
+                                                    <div>Botões principais: <span x-text="importPreview.config_summary.main_buttons"></span></div>
+                                                    <div>Downsells: <span x-text="importPreview.config_summary.downsells"></span></div>
+                                                    <div>Upsells: <span x-text="importPreview.config_summary.upsells"></span></div>
+                                                    <div>Fluxo visual: <span x-text="importPreview.config_summary.flow_enabled"></span></div>
+                                                    <div>Gateway: <span x-text="importPreview.config_summary.gateway_type"></span></div>
+                                                    <div>Assinatura: <span x-text="importPreview.config_summary.subscription"></span></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </template>
+                                    <template x-if="!importPreview.valid">
+                                        <div class="text-red-400">
+                                            <i class="fas fa-exclamation-circle mr-2"></i>
+                                            <!-- ✅ x-text já escapa HTML automaticamente (prevenir XSS) -->
+                                            <span x-text="importPreview.error"></span>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+                            
+                            <!-- Seleção de destino -->
+                            <template x-if="importPreview && importPreview.valid">
+                                <div>
+                                    <label class="block text-sm font-bold text-textPrimary mb-3">
+                                        <i class="fas fa-target mr-2 text-accent500"></i>
+                                        Aplicar em:
+                                    </label>
+                                    <div class="space-y-3">
+                                        <label class="flex items-center gap-3 p-4 bg-bg900 rounded-lg cursor-pointer border-2"
+                                               :class="importTargetType === 'new' ? 'border-accent500' : 'border-transparent'">
+                                            <input type="radio" 
+                                                   x-model="importTargetType"
+                                                   value="new"
+                                                   @change="importTargetBotId = null"
+                                                   class="w-4 h-4"
+                                                   style="accent-color: var(--brand-gold-500);">
+                                            <div>
+                                                <div class="text-sm font-bold text-textPrimary">Criar novo bot</div>
+                                                <div class="text-xs text-textSecondary">As configurações serão aplicadas em um bot novo</div>
+                                            </div>
+                                        </label>
+                                        
+                                        <div x-show="importTargetType === 'new'" class="ml-7 space-y-3">
+                                            <div>
+                                                <label class="block text-xs text-textSecondary mb-1">Token do novo bot *</label>
+                                                <input type="text" 
+                                                       x-model="importNewBotToken"
+                                                       @input="if (importNewBotToken && !validateTokenFormat(importNewBotToken.trim())) { importNewBotToken = importNewBotToken.trim(); }"
+                                                       placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
+                                                       class="w-full px-4 py-2 bg-surface-800 border rounded-lg text-textPrimary font-mono text-sm focus:outline-none focus:ring-2"
+                                                       :class="importNewBotToken && !validateTokenFormat(importNewBotToken.trim()) ? 'border-red-500 focus:ring-red-500' : 'border-white border-opacity-10 focus:ring-accent500'">
+                                                <p x-show="importNewBotToken && !validateTokenFormat(importNewBotToken.trim())" 
+                                                   x-cloak
+                                                   class="text-xs text-red-400 mt-1">
+                                                    <i class="fas fa-exclamation-circle mr-1"></i>
+                                                    Formato inválido. Deve ser: números:letras/números
+                                                </p>
+                                            </div>
+                                            <div>
+                                                <label class="block text-xs text-textSecondary mb-1">Nome do novo bot (opcional)</label>
+                                                <input type="text" 
+                                                       x-model="importNewBotName"
+                                                       :placeholder="importPreview.bot_name + ' (Importado)'"
+                                                       class="w-full px-4 py-2 bg-surface-800 border border-white border-opacity-10 rounded-lg text-textPrimary text-sm focus:outline-none focus:ring-2 focus:ring-accent500">
+                                            </div>
+                                        </div>
+                                        
+                                        <label class="flex items-center gap-3 p-4 bg-bg900 rounded-lg cursor-pointer border-2"
+                                               :class="importTargetType === 'existing' ? 'border-accent500' : 'border-transparent'">
+                                            <input type="radio" 
+                                                   x-model="importTargetType"
+                                                   value="existing"
+                                                   @change="importTargetBotId = null"
+                                                   class="w-4 h-4"
+                                                   style="accent-color: var(--brand-gold-500);">
+                                            <div>
+                                                <div class="text-sm font-bold text-textPrimary">Bot existente</div>
+                                                <div class="text-xs text-textSecondary">As configurações serão aplicadas em um bot existente</div>
+                                            </div>
+                                        </label>
+                                        
+                                        <div x-show="importTargetType === 'existing'" class="ml-7">
+                                            <select x-model="importTargetBotId"
+                                                    class="w-full px-4 py-2 bg-surface-800 border border-white border-opacity-10 rounded-lg text-textPrimary text-sm focus:outline-none focus:ring-2 focus:ring-accent500">
+                                                <option :value="null">Selecione um bot...</option>
+                                                <template x-for="bot in bots" :key="bot.id">
+                                                    <option :value="bot.id" x-text="bot.name + ' (@' + (bot.username || 'N/A') + ')'"></option>
+                                                </template>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+                            
+                            <!-- Botões de ação -->
+                            <div class="flex gap-3">
+                                <button @click="showImportExportModal = false"
+                                        class="flex-1 px-6 py-3 bg-bg900 border border-white border-opacity-10 rounded-lg text-textSecondary font-bold hover:bg-surface-800 transition-colors">
+                                    Cancelar
+                                </button>
+                                <button @click="importBot()"
+                                        :disabled="!importPreview || !importPreview.valid || loading || (importTargetType === 'existing' && !importTargetBotId) || (importTargetType === 'new' && (!importNewBotToken.trim() || !validateTokenFormat(importNewBotToken.trim())))"
+                                        :class="(!importPreview || !importPreview.valid || loading || (importTargetType === 'existing' && !importTargetBotId) || (importTargetType === 'new' && (!importNewBotToken.trim() || !validateTokenFormat(importNewBotToken.trim())))) ? 'opacity-50 cursor-not-allowed' : ''"
+                                        class="flex-1 btn-action btn-action-primary relative">
+                                    <i class="fas" :class="loading ? 'fa-spinner fa-spin' : 'fa-upload'" class="mr-2"></i>
+                                    <span x-text="loading ? 'Importando...' : 'Importar'"></span>
+                                    <!-- ✅ Loading overlay -->
+                                    <div x-show="loading" 
+                                         x-cloak
+                                         class="absolute inset-0 bg-black bg-opacity-50 rounded-lg flex items-center justify-center">
+                                        <i class="fas fa-spinner fa-spin text-white text-xl"></i>
+                                    </div>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </div><!-- FIM: x-data="dashboardApp()" -->
 
 {% endblock %}
@@ -1759,6 +2056,21 @@ function dashboardApp() {
         botToDuplicate: null,
         loading: false,
         isUpdating: false,
+        
+        // Importar/Exportar Bot
+        showImportExportModal: false,
+        importExportTab: 'export', // 'export' | 'import'
+        selectedExportBot: null,
+        exportData: null,
+        exportJson: '',
+        importJson: '',
+        importFile: null,
+        importPreview: null,
+        importTargetType: 'new', // 'new' | 'existing'
+        importTargetBotId: null,
+        importNewBotToken: '',
+        importNewBotName: '',
+        importWarnings: [],
         
         // Remarketing Geral
         generalRemarketing: {
@@ -2668,6 +2980,347 @@ function dashboardApp() {
                 'remarketing_buyers': 'Todos que Comprou por Remarketing'
             };
             return segmentLabels[segment] || 'Todos os Usuários';
+        },
+        
+        // Importar/Exportar Bot
+        async exportBot() {
+            if (!this.selectedExportBot) {
+                alert('❌ Selecione um bot para exportar');
+                return;
+            }
+            
+            try {
+                this.loading = true;
+                const response = await fetch(`/api/bots/${this.selectedExportBot.id}/export`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    this.exportData = data.export;
+                    this.exportJson = JSON.stringify(data.export, null, 2);
+                } else {
+                    alert('Erro: ' + (data.error || 'Erro ao exportar configurações'));
+                }
+            } catch (error) {
+                alert('Erro ao exportar: ' + error.message);
+            } finally {
+                this.loading = false;
+            }
+        },
+        
+        copyExportJson() {
+            navigator.clipboard.writeText(this.exportJson).then(() => {
+                alert('✅ JSON copiado para a área de transferência!');
+            }).catch(() => {
+                alert('❌ Erro ao copiar JSON');
+            });
+        },
+        
+        downloadExportJson() {
+            const blob = new Blob([this.exportJson], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `bot_${this.selectedExportBot.name.replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        },
+        
+        // ✅ Função helper para sanitizar texto (prevenir XSS)
+        // Nota: x-text já escapa HTML automaticamente, mas esta função pode ser útil para outros casos
+        sanitizeText(text) {
+            if (!text) return '';
+            // Retornar texto puro (x-text já escapa HTML)
+            return String(text).replace(/[<>]/g, ''); // Remover apenas < e > como medida extra
+        },
+        
+        // ✅ Validação completa de estrutura (igual ao backend)
+        validateConfigStructure(config) {
+            const errors = [];
+            
+            if (!config || typeof config !== 'object') {
+                errors.push('Config deve ser um objeto JSON');
+                return errors;
+            }
+            
+            // Validar welcome_message
+            if ('welcome_message' in config && config.welcome_message !== null) {
+                if (typeof config.welcome_message !== 'string') {
+                    errors.push('welcome_message deve ser uma string');
+                } else if (config.welcome_message.length > 4096) {
+                    errors.push(`welcome_message muito longo: ${config.welcome_message.length} caracteres (máximo: 4096)`);
+                }
+            }
+            
+            // Validar welcome_media_type
+            if ('welcome_media_type' in config && config.welcome_media_type !== null) {
+                if (!['video', 'photo'].includes(config.welcome_media_type)) {
+                    errors.push(`welcome_media_type inválido: ${config.welcome_media_type} (deve ser "video" ou "photo")`);
+                }
+            }
+            
+            // Validar main_buttons
+            if ('main_buttons' in config && config.main_buttons !== null) {
+                if (!Array.isArray(config.main_buttons)) {
+                    errors.push('main_buttons deve ser um array');
+                } else {
+                    config.main_buttons.forEach((btn, idx) => {
+                        if (typeof btn !== 'object') {
+                            errors.push(`main_buttons[${idx}] deve ser um objeto`);
+                        } else if (!btn.text) {
+                            errors.push(`main_buttons[${idx}] deve ter campo "text"`);
+                        }
+                    });
+                }
+            }
+            
+            // Validar flow_steps e flow_start_step_id
+            if ('flow_steps' in config && config.flow_steps !== null) {
+                if (!Array.isArray(config.flow_steps)) {
+                    errors.push('flow_steps deve ser um array');
+                } else {
+                    const stepIds = new Set();
+                    config.flow_steps.forEach((step, idx) => {
+                        if (typeof step !== 'object') {
+                            errors.push(`flow_steps[${idx}] deve ser um objeto`);
+                        } else if (!step.id) {
+                            errors.push(`flow_steps[${idx}] deve ter campo "id"`);
+                        } else {
+                            if (stepIds.has(step.id)) {
+                                errors.push(`flow_steps[${idx}]: ID duplicado "${step.id}"`);
+                            }
+                            stepIds.add(step.id);
+                        }
+                    });
+                    
+                    // Validar flow_start_step_id
+                    if ('flow_start_step_id' in config && config.flow_start_step_id) {
+                        if (!stepIds.has(config.flow_start_step_id)) {
+                            errors.push(`flow_start_step_id "${config.flow_start_step_id}" não existe em flow_steps`);
+                        }
+                    }
+                }
+            }
+            
+            return errors;
+        },
+        
+        // ✅ Validação com debounce
+        validateImportJsonDebounced: null,
+        
+        async validateImportJson() {
+            // Limpar timeout anterior
+            if (this.validateImportJsonDebounced) {
+                clearTimeout(this.validateImportJsonDebounced);
+            }
+            
+            // Debounce de 500ms
+            this.validateImportJsonDebounced = setTimeout(() => {
+                this._doValidateImportJson();
+            }, 500);
+        },
+        
+        _doValidateImportJson() {
+            if (!this.importJson.trim()) {
+                this.importPreview = null;
+                return;
+            }
+            
+            try {
+                const parsed = JSON.parse(this.importJson);
+                
+                // Validar estrutura básica
+                if (!parsed.version || parsed.version !== '1.0') {
+                    this.importPreview = {
+                        valid: false,
+                        error: `Versão incompatível: ${parsed.version || 'não especificada'}. Versão suportada: 1.0`
+                    };
+                    return;
+                }
+                
+                if (!parsed.config || typeof parsed.config !== 'object') {
+                    this.importPreview = {
+                        valid: false,
+                        error: 'Estrutura de configuração inválida: campo "config" não encontrado ou inválido'
+                    };
+                    return;
+                }
+                
+                // ✅ Validação completa de estrutura
+                const validationErrors = this.validateConfigStructure(parsed.config);
+                if (validationErrors.length > 0) {
+                    this.importPreview = {
+                        valid: false,
+                        error: 'Dados de configuração inválidos: ' + validationErrors.join('; ')
+                    };
+                    return;
+                }
+                
+                // ✅ Sanitizar bot_name antes de mostrar (prevenir XSS)
+                const config = parsed.config;
+                const botName = parsed.bot_name || 'Bot Importado';
+                const sanitizedBotName = this.sanitizeText(botName);
+                
+                // Montar preview
+                this.importPreview = {
+                    valid: true,
+                    bot_name: sanitizedBotName,
+                    exported_at: parsed.exported_at || 'Não especificado',
+                    config_summary: {
+                        welcome_message: config.welcome_message ? '✅' : '❌',
+                        main_buttons: Array.isArray(config.main_buttons) ? config.main_buttons.length : 0,
+                        downsells: Array.isArray(config.downsells) ? config.downsells.length : 0,
+                        upsells: Array.isArray(config.upsells) ? config.upsells.length : 0,
+                        flow_enabled: config.flow_enabled ? '✅' : '❌',
+                        gateway_type: config.gateway_type || 'Não especificado',
+                        subscription: config.subscription ? '✅' : '❌'
+                    }
+                };
+                
+                // ✅ Resetar seleção de destino apenas se preview mudou de inválido para válido
+                const wasInvalid = !this.importPreview || !this.importPreview.valid;
+                if (wasInvalid && this.importPreview.valid) {
+                    // Só resetar se estava inválido antes
+                    this.importTargetType = 'new';
+                    this.importTargetBotId = null;
+                    this.importNewBotToken = '';
+                    this.importNewBotName = '';
+                }
+            } catch (error) {
+                this.importPreview = {
+                    valid: false,
+                    error: 'JSON inválido: ' + error.message
+                };
+            }
+        },
+        
+        handleImportFile(event) {
+            const file = event.target.files[0];
+            if (!file) {
+                this.importFile = null;
+                return;
+            }
+            
+            // ✅ Validação de tamanho máximo (5MB)
+            const maxSize = 5 * 1024 * 1024; // 5MB
+            if (file.size > maxSize) {
+                alert('❌ Arquivo muito grande! Tamanho máximo: 5MB');
+                event.target.value = ''; // Limpar input
+                return;
+            }
+            
+            // ✅ Validação de tipo MIME
+            if (file.type && !file.type.includes('json') && !file.name.endsWith('.json')) {
+                alert('❌ Arquivo deve ser do tipo JSON (.json)');
+                event.target.value = ''; // Limpar input
+                return;
+            }
+            
+            this.importFile = file;
+            const reader = new FileReader();
+            
+            // ✅ Tratamento de erro
+            reader.onerror = () => {
+                alert('❌ Erro ao ler arquivo. Verifique se o arquivo não está corrompido.');
+                this.importFile = null;
+                event.target.value = ''; // Limpar input
+            };
+            
+            reader.onload = (e) => {
+                try {
+                    this.importJson = e.target.result;
+                    this._doValidateImportJson(); // Validar imediatamente (sem debounce para upload)
+                } catch (error) {
+                    alert('❌ Erro ao processar arquivo: ' + error.message);
+                }
+            };
+            
+            reader.readAsText(file);
+        },
+        
+        // ✅ Validar formato de token no frontend
+        validateTokenFormat(token) {
+            if (!token) return false;
+            // Formato: números:letras/números (ex: 123456789:ABCdefGHIjklMNOpqrsTUVwxyz)
+            const tokenRegex = /^\d+:[A-Za-z0-9_-]+$/;
+            return tokenRegex.test(token) && token.length >= 20;
+        },
+        
+        async importBot() {
+            if (!this.importJson.trim()) {
+                alert('❌ Cole o JSON ou faça upload de um arquivo');
+                return;
+            }
+            
+            if (!this.importPreview || !this.importPreview.valid) {
+                alert('❌ JSON inválido. Corrija os erros antes de importar.');
+                return;
+            }
+            
+            // Validar destino
+            const isNewBot = this.importTargetType === 'new';
+            const isExistingBot = this.importTargetType === 'existing' && this.importTargetBotId;
+            
+            if (!isExistingBot && !this.importNewBotToken.trim()) {
+                alert('❌ Selecione um bot existente ou forneça o token de um novo bot');
+                return;
+            }
+            
+            // ✅ Validação de formato de token no frontend
+            if (isNewBot && !this.validateTokenFormat(this.importNewBotToken.trim())) {
+                alert('❌ Formato de token inválido. Deve ser no formato: 123456789:ABCdefGHIjklMNOpqrsTUVwxyz');
+                return;
+            }
+            
+            // ✅ Confirmação para novo bot
+            if (isNewBot && !confirm(`Criar novo bot com as configurações importadas?\n\nBot: ${this.importPreview.bot_name}`)) {
+                return;
+            }
+            
+            // ✅ Confirmação para bot existente (CRÍTICO: substitui tudo!)
+            if (isExistingBot) {
+                const botName = this.bots.find(b => b.id === this.importTargetBotId)?.name || 'Bot';
+                if (!confirm(`⚠️ ATENÇÃO: Aplicar configurações no bot "${botName}"?\n\n` +
+                           `TODAS as configurações atuais serão SUBSTITUÍDAS pelas configurações importadas.\n\n` +
+                           `Esta ação NÃO pode ser desfeita!`)) {
+                    return;
+                }
+            }
+            
+            try {
+                this.loading = true;
+                const exportData = JSON.parse(this.importJson);
+                
+                const response = await fetch('/api/bots/import', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        export_data: exportData,
+                        target_bot_id: isExistingBot ? this.importTargetBotId : null,
+                        new_bot_token: isNewBot ? this.importNewBotToken.trim() : null,
+                        new_bot_name: isNewBot ? (this.importNewBotName.trim() || null) : null
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    let message = `✅ Configurações importadas com sucesso!\n\nBot: ${data.bot_name}`;
+                    if (data.warnings && data.warnings.length > 0) {
+                        message += '\n\n⚠️ Avisos:\n' + data.warnings.join('\n');
+                    }
+                    alert(message);
+                    this.showImportExportModal = false;
+                    location.reload();
+                } else {
+                    alert('Erro: ' + (data.error || 'Erro ao importar configurações'));
+                }
+            } catch (error) {
+                alert('Erro ao importar: ' + error.message);
+            } finally {
+                this.loading = false;
+            }
         },
         
         // Remarketing Geral (Multi-Bot)
