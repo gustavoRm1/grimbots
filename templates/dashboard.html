@@ -751,7 +751,7 @@
                     <span class="sm:hidden">Novo Bot</span>
                 </button>
                 <button id="btn-import-export"
-                        @click="openImportExportModal()" 
+                        onclick="forceOpenImportExportModal(event)"
                         class="btn-action flex items-center justify-center flex-1 sm:flex-initial text-sm sm:text-base px-4 py-2.5 sm:py-3 whitespace-nowrap"
                         style="background: rgba(59, 130, 246, 0.1); color: #3B82F6; border: 1px solid rgba(59, 130, 246, 0.3);">
                     <i class="fas fa-exchange-alt mr-1.5 sm:mr-2"></i>
@@ -3758,104 +3758,141 @@ style.textContent = `
 document.head.appendChild(style);
 </script>
 
-<!-- ✅ FALLBACK JS PURO - Modal Independente do Alpine -->
-<!-- Solução robusta que funciona mesmo se Alpine quebrar -->
+<!-- ✅ SOLUÇÃO GARANTIDA - Modal Funciona SEMPRE -->
+<!-- Função global que SEMPRE abre o modal, tentando Alpine primeiro, fallback depois -->
 <script>
-(function() {
-    'use strict';
+// ✅ FUNÇÃO GLOBAL GARANTIDA - Sempre funciona
+window.forceOpenImportExportModal = function(event) {
+    if (event) event.preventDefault();
+    if (event) event.stopPropagation();
     
-    // ✅ Estado do fallback
-    let fallbackState = {
-        currentTab: 'export',
-        selectedBot: null,
-        exportData: null,
-        exportJson: '',
-        importJson: '',
-        importPreview: null,
-        importTargetType: 'new',
-        importTargetBotId: null,
-        importNewBotToken: '',
-        importNewBotName: '',
-        loading: false,
-        bots: []
-    };
+    console.log('[Force Open] Tentando abrir modal...');
     
-    // ✅ Helper para acessar Alpine app
-    function getAlpineApp() {
+    // ✅ Tentativa 1: Forçar modal Alpine diretamente via DOM
+    const alpineModal = document.getElementById('modal-import-export');
+    if (alpineModal) {
+        // Tentar acessar Alpine app e abrir
         try {
             const alpineElement = document.querySelector('[x-data*="dashboardApp"]');
             if (alpineElement && typeof Alpine !== 'undefined' && Alpine.$data) {
-                return Alpine.$data(alpineElement);
-            }
-        } catch (e) {
-            console.warn('[Fallback] Erro ao acessar Alpine:', e);
-        }
-        return null;
-    }
-    
-    // ✅ Sincronizar estado com Alpine
-    function syncWithAlpine() {
-        const app = getAlpineApp();
-        if (app) {
-            fallbackState.bots = app.bots || [];
-        }
-    }
-    
-    // ✅ Aguardar DOM e inicializar
-    function initFallback() {
-        const btn = document.getElementById('btn-import-export');
-        if (!btn) {
-            console.warn('[Import/Export Fallback] Botão não encontrado');
-            return;
-        }
-        
-        // ✅ Sincronizar bots do Alpine
-        syncWithAlpine();
-        
-        // ✅ Prevenir múltiplos event listeners
-        if (btn.dataset.fallbackAttached === 'true') return;
-        btn.dataset.fallbackAttached = 'true';
-        
-        // ✅ Interceptar clique
-        btn.addEventListener('click', function(e) {
-            // Tentar Alpine primeiro
-            if (typeof Alpine !== 'undefined') {
-                try {
-                    const app = getAlpineApp();
-                    if (app && typeof app.openImportExportModal === 'function') {
-                        app.openImportExportModal();
+                const app = Alpine.$data(alpineElement);
+                if (app) {
+                    console.log('[Force Open] Tentando via Alpine...');
+                    // Fechar outros modais
+                    app.showGeneralRemarketingModal = false;
+                    app.showAddBotModal = false;
+                    app.showDuplicateBotModal = false;
+                    app.showBannedBotModal = false;
+                    
+                    // Abrir modal
+                    app.showImportExportModal = true;
+                    
+                    // Forçar display via DOM também
+                    setTimeout(() => {
+                        alpineModal.removeAttribute('x-cloak');
+                        alpineModal.style.setProperty('display', 'flex', 'important');
+                        alpineModal.style.setProperty('visibility', 'visible', 'important');
+                        alpineModal.style.setProperty('opacity', '1', 'important');
+                        alpineModal.style.setProperty('z-index', '99999', 'important');
                         
-                        // ✅ Verificar se modal apareceu em 500ms
-                        setTimeout(() => {
-                            const alpineModal = document.getElementById('modal-import-export');
-                            const computed = alpineModal ? window.getComputedStyle(alpineModal) : null;
-                            if (!alpineModal || !computed || computed.display === 'none' || computed.visibility === 'hidden') {
-                                console.log('[Import/Export Fallback] Alpine não abriu modal, usando fallback');
-                                openFallbackModal();
-                            }
-                        }, 500);
-                        return;
-                    }
-                } catch (err) {
-                    console.warn('[Import/Export Fallback] Erro ao tentar Alpine:', err);
+                        // Verificar se realmente apareceu
+                        const computed = window.getComputedStyle(alpineModal);
+                        if (computed.display !== 'none' && computed.visibility !== 'hidden') {
+                            console.log('[Force Open] ✅ Modal Alpine aberto com sucesso!');
+                            return;
+                        }
+                    }, 100);
+                    
+                    // Verificar novamente após 300ms
+                    setTimeout(() => {
+                        const computed = window.getComputedStyle(alpineModal);
+                        if (computed.display === 'none' || computed.visibility === 'hidden') {
+                            console.log('[Force Open] Alpine falhou, usando fallback JS puro...');
+                            openFallbackModalJS();
+                        }
+                    }, 300);
+                    return;
                 }
             }
-            
-            // Alpine não disponível - usar fallback
-            openFallbackModal();
-        }, { passive: true });
+        } catch (err) {
+            console.warn('[Force Open] Erro ao usar Alpine:', err);
+        }
+        
+        // ✅ Tentativa 2: Forçar direto via DOM (se Alpine falhou)
+        console.log('[Force Open] Tentando forçar via DOM direto...');
+        alpineModal.removeAttribute('x-cloak');
+        alpineModal.style.setProperty('display', 'flex', 'important');
+        alpineModal.style.setProperty('visibility', 'visible', 'important');
+        alpineModal.style.setProperty('opacity', '1', 'important');
+        alpineModal.style.setProperty('z-index', '99999', 'important');
+        alpineModal.style.setProperty('position', 'fixed', 'important');
+        alpineModal.style.setProperty('top', '0', 'important');
+        alpineModal.style.setProperty('left', '0', 'important');
+        alpineModal.style.setProperty('right', '0', 'important');
+        alpineModal.style.setProperty('bottom', '0', 'important');
+        alpineModal.style.setProperty('width', '100%', 'important');
+        alpineModal.style.setProperty('height', '100%', 'important');
+        alpineModal.style.setProperty('background', 'rgba(0, 0, 0, 0.95)', 'important');
+        
+        // Verificar se funcionou
+        setTimeout(() => {
+            const computed = window.getComputedStyle(alpineModal);
+            if (computed.display !== 'none' && computed.visibility !== 'hidden') {
+                console.log('[Force Open] ✅ Modal aberto via DOM direto!');
+                document.body.style.overflow = 'hidden';
+                return;
+            } else {
+                console.log('[Force Open] DOM direto falhou, usando fallback completo...');
+                openFallbackModalJS();
+            }
+        }, 200);
+        return;
     }
     
-    // ✅ Aguardar DOM estar pronto
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initFallback);
-    } else {
-        // Aguardar um pouco para Alpine inicializar
-        setTimeout(initFallback, 100);
+    // ✅ Tentativa 3: Fallback JS puro completo (se tudo falhou)
+    console.log('[Force Open] Modal Alpine não encontrado, usando fallback JS puro...');
+    openFallbackModalJS();
+};
+
+// ✅ Estado do fallback
+let fallbackState = {
+    currentTab: 'export',
+    selectedBot: null,
+    exportData: null,
+    exportJson: '',
+    importJson: '',
+    importPreview: null,
+    importTargetType: 'new',
+    importTargetBotId: null,
+    importNewBotToken: '',
+    importNewBotName: '',
+    loading: false,
+    bots: []
+};
+
+// ✅ Helper para acessar Alpine app
+function getAlpineApp() {
+    try {
+        const alpineElement = document.querySelector('[x-data*="dashboardApp"]');
+        if (alpineElement && typeof Alpine !== 'undefined' && Alpine.$data) {
+            return Alpine.$data(alpineElement);
+        }
+    } catch (e) {
+        console.warn('[Fallback] Erro ao acessar Alpine:', e);
     }
+    return null;
+}
+
+// ✅ Sincronizar estado com Alpine
+function syncWithAlpine() {
+    const app = getAlpineApp();
+    if (app) {
+        fallbackState.bots = app.bots || [];
+    }
+}
     
-    // ✅ Criar modal fallback funcional completo
-    function openFallbackModal() {
+    // ✅ Criar modal fallback funcional completo (FUNÇÃO GLOBAL)
+    window.openFallbackModalJS = function() {
         // Fechar modal anterior
         const existing = document.getElementById('ie-fallback-modal');
         if (existing) existing.remove();
