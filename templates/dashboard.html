@@ -1745,20 +1745,14 @@
     </div>
 
     <!-- Modal: Importar/Exportar Bot -->
-    <template x-if="showImportExportModal">
-        <div x-transition
-             class="fixed inset-0 z-50 overflow-y-auto"
-             style="background: rgba(0, 0, 0, 0.95); backdrop-filter: blur(8px);">
-            <div class="flex items-center justify-center min-h-screen p-4">
-                <div @click.away="showImportExportModal = false" 
-                     x-transition:enter="transition ease-out duration-300"
-                     x-transition:enter-start="opacity-0 transform scale-95"
-                     x-transition:enter-end="opacity-100 transform scale-100"
-                     x-transition:leave="transition ease-in duration-200"
-                     x-transition:leave-start="opacity-100 transform scale-100"
-                     x-transition:leave-end="opacity-0 transform scale-95"
-                     class="relative bg-bg900 rounded-2xl shadow-2xl max-w-4xl w-full"
-                     style="border: 2px solid var(--border-accent);">
+    <div x-show="showImportExportModal" 
+         x-cloak
+         class="fixed inset-0 z-50 overflow-y-auto"
+         style="background: rgba(0, 0, 0, 0.95); backdrop-filter: blur(8px);">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div @click.away="showImportExportModal = false" 
+                 class="relative bg-bg900 rounded-2xl shadow-2xl max-w-4xl w-full"
+                 style="border: 2px solid var(--border-accent);">
                 
                 <!-- Header -->
                 <div class="px-8 py-6 border-b border-white border-opacity-5" style="background: var(--border-subtle);">
@@ -2038,7 +2032,7 @@
                 </div>
             </div>
         </div>
-    </template>
+    </div>
 
 </div><!-- FIM: x-data="dashboardApp()" -->
 
@@ -2071,6 +2065,22 @@ function dashboardApp() {
             console.log('🔵 Abrindo modal Importar/Exportar Bot...');
             this.showImportExportModal = true;
             console.log('🔵 showImportExportModal:', this.showImportExportModal);
+            
+            // ✅ Debug: Verificar se o elemento existe no DOM
+            this.$nextTick(() => {
+                const modalElements = document.querySelectorAll('[x-show*="showImportExportModal"]');
+                console.log('🔵 Elementos encontrados no DOM:', modalElements.length);
+                modalElements.forEach((el, idx) => {
+                    const style = window.getComputedStyle(el);
+                    console.log(`🔵 Elemento ${idx}:`, {
+                        display: style.display,
+                        visibility: style.visibility,
+                        opacity: style.opacity,
+                        zIndex: style.zIndex,
+                        element: el
+                    });
+                });
+            });
         },
         importExportTab: 'export', // 'export' | 'import'
         selectedExportBot: null,
