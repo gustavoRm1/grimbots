@@ -1745,24 +1745,12 @@
     </div>
 
     <!-- Modal: Importar/Exportar Bot -->
-    <template x-if="showImportExportModal">
-        <div x-show="showImportExportModal"
-             x-transition:enter="transition ease-out duration-300"
-             x-transition:enter-start="opacity-0"
-             x-transition:enter-end="opacity-100"
-             x-transition:leave="transition ease-in duration-200"
-             x-transition:leave-start="opacity-100"
-             x-transition:leave-end="opacity-0"
-             class="fixed inset-0 z-50 overflow-y-auto"
-             style="display: flex !important; background: rgba(0, 0, 0, 0.95); backdrop-filter: blur(8px);">
+    <div x-show="showImportExportModal" 
+         x-cloak
+         class="fixed inset-0 z-50 overflow-y-auto"
+         style="background: rgba(0, 0, 0, 0.95); backdrop-filter: blur(8px);">
         <div class="flex items-center justify-center min-h-screen p-4">
             <div @click.away="showImportExportModal = false" 
-                 x-transition:enter="transition ease-out duration-300"
-                 x-transition:enter-start="opacity-0 scale-95"
-                 x-transition:enter-end="opacity-100 scale-100"
-                 x-transition:leave="transition ease-in duration-200"
-                 x-transition:leave-start="opacity-100 scale-100"
-                 x-transition:leave-end="opacity-0 scale-95"
                  class="relative bg-bg900 rounded-2xl shadow-2xl max-w-4xl w-full"
                  style="border: 2px solid var(--border-accent);">
                 
@@ -2063,7 +2051,7 @@
                 </div>
             </div>
         </div>
-        </div>
+    </div>
     </template>
 
 </div><!-- FIM: x-data="dashboardApp()" -->
