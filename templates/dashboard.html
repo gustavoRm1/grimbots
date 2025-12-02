@@ -750,7 +750,7 @@
                     <span class="hidden sm:inline">Adicionar Bot</span>
                     <span class="sm:hidden">Novo Bot</span>
                 </button>
-                <button @click="openImportExportModal()" 
+                <button @click="showImportExportModal = true" 
                         class="btn-action flex items-center justify-center flex-1 sm:flex-initial text-sm sm:text-base px-4 py-2.5 sm:py-3 whitespace-nowrap"
                         style="background: rgba(59, 130, 246, 0.1); color: #3B82F6; border: 1px solid rgba(59, 130, 246, 0.3);">
                     <i class="fas fa-exchange-alt mr-1.5 sm:mr-2"></i>
@@ -1746,8 +1746,9 @@
 
     <!-- Modal: Importar/Exportar Bot -->
     <div x-show="showImportExportModal" 
-         :style="showImportExportModal ? 'display: block !important; background: rgba(0, 0, 0, 0.95); backdrop-filter: blur(8px);' : 'display: none;'"
-         class="fixed inset-0 z-50 overflow-y-auto">
+         x-cloak
+         class="fixed inset-0 z-50 overflow-y-auto"
+         style="background: rgba(0, 0, 0, 0.95); backdrop-filter: blur(8px);">
         <div class="flex items-center justify-center min-h-screen p-4">
             <div @click.away="showImportExportModal = false" 
                  class="relative bg-bg900 rounded-2xl shadow-2xl max-w-4xl w-full"
@@ -2059,37 +2060,6 @@ function dashboardApp() {
         // Importar/Exportar Bot
         showImportExportModal: false,
         
-        // ✅ Função para abrir modal de Importar/Exportar Bot
-        openImportExportModal() {
-            console.log('🔵 Abrindo modal Importar/Exportar Bot...');
-            this.showImportExportModal = true;
-            console.log('🔵 showImportExportModal:', this.showImportExportModal);
-            
-            // ✅ CRÍTICO: Forçar remoção do x-cloak e garantir display
-            this.$nextTick(() => {
-                const modalElement = document.querySelector('[x-show*="showImportExportModal"]');
-                if (modalElement) {
-                    console.log('🔵 Modal encontrado no DOM');
-                    
-                    // Remover x-cloak manualmente (Alpine.js pode não estar removendo)
-                    modalElement.removeAttribute('x-cloak');
-                    console.log('🔵 x-cloak removido');
-                    
-                    // Forçar display block
-                    const style = window.getComputedStyle(modalElement);
-                    console.log('🔵 Antes - display:', style.display, 'visibility:', style.visibility);
-                    
-                    // Forçar display block com !important via style inline
-                    modalElement.style.setProperty('display', 'block', 'important');
-                    console.log('🔵 Display forçado para block');
-                    
-                    const styleAfter = window.getComputedStyle(modalElement);
-                    console.log('🔵 Depois - display:', styleAfter.display, 'visibility:', styleAfter.visibility, 'zIndex:', styleAfter.zIndex);
-                } else {
-                    console.error('❌ Modal NÃO encontrado no DOM!');
-                }
-            });
-        },
         importExportTab: 'export', // 'export' | 'import'
         selectedExportBot: null,
         exportData: null,
