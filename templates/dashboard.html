@@ -2226,10 +2226,10 @@ function dashboardApp() {
             this.$watch('showImportExportModal', (value) => {
                 this.toggleBodyScroll(value);
                 
-                // Forçar display: flex quando modal está aberto (x-show aplica block por padrão)
+                // Forçar display: flex quando modal está aberto (igual ao Remarketing que funciona)
                 if (value) {
                     this.$nextTick(() => {
-                        const modal = document.getElementById('modal-import-export');
+                        const modal = document.querySelector('[x-show*="showImportExportModal"]');
                         if (modal) {
                             modal.removeAttribute('x-cloak');
                             // Alpine aplica display: block, precisamos forçar flex
@@ -3073,7 +3073,7 @@ function dashboardApp() {
         
         // ✅ Função para abrir modal de Importar/Exportar Bot
         openImportExportModal() {
-            // Fechar outros modais
+            // Fechar outros modais (igual ao Remarketing que funciona)
             this.showGeneralRemarketingModal = false;
             this.showAddBotModal = false;
             this.showDuplicateBotModal = false;
