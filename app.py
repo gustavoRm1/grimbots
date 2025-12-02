@@ -5503,22 +5503,22 @@ def public_redirect(slug):
     fbc_cookie = None  # ✅ Inicializar para usar depois mesmo se Meta Pixel desabilitado
     
     if pool.meta_tracking_enabled and pool.meta_pixel_id and pool.meta_access_token:
-    tracking_service_v4 = TrackingServiceV4()
-    tracking_token = uuid.uuid4().hex
-    pageview_event_id = f"pageview_{uuid.uuid4().hex}"
-    pageview_ts = int(time.time())
-    TRACKING_TOKEN_TTL = TrackingServiceV4.TRACKING_TOKEN_TTL_SECONDS
+        tracking_service_v4 = TrackingServiceV4()
+        tracking_token = uuid.uuid4().hex
+        pageview_event_id = f"pageview_{uuid.uuid4().hex}"
+        pageview_ts = int(time.time())
+        TRACKING_TOKEN_TTL = TrackingServiceV4.TRACKING_TOKEN_TTL_SECONDS
 
-    # ✅ CRÍTICO V4.1: Capturar FBC do cookie OU dos params (JS pode ter enviado)
-    # Prioridade: cookie > params (cookie é mais confiável)
-    fbp_cookie = request.cookies.get('_fbp') or request.args.get('_fbp_cookie')
-    fbc_cookie = request.cookies.get('_fbc') or request.args.get('_fbc_cookie')
+        # ✅ CRÍTICO V4.1: Capturar FBC do cookie OU dos params (JS pode ter enviado)
+        # Prioridade: cookie > params (cookie é mais confiável)
+        fbp_cookie = request.cookies.get('_fbp') or request.args.get('_fbp_cookie')
+        fbc_cookie = request.cookies.get('_fbc') or request.args.get('_fbc_cookie')
         # ✅ Usar variável fbclid já capturada anteriormente (linha 4166)
 
-    # ✅ LOG DIAGNÓSTICO: Verificar cookies iniciais
-    logger.info(f"[META PIXEL] Redirect - Cookies iniciais: _fbp={'✅' if fbp_cookie else '❌'}, _fbc={'✅' if fbc_cookie else '❌'}, fbclid={'✅' if fbclid else '❌'}, is_crawler={is_crawler_request}")
+        # ✅ LOG DIAGNÓSTICO: Verificar cookies iniciais
+        logger.info(f"[META PIXEL] Redirect - Cookies iniciais: _fbp={'✅' if fbp_cookie else '❌'}, _fbc={'✅' if fbc_cookie else '❌'}, fbclid={'✅' if fbclid else '❌'}, is_crawler={is_crawler_request}")
 
-    if not fbp_cookie and not is_crawler_request:
+        if not fbp_cookie and not is_crawler_request:
         try:
             fbp_cookie = TrackingService.generate_fbp()
             logger.info(f"[META PIXEL] Redirect - fbp gerado: {fbp_cookie[:30]}...")
@@ -5526,13 +5526,13 @@ def public_redirect(slug):
             logger.warning(f"[META PIXEL] Redirect - Erro ao gerar fbp: {e}")
             fbp_cookie = None
 
-    # ✅ CRÍTICO V4.1: Priorizar cookie _fbc do browser (MAIS CONFIÁVEL)
-    # Se não tiver cookie, gerar _fbc baseado em fbclid conforme documentação Meta
-    # Meta aceita _fbc gerado se fbclid estiver presente na URL
-    fbc_value = None
-    fbc_origin = None
-    
-    if fbc_cookie:
+        # ✅ CRÍTICO V4.1: Priorizar cookie _fbc do browser (MAIS CONFIÁVEL)
+        # Se não tiver cookie, gerar _fbc baseado em fbclid conforme documentação Meta
+        # Meta aceita _fbc gerado se fbclid estiver presente na URL
+        fbc_value = None
+        fbc_origin = None
+        
+        if fbc_cookie:
         # ✅ PRIORIDADE 1: Cookie do browser (MAIS CONFIÁVEL - Meta confia 100%)
         fbc_value = fbc_cookie.strip()
         fbc_origin = 'cookie'  # ✅ ORIGEM REAL - Meta confia e atribui
@@ -5557,11 +5557,11 @@ def public_redirect(slug):
             logger.warning(f"[META REDIRECT] Redirect - fbc ausente: cookie ausente e fbclid ausente")
         elif is_crawler_request:
             logger.warning(f"[META REDIRECT] Redirect - fbc não capturado: is_crawler_request=True")
-    
-    # Usar fbc_value como fbc_cookie para compatibilidade com código existente
-    fbc_cookie = fbc_value
+        
+        # Usar fbc_value como fbc_cookie para compatibilidade com código existente
+        fbc_cookie = fbc_value
 
-    if not is_crawler_request:
+        if not is_crawler_request:
         utms = {
             'utm_source': request.args.get('utm_source', ''),
             'utm_campaign': request.args.get('utm_campaign', ''),
@@ -5585,18 +5585,18 @@ def public_redirect(slug):
             'fbp': fbp_cookie,
             'pageview_event_id': pageview_event_id,
             'pageview_ts': pageview_ts,
-                'client_ip': user_ip if user_ip else None,  # ✅ Só salvar se user_ip for válido (não '0.0.0.0' ou vazio) - será atualizado pelo Parameter Builder (_fbi)
-                'client_user_agent': user_agent if user_agent and user_agent.strip() else None,  # ✅ Só salvar se user_agent for válido
+            'client_ip': user_ip if user_ip else None,  # ✅ Só salvar se user_ip for válido (não '0.0.0.0' ou vazio) - será atualizado pelo Parameter Builder (_fbi)
+            'client_user_agent': user_agent if user_agent and user_agent.strip() else None,  # ✅ Só salvar se user_agent for válido
             'grim': grim_param or None,
             'event_source_url': request.url or f'https://{request.host}/go/{pool.slug}',
             'first_page': request.url or f'https://{request.host}/go/{pool.slug}',  # ✅ ADICIONAR para fallback no Purchase
             **{k: v for k, v in utms.items() if v}
         }
         
-            # ✅ LOG INFORMATIVO: Indicar se client_ip será atualizado pelo Parameter Builder
-            if not user_ip:
-                logger.info(f"[META TRACKING] client_ip não capturado no redirect (será atualizado pelo Parameter Builder via _fbi)")
-            
+        # ✅ LOG INFORMATIVO: Indicar se client_ip será atualizado pelo Parameter Builder
+        if not user_ip:
+            logger.info(f"[META TRACKING] client_ip não capturado no redirect (será atualizado pelo Parameter Builder via _fbi)")
+        
         # ✅ CRÍTICO V4.1: Salvar fbc se veio do cookie OU foi gerado conforme documentação Meta
         # Meta aceita _fbc gerado quando fbclid está presente na URL (conforme documentação oficial)
         if fbc_cookie and fbc_origin:
@@ -5613,7 +5613,7 @@ def public_redirect(slug):
         try:
             # ✅ LOG DETALHADO: Mostrar o que está sendo salvo
             logger.info(f"[META PIXEL] Redirect - tracking_payload completo: fbclid={'✅' if tracking_payload.get('fbclid') else '❌'}, fbp={'✅' if tracking_payload.get('fbp') else '❌'}, ip={'✅' if tracking_payload.get('client_ip') else '❌'}, ua={'✅' if tracking_payload.get('client_user_agent') else '❌'}")
-                logger.info(f"[META PIXEL] Redirect - UTMs no tracking_payload: utm_source={'✅' if tracking_payload.get('utm_source') else '❌'}, utm_campaign={'✅' if tracking_payload.get('utm_campaign') else '❌'}, grim={'✅' if tracking_payload.get('grim') else '❌'}")
+            logger.info(f"[META PIXEL] Redirect - UTMs no tracking_payload: utm_source={'✅' if tracking_payload.get('utm_source') else '❌'}, utm_campaign={'✅' if tracking_payload.get('utm_campaign') else '❌'}, grim={'✅' if tracking_payload.get('grim') else '❌'}")
             logger.info(f"[META PIXEL] Redirect - Salvando tracking_payload inicial com pageview_event_id: {tracking_payload.get('pageview_event_id', 'N/A')}")
             ok = tracking_service_v4.save_tracking_token(tracking_token, tracking_payload, ttl=TRACKING_TOKEN_TTL)
             if not ok:
@@ -5629,9 +5629,9 @@ def public_redirect(slug):
             # TrackingService.save_tracking_data() é legacy e não deve ser usado aqui
         except Exception as e:
             logger.error(f"⚠️ Erro ao persistir tracking_token {tracking_token}: {e}", exc_info=True)
-    else:
-        tracking_token = None
-        logger.info(f"🤖 Crawler detectado - Tracking NÃO salvo (evita poluição do Redis)")
+        else:
+            tracking_token = None
+            logger.info(f"🤖 Crawler detectado - Tracking NÃO salvo (evita poluição do Redis)")
     
     # ============================================================================
     # ✅ META PIXEL: PAGEVIEW TRACKING + UTM CAPTURE (NÍVEL DE POOL)
@@ -5664,8 +5664,8 @@ def public_redirect(slug):
                         # ✅ PRIORIDADE: pageview_context > tracking_payload (pageview_context é mais recente e tem dados do PageView)
                     merged_context = {
                         **tracking_payload,  # ✅ Dados iniciais (client_ip, client_user_agent, fbclid, fbp, etc.)
-                            **pageview_context   # ✅ Dados do PageView (pageview_event_id, event_source_url, client_ip, client_user_agent, etc.) - SOBRESCREVE tracking_payload
-                        }
+                        **pageview_context   # ✅ Dados do PageView (pageview_event_id, event_source_url, client_ip, client_user_agent, etc.) - SOBRESCREVE tracking_payload
+                    }
                         # ✅ CRÍTICO: GARANTIR que client_ip e client_user_agent sejam preservados (prioridade: pageview_context > tracking_payload)
                         # Se pageview_context tem valores válidos, usar (são mais recentes e vêm do PageView)
                         # Se pageview_context tem vazios/None mas tracking_payload tem valores válidos, usar tracking_payload (fallback)
@@ -5675,7 +5675,7 @@ def public_redirect(slug):
                             logger.info(f"✅ Usando client_ip do pageview_context (mais recente): {pageview_context['client_ip']}")
                         elif tracking_payload.get('client_ip') and isinstance(tracking_payload.get('client_ip'), str) and tracking_payload.get('client_ip').strip():
                             # ✅ Prioridade 2: Se pageview_context não tem, usar tracking_payload (fallback)
-                        merged_context['client_ip'] = tracking_payload['client_ip']
+                            merged_context['client_ip'] = tracking_payload['client_ip']
                             logger.info(f"✅ Usando client_ip do tracking_payload (fallback): {tracking_payload['client_ip']}")
                         
                         if pageview_context.get('client_user_agent') and isinstance(pageview_context.get('client_user_agent'), str) and pageview_context.get('client_user_agent').strip():
@@ -5684,7 +5684,7 @@ def public_redirect(slug):
                             logger.info(f"✅ Usando client_user_agent do pageview_context (mais recente): {pageview_context['client_user_agent'][:50]}...")
                         elif tracking_payload.get('client_user_agent') and isinstance(tracking_payload.get('client_user_agent'), str) and tracking_payload.get('client_user_agent').strip():
                             # ✅ Prioridade 2: Se pageview_context não tem, usar tracking_payload (fallback)
-                        merged_context['client_user_agent'] = tracking_payload['client_user_agent']
+                            merged_context['client_user_agent'] = tracking_payload['client_user_agent']
                             logger.info(f"✅ Usando client_user_agent do tracking_payload (fallback): {tracking_payload['client_user_agent'][:50]}...")
                     # ✅ GARANTIR que pageview_event_id seja preservado (prioridade: pageview_context > tracking_payload)
                     if not merged_context.get('pageview_event_id') and tracking_payload.get('pageview_event_id'):
@@ -5879,19 +5879,19 @@ def public_redirect(slug):
     
     # ✅ CORREÇÃO: Só injetar cookies se Meta Pixel está habilitado (fbp_cookie e fbc_cookie só são definidos nesse caso)
     if pool.meta_tracking_enabled and (fbp_cookie or fbc_cookie):
-    # ✅ Injetar _fbp/_fbc gerados no servidor (90 dias - padrão Meta)
-    cookie_kwargs = {
-        'max_age': 90 * 24 * 60 * 60,
-        'httponly': False,
-        'secure': True,
-        'samesite': 'None',
-    }
-    if fbp_cookie:
-        response.set_cookie('_fbp', fbp_cookie, **cookie_kwargs)
-        logger.info(f"✅ Cookie _fbp injetado: {fbp_cookie[:30]}...")
-    if fbc_cookie:
-        response.set_cookie('_fbc', fbc_cookie, **cookie_kwargs)
-        logger.info(f"✅ Cookie _fbc injetado: {fbc_cookie[:30]}...")
+        # ✅ Injetar _fbp/_fbc gerados no servidor (90 dias - padrão Meta)
+        cookie_kwargs = {
+            'max_age': 90 * 24 * 60 * 60,
+            'httponly': False,
+            'secure': True,
+            'samesite': 'None',
+        }
+        if fbp_cookie:
+            response.set_cookie('_fbp', fbp_cookie, **cookie_kwargs)
+            logger.info(f"✅ Cookie _fbp injetado: {fbp_cookie[:30]}...")
+        if fbc_cookie:
+            response.set_cookie('_fbc', fbc_cookie, **cookie_kwargs)
+            logger.info(f"✅ Cookie _fbc injetado: {fbc_cookie[:30]}...")
     
     return response
 
