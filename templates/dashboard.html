@@ -3761,8 +3761,10 @@ document.head.appendChild(style);
 <!-- ✅ SOLUÇÃO GARANTIDA - Modal Funciona SEMPRE -->
 <!-- Função global que SEMPRE abre o modal, tentando Alpine primeiro, fallback depois -->
 <script>
-// ✅ FUNÇÃO GLOBAL GARANTIDA - Sempre funciona
+// ✅ FUNÇÃO GLOBAL GARANTIDA - Definida IMEDIATAMENTE no escopo global (SEM IIFE para garantir acesso)
+// ✅ FUNÇÃO PRINCIPAL - Definida primeiro para garantir acesso
 window.forceOpenImportExportModal = function(event) {
+    'use strict';
     if (event) event.preventDefault();
     if (event) event.stopPropagation();
     
@@ -3890,9 +3892,9 @@ function syncWithAlpine() {
         fallbackState.bots = app.bots || [];
     }
 }
-    
-    // ✅ Criar modal fallback funcional completo (FUNÇÃO GLOBAL)
-    window.openFallbackModalJS = function() {
+
+// ✅ Criar modal fallback funcional completo (FUNÇÃO GLOBAL)
+window.openFallbackModalJS = function() {
         // Fechar modal anterior
         const existing = document.getElementById('ie-fallback-modal');
         if (existing) existing.remove();
@@ -4390,7 +4392,9 @@ function syncWithAlpine() {
         div.textContent = text;
         return div.innerHTML;
     }
-})();
+    
+// ✅ Garantir que função está disponível globalmente
+console.log('[Import/Export] Função forceOpenImportExportModal definida:', typeof window.forceOpenImportExportModal);
 </script>
 {% endblock %}
 
