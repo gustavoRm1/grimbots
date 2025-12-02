@@ -16,10 +16,24 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="grimbots">
     
+    <!-- ✅ Polyfill único e robusto para extensões (compatibilidade com scripts externos) -->
     <script>
-        if (typeof window !== 'undefined' && typeof window.browser === 'undefined') {
-            window.browser = window.chrome ? window.chrome : {};
-        }
+        // Garantir que window.browser existe (para compatibilidade com extensões)
+        // Executar IMEDIATAMENTE para evitar erros em scripts que dependem disso
+        (function() {
+            'use strict';
+            if (typeof window === 'undefined') return;
+            
+            // Criar objeto browser seguro se não existir
+            if (typeof window.browser === 'undefined') {
+                window.browser = window.chrome || {};
+            }
+            
+            // Garantir que browser é um objeto válido (não null/undefined)
+            if (!window.browser || typeof window.browser !== 'object') {
+                window.browser = {};
+            }
+        })();
     </script>
 
     <!-- Google Fonts - Inter -->
@@ -94,11 +108,6 @@
                 }
             }
         }
-    </script>
-
-    <!-- Polyfill para extensões que esperam window.browser -->
-    <script>
-        window.browser = window.browser || window.chrome || {};
     </script>
     
     <!-- jsPlumb Community Edition - Editor Visual de Fluxo -->
