@@ -1178,8 +1178,8 @@
      x-transition:leave="ease-in duration-200"
      x-transition:leave-start="opacity-100"
      x-transition:leave-end="opacity-0"
-     :style="showGeneralRemarketingModal ? 'display: flex !important; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.95); backdrop-filter: blur(8px);' : 'display: none !important;'"
-     class="fixed inset-0 z-50 overflow-y-auto">
+     class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto"
+     style="background: rgba(0, 0, 0, 0.95); backdrop-filter: blur(8px);">
     <div class="flex items-center justify-center min-h-screen w-full p-4">
         <div @click.away="showGeneralRemarketingModal = false"
              x-transition:enter="ease-out duration-300"
@@ -1766,8 +1766,8 @@
      x-transition:leave="ease-in duration-200"
      x-transition:leave-start="opacity-100"
      x-transition:leave-end="opacity-0"
-     :style="showImportExportModal ? 'display: flex !important; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.95); backdrop-filter: blur(8px);' : 'display: none !important;'"
-     class="fixed inset-0 z-[60] overflow-y-auto">
+     class="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto"
+     style="background: rgba(0, 0, 0, 0.95); backdrop-filter: blur(8px);">
     <div class="flex items-center justify-center min-h-screen w-full p-4">
         <div @click.away="showImportExportModal = false"
              x-transition:enter="ease-out duration-300"
@@ -2201,15 +2201,45 @@ function dashboardApp() {
             
             this.$watch('showGeneralRemarketingModal', (value) => {
                 this.toggleBodyScroll(value);
+                
+                // Forçar display: flex quando modal está aberto (x-show aplica block por padrão)
+                if (value) {
+                    this.$nextTick(() => {
+                        const modal = document.querySelector('[x-show*="showGeneralRemarketingModal"]');
+                        if (modal) {
+                            modal.removeAttribute('x-cloak');
+                            // Alpine aplica display: block, precisamos forçar flex
+                            const computed = window.getComputedStyle(modal);
+                            if (computed.display === 'block' || computed.display === 'flex') {
+                                modal.style.setProperty('display', 'flex', 'important');
+                            }
+                        }
+                    });
+                }
             });
             
             this.$watch('showBannedBotModal', (value) => {
                 this.toggleBodyScroll(value);
             });
             
-            // ✅ Watcher para modal de Importar/Exportar Bot - apenas scroll
+            // ✅ Watcher para modal de Importar/Exportar Bot
             this.$watch('showImportExportModal', (value) => {
                 this.toggleBodyScroll(value);
+                
+                // Forçar display: flex quando modal está aberto (x-show aplica block por padrão)
+                if (value) {
+                    this.$nextTick(() => {
+                        const modal = document.getElementById('modal-import-export');
+                        if (modal) {
+                            modal.removeAttribute('x-cloak');
+                            // Alpine aplica display: block, precisamos forçar flex
+                            const computed = window.getComputedStyle(modal);
+                            if (computed.display === 'block' || computed.display === 'flex') {
+                                modal.style.setProperty('display', 'flex', 'important');
+                            }
+                        }
+                    });
+                }
             });
             
             // ✅ PERFORMANCE: Carregar apenas o essencial no início, resto em background
@@ -3029,26 +3059,30 @@ function dashboardApp() {
         
         // ✅ Função para abrir modal de Remarketing Geral
         openGeneralRemarketingModal() {
-            // Fechar outros modais atomicamente
+            // Fechar outros modais
             this.showImportExportModal = false;
             this.showAddBotModal = false;
             this.showDuplicateBotModal = false;
             this.showBannedBotModal = false;
             
-            // Abrir este modal - Alpine processa reatividade automaticamente
-            this.showGeneralRemarketingModal = true;
+            // Aguardar Alpine processar fechamento, depois abrir
+            this.$nextTick(() => {
+                this.showGeneralRemarketingModal = true;
+            });
         },
         
         // ✅ Função para abrir modal de Importar/Exportar Bot
         openImportExportModal() {
-            // Fechar outros modais atomicamente
+            // Fechar outros modais
             this.showGeneralRemarketingModal = false;
             this.showAddBotModal = false;
             this.showDuplicateBotModal = false;
             this.showBannedBotModal = false;
             
-            // Abrir este modal - Alpine processa reatividade automaticamente
-            this.showImportExportModal = true;
+            // Aguardar Alpine processar fechamento, depois abrir
+            this.$nextTick(() => {
+                this.showImportExportModal = true;
+            });
         },
         
         async exportBot() {
