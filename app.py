@@ -5519,12 +5519,12 @@ def public_redirect(slug):
         logger.info(f"[META PIXEL] Redirect - Cookies iniciais: _fbp={'✅' if fbp_cookie else '❌'}, _fbc={'✅' if fbc_cookie else '❌'}, fbclid={'✅' if fbclid else '❌'}, is_crawler={is_crawler_request}")
 
         if not fbp_cookie and not is_crawler_request:
-        try:
-            fbp_cookie = TrackingService.generate_fbp()
-            logger.info(f"[META PIXEL] Redirect - fbp gerado: {fbp_cookie[:30]}...")
-        except Exception as e:
-            logger.warning(f"[META PIXEL] Redirect - Erro ao gerar fbp: {e}")
-            fbp_cookie = None
+            try:
+                fbp_cookie = TrackingService.generate_fbp()
+                logger.info(f"[META PIXEL] Redirect - fbp gerado: {fbp_cookie[:30]}...")
+            except Exception as e:
+                logger.warning(f"[META PIXEL] Redirect - Erro ao gerar fbp: {e}")
+                fbp_cookie = None
 
         # ✅ CRÍTICO V4.1: Priorizar cookie _fbc do browser (MAIS CONFIÁVEL)
         # Se não tiver cookie, gerar _fbc baseado em fbclid conforme documentação Meta
