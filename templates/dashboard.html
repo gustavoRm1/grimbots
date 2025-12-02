@@ -1760,13 +1760,8 @@
 <div id="modal-import-export"
      x-show="showImportExportModal"
      x-cloak
-     x-transition:enter="ease-out duration-300"
-     x-transition:enter-start="opacity-0"
-     x-transition:enter-end="opacity-100"
-     x-transition:leave="ease-in duration-200"
-     x-transition:leave-start="opacity-100"
-     x-transition:leave-end="opacity-0"
-     class="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto"
+     :style="showImportExportModal ? 'display: flex !important; visibility: visible !important; opacity: 1 !important; z-index: 9999 !important;' : 'display: none !important;'"
+     class="fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto"
      style="background: rgba(0, 0, 0, 0.95); backdrop-filter: blur(8px);">
     <div class="flex items-center justify-center min-h-screen w-full p-4">
         <div @click.away="showImportExportModal = false"
@@ -2222,26 +2217,61 @@ function dashboardApp() {
                 this.toggleBodyScroll(value);
             });
             
-            // ✅ Watcher para modal de Importar/Exportar Bot
+            // ✅ Watcher para modal de Importar/Exportar Bot - FORÇA AGRESSIVA
             this.$watch('showImportExportModal', (value) => {
+                console.log('[Import/Export] Watcher chamado, value =', value);
                 this.toggleBodyScroll(value);
                 
-                // Forçar display: flex quando modal está aberto (igual ao Remarketing que funciona)
                 if (value) {
-                    // Usar requestAnimationFrame para garantir que Alpine renderizou completamente
-                    requestAnimationFrame(() => {
-                        requestAnimationFrame(() => {
-                            const modal = document.getElementById('modal-import-export');
-                            if (modal) {
-                                modal.removeAttribute('x-cloak');
-                                // Alpine aplica display: block, precisamos forçar flex
-                                const computed = window.getComputedStyle(modal);
-                                if (computed.display === 'block' || computed.display === 'flex') {
-                                    modal.style.setProperty('display', 'flex', 'important');
-                                }
-                            }
-                        });
+                    // Múltiplas tentativas para garantir que aparece
+                    const forceShow = () => {
+                        const modal = document.getElementById('modal-import-export');
+                        if (modal) {
+                            // Remover x-cloak
+                            modal.removeAttribute('x-cloak');
+                            
+                            // Forçar TODOS os estilos com !important
+                            modal.style.cssText = `
+                                display: flex !important;
+                                visibility: visible !important;
+                                opacity: 1 !important;
+                                z-index: 9999 !important;
+                                position: fixed !important;
+                                top: 0 !important;
+                                left: 0 !important;
+                                right: 0 !important;
+                                bottom: 0 !important;
+                                width: 100% !important;
+                                height: 100% !important;
+                                background: rgba(0, 0, 0, 0.95) !important;
+                                backdrop-filter: blur(8px) !important;
+                            `;
+                            
+                            const computed = window.getComputedStyle(modal);
+                            console.log('[Import/Export] Modal forçado - Display:', computed.display, 'Visibility:', computed.visibility, 'Opacity:', computed.opacity);
+                        } else {
+                            console.warn('[Import/Export] Modal não encontrado!');
+                        }
+                    };
+                    
+                    // Tentar imediatamente
+                    forceShow();
+                    
+                    // Tentar após Alpine processar
+                    this.$nextTick(() => {
+                        forceShow();
+                        
+                        // Tentar novamente após pequeno delay
+                        setTimeout(forceShow, 50);
+                        setTimeout(forceShow, 100);
+                        setTimeout(forceShow, 200);
                     });
+                } else {
+                    // Fechar modal
+                    const modal = document.getElementById('modal-import-export');
+                    if (modal) {
+                        modal.style.setProperty('display', 'none', 'important');
+                    }
                 }
             });
             
@@ -3076,15 +3106,30 @@ function dashboardApp() {
         
         // ✅ Função para abrir modal de Importar/Exportar Bot
         openImportExportModal() {
+            console.log('[Import/Export] openImportExportModal() chamado');
+            
             // Fechar outros modais
             this.showGeneralRemarketingModal = false;
             this.showAddBotModal = false;
             this.showDuplicateBotModal = false;
             this.showBannedBotModal = false;
             
-            // Aguardar Alpine processar fechamento, depois abrir
+            // Abrir modal
+            this.showImportExportModal = true;
+            console.log('[Import/Export] showImportExportModal =', this.showImportExportModal);
+            
+            // Forçar exibição após Alpine processar
             this.$nextTick(() => {
-                this.showImportExportModal = true;
+                setTimeout(() => {
+                    const modal = document.getElementById('modal-import-export');
+                    if (modal) {
+                        modal.removeAttribute('x-cloak');
+                        modal.style.setProperty('display', 'flex', 'important');
+                        modal.style.setProperty('visibility', 'visible', 'important');
+                        modal.style.setProperty('opacity', '1', 'important');
+                        console.log('[Import/Export] Modal forçado a aparecer via openImportExportModal()');
+                    }
+                }, 100);
             });
         },
         
