@@ -1744,38 +1744,24 @@
         </div>
     </div>
 
-    <!-- Modal: Importar/Exportar Bot -->
-    <div x-show="showImportExportModal"
-         x-transition:enter="transition ease-out duration-300"
-         x-transition:enter-start="opacity-0"
-         x-transition:enter-end="opacity-100"
-         x-transition:leave="transition ease-in duration-200"
-         x-transition:leave-start="opacity-100"
-         x-transition:leave-end="opacity-0"
-         :style="showImportExportModal ? 'display: flex !important;' : 'display: none !important;'"
-         class="fixed inset-0 z-50 overflow-y-auto"
-         style="background: rgba(0, 0, 0, 0.95); backdrop-filter: blur(8px);">
-        <div class="flex items-center justify-center min-h-screen p-4 w-full">
-            <div @click.away="showImportExportModal = false" 
-                 class="relative bg-bg900 rounded-2xl shadow-2xl max-w-4xl w-full"
-                 style="border: 2px solid var(--border-accent);">
-                
-                <!-- Header -->
-                <div class="px-8 py-6 border-b border-white border-opacity-5" style="background: var(--border-subtle);">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <h3 class="text-2xl font-bold flex items-center gap-3 text-accent500">
-                                <i class="fas fa-exchange-alt"></i>
-                                Importar/Exportar Bot
-                            </h3>
-                            <p class="text-sm text-textSecondary mt-1">Exporte configurações de um bot ou importe para outro</p>
-                        </div>
-                        <button @click="showImportExportModal = false" 
-                                class="text-textSecondary hover:text-textPrimary transition-colors">
-                            <i class="fas fa-times text-xl"></i>
-                        </button>
-                    </div>
-                </div>
+<!-- Modal: Importar/Exportar Bot -->
+<div x-show="showImportExportModal" 
+     x-cloak
+     class="fixed inset-0 z-50 overflow-y-auto"
+     style="background: rgba(0, 0, 0, 0.95); backdrop-filter: blur(8px);">
+    <div class="flex items-center justify-center min-h-screen p-4">
+        <div @click.away="showImportExportModal = false" 
+             class="relative bg-bg900 rounded-2xl shadow-2xl max-w-4xl w-full"
+             style="border: 2px solid var(--border-accent);">
+            
+            <!-- Header -->
+            <div class="px-8 py-6 border-b border-white border-opacity-5" style="background: var(--border-subtle);">
+                <h3 class="text-2xl font-bold flex items-center gap-3 text-accent500">
+                    <i class="fas fa-exchange-alt"></i>
+                    Importar/Exportar Bot
+                </h3>
+                <p class="text-sm text-textSecondary mt-1">Exporte configurações de um bot ou importe para outro</p>
+            </div>
                 
                 <!-- Tabs -->
                 <div class="px-8 pt-6 border-b border-white border-opacity-5">
@@ -2052,13 +2038,12 @@
                                     </div>
                                 </button>
                             </div>
-                        </div>
-                    </div>
+                </div>
                 </div>
             </div>
         </div>
     </div>
-    </template>
+</div>
 
 </div><!-- FIM: x-data="dashboardApp()" -->
 
@@ -3026,29 +3011,7 @@ function dashboardApp() {
         
         // Importar/Exportar Bot
         openImportExportModal() {
-            console.log('🔍 Abrindo modal Importar/Exportar');
             this.showImportExportModal = true;
-            console.log('🔍 showImportExportModal =', this.showImportExportModal);
-            
-            // Forçar atualização visual após Alpine processar
-            this.$nextTick(() => {
-                const modal = document.querySelector('[x-show*="showImportExportModal"]');
-                console.log('🔍 Modal elemento:', modal);
-                if (modal) {
-                    console.log('🔍 Computed display:', window.getComputedStyle(modal).display);
-                    console.log('🔍 Computed visibility:', window.getComputedStyle(modal).visibility);
-                    console.log('🔍 Computed opacity:', window.getComputedStyle(modal).opacity);
-                    console.log('🔍 Computed z-index:', window.getComputedStyle(modal).zIndex);
-                    
-                    // Forçar display se necessário
-                    if (window.getComputedStyle(modal).display === 'none') {
-                        console.log('🔍 Display está none, forçando flex');
-                        modal.style.setProperty('display', 'flex', 'important');
-                    }
-                } else {
-                    console.error('❌ Modal não encontrado no DOM!');
-                }
-            });
         },
         
         async exportBot() {
