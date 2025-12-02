@@ -1759,6 +1759,7 @@
 <!-- Modal: Importar/Exportar Bot -->
 <div id="modal-import-export"
      x-show="showImportExportModal"
+     x-cloak
      x-transition:enter="ease-out duration-300"
      x-transition:enter-start="opacity-0"
      x-transition:enter-end="opacity-100"
@@ -1766,7 +1767,7 @@
      x-transition:leave-start="opacity-100"
      x-transition:leave-end="opacity-0"
      class="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto"
-     :style="showImportExportModal ? 'display: flex !important; background: rgba(0, 0, 0, 0.95); backdrop-filter: blur(8px);' : 'display: none !important;'">
+     style="background: rgba(0, 0, 0, 0.95); backdrop-filter: blur(8px);">
     <div class="flex items-center justify-center min-h-screen w-full p-4">
         <div @click.away="showImportExportModal = false"
              x-transition:enter="ease-out duration-300"
@@ -2225,22 +2226,22 @@ function dashboardApp() {
             this.$watch('showImportExportModal', (value) => {
                 this.toggleBodyScroll(value);
                 
-                // Forçar display: flex quando modal está aberto
+                // Forçar display: flex quando modal está aberto (igual ao Remarketing que funciona)
                 if (value) {
-                    // Usar setTimeout para garantir que Alpine processou completamente
-                    setTimeout(() => {
-                        const modal = document.getElementById('modal-import-export');
-                        if (modal) {
-                            modal.removeAttribute('x-cloak');
-                            const computed = window.getComputedStyle(modal);
-                            // Se ainda não está flex, forçar
-                            if (computed.display !== 'flex') {
-                                modal.style.setProperty('display', 'flex', 'important');
-                                modal.style.setProperty('align-items', 'center', 'important');
-                                modal.style.setProperty('justify-content', 'center', 'important');
+                    // Usar requestAnimationFrame para garantir que Alpine renderizou completamente
+                    requestAnimationFrame(() => {
+                        requestAnimationFrame(() => {
+                            const modal = document.getElementById('modal-import-export');
+                            if (modal) {
+                                modal.removeAttribute('x-cloak');
+                                // Alpine aplica display: block, precisamos forçar flex
+                                const computed = window.getComputedStyle(modal);
+                                if (computed.display === 'block' || computed.display === 'flex') {
+                                    modal.style.setProperty('display', 'flex', 'important');
+                                }
                             }
-                        }
-                    }, 10);
+                        });
+                    });
                 }
             });
             
@@ -3084,28 +3085,6 @@ function dashboardApp() {
             // Aguardar Alpine processar fechamento, depois abrir
             this.$nextTick(() => {
                 this.showImportExportModal = true;
-                
-                // ✅ FORÇA EXIBIÇÃO IMEDIATA - Correção definitiva para bug de modal não aparecer
-                this.$nextTick(() => {
-                    const modal = document.getElementById('modal-import-export');
-                    if (modal) {
-                        // Remover qualquer x-cloak residual e forçar display flex
-                        modal.removeAttribute('x-cloak');
-                        modal.style.setProperty('display', 'flex', 'important');
-                        modal.style.setProperty('align-items', 'center', 'important');
-                        modal.style.setProperty('justify-content', 'center', 'important');
-                        modal.style.setProperty('position', 'fixed', 'important');
-                        modal.style.setProperty('top', '0', 'important');
-                        modal.style.setProperty('left', '0', 'important');
-                        modal.style.setProperty('right', '0', 'important');
-                        modal.style.setProperty('bottom', '0', 'important');
-                        modal.style.setProperty('width', '100%', 'important');
-                        modal.style.setProperty('height', '100%', 'important');
-                        modal.style.setProperty('z-index', '60', 'important');
-                        modal.style.setProperty('background', 'rgba(0, 0, 0, 0.95)', 'important');
-                        modal.style.setProperty('backdrop-filter', 'blur(8px)', 'important');
-                    }
-                });
             });
         },
         
