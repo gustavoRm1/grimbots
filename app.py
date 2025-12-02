@@ -5533,36 +5533,36 @@ def public_redirect(slug):
         fbc_origin = None
         
         if fbc_cookie:
-        # ✅ PRIORIDADE 1: Cookie do browser (MAIS CONFIÁVEL - Meta confia 100%)
-        fbc_value = fbc_cookie.strip()
-        fbc_origin = 'cookie'  # ✅ ORIGEM REAL - Meta confia e atribui
-        logger.info(f"[META REDIRECT] Redirect - fbc capturado do cookie (ORIGEM REAL): {fbc_value[:50]}... (len={len(fbc_value)})")
-    elif fbclid and not is_crawler_request:
-        # ✅ PRIORIDADE 2: Gerar _fbc baseado em fbclid conforme documentação Meta
-        # Formato: fb.1.{creationTime_ms}.{fbclid}
-        # Meta aceita este formato quando fbclid está presente na URL
-        try:
-            fbc_value = TrackingService.generate_fbc(fbclid)
-            fbc_origin = 'generated_from_fbclid'  # ✅ Gerado conforme documentação Meta
-            logger.info(f"[META REDIRECT] Redirect - fbc gerado baseado em fbclid (conforme doc Meta): {fbc_value[:50]}... (len={len(fbc_value)})")
-            logger.info(f"   Meta aceita _fbc gerado quando fbclid está presente na URL")
-        except Exception as e:
-            logger.warning(f"[META REDIRECT] Redirect - Erro ao gerar fbc: {e}")
+            # ✅ PRIORIDADE 1: Cookie do browser (MAIS CONFIÁVEL - Meta confia 100%)
+            fbc_value = fbc_cookie.strip()
+            fbc_origin = 'cookie'  # ✅ ORIGEM REAL - Meta confia e atribui
+            logger.info(f"[META REDIRECT] Redirect - fbc capturado do cookie (ORIGEM REAL): {fbc_value[:50]}... (len={len(fbc_value)})")
+        elif fbclid and not is_crawler_request:
+            # ✅ PRIORIDADE 2: Gerar _fbc baseado em fbclid conforme documentação Meta
+            # Formato: fb.1.{creationTime_ms}.{fbclid}
+            # Meta aceita este formato quando fbclid está presente na URL
+            try:
+                fbc_value = TrackingService.generate_fbc(fbclid)
+                fbc_origin = 'generated_from_fbclid'  # ✅ Gerado conforme documentação Meta
+                logger.info(f"[META REDIRECT] Redirect - fbc gerado baseado em fbclid (conforme doc Meta): {fbc_value[:50]}... (len={len(fbc_value)})")
+                logger.info(f"   Meta aceita _fbc gerado quando fbclid está presente na URL")
+            except Exception as e:
+                logger.warning(f"[META REDIRECT] Redirect - Erro ao gerar fbc: {e}")
+                fbc_value = None
+                fbc_origin = None
+        else:
             fbc_value = None
             fbc_origin = None
-    else:
-        fbc_value = None
-        fbc_origin = None
-        if not fbclid:
-            logger.warning(f"[META REDIRECT] Redirect - fbc ausente: cookie ausente e fbclid ausente")
-        elif is_crawler_request:
-            logger.warning(f"[META REDIRECT] Redirect - fbc não capturado: is_crawler_request=True")
+            if not fbclid:
+                logger.warning(f"[META REDIRECT] Redirect - fbc ausente: cookie ausente e fbclid ausente")
+            elif is_crawler_request:
+                logger.warning(f"[META REDIRECT] Redirect - fbc não capturado: is_crawler_request=True")
         
         # Usar fbc_value como fbc_cookie para compatibilidade com código existente
         fbc_cookie = fbc_value
 
         if not is_crawler_request:
-        utms = {
+            utms = {
             'utm_source': request.args.get('utm_source', ''),
             'utm_campaign': request.args.get('utm_campaign', ''),
             'utm_medium': request.args.get('utm_medium', ''),
