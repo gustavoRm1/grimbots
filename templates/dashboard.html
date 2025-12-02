@@ -750,7 +750,7 @@
                     <span class="hidden sm:inline">Adicionar Bot</span>
                     <span class="sm:hidden">Novo Bot</span>
                 </button>
-                <button @click="showImportExportModal = true; console.log('🔍 Click - showImportExportModal =', showImportExportModal); $nextTick(() => { const modal = document.querySelector('[x-show*=\"showImportExportModal\"]'); console.log('🔍 Modal elemento:', modal); if (modal) { console.log('🔍 Computed display:', window.getComputedStyle(modal).display); console.log('🔍 Computed visibility:', window.getComputedStyle(modal).visibility); console.log('🔍 Computed opacity:', window.getComputedStyle(modal).opacity); console.log('🔍 Computed z-index:', window.getComputedStyle(modal).zIndex); } });" 
+                <button @click="openImportExportModal()" 
                         class="btn-action flex items-center justify-center flex-1 sm:flex-initial text-sm sm:text-base px-4 py-2.5 sm:py-3 whitespace-nowrap"
                         style="background: rgba(59, 130, 246, 0.1); color: #3B82F6; border: 1px solid rgba(59, 130, 246, 0.3);">
                     <i class="fas fa-exchange-alt mr-1.5 sm:mr-2"></i>
@@ -3025,6 +3025,32 @@ function dashboardApp() {
         },
         
         // Importar/Exportar Bot
+        openImportExportModal() {
+            console.log('🔍 Abrindo modal Importar/Exportar');
+            this.showImportExportModal = true;
+            console.log('🔍 showImportExportModal =', this.showImportExportModal);
+            
+            // Forçar atualização visual após Alpine processar
+            this.$nextTick(() => {
+                const modal = document.querySelector('[x-show*="showImportExportModal"]');
+                console.log('🔍 Modal elemento:', modal);
+                if (modal) {
+                    console.log('🔍 Computed display:', window.getComputedStyle(modal).display);
+                    console.log('🔍 Computed visibility:', window.getComputedStyle(modal).visibility);
+                    console.log('🔍 Computed opacity:', window.getComputedStyle(modal).opacity);
+                    console.log('🔍 Computed z-index:', window.getComputedStyle(modal).zIndex);
+                    
+                    // Forçar display se necessário
+                    if (window.getComputedStyle(modal).display === 'none') {
+                        console.log('🔍 Display está none, forçando flex');
+                        modal.style.setProperty('display', 'flex', 'important');
+                    }
+                } else {
+                    console.error('❌ Modal não encontrado no DOM!');
+                }
+            });
+        },
+        
         async exportBot() {
             // ✅ VALIDAÇÃO ROBUSTA: Verificar se selectedExportBot é objeto válido
             if (!this.selectedExportBot || 
