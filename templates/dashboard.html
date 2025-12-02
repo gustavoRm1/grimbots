@@ -1746,9 +1746,8 @@
 
     <!-- Modal: Importar/Exportar Bot -->
     <div x-show="showImportExportModal" 
-         x-cloak
-         class="fixed inset-0 z-50 overflow-y-auto"
-         style="background: rgba(0, 0, 0, 0.95); backdrop-filter: blur(8px);">
+         :style="showImportExportModal ? 'display: block !important; background: rgba(0, 0, 0, 0.95); backdrop-filter: blur(8px);' : 'display: none;'"
+         class="fixed inset-0 z-50 overflow-y-auto">
         <div class="flex items-center justify-center min-h-screen p-4">
             <div @click.away="showImportExportModal = false" 
                  class="relative bg-bg900 rounded-2xl shadow-2xl max-w-4xl w-full"
@@ -2066,20 +2065,29 @@ function dashboardApp() {
             this.showImportExportModal = true;
             console.log('🔵 showImportExportModal:', this.showImportExportModal);
             
-            // ✅ Debug: Verificar se o elemento existe no DOM
+            // ✅ CRÍTICO: Forçar remoção do x-cloak e garantir display
             this.$nextTick(() => {
-                const modalElements = document.querySelectorAll('[x-show*="showImportExportModal"]');
-                console.log('🔵 Elementos encontrados no DOM:', modalElements.length);
-                modalElements.forEach((el, idx) => {
-                    const style = window.getComputedStyle(el);
-                    console.log(`🔵 Elemento ${idx}:`, {
-                        display: style.display,
-                        visibility: style.visibility,
-                        opacity: style.opacity,
-                        zIndex: style.zIndex,
-                        element: el
-                    });
-                });
+                const modalElement = document.querySelector('[x-show*="showImportExportModal"]');
+                if (modalElement) {
+                    console.log('🔵 Modal encontrado no DOM');
+                    
+                    // Remover x-cloak manualmente (Alpine.js pode não estar removendo)
+                    modalElement.removeAttribute('x-cloak');
+                    console.log('🔵 x-cloak removido');
+                    
+                    // Forçar display block
+                    const style = window.getComputedStyle(modalElement);
+                    console.log('🔵 Antes - display:', style.display, 'visibility:', style.visibility);
+                    
+                    // Forçar display block com !important via style inline
+                    modalElement.style.setProperty('display', 'block', 'important');
+                    console.log('🔵 Display forçado para block');
+                    
+                    const styleAfter = window.getComputedStyle(modalElement);
+                    console.log('🔵 Depois - display:', styleAfter.display, 'visibility:', styleAfter.visibility, 'zIndex:', styleAfter.zIndex);
+                } else {
+                    console.error('❌ Modal NÃO encontrado no DOM!');
+                }
             });
         },
         importExportTab: 'export', // 'export' | 'import'
