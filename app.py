@@ -412,7 +412,7 @@ def send_payment_delivery(payment, bot_manager):
             logger.info(f"✅ Meta Pixel ativo → enviando /delivery para disparar Purchase tracking (payment {payment.id})")
         else:
             # ✅ Meta Pixel INATIVO → usar access_link direto (sem passar por /delivery)
-        if has_access_link:
+            if has_access_link:
                 link_to_send = access_link
                 logger.info(f"✅ Meta Pixel inativo → enviando access_link direto: {access_link[:50]}... (payment {payment.id})")
             else:
