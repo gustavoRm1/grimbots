@@ -750,7 +750,8 @@
                     <span class="hidden sm:inline">Adicionar Bot</span>
                     <span class="sm:hidden">Novo Bot</span>
                 </button>
-                <button @click="openImportExportModal()" 
+                <button id="btn-import-export"
+                        @click="openImportExportModal()" 
                         class="btn-action flex items-center justify-center flex-1 sm:flex-initial text-sm sm:text-base px-4 py-2.5 sm:py-3 whitespace-nowrap"
                         style="background: rgba(59, 130, 246, 0.1); color: #3B82F6; border: 1px solid rgba(59, 130, 246, 0.3);">
                     <i class="fas fa-exchange-alt mr-1.5 sm:mr-2"></i>
@@ -3755,6 +3756,604 @@ style.textContent = `
     }
 `;
 document.head.appendChild(style);
+</script>
+
+<!-- ✅ FALLBACK JS PURO - Modal Independente do Alpine -->
+<!-- Solução robusta que funciona mesmo se Alpine quebrar -->
+<script>
+(function() {
+    'use strict';
+    
+    // ✅ Estado do fallback
+    let fallbackState = {
+        currentTab: 'export',
+        selectedBot: null,
+        exportData: null,
+        exportJson: '',
+        importJson: '',
+        importPreview: null,
+        importTargetType: 'new',
+        importTargetBotId: null,
+        importNewBotToken: '',
+        importNewBotName: '',
+        loading: false,
+        bots: []
+    };
+    
+    // ✅ Helper para acessar Alpine app
+    function getAlpineApp() {
+        try {
+            const alpineElement = document.querySelector('[x-data*="dashboardApp"]');
+            if (alpineElement && typeof Alpine !== 'undefined' && Alpine.$data) {
+                return Alpine.$data(alpineElement);
+            }
+        } catch (e) {
+            console.warn('[Fallback] Erro ao acessar Alpine:', e);
+        }
+        return null;
+    }
+    
+    // ✅ Sincronizar estado com Alpine
+    function syncWithAlpine() {
+        const app = getAlpineApp();
+        if (app) {
+            fallbackState.bots = app.bots || [];
+        }
+    }
+    
+    // ✅ Aguardar DOM e inicializar
+    function initFallback() {
+        const btn = document.getElementById('btn-import-export');
+        if (!btn) {
+            console.warn('[Import/Export Fallback] Botão não encontrado');
+            return;
+        }
+        
+        // ✅ Sincronizar bots do Alpine
+        syncWithAlpine();
+        
+        // ✅ Prevenir múltiplos event listeners
+        if (btn.dataset.fallbackAttached === 'true') return;
+        btn.dataset.fallbackAttached = 'true';
+        
+        // ✅ Interceptar clique
+        btn.addEventListener('click', function(e) {
+            // Tentar Alpine primeiro
+            if (typeof Alpine !== 'undefined') {
+                try {
+                    const app = getAlpineApp();
+                    if (app && typeof app.openImportExportModal === 'function') {
+                        app.openImportExportModal();
+                        
+                        // ✅ Verificar se modal apareceu em 500ms
+                        setTimeout(() => {
+                            const alpineModal = document.getElementById('modal-import-export');
+                            const computed = alpineModal ? window.getComputedStyle(alpineModal) : null;
+                            if (!alpineModal || !computed || computed.display === 'none' || computed.visibility === 'hidden') {
+                                console.log('[Import/Export Fallback] Alpine não abriu modal, usando fallback');
+                                openFallbackModal();
+                            }
+                        }, 500);
+                        return;
+                    }
+                } catch (err) {
+                    console.warn('[Import/Export Fallback] Erro ao tentar Alpine:', err);
+                }
+            }
+            
+            // Alpine não disponível - usar fallback
+            openFallbackModal();
+        }, { passive: true });
+    }
+    
+    // ✅ Aguardar DOM estar pronto
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initFallback);
+    } else {
+        // Aguardar um pouco para Alpine inicializar
+        setTimeout(initFallback, 100);
+    }
+    
+    // ✅ Criar modal fallback funcional completo
+    function openFallbackModal() {
+        // Fechar modal anterior
+        const existing = document.getElementById('ie-fallback-modal');
+        if (existing) existing.remove();
+        
+        // Sincronizar com Alpine antes de abrir
+        syncWithAlpine();
+        
+        // Criar modal container
+        const modal = document.createElement('div');
+        modal.id = 'ie-fallback-modal';
+        modal.setAttribute('role', 'dialog');
+        modal.setAttribute('aria-modal', 'true');
+        modal.style.cssText = `
+            position: fixed;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 99999;
+            background: rgba(0, 0, 0, 0.95);
+            backdrop-filter: blur(8px);
+            animation: fadeIn 0.2s ease-out;
+        `;
+        
+        // ✅ HTML do modal (estilo similar ao Alpine)
+        modal.innerHTML = `
+            <div style="width: min(920px, 96%); max-height: 90vh; overflow: auto; background: var(--bg-900, #1a1a1a); border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.35); border: 2px solid rgba(255, 184, 0, 0.3); position: relative;">
+                <!-- Header -->
+                <div style="padding: 24px; border-bottom: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.02);">
+                    <button id="ie-fallback-close" 
+                            style="position: absolute; right: 16px; top: 16px; border: none; background: transparent; color: #fff; font-size: 24px; cursor: pointer; width: 32px; height: 32px; display: flex; align-items: center; justify-center; border-radius: 50%; transition: background 0.2s;"
+                            onmouseover="this.style.background='rgba(255,255,255,0.1)'" 
+                            onmouseout="this.style.background='transparent'"
+                            aria-label="Fechar">✕</button>
+                    <h2 style="margin: 0; font-size: 24px; font-weight: bold; color: #FFB800; display: flex; align-items: center; gap: 12px;">
+                        <i class="fas fa-exchange-alt"></i>Importar/Exportar Bot
+                    </h2>
+                    <p style="margin: 8px 0 0 0; color: #999; font-size: 14px;">Exporte configurações de um bot ou importe para outro</p>
+                </div>
+                
+                <!-- Tabs -->
+                <div style="padding: 0 24px; border-bottom: 1px solid rgba(255,255,255,0.1);">
+                    <div style="display: flex; gap: 8px;">
+                        <button id="ie-tab-export" 
+                                style="padding: 12px 24px; border: none; border-bottom: 2px solid; background: transparent; color: #FFB800; font-weight: bold; cursor: pointer; transition: all 0.2s;"
+                                onclick="switchFallbackTab('export')">
+                            <i class="fas fa-download"></i> Exportar
+                        </button>
+                        <button id="ie-tab-import" 
+                                style="padding: 12px 24px; border: none; border-bottom: 2px solid transparent; background: transparent; color: #999; font-weight: bold; cursor: pointer; transition: all 0.2s;"
+                                onclick="switchFallbackTab('import')">
+                            <i class="fas fa-upload"></i> Importar
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Content -->
+                <div id="ie-fallback-content" style="padding: 24px;">
+                    <!-- Conteúdo será injetado dinamicamente -->
+                    <div style="text-align: center; padding: 40px; color: #999;">
+                        <i class="fas fa-spinner fa-spin" style="font-size: 32px; margin-bottom: 16px;"></i>
+                        <p>Carregando...</p>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // ✅ Adicionar animação CSS
+        if (!document.getElementById('ie-fallback-styles')) {
+            const style = document.createElement('style');
+            style.id = 'ie-fallback-styles';
+            style.textContent = `
+                @keyframes fadeIn {
+                    from { opacity: 0; }
+                    to { opacity: 1; }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+        
+        // ✅ Handlers
+        function closeModal() {
+            modal.remove();
+            document.removeEventListener('keydown', onKeyDown);
+            document.documentElement.style.overflow = '';
+            document.body.style.overflow = '';
+        }
+        
+        function onKeyDown(e) {
+            if (e.key === 'Escape') closeModal();
+        }
+        
+        // ✅ Event listeners
+        modal.querySelector('#ie-fallback-close').addEventListener('click', closeModal);
+        modal.addEventListener('click', function(e) {
+            if (e.target === modal) closeModal();
+        });
+        document.addEventListener('keydown', onKeyDown);
+        
+        // ✅ Bloquear scroll
+        document.documentElement.style.overflow = 'hidden';
+        document.body.style.overflow = 'hidden';
+        
+        // ✅ Adicionar ao DOM
+        document.body.appendChild(modal);
+        
+        // ✅ Renderizar conteúdo inicial
+        renderFallbackContent(modal, fallbackState.currentTab);
+        
+        // ✅ Expor função de troca de tab globalmente
+        window.switchFallbackTab = function(tab) {
+            fallbackState.currentTab = tab;
+            
+            // Atualizar tabs
+            document.getElementById('ie-tab-export').style.borderBottomColor = tab === 'export' ? '#FFB800' : 'transparent';
+            document.getElementById('ie-tab-export').style.color = tab === 'export' ? '#FFB800' : '#999';
+            document.getElementById('ie-tab-import').style.borderBottomColor = tab === 'import' ? '#FFB800' : 'transparent';
+            document.getElementById('ie-tab-import').style.color = tab === 'import' ? '#FFB800' : '#999';
+            
+            // Renderizar conteúdo
+            const contentDiv = document.getElementById('ie-fallback-content');
+            if (contentDiv) {
+                renderFallbackContent(document.getElementById('ie-fallback-modal'), tab);
+            }
+        };
+        
+        console.log('[Import/Export Fallback] Modal aberto');
+    }
+    
+    // ✅ Renderizar conteúdo do modal
+    function renderFallbackContent(modal, tab) {
+        const contentDiv = modal.querySelector('#ie-fallback-content');
+        if (!contentDiv) return;
+        
+        if (tab === 'export') {
+            renderExportTab(contentDiv);
+        } else {
+            renderImportTab(contentDiv);
+        }
+    }
+    
+    // ✅ Renderizar aba Exportar
+    function renderExportTab(container) {
+        syncWithAlpine();
+        const bots = fallbackState.bots || [];
+        
+        container.innerHTML = `
+            ${!fallbackState.exportData ? `
+                <!-- Seleção de Bot -->
+                <div style="margin-bottom: 24px; padding: 16px; border-radius: 8px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,184,0,0.2);">
+                    <label style="display: block; margin-bottom: 12px; font-weight: bold; color: #fff;">
+                        <i class="fas fa-robot" style="color: #FFB800; margin-right: 8px;"></i>
+                        Selecione o bot para exportar:
+                    </label>
+                    <div id="ie-bot-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; max-height: 300px; overflow-y: auto;">
+                        ${bots.length === 0 ? '<p style="color: #999; grid-column: 1/-1; text-align: center; padding: 20px;">Nenhum bot disponível</p>' : ''}
+                    </div>
+                    <div style="margin-top: 16px; padding: 12px; background: rgba(0,0,0,0.3); border-radius: 6px;">
+                        <p style="margin: 0; font-size: 12px; color: #999;">
+                            <i class="fas fa-info-circle" style="color: #FFB800; margin-right: 4px;"></i>
+                            <span id="ie-selected-info">Nenhum bot selecionado</span>
+                        </p>
+                    </div>
+                </div>
+                <button id="ie-btn-export" 
+                        style="width: 100%; padding: 12px 24px; background: linear-gradient(to right, #FFB800, #FFA000); color: #000; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; transition: transform 0.2s;"
+                        onmouseover="this.style.transform='scale(1.02)'" 
+                        onmouseout="this.style.transform='scale(1)'"
+                        onclick="handleFallbackExport()">
+                    <i class="fas fa-download"></i> Exportar Configurações
+                </button>
+            ` : `
+                <!-- Resultado Export -->
+                <div style="margin-bottom: 24px; padding: 16px; border-radius: 8px; background: rgba(16,185,129,0.1); border: 1px solid #10b981;">
+                    <div style="display: flex; align-items: center; gap: 8px; color: #10b981; font-weight: bold;">
+                        <i class="fas fa-check-circle"></i>
+                        <span>Configurações exportadas com sucesso!</span>
+                    </div>
+                </div>
+                <div style="margin-bottom: 24px;">
+                    <label style="display: block; margin-bottom: 8px; font-weight: bold; color: #fff;">
+                        <i class="fas fa-code" style="color: #FFB800; margin-right: 8px;"></i>
+                        JSON Exportado:
+                    </label>
+                    <textarea id="ie-export-json" 
+                              readonly 
+                              style="width: 100%; min-height: 200px; padding: 12px; background: #0a0a0a; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: #fff; font-family: monospace; font-size: 12px; resize: vertical;"
+                              rows="15">${fallbackState.exportJson || ''}</textarea>
+                </div>
+                <div style="display: flex; gap: 12px; margin-bottom: 12px;">
+                    <button onclick="copyFallbackJson()" 
+                            style="flex: 1; padding: 12px; background: rgba(255,255,255,0.1); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; cursor: pointer; font-weight: bold;">
+                        <i class="fas fa-copy"></i> Copiar JSON
+                    </button>
+                    <button onclick="downloadFallbackJson()" 
+                            style="flex: 1; padding: 12px; background: linear-gradient(to right, #FFB800, #FFA000); color: #000; border: none; border-radius: 8px; cursor: pointer; font-weight: bold;">
+                        <i class="fas fa-download"></i> Download
+                    </button>
+                </div>
+                <button onclick="resetFallbackExport()" 
+                        style="width: 100%; padding: 12px; background: rgba(255,255,255,0.1); color: #999; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; cursor: pointer;">
+                    <i class="fas fa-redo"></i> Exportar Outro Bot
+                </button>
+            `}
+        `;
+        
+        // ✅ Renderizar lista de bots
+        if (!fallbackState.exportData && bots.length > 0) {
+            const botList = container.querySelector('#ie-bot-list');
+            if (botList) {
+                botList.innerHTML = bots.map(bot => `
+                    <label onclick="selectFallbackBot(${bot.id})" 
+                           style="display: flex; align-items: center; gap: 12px; padding: 12px; background: ${fallbackState.selectedBot?.id === bot.id ? 'rgba(255,184,0,0.1)' : 'rgba(255,255,255,0.02)'}; border: 2px solid ${fallbackState.selectedBot?.id === bot.id ? '#FFB800' : 'transparent'}; border-radius: 8px; cursor: pointer; transition: all 0.2s;"
+                           onmouseover="this.style.background='rgba(255,255,255,0.05)'" 
+                           onmouseout="this.style.background='${fallbackState.selectedBot?.id === bot.id ? 'rgba(255,184,0,0.1)' : 'rgba(255,255,255,0.02)'}'">
+                        <input type="radio" name="fallback-bot" ${fallbackState.selectedBot?.id === bot.id ? 'checked' : ''} 
+                               style="accent-color: #FFB800;" onclick="event.stopPropagation(); selectFallbackBot(${bot.id})">
+                        <div>
+                            <div style="font-weight: bold; color: #fff;">${escapeHtml(bot.name || 'Bot')}</div>
+                            <div style="font-size: 12px; color: #999;">@${escapeHtml(bot.username || 'N/A')}</div>
+                        </div>
+                    </label>
+                `).join('');
+            }
+        }
+    }
+    
+    // ✅ Renderizar aba Importar
+    function renderImportTab(container) {
+        container.innerHTML = `
+            <div style="space-y: 24px;">
+                <!-- Opção 1: Colar JSON -->
+                <div style="margin-bottom: 24px; padding: 16px; border-radius: 8px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,184,0,0.2);">
+                    <label style="display: block; margin-bottom: 8px; font-weight: bold; color: #fff;">
+                        <i class="fas fa-paste" style="color: #FFB800; margin-right: 8px;"></i>
+                        Opção 1: Colar JSON
+                    </label>
+                    <textarea id="ie-import-json" 
+                              style="width: 100%; min-height: 150px; padding: 12px; background: #0a0a0a; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: #fff; font-family: monospace; font-size: 12px; resize: vertical;"
+                              placeholder='Cole aqui o JSON exportado...' 
+                              oninput="validateFallbackJson()">${fallbackState.importJson || ''}</textarea>
+                </div>
+                
+                <!-- Opção 2: Upload -->
+                <div style="margin-bottom: 24px; padding: 16px; border-radius: 8px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,184,0,0.2);">
+                    <label style="display: block; margin-bottom: 8px; font-weight: bold; color: #fff;">
+                        <i class="fas fa-file-upload" style="color: #FFB800; margin-right: 8px;"></i>
+                        Opção 2: Upload arquivo
+                    </label>
+                    <input type="file" 
+                           id="ie-import-file"
+                           accept=".json,application/json"
+                           style="width: 100%; padding: 12px; background: #0a0a0a; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: #fff;"
+                           onchange="handleFallbackFile(event)">
+                </div>
+                
+                <!-- Preview -->
+                <div id="ie-import-preview"></div>
+                
+                <!-- Botões -->
+                <div style="display: flex; gap: 12px; margin-top: 24px;">
+                    <button onclick="closeFallbackModal()" 
+                            style="flex: 1; padding: 12px; background: rgba(255,255,255,0.1); color: #999; border: 1px solid rgba(255,255,255,0.2); border-radius: 8px; cursor: pointer; font-weight: bold;">
+                        Cancelar
+                    </button>
+                    <button id="ie-btn-import" 
+                            onclick="handleFallbackImport()"
+                            style="flex: 1; padding: 12px; background: linear-gradient(to right, #FFB800, #FFA000); color: #000; border: none; border-radius: 8px; cursor: pointer; font-weight: bold;"
+                            disabled>
+                        <i class="fas fa-upload"></i> Importar
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        // ✅ Validar JSON inicial se existir
+        if (fallbackState.importJson) {
+            validateFallbackJson();
+        }
+    }
+    
+    // ✅ Helper functions globais
+    window.selectFallbackBot = function(botId) {
+        syncWithAlpine();
+        const bot = fallbackState.bots.find(b => b.id === botId);
+        if (bot) {
+            fallbackState.selectedBot = bot;
+            const info = document.getElementById('ie-selected-info');
+            if (info) info.textContent = 'Bot selecionado: ' + bot.name;
+            
+            // Re-renderizar lista
+            const modal = document.getElementById('ie-fallback-modal');
+            if (modal) renderFallbackContent(modal, 'export');
+        }
+    };
+    
+    window.handleFallbackExport = async function() {
+        if (!fallbackState.selectedBot) {
+            alert('❌ Selecione um bot para exportar');
+            return;
+        }
+        
+        const btn = document.getElementById('ie-btn-export');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Exportando...';
+        }
+        
+        try {
+            const response = await fetch(`/api/bots/${fallbackState.selectedBot.id}/export`);
+            if (!response.ok) throw new Error('Erro ao exportar');
+            
+            const data = await response.json();
+            if (!data.export) throw new Error('Resposta inválida');
+            
+            fallbackState.exportData = data.export;
+            fallbackState.exportJson = JSON.stringify(data.export, null, 2);
+            
+            const modal = document.getElementById('ie-fallback-modal');
+            if (modal) renderFallbackContent(modal, 'export');
+        } catch (error) {
+            alert('Erro ao exportar: ' + error.message);
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-download"></i> Exportar Configurações';
+            }
+        }
+    };
+    
+    window.copyFallbackJson = function() {
+        const textarea = document.getElementById('ie-export-json');
+        if (textarea) {
+            textarea.select();
+            document.execCommand('copy');
+            alert('✅ JSON copiado para a área de transferência!');
+        }
+    };
+    
+    window.downloadFallbackJson = function() {
+        const json = fallbackState.exportJson;
+        if (!json) return;
+        
+        const blob = new Blob([json], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `bot_${(fallbackState.selectedBot?.name || 'export').replace(/[^a-z0-9]/gi, '_')}_${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    };
+    
+    window.resetFallbackExport = function() {
+        fallbackState.exportData = null;
+        fallbackState.exportJson = '';
+        fallbackState.selectedBot = null;
+        const modal = document.getElementById('ie-fallback-modal');
+        if (modal) renderFallbackContent(modal, 'export');
+    };
+    
+    window.validateFallbackJson = function() {
+        const textarea = document.getElementById('ie-import-json');
+        const preview = document.getElementById('ie-import-preview');
+        if (!textarea || !preview) return;
+        
+        fallbackState.importJson = textarea.value;
+        const json = textarea.value.trim();
+        
+        if (!json) {
+            preview.innerHTML = '';
+            fallbackState.importPreview = null;
+            document.getElementById('ie-btn-import').disabled = true;
+            return;
+        }
+        
+        try {
+            const parsed = JSON.parse(json);
+            if (!parsed.version || parsed.version !== '1.0') {
+                throw new Error('Versão incompatível');
+            }
+            if (!parsed.config) {
+                throw new Error('Estrutura inválida: campo "config" não encontrado');
+            }
+            
+            fallbackState.importPreview = { valid: true, data: parsed };
+            preview.innerHTML = `
+                <div style="padding: 16px; border-radius: 8px; background: rgba(16,185,129,0.1); border: 1px solid #10b981;">
+                    <div style="display: flex; align-items: center; gap: 8px; color: #10b981; font-weight: bold; margin-bottom: 12px;">
+                        <i class="fas fa-check-circle"></i>
+                        <span>JSON válido</span>
+                    </div>
+                    <div style="color: #fff; font-size: 14px;">
+                        <div><strong>Bot:</strong> ${escapeHtml(parsed.bot_name || 'Bot Importado')}</div>
+                        <div style="margin-top: 8px;"><strong>Exportado em:</strong> ${escapeHtml(parsed.exported_at || 'Não especificado')}</div>
+                    </div>
+                </div>
+            `;
+            document.getElementById('ie-btn-import').disabled = false;
+        } catch (error) {
+            fallbackState.importPreview = { valid: false, error: error.message };
+            preview.innerHTML = `
+                <div style="padding: 16px; border-radius: 8px; background: rgba(239,68,68,0.1); border: 1px solid #ef4444;">
+                    <div style="display: flex; align-items: center; gap: 8px; color: #ef4444;">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <span>${escapeHtml(error.message)}</span>
+                    </div>
+                </div>
+            `;
+            document.getElementById('ie-btn-import').disabled = true;
+        }
+    };
+    
+    window.handleFallbackFile = function(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        
+        if (file.size > 5 * 1024 * 1024) {
+            alert('❌ Arquivo muito grande! Máximo: 5MB');
+            return;
+        }
+        
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const textarea = document.getElementById('ie-import-json');
+            if (textarea) {
+                textarea.value = e.target.result;
+                validateFallbackJson();
+            }
+        };
+        reader.onerror = function() {
+            alert('❌ Erro ao ler arquivo');
+        };
+        reader.readAsText(file);
+    };
+    
+    window.handleFallbackImport = async function() {
+        if (!fallbackState.importPreview || !fallbackState.importPreview.valid) {
+            alert('❌ JSON inválido ou não validado');
+            return;
+        }
+        
+        const confirmed = confirm('⚠️ Importar configurações?\n\nEsta ação não pode ser desfeita.');
+        if (!confirmed) return;
+        
+        const btn = document.getElementById('ie-btn-import');
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importando...';
+        }
+        
+        try {
+            const response = await fetch('/api/bots/import', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    export_data: fallbackState.importPreview.data,
+                    target_bot_id: null,
+                    new_bot_token: null,
+                    new_bot_name: null
+                })
+            });
+            
+            const data = await response.json();
+            if (response.ok) {
+                alert('✅ Importado com sucesso!');
+                location.reload();
+            } else {
+                alert('Erro: ' + (data.error || 'Erro ao importar'));
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-upload"></i> Importar';
+                }
+            }
+        } catch (error) {
+            alert('Erro ao importar: ' + error.message);
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-upload"></i> Importar';
+            }
+        }
+    };
+    
+    window.closeFallbackModal = function() {
+        const modal = document.getElementById('ie-fallback-modal');
+        if (modal) modal.remove();
+        document.documentElement.style.overflow = '';
+        document.body.style.overflow = '';
+    };
+    
+    // ✅ Helper para escape HTML
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+})();
 </script>
 {% endblock %}
 
