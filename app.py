@@ -10619,72 +10619,23 @@ def send_meta_pixel_purchase_event(payment, pageview_event_id=None):
                        f"Task: {task.id} | " +
                        f"Type: {'Downsell' if is_downsell else 'Upsell' if is_upsell else 'Remarketing' if is_remarketing else 'Normal'}")
             
-            # ✅ CORREÇÃO CRÍTICA: Aguardar resultado do Celery ANTES de marcar como enviado
-            # Isso garante que o evento foi realmente processado e enviado à Meta
-            # Timeout de 10 segundos (validação token + envio Meta pode levar alguns segundos)
-            try:
-                # Aguardar resultado com timeout de 10 segundos
-                result = task.get(timeout=10)
-                
-                # Verificar se foi bem-sucedido
-                if result and result.get('events_received', 0) > 0:
-                    # ✅ SUCESSO: Atualizar meta_event_id (meta_purchase_sent já foi marcado antes de enviar)
-                    # ✅ CRÍTICO: Não marcar meta_purchase_sent novamente aqui (já foi marcado antes de enviar para evitar duplicação)
-                    payment.meta_event_id = event_id
-                    db.session.commit()
-                    logger.info(f"[META PURCHASE] Purchase - meta_event_id atualizado: {event_id[:50]}...")
-                    
-                    events_received = result.get('events_received', 0)
-                    # ✅ CRÍTICO: Mostrar origem real do event_id usado (pode vir do Redis ou Payment)
-                    pageview_event_id_used = tracking_data.get('pageview_event_id') or getattr(payment, 'pageview_event_id', None) or 'N/A'
-                    pageview_event_id_source = 'Redis' if tracking_data.get('pageview_event_id') else ('Payment' if getattr(payment, 'pageview_event_id', None) else 'N/A')
-                    
-                    logger.info(f"📤 Purchase ENVIADO: {payment.payment_id} | Events Received: {events_received} | event_id: {event_id}")
-                    logger.info(f"✅ Purchase ENVIADO com sucesso para Meta: R$ {payment.amount} | " +
-                               f"Events Received: {events_received} | " +
-                               f"Task: {task.id} | " +
-                               f"Deduplicação: event_id={event_id} (reutilizado do PageView: {pageview_event_id_used} via {pageview_event_id_source})")
-                    return True  # ✅ Retornar True indicando sucesso
-                else:
-                    # ❌ FALHOU: Reverter meta_purchase_sent para permitir nova tentativa
-                    logger.error(f"❌ Purchase FALHOU silenciosamente: R$ {payment.amount} | " +
-                               f"Result: {result} | " +
-                               f"Task: {task.id}")
-                    logger.error(f"   ⚠️ Revertendo meta_purchase_sent para permitir nova tentativa")
-                    try:
-                        payment.meta_purchase_sent = False
-                        payment.meta_purchase_sent_at = None
-                        db.session.commit()
-                        logger.warning(f"   ✅ meta_purchase_sent revertido - Purchase pode ser tentado novamente")
-                    except Exception as rollback_error:
-                        logger.error(f"   ❌ Erro ao reverter meta_purchase_sent: {rollback_error}")
-                    return False  # ✅ Retornar False indicando falha
-            except Exception as timeout_error:
-                # ❌ TIMEOUT ou ERRO: Reverter meta_purchase_sent para permitir nova tentativa
-                logger.error(f"❌ Purchase FALHOU (timeout/erro): R$ {payment.amount} | " +
-                           f"Erro: {timeout_error} | " +
-                           f"Task: {task.id}")
-                logger.error(f"   ⚠️ Timeout ao aguardar resultado do Celery ou erro ao processar task")
-                logger.error(f"   ⚠️ Revertendo meta_purchase_sent para permitir nova tentativa")
-                # Tentar obter estado da task para diagnóstico
-                try:
-                    task_state = task.state
-                    logger.error(f"   Task state: {task_state}")
-                    if hasattr(task, 'traceback') and task.traceback:
-                        logger.error(f"   Task traceback: {task.traceback[:500]}")
-                except:
-                    pass
-                # Reverter meta_purchase_sent
-                try:
-                    payment.meta_purchase_sent = False
-                    payment.meta_purchase_sent_at = None
-                    db.session.commit()
-                    logger.warning(f"   ✅ meta_purchase_sent revertido - Purchase pode ser tentado novamente")
-                except Exception as rollback_error:
-                    logger.error(f"   ❌ Erro ao reverter meta_purchase_sent: {rollback_error}")
-                    db.session.rollback()
-                db.session.rollback()
-                return False  # ✅ Retornar False indicando falha por timeout/erro
+            # ✅ CORREÇÃO CRÍTICA V2: Fire and Forget - Não aguardar resultado do Celery
+            # O problema anterior era que timeout de 10s estava bloqueando o fluxo quando Celery estava lento
+            # Agora: enfileirar task e confiar que Celery vai processar em background
+            # Celery tem retry automático se falhar, então não precisamos aguardar resultado síncrono
+            # ✅ IMPORTANTE: meta_purchase_sent já foi marcado antes de enfileirar (linha 10598)
+            # Se task falhar, Celery vai retry automaticamente (max_retries=10)
+            # Não fazer rollback aqui - deixar Celery processar em background
+            
+            # ✅ Salvar event_id para referência futura (mesmo sem aguardar resultado)
+            payment.meta_event_id = event_id
+            db.session.commit()
+            logger.info(f"[META PURCHASE] Purchase - Task enfileirada com sucesso: {task.id} | event_id: {event_id[:50]}...")
+            logger.info(f"✅ Purchase enfileirado para processamento assíncrono via Celery (fire and forget)")
+            logger.info(f"   💡 Celery vai processar em background e enviar para Meta automaticamente")
+            logger.info(f"   💡 Se falhar, Celery tem retry automático (max_retries=10)")
+            
+            return True  # ✅ Retornar True indicando que task foi enfileirada com sucesso
                 
         except Exception as celery_error:
             logger.error(f"❌ ERRO CRÍTICO ao enfileirar Purchase no Celery: {celery_error}", exc_info=True)
