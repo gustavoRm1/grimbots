@@ -1759,6 +1759,7 @@
 <!-- Modal: Importar/Exportar Bot -->
 <div id="modal-import-export"
      x-show="showImportExportModal"
+     x-cloak
      x-transition:enter="ease-out duration-300"
      x-transition:enter-start="opacity-0"
      x-transition:enter-end="opacity-100"
@@ -3028,57 +3029,29 @@ function dashboardApp() {
         
         // ✅ Função para abrir modal de Remarketing Geral
         openGeneralRemarketingModal() {
-            // Fechar TODOS os outros modais PRIMEIRO
+            // Fechar outros modais
             this.showImportExportModal = false;
             this.showAddBotModal = false;
             this.showDuplicateBotModal = false;
             this.showBannedBotModal = false;
             
-            // Aguardar Alpine processar o fechamento dos outros modais
+            // Aguardar Alpine processar e abrir
             this.$nextTick(() => {
-                // AGORA sim, abrir o modal de Remarketing
                 this.showGeneralRemarketingModal = true;
-                
-                // Forçar exibição imediata após Alpine processar
-                this.$nextTick(() => {
-                    const modal = document.querySelector('[x-show*="showGeneralRemarketingModal"]');
-                    if (modal) {
-                        // Remover x-cloak que pode estar bloqueando
-                        modal.removeAttribute('x-cloak');
-                        // Forçar display apenas se necessário
-                        if (window.getComputedStyle(modal).display === 'none') {
-                            modal.style.setProperty('display', 'flex', 'important');
-                        }
-                    }
-                });
             });
         },
         
         // ✅ Função para abrir modal de Importar/Exportar Bot
         openImportExportModal() {
-            // Fechar TODOS os outros modais PRIMEIRO
+            // Fechar outros modais
             this.showGeneralRemarketingModal = false;
             this.showAddBotModal = false;
             this.showDuplicateBotModal = false;
             this.showBannedBotModal = false;
             
-            // Aguardar Alpine processar o fechamento dos outros modais
+            // Aguardar Alpine processar e abrir
             this.$nextTick(() => {
-                // AGORA sim, abrir o modal de Importar/Exportar
                 this.showImportExportModal = true;
-                
-                // Forçar exibição imediata após Alpine processar
-                this.$nextTick(() => {
-                    const modal = document.getElementById('modal-import-export');
-                    if (modal) {
-                        // Remover x-cloak que pode estar bloqueando
-                        modal.removeAttribute('x-cloak');
-                        // Forçar display apenas se necessário
-                        if (window.getComputedStyle(modal).display === 'none') {
-                            modal.style.setProperty('display', 'flex', 'important');
-                        }
-                    }
-                });
             });
         },
         
