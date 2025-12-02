@@ -5641,6 +5641,8 @@ def public_redirect(slug):
     # ============================================================================
     # ✅ Verificar se Meta Pixel está habilitado antes de processar PageView
     if pool.meta_tracking_enabled and pool.meta_pixel_id and pool.meta_access_token:
+        # ✅ CORREÇÃO CRÍTICA QI 500: Inicializar pageview_context antes do try para garantir que sempre exista
+        pageview_context = {}
         try:
             external_id, utm_data, pageview_context = send_meta_pixel_pageview_event(
                 pool,
@@ -5652,76 +5654,80 @@ def public_redirect(slug):
             logger.error(f"Erro ao enviar PageView para Meta Pixel: {e}")
             # Não impedir o redirect se Meta falhar
             pageview_context = {}
-        else:
-            # ✅ CRÍTICO: Sempre salvar pageview_context, mesmo se vazio, para garantir que pageview_event_id seja preservado
-            # ✅ CORREÇÃO CRÍTICA QI 1000+: MERGE pageview_context com tracking_payload inicial
-            # Isso garante que client_ip e client_user_agent sejam preservados (não sobrescritos)
-            if tracking_token:
-                try:
-                    # ✅ CORREÇÃO CRÍTICA: MERGE pageview_context com tracking_payload inicial
-                    # PROBLEMA IDENTIFICADO: pageview_context estava sobrescrevendo tracking_payload inicial
-                    # Isso fazia com que client_ip e client_user_agent fossem perdidos
-                    # SOLUÇÃO: Fazer merge (não sobrescrever)
-                    if pageview_context:
-                        # ✅ MERGE: Combinar dados iniciais com dados do PageView
-                        # ✅ PRIORIDADE: pageview_context > tracking_payload (pageview_context é mais recente e tem dados do PageView)
-                        merged_context = {
-                            **tracking_payload,  # ✅ Dados iniciais (client_ip, client_user_agent, fbclid, fbp, etc.)
-                            **pageview_context   # ✅ Dados do PageView (pageview_event_id, event_source_url, client_ip, client_user_agent, etc.) - SOBRESCREVE tracking_payload
-                        }
-                        
-                        # ✅ CRÍTICO: GARANTIR que client_ip e client_user_agent sejam preservados (prioridade: pageview_context > tracking_payload)
-                        # Se pageview_context tem valores válidos, usar (são mais recentes e vêm do PageView)
-                        # Se pageview_context tem vazios/None mas tracking_payload tem valores válidos, usar tracking_payload (fallback)
-                        if pageview_context.get('client_ip') and isinstance(pageview_context.get('client_ip'), str) and pageview_context.get('client_ip').strip():
-                            # ✅ Prioridade 1: Usar client_ip do pageview_context (mais recente e vem do PageView)
-                            merged_context['client_ip'] = pageview_context['client_ip']
-                            logger.info(f"✅ Usando client_ip do pageview_context (mais recente): {pageview_context['client_ip']}")
-                        elif tracking_payload.get('client_ip') and isinstance(tracking_payload.get('client_ip'), str) and tracking_payload.get('client_ip').strip():
-                            # ✅ Prioridade 2: Se pageview_context não tem, usar tracking_payload (fallback)
-                            merged_context['client_ip'] = tracking_payload['client_ip']
-                            logger.info(f"✅ Usando client_ip do tracking_payload (fallback): {tracking_payload['client_ip']}")
-                        
-                        if pageview_context.get('client_user_agent') and isinstance(pageview_context.get('client_user_agent'), str) and pageview_context.get('client_user_agent').strip():
-                            # ✅ Prioridade 1: Usar client_user_agent do pageview_context (mais recente e vem do PageView)
-                            merged_context['client_user_agent'] = pageview_context['client_user_agent']
-                            logger.info(f"✅ Usando client_user_agent do pageview_context (mais recente): {pageview_context['client_user_agent'][:50]}...")
-                        elif tracking_payload.get('client_user_agent') and isinstance(tracking_payload.get('client_user_agent'), str) and tracking_payload.get('client_user_agent').strip():
-                            # ✅ Prioridade 2: Se pageview_context não tem, usar tracking_payload (fallback)
-                            merged_context['client_user_agent'] = tracking_payload['client_user_agent']
-                            logger.info(f"✅ Usando client_user_agent do tracking_payload (fallback): {tracking_payload['client_user_agent'][:50]}...")
-                        
-                        # ✅ GARANTIR que pageview_event_id seja preservado (prioridade: pageview_context > tracking_payload)
-                        if not merged_context.get('pageview_event_id') and tracking_payload.get('pageview_event_id'):
-                            merged_context['pageview_event_id'] = tracking_payload['pageview_event_id']
-                            logger.info(f"✅ Preservando pageview_event_id do tracking_payload inicial: {tracking_payload['pageview_event_id']}")
-                        
-                        logger.info(f"✅ Merge realizado: client_ip={'✅' if merged_context.get('client_ip') else '❌'}, client_user_agent={'✅' if merged_context.get('client_user_agent') else '❌'}, pageview_event_id={'✅' if merged_context.get('pageview_event_id') else '❌'}")
-                        
-                        ok = tracking_service_v4.save_tracking_token(
-                            tracking_token,
-                            merged_context,  # ✅ Dados completos (não sobrescreve)
-                            ttl=TRACKING_TOKEN_TTL
-                        )
-                    else:
-                        # Se pageview_context está vazio, salvar apenas o tracking_payload inicial (já tem tudo)
-                        logger.warning(f"⚠️ pageview_context vazio - preservando tracking_payload inicial completo")
-                        ok = tracking_service_v4.save_tracking_token(
-                            tracking_token,
-                            tracking_payload,  # ✅ Dados iniciais completos (client_ip, client_user_agent, pageview_event_id, etc.)
-                            ttl=TRACKING_TOKEN_TTL
-                        )
+        
+        # ✅ CORREÇÃO CRÍTICA QI 500: MERGE sempre executa, independentemente de erros no PageView
+        # Isso garante que o tracking_token seja sempre atualizado com os dados disponíveis
+        # ✅ CRÍTICO: Sempre salvar pageview_context, mesmo se vazio, para garantir que pageview_event_id seja preservado
+        # ✅ CORREÇÃO CRÍTICA QI 1000+: MERGE pageview_context com tracking_payload inicial
+        # Isso garante que client_ip e client_user_agent sejam preservados (não sobrescritos)
+        if tracking_token:
+            try:
+                # ✅ CORREÇÃO CRÍTICA: MERGE pageview_context com tracking_payload inicial
+                # PROBLEMA IDENTIFICADO: pageview_context estava sobrescrevendo tracking_payload inicial
+                # Isso fazia com que client_ip e client_user_agent fossem perdidos
+                # SOLUÇÃO: Fazer merge (não sobrescrever)
+                merged_context = None  # ✅ Inicializar para garantir que sempre existe
+                if pageview_context:
+                    # ✅ MERGE: Combinar dados iniciais com dados do PageView
+                    # ✅ PRIORIDADE: pageview_context > tracking_payload (pageview_context é mais recente e tem dados do PageView)
+                    merged_context = {
+                        **tracking_payload,  # ✅ Dados iniciais (client_ip, client_user_agent, fbclid, fbp, etc.)
+                        **pageview_context   # ✅ Dados do PageView (pageview_event_id, event_source_url, client_ip, client_user_agent, etc.) - SOBRESCREVE tracking_payload
+                    }
                     
-                    if not ok:
-                        logger.warning("Retry saving merged context once (redirect)")
-                        retry_context = merged_context if pageview_context else tracking_payload
-                        tracking_service_v4.save_tracking_token(
-                            tracking_token,
-                            retry_context,
-                            ttl=TRACKING_TOKEN_TTL
-                        )
-                except Exception as e:
-                    logger.warning(f"⚠️ Erro ao atualizar tracking_token {tracking_token} com merged context: {e}")
+                    # ✅ CRÍTICO: GARANTIR que client_ip e client_user_agent sejam preservados (prioridade: pageview_context > tracking_payload)
+                    # Se pageview_context tem valores válidos, usar (são mais recentes e vêm do PageView)
+                    # Se pageview_context tem vazios/None mas tracking_payload tem valores válidos, usar tracking_payload (fallback)
+                    if pageview_context.get('client_ip') and isinstance(pageview_context.get('client_ip'), str) and pageview_context.get('client_ip').strip():
+                        # ✅ Prioridade 1: Usar client_ip do pageview_context (mais recente e vem do PageView)
+                        merged_context['client_ip'] = pageview_context['client_ip']
+                        logger.info(f"✅ Usando client_ip do pageview_context (mais recente): {pageview_context['client_ip']}")
+                    elif tracking_payload.get('client_ip') and isinstance(tracking_payload.get('client_ip'), str) and tracking_payload.get('client_ip').strip():
+                        # ✅ Prioridade 2: Se pageview_context não tem, usar tracking_payload (fallback)
+                        merged_context['client_ip'] = tracking_payload['client_ip']
+                        logger.info(f"✅ Usando client_ip do tracking_payload (fallback): {tracking_payload['client_ip']}")
+                    
+                    if pageview_context.get('client_user_agent') and isinstance(pageview_context.get('client_user_agent'), str) and pageview_context.get('client_user_agent').strip():
+                        # ✅ Prioridade 1: Usar client_user_agent do pageview_context (mais recente e vem do PageView)
+                        merged_context['client_user_agent'] = pageview_context['client_user_agent']
+                        logger.info(f"✅ Usando client_user_agent do pageview_context (mais recente): {pageview_context['client_user_agent'][:50]}...")
+                    elif tracking_payload.get('client_user_agent') and isinstance(tracking_payload.get('client_user_agent'), str) and tracking_payload.get('client_user_agent').strip():
+                        # ✅ Prioridade 2: Se pageview_context não tem, usar tracking_payload (fallback)
+                        merged_context['client_user_agent'] = tracking_payload['client_user_agent']
+                        logger.info(f"✅ Usando client_user_agent do tracking_payload (fallback): {tracking_payload['client_user_agent'][:50]}...")
+                    
+                    # ✅ GARANTIR que pageview_event_id seja preservado (prioridade: pageview_context > tracking_payload)
+                    if not merged_context.get('pageview_event_id') and tracking_payload.get('pageview_event_id'):
+                        merged_context['pageview_event_id'] = tracking_payload['pageview_event_id']
+                        logger.info(f"✅ Preservando pageview_event_id do tracking_payload inicial: {tracking_payload['pageview_event_id']}")
+                    
+                    logger.info(f"✅ Merge realizado: client_ip={'✅' if merged_context.get('client_ip') else '❌'}, client_user_agent={'✅' if merged_context.get('client_user_agent') else '❌'}, pageview_event_id={'✅' if merged_context.get('pageview_event_id') else '❌'}")
+                    
+                    ok = tracking_service_v4.save_tracking_token(
+                        tracking_token,
+                        merged_context,  # ✅ Dados completos (não sobrescreve)
+                        ttl=TRACKING_TOKEN_TTL
+                    )
+                else:
+                    # Se pageview_context está vazio, salvar apenas o tracking_payload inicial (já tem tudo)
+                    logger.warning(f"⚠️ pageview_context vazio - preservando tracking_payload inicial completo")
+                    ok = tracking_service_v4.save_tracking_token(
+                        tracking_token,
+                        tracking_payload,  # ✅ Dados iniciais completos (client_ip, client_user_agent, pageview_event_id, etc.)
+                        ttl=TRACKING_TOKEN_TTL
+                    )
+                
+                if not ok:
+                    logger.warning("Retry saving merged context once (redirect)")
+                    # ✅ CORREÇÃO: Usar merged_context se foi criado (não é None), senão usar tracking_payload
+                    retry_context = merged_context if merged_context else tracking_payload
+                    tracking_service_v4.save_tracking_token(
+                        tracking_token,
+                        retry_context,
+                        ttl=TRACKING_TOKEN_TTL
+                    )
+            except Exception as e:
+                logger.warning(f"⚠️ Erro ao atualizar tracking_token {tracking_token} com merged context: {e}")
     else:
         # ✅ Meta Pixel desabilitado - nenhum tracking será executado
         logger.info(f"⚠️ [META PIXEL] Tracking desabilitado para pool {pool.name} - pulando todo processamento de Meta Pixel")
@@ -8766,14 +8772,6 @@ def delivery_page(delivery_token):
         # Isso garante que Purchase seja enviado mesmo se client-side falhar
         if has_meta_pixel and not purchase_already_sent:
             try:
-                # ✅ CRÍTICO: Lock pessimista - marcar ANTES de enviar para evitar chamadas duplicadas
-                # Isso evita condição de corrida onde duas chamadas veem meta_purchase_sent=False simultaneamente
-                payment.meta_purchase_sent = True
-                from models import get_brazil_time
-                payment.meta_purchase_sent_at = get_brazil_time()
-                db.session.commit()
-                logger.info(f"[META DELIVERY] Delivery - payment.meta_purchase_sent marcado como True (ANTES de enviar) para evitar duplicação")
-                
                 # ✅ CRÍTICO: Garantir que pixel_config['event_id'] existe antes de passar
                 # Se não tiver, gerar agora (mesmo formato do client-side)
                 # ✅ IMPORTANTE: Gerar event_id UMA VEZ e reutilizar (evitar timestamps diferentes)
@@ -8782,17 +8780,16 @@ def delivery_page(delivery_token):
                 logger.info(f"[META DELIVERY] Delivery - event_id que será usado (mesmo do client-side): {event_id_to_pass[:50]}...")
                 # ✅ CRÍTICO: Passar event_id garantido para garantir MESMO event_id no client-side e server-side
                 # Isso garante deduplicação automática pela Meta mesmo sem pageview_event_id original
-                send_meta_pixel_purchase_event(payment, pageview_event_id=event_id_to_pass)
-                logger.info(f"[META DELIVERY] Delivery - Purchase via Server enfileirado com sucesso (event_id: {event_id_to_pass[:30]}...)")
+                # ✅ CORREÇÃO CRÍTICA: NÃO marcar meta_purchase_sent ANTES - deixar a função fazer isso APÓS validações
+                purchase_was_sent = send_meta_pixel_purchase_event(payment, pageview_event_id=event_id_to_pass)
+                
+                # ✅ VALIDAÇÃO: Verificar se Purchase foi realmente enfileirado
+                if purchase_was_sent:
+                    logger.info(f"[META DELIVERY] Delivery - Purchase via Server enfileirado com sucesso (event_id: {event_id_to_pass[:30]}...)")
+                else:
+                    logger.warning(f"⚠️ [META DELIVERY] Delivery - Purchase NÃO foi enfileirado (função retornou False/None)")
             except Exception as e:
                 logger.error(f"❌ Erro ao enviar Purchase via Server: {e}", exc_info=True)
-                # ✅ ROLLBACK: Se falhou, reverter meta_purchase_sent para permitir nova tentativa
-                try:
-                    payment.meta_purchase_sent = False
-                    payment.meta_purchase_sent_at = None
-                    db.session.commit()
-                except:
-                    pass
                 # Não bloquear renderização da página se server-side falhar
         elif has_meta_pixel and payment.meta_purchase_sent:
             # ✅ Purchase já foi enviado (server-side) - client-side NÃO deve enviar
@@ -9496,7 +9493,7 @@ def send_meta_pixel_purchase_event(payment, pageview_event_id=None):
         if not pool_bot:
             logger.error(f"❌ PROBLEMA RAIZ: Bot {payment.bot_id} não está associado a nenhum pool - Meta Pixel Purchase NÃO SERÁ ENVIADO (Payment {payment.id})")
             logger.error(f"   SOLUÇÃO: Associe o bot a um pool no dashboard ou via API")
-            return
+            return False
         
         pool = pool_bot.pool
         logger.info(f"🔍 DEBUG Meta Pixel Purchase - Pool ID: {pool.id}, Nome: {pool.name}")
@@ -9509,19 +9506,19 @@ def send_meta_pixel_purchase_event(payment, pageview_event_id=None):
         if not pool.meta_tracking_enabled:
             logger.error(f"❌ PROBLEMA RAIZ: Meta tracking DESABILITADO para pool {pool.id} ({pool.name}) - Meta Pixel Purchase NÃO SERÁ ENVIADO (Payment {payment.id})")
             logger.error(f"   SOLUÇÃO: Ative 'Meta Tracking' nas configurações do pool {pool.name}")
-            return
+            return False
         
         if not pool.meta_pixel_id or not pool.meta_access_token:
             logger.error(f"❌ PROBLEMA RAIZ: Pool {pool.id} ({pool.name}) tem tracking ativo mas SEM pixel_id ou access_token - Meta Pixel Purchase NÃO SERÁ ENVIADO (Payment {payment.id})")
             logger.error(f"   SOLUÇÃO: Configure Meta Pixel ID e Access Token nas configurações do pool {pool.name}")
-            return
+            return False
         
         # ✅ VERIFICAÇÃO 3: Evento Purchase está habilitado?
         logger.info(f"🔍 DEBUG Meta Pixel Purchase - Evento Purchase habilitado: {pool.meta_events_purchase}")
         if not pool.meta_events_purchase:
             logger.error(f"❌ PROBLEMA RAIZ: Evento Purchase DESABILITADO para pool {pool.id} ({pool.name}) - Meta Pixel Purchase NÃO SERÁ ENVIADO (Payment {payment.id})")
             logger.error(f"   SOLUÇÃO: Ative 'Purchase Event' nas configurações do pool {pool.name}")
-            return
+            return False
         
         # ✅ VERIFICAÇÃO 4: Já enviou este pagamento via CAPI? (ANTI-DUPLICAÇÃO)
         # ✅ CORREÇÃO CRÍTICA: NÃO bloquear se apenas client-side foi enviado!
@@ -9533,7 +9530,7 @@ def send_meta_pixel_purchase_event(payment, pageview_event_id=None):
             # ✅ CAPI já foi enviado com sucesso (tem meta_event_id) - bloquear para evitar duplicação
             logger.info(f"⚠️ Purchase já enviado via CAPI ao Meta, ignorando: {payment.payment_id} | Event ID: {payment.meta_event_id}")
             logger.info(f"   💡 Para reenviar, resetar flag meta_purchase_sent e meta_event_id antes de chamar esta função")
-            return
+            return True  # ✅ Retornar True pois já foi enviado com sucesso
         elif payment.meta_purchase_sent and not getattr(payment, 'meta_event_id', None):
             # ⚠️ meta_purchase_sent está True mas meta_event_id não existe
             # Isso indica que foi marcado apenas client-side, mas CAPI ainda não foi enviado
@@ -9559,7 +9556,7 @@ def send_meta_pixel_purchase_event(payment, pageview_event_id=None):
             access_token = decrypt(pool.meta_access_token)
         except Exception as decrypt_error:
             logger.error(f"❌ Erro ao descriptografar access_token do pool {pool.id} ({pool.name}): {decrypt_error} - Purchase ignorado (Payment {payment.id})")
-            return
+            return False
         
         # Determinar tipo de venda (QI 540 - FIX BUG)
         is_downsell = payment.is_downsell or False
@@ -10593,6 +10590,17 @@ def send_meta_pixel_purchase_event(payment, pageview_event_id=None):
         logger.info(f"🚀 [META PURCHASE] Purchase - Event Data: event_name={event_data.get('event_name')}, event_id={event_data.get('event_id')}, event_time={event_data.get('event_time')}")
         logger.info(f"🚀 [META PURCHASE] Purchase - User Data: external_id={'✅' if user_data.get('external_id') else '❌'}, fbp={'✅' if user_data.get('fbp') else '❌'}, fbc={'✅' if user_data.get('fbc') else '❌'}, ip={'✅' if user_data.get('client_ip_address') else '❌'}, ua={'✅' if user_data.get('client_user_agent') else '❌'}")
         
+        # ✅ CORREÇÃO CRÍTICA: Marcar meta_purchase_sent ANTES de enfileirar (lock pessimista)
+        # Isso previne duplicação mesmo que múltiplas requisições cheguem simultaneamente
+        # MAS só marca APÓS todas as verificações passarem (pool, tracking, pixel, etc.)
+        # ✅ IMPORTANTE: Só marcar se ainda não estiver marcado OU se meta_event_id não existe (permitir retry)
+        if not payment.meta_purchase_sent or not getattr(payment, 'meta_event_id', None):
+            payment.meta_purchase_sent = True
+            from models import get_brazil_time
+            payment.meta_purchase_sent_at = get_brazil_time()
+            db.session.commit()
+            logger.info(f"[META PURCHASE] Purchase - meta_purchase_sent marcado como True (APÓS validações, antes de enfileirar)")
+        
         # ✅ ENFILEIRAR COM PRIORIDADE ALTA (Purchase é crítico!)
         try:
             task = send_meta_event.apply_async(
@@ -10636,6 +10644,7 @@ def send_meta_pixel_purchase_event(payment, pageview_event_id=None):
                                f"Events Received: {events_received} | " +
                                f"Task: {task.id} | " +
                                f"Deduplicação: event_id={event_id} (reutilizado do PageView: {pageview_event_id_used} via {pageview_event_id_source})")
+                    return True  # ✅ Retornar True indicando sucesso
                 else:
                     # ❌ FALHOU: Reverter meta_purchase_sent para permitir nova tentativa
                     logger.error(f"❌ Purchase FALHOU silenciosamente: R$ {payment.amount} | " +
@@ -10649,6 +10658,7 @@ def send_meta_pixel_purchase_event(payment, pageview_event_id=None):
                         logger.warning(f"   ✅ meta_purchase_sent revertido - Purchase pode ser tentado novamente")
                     except Exception as rollback_error:
                         logger.error(f"   ❌ Erro ao reverter meta_purchase_sent: {rollback_error}")
+                    return False  # ✅ Retornar False indicando falha
             except Exception as timeout_error:
                 # ❌ TIMEOUT ou ERRO: Reverter meta_purchase_sent para permitir nova tentativa
                 logger.error(f"❌ Purchase FALHOU (timeout/erro): R$ {payment.amount} | " +
@@ -10674,17 +10684,33 @@ def send_meta_pixel_purchase_event(payment, pageview_event_id=None):
                     logger.error(f"   ❌ Erro ao reverter meta_purchase_sent: {rollback_error}")
                     db.session.rollback()
                 db.session.rollback()
+                return False  # ✅ Retornar False indicando falha por timeout/erro
                 
         except Exception as celery_error:
             logger.error(f"❌ ERRO CRÍTICO ao enfileirar Purchase no Celery: {celery_error}", exc_info=True)
             logger.error(f"   Payment ID: {payment.payment_id} | Pool: {pool.name} | Pixel: {pool.meta_pixel_id}")
-            # NÃO marcar como enviado se falhou
+            # ✅ Reverter meta_purchase_sent se falhou ao enfileirar
+            try:
+                payment.meta_purchase_sent = False
+                payment.meta_purchase_sent_at = None
+                db.session.commit()
+            except:
+                pass
             db.session.rollback()
+            return False  # ✅ Retornar False indicando falha
     
     except Exception as e:
         logger.error(f"💥 Erro CRÍTICO ao enviar Meta Purchase para payment {payment.id if payment else 'None'}: {e}", exc_info=True)
+        # ✅ Reverter meta_purchase_sent se falhou
+        try:
+            if payment and hasattr(payment, 'meta_purchase_sent'):
+                payment.meta_purchase_sent = False
+                payment.meta_purchase_sent_at = None
+                db.session.commit()
+        except:
+            pass
         db.session.rollback()  # ✅ Rollback se falhar
-        # Não impedir o commit do pagamento se Meta falhar
+        return False  # ✅ Retornar False indicando falha
 
 # ============================================================================
 # ✅ SISTEMA DE ASSINATURAS - Criação de Subscription
