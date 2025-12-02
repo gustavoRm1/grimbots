@@ -750,7 +750,7 @@
                     <span class="hidden sm:inline">Adicionar Bot</span>
                     <span class="sm:hidden">Novo Bot</span>
                 </button>
-                <button @click="showImportExportModal = true" 
+                <button @click="openImportExportModal()" 
                         class="btn-action flex items-center justify-center flex-1 sm:flex-initial text-sm sm:text-base px-4 py-2.5 sm:py-3 whitespace-nowrap"
                         style="background: rgba(59, 130, 246, 0.1); color: #3B82F6; border: 1px solid rgba(59, 130, 246, 0.3);">
                     <i class="fas fa-exchange-alt mr-1.5 sm:mr-2"></i>
@@ -1753,7 +1753,7 @@
      x-transition:leave="ease-in duration-200"
      x-transition:leave-start="opacity-100"
      x-transition:leave-end="opacity-0"
-     class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto"
+     class="fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto"
      style="background: rgba(0, 0, 0, 0.95); backdrop-filter: blur(8px);">
     <div class="flex items-center justify-center min-h-screen w-full p-4">
         <div @click.away="showImportExportModal = false"
@@ -2178,24 +2178,49 @@ function dashboardApp() {
             // ✅ Watchers para bloquear scroll do body quando modal abre
             this.$watch('showAddBotModal', (value) => {
                 this.toggleBodyScroll(value);
+                // Fechar modal de Importar/Exportar se AddBot abrir
+                if (value) {
+                    this.showImportExportModal = false;
+                }
             });
             
             this.$watch('showDuplicateBotModal', (value) => {
                 this.toggleBodyScroll(value);
+                // Fechar modal de Importar/Exportar se DuplicateBot abrir
+                if (value) {
+                    this.showImportExportModal = false;
+                }
             });
             
             this.$watch('showGeneralRemarketingModal', (value) => {
                 this.toggleBodyScroll(value);
+                // Fechar modal de Importar/Exportar se Remarketing abrir
+                if (value) {
+                    this.showImportExportModal = false;
+                }
             });
             
             this.$watch('showBannedBotModal', (value) => {
                 this.toggleBodyScroll(value);
+                // Fechar modal de Importar/Exportar se BannedBot abrir
+                if (value) {
+                    this.showImportExportModal = false;
+                }
             });
             
             // ✅ Watcher para modal de Importar/Exportar Bot
             this.$watch('showImportExportModal', (value) => {
                 console.log('🔍 Watcher showImportExportModal:', value);
                 this.toggleBodyScroll(value);
+                
+                // Fechar outros modais se Importar/Exportar abrir
+                if (value) {
+                    this.showGeneralRemarketingModal = false;
+                    this.showAddBotModal = false;
+                    this.showDuplicateBotModal = false;
+                    this.showBannedBotModal = false;
+                }
+                
                 // Forçar atualização visual após Alpine processar
                 this.$nextTick(() => {
                     const modal = document.querySelector('[x-show*="showImportExportModal"]');
@@ -2206,20 +2231,14 @@ function dashboardApp() {
                             modal.style.setProperty('align-items', 'center', 'important');
                             modal.style.setProperty('justify-content', 'center', 'important');
                             modal.style.setProperty('position', 'fixed', 'important');
-                            modal.style.setProperty('z-index', '50', 'important');
+                            modal.style.setProperty('z-index', '60', 'important');
                             modal.style.setProperty('top', '0', 'important');
                             modal.style.setProperty('left', '0', 'important');
                             modal.style.setProperty('right', '0', 'important');
                             modal.style.setProperty('bottom', '0', 'important');
                             modal.style.setProperty('width', '100%', 'important');
                             modal.style.setProperty('height', '100%', 'important');
-                            console.log('🔍 Display:', window.getComputedStyle(modal).display);
-                            console.log('🔍 Position:', window.getComputedStyle(modal).position);
-                            console.log('🔍 Z-index:', window.getComputedStyle(modal).zIndex);
-                            console.log('🔍 Top:', window.getComputedStyle(modal).top);
-                            console.log('🔍 Left:', window.getComputedStyle(modal).left);
-                            console.log('🔍 Width:', window.getComputedStyle(modal).width);
-                            console.log('🔍 Height:', window.getComputedStyle(modal).height);
+                            console.log('✅ Modal forçado a aparecer - Display:', window.getComputedStyle(modal).display);
                         } else {
                             modal.style.removeProperty('display');
                         }
@@ -3046,7 +3065,33 @@ function dashboardApp() {
         
         // Importar/Exportar Bot
         openImportExportModal() {
+            // Fechar outros modais primeiro
+            this.showGeneralRemarketingModal = false;
+            this.showAddBotModal = false;
+            this.showDuplicateBotModal = false;
+            this.showBannedBotModal = false;
+            
+            // Abrir modal de Importar/Exportar
             this.showImportExportModal = true;
+            
+            // Forçar exibição imediatamente
+            this.$nextTick(() => {
+                const modal = document.querySelector('[x-show*="showImportExportModal"]');
+                if (modal) {
+                    modal.style.setProperty('display', 'flex', 'important');
+                    modal.style.setProperty('align-items', 'center', 'important');
+                    modal.style.setProperty('justify-content', 'center', 'important');
+                    modal.style.setProperty('position', 'fixed', 'important');
+                    modal.style.setProperty('z-index', '60', 'important');
+                    modal.style.setProperty('top', '0', 'important');
+                    modal.style.setProperty('left', '0', 'important');
+                    modal.style.setProperty('right', '0', 'important');
+                    modal.style.setProperty('bottom', '0', 'important');
+                    modal.style.setProperty('width', '100%', 'important');
+                    modal.style.setProperty('height', '100%', 'important');
+                    console.log('✅ Modal de Importar/Exportar forçado a aparecer');
+                }
+            });
         },
         
         async exportBot() {
