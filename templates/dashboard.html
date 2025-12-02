@@ -1769,16 +1769,18 @@
                 <!-- Header -->
                 <div class="px-8 py-6 border-b border-white border-opacity-5" style="background: var(--border-subtle);">
                     <div class="flex items-center justify-between">
-                        <h3 class="text-2xl font-bold flex items-center gap-3 text-accent500">
-                            <i class="fas fa-exchange-alt"></i>
-                            Importar/Exportar Bot
-                        </h3>
+                        <div>
+                            <h3 class="text-2xl font-bold flex items-center gap-3 text-accent500">
+                                <i class="fas fa-exchange-alt"></i>
+                                Importar/Exportar Bot
+                            </h3>
+                            <p class="text-sm text-textSecondary mt-1">Exporte configurações de um bot ou importe para outro</p>
+                        </div>
                         <button @click="showImportExportModal = false" 
                                 class="text-textSecondary hover:text-textPrimary transition-colors">
                             <i class="fas fa-times text-xl"></i>
                         </button>
                     </div>
-                    <p class="text-sm text-textSecondary mt-1">Exporte configurações de um bot ou importe para outro</p>
                 </div>
                 
                 <!-- Tabs -->
@@ -1803,36 +1805,47 @@
                     <div x-show="importExportTab === 'export'" x-cloak>
                         <template x-if="!exportData">
                             <div>
-                                <label class="block text-sm font-bold text-textPrimary mb-3">
-                                    <i class="fas fa-robot mr-2 text-accent500"></i>
-                                    Selecione o bot para exportar:
-                                </label>
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
-                                    <template x-for="bot in bots" :key="bot.id">
-                                        <label @click="selectedExportBot = bot"
-                                               class="flex items-center gap-3 p-4 bg-bg900 rounded-lg cursor-pointer hover:bg-surface-800 transition-colors border-2"
-                                               :class="selectedExportBot?.id === bot.id ? 'border-accent500' : 'border-transparent'"
-                                               :style="selectedExportBot?.id === bot.id ? 'background: var(--border-subtle);' : ''">
-                                            <input type="radio" 
-                                                   :checked="selectedExportBot?.id === bot.id"
-                                                   class="w-4 h-4"
-                                                   style="accent-color: var(--brand-gold-500);"
-                                                   @click.stop>
-                                            <div class="flex items-center gap-2 flex-1">
-                                                <i class="fas fa-robot text-accent500"></i>
-                                                <div>
-                                                    <div class="text-sm font-bold text-textPrimary" x-text="bot.name"></div>
-                                                    <div class="text-xs text-textSecondary">@<span x-text="bot.username || 'N/A'"></span></div>
+                                <!-- Seleção de Bot para Exportar -->
+                                <div class="mb-6 p-4 rounded-xl" style="background: var(--border-subtle); border: 1px solid var(--border-accent);">
+                                    <label class="block text-sm font-bold text-textPrimary mb-3">
+                                        <i class="fas fa-robot mr-2 text-accent500"></i>
+                                        Selecione o bot para exportar:
+                                    </label>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        <template x-for="bot in bots" :key="bot.id">
+                                            <label @click="selectedExportBot = bot"
+                                                   class="flex items-center gap-3 p-3 bg-bg900 rounded-lg cursor-pointer hover:bg-surface-800 transition-colors border"
+                                                   :class="selectedExportBot?.id === bot.id ? 'border-accent500' : 'border-transparent'"
+                                                   :style="selectedExportBot?.id === bot.id ? 'background: var(--border-subtle); border-color: var(--brand-gold-500);' : ''">
+                                                <input type="radio" 
+                                                       :checked="selectedExportBot?.id === bot.id"
+                                                       class="w-4 h-4 bg-bg900 border-white border-opacity-10 rounded focus:ring-accent500"
+                                                       style="accent-color: var(--brand-gold-500);"
+                                                       @click.stop>
+                                                <div class="flex items-center gap-2 flex-1">
+                                                    <i class="fas fa-robot text-accent500"></i>
+                                                    <div>
+                                                        <div class="text-sm font-bold text-textPrimary" x-text="bot.name"></div>
+                                                        <div class="text-xs text-textSecondary">@<span x-text="bot.username || 'N/A'"></span></div>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        </label>
-                                    </template>
+                                            </label>
+                                        </template>
+                                    </div>
+                                    <div class="mt-3 p-3 bg-bg900 rounded-lg border border-white border-opacity-5">
+                                        <p class="text-xs text-textSecondary">
+                                            <i class="fas fa-info-circle mr-1 text-accent500"></i>
+                                            <span x-show="selectedExportBot">Bot selecionado: <span class="font-bold text-accent500" x-text="selectedExportBot?.name || ''"></span></span>
+                                            <span x-show="!selectedExportBot">Nenhum bot selecionado</span>
+                                        </p>
+                                    </div>
                                 </div>
                                 <button @click="exportBot()"
                                         :disabled="!selectedExportBot || loading"
                                         :class="!selectedExportBot || loading ? 'opacity-50 cursor-not-allowed' : ''"
-                                        class="w-full btn-action btn-action-primary">
-                                    <i class="fas fa-download mr-2"></i>
+                                        class="w-full px-6 py-3 text-black font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
+                                        style="background: linear-gradient(to right, var(--brand-gold-500), var(--brand-gold-700));">
+                                    <i class="fas fa-download"></i>
                                     <span x-text="loading ? 'Exportando...' : 'Exportar Configurações'"></span>
                                 </button>
                             </div>
@@ -1840,35 +1853,38 @@
                         
                         <template x-if="exportData">
                             <div>
-                                <div class="mb-4 p-4 bg-green-500 bg-opacity-10 border border-green-500 rounded-lg">
+                                <div class="mb-4 p-4 rounded-xl" style="background: var(--border-subtle); border: 1px solid var(--border-accent);">
                                     <div class="flex items-center gap-2 text-green-400 font-bold">
                                         <i class="fas fa-check-circle"></i>
                                         <span>Configurações exportadas com sucesso!</span>
                                     </div>
                                 </div>
                                 
-                                <label class="block text-sm font-bold text-textPrimary mb-2">
-                                    <i class="fas fa-code mr-2 text-accent500"></i>
-                                    JSON Exportado:
-                                </label>
-                                <textarea x-model="exportJson" 
-                                          readonly
-                                          rows="15"
-                                          class="w-full px-4 py-3 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary font-mono text-xs focus:outline-none"></textarea>
+                                <div class="mb-6">
+                                    <label class="block text-sm font-bold text-textPrimary mb-2">
+                                        <i class="fas fa-code mr-2 text-accent500"></i>
+                                        JSON Exportado:
+                                    </label>
+                                    <textarea x-model="exportJson" 
+                                              readonly
+                                              rows="15"
+                                              class="w-full px-4 py-3 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary font-mono text-xs placeholder-textSecondary focus:outline-none focus:ring-2 focus:ring-accent500"></textarea>
+                                </div>
                                 
-                                <div class="flex gap-3 mt-4">
+                                <div class="flex gap-3 mb-3">
                                     <button @click="copyExportJson()"
                                             class="flex-1 px-6 py-3 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary font-bold hover:bg-surface-800 transition-colors">
                                         <i class="fas fa-copy mr-2"></i>Copiar JSON
                                     </button>
                                     <button @click="downloadExportJson()"
-                                            class="flex-1 btn-action btn-action-primary">
-                                        <i class="fas fa-download mr-2"></i>Download
+                                            class="flex-1 px-6 py-3 text-black font-bold rounded-lg transition-colors flex items-center justify-center gap-2"
+                                            style="background: linear-gradient(to right, var(--brand-gold-500), var(--brand-gold-700));">
+                                        <i class="fas fa-download"></i>Download
                                     </button>
                                 </div>
                                 
                                 <button @click="exportData = null; exportJson = ''; selectedExportBot = null"
-                                        class="w-full mt-3 px-6 py-3 bg-bg900 border border-white border-opacity-10 rounded-lg text-textSecondary font-bold hover:bg-surface-800 transition-colors">
+                                        class="w-full px-6 py-3 bg-bg900 border border-white border-opacity-10 rounded-lg text-textSecondary font-semibold hover:bg-surface-800 transition-colors">
                                     <i class="fas fa-redo mr-2"></i>Exportar Outro Bot
                                 </button>
                             </div>
@@ -1879,7 +1895,7 @@
                     <div x-show="importExportTab === 'import'" x-cloak>
                         <div class="space-y-6">
                             <!-- Opção 1: Colar JSON -->
-                            <div>
+                            <div class="p-4 rounded-xl" style="background: var(--border-subtle); border: 1px solid var(--border-accent);">
                                 <label class="block text-sm font-bold text-textPrimary mb-2">
                                     <i class="fas fa-paste mr-2 text-accent500"></i>
                                     Opção 1: Colar JSON
@@ -1887,17 +1903,17 @@
                                 <textarea x-model="importJson" 
                                           @input="validateImportJson()"
                                           rows="10"
-                                          class="w-full px-4 py-3 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary font-mono text-xs focus:outline-none focus:ring-2 focus:ring-accent500"
+                                          class="w-full px-4 py-3 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary font-mono text-xs placeholder-textSecondary focus:outline-none focus:ring-2 focus:ring-accent500"
                                           placeholder='Cole aqui o JSON exportado...&#10;&#10;Exemplo:&#10;{&#10;  "version": "1.0",&#10;  "bot_name": "Bot 1",&#10;  "config": { ... }&#10;}'
                                           maxlength="5242880"></textarea>
-                                <p class="text-xs text-textSecondary mt-1">
-                                    <i class="fas fa-info-circle mr-1"></i>
+                                <p class="text-xs text-textSecondary mt-2">
+                                    <i class="fas fa-info-circle mr-1 text-accent500"></i>
                                     Tamanho máximo: 5MB. Validação automática em tempo real.
                                 </p>
                             </div>
                             
                             <!-- Opção 2: Upload arquivo -->
-                            <div>
+                            <div class="p-4 rounded-xl" style="background: var(--border-subtle); border: 1px solid var(--border-accent);">
                                 <label class="block text-sm font-bold text-textPrimary mb-2">
                                     <i class="fas fa-file-upload mr-2 text-accent500"></i>
                                     Opção 2: Upload arquivo
@@ -1911,7 +1927,7 @@
                             <!-- Preview -->
                             <template x-if="importPreview">
                                 <div :class="importPreview.valid ? 'bg-green-500 bg-opacity-10 border-green-500' : 'bg-red-500 bg-opacity-10 border-red-500'"
-                                     class="p-4 border rounded-lg">
+                                     class="p-4 border rounded-xl">
                                     <template x-if="importPreview.valid">
                                         <div>
                                             <div class="flex items-center gap-2 text-green-400 font-bold mb-3">
@@ -1947,19 +1963,20 @@
                             
                             <!-- Seleção de destino -->
                             <template x-if="importPreview && importPreview.valid">
-                                <div>
+                                <div class="p-4 rounded-xl" style="background: var(--border-subtle); border: 1px solid var(--border-accent);">
                                     <label class="block text-sm font-bold text-textPrimary mb-3">
                                         <i class="fas fa-target mr-2 text-accent500"></i>
                                         Aplicar em:
                                     </label>
                                     <div class="space-y-3">
-                                        <label class="flex items-center gap-3 p-4 bg-bg900 rounded-lg cursor-pointer border-2"
-                                               :class="importTargetType === 'new' ? 'border-accent500' : 'border-transparent'">
+                                        <label class="flex items-center gap-3 p-3 bg-bg900 rounded-lg cursor-pointer hover:bg-surface-800 transition-colors border"
+                                               :class="importTargetType === 'new' ? 'border-accent500' : 'border-transparent'"
+                                               :style="importTargetType === 'new' ? 'background: var(--border-subtle); border-color: var(--brand-gold-500);' : ''">
                                             <input type="radio" 
                                                    x-model="importTargetType"
                                                    value="new"
                                                    @change="importTargetBotId = null"
-                                                   class="w-4 h-4"
+                                                   class="w-4 h-4 bg-bg900 border-white border-opacity-10 rounded focus:ring-accent500"
                                                    style="accent-color: var(--brand-gold-500);">
                                             <div>
                                                 <div class="text-sm font-bold text-textPrimary">Criar novo bot</div>
@@ -1967,14 +1984,14 @@
                                             </div>
                                         </label>
                                         
-                                        <div x-show="importTargetType === 'new'" class="ml-7 space-y-3">
+                                        <div x-show="importTargetType === 'new'" x-cloak class="ml-7 space-y-3">
                                             <div>
                                                 <label class="block text-xs text-textSecondary mb-1">Token do novo bot *</label>
                                                 <input type="text" 
                                                        x-model="importNewBotToken"
                                                        @input="if (importNewBotToken && !validateTokenFormat(importNewBotToken.trim())) { importNewBotToken = importNewBotToken.trim(); }"
                                                        placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
-                                                       class="w-full px-4 py-2 bg-surface-800 border rounded-lg text-textPrimary font-mono text-sm focus:outline-none focus:ring-2"
+                                                       class="w-full px-4 py-3 bg-bg900 border rounded-lg text-textPrimary font-mono text-sm placeholder-textSecondary focus:outline-none focus:ring-2"
                                                        :class="importNewBotToken && !validateTokenFormat(importNewBotToken.trim()) ? 'border-red-500 focus:ring-red-500' : 'border-white border-opacity-10 focus:ring-accent500'">
                                                 <p x-show="importNewBotToken && !validateTokenFormat(importNewBotToken.trim())" 
                                                    x-cloak
@@ -1988,17 +2005,18 @@
                                                 <input type="text" 
                                                        x-model="importNewBotName"
                                                        :placeholder="importPreview.bot_name + ' (Importado)'"
-                                                       class="w-full px-4 py-2 bg-surface-800 border border-white border-opacity-10 rounded-lg text-textPrimary text-sm focus:outline-none focus:ring-2 focus:ring-accent500">
+                                                       class="w-full px-4 py-3 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary text-sm placeholder-textSecondary focus:outline-none focus:ring-2 focus:ring-accent500">
                                             </div>
                                         </div>
                                         
-                                        <label class="flex items-center gap-3 p-4 bg-bg900 rounded-lg cursor-pointer border-2"
-                                               :class="importTargetType === 'existing' ? 'border-accent500' : 'border-transparent'">
+                                        <label class="flex items-center gap-3 p-3 bg-bg900 rounded-lg cursor-pointer hover:bg-surface-800 transition-colors border"
+                                               :class="importTargetType === 'existing' ? 'border-accent500' : 'border-transparent'"
+                                               :style="importTargetType === 'existing' ? 'background: var(--border-subtle); border-color: var(--brand-gold-500);' : ''">
                                             <input type="radio" 
                                                    x-model="importTargetType"
                                                    value="existing"
                                                    @change="importTargetBotId = null"
-                                                   class="w-4 h-4"
+                                                   class="w-4 h-4 bg-bg900 border-white border-opacity-10 rounded focus:ring-accent500"
                                                    style="accent-color: var(--brand-gold-500);">
                                             <div>
                                                 <div class="text-sm font-bold text-textPrimary">Bot existente</div>
@@ -2006,9 +2024,9 @@
                                             </div>
                                         </label>
                                         
-                                        <div x-show="importTargetType === 'existing'" class="ml-7">
+                                        <div x-show="importTargetType === 'existing'" x-cloak class="ml-7">
                                             <select x-model="importTargetBotId"
-                                                    class="w-full px-4 py-2 bg-surface-800 border border-white border-opacity-10 rounded-lg text-textPrimary text-sm focus:outline-none focus:ring-2 focus:ring-accent500">
+                                                    class="w-full px-4 py-3 bg-bg900 border border-white border-opacity-10 rounded-lg text-textPrimary text-sm focus:outline-none focus:ring-2 focus:ring-accent500">
                                                 <option :value="null">Selecione um bot...</option>
                                                 <template x-for="bot in bots" :key="bot.id">
                                                     <option :value="bot.id" x-text="bot.name + ' (@' + (bot.username || 'N/A') + ')'"></option>
@@ -2022,14 +2040,15 @@
                             <!-- Botões de ação -->
                             <div class="flex gap-3">
                                 <button @click="showImportExportModal = false"
-                                        class="flex-1 px-6 py-3 bg-bg900 border border-white border-opacity-10 rounded-lg text-textSecondary font-bold hover:bg-surface-800 transition-colors">
+                                        class="flex-1 px-6 py-3 bg-bg900 border border-white border-opacity-10 rounded-lg text-textSecondary font-semibold hover:bg-surface-800 transition-colors">
                                     Cancelar
                                 </button>
                                 <button @click="importBot()"
                                         :disabled="!importPreview || !importPreview.valid || loading || (importTargetType === 'existing' && !importTargetBotId) || (importTargetType === 'new' && (!importNewBotToken.trim() || !validateTokenFormat(importNewBotToken.trim())))"
                                         :class="(!importPreview || !importPreview.valid || loading || (importTargetType === 'existing' && !importTargetBotId) || (importTargetType === 'new' && (!importNewBotToken.trim() || !validateTokenFormat(importNewBotToken.trim())))) ? 'opacity-50 cursor-not-allowed' : ''"
-                                        class="flex-1 btn-action btn-action-primary relative">
-                                    <i class="fas" :class="loading ? 'fa-spinner fa-spin' : 'fa-upload'" class="mr-2"></i>
+                                        class="flex-1 px-6 py-3 text-black font-bold rounded-lg transition-colors flex items-center justify-center gap-2 relative"
+                                        style="background: linear-gradient(to right, var(--brand-gold-500), var(--brand-gold-700));">
+                                    <i class="fas" :class="loading ? 'fa-spinner fa-spin' : 'fa-upload'"></i>
                                     <span x-text="loading ? 'Importando...' : 'Importar'"></span>
                                     <!-- ✅ Loading overlay -->
                                     <div x-show="loading" 
