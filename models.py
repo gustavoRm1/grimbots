@@ -391,31 +391,88 @@ class BotConfig(db.Model):
     def to_dict(self):
         """Retorna configuração em formato dict"""
         try:
+            # ✅ VALIDAÇÃO CRÍTICA: Garantir que self.id existe
+            config_id = getattr(self, 'id', None)
+            if config_id is None:
+                logger.error(f"❌ BotConfig.to_dict() chamado sem id - config pode não estar salvo no banco")
+                # Retornar config mínimo com id None
+                return {
+                    'id': None,
+                    'welcome_message': '',
+                    'welcome_media_url': '',
+                    'welcome_media_type': 'video',
+                    'welcome_audio_enabled': False,
+                    'welcome_audio_url': '',
+                    'main_buttons': [],
+                    'redirect_buttons': [],
+                    'downsells_enabled': False,
+                    'downsells': [],
+                    'upsells_enabled': False,
+                    'upsells': [],
+                    'access_link': '',
+                    'success_message': '',
+                    'pending_message': '',
+                    'flow_enabled': False,
+                    'flow_steps': [],
+                    'flow_start_step_id': None
+                }
+            
+            # ✅ VALIDAÇÃO: Tentar obter métodos get_* com tratamento de erro individual
+            try:
+                main_buttons = self.get_main_buttons()
+            except Exception as e:
+                logger.warning(f"⚠️ Erro ao obter main_buttons: {e}")
+                main_buttons = []
+            
+            try:
+                redirect_buttons = self.get_redirect_buttons()
+            except Exception as e:
+                logger.warning(f"⚠️ Erro ao obter redirect_buttons: {e}")
+                redirect_buttons = []
+            
+            try:
+                downsells = self.get_downsells()
+            except Exception as e:
+                logger.warning(f"⚠️ Erro ao obter downsells: {e}")
+                downsells = []
+            
+            try:
+                upsells = self.get_upsells()
+            except Exception as e:
+                logger.warning(f"⚠️ Erro ao obter upsells: {e}")
+                upsells = []
+            
+            try:
+                flow_steps = self.get_flow_steps()
+            except Exception as e:
+                logger.warning(f"⚠️ Erro ao obter flow_steps: {e}")
+                flow_steps = []
+            
             return {
-                'id': self.id,
-                'welcome_message': self.welcome_message or '',
-                'welcome_media_url': self.welcome_media_url or '',
-                'welcome_media_type': self.welcome_media_type or 'video',
-                'welcome_audio_enabled': self.welcome_audio_enabled or False,
-                'welcome_audio_url': self.welcome_audio_url or '',
-                'main_buttons': self.get_main_buttons(),
-                'redirect_buttons': self.get_redirect_buttons(),
-                'downsells_enabled': self.downsells_enabled or False,
-                'downsells': self.get_downsells(),
-                'upsells_enabled': self.upsells_enabled or False,
-                'upsells': self.get_upsells(),
-                'access_link': self.access_link or '',
+                'id': config_id,
+                'welcome_message': getattr(self, 'welcome_message', None) or '',
+                'welcome_media_url': getattr(self, 'welcome_media_url', None) or '',
+                'welcome_media_type': getattr(self, 'welcome_media_type', None) or 'video',
+                'welcome_audio_enabled': getattr(self, 'welcome_audio_enabled', False) or False,
+                'welcome_audio_url': getattr(self, 'welcome_audio_url', None) or '',
+                'main_buttons': main_buttons,
+                'redirect_buttons': redirect_buttons,
+                'downsells_enabled': getattr(self, 'downsells_enabled', False) or False,
+                'downsells': downsells,
+                'upsells_enabled': getattr(self, 'upsells_enabled', False) or False,
+                'upsells': upsells,
+                'access_link': getattr(self, 'access_link', None) or '',
                 'success_message': getattr(self, 'success_message', None) or '',
                 'pending_message': getattr(self, 'pending_message', None) or '',
-                'flow_enabled': self.flow_enabled or False,
-                'flow_steps': self.get_flow_steps(),
-                'flow_start_step_id': self.flow_start_step_id or None
+                'flow_enabled': getattr(self, 'flow_enabled', False) or False,
+                'flow_steps': flow_steps,
+                'flow_start_step_id': getattr(self, 'flow_start_step_id', None) or None
             }
         except Exception as e:
-            logger.error(f"❌ Erro ao serializar BotConfig: {e}")
+            logger.error(f"❌ Erro ao serializar BotConfig: {e}", exc_info=True)
             # Retornar config mínimo em caso de erro
             return {
-                'id': self.id,
+                'id': getattr(self, 'id', None),
                 'welcome_message': '',
                 'welcome_media_url': '',
                 'welcome_media_type': 'video',

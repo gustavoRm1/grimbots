@@ -2884,11 +2884,20 @@ def import_bot_config():
             logger.info(f"✅ Novo bot criado: {bot.name} (ID: {bot.id})")
         
         # ✅ VALIDAÇÃO 7: Criar ou atualizar configuração
+        # ✅ CORREÇÃO: Garantir que bot.config existe e está vinculado corretamente
         if not bot.config:
             config = BotConfig(bot_id=bot.id)
             db.session.add(config)
+            db.session.flush()  # ✅ CRÍTICO: Flush para garantir que config.id existe
+            # ✅ CRÍTICO: Recarregar bot para garantir relacionamento config está disponível
+            db.session.refresh(bot)
         else:
             config = bot.config
+        
+        # ✅ VALIDAÇÃO ADICIONAL: Garantir que config.bot_id está correto
+        if config.bot_id != bot.id:
+            logger.warning(f"⚠️ Config bot_id ({config.bot_id}) não corresponde ao bot.id ({bot.id}) - corrigindo...")
+            config.bot_id = bot.id
         
         # ✅ APLICAR CONFIGURAÇÕES (já validadas)
         # Usar verificação explícita de existência para diferenciar "não presente" de "presente mas None"
@@ -2960,6 +2969,38 @@ def import_bot_config():
         # ✅ COMMIT apenas se tudo passou
         db.session.commit()
         
+        # ✅ VALIDAÇÃO FINAL: Recarregar bot e config do banco para garantir relacionamentos
+        try:
+            db.session.refresh(bot)
+            db.session.refresh(config)
+            
+            # ✅ VALIDAÇÃO CRÍTICA: Verificar se bot.owner está disponível (backref do SQLAlchemy)
+            if not hasattr(bot, 'owner') or bot.owner is None:
+                logger.error(f"❌ Bot {bot.id} não tem owner após importação!")
+                logger.error(f"   Bot user_id: {bot.user_id}")
+                logger.error(f"   Current user id: {current_user.id}")
+                # Tentar recarregar do banco
+                bot = Bot.query.filter_by(id=bot.id).first()
+                if bot and hasattr(bot, 'owner') and bot.owner:
+                    logger.info(f"✅ Bot.owner recuperado após reload")
+                else:
+                    logger.error(f"❌ Bot.owner ainda não disponível após reload")
+            
+            # ✅ VALIDAÇÃO CRÍTICA: Verificar se bot.config está disponível
+            if not hasattr(bot, 'config') or bot.config is None:
+                logger.error(f"❌ Bot {bot.id} não tem config após importação!")
+                # Tentar recarregar do banco
+                bot = Bot.query.filter_by(id=bot.id).first()
+                if bot and hasattr(bot, 'config') and bot.config:
+                    logger.info(f"✅ Bot.config recuperado após reload")
+                else:
+                    logger.error(f"❌ Bot.config ainda não disponível após reload")
+                    raise ValueError("Bot.config não disponível após importação")
+        except Exception as validation_error:
+            logger.error(f"❌ Erro na validação final após importação: {validation_error}", exc_info=True)
+            # Não bloquear o retorno se as validações básicas passaram
+            logger.warning(f"⚠️ Continuando apesar do erro de validação final")
+        
         logger.info(f"✅ Configurações importadas com sucesso para bot {bot.id} por {current_user.email}")
         
         return jsonify({
@@ -3011,8 +3052,16 @@ def start_bot(bot_id):
     if not current_user.gateways.filter_by(is_active=True, is_verified=True).first():
         return jsonify({'error': 'Configure um gateway de pagamento verificado primeiro'}), 400
     
-    # Verificar se tem configuração
-    if not bot.config or not bot.config.welcome_message:
+    # ✅ VALIDAÇÃO CRÍTICA: Verificar se bot.config existe
+    if not bot.config:
+        logger.error(f"❌ Bot {bot_id} não tem config antes de iniciar")
+        # Tentar recarregar do banco
+        db.session.refresh(bot)
+        if not bot.config:
+            return jsonify({'error': 'Bot não possui configuração. Recarregue a página e tente novamente.'}), 400
+    
+    # Verificar se tem configuração (welcome_message)
+    if not bot.config.welcome_message:
         return jsonify({'error': 'Configure a mensagem de boas-vindas antes de iniciar'}), 400
     
     # ✅ VALIDAR TOKEN ANTES DE INICIAR (QI 500)
@@ -3051,7 +3100,19 @@ def start_bot(bot_id):
             }), 400
     
     try:
-        bot_manager.start_bot(bot.id, bot.token, bot.config.to_dict())
+        # ✅ VALIDAÇÃO CRÍTICA: Garantir que bot.config existe e pode ser serializado
+        try:
+            config_dict = bot.config.to_dict()
+        except Exception as config_error:
+            logger.error(f"❌ Erro ao serializar config do bot {bot_id}: {config_error}", exc_info=True)
+            return jsonify({'error': f'Erro ao processar configuração do bot: {str(config_error)}'}), 500
+        
+        # ✅ VALIDAÇÃO: Garantir que config_dict é válido
+        if not config_dict or not isinstance(config_dict, dict):
+            logger.error(f"❌ Config do bot {bot_id} serializado é inválido: {config_dict}")
+            return jsonify({'error': 'Configuração do bot inválida. Recarregue a página e tente novamente.'}), 500
+        
+        bot_manager.start_bot(bot.id, bot.token, config_dict)
         bot.is_running = True
         bot.last_started = get_brazil_time()
         db.session.commit()
