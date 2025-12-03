@@ -1759,9 +1759,8 @@
 <!-- Modal: Importar/Exportar Bot -->
 <div id="modal-import-export"
      x-show="showImportExportModal"
-     x-cloak
-     :style="showImportExportModal ? 'display: flex !important; visibility: visible !important; opacity: 1 !important; z-index: 9999 !important;' : 'display: none !important;'"
-     class="fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto"
+     :style="showImportExportModal ? 'display: flex !important; visibility: visible !important; opacity: 1 !important; z-index: 99999 !important; position: fixed !important; top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important; width: 100% !important; height: 100% !important; background: rgba(0, 0, 0, 0.95) !important; backdrop-filter: blur(8px) !important;' : 'display: none !important;'"
+     class="fixed inset-0 z-[99999] flex items-center justify-center overflow-y-auto"
      style="background: rgba(0, 0, 0, 0.95); backdrop-filter: blur(8px);">
     <div class="flex items-center justify-center min-h-screen w-full p-4">
         <div @click.away="showImportExportModal = false"
@@ -2220,6 +2219,7 @@ function dashboardApp() {
             // ✅ Watcher para modal de Importar/Exportar Bot - FORÇA AGRESSIVA
             this.$watch('showImportExportModal', (value) => {
                 console.log('[Import/Export] Watcher chamado, value =', value);
+                console.log('[Import/Export] Modal existe no DOM?', !!document.getElementById('modal-import-export'));
                 this.toggleBodyScroll(value);
                 
                 if (value) {
@@ -2227,28 +2227,49 @@ function dashboardApp() {
                     const forceShow = () => {
                         const modal = document.getElementById('modal-import-export');
                         if (modal) {
-                            // Remover x-cloak
+                            // Remover qualquer x-cloak que possa estar bloqueando
                             modal.removeAttribute('x-cloak');
+                            modal.classList.remove('x-cloak');
                             
-                            // Forçar TODOS os estilos com !important
+                            // REMOVER TODOS os estilos inline primeiro (limpar TUDO)
+                            modal.removeAttribute('style');
+                            
+                            // AGORA aplicar TODOS os estilos necessários com !important
                             modal.style.cssText = `
                                 display: flex !important;
                                 visibility: visible !important;
                                 opacity: 1 !important;
-                                z-index: 9999 !important;
+                                z-index: 99999 !important;
                                 position: fixed !important;
                                 top: 0 !important;
                                 left: 0 !important;
                                 right: 0 !important;
                                 bottom: 0 !important;
-                                width: 100% !important;
-                                height: 100% !important;
+                                width: 100vw !important;
+                                height: 100vh !important;
                                 background: rgba(0, 0, 0, 0.95) !important;
                                 backdrop-filter: blur(8px) !important;
+                                pointer-events: auto !important;
                             `;
                             
+                            // Forçar também no elemento pai se existir
+                            if (modal.parentElement) {
+                                modal.parentElement.style.setProperty('position', 'relative', 'important');
+                                modal.parentElement.style.setProperty('z-index', '99999', 'important');
+                            }
+                            
                             const computed = window.getComputedStyle(modal);
+                            const rect = modal.getBoundingClientRect();
                             console.log('[Import/Export] Modal forçado - Display:', computed.display, 'Visibility:', computed.visibility, 'Opacity:', computed.opacity);
+                            console.log('[Import/Export] Modal position:', rect.x, rect.y, rect.width, rect.height);
+                            console.log('[Import/Export] Modal no DOM:', modal.offsetParent !== null);
+                            console.log('[Import/Export] Modal z-index:', computed.zIndex);
+                            
+                            // Verificar se há elementos sobrepondo
+                            const elementsAbove = document.elementsFromPoint(window.innerWidth / 2, window.innerHeight / 2);
+                            const modalIndex = elementsAbove.indexOf(modal);
+                            console.log('[Import/Export] Elementos sobre o modal:', elementsAbove.slice(0, 5).map(el => el.id || el.className || el.tagName));
+                            console.log('[Import/Export] Modal está no topo?', modalIndex === 0 || modalIndex === 1);
                         } else {
                             console.warn('[Import/Export] Modal não encontrado!');
                         }
