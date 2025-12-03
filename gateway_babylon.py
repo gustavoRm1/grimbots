@@ -193,7 +193,7 @@ class BabylonGateway(PaymentGateway):
             logger.info(f"📋 [{self.get_gateway_name()}] URL: {pix_url}")
             logger.info(f"📋 [{self.get_gateway_name()}] Base URL: {self.base_url}")
             logger.debug(f"📋 [{self.get_gateway_name()}] Payload completo: {payload}")
-            logger.debug(f"📋 [{self.get_gateway_name()}] Headers: Authorization=Bearer {self.api_key[:20]}... (oculto)")
+            logger.debug(f"📋 [{self.get_gateway_name()}] Headers: Authorization=Basic {credentials_base64[:30]}... (oculto)")
             logger.debug(f"📋 [{self.get_gateway_name()}] Payload (resumido): paymentMethod=PIX, amount={amount_cents}, customer.name={customer_name}, expiresInDays={expires_in_days}")
             
             # Fazer requisição
