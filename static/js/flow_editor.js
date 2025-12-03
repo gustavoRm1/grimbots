@@ -58,27 +58,84 @@ class FlowEditor {
             return;
         }
         
-        // Inicializar jsPlumb
-        this.instance = jsPlumb.newInstance({
-            container: this.canvas,
-            paintStyle: { stroke: '#10B981', strokeWidth: 2 },
-            hoverPaintStyle: { stroke: '#34D399', strokeWidth: 3 },
-            connector: ['Bezier', { curviness: 50, stub: [10, 15], gap: 5 }],
-            endpoint: ['Dot', { radius: 8 }],
-            endpointStyle: { fill: '#10B981', outlineStroke: '#FFFFFF', outlineWidth: 2 },
-            endpointHoverStyle: { fill: '#34D399', outlineStroke: '#FFFFFF', outlineWidth: 3 },
-            anchors: ['Top', 'Bottom'],
-            maxConnections: -1,
-            dragOptions: {
-                cursor: 'grabbing',
-                zIndex: 2000
-            },
-            // Permitir conexões apenas de bottom para top
-            connectionType: 'basic'
-        });
+        // Verificar se jsPlumb está disponível
+        if (typeof jsPlumb === 'undefined') {
+            console.error('❌ jsPlumb não está carregado. Verifique se o script foi incluído antes deste arquivo.');
+            return;
+        }
+        
+        // Inicializar jsPlumb (API 2.x)
+        try {
+            // jsPlumb 2.x: tentar diferentes APIs
+            if (typeof jsPlumb.getInstance === 'function') {
+                // API: getInstance()
+                this.instance = jsPlumb.getInstance({
+                    container: this.canvas,
+                    paintStyle: { stroke: '#10B981', strokeWidth: 2 },
+                    hoverPaintStyle: { stroke: '#34D399', strokeWidth: 3 },
+                    connector: ['Bezier', { curviness: 50, stub: [10, 15], gap: 5 }],
+                    endpoint: ['Dot', { radius: 8 }],
+                    endpointStyle: { fill: '#10B981', outlineStroke: '#FFFFFF', outlineWidth: 2 },
+                    endpointHoverStyle: { fill: '#34D399', outlineStroke: '#FFFFFF', outlineWidth: 3 },
+                    anchors: ['Top', 'Bottom'],
+                    maxConnections: -1,
+                    dragOptions: {
+                        cursor: 'grabbing',
+                        zIndex: 2000
+                    },
+                    connectionType: 'basic'
+                });
+            } else if (typeof jsPlumb.jsPlumb === 'function') {
+                // API: jsPlumb.jsPlumb()
+                this.instance = jsPlumb.jsPlumb({
+                    container: this.canvas,
+                    paintStyle: { stroke: '#10B981', strokeWidth: 2 },
+                    hoverPaintStyle: { stroke: '#34D399', strokeWidth: 3 },
+                    connector: ['Bezier', { curviness: 50, stub: [10, 15], gap: 5 }],
+                    endpoint: ['Dot', { radius: 8 }],
+                    endpointStyle: { fill: '#10B981', outlineStroke: '#FFFFFF', outlineWidth: 2 },
+                    endpointHoverStyle: { fill: '#34D399', outlineStroke: '#FFFFFF', outlineWidth: 3 },
+                    anchors: ['Top', 'Bottom'],
+                    maxConnections: -1,
+                    dragOptions: {
+                        cursor: 'grabbing',
+                        zIndex: 2000
+                    },
+                    connectionType: 'basic'
+                });
+            } else {
+                // Fallback: usar instância padrão do jsPlumb 2.x
+                this.instance = jsPlumb;
+                if (typeof this.instance.importDefaults === 'function') {
+                    this.instance.importDefaults({
+                        paintStyle: { stroke: '#10B981', strokeWidth: 2 },
+                        hoverPaintStyle: { stroke: '#34D399', strokeWidth: 3 },
+                        connector: ['Bezier', { curviness: 50, stub: [10, 15], gap: 5 }],
+                        endpoint: ['Dot', { radius: 8 }],
+                        endpointStyle: { fill: '#10B981', outlineStroke: '#FFFFFF', outlineWidth: 2 },
+                        endpointHoverStyle: { fill: '#34D399', outlineStroke: '#FFFFFF', outlineWidth: 3 },
+                        anchors: ['Top', 'Bottom'],
+                        maxConnections: -1,
+                        dragOptions: {
+                            cursor: 'grabbing',
+                            zIndex: 2000
+                        },
+                        connectionType: 'basic'
+                    });
+                }
+                if (typeof this.instance.setContainer === 'function') {
+                    this.instance.setContainer(this.canvas);
+                }
+            }
+        } catch (error) {
+            console.error('❌ Erro ao inicializar jsPlumb:', error);
+            console.error('jsPlumb disponível:', typeof jsPlumb, Object.keys(jsPlumb || {}));
+            return;
+        }
         
         // Habilitar drag em todos os elementos com classe flow-step-block
-        this.instance.bind('ready', () => {
+        // No jsPlumb 2.x, eventos podem ser registrados diretamente
+        setTimeout(() => {
             this.instance.bind('connection', (info) => this.onConnectionCreated(info));
             this.instance.bind('connectionDetached', (info) => this.onConnectionDetached(info));
             this.instance.bind('connectionMoved', (info) => this.onConnectionMoved(info));
@@ -97,7 +154,7 @@ class FlowEditor {
             });
             
             console.log('✅ jsPlumb inicializado');
-        });
+        }, 100);
         
         // Renderizar steps existentes
         this.renderAllSteps();
