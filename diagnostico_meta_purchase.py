@@ -10,10 +10,14 @@ import os
 # Adicionar diretório do projeto ao path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+# Carregar variáveis de ambiente antes de importar app
+from dotenv import load_dotenv
+load_dotenv()
+
 from app import app, db
 from models import Payment, PoolBot, RedirectPool, Bot
 from datetime import datetime, timedelta
-from sqlalchemy import func, text
+from sqlalchemy import func, text, case
 
 def print_section(title):
     print("\n" + "="*60)
@@ -80,7 +84,7 @@ def analyze_database():
             RedirectPool.meta_events_purchase,
             func.count(func.distinct(PoolBot.bot_id)).label('bots_count'),
             func.count(func.distinct(Payment.id)).label('payments_count'),
-            func.count(func.distinct(db.case((Payment.meta_purchase_sent == True, Payment.id), else_=None))).label('purchases_sent')
+            func.count(func.distinct(case((Payment.meta_purchase_sent == True, Payment.id), else_=None))).label('purchases_sent')
         ).outerjoin(
             PoolBot, PoolBot.pool_id == RedirectPool.id
         ).outerjoin(
