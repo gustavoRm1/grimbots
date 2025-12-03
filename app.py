@@ -9372,11 +9372,33 @@ def delivery_page(delivery_token):
             value = re.sub(r'[^a-zA-Z0-9_.-]', '', value)
             return value[:255]
         
+        # ✅ CORREÇÃO CRÍTICA: Normalizar external_id para garantir matching
+        # Se external_id existir, normalizar (MD5 se > 80 chars, ou original se <= 80)
+        # Isso garante que browser e server usem EXATAMENTE o mesmo formato
+        external_id_normalized = None
+        if external_id:
+            from utils.meta_pixel import normalize_external_id
+            external_id_normalized = normalize_external_id(external_id)
+            logger.info(f"[META DELIVERY] Delivery - external_id normalizado: {external_id[:30]}... -> {external_id_normalized[:30]}... (len={len(external_id_normalized)})")
+        
+        # ✅ CORREÇÃO CRÍTICA: Garantir que event_id seja sempre string e no formato correto
+        # Meta requer event_id como string para deduplicação
+        # Usar pageview_event_id se disponível (garante matching com PageView)
+        # Se não tiver, gerar baseado no payment.id (garante unicidade)
+        event_id_final = None
+        if pageview_event_id:
+            event_id_final = str(pageview_event_id)  # ✅ Garantir que é string
+            logger.info(f"[META DELIVERY] Delivery - event_id do PageView: {event_id_final[:50]}...")
+        else:
+            # ✅ Fallback: gerar event_id único baseado no payment
+            event_id_final = f"purchase_{payment.id}_{int(time.time())}"
+            logger.warning(f"[META DELIVERY] Delivery - pageview_event_id ausente, gerando novo: {event_id_final[:50]}...")
+        
         # ✅ Renderizar página com Purchase tracking (INCLUINDO FBP E FBC!)
         pixel_config = {
             'pixel_id': pool.meta_pixel_id if has_meta_pixel else None,
-            'event_id': pageview_event_id or f"purchase_{payment.id}_{int(time.time())}",
-            'external_id': external_id or '',
+            'event_id': event_id_final,  # ✅ SEMPRE string, formato correto
+            'external_id': external_id_normalized,  # ✅ None se não houver (não string vazia!)
             'fbp': fbp_value or '',  # ✅ CRÍTICO: FBP para matching perfeito
             'fbc': fbc_value or '',  # ✅ CRÍTICO: FBC para matching perfeito (apenas se real)
             'value': float(payment.amount),
