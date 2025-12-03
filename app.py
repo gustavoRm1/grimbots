@@ -12412,29 +12412,55 @@ def send_push_notification(user_id, title, body, data=None, color='green'):
             return
         
         # Chave privada VAPID
-        vapid_private_key = os.getenv('VAPID_PRIVATE_KEY')
+        vapid_private_key_raw = os.getenv('VAPID_PRIVATE_KEY')
         vapid_claims = {
             "sub": f"mailto:{os.getenv('VAPID_EMAIL', 'admin@grimbots.com')}"
         }
         
-        if not vapid_private_key:
+        if not vapid_private_key_raw:
             logger.warning("⚠️ VAPID_PRIVATE_KEY não configurada. Push notifications desabilitadas.")
             return
         
-        # ✅ TRATAR FORMATO: pywebpush pode aceitar PEM ou base64
-        # Se for base64, tentar converter para bytes se necessário
+        # ✅ CORREÇÃO: Converter chave privada para formato PEM se necessário
+        # pywebpush espera formato PEM, então vamos garantir que sempre seja PEM
+        from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.backends import default_backend
+        import base64
+        
+        vapid_private_key = None
         try:
-            # pywebpush aceita string (PEM ou base64) ou bytes
-            # Testar se precisa converter
-            import base64
-            # Se parece ser base64, manter como string (pywebpush trata automaticamente)
-            # Se começa com "-----BEGIN", é PEM e já está correto
-            if not vapid_private_key.startswith("-----BEGIN"):
-                # É base64 - pywebpush pode aceitar diretamente ou precisar converter
-                # Vamos deixar como está e verificar se funciona
-                logger.debug(f"VAPID key format: base64 ({len(vapid_private_key)} chars)")
+            # Se já é PEM, usar direto
+            if vapid_private_key_raw.startswith("-----BEGIN"):
+                vapid_private_key = vapid_private_key_raw
+                logger.debug("VAPID key already in PEM format")
+            else:
+                # Formato base64 (DER) - converter para PEM
+                try:
+                    # Decodificar base64 para DER
+                    private_key_der = base64.urlsafe_b64decode(
+                        vapid_private_key_raw + '=' * (4 - len(vapid_private_key_raw) % 4)
+                    )
+                    # Carregar como objeto
+                    private_key_obj = serialization.load_der_private_key(
+                        private_key_der,
+                        password=None,
+                        backend=default_backend()
+                    )
+                    # Converter de volta para PEM (formato que pywebpush espera)
+                    vapid_private_key = private_key_obj.private_bytes(
+                        encoding=serialization.Encoding.PEM,
+                        format=serialization.PrivateFormat.PKCS8,
+                        encryption_algorithm=serialization.NoEncryption()
+                    ).decode('utf-8')
+                    logger.debug("VAPID key converted from base64 (DER) to PEM format")
+                except Exception as der_error:
+                    logger.error(f"❌ Erro ao converter chave de base64 para PEM: {der_error}")
+                    logger.warning("⚠️ Tentando usar chave como está (pode falhar)")
+                    vapid_private_key = vapid_private_key_raw
         except Exception as e:
-            logger.warning(f"⚠️ Aviso ao processar VAPID key: {e}")
+            logger.error(f"❌ Erro ao processar VAPID private key: {e}")
+            logger.warning("⚠️ Tentando usar chave como está (pode falhar)")
+            vapid_private_key = vapid_private_key_raw
         
         # Preparar payload com cor
         # ✅ IMPORTANTE: Incluir todos os dados no nível raiz para fácil acesso no Service Worker
