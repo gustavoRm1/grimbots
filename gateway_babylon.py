@@ -216,7 +216,8 @@ class BabylonGateway(PaymentGateway):
             logger.debug(f"📋 [{self.get_gateway_name()}] Response Text (primeiros 500 chars): {response.text[:500]}")
             
             # Processar resposta
-            if response.status_code == 201:  # 201 Created conforme documentação
+            # ✅ Babylon pode retornar 200 (OK) ou 201 (Created)
+            if response.status_code in [200, 201]:
                 try:
                     data = response.json()
                 except (ValueError, requests.exceptions.JSONDecodeError) as json_error:
@@ -232,6 +233,10 @@ class BabylonGateway(PaymentGateway):
                 # ✅ Extrair dados do PIX
                 pix_info = data.get('pix', {})
                 
+                logger.debug(f"🔍 [{self.get_gateway_name()}] Objeto pix: {pix_info}")
+                if isinstance(pix_info, dict):
+                    logger.debug(f"🔍 [{self.get_gateway_name()}] Campos do pix: {list(pix_info.keys())}")
+                
                 # ✅ Tentar extrair código PIX de múltiplos campos possíveis
                 # Prioridade: copyPaste > emv > qrcode (pode ser URL)
                 pix_code = None
@@ -241,6 +246,7 @@ class BabylonGateway(PaymentGateway):
                         pix_info.get('emv') or           # Código EMV
                         pix_info.get('qrcode')           # Pode ser URL ou código
                     )
+                    logger.info(f"🔍 [{self.get_gateway_name()}] Código PIX extraído: {pix_code[:50] if pix_code else 'None'}...")
                 
                 # ✅ Se qrcode for URL, tentar fazer requisição para obter código PIX
                 # Ou usar outros campos da resposta
