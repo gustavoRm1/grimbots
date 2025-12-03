@@ -1291,45 +1291,102 @@ def log_admin_action(action, description, target_user_id=None, data_before=None,
         logger.error(f"❌ Erro ao registrar log de auditoria: {e}")
         db.session.rollback()
 
-def get_user_ip(request_obj=None):
+def normalize_ip_to_ipv6(ip_address: str) -> str:
+    """
+    Normaliza endereço IP para IPv6 quando possível
+    
+    Meta recomenda IPv6 para melhor matching e durabilidade.
+    Se o IP for IPv4, converte para IPv6 mapeado (IPv4-mapped IPv6).
+    
+    Args:
+        ip_address: Endereço IP (IPv4 ou IPv6)
+    
+    Returns:
+        Endereço IPv6 ou IPv4 original se conversão falhar
+    """
+    if not ip_address:
+        return ip_address
+    
+    try:
+        import ipaddress
+        # Tentar parsear como IP
+        ip = ipaddress.ip_address(ip_address.strip())
+        
+        # Se já é IPv6, retornar como está
+        if isinstance(ip, ipaddress.IPv6Address):
+            return str(ip)
+        
+        # Se é IPv4, converter para IPv6 mapeado (IPv4-mapped IPv6)
+        if isinstance(ip, ipaddress.IPv4Address):
+            ipv6_mapped = ipaddress.IPv6Address(f"::ffff:{ip}")
+            logger.debug(f"✅ IPv4 convertido para IPv6 mapeado: {ip_address} -> {ipv6_mapped}")
+            return str(ipv6_mapped)
+        
+    except (ValueError, Exception) as e:
+        logger.warning(f"⚠️ Erro ao normalizar IP {ip_address}: {e}")
+        return ip_address
+    
+    return ip_address
+
+
+def get_user_ip(request_obj=None, normalize_to_ipv6: bool = True):
     """
     Obtém o IP real do usuário (considerando Cloudflare e proxies)
     
     Prioridade:
-    1. CF-Connecting-IP (Cloudflare - mais confiável)
+    1. CF-Connecting-IP (Cloudflare - mais confiável, pode ser IPv6)
     2. True-Client-IP (Cloudflare alternativo)
     3. X-Forwarded-For (proxies genéricos - primeiro IP)
     4. X-Real-IP (nginx e outros)
     5. request.remote_addr (fallback direto)
+    
+    Args:
+        request_obj: Objeto request do Flask (opcional)
+        normalize_to_ipv6: Se True, normaliza IPv4 para IPv6 mapeado (recomendado pela Meta)
+    
+    Returns:
+        Endereço IP (IPv6 se normalize_to_ipv6=True, ou original)
     """
     if request_obj is None:
         from flask import request
         request_obj = request
     
-    # ✅ PRIORIDADE 1: Cloudflare CF-Connecting-IP (mais confiável)
+    ip_address = None
+    
+    # ✅ PRIORIDADE 1: Cloudflare CF-Connecting-IP (mais confiável, pode ser IPv6)
     cf_ip = request_obj.headers.get('CF-Connecting-IP')
     if cf_ip:
-        return cf_ip.strip()
+        ip_address = cf_ip.strip()
     
     # ✅ PRIORIDADE 2: Cloudflare True-Client-IP (alternativo)
-    true_client_ip = request_obj.headers.get('True-Client-IP')
-    if true_client_ip:
-        return true_client_ip.strip()
+    if not ip_address:
+        true_client_ip = request_obj.headers.get('True-Client-IP')
+        if true_client_ip:
+            ip_address = true_client_ip.strip()
     
     # ✅ PRIORIDADE 3: X-Forwarded-For (proxies genéricos - usar primeiro IP)
-    x_forwarded_for = request_obj.headers.get('X-Forwarded-For')
-    if x_forwarded_for:
-        # X-Forwarded-For pode ter múltiplos IPs separados por vírgula
-        # O primeiro IP é o IP real do cliente
-        return x_forwarded_for.split(',')[0].strip()
+    if not ip_address:
+        x_forwarded_for = request_obj.headers.get('X-Forwarded-For')
+        if x_forwarded_for:
+            # X-Forwarded-For pode ter múltiplos IPs separados por vírgula
+            # O primeiro IP é o IP real do cliente
+            ip_address = x_forwarded_for.split(',')[0].strip()
     
     # ✅ PRIORIDADE 4: X-Real-IP (nginx e outros)
-    x_real_ip = request_obj.headers.get('X-Real-IP')
-    if x_real_ip:
-        return x_real_ip.strip()
+    if not ip_address:
+        x_real_ip = request_obj.headers.get('X-Real-IP')
+        if x_real_ip:
+            ip_address = x_real_ip.strip()
     
     # ✅ PRIORIDADE 5: request.remote_addr (fallback direto)
-    return request_obj.remote_addr or '0.0.0.0'
+    if not ip_address:
+        ip_address = request_obj.remote_addr or '0.0.0.0'
+    
+    # ✅ NORMALIZAR PARA IPv6 (conforme recomendação Meta)
+    if normalize_to_ipv6 and ip_address:
+        ip_address = normalize_ip_to_ipv6(ip_address)
+    
+    return ip_address
 
 def check_and_unlock_achievements(user):
     """Verifica e desbloqueia conquistas automaticamente"""
@@ -9890,7 +9947,13 @@ def send_meta_pixel_pageview_event(pool, request, pageview_event_id=None, tracki
         # Isso garante que PageView e Purchase usem EXATAMENTE o mesmo formato
         # ✅ SERVER-SIDE PARAMETER BUILDER: Priorizar client_ip do Parameter Builder
         # Prioridade: Parameter Builder (_fbi) > get_user_ip() (Cloudflare headers) > X-Forwarded-For > Remote-Addr
-        client_ip = client_ip_from_builder if client_ip_from_builder else get_user_ip(request)
+        # ✅ CORREÇÃO IPv6: Normalizar IP para IPv6 (conforme recomendação Meta)
+        if client_ip_from_builder:
+            # Se Parameter Builder retornou IP, normalizar para IPv6 se necessário
+            client_ip = normalize_ip_to_ipv6(client_ip_from_builder) if client_ip_from_builder else None
+        else:
+            # Se não tem do Parameter Builder, usar get_user_ip com normalização IPv6
+            client_ip = get_user_ip(request, normalize_to_ipv6=True)
         
         user_data = MetaPixelAPI._build_user_data(
             customer_user_id=None,  # Não temos telegram_user_id no PageView
