@@ -2730,10 +2730,24 @@ body {
                         <!-- ✅ Canvas apenas se houver steps -->
                         <div x-show="config.flow_steps && config.flow_steps.length > 0"
                              x-cloak
-                             x-init="$nextTick(() => { 
-                                 setTimeout(() => { 
-                                     initVisualFlowEditor(); 
-                                 }, 100); 
+                             x-init="$watch('config.flow_steps.length', (newLength) => {
+                                 if (newLength > 0 && config.flow_enabled) {
+                                     $nextTick(() => {
+                                         setTimeout(() => {
+                                             if (!window.flowEditor) {
+                                                 initVisualFlowEditor();
+                                             } else {
+                                                 window.flowEditor.renderAllSteps();
+                                             }
+                                         }, 300);
+                                     });
+                                 }
+                             }); $nextTick(() => { 
+                                 if (config.flow_steps && config.flow_steps.length > 0 && config.flow_enabled) {
+                                     setTimeout(() => { 
+                                         initVisualFlowEditor(); 
+                                     }, 300); 
+                                 }
                              })"
                              class="w-full overflow-hidden">
                             <div class="relative w-full">
@@ -5152,18 +5166,6 @@ function botConfigApp() {
             }
         },
 
-        addFlowStep() {
-            if (!this.config.flow_steps) {
-                this.config.flow_steps = [];
-            }
-            const stepId = Date.now();
-            this.config.flow_steps.push({
-                id: stepId,
-                order: this.config.flow_steps.length,
-                message: '',
-                buttons: []
-            });
-        },
 
         setFlowStartStep(stepId) {
             this.config.flow_start_step_id = stepId;
@@ -5487,9 +5489,16 @@ function botConfigApp() {
         
         // Adicionar step (melhorado)
         addFlowStep() {
+            // Garantir que flow_steps existe
             if (!this.config.flow_steps) {
                 this.config.flow_steps = [];
             }
+            
+            // Habilitar flow automaticamente se não estiver habilitado
+            if (!this.config.flow_enabled) {
+                this.config.flow_enabled = true;
+            }
+            
             const stepId = `step_${Date.now()}`;
             
             // Calcular posição inicial (evitar sobreposição)
@@ -5515,13 +5524,21 @@ function botConfigApp() {
                     y: 100 + (row * 180)
                 }
             };
+            
             this.config.flow_steps.push(newStep);
             
-            // Re-renderizar canvas
+            // Re-renderizar canvas após próximo tick
             this.$nextTick(() => {
-                if (window.flowEditor) {
-                    window.flowEditor.renderAllSteps();
-                }
+                // Aguardar um pouco mais para garantir que DOM está pronto
+                setTimeout(() => {
+                    // Se é o primeiro step ou editor não existe, inicializar
+                    if (!window.flowEditor) {
+                        this.initVisualFlowEditor();
+                    } else {
+                        // Se editor já existe, apenas re-renderizar
+                        window.flowEditor.renderAllSteps();
+                    }
+                }, 400);
             });
         },
         
