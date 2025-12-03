@@ -6125,15 +6125,18 @@ def public_redirect(slug):
         # Usar fbc_value como fbc_cookie para compatibilidade com código existente
         fbc_cookie = fbc_value
 
+        # ✅ CORREÇÃO: Inicializar utms sempre (mesmo se for crawler)
+        # Se for crawler, utms será dict vazio (não salvará UTMs)
+        utms = {}
         if not is_crawler_request:
             utms = {
-            'utm_source': request.args.get('utm_source', ''),
-            'utm_campaign': request.args.get('utm_campaign', ''),
-            'utm_medium': request.args.get('utm_medium', ''),
-            'utm_content': request.args.get('utm_content', ''),
-            'utm_term': request.args.get('utm_term', ''),
-            'utm_id': request.args.get('utm_id', '')
-        }
+                'utm_source': request.args.get('utm_source', ''),
+                'utm_campaign': request.args.get('utm_campaign', ''),
+                'utm_medium': request.args.get('utm_medium', ''),
+                'utm_content': request.args.get('utm_content', ''),
+                'utm_term': request.args.get('utm_term', ''),
+                'utm_id': request.args.get('utm_id', '')
+            }
 
         # ✅ CRÍTICO: Garantir que fbclid completo (até 255 chars) seja salvo - NUNCA truncar antes de salvar no Redis!
         fbclid_to_save = fbclid or None
