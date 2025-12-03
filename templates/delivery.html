@@ -18,11 +18,11 @@
         'https://connect.facebook.net/en_US/fbevents.js');
         fbq('init', '{{ pixel_config.pixel_id }}');
         
-        // ✅ ANTI-DUPLICAÇÃO: Verificar se Purchase já foi enviado (server-side)
-        // ✅ CRÍTICO: Sistema multi-usuário não pode usar localStorage (seria compartilhado por domínio)
-        // ✅ Solução: Usar payment.meta_purchase_sent (verificado server-side antes de renderizar)
-        {% if not payment.meta_purchase_sent %}
-        // ✅ Purchase ainda NÃO foi enviado - pode disparar client-side
+        // ✅ CORREÇÃO CRÍTICA: SEMPRE disparar Purchase client-side
+        // Meta deduplica automaticamente usando eventID, então não precisamos bloquear
+        // Mesmo que server-side já tenha enviado, client-side também deve enviar para melhor cobertura
+        // Meta mostra "Múltiplos" quando recebe tanto browser quanto server (melhor matching)
+        
         // ✅ PURCHASE conforme documentação oficial Meta
         // ✅ CRÍTICO: Meta Pixel JS captura _fbp e _fbc AUTOMATICAMENTE dos cookies do browser
         // ✅ NÃO incluir _fbp/_fbc manualmente no objeto de parâmetros (pode causar duplicação)
@@ -31,7 +31,7 @@
         fbq('track', 'Purchase', {
             value: {{ pixel_config.value }},
             currency: '{{ pixel_config.currency }}',
-            eventID: '{{ pixel_config.event_id }}',  // ✅ MESMO event_id do PageView (deduplicação garantida)
+            eventID: '{{ pixel_config.event_id }}',  // ✅ MESMO event_id do server-side (deduplicação garantida)
             {% if pixel_config.external_id %}
             external_id: '{{ pixel_config.external_id }}',  // ✅ CRÍTICO: Enviar fbclid no browser para matching perfeito
             {% endif %}
@@ -40,14 +40,12 @@
             content_type: 'product',
             num_items: 1
             // ✅ Meta Pixel JS captura _fbp e _fbc automaticamente dos cookies (_fbp, _fbc)
-            // ✅ external_id agora enviado TANTO no browser quanto no server (conforme recomendação Meta)
+            // ✅ external_id enviado TANTO no browser quanto no server (conforme recomendação Meta)
+            // ✅ Meta deduplica automaticamente usando eventID, então não há duplicação
         });
         
         console.log('[META PIXEL] Purchase disparado (client-side) com eventID: {{ pixel_config.event_id }}');
-        {% else %}
-        // ✅ Purchase JÁ foi enviado anteriormente - NÃO disparar novamente
-        console.log('[META PIXEL] Purchase já foi enviado anteriormente (payment.meta_purchase_sent=true), pulando client-side...');
-        {% endif %}
+        console.log('[META PIXEL] Meta deduplicará automaticamente se server-side também enviar (mesmo eventID)');
     </script>
     <noscript>
         <img height="1" width="1" style="display:none"
