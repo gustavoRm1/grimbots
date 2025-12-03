@@ -143,19 +143,24 @@
     </div>
     
     <script>
-        // ✅ Marcar Purchase como enviado (anti-duplicação)
+        // ✅ Marcar Purchase como enviado APENAS APÓS client-side disparar (anti-duplicação)
+        // ✅ CRÍTICO: Permitir que client-side e server-side sejam enviados em paralelo
+        // Meta deduplica automaticamente usando eventID, então não bloqueamos client-side mesmo se server-side já foi enviado
         {% if has_meta_pixel %}
-        fetch('/api/tracking/mark-purchase-sent', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ payment_id: {{ payment.id }} })
-        }).then(response => {
-            if (response.ok) {
-                console.log('[TRACKING] Purchase marcado como enviado');
-            }
-        }).catch(err => {
-            console.error('[TRACKING] Erro ao marcar Purchase:', err);
-        });
+        // ✅ Aguardar um pouco para garantir que Purchase client-side foi disparado
+        setTimeout(() => {
+            fetch('/api/tracking/mark-purchase-sent', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ payment_id: {{ payment.id }} })
+            }).then(response => {
+                if (response.ok) {
+                    console.log('[TRACKING] Purchase marcado como enviado (client-side disparado)');
+                }
+            }).catch(err => {
+                console.error('[TRACKING] Erro ao marcar Purchase:', err);
+            });
+        }, 500);  // Aguardar 500ms para garantir que Purchase client-side foi disparado
         {% endif %}
         
         // ✅ Auto-redirect após Purchase ser disparado

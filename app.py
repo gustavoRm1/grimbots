@@ -9283,8 +9283,22 @@ def delivery_page(delivery_token):
         # ✅ Lock pessimista: marcar meta_purchase_sent ANTES de enviar para evitar condição de corrida
         purchase_already_sent = payment.meta_purchase_sent
         
-        # ✅ CRÍTICO: ENVIAR PURCHASE VIA SERVER (Conversions API) TAMBÉM!
+        # ✅ CRÍTICO: Renderizar template PRIMEIRO para permitir client-side disparar Purchase
+        # Meta deduplica automaticamente usando eventID, então não bloqueamos client-side mesmo se server-side já foi enviado
+        # ✅ CORREÇÃO: NÃO marcar meta_purchase_sent ANTES de renderizar - isso bloqueava client-side!
+        logger.info(f"✅ Delivery - Renderizando página para payment {payment.id} | Pixel: {'✅' if has_meta_pixel else '❌'} | event_id: {pixel_config['event_id'][:30]}... | meta_purchase_sent: {payment.meta_purchase_sent}")
+        
+        # ✅ Renderizar template ANTES de enviar server-side para garantir que client-side dispare primeiro
+        response = render_template('delivery.html',
+            payment=payment,
+            pixel_config=pixel_config,
+            has_meta_pixel=has_meta_pixel,
+            redirect_url=redirect_url
+        )
+        
+        # ✅ DEPOIS de renderizar template, enfileirar Purchase via Server (Conversions API)
         # Isso garante que Purchase seja enviado mesmo se client-side falhar
+        # Meta deduplica automaticamente usando eventID/event_id
         if has_meta_pixel and not purchase_already_sent:
             try:
                 # ✅ CRÍTICO: Garantir que pixel_config['event_id'] existe antes de passar
@@ -9295,7 +9309,7 @@ def delivery_page(delivery_token):
                 logger.info(f"[META DELIVERY] Delivery - event_id que será usado (mesmo do client-side): {event_id_to_pass[:50]}...")
                 # ✅ CRÍTICO: Passar event_id garantido para garantir MESMO event_id no client-side e server-side
                 # Isso garante deduplicação automática pela Meta mesmo sem pageview_event_id original
-                # ✅ CORREÇÃO CRÍTICA: NÃO marcar meta_purchase_sent ANTES - deixar a função fazer isso APÓS validações
+                # ✅ CORREÇÃO: Enfileirar server-side DEPOIS de renderizar template (client-side dispara primeiro)
                 purchase_was_sent = send_meta_pixel_purchase_event(payment, pageview_event_id=event_id_to_pass)
                 
                 # ✅ VALIDAÇÃO: Verificar se Purchase foi realmente enfileirado
@@ -9305,19 +9319,9 @@ def delivery_page(delivery_token):
                     logger.warning(f"⚠️ [META DELIVERY] Delivery - Purchase NÃO foi enfileirado (função retornou False/None)")
             except Exception as e:
                 logger.error(f"❌ Erro ao enviar Purchase via Server: {e}", exc_info=True)
-                # Não bloquear renderização da página se server-side falhar
-        elif has_meta_pixel and payment.meta_purchase_sent:
-            # ✅ Purchase já foi enviado (server-side) - client-side NÃO deve enviar
-            logger.info(f"[META DELIVERY] Delivery - Purchase já foi enviado (meta_purchase_sent=True), client-side NÃO enviará")
+                # Não bloquear resposta se server-side falhar
         
-        logger.info(f"✅ Delivery - Renderizando página para payment {payment.id} | Pixel: {'✅' if has_meta_pixel else '❌'} | event_id: {pixel_config['event_id'][:30]}... | meta_purchase_sent: {payment.meta_purchase_sent}")
-        
-        return render_template('delivery.html',
-            payment=payment,
-            pixel_config=pixel_config,
-            has_meta_pixel=has_meta_pixel,
-            redirect_url=redirect_url
-        )
+        return response
         
     except Exception as e:
         logger.error(f"❌ Erro na página de delivery: {e}", exc_info=True)
