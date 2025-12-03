@@ -174,15 +174,40 @@ class BabylonGateway(PaymentGateway):
             pix_url = f"{self.base_url}/transactions"
             
             logger.info(f"📤 [{self.get_gateway_name()}] Gerando PIX de R$ {amount:.2f} ({amount_cents} centavos)...")
-            logger.debug(f"📋 [{self.get_gateway_name()}] URL: {pix_url}")
-            logger.debug(f"📋 [{self.get_gateway_name()}] Payload (resumido): paymentMethod=PIX, amount={amount_cents}, customer.name={customer_name}")
+            logger.info(f"📋 [{self.get_gateway_name()}] URL: {pix_url}")
+            logger.info(f"📋 [{self.get_gateway_name()}] Base URL: {self.base_url}")
+            logger.debug(f"📋 [{self.get_gateway_name()}] Payload completo: {payload}")
+            logger.debug(f"📋 [{self.get_gateway_name()}] Headers: Authorization=Bearer {self.api_key[:20]}... (oculto)")
+            logger.debug(f"📋 [{self.get_gateway_name()}] Payload (resumido): paymentMethod=PIX, amount={amount_cents}, customer.name={customer_name}, expiresInDays={expires_in_days}")
             
             # Fazer requisição
             response = requests.post(pix_url, json=payload, headers=headers, timeout=15)
             
+            # ✅ Log da resposta para diagnóstico
+            logger.info(f"📋 [{self.get_gateway_name()}] Status Code: {response.status_code}")
+            logger.debug(f"📋 [{self.get_gateway_name()}] Headers: {dict(response.headers)}")
+            
+            # ✅ Detectar se resposta é HTML (indica erro de autenticação ou endpoint incorreto)
+            content_type = response.headers.get('Content-Type', '').lower()
+            is_html = '<html' in response.text.lower()[:100] or 'text/html' in content_type
+            
+            if is_html:
+                logger.error(f"❌ [{self.get_gateway_name()}] Resposta é HTML (não JSON) - possível erro de autenticação ou endpoint incorreto")
+                logger.error(f"📋 Content-Type: {content_type}")
+                logger.error(f"📋 Resposta (primeiros 500 chars): {response.text[:500]}")
+                return None
+            
+            logger.debug(f"📋 [{self.get_gateway_name()}] Response Text (primeiros 500 chars): {response.text[:500]}")
+            
             # Processar resposta
             if response.status_code == 201:  # 201 Created conforme documentação
-                data = response.json()
+                try:
+                    data = response.json()
+                except (ValueError, requests.exceptions.JSONDecodeError) as json_error:
+                    logger.error(f"❌ [{self.get_gateway_name()}] Erro ao parsear JSON da resposta de sucesso: {json_error}")
+                    logger.error(f"📋 Resposta raw (primeiros 1000 chars): {response.text[:1000]}")
+                    logger.error(f"📋 Content-Type: {response.headers.get('Content-Type', 'N/A')}")
+                    return None
                 
                 # ✅ Extrair dados conforme formato da resposta
                 transaction_id = data.get('id')
@@ -278,13 +303,56 @@ class BabylonGateway(PaymentGateway):
                     'expires_at': expires_at
                 }
             else:
-                error_data = response.json() if response.text else {}
-                logger.error(f"❌ [{self.get_gateway_name()}] Erro: Status {response.status_code}")
-                logger.error(f"📋 Resposta: {error_data}")
+                # ✅ Tratar erros com melhor diagnóstico
+                error_data = {}
+                error_message = None
                 
-                # Log detalhado do erro
-                if isinstance(error_data, dict):
-                    error_message = error_data.get('message') or error_data.get('error') or str(error_data)
+                # ✅ Tentar parsear JSON apenas se houver conteúdo
+                if response.text:
+                    try:
+                        error_data = response.json()
+                        if isinstance(error_data, dict):
+                            error_message = (
+                                error_data.get('message') or 
+                                error_data.get('error') or 
+                                error_data.get('error_message') or
+                                str(error_data)
+                            )
+                    except (ValueError, requests.exceptions.JSONDecodeError) as json_error:
+                        # ✅ Resposta não é JSON válido - logar conteúdo raw
+                        logger.warning(f"⚠️ [{self.get_gateway_name()}] Resposta de erro não é JSON válido: {json_error}")
+                        error_message = response.text[:500]  # Primeiros 500 caracteres
+                        logger.error(f"📋 Resposta raw (primeiros 500 chars): {error_message}")
+                        logger.error(f"📋 Content-Type: {response.headers.get('Content-Type', 'N/A')}")
+                
+                # ✅ Log detalhado baseado no status code
+                logger.error(f"❌ [{self.get_gateway_name()}] Erro: Status {response.status_code}")
+                
+                if response.status_code == 401:
+                    logger.error(f"🔐 [{self.get_gateway_name()}] Não autorizado - API Key inválida ou expirada")
+                    if error_message:
+                        logger.error(f"📋 Mensagem: {error_message}")
+                elif response.status_code == 400:
+                    logger.error(f"📋 [{self.get_gateway_name()}] Requisição inválida - verificar payload")
+                    if error_message:
+                        logger.error(f"📋 Mensagem: {error_message}")
+                    if error_data:
+                        logger.error(f"📋 Dados do erro: {error_data}")
+                elif response.status_code == 404:
+                    logger.error(f"🔍 [{self.get_gateway_name()}] Endpoint não encontrado - verificar URL base")
+                elif response.status_code == 500:
+                    logger.error(f"💥 [{self.get_gateway_name()}] Erro interno do servidor Babylon")
+                    if error_message:
+                        logger.error(f"📋 Mensagem: {error_message}")
+                elif response.status_code == 503:
+                    logger.error(f"⚠️ [{self.get_gateway_name()}] Serviço temporariamente indisponível")
+                else:
+                    logger.error(f"❓ [{self.get_gateway_name()}] Status code desconhecido: {response.status_code}")
+                
+                # ✅ Log completo da resposta se disponível
+                if error_data:
+                    logger.error(f"📋 Resposta completa: {error_data}")
+                elif error_message:
                     logger.error(f"📋 Mensagem de erro: {error_message}")
                 
                 return None
