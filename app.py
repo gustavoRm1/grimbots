@@ -10349,13 +10349,24 @@ def send_meta_pixel_purchase_event(payment, pageview_event_id=None):
         
         # ✅ CRÍTICO: Processar via Parameter Builder (valida e processa conforme Meta best practices)
         # SEM Parameter Builder, fbc não é gerado e vendas NÃO são trackeadas!
-        logger.info(f"[META PURCHASE] Purchase - Chamando Parameter Builder com fbclid={'✅' if sim_args.get('fbclid') else '❌'} e _fbc={'✅' if sim_cookies.get('_fbc') else '❌'}")
+        # ✅ CORREÇÃO: Passar pageview_ts para usar como creationTime do fbc (quando fbclid foi primeiro observado)
+        fbclid_first_seen_ts = None
+        if pageview_ts_int:
+            fbclid_first_seen_ts = pageview_ts_int  # pageview_ts está em segundos
+        elif tracking_data.get('pageview_ts'):
+            try:
+                fbclid_first_seen_ts = int(float(tracking_data.get('pageview_ts')))
+            except (ValueError, TypeError):
+                pass
+        
+        logger.info(f"[META PURCHASE] Purchase - Chamando Parameter Builder com fbclid={'✅' if sim_args.get('fbclid') else '❌'}, _fbc={'✅' if sim_cookies.get('_fbc') else '❌'}, fbclid_first_seen_ts={'✅' if fbclid_first_seen_ts else '❌'}")
         param_builder_result = process_meta_parameters(
             request_cookies=sim_cookies,
             request_args=sim_args,
             request_headers={},  # Não temos headers no Purchase
             request_remote_addr=None,  # Não temos remote_addr no Purchase
-            referer=None  # Não temos referer no Purchase
+            referer=None,  # Não temos referer no Purchase
+            fbclid_first_seen_ts=fbclid_first_seen_ts  # ✅ CORREÇÃO: Passar timestamp quando fbclid foi primeiro observado
         )
         
         # ✅ PRIORIDADE: Parameter Builder > tracking_data (Redis) > payment > bot_user

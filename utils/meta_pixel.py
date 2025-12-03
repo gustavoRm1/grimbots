@@ -64,7 +64,8 @@ def process_meta_parameters(
     request_args: dict = None,
     request_headers: dict = None,
     request_remote_addr: str = None,
-    referer: str = None
+    referer: str = None,
+    fbclid_first_seen_ts: int = None  # ✅ NOVO: Timestamp (em ms) quando fbclid foi primeiro observado
 ) -> dict:
     """
     Processa cookies, query parameters e headers para extrair fbc, fbp e client_ip_address
@@ -132,14 +133,53 @@ def process_meta_parameters(
     # ✅ CRÍTICO: FBC - Prioridade 2 - Gerar baseado em fbclid (se presente)
     # Meta aceita _fbc gerado quando fbclid está presente (conforme documentação oficial)
     # SEM fbc, VENDAS NÃO SÃO TRACKEADAS CORRETAMENTE!
+    # ✅ CORREÇÃO: Usar creationTime do cookie _fbc se existir, senão usar timestamp quando fbclid foi primeiro observado
     if not result['fbc']:
         fbclid = request_args.get('fbclid', '').strip()
         if fbclid:
             logger.info(f"[PARAM BUILDER] ✅ fbclid encontrado nos args: {fbclid[:50]}... (len={len(fbclid)})")
             try:
                 # Formato: fb.1.{creationTime_ms}.{fbclid}
-                # creationTime_ms: Timestamp em milissegundos da criação do fbc
-                creation_time_ms = int(time.time() * 1000)
+                # ✅ CORREÇÃO CRÍTICA: Meta diz: "use the timestamp in milliseconds when you first observed or received this fbclid value"
+                # NÃO usar timestamp atual! Deve ser quando fbclid foi primeiro observado
+                # Prioridade 1: Se cookie _fbc existe mas não foi capturado, tentar extrair creationTime
+                # Prioridade 2: Usar pageview_ts do tracking_data (quando fbclid foi primeiro observado)
+                # Prioridade 3: Fallback para timestamp atual (melhor que nada, mas não ideal)
+                
+                # ✅ CORREÇÃO CRÍTICA: Meta diz "use the timestamp in milliseconds when you first observed or received this fbclid value"
+                # Prioridade 1: Extrair creationTime do cookie _fbc (se existir mas não foi capturado antes)
+                # Prioridade 2: Usar fbclid_first_seen_ts (quando fbclid foi primeiro observado - pageview_ts)
+                # Prioridade 3: Fallback para timestamp atual (não ideal, mas melhor que nada)
+                creation_time_ms = None
+                
+                # ✅ PRIORIDADE 1: Extrair creationTime do cookie _fbc (se existir)
+                if fbc_cookie and fbc_cookie.startswith(('fb.1.', 'fb.2.')):
+                    # Cookie _fbc existe - extrair creationTime do formato: fb.1.{creationTime_ms}.{fbclid}
+                    parts = fbc_cookie.split('.')
+                    if len(parts) >= 4:
+                        try:
+                            creation_time_ms = int(parts[2])  # Índice 2 = creationTime_ms
+                            logger.info(f"[PARAM BUILDER] ✅ creationTime extraído do cookie _fbc: {creation_time_ms}")
+                        except (ValueError, IndexError):
+                            logger.warning(f"[PARAM BUILDER] ⚠️ Não foi possível extrair creationTime do cookie _fbc")
+                
+                # ✅ PRIORIDADE 2: Usar timestamp quando fbclid foi primeiro observado (pageview_ts)
+                # Meta diz: "use the timestamp in milliseconds when you first observed or received this fbclid value"
+                if creation_time_ms is None and fbclid_first_seen_ts is not None:
+                    # fbclid_first_seen_ts pode estar em segundos ou milissegundos
+                    # Se < 10000000000 (10 dígitos), está em segundos -> converter para ms
+                    if fbclid_first_seen_ts < 10000000000:
+                        creation_time_ms = int(fbclid_first_seen_ts * 1000)
+                    else:
+                        creation_time_ms = int(fbclid_first_seen_ts)
+                    logger.info(f"[PARAM BUILDER] ✅ creationTime usando fbclid_first_seen_ts (quando fbclid foi primeiro observado): {creation_time_ms}")
+                
+                # ✅ PRIORIDADE 3: Fallback para timestamp atual (não ideal, mas necessário)
+                if creation_time_ms is None:
+                    creation_time_ms = int(time.time() * 1000)
+                    logger.warning(f"[PARAM BUILDER] ⚠️ creationTime não encontrado - usando timestamp atual (não ideal, mas necessário)")
+                    logger.warning(f"[PARAM BUILDER] ⚠️ IDEAL: Passar fbclid_first_seen_ts (pageview_ts) para usar timestamp quando fbclid foi primeiro observado")
+                
                 result['fbc'] = f"fb.1.{creation_time_ms}.{fbclid}"
                 result['fbc_origin'] = 'generated_from_fbclid'
                 logger.info(f"[PARAM BUILDER] ✅ fbc gerado baseado em fbclid (conforme doc Meta): {result['fbc'][:50]}...")
