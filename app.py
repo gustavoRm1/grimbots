@@ -7220,7 +7220,7 @@ def create_gateway():
         gateway_type = data.get('gateway_type')
     
         # ✅ Validar tipo de gateway
-        if gateway_type not in ['syncpay', 'pushynpay', 'paradise', 'wiinpay', 'atomopay', 'umbrellapag', 'orionpay']:
+        if gateway_type not in ['syncpay', 'pushynpay', 'paradise', 'wiinpay', 'atomopay', 'umbrellapag', 'orionpay', 'babylon']:
             logger.error(f"❌ Tipo de gateway inválido: {gateway_type}")
             return jsonify({'error': 'Tipo de gateway inválido'}), 400
         
@@ -7334,6 +7334,26 @@ def create_gateway():
             else:
                 logger.warning(f"⚠️ [OrionPay] api_key não fornecido")
         
+        elif gateway_type == 'babylon':
+            # ✅ BABYLON
+            api_key_value = data.get('api_key')
+            split_user_id_value = data.get('split_user_id')
+            
+            logger.info(f"📦 [Babylon] Dados recebidos:")
+            logger.info(f"   api_key: {'SIM' if api_key_value else 'NÃO'} ({len(api_key_value) if api_key_value else 0} chars)")
+            logger.info(f"   split_user_id: {'SIM' if split_user_id_value else 'NÃO'}")
+            
+            if api_key_value:
+                gateway.api_key = api_key_value  # Criptografia automática via setter
+                logger.info(f"✅ [Babylon] api_key salvo (criptografado)")
+            else:
+                logger.warning(f"⚠️ [Babylon] api_key não fornecido")
+            
+            # Split User ID (opcional - para split payment)
+            if split_user_id_value:
+                gateway.split_user_id = split_user_id_value
+                logger.info(f"✅ [Babylon] split_user_id salvo")
+        
         # ✅ Split percentage (comum a todos)
         gateway.split_percentage = float(data.get('split_percentage', 2.0))  # 2% PADRÃO
         
@@ -7363,7 +7383,8 @@ def create_gateway():
                 'offer_hash': gateway.offer_hash,      # Paradise (Átomo Pay não usa mais)
                 'store_id': gateway.store_id,          # Paradise
                 'organization_id': gateway.organization_id,  # HooPay
-                'split_user_id': gateway.split_user_id  # WiinPay
+                'split_user_id': gateway.split_user_id,  # WiinPay / Babylon
+                'split_percentage': gateway.split_percentage  # Babylon
             }
             
             # ✅ ÁTOMO PAY: Verificar se tem api_token (obrigatório)
@@ -7391,6 +7412,20 @@ def create_gateway():
                 else:
                     logger.info(f"🔍 [OrionPay] Verificando credenciais...")
                     logger.info(f"   api_key: {'SIM' if credentials.get('api_key') else 'NÃO'} ({len(credentials.get('api_key', ''))} chars)")
+            
+            # ✅ BABYLON: Verificar se tem api_key (obrigatório)
+            if gateway_type == 'babylon':
+                if not credentials.get('api_key'):
+                    logger.error(f"❌ [Babylon] api_key não configurado - não será verificado")
+                    gateway.is_verified = False
+                    gateway.last_error = 'API Key não configurado'
+                    db.session.commit()
+                    return jsonify(gateway.to_dict())
+                else:
+                    logger.info(f"🔍 [Babylon] Verificando credenciais...")
+                    logger.info(f"   api_key: {'SIM' if credentials.get('api_key') else 'NÃO'} ({len(credentials.get('api_key', ''))} chars)")
+                    logger.info(f"   split_percentage: {credentials.get('split_percentage', 2.0)}%")
+                    logger.info(f"   split_user_id: {'SIM' if credentials.get('split_user_id') else 'NÃO'}")
             
             is_valid = bot_manager.verify_gateway(gateway_type, credentials)
             
