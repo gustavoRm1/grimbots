@@ -1757,11 +1757,10 @@
     </div>
 </div>
 
-</div><!-- FIM: x-data="dashboardApp()" -->
-
-<!-- Modal: Importar/Exportar Bot - FORA DO CONTAINER PARA FUNCIONAR COM position: fixed -->
+<!-- Modal: Importar/Exportar Bot - DENTRO DO ESCOPO DO dashboardApp() -->
 <div id="modal-import-export"
      x-show="showImportExportModal"
+     x-cloak
      :style="showImportExportModal ? 'display: flex !important; visibility: visible !important; opacity: 1 !important; z-index: 99999 !important; position: fixed !important; top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important; width: 100vw !important; height: 100vh !important; background: rgba(0, 0, 0, 0.95) !important; backdrop-filter: blur(8px) !important;' : 'display: none !important;'"
      class="fixed inset-0 z-[99999] flex items-center justify-center overflow-y-auto"
      style="background: rgba(0, 0, 0, 0.95); backdrop-filter: blur(8px);">
@@ -1801,19 +1800,16 @@
                     </div>
                 </div>
                 
-                <!-- Body - Conteúdo do modal será movido aqui via JavaScript ou manteremos uma cópia simplificada -->
+                <!-- Body - Conteúdo completo será adicionado aqui -->
                 <div class="px-8 py-6 max-h-[70vh] overflow-y-auto">
-                    <p class="text-white">O conteúdo completo do modal será renderizado aqui...</p>
-                    <p class="text-gray-400 text-sm mt-4">Esta é uma versão simplificada para garantir que o modal apareça primeiro.</p>
-                    <button @click="showImportExportModal = false"
-                            class="mt-4 px-6 py-3 bg-accent500 text-black font-bold rounded-lg">
-                        Fechar Modal
-                    </button>
+                    <p class="text-white text-center">Carregando conteúdo do modal...</p>
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+</div><!-- FIM: x-data="dashboardApp()" -->
 
 {% endblock %}
 
