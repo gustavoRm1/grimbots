@@ -1763,9 +1763,11 @@
      x-cloak
      :style="showImportExportModal ? 'display: flex !important; visibility: visible !important; opacity: 1 !important; z-index: 99999 !important; position: fixed !important; top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important; width: 100vw !important; height: 100vh !important; background: rgba(0, 0, 0, 0.95) !important; backdrop-filter: blur(8px) !important;' : 'display: none !important;'"
      class="fixed inset-0 z-[99999] flex items-center justify-center overflow-y-auto"
-     style="background: rgba(0, 0, 0, 0.95); backdrop-filter: blur(8px);">
+     style="background: rgba(0, 0, 0, 0.95); backdrop-filter: blur(8px);"
+     @click="showImportExportModal = false">
     <div class="flex items-center justify-center min-h-screen w-full p-4">
-        <div @click.away="showImportExportModal = false"
+        <div @click.stop
+             @click.away="showImportExportModal = false"
              x-transition:enter="ease-out duration-300"
              x-transition:enter-start="opacity-0 translate-y-4 sm:translate-y-0 sm:scale-95"
              x-transition:enter-end="opacity-100 translate-y-0 sm:scale-100"
