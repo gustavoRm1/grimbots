@@ -31,15 +31,20 @@ print_section "1. ANÁLISE DO BANCO DE DADOS"
 DB_NAME="${DB_NAME:-grimbots}"
 DB_USER="${DB_USER:-postgres}"
 DB_HOST="${DB_HOST:-localhost}"
+DB_PASSWORD="${DB_PASSWORD:-123sefudeu}"
+
+# Configurar PGPASSWORD para evitar prompts
+export PGPASSWORD="$DB_PASSWORD"
 
 # Verificar se psql está disponível
 if command -v psql &> /dev/null; then
     echo "✅ PostgreSQL client encontrado"
+    echo "📋 Configuração: DB=$DB_NAME USER=$DB_USER HOST=$DB_HOST"
     
     # Query 1: Total de payments 'paid' dos últimos 7 dias
     echo ""
     echo "📊 Payments 'paid' dos últimos 7 dias:"
-    psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -c "
+    psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -w -c "
     SELECT 
         COUNT(*) as total_payments,
         COUNT(delivery_token) as with_delivery_token,
@@ -55,7 +60,7 @@ if command -v psql &> /dev/null; then
     # Query 2: Análise por pool
     echo ""
     echo "📊 Análise por Pool (configuração Meta Pixel):"
-    psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -c "
+    psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -w -c "
     SELECT 
         rp.id as pool_id,
         rp.name as pool_name,
@@ -76,7 +81,7 @@ if command -v psql &> /dev/null; then
     # Query 3: Payments problemáticos (tem delivery_token mas não tem meta_purchase_sent)
     echo ""
     echo "📊 Payments com delivery_token mas SEM meta_purchase_sent (TOP 20):"
-    psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -c "
+    psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -w -c "
     SELECT 
         p.id,
         p.payment_id,
@@ -197,7 +202,7 @@ print_section "5. ANÁLISE DE CONFIGURAÇÃO DOS POOLS"
 
 if command -v psql &> /dev/null; then
     echo "📊 Resumo de configuração dos pools:"
-    psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -c "
+    psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -w -c "
     SELECT 
         COUNT(*) as total_pools,
         COUNT(CASE WHEN meta_tracking_enabled = true THEN 1 END) as pools_with_meta_tracking,
@@ -210,7 +215,7 @@ if command -v psql &> /dev/null; then
     
     echo ""
     echo "📊 Pools com configuração incompleta:"
-    psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -c "
+    psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -w -c "
     SELECT 
         id,
         name,
@@ -236,7 +241,7 @@ print_section "6. BOTS SEM POOL ASSOCIADO"
 
 if command -v psql &> /dev/null; then
     echo "📊 Bots que têm payments 'paid' mas não estão associados a nenhum pool:"
-    psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -c "
+    psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -w -c "
     SELECT 
         b.id as bot_id,
         b.username as bot_username,
@@ -272,7 +277,7 @@ print_section "8. RESUMO FINAL"
 
 if command -v psql &> /dev/null; then
     echo "📊 RESUMO EXECUTIVO:"
-    psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -c "
+    psql -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -w -c "
     WITH payment_stats AS (
         SELECT 
             COUNT(*) as total,
