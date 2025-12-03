@@ -4991,21 +4991,35 @@ function botConfigApp() {
                     this.config.welcome_media_type = data.welcome_media_type || 'video';
                     this.config.welcome_audio_enabled = data.welcome_audio_enabled || false;
                     this.config.welcome_audio_url = data.welcome_audio_url || '';
-                    // Garantir que subscription existe em todos os botões
+                    // Garantir que subscription existe em todos os botões com objeto padrão
+                    const defaultSubscription = {
+                        enabled: false,
+                        duration_type: 'days',
+                        duration_value: null,
+                        vip_chat_id: '',
+                        vip_group_link: '',
+                        validation_status: null
+                    };
                     this.config.main_buttons = (data.main_buttons || []).map(btn => ({
                         ...btn,
-                        subscription: btn.subscription || null
+                        subscription: btn.subscription && typeof btn.subscription === 'object' 
+                            ? { ...defaultSubscription, ...btn.subscription }
+                            : defaultSubscription
                     }));
                     this.config.redirect_buttons = data.redirect_buttons || [];
                     this.config.downsells_enabled = data.downsells_enabled || false;
                     this.config.downsells = (data.downsells || []).map(btn => ({
                         ...btn,
-                        subscription: btn.subscription || null
+                        subscription: btn.subscription && typeof btn.subscription === 'object' 
+                            ? { ...defaultSubscription, ...btn.subscription }
+                            : defaultSubscription
                     }));
                     this.config.upsells_enabled = data.upsells_enabled || false;
                     this.config.upsells = (data.upsells || []).map(btn => ({
                         ...btn,
-                        subscription: btn.subscription || null
+                        subscription: btn.subscription && typeof btn.subscription === 'object' 
+                            ? { ...defaultSubscription, ...btn.subscription }
+                            : defaultSubscription
                     }));
                     this.config.access_link = data.access_link || '';
                     this.config.success_message = data.success_message || '';

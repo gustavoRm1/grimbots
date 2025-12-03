@@ -66,9 +66,9 @@ class FlowEditor {
         
         // Inicializar jsPlumb (API 2.x)
         try {
-            // jsPlumb 2.x: tentar diferentes APIs
+            // jsPlumb 2.x: usar getInstance() se disponível, senão usar instância padrão
             if (typeof jsPlumb.getInstance === 'function') {
-                // API: getInstance()
+                // API: getInstance() - cria uma nova instância
                 this.instance = jsPlumb.getInstance({
                     container: this.canvas,
                     paintStyle: { stroke: '#10B981', strokeWidth: 2 },
@@ -85,27 +85,12 @@ class FlowEditor {
                     },
                     connectionType: 'basic'
                 });
-            } else if (typeof jsPlumb.jsPlumb === 'function') {
-                // API: jsPlumb.jsPlumb()
-                this.instance = jsPlumb.jsPlumb({
-                    container: this.canvas,
-                    paintStyle: { stroke: '#10B981', strokeWidth: 2 },
-                    hoverPaintStyle: { stroke: '#34D399', strokeWidth: 3 },
-                    connector: ['Bezier', { curviness: 50, stub: [10, 15], gap: 5 }],
-                    endpoint: ['Dot', { radius: 8 }],
-                    endpointStyle: { fill: '#10B981', outlineStroke: '#FFFFFF', outlineWidth: 2 },
-                    endpointHoverStyle: { fill: '#34D399', outlineStroke: '#FFFFFF', outlineWidth: 3 },
-                    anchors: ['Top', 'Bottom'],
-                    maxConnections: -1,
-                    dragOptions: {
-                        cursor: 'grabbing',
-                        zIndex: 2000
-                    },
-                    connectionType: 'basic'
-                });
             } else {
-                // Fallback: usar instância padrão do jsPlumb 2.x
+                // Fallback: usar instância padrão do jsPlumb 2.x diretamente
+                // jsPlumb 2.x expõe a instância padrão globalmente
                 this.instance = jsPlumb;
+                
+                // Configurar defaults se a função existir
                 if (typeof this.instance.importDefaults === 'function') {
                     this.instance.importDefaults({
                         paintStyle: { stroke: '#10B981', strokeWidth: 2 },
@@ -123,13 +108,27 @@ class FlowEditor {
                         connectionType: 'basic'
                     });
                 }
+                
+                // Definir container se a função existir
                 if (typeof this.instance.setContainer === 'function') {
                     this.instance.setContainer(this.canvas);
+                } else if (typeof this.instance.ready === 'function') {
+                    // Alternativa: usar ready() para configurar após carregamento
+                    this.instance.ready(() => {
+                        if (typeof this.instance.setContainer === 'function') {
+                            this.instance.setContainer(this.canvas);
+                        }
+                    });
                 }
             }
+            
+            console.log('✅ jsPlumb inicializado:', this.instance ? 'OK' : 'FALHOU');
         } catch (error) {
             console.error('❌ Erro ao inicializar jsPlumb:', error);
-            console.error('jsPlumb disponível:', typeof jsPlumb, Object.keys(jsPlumb || {}));
+            console.error('jsPlumb disponível:', typeof jsPlumb);
+            if (jsPlumb) {
+                console.error('jsPlumb métodos:', Object.keys(jsPlumb).filter(k => typeof jsPlumb[k] === 'function'));
+            }
             return;
         }
         
