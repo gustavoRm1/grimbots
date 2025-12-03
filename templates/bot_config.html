@@ -112,6 +112,161 @@
     display: none !important; /* ✅ Ocultar endpoints jsPlumb - usamos apenas elementos visuais */
 }
 
+/* ✅ Estilos para blocos de steps no canvas */
+.flow-step-block {
+    position: absolute;
+    width: 240px;
+    min-height: 120px;
+    background: #1F2937;
+    border: 2px solid #374151;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    cursor: move;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.flow-step-block:hover {
+    border-color: #4B5563;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.7);
+}
+
+.flow-step-block.dragging {
+    cursor: grabbing !important;
+    opacity: 0.9;
+    transform: scale(1.05);
+    z-index: 1000 !important;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.8) !important;
+}
+
+.flow-step-block.flow-step-initial {
+    border-color: #FFB800;
+    box-shadow: 0 0 20px rgba(255, 184, 0, 0.5);
+}
+
+.flow-step-header {
+    padding: 12px;
+    border-radius: 6px 6px 0 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: white;
+    font-weight: bold;
+    position: relative;
+}
+
+.flow-step-icon {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 6px;
+    font-size: 16px;
+}
+
+.flow-step-title {
+    flex: 1;
+    font-size: 14px;
+}
+
+.flow-step-start-badge {
+    font-size: 18px;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+.flow-step-body {
+    padding: 12px;
+    background: #111827;
+    min-height: 60px;
+}
+
+.flow-step-preview {
+    color: #9CA3AF;
+    font-size: 12px;
+    line-height: 1.4;
+    word-break: break-word;
+}
+
+.flow-step-footer {
+    padding: 8px 12px;
+    border-top: 1px solid #374151;
+    display: flex;
+    gap: 6px;
+    justify-content: flex-end;
+    background: #111827;
+    border-radius: 0 0 6px 6px;
+}
+
+.flow-step-btn-edit,
+.flow-step-btn-delete,
+.flow-step-btn-start {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 12px;
+}
+
+.flow-step-btn-edit {
+    background: #3B82F6;
+    color: white;
+}
+
+.flow-step-btn-edit:hover {
+    background: #2563EB;
+}
+
+.flow-step-btn-delete {
+    background: #EF4444;
+    color: white;
+}
+
+.flow-step-btn-delete:hover {
+    background: #DC2626;
+}
+
+.flow-step-btn-start {
+    background: #FFB800;
+    color: #000;
+}
+
+.flow-step-btn-start:hover {
+    background: #F59E0B;
+}
+
+/* ✅ Labels de conexão */
+.connection-label {
+    pointer-events: none;
+    user-select: none;
+}
+
+/* ✅ Endpoints visíveis (quando necessário) */
+.jtk-endpoint-connected {
+    display: block !important;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #10B981;
+    border: 2px solid white;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.jtk-endpoint-connected:hover {
+    background: #34D399;
+    transform: scale(1.2);
+}
+
 /* ✅ Manter visíveis apenas nossos elementos visuais customizados */
 .step-input-endpoint,
 .step-output-endpoint,
@@ -2426,7 +2581,11 @@ body {
                         <!-- ✅ Canvas apenas se houver steps -->
                         <div x-show="config.flow_steps && config.flow_steps.length > 0"
                              x-cloak
-                             x-init="$nextTick(() => { initVisualFlowEditor(); })"
+                             x-init="$nextTick(() => { 
+                                 setTimeout(() => { 
+                                     initVisualFlowEditor(); 
+                                 }, 100); 
+                             })"
                              class="w-full overflow-hidden">
                             <div id="flow-visual-canvas" 
                                  class="relative w-full bg-gray-950 rounded border border-gray-700"
@@ -4162,9 +4321,362 @@ body {
         </div>
     </div>
 </div>
+
+<!-- Modal de Edição de Step -->
+<div x-show="showStepModal" 
+     x-cloak
+     x-transition
+     class="fixed z-50 inset-0 overflow-y-auto"
+     style="background: rgba(0, 0, 0, 0.75);"
+     @click.away="closeStepModal()">
+    <div class="flex items-center justify-center min-h-screen px-4">
+        <div class="bg-gray-900 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+             style="border: 2px solid rgba(255, 184, 0, 0.3);"
+             @click.stop>
+            
+            <!-- Header -->
+            <div class="px-6 py-4 border-b border-gray-800 flex items-center justify-between">
+                <div>
+                    <h3 class="text-xl font-bold text-white">Editar Step</h3>
+                    <p class="text-sm text-gray-400">Configure o step do fluxo</p>
+                </div>
+                <button @click="closeStepModal()" class="text-gray-400 hover:text-white">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            
+            <!-- Body -->
+            <div class="p-6 space-y-6" x-show="editingStep">
+                <!-- Tipo do Step -->
+                <div>
+                    <label class="block text-sm font-bold text-white mb-2">
+                        <i class="fas fa-tag mr-2 text-blue-500"></i>
+                        Tipo do Step <span class="text-red-400">*</span>
+                    </label>
+                    <select x-model="editingStep.type" class="form-input">
+                        <option value="content">Conteúdo</option>
+                        <option value="message">Mensagem</option>
+                        <option value="audio">Áudio</option>
+                        <option value="video">Vídeo</option>
+                        <option value="buttons">Botões</option>
+                        <option value="payment">Pagamento</option>
+                        <option value="access">Acesso</option>
+                    </select>
+                </div>
+                
+                <!-- Configurações por Tipo -->
+                <template x-if="editingStep.type === 'message' || editingStep.type === 'content'">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-bold text-white mb-2">
+                                <i class="fas fa-comment mr-2 text-purple-500"></i>
+                                Mensagem
+                            </label>
+                            <textarea x-model="editingStep.config.message" 
+                                      class="form-textarea" 
+                                      rows="4"
+                                      placeholder="Digite a mensagem..."></textarea>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-bold text-white mb-2">
+                                    URL da Mídia
+                                </label>
+                                <input type="url" 
+                                       x-model="editingStep.config.media_url" 
+                                       class="form-input"
+                                       placeholder="https://t.me/canal/123">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-bold text-white mb-2">
+                                    Tipo de Mídia
+                                </label>
+                                <select x-model="editingStep.config.media_type" class="form-input">
+                                    <option value="video">Vídeo</option>
+                                    <option value="photo">Foto</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+                
+                <template x-if="editingStep.type === 'payment'">
+                    <div class="space-y-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-bold text-white mb-2">
+                                    Valor (R$)
+                                </label>
+                                <input type="number" 
+                                       x-model.number="editingStep.config.amount" 
+                                       step="0.01"
+                                       class="form-input"
+                                       placeholder="19.97">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-bold text-white mb-2">
+                                    Descrição
+                                </label>
+                                <input type="text" 
+                                       x-model="editingStep.config.description" 
+                                       class="form-input"
+                                       placeholder="Produto">
+                            </div>
+                        </div>
+                        <div class="p-4 bg-yellow-500 bg-opacity-10 border border-yellow-500 rounded-lg">
+                            <p class="text-sm text-yellow-300">
+                                <i class="fas fa-info-circle mr-2"></i>
+                                <strong>Importante:</strong> O step de pagamento deve ter conexões 'next' (pago) ou 'pending' (pendente) definidas.
+                            </p>
+                        </div>
+                    </div>
+                </template>
+                
+                <template x-if="editingStep.type === 'access'">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-bold text-white mb-2">
+                                Mensagem
+                            </label>
+                            <textarea x-model="editingStep.config.message" 
+                                      class="form-textarea" 
+                                      rows="3"
+                                      placeholder="Acesso liberado!"></textarea>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold text-white mb-2">
+                                Link de Acesso
+                            </label>
+                            <input type="url" 
+                                   x-model="editingStep.config.link" 
+                                   class="form-input"
+                                   placeholder="https://t.me/+seugrupo">
+                        </div>
+                    </div>
+                </template>
+                
+                <template x-if="editingStep.type === 'buttons'">
+                    <div class="space-y-4">
+                        <div class="flex justify-between items-center">
+                            <label class="block text-sm font-bold text-white">
+                                Botões Customizados
+                            </label>
+                            <button @click="addCustomButton()" 
+                                    class="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm">
+                                <i class="fas fa-plus mr-1"></i>Adicionar
+                            </button>
+                        </div>
+                        <template x-if="editingStep.config.custom_buttons && editingStep.config.custom_buttons.length > 0">
+                            <div class="space-y-2">
+                                <template x-for="(btn, idx) in editingStep.config.custom_buttons" :key="idx">
+                                    <div class="flex gap-2 items-center p-3 bg-gray-800 rounded">
+                                        <input type="text" 
+                                               x-model="btn.text" 
+                                               class="form-input flex-1"
+                                               placeholder="Texto do botão">
+                                        <select x-model="btn.target_step" class="form-input w-48">
+                                            <option value="">Selecione step...</option>
+                                            <template x-for="step in config.flow_steps" :key="step.id">
+                                                <option :value="step.id" x-text="getStepTypeLabel(step.type) + ' (' + step.id + ')'"></option>
+                                            </template>
+                                        </select>
+                                        <button @click="removeCustomButton(idx)" 
+                                                class="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+                
+                <!-- Delay -->
+                <div>
+                    <label class="block text-sm font-bold text-white mb-2">
+                        <i class="fas fa-clock mr-2 text-yellow-500"></i>
+                        Delay (segundos)
+                    </label>
+                    <input type="number" 
+                           x-model.number="editingStep.delay_seconds" 
+                           min="0"
+                           class="form-input w-32"
+                           placeholder="0">
+                </div>
+                
+                <!-- Conexões -->
+                <div class="border-t border-gray-800 pt-4">
+                    <h4 class="text-lg font-bold text-white mb-4">
+                        <i class="fas fa-project-diagram mr-2 text-blue-500"></i>
+                        Conexões
+                    </h4>
+                    <div class="grid grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-sm font-bold text-green-400 mb-2">
+                                Próximo (Next)
+                            </label>
+                            <select x-model="editingStep.connections.next" class="form-input">
+                                <option value="">Nenhum</option>
+                                <template x-for="step in config.flow_steps" :key="step.id">
+                                    <option :value="step.id" 
+                                            :disabled="step.id === editingStep.id"
+                                            x-text="getStepTypeLabel(step.type) + ' (' + step.id + ')'"></option>
+                                </template>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold text-yellow-400 mb-2">
+                                Pendente (Pending)
+                            </label>
+                            <select x-model="editingStep.connections.pending" class="form-input">
+                                <option value="">Nenhum</option>
+                                <template x-for="step in config.flow_steps" :key="step.id">
+                                    <option :value="step.id" 
+                                            :disabled="step.id === editingStep.id"
+                                            x-text="getStepTypeLabel(step.type) + ' (' + step.id + ')'"></option>
+                                </template>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold text-red-400 mb-2">
+                                Retry (Erro)
+                            </label>
+                            <select x-model="editingStep.connections.retry" class="form-input">
+                                <option value="">Nenhum</option>
+                                <template x-for="step in config.flow_steps" :key="step.id">
+                                    <option :value="step.id" 
+                                            :disabled="step.id === editingStep.id"
+                                            x-text="getStepTypeLabel(step.type) + ' (' + step.id + ')'"></option>
+                                </template>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Condições -->
+                <div class="border-t border-gray-800 pt-4">
+                    <div class="flex justify-between items-center mb-4">
+                        <h4 class="text-lg font-bold text-white">
+                            <i class="fas fa-filter mr-2 text-purple-500"></i>
+                            Condições
+                        </h4>
+                        <button @click="addCondition()" 
+                                class="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded text-sm">
+                            <i class="fas fa-plus mr-1"></i>Adicionar
+                        </button>
+                    </div>
+                    <template x-if="editingStep.conditions && editingStep.conditions.length > 0">
+                        <div class="space-y-3">
+                            <template x-for="(condition, idx) in editingStep.conditions" :key="condition.id || idx">
+                                <div class="p-4 bg-gray-800 rounded-lg">
+                                    <div class="grid grid-cols-2 gap-4 mb-3">
+                                        <div>
+                                            <label class="block text-xs font-bold text-white mb-1">Tipo</label>
+                                            <select x-model="condition.type" class="form-input text-sm">
+                                                <option value="text_validation">Validação de Texto</option>
+                                                <option value="button_click">Clique em Botão</option>
+                                                <option value="payment_status">Status de Pagamento</option>
+                                                <option value="time_elapsed">Tempo Decorrido</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-bold text-white mb-1">Step Alvo</label>
+                                            <select x-model="condition.target_step" class="form-input text-sm">
+                                                <option value="">Selecione...</option>
+                                                <template x-for="step in config.flow_steps" :key="step.id">
+                                                    <option :value="step.id" 
+                                                            :disabled="step.id === editingStep.id"
+                                                            x-text="getStepTypeLabel(step.type)"></option>
+                                                </template>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <template x-if="condition.type === 'text_validation'">
+                                        <div class="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label class="block text-xs font-bold text-white mb-1">Validação</label>
+                                                <select x-model="condition.validation" class="form-input text-sm">
+                                                    <option value="any">Qualquer texto</option>
+                                                    <option value="email">Email</option>
+                                                    <option value="phone">Telefone</option>
+                                                    <option value="cpf">CPF</option>
+                                                    <option value="contains">Contém</option>
+                                                    <option value="equals">Igual a</option>
+                                                </select>
+                                            </div>
+                                            <template x-if="condition.validation === 'contains' || condition.validation === 'equals'">
+                                                <div>
+                                                    <label class="block text-xs font-bold text-white mb-1">Valor</label>
+                                                    <input type="text" 
+                                                           x-model="condition.value" 
+                                                           class="form-input text-sm"
+                                                           placeholder="Texto...">
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </template>
+                                    <template x-if="condition.type === 'button_click'">
+                                        <div>
+                                            <label class="block text-xs font-bold text-white mb-1">Texto do Botão</label>
+                                            <input type="text" 
+                                                   x-model="condition.button_text" 
+                                                   class="form-input text-sm"
+                                                   placeholder="Texto exato do botão">
+                                        </div>
+                                    </template>
+                                    <template x-if="condition.type === 'payment_status'">
+                                        <div>
+                                            <label class="block text-xs font-bold text-white mb-1">Status</label>
+                                            <select x-model="condition.status" class="form-input text-sm">
+                                                <option value="paid">Pago</option>
+                                                <option value="pending">Pendente</option>
+                                                <option value="failed">Falhou</option>
+                                                <option value="expired">Expirado</option>
+                                            </select>
+                                        </div>
+                                    </template>
+                                    <template x-if="condition.type === 'time_elapsed'">
+                                        <div>
+                                            <label class="block text-xs font-bold text-white mb-1">Minutos</label>
+                                            <input type="number" 
+                                                   x-model.number="condition.minutes" 
+                                                   min="1"
+                                                   class="form-input text-sm w-32"
+                                                   placeholder="5">
+                                        </div>
+                                    </template>
+                                    <div class="mt-3 flex justify-end">
+                                        <button @click="removeCondition(idx)" 
+                                                class="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm">
+                                            <i class="fas fa-trash mr-1"></i>Remover
+                                        </button>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+                </div>
+            </div>
+            
+            <!-- Footer -->
+            <div class="px-6 py-4 border-t border-gray-800 flex justify-end gap-3">
+                <button @click="closeStepModal()" 
+                        class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg">
+                    Cancelar
+                </button>
+                <button @click="saveStep()" 
+                        class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg">
+                    <i class="fas fa-save mr-2"></i>Salvar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_scripts %}
+<!-- Flow Editor JS -->
+<script src="{{ url_for('static', filename='js/flow_editor.js') }}"></script>
 <script>
 function botConfigApp() {
     return {
@@ -4198,6 +4710,8 @@ function botConfigApp() {
 
         async init() {
             await this.loadConfig();
+            // Observar mudanças em flow_steps
+            this.watchFlowSteps();
         },
 
         async loadConfig() {
@@ -4563,15 +5077,285 @@ function botConfigApp() {
 
         // Função para toggle do Flow
         onFlowToggle() {
-            // Pode adicionar lógica adicional se necessário
             console.log('Flow enabled:', this.config.flow_enabled);
+            
+            // Se flow foi habilitado, inicializar editor
+            if (this.config.flow_enabled) {
+                this.$nextTick(() => {
+                    setTimeout(() => {
+                        this.initVisualFlowEditor();
+                    }, 200);
+                });
+            } else {
+                // Se flow foi desabilitado, destruir editor
+                if (window.flowEditor) {
+                    try {
+                        window.flowEditor.destroy();
+                        window.flowEditor = null;
+                    } catch (e) {
+                        console.warn('⚠️ Erro ao destruir editor:', e);
+                    }
+                }
+            }
         },
 
         // Função para inicializar o editor visual de fluxo
         initVisualFlowEditor() {
-            // Placeholder - implementação completa do jsPlumb será feita depois
-            console.log('Inicializando editor visual de fluxo...');
-            // TODO: Implementar lógica do jsPlumb aqui
+            // Verificar se flow está habilitado
+            if (!this.config.flow_enabled) {
+                console.log('ℹ️ Flow desabilitado - não inicializando editor');
+                return;
+            }
+            
+            // Aguardar próximo tick para garantir que DOM está pronto
+            this.$nextTick(() => {
+                const canvas = document.getElementById('flow-visual-canvas');
+                if (!canvas) {
+                    console.error('❌ Canvas não encontrado');
+                    return;
+                }
+                
+                // Verificar se jsPlumb está disponível
+                if (typeof jsPlumb === 'undefined') {
+                    console.error('❌ jsPlumb não está disponível');
+                    return;
+                }
+                
+                // Destruir instância anterior se existir
+                if (window.flowEditor) {
+                    try {
+                        window.flowEditor.destroy();
+                    } catch (e) {
+                        console.warn('⚠️ Erro ao destruir editor anterior:', e);
+                    }
+                }
+                
+                // Criar nova instância
+                try {
+                    window.flowEditor = new FlowEditor('flow-visual-canvas', this);
+                    console.log('✅ Editor visual inicializado');
+                } catch (error) {
+                    console.error('❌ Erro ao inicializar editor:', error);
+                }
+            });
+        },
+        
+        // Modal de edição de steps
+        showStepModal: false,
+        editingStep: null,
+        editingStepIndex: -1,
+        
+        // Abrir modal de edição
+        openStepModal(stepId) {
+            if (!this.config.flow_steps) {
+                console.error('❌ flow_steps não existe');
+                return;
+            }
+            
+            const step = this.config.flow_steps.find(s => String(s.id) === String(stepId));
+            if (!step) {
+                console.error(`❌ Step ${stepId} não encontrado`);
+                return;
+            }
+            
+            this.editingStepIndex = this.config.flow_steps.indexOf(step);
+            
+            // Deep copy com valores padrão garantidos
+            this.editingStep = JSON.parse(JSON.stringify(step));
+            
+            // Garantir estrutura completa
+            if (!this.editingStep.connections) {
+                this.editingStep.connections = {};
+            }
+            if (!this.editingStep.config) {
+                this.editingStep.config = {};
+            }
+            if (!this.editingStep.conditions) {
+                this.editingStep.conditions = [];
+            }
+            if (!this.editingStep.position) {
+                this.editingStep.position = { x: 100, y: 100 };
+            }
+            
+            this.showStepModal = true;
+        },
+        
+        // Fechar modal
+        closeStepModal() {
+            this.showStepModal = false;
+            this.editingStep = null;
+            this.editingStepIndex = -1;
+        },
+        
+        // Salvar step editado
+        saveStep() {
+            if (!this.editingStep || this.editingStepIndex === -1) {
+                alert('Erro: Step não encontrado');
+                return;
+            }
+            
+            // Validar campos obrigatórios
+            if (!this.editingStep.type) {
+                alert('Tipo do step é obrigatório');
+                return;
+            }
+            
+            // Garantir que connections existe
+            if (!this.editingStep.connections) {
+                this.editingStep.connections = {};
+            }
+            
+            // Garantir que config existe
+            if (!this.editingStep.config) {
+                this.editingStep.config = {};
+            }
+            
+            // Garantir que conditions existe
+            if (!this.editingStep.conditions) {
+                this.editingStep.conditions = [];
+            }
+            
+            // Garantir que position existe
+            if (!this.editingStep.position) {
+                const existingStep = this.config.flow_steps[this.editingStepIndex];
+                this.editingStep.position = existingStep.position || { x: 100, y: 100 };
+            }
+            
+            // Atualizar step no array (deep merge para preservar campos não editados)
+            const existingStep = this.config.flow_steps[this.editingStepIndex];
+            this.config.flow_steps[this.editingStepIndex] = {
+                ...existingStep,
+                ...this.editingStep,
+                id: existingStep.id, // Preservar ID original
+                position: this.editingStep.position || existingStep.position
+            };
+            
+            // Re-renderizar canvas
+            this.$nextTick(() => {
+                if (window.flowEditor) {
+                    window.flowEditor.renderAllSteps();
+                }
+            });
+            
+            // Fechar modal
+            this.closeStepModal();
+        },
+        
+        // Adicionar step (melhorado)
+        addFlowStep() {
+            if (!this.config.flow_steps) {
+                this.config.flow_steps = [];
+            }
+            const stepId = `step_${Date.now()}`;
+            
+            // Calcular posição inicial (evitar sobreposição)
+            const existingSteps = this.config.flow_steps.length;
+            const cols = Math.ceil(Math.sqrt(existingSteps + 1));
+            const row = Math.floor(existingSteps / cols);
+            const col = existingSteps % cols;
+            
+            const newStep = {
+                id: stepId,
+                type: 'message',
+                order: existingSteps,
+                config: {
+                    message: '',
+                    media_url: '',
+                    media_type: 'video'
+                },
+                connections: {},
+                conditions: [],
+                delay_seconds: 0,
+                position: {
+                    x: 100 + (col * 280),
+                    y: 100 + (row * 180)
+                }
+            };
+            this.config.flow_steps.push(newStep);
+            
+            // Re-renderizar canvas
+            this.$nextTick(() => {
+                if (window.flowEditor) {
+                    window.flowEditor.renderAllSteps();
+                }
+            });
+        },
+        
+        // Remover step
+        removeFlowStep(stepId) {
+            if (window.flowEditor) {
+                window.flowEditor.deleteStep(stepId);
+            }
+        },
+        
+        // Adicionar condição ao step
+        addCondition() {
+            if (!this.editingStep) return;
+            if (!this.editingStep.conditions) {
+                this.editingStep.conditions = [];
+            }
+            this.editingStep.conditions.push({
+                id: `cond_${Date.now()}`,
+                type: 'text_validation',
+                validation: 'any',
+                target_step: '',
+                order: this.editingStep.conditions.length
+            });
+        },
+        
+        // Remover condição
+        removeCondition(index) {
+            if (!this.editingStep || !this.editingStep.conditions) return;
+            this.editingStep.conditions.splice(index, 1);
+        },
+        
+        // Adicionar botão customizado ao step
+        addCustomButton() {
+            if (!this.editingStep) return;
+            if (!this.editingStep.config) {
+                this.editingStep.config = {};
+            }
+            if (!this.editingStep.config.custom_buttons) {
+                this.editingStep.config.custom_buttons = [];
+            }
+            this.editingStep.config.custom_buttons.push({
+                text: '',
+                target_step: ''
+            });
+        },
+        
+        // Remover botão customizado
+        removeCustomButton(index) {
+            if (!this.editingStep || !this.editingStep.config || !this.editingStep.config.custom_buttons) return;
+            this.editingStep.config.custom_buttons.splice(index, 1);
+        },
+        
+        // Observar mudanças em flow_steps para sincronizar canvas
+        watchFlowSteps() {
+            // Usar $watch do Alpine para observar mudanças
+            this.$watch('config.flow_steps', (newSteps, oldSteps) => {
+                if (window.flowEditor && newSteps) {
+                    // Debounce para evitar renderizações excessivas
+                    clearTimeout(this._flowStepsWatchTimeout);
+                    this._flowStepsWatchTimeout = setTimeout(() => {
+                        window.flowEditor.renderAllSteps();
+                    }, 100);
+                }
+            }, { deep: true });
+        },
+        
+        // Utilitário: Label do tipo de step
+        getStepTypeLabel(type) {
+            const labels = {
+                content: 'Conteúdo',
+                message: 'Mensagem',
+                audio: 'Áudio',
+                video: 'Vídeo',
+                buttons: 'Botões',
+                payment: 'Pagamento',
+                access: 'Acesso'
+            };
+            return labels[type] || type;
         }
     };
 }
