@@ -904,6 +904,9 @@ class Gateway(db.Model):
             result['product_hash'] = self.product_hash
             # ✅ REMOVIDO: offer_hash não é mais necessário (ofertas são criadas dinamicamente)
             # result['offer_hash'] = self.offer_hash
+        elif self.gateway_type == 'babylon':
+            result['api_key'] = self.api_key  # Secret Key (criptografada)
+            result['company_id'] = self.client_id  # Company ID (não criptografado - armazenado em client_id)
         
         return result
 

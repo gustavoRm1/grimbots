@@ -7335,19 +7335,27 @@ def create_gateway():
                 logger.warning(f"⚠️ [OrionPay] api_key não fornecido")
         
         elif gateway_type == 'babylon':
-            # ✅ BABYLON
-            api_key_value = data.get('api_key')
+            # ✅ BABYLON - Requer Secret Key + Company ID (Basic Auth)
+            api_key_value = data.get('api_key')  # Secret Key
+            company_id_value = data.get('company_id') or data.get('client_id')  # Company ID
             split_user_id_value = data.get('split_user_id')
             
             logger.info(f"📦 [Babylon] Dados recebidos:")
-            logger.info(f"   api_key: {'SIM' if api_key_value else 'NÃO'} ({len(api_key_value) if api_key_value else 0} chars)")
+            logger.info(f"   api_key (Secret Key): {'SIM' if api_key_value else 'NÃO'} ({len(api_key_value) if api_key_value else 0} chars)")
+            logger.info(f"   company_id (Company ID): {'SIM' if company_id_value else 'NÃO'}")
             logger.info(f"   split_user_id: {'SIM' if split_user_id_value else 'NÃO'}")
             
             if api_key_value:
-                gateway.api_key = api_key_value  # Criptografia automática via setter
-                logger.info(f"✅ [Babylon] api_key salvo (criptografado)")
+                gateway.api_key = api_key_value  # Criptografia automática via setter (Secret Key)
+                logger.info(f"✅ [Babylon] api_key (Secret Key) salvo (criptografado)")
             else:
-                logger.warning(f"⚠️ [Babylon] api_key não fornecido")
+                logger.warning(f"⚠️ [Babylon] api_key (Secret Key) não fornecido")
+            
+            if company_id_value:
+                gateway.client_id = company_id_value  # Company ID (não é criptografado)
+                logger.info(f"✅ [Babylon] client_id (Company ID) salvo")
+            else:
+                logger.warning(f"⚠️ [Babylon] company_id (Company ID) não fornecido")
             
             # Split User ID (opcional - para split payment)
             if split_user_id_value:
@@ -7379,6 +7387,7 @@ def create_gateway():
                 'client_secret': gateway.client_secret,
                 'api_key': gateway.api_key,
                 'api_token': gateway.api_key,  # Átomo Pay usa api_token (mesmo valor)
+                'company_id': gateway.client_id,  # Babylon usa client_id como Company ID
                 'product_hash': gateway.product_hash,  # Paradise / Átomo Pay
                 'offer_hash': gateway.offer_hash,      # Paradise (Átomo Pay não usa mais)
                 'store_id': gateway.store_id,          # Paradise
@@ -7413,19 +7422,27 @@ def create_gateway():
                     logger.info(f"🔍 [OrionPay] Verificando credenciais...")
                     logger.info(f"   api_key: {'SIM' if credentials.get('api_key') else 'NÃO'} ({len(credentials.get('api_key', ''))} chars)")
             
-            # ✅ BABYLON: Verificar se tem api_key (obrigatório)
+            # ✅ BABYLON: Verificar se tem api_key (Secret Key) + company_id (Company ID) - ambos obrigatórios
             if gateway_type == 'babylon':
                 if not credentials.get('api_key'):
-                    logger.error(f"❌ [Babylon] api_key não configurado - não será verificado")
+                    logger.error(f"❌ [Babylon] api_key (Secret Key) não configurado - não será verificado")
                     gateway.is_verified = False
-                    gateway.last_error = 'API Key não configurado'
+                    gateway.last_error = 'Secret Key não configurado'
                     db.session.commit()
                     return jsonify(gateway.to_dict())
-                else:
-                    logger.info(f"🔍 [Babylon] Verificando credenciais...")
-                    logger.info(f"   api_key: {'SIM' if credentials.get('api_key') else 'NÃO'} ({len(credentials.get('api_key', ''))} chars)")
-                    logger.info(f"   split_percentage: {credentials.get('split_percentage', 2.0)}%")
-                    logger.info(f"   split_user_id: {'SIM' if credentials.get('split_user_id') else 'NÃO'}")
+                
+                if not credentials.get('company_id'):
+                    logger.error(f"❌ [Babylon] company_id (Company ID) não configurado - não será verificado")
+                    gateway.is_verified = False
+                    gateway.last_error = 'Company ID não configurado'
+                    db.session.commit()
+                    return jsonify(gateway.to_dict())
+                
+                logger.info(f"🔍 [Babylon] Verificando credenciais...")
+                logger.info(f"   api_key (Secret Key): {'SIM' if credentials.get('api_key') else 'NÃO'} ({len(credentials.get('api_key', ''))} chars)")
+                logger.info(f"   company_id (Company ID): {'SIM' if credentials.get('company_id') else 'NÃO'}")
+                logger.info(f"   split_percentage: {credentials.get('split_percentage', 2.0)}%")
+                logger.info(f"   split_user_id: {'SIM' if credentials.get('split_user_id') else 'NÃO'}")
             
             is_valid = bot_manager.verify_gateway(gateway_type, credentials)
             

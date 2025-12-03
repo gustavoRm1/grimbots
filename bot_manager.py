@@ -6775,6 +6775,8 @@ Seu pagamento ainda não foi confirmado.
                     'api_key': api_key,
                     # ✅ Átomo Pay: api_token é salvo em api_key no banco, mas precisa ser passado como api_token
                     'api_token': api_key if gateway.gateway_type == 'atomopay' else None,
+                    # ✅ Babylon: company_id é salvo em client_id no banco
+                    'company_id': gateway.client_id if gateway.gateway_type == 'babylon' else None,
                     # Paradise
                     'product_hash': product_hash,
                     'offer_hash': gateway.offer_hash,
@@ -6813,7 +6815,7 @@ Seu pagamento ainda não foi confirmado.
                         logger.error(f"❌ SyncPay: client_id ausente")
                         logger.error(f"   Gateway ID: {gateway.id} | User: {gateway.user_id}")
                         return None
-                elif gateway.gateway_type in ['pushynpay', 'wiinpay', 'babylon']:
+                elif gateway.gateway_type in ['pushynpay', 'wiinpay']:
                     if not api_key:
                         logger.error(f"❌ {gateway.gateway_type.upper()}: api_key ausente ou não descriptografado")
                         logger.error(f"   Gateway ID: {gateway.id} | User: {gateway.user_id} | Tipo: {gateway.gateway_type}")
@@ -6830,6 +6832,21 @@ Seu pagamento ainda não foi confirmado.
                         else:
                             logger.error(f"   Campo interno (_api_key) também está vazio - gateway não foi configurado corretamente")
                             logger.error(f"   SOLUÇÃO: Configure o gateway {gateway.gateway_type.upper()} em /settings")
+                        return None
+                elif gateway.gateway_type == 'babylon':
+                    # ✅ BABYLON requer: api_key (Secret Key) + client_id (Company ID)
+                    if not api_key:
+                        logger.error(f"❌ BABYLON: api_key (Secret Key) ausente ou não descriptografado")
+                        logger.error(f"   Gateway ID: {gateway.id} | User: {gateway.user_id}")
+                        if gateway._api_key:
+                            logger.error(f"   ❌ Campo interno existe mas descriptografia falhou!")
+                            logger.error(f"   POSSÍVEL CAUSA: ENCRYPTION_KEY foi alterada após salvar credenciais")
+                            logger.error(f"   SOLUÇÃO: Reconfigure o gateway Babylon (ID: {gateway.id}) em /settings")
+                        return None
+                    if not gateway.client_id:
+                        logger.error(f"❌ BABYLON: client_id (Company ID) ausente")
+                        logger.error(f"   Gateway ID: {gateway.id} | User: {gateway.user_id}")
+                        logger.error(f"   SOLUÇÃO: Configure o Company ID no gateway Babylon em /settings")
                         return None
                 
                 # Log para auditoria (apenas se for premium)

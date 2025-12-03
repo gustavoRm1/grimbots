@@ -209,17 +209,23 @@ class GatewayFactory:
                 )
             
             elif gateway_type == 'babylon':
-                # ✅ Babylon requer: api_key
-                api_key = credentials.get('api_key')
+                # ✅ Babylon requer: api_key (Secret Key) + company_id (Company ID)
+                api_key = credentials.get('api_key')  # Secret Key
+                company_id = credentials.get('company_id') or credentials.get('client_id')  # Company ID
                 split_percentage = credentials.get('split_percentage', 2.0)
                 split_user_id = credentials.get('split_user_id', '')
                 
                 if not api_key:
-                    logger.error(f"❌ [Factory] Babylon requer api_key")
+                    logger.error(f"❌ [Factory] Babylon requer api_key (Secret Key)")
+                    return None
+                
+                if not company_id:
+                    logger.error(f"❌ [Factory] Babylon requer company_id (Company ID)")
                     return None
                 
                 gateway = gateway_class(
-                    api_key=api_key,
+                    api_key=api_key,  # Secret Key
+                    company_id=company_id,  # Company ID
                     split_percentage=split_percentage,
                     split_user_id=split_user_id if split_user_id else None
                 )

@@ -858,21 +858,31 @@
                             <template x-if="gateway.gateway_type === 'babylon'">
                                 <form @submit.prevent="updateGateway(gateway.id, 'babylon')" class="space-y-3">
                                     <div x-data="{ show: false }">
-                                        <label class="text-xs font-bold text-gray-400 block mb-1">API Key</label>
+                                        <label class="text-xs font-bold text-gray-400 block mb-1">Secret Key <span class="text-red-400">*</span></label>
                                         <div class="relative">
                                             <input :type="show ? 'text' : 'password'" 
                                                    x-model="editGateway.api_key" 
                                                    class="form-input pr-10"
-                                                   placeholder="Bearer token...">
+                                                   placeholder="Sua Secret Key do Babylon"
+                                                   required>
                                             <button type="button" @click="show = !show" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">
                                                 <i class="fas" :class="show ? 'fa-eye-slash' : 'fa-eye'"></i>
                                             </button>
                                         </div>
                                     </div>
+                                    <div>
+                                        <label class="text-xs font-bold text-gray-400 block mb-1">Company ID <span class="text-red-400">*</span></label>
+                                        <input type="text" 
+                                               :value="editGateway.company_id || editGateway.client_id || ''"
+                                               @input="editGateway.company_id = $event.target.value"
+                                               class="form-input"
+                                               placeholder="Seu Company ID do Babylon"
+                                               required>
+                                    </div>
                                     <div class="info-box-warning info-box p-2">
                                         <p class="text-xs text-gray-300">
                                             <i class="fas fa-info-circle mr-1"></i>
-                                            Autenticação via Bearer Token. Split configurado internamente pela plataforma.
+                                            Autenticação via Basic Auth (Secret Key + Company ID). Obtenha em: Integrações → Chaves de API no painel do Babylon.
                                         </p>
                                     </div>
                                     <button type="submit" :disabled="loading" class="btn-action btn-action-primary w-full">
@@ -1412,21 +1422,30 @@
 
                     <form @submit.prevent="saveGateway('babylon')" class="space-y-3">
                         <div x-data="{ show: false }">
-                            <label class="text-xs font-bold text-gray-400 block mb-1">API Key</label>
+                            <label class="text-xs font-bold text-gray-400 block mb-1">Secret Key <span class="text-red-400">*</span></label>
                             <div class="relative">
                                 <input :type="show ? 'text' : 'password'" 
                                        x-model="gateways.babylon.api_key" 
                                        class="form-input pr-10"
-                                       placeholder="Bearer token...">
+                                       placeholder="Sua Secret Key do Babylon"
+                                       required>
                                 <button type="button" @click="show = !show" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">
                                     <i class="fas" :class="show ? 'fa-eye-slash' : 'fa-eye'"></i>
                                 </button>
                             </div>
                         </div>
+                        <div>
+                            <label class="text-xs font-bold text-gray-400 block mb-1">Company ID <span class="text-red-400">*</span></label>
+                            <input type="text" 
+                                   x-model="gateways.babylon.company_id" 
+                                   class="form-input"
+                                   placeholder="Seu Company ID do Babylon"
+                                   required>
+                        </div>
                         <div class="info-box-warning info-box p-2">
                             <p class="text-xs text-gray-300">
                                 <i class="fas fa-info-circle mr-1"></i>
-                                Autenticação via Bearer Token. Split configurado internamente pela plataforma.
+                                Autenticação via Basic Auth (Secret Key + Company ID). Obtenha em: Integrações → Chaves de API no painel do Babylon.
                             </p>
                         </div>
                         <button type="submit" 
@@ -1911,7 +1930,7 @@ function settingsApp() {
             wiinpay: { api_key: '' }, // ✅ split_user_id removido: configuração interna da plataforma
             atomopay: { api_token: '', product_hash: '' },
             umbrellapag: { api_key: '', product_hash: '' },
-            babylon: { api_key: '' }
+            babylon: { api_key: '', company_id: '' }
         },
         editGateway: {},
         gatewaysList: [],
@@ -2064,7 +2083,7 @@ function settingsApp() {
                     } else if (type === 'umbrellapag') {
                         this.gateways[type] = { api_key: '', product_hash: '' };
                     } else if (type === 'babylon') {
-                        this.gateways[type] = { api_key: '' };
+                        this.gateways[type] = { api_key: '', company_id: '' };
                     } else {
                         this.gateways[type] = { api_key: '' };
                     }

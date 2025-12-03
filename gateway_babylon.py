@@ -21,16 +21,18 @@ class BabylonGateway(PaymentGateway):
     - Webhook para confirmação de pagamento
     """
     
-    def __init__(self, api_key: str, split_percentage: float = 2.0, split_user_id: str = None):
+    def __init__(self, api_key: str, company_id: str = None, split_percentage: float = 2.0, split_user_id: str = None):
         """
         Inicializa gateway Babylon
         
         Args:
-            api_key: API Key do Babylon
+            api_key: Secret Key do Babylon (usado como username na autenticação Basic)
+            company_id: Company ID do Babylon (usado como password na autenticação Basic)
             split_percentage: Percentual de split (padrão: 2%)
             split_user_id: ID do usuário para split (opcional)
         """
-        self.api_key = api_key
+        self.secret_key = api_key  # Secret Key = username
+        self.company_id = company_id  # Company ID = password
         self.split_percentage = split_percentage
         self.split_user_id = split_user_id
         self.base_url = os.environ.get('BABYLON_API_URL', 'https://api.bancobabylon.com/functions/v1')
@@ -75,9 +77,23 @@ class BabylonGateway(PaymentGateway):
             # Converter valor para centavos
             amount_cents = int(amount * 100)
             
+            # ✅ VALIDAÇÃO: Verificar se temos ambas as credenciais (Basic Auth requer Secret Key + Company ID)
+            if not self.secret_key:
+                logger.error(f"❌ [{self.get_gateway_name()}] Secret Key não configurada")
+                return None
+            
+            if not self.company_id:
+                logger.error(f"❌ [{self.get_gateway_name()}] Company ID não configurado")
+                return None
+            
+            # ✅ AUTENTICAÇÃO BASIC: Base64(Secret Key:Company ID)
+            import base64
+            credentials_string = f"{self.secret_key}:{self.company_id}"
+            credentials_base64 = base64.b64encode(credentials_string.encode('utf-8')).decode('utf-8')
+            
             # Preparar headers
             headers = {
-                'Authorization': f'Bearer {self.api_key}',
+                'Authorization': f'Basic {credentials_base64}',
                 'Accept': 'application/json',
                 'Content-Type': 'application/json'
             }
@@ -579,19 +595,27 @@ class BabylonGateway(PaymentGateway):
         """
         Verifica se credenciais Babylon são válidas
         
-        TODO: Implementar validação real se a API fornecer endpoint de verificação
+        Valida presença de Secret Key e Company ID (ambos obrigatórios para Basic Auth)
         """
         try:
-            if not self.api_key:
+            if not self.secret_key:
+                logger.error(f"❌ [{self.get_gateway_name()}] Secret Key não configurada")
+                return False
+            
+            if not self.company_id:
+                logger.error(f"❌ [{self.get_gateway_name()}] Company ID não configurado")
                 return False
             
             # Validação básica de formato
-            if len(self.api_key) < 10:
-                logger.error(f"❌ [{self.get_gateway_name()}] API Key muito curta")
+            if len(self.secret_key) < 10:
+                logger.error(f"❌ [{self.get_gateway_name()}] Secret Key muito curta")
                 return False
             
-            # TODO: Se API tiver endpoint de verificação, fazer requisição real
-            logger.info(f"✅ [{self.get_gateway_name()}] API Key parece válida (formato correto)")
+            if len(self.company_id) < 5:
+                logger.error(f"❌ [{self.get_gateway_name()}] Company ID muito curto")
+                return False
+            
+            logger.info(f"✅ [{self.get_gateway_name()}] Credenciais parecem válidas (Secret Key + Company ID configurados)")
             return True
             
         except Exception as e:
@@ -610,8 +634,17 @@ class BabylonGateway(PaymentGateway):
             # ✅ Endpoint conforme documentação
             query_url = f"{self.base_url}/transactions/{transaction_id}"
             
+            # ✅ AUTENTICAÇÃO BASIC: Base64(Secret Key:Company ID)
+            if not self.secret_key or not self.company_id:
+                logger.error(f"❌ [{self.get_gateway_name()}] Credenciais incompletas para consulta de status")
+                return None
+            
+            import base64
+            credentials_string = f"{self.secret_key}:{self.company_id}"
+            credentials_base64 = base64.b64encode(credentials_string.encode('utf-8')).decode('utf-8')
+            
             headers = {
-                'Authorization': f'Bearer {self.api_key}',
+                'Authorization': f'Basic {credentials_base64}',
                 'Accept': 'application/json'
             }
             
