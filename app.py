@@ -9203,9 +9203,17 @@ def delivery_page(delivery_token):
             return render_template('delivery_error.html', error="Configuração inválida"), 500
         
         pool = pool_bot.pool
-        # ✅ CRÍTICO: Se pool tem meta_pixel_id, SEMPRE renderizar pixel (mesmo sem access_token para client-side)
-        # Access token é necessário apenas para server-side (Conversions API), client-side não precisa
-        has_meta_pixel = pool and pool.meta_pixel_id  # ✅ SIMPLIFICADO: Apenas verificar se tem pixel_id
+        # ✅ CRÍTICO: Verificar TODAS as condições antes de renderizar pixel HTML
+        # Mesmo que client-side não precise de access_token, devemos verificar todas as condições
+        # para garantir consistência com server-side (CAPI) e evitar purchases apenas client-side
+        # Se meta_tracking_enabled = false ou meta_events_purchase = false, não renderizar pixel
+        has_meta_pixel = (
+            pool and 
+            pool.meta_tracking_enabled and 
+            pool.meta_pixel_id and 
+            pool.meta_access_token and 
+            pool.meta_events_purchase
+        )
         
         # ✅ Link final para redirecionar (configurado pelo usuário)
         # ✅ Link final para redirecionar (configurado pelo usuário)
