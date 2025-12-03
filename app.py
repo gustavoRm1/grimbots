@@ -11172,16 +11172,13 @@ def send_meta_pixel_purchase_event(payment, pageview_event_id=None):
         logger.info(f"🚀 [META PURCHASE] Purchase - Event Data: event_name={event_data.get('event_name')}, event_id={event_data.get('event_id')}, event_time={event_data.get('event_time')}")
         logger.info(f"🚀 [META PURCHASE] Purchase - User Data: external_id={'✅' if user_data.get('external_id') else '❌'}, fbp={'✅' if user_data.get('fbp') else '❌'}, fbc={'✅' if user_data.get('fbc') else '❌'}, ip={'✅' if user_data.get('client_ip_address') else '❌'}, ua={'✅' if user_data.get('client_user_agent') else '❌'}")
         
-        # ✅ CORREÇÃO CRÍTICA: Marcar meta_purchase_sent ANTES de enfileirar (lock pessimista)
-        # Isso previne duplicação mesmo que múltiplas requisições cheguem simultaneamente
-        # MAS só marca APÓS todas as verificações passarem (pool, tracking, pixel, etc.)
-        # ✅ IMPORTANTE: Só marcar se ainda não estiver marcado OU se meta_event_id não existe (permitir retry)
-        if not payment.meta_purchase_sent or not getattr(payment, 'meta_event_id', None):
-            payment.meta_purchase_sent = True
-            from models import get_brazil_time
-            payment.meta_purchase_sent_at = get_brazil_time()
-            db.session.commit()
-            logger.info(f"[META PURCHASE] Purchase - meta_purchase_sent marcado como True (APÓS validações, antes de enfileirar)")
+        # ✅ CORREÇÃO CRÍTICA V3: NÃO marcar meta_purchase_sent ANTES de enfileirar se chamado de delivery_page
+        # Se chamado de delivery_page, template precisa renderizar PRIMEIRO para client-side disparar
+        # Marcar apenas DEPOIS que task foi enfileirada (linha 11213-11214)
+        # Isso permite client-side disparar e Meta deduplicar usando eventID
+        # ✅ IMPORTANTE: Lock pessimista será feito DEPOIS de enfileirar para evitar duplicação
+        purchase_was_pending = payment.meta_purchase_sent
+        logger.info(f"[META PURCHASE] Purchase - meta_purchase_sent atual: {purchase_was_pending} | event_id: {getattr(payment, 'meta_event_id', None)}")
         
         # ✅ ENFILEIRAR COM PRIORIDADE ALTA (Purchase é crítico!)
         try:
@@ -11205,17 +11202,29 @@ def send_meta_pixel_purchase_event(payment, pageview_event_id=None):
             # O problema anterior era que timeout de 10s estava bloqueando o fluxo quando Celery estava lento
             # Agora: enfileirar task e confiar que Celery vai processar em background
             # Celery tem retry automático se falhar, então não precisamos aguardar resultado síncrono
-            # ✅ IMPORTANTE: meta_purchase_sent já foi marcado antes de enfileirar (linha 10598)
+            # ✅ IMPORTANTE: meta_purchase_sent será marcado DEPOIS de enfileirar (linha 11213-11216)
+            # Isso permite client-side disparar primeiro (template renderizado com meta_purchase_sent=False)
             # Se task falhar, Celery vai retry automaticamente (max_retries=10)
             # Não fazer rollback aqui - deixar Celery processar em background
+            
+            # ✅ CORREÇÃO CRÍTICA V3: Marcar meta_purchase_sent DEPOIS de enfileirar (lock pessimista)
+            # Isso previne duplicação mesmo que múltiplas requisições cheguem simultaneamente
+            # MAS só marca DEPOIS que task foi enfileirada para permitir client-side disparar primeiro
+            # ✅ IMPORTANTE: Só marcar se ainda não estiver marcado OU se meta_event_id não existe (permitir retry)
+            if not payment.meta_purchase_sent or not getattr(payment, 'meta_event_id', None):
+                payment.meta_purchase_sent = True
+                from models import get_brazil_time
+                payment.meta_purchase_sent_at = get_brazil_time()
             
             # ✅ Salvar event_id para referência futura (mesmo sem aguardar resultado)
             payment.meta_event_id = event_id
             db.session.commit()
+            logger.info(f"[META PURCHASE] Purchase - meta_purchase_sent marcado como True (DEPOIS de enfileirar)")
             logger.info(f"[META PURCHASE] Purchase - Task enfileirada com sucesso: {task.id} | event_id: {event_id[:50]}...")
             logger.info(f"✅ Purchase enfileirado para processamento assíncrono via Celery (fire and forget)")
             logger.info(f"   💡 Celery vai processar em background e enviar para Meta automaticamente")
             logger.info(f"   💡 Se falhar, Celery tem retry automático (max_retries=10)")
+            logger.info(f"   💡 Client-side já disparou antes (template renderizado primeiro)")
             
             return True  # ✅ Retornar True indicando que task foi enfileirada com sucesso
                 
