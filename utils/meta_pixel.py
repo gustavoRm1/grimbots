@@ -241,6 +241,21 @@ def process_meta_parameters(
             result['ip_origin'] = 'remote_addr'
             logger.debug(f"[PARAM BUILDER] client_ip_address capturado do Remote-Addr: {remote_addr}")
     
+    # ✅ CORREÇÃO CRÍTICA: Normalizar IP para IPv6 (conforme recomendação Meta)
+    # Meta recomenda IPv6 para melhor matching e durabilidade
+    # Converter IPv4 para IPv6 mapeado quando possível
+    if result.get('client_ip_address'):
+        try:
+            from utils.ip_utils import normalize_ip_to_ipv6
+            original_ip = result['client_ip_address']
+            normalized_ip = normalize_ip_to_ipv6(original_ip)
+            if original_ip != normalized_ip:
+                logger.info(f"[PARAM BUILDER] ✅ IP normalizado para IPv6: {original_ip} -> {normalized_ip}")
+            result['client_ip_address'] = normalized_ip
+        except Exception as e:
+            logger.warning(f"[PARAM BUILDER] ⚠️ Erro ao normalizar IP para IPv6: {e}")
+            # Continuar com IP original se normalização falhar
+    
     return result
 
 
