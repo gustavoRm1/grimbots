@@ -750,7 +750,7 @@
                     <span class="hidden sm:inline">Adicionar Bot</span>
                     <span class="sm:hidden">Novo Bot</span>
                 </button>
-                <button @click="openImportExportModal()"
+                <button @click.stop="openImportExportModal($event)"
                         class="btn-action flex items-center justify-center flex-1 sm:flex-initial text-sm sm:text-base px-4 py-2.5 sm:py-3 whitespace-nowrap"
                         style="background: rgba(59, 130, 246, 0.1); color: #3B82F6; border: 1px solid rgba(59, 130, 246, 0.3);">
                     <i class="fas fa-exchange-alt mr-1.5 sm:mr-2"></i>
@@ -3169,7 +3169,13 @@ function dashboardApp() {
         },
         
         // ✅ Função para abrir modal de Importar/Exportar Bot
-        openImportExportModal() {
+        openImportExportModal(event) {
+            // ✅ Prevenir propagação do evento
+            if (event) {
+                event.stopPropagation();
+                event.preventDefault();
+            }
+            
             console.log('[Import/Export] openImportExportModal() chamado');
             
             // Fechar outros modais
@@ -3178,19 +3184,22 @@ function dashboardApp() {
             this.showDuplicateBotModal = false;
             this.showBannedBotModal = false;
             
-            // Abrir modal
-            this.showImportExportModal = true;
-            console.log('[Import/Export] showImportExportModal =', this.showImportExportModal);
-            
-            // ✅ NÃO MOVER MODAL PARA BODY - manter no escopo do dashboardApp()
-            // Apenas garantir que x-cloak seja removido
-            this.$nextTick(() => {
-                const modal = document.getElementById('modal-import-export');
-                if (modal) {
-                    modal.removeAttribute('x-cloak');
-                    console.log('[Import/Export] x-cloak removido, modal deve aparecer');
-                }
-            });
+            // ✅ Usar setTimeout para garantir que o modal abra após o evento do botão terminar
+            // Isso previne que o clique no botão seja capturado pelo overlay do modal
+            setTimeout(() => {
+                this.showImportExportModal = true;
+                console.log('[Import/Export] showImportExportModal =', this.showImportExportModal);
+                
+                // ✅ NÃO MOVER MODAL PARA BODY - manter no escopo do dashboardApp()
+                // Apenas garantir que x-cloak seja removido
+                this.$nextTick(() => {
+                    const modal = document.getElementById('modal-import-export');
+                    if (modal) {
+                        modal.removeAttribute('x-cloak');
+                        console.log('[Import/Export] x-cloak removido, modal deve aparecer');
+                    }
+                });
+            }, 10);
         },
         
         async exportBot() {
