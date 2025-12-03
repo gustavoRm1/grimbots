@@ -2297,14 +2297,13 @@ function dashboardApp() {
                             })));
                             console.log('[Import/Export] Modal está no topo?', modalIndex === 0 || modalIndex === 1, 'Index:', modalIndex);
                             
-                            // Se modal tem dimensões 0, mover para body diretamente
+                            // ✅ NÃO MOVER MODAL PARA BODY - manter no escopo do dashboardApp()
+                            // Se modal tem dimensões 0, apenas forçar dimensões
                             if (rect.width === 0 || rect.height === 0) {
-                                console.warn('[Import/Export] Modal tem dimensões 0! Movendo para body...');
-                                const modalClone = modal.cloneNode(true);
-                                modal.remove();
-                                document.body.appendChild(modalClone);
-                                modalClone.style.cssText = modal.style.cssText;
-                                console.log('[Import/Export] Modal movido para body');
+                                console.warn('[Import/Export] Modal tem dimensões 0! Forçando dimensões...');
+                                modal.style.setProperty('width', '100vw', 'important');
+                                modal.style.setProperty('height', '100vh', 'important');
+                                console.log('[Import/Export] Dimensões do modal forçadas');
                             }
                         } else {
                             console.warn('[Import/Export] Modal não encontrado!');
@@ -3175,62 +3174,14 @@ function dashboardApp() {
             this.showImportExportModal = true;
             console.log('[Import/Export] showImportExportModal =', this.showImportExportModal);
             
-            // ✅ MOVER MODAL PARA BODY para garantir position: fixed funciona
+            // ✅ NÃO MOVER MODAL PARA BODY - manter no escopo do dashboardApp()
+            // Apenas garantir que x-cloak seja removido
             this.$nextTick(() => {
-                setTimeout(() => {
-                    const modal = document.getElementById('modal-import-export');
-                    if (modal && modal.parentElement !== document.body) {
-                        console.log('[Import/Export] Movendo modal para body...');
-                        // Clonar modal
-                        const clonedModal = modal.cloneNode(true);
-                        // Remover modal antigo
-                        modal.remove();
-                        // Adicionar ao body
-                        document.body.appendChild(clonedModal);
-                        clonedModal.id = 'modal-import-export';
-                        
-                        // Forçar estilos
-                        clonedModal.removeAttribute('x-cloak');
-                        clonedModal.style.cssText = `
-                            display: flex !important;
-                            visibility: visible !important;
-                            opacity: 1 !important;
-                            z-index: 99999 !important;
-                            position: fixed !important;
-                            top: 0 !important;
-                            left: 0 !important;
-                            right: 0 !important;
-                            bottom: 0 !important;
-                            width: 100vw !important;
-                            height: 100vh !important;
-                            background: rgba(0, 0, 0, 0.95) !important;
-                            backdrop-filter: blur(8px) !important;
-                            pointer-events: auto !important;
-                        `;
-                        
-                        console.log('[Import/Export] Modal movido para body e estilos forçados');
-                    } else if (modal) {
-                        // Modal já está no body, apenas forçar estilos
-                        modal.removeAttribute('x-cloak');
-                        modal.style.cssText = `
-                            display: flex !important;
-                            visibility: visible !important;
-                            opacity: 1 !important;
-                            z-index: 99999 !important;
-                            position: fixed !important;
-                            top: 0 !important;
-                            left: 0 !important;
-                            right: 0 !important;
-                            bottom: 0 !important;
-                            width: 100vw !important;
-                            height: 100vh !important;
-                            background: rgba(0, 0, 0, 0.95) !important;
-                            backdrop-filter: blur(8px) !important;
-                            pointer-events: auto !important;
-                        `;
-                        console.log('[Import/Export] Modal forçado a aparecer via openImportExportModal()');
-                    }
-                }, 50);
+                const modal = document.getElementById('modal-import-export');
+                if (modal) {
+                    modal.removeAttribute('x-cloak');
+                    console.log('[Import/Export] x-cloak removido, modal deve aparecer');
+                }
             });
         },
         
