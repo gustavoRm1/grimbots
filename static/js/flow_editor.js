@@ -17,6 +17,8 @@ class FlowEditor {
         this.connections = new Map(); // Map<connectionId, jsPlumbConnection>
         this.currentDragging = null; // Step sendo arrastado
         this.connectionMode = null; // 'next' | 'pending' | 'retry' | null
+        this.selectedStep = null; // Step selecionado
+        this.zoomLevel = 1; // Nível de zoom atual
         
         // Cores por tipo de conexão
         this.connectionColors = {
@@ -61,7 +63,7 @@ class FlowEditor {
             container: this.canvas,
             paintStyle: { stroke: '#10B981', strokeWidth: 2 },
             hoverPaintStyle: { stroke: '#34D399', strokeWidth: 3 },
-            connector: ['Flowchart', { stub: [10, 15], gap: 5, cornerRadius: 5, alwaysRespectStubs: true }],
+            connector: ['Bezier', { curviness: 50, stub: [10, 15], gap: 5 }],
             endpoint: ['Dot', { radius: 8 }],
             endpointStyle: { fill: '#10B981', outlineStroke: '#FFFFFF', outlineWidth: 2 },
             endpointHoverStyle: { fill: '#34D399', outlineStroke: '#FFFFFF', outlineWidth: 3 },
@@ -99,6 +101,119 @@ class FlowEditor {
         
         // Renderizar steps existentes
         this.renderAllSteps();
+        
+        // Habilitar zoom com scroll
+        this.enableZoom();
+        
+        // Habilitar seleção ao clicar
+        this.enableSelection();
+    }
+    
+    /**
+     * Habilita zoom com scroll do mouse
+     */
+    enableZoom() {
+        if (!this.canvas) return;
+        
+        this.canvas.addEventListener('wheel', (e) => {
+            // Zoom com Ctrl/Cmd + Scroll
+            if (e.ctrlKey || e.metaKey) {
+                e.preventDefault();
+                const delta = e.deltaY > 0 ? 0.9 : 1.1;
+                this.zoomLevel = Math.max(0.5, Math.min(2, this.zoomLevel * delta));
+                this.applyZoom();
+            }
+        }, { passive: false });
+    }
+    
+    /**
+     * Aplica zoom ao canvas
+     */
+    applyZoom() {
+        if (!this.instance || !this.canvas) return;
+        
+        // Aplicar zoom no canvas diretamente
+        this.canvas.style.transform = `scale(${this.zoomLevel})`;
+        this.canvas.style.transformOrigin = 'top left';
+        
+        // Repintar jsPlumb após zoom
+        setTimeout(() => {
+            if (this.instance) {
+                this.instance.repaintEverything();
+            }
+        }, 10);
+    }
+    
+    /**
+     * Zoom in
+     */
+    zoomIn() {
+        this.zoomLevel = Math.min(2, this.zoomLevel * 1.2);
+        this.applyZoom();
+    }
+    
+    /**
+     * Zoom out
+     */
+    zoomOut() {
+        this.zoomLevel = Math.max(0.5, this.zoomLevel * 0.8);
+        this.applyZoom();
+    }
+    
+    /**
+     * Reset zoom
+     */
+    zoomReset() {
+        this.zoomLevel = 1;
+        this.applyZoom();
+    }
+    
+    /**
+     * Habilita seleção visual ao clicar
+     */
+    enableSelection() {
+        if (!this.canvas) return;
+        
+        this.canvas.addEventListener('click', (e) => {
+            // Ignorar cliques em botões
+            if (e.target.closest('button')) {
+                return;
+            }
+            
+            const stepElement = e.target.closest('.flow-step-block');
+            if (stepElement) {
+                this.selectStep(stepElement.dataset.stepId);
+            } else {
+                this.deselectStep();
+            }
+        });
+    }
+    
+    /**
+     * Seleciona um step
+     */
+    selectStep(stepId) {
+        // Deselecionar anterior
+        this.deselectStep();
+        
+        const element = this.steps.get(String(stepId));
+        if (element) {
+            element.classList.add('flow-step-selected');
+            this.selectedStep = stepId;
+        }
+    }
+    
+    /**
+     * Deseleciona step atual
+     */
+    deselectStep() {
+        if (this.selectedStep) {
+            const element = this.steps.get(String(this.selectedStep));
+            if (element) {
+                element.classList.remove('flow-step-selected');
+            }
+        }
+        this.selectedStep = null;
     }
     
     /**
@@ -390,6 +505,20 @@ class FlowEditor {
             
             if (connection) {
                 this.connections.set(connId, connection);
+                
+                // Adicionar classe para animação
+            // Adicionar animação de conexão (se possível)
+            try {
+                const overlays = connection.getOverlays();
+                if (overlays && overlays.length > 0) {
+                    // Adicionar classe de animação via CSS
+                    setTimeout(() => {
+                        this.instance.repaint(connection);
+                    }, 10);
+                }
+            } catch (e) {
+                // Ignorar erros de animação
+            }
                 
                 // Atualizar dados no Alpine (apenas se não existir)
                 const step = this.alpine?.config?.flow_steps?.find(s => String(s.id) === sourceId);
