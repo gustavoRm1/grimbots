@@ -2597,6 +2597,16 @@ def export_bot_config(bot_id):
         logger.error(f"❌ Erro ao exportar configurações do bot {bot_id}: {e}", exc_info=True)
         return jsonify({'error': f'Erro ao exportar configurações: {str(e)}'}), 500
 
+def _safe_strip(value):
+    """
+    Função auxiliar para fazer strip de forma segura (trata None)
+    """
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value.strip()
+    return value
+
 def _validate_import_config(config_data):
     """
     Valida estrutura completa de configuração antes de importar
@@ -2818,8 +2828,11 @@ def import_bot_config():
         
         # ✅ VALIDAÇÃO 6: Determinar bot destino
         target_bot_id = data.get('target_bot_id')  # null = criar novo, int = aplicar em existente
-        new_bot_token = data.get('new_bot_token', '').strip()
-        new_bot_name = data.get('new_bot_name', '').strip()
+        # ✅ CORREÇÃO: Usar função auxiliar para strip seguro
+        new_bot_token_raw = data.get('new_bot_token')
+        new_bot_token = _safe_strip(new_bot_token_raw) or ''
+        new_bot_name_raw = data.get('new_bot_name')
+        new_bot_name = _safe_strip(new_bot_name_raw) or ''
         
         if target_bot_id:
             # Aplicar em bot existente
@@ -3028,6 +3041,26 @@ def import_bot_config():
             'details': str(ve)
         }), 400
         
+    except AttributeError as ae:
+        # ✅ CORREÇÃO ESPECÍFICA: Erro de atributo (ex: NoneType has no attribute 'strip')
+        db.session.rollback()
+        if bot_created and bot:
+            # ✅ CLEANUP: Remover bot criado se erro ocorreu
+            try:
+                db.session.delete(bot)
+                db.session.commit()
+                logger.info(f"🧹 Bot {bot.id} removido devido a erro na importação")
+            except:
+                db.session.rollback()
+        import traceback
+        error_details = traceback.format_exc()
+        logger.error(f"❌ Erro de atributo ao importar configurações: {ae}", exc_info=True)
+        logger.error(f"❌ Traceback completo:\n{error_details}")
+        return jsonify({
+            'error': f'Erro ao processar dados: {str(ae)}. Verifique se todos os campos de texto estão no formato correto.',
+            'details': str(ae),
+            'traceback': error_details if app.debug else None
+        }), 500
     except Exception as e:
         db.session.rollback()
         if bot_created and bot:
@@ -3038,8 +3071,15 @@ def import_bot_config():
                 logger.info(f"🧹 Bot {bot.id} removido devido a erro na importação")
             except:
                 db.session.rollback()
+        import traceback
+        error_details = traceback.format_exc()
         logger.error(f"❌ Erro ao importar configurações: {e}", exc_info=True)
-        return jsonify({'error': f'Erro ao importar configurações: {str(e)}'}), 500
+        logger.error(f"❌ Traceback completo:\n{error_details}")
+        return jsonify({
+            'error': f'Erro ao importar configurações: {str(e)}',
+            'details': str(e),
+            'traceback': error_details if app.debug else None
+        }), 500
 
 @app.route('/api/bots/<int:bot_id>/start', methods=['POST'])
 @login_required
