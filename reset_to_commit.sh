@@ -97,14 +97,41 @@ if ! git diff-index --quiet HEAD --; then
     echo ""
     git status --short
     echo ""
-    read -p "Deseja fazer stash das mudanças? (sim/não): " STASH_IT
-    if [ "$STASH_IT" = "sim" ]; then
-        git stash push -m "Stash antes de reset para $TARGET_COMMIT"
-        echo "✅ Mudanças salvas em stash"
-    else
-        echo "❌ Operação cancelada. Faça commit ou stash das mudanças primeiro."
-        exit 1
-    fi
+    echo "Opções:"
+    echo "  1. Fazer stash (salvar mudanças)"
+    echo "  2. Descartar mudanças (perder alterações)"
+    echo "  3. Cancelar"
+    echo ""
+    read -p "Escolha (1/2/3): " OPTION
+    
+    case "$OPTION" in
+        1)
+            git stash push -m "Stash antes de reset para $TARGET_COMMIT"
+            echo "✅ Mudanças salvas em stash"
+            ;;
+        2)
+            git reset --hard HEAD
+            echo "✅ Mudanças descartadas"
+            ;;
+        3)
+            echo "❌ Operação cancelada"
+            exit 1
+            ;;
+        *)
+            # Aceitar "sim", "SIM", "s", "S" como stash
+            STASH_IT_LOWER=$(echo "$OPTION" | tr '[:upper:]' '[:lower:]')
+            if [ "$STASH_IT_LOWER" = "sim" ] || [ "$STASH_IT_LOWER" = "s" ] || [ "$STASH_IT_LOWER" = "1" ]; then
+                git stash push -m "Stash antes de reset para $TARGET_COMMIT"
+                echo "✅ Mudanças salvas em stash"
+            elif [ "$STASH_IT_LOWER" = "não" ] || [ "$STASH_IT_LOWER" = "nao" ] || [ "$STASH_IT_LOWER" = "n" ] || [ "$STASH_IT_LOWER" = "2" ]; then
+                git reset --hard HEAD
+                echo "✅ Mudanças descartadas"
+            else
+                echo "❌ Opção inválida. Operação cancelada."
+                exit 1
+            fi
+            ;;
+    esac
     echo ""
 fi
 
