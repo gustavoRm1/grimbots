@@ -2700,6 +2700,7 @@ body {
                     <h3 class="text-lg font-bold text-white">Steps do Fluxo</h3>
                     <div class="flex items-center gap-3">
                         <button @click="addFlowStep()" 
+                                type="button"
                                 class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition">
                             <i class="fas fa-plus mr-2"></i>Adicionar Step
                         </button>
@@ -4934,7 +4935,7 @@ body {
 
 {% block extra_scripts %}
 <!-- Flow Editor JS -->
-<script src="{{ url_for('static', filename='js/flow_editor.js') }}"></script>
+<script src="{{ url_for('static', filename='js/flow_editor.js') }}?v=2.0.1"></script>
 <script>
 function botConfigApp() {
     return {
@@ -5402,10 +5403,26 @@ function botConfigApp() {
                 
                 // Criar nova instância
                 try {
+                    // Verificar se FlowEditor está disponível
+                    if (typeof FlowEditor === 'undefined') {
+                        console.error('❌ FlowEditor não está disponível. Verifique se flow_editor.js foi carregado.');
+                        return;
+                    }
+                    
                     window.flowEditor = new FlowEditor('flow-visual-canvas', this);
                     console.log('✅ Editor visual inicializado');
                 } catch (error) {
                     console.error('❌ Erro ao inicializar editor:', error);
+                    console.error('Stack:', error.stack);
+                    // Tentar novamente após um delay
+                    setTimeout(() => {
+                        try {
+                            window.flowEditor = new FlowEditor('flow-visual-canvas', this);
+                            console.log('✅ Editor visual inicializado (tentativa 2)');
+                        } catch (e2) {
+                            console.error('❌ Erro na tentativa 2:', e2);
+                        }
+                    }, 1000);
                 }
             });
         },
@@ -5513,6 +5530,8 @@ function botConfigApp() {
         
         // Adicionar step (melhorado)
         addFlowStep() {
+            console.log('🔵 addFlowStep() chamado');
+            
             // Garantir que flow_steps existe
             if (!this.config.flow_steps) {
                 this.config.flow_steps = [];
@@ -5521,6 +5540,7 @@ function botConfigApp() {
             // Habilitar flow automaticamente se não estiver habilitado
             if (!this.config.flow_enabled) {
                 this.config.flow_enabled = true;
+                console.log('✅ Flow habilitado automaticamente');
             }
             
             const stepId = `step_${Date.now()}`;
@@ -5550,19 +5570,31 @@ function botConfigApp() {
             };
             
             this.config.flow_steps.push(newStep);
+            console.log('✅ Step adicionado:', stepId, 'Total:', this.config.flow_steps.length);
             
             // Re-renderizar canvas após próximo tick
             this.$nextTick(() => {
+                console.log('🔄 $nextTick executado, aguardando DOM...');
                 // Aguardar um pouco mais para garantir que DOM está pronto
                 setTimeout(() => {
+                    console.log('🔄 Timeout executado, verificando editor...');
                     // Se é o primeiro step ou editor não existe, inicializar
                     if (!window.flowEditor) {
+                        console.log('🆕 Inicializando editor...');
                         this.initVisualFlowEditor();
                     } else {
+                        console.log('🔄 Re-renderizando steps...');
                         // Se editor já existe, apenas re-renderizar
-                        window.flowEditor.renderAllSteps();
+                        try {
+                            window.flowEditor.renderAllSteps();
+                            console.log('✅ Steps re-renderizados');
+                        } catch (e) {
+                            console.error('❌ Erro ao re-renderizar:', e);
+                            // Tentar reinicializar se houver erro
+                            this.initVisualFlowEditor();
+                        }
                     }
-                }, 400);
+                }, 500); // Aumentado para 500ms
             });
         },
         
