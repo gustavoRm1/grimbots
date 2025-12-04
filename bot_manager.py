@@ -5293,7 +5293,7 @@ Desculpe, não foi possível processar seu pagamento.
                                                             chat_id=int(payment.customer_user_id),
                                                             upsells=matched_upsells,
                                                             original_price=payment.amount,
-                                                            original_button_index=-1
+                                                            original_button_index=payment.button_index if payment.button_index is not None else -1
                                                         )
                                                         
                                                         logger.info(f"📅 [UPSELLS VERIFY] Upsells agendados com sucesso para payment {payment.payment_id}!")
@@ -5701,7 +5701,7 @@ Desculpe, não foi possível processar seu pagamento.
                                                             chat_id=int(payment.customer_user_id),
                                                             upsells=matched_upsells,
                                                             original_price=payment.amount,
-                                                            original_button_index=-1
+                                                            original_button_index=payment.button_index if payment.button_index is not None else -1
                                                         )
                                                         
                                                         logger.info(f"📅 [UPSELLS VERIFY] Upsells agendados com sucesso para payment {payment.payment_id}!")
@@ -9484,7 +9484,7 @@ Seu pagamento ainda não foi confirmado.
                     
                     buttons = [{
                         'text': button_text,
-                        'callback_data': f'upsell_{index}_{int(price*100)}_{0}'  # ✅ Formato: upsell_INDEX_PRICE_ORIGINAL_BTN
+                        'callback_data': f'upsell_{index}_{int(price*100)}_{original_button_index if original_button_index >= 0 else 0}'  # ✅ Formato: upsell_INDEX_PRICE_ORIGINAL_BTN
                     }]
             
             else:
@@ -9502,7 +9502,7 @@ Seu pagamento ainda não foi confirmado.
                 
                 buttons = [{
                     'text': button_text,
-                    'callback_data': f'upsell_{index}_{int(price*100)}_{0}'  # ✅ Formato: upsell_INDEX_PRICE_ORIGINAL_BTN
+                    'callback_data': f'upsell_{index}_{int(price*100)}_{original_button_index}'  # ✅ Formato: upsell_INDEX_PRICE_ORIGINAL_BTN
                 }]
             
             # ✅ VERIFICAR SE TEM ORDER BUMP PARA ESTE UPSELL
