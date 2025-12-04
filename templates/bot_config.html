@@ -468,6 +468,36 @@ function botConfigApp() {
             // ... resto da configuração ...
         },
         // ... resto dos métodos ...
+        init() {
+            // Função de inicialização do componente Alpine.js
+            // Carrega a configuração do bot ao inicializar
+            this.loadConfig();
+        },
+        loadConfig() {
+            // Carregar configuração do bot via API
+            this.loading = true;
+            fetch(`/api/bots/${this.bot_id}/config`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.config) {
+                        this.config = data.config;
+                        // Inicializar editor visual se flow estiver habilitado
+                        if (this.config.flow_enabled && window.flowEditor) {
+                            setTimeout(() => {
+                                if (window.flowEditor && window.flowEditor.instance) {
+                                    window.flowEditor.renderAllSteps();
+                                    window.flowEditor.revalidateConnections();
+                                }
+                            }, 300);
+                        }
+                    }
+                    this.loading = false;
+                })
+                .catch(error => {
+                    console.error('Erro ao carregar configuração:', error);
+                    this.loading = false;
+                });
+        },
         getAvailableStepsForConnection(currentStepId) {
             if (!this.config.flow_steps) return [];
             return this.config.flow_steps.filter(step => String(step.id) !== String(currentStepId));
