@@ -1,42 +1,58 @@
 /**
- * Flow Editor - Editor Visual de Fluxo com jsPlumb
+ * Flow Editor V2.0 - Editor Visual de Fluxo com jsPlumb
  * Sistema completo de edição visual de fluxos de bot
- * Versão: 2.0.1 - Correção jsPlumb 2.x
+ * Versão: 2.0.0 - Visual Dashboard + jsPlumb 2.x Compatible
  * 
  * Dependências:
  * - jsPlumb 2.15.6 (CDN)
  * - Alpine.js 3.x (CDN)
+ * 
+ * Design System:
+ * - Background: #0D0F15
+ * - Cards: #15171F
+ * - Borda: #242836
+ * - Linhas: #1f232e
+ * - Títulos: #FFFFFF
+ * - Textos: #A1A1A9
+ * - Amarelo: #FFB800 / #FFC633
+ * - Verde: #10B981
+ * - Azul: #3B82F6
+ * - Vermelho: #EF4444
+ * - Fonte: Inter
  */
 
 class FlowEditor {
     constructor(canvasId, alpineContext) {
         this.canvasId = canvasId;
         this.canvas = document.getElementById(canvasId);
-        this.alpine = alpineContext; // Referência ao contexto Alpine.js
-        this.instance = null; // Instância do jsPlumb
-        this.steps = new Map(); // Map<stepId, DOMElement>
-        this.connections = new Map(); // Map<connectionId, jsPlumbConnection>
-        this.currentDragging = null; // Step sendo arrastado
-        this.connectionMode = null; // 'next' | 'pending' | 'retry' | null
-        this.selectedStep = null; // Step selecionado
-        this.zoomLevel = 1; // Nível de zoom atual
+        this.alpine = alpineContext;
+        this.instance = null;
+        this.steps = new Map();
+        this.connections = new Map();
+        this.selectedStep = null;
+        this.zoomLevel = 1;
+        this.pan = { x: 0, y: 0 };
+        this.isPanning = false;
+        this.lastPanPoint = { x: 0, y: 0 };
+        this.snapToGrid = false;
+        this.gridSize = 20;
         
-        // Cores por tipo de conexão
+        // Cores por tipo de conexão (Dashboard Style)
         this.connectionColors = {
-            next: '#10B981',      // Verde (sucesso)
-            pending: '#F59E0B',   // Amarelo (pendente)
-            retry: '#EF4444'      // Vermelho (erro/retry)
+            next: '#10B981',      // Verde
+            pending: '#FACC15',   // Amarelo (FACC15 = mais próximo do padrão)
+            retry: '#EF4444'      // Vermelho
         };
         
-        // Cores por tipo de step
+        // Cores por tipo de step (Dashboard Style)
         this.stepColors = {
             content: '#3B82F6',   // Azul
-            message: '#8B5CF6',   // Roxo
-            audio: '#EC4899',     // Rosa
-            video: '#F59E0B',     // Amarelo
-            buttons: '#10B981',   // Verde
-            payment: '#EF4444',   // Vermelho
-            access: '#14B8A6'     // Ciano
+            message: '#8B5CF6',    // Roxo
+            audio: '#EC4899',      // Rosa
+            video: '#F59E0B',      // Amarelo
+            buttons: '#10B981',    // Verde
+            payment: '#EF4444',    // Vermelho
+            access: '#14B8A6'      // Ciano
         };
         
         // Ícones por tipo de step
@@ -54,31 +70,18 @@ class FlowEditor {
     }
     
     init() {
-        console.log('🔵 FlowEditor.init() chamado - Versão 2.0.1');
-        
         if (!this.canvas) {
             console.error('❌ Canvas não encontrado:', this.canvasId);
             return;
         }
         
-        // Verificar se jsPlumb está disponível
         if (typeof jsPlumb === 'undefined') {
-            console.error('❌ jsPlumb não está carregado. Verifique se o script foi incluído antes deste arquivo.');
+            console.error('❌ jsPlumb não está carregado.');
             return;
         }
         
-        console.log('✅ jsPlumb disponível:', typeof jsPlumb);
-        console.log('✅ jsPlumb métodos disponíveis:', Object.keys(jsPlumb).filter(k => typeof jsPlumb[k] === 'function').slice(0, 10));
-        
-        // Inicializar jsPlumb (API 2.x)
-        // jsPlumb 2.x usa a instância padrão global diretamente
+        // Inicializar jsPlumb 2.x (API correta)
         try {
-            // Verificar se jsPlumb está realmente disponível
-            if (!jsPlumb || typeof jsPlumb !== 'object') {
-                throw new Error('jsPlumb não está disponível como objeto');
-            }
-            
-            // jsPlumb 2.x: usar a instância padrão diretamente
             this.instance = jsPlumb;
             
             // Configurar container
@@ -91,82 +94,77 @@ class FlowEditor {
                 this.instance.importDefaults({
                     paintStyle: { stroke: '#10B981', strokeWidth: 2 },
                     hoverPaintStyle: { stroke: '#34D399', strokeWidth: 3 },
-                    connector: ['Bezier', { curviness: 50, stub: [10, 15], gap: 5 }],
-                    endpoint: ['Dot', { radius: 8 }],
+                    connector: ['Bezier', { curviness: 60, stub: [10, 15], gap: 5 }],
+                    endpoint: ['Dot', { radius: 6 }],
                     endpointStyle: { fill: '#10B981', outlineStroke: '#FFFFFF', outlineWidth: 2 },
                     endpointHoverStyle: { fill: '#34D399', outlineStroke: '#FFFFFF', outlineWidth: 3 },
                     anchors: ['Top', 'Bottom'],
-                    maxConnections: -1,
-                    dragOptions: {
-                        cursor: 'grabbing',
-                        zIndex: 2000
-                    }
+                    maxConnections: -1
                 });
-            } else {
-                // Se importDefaults não existe, configurar diretamente
-                this.instance.Defaults = this.instance.Defaults || {};
-                this.instance.Defaults.paintStyle = { stroke: '#10B981', strokeWidth: 2 };
-                this.instance.Defaults.hoverPaintStyle = { stroke: '#34D399', strokeWidth: 3 };
-                this.instance.Defaults.connector = ['Bezier', { curviness: 50, stub: [10, 15], gap: 5 }];
-                this.instance.Defaults.endpoint = ['Dot', { radius: 8 }];
-                this.instance.Defaults.endpointStyle = { fill: '#10B981', outlineStroke: '#FFFFFF', outlineWidth: 2 };
-                this.instance.Defaults.endpointHoverStyle = { fill: '#34D399', outlineStroke: '#FFFFFF', outlineWidth: 3 };
-                this.instance.Defaults.anchors = ['Top', 'Bottom'];
-                this.instance.Defaults.maxConnections = -1;
             }
             
-            console.log('✅ jsPlumb inicializado:', this.instance ? 'OK' : 'FALHOU');
+            // Bind eventos
+            setTimeout(() => {
+                this.instance.bind('connection', (info) => this.onConnectionCreated(info));
+                this.instance.bind('connectionDetached', (info) => this.onConnectionDetached(info));
+                
+                // Remover conexão com duplo clique
+                this.instance.bind('click', (conn, originalEvent) => {
+                    if (originalEvent && originalEvent.detail === 2) {
+                        this.removeConnection(conn);
+                    }
+                });
+                
+                // Remover conexão com botão direito
+                this.instance.bind('contextmenu', (conn, originalEvent) => {
+                    if (originalEvent) {
+                        originalEvent.preventDefault();
+                        this.removeConnection(conn);
+                    }
+                });
+            }, 100);
+            
+            console.log('✅ jsPlumb inicializado');
         } catch (error) {
             console.error('❌ Erro ao inicializar jsPlumb:', error);
-            console.error('jsPlumb disponível:', typeof jsPlumb);
-            if (jsPlumb) {
-                console.error('jsPlumb tipo:', typeof jsPlumb);
-                console.error('jsPlumb chaves:', Object.keys(jsPlumb).slice(0, 20));
-            }
             return;
         }
         
-        // Habilitar drag em todos os elementos com classe flow-step-block
-        // No jsPlumb 2.x, eventos podem ser registrados diretamente
-        setTimeout(() => {
-            this.instance.bind('connection', (info) => this.onConnectionCreated(info));
-            this.instance.bind('connectionDetached', (info) => this.onConnectionDetached(info));
-            this.instance.bind('connectionMoved', (info) => this.onConnectionMoved(info));
-            
-            // Habilitar remoção de conexão com duplo clique
-            this.instance.bind('click', (conn, originalEvent) => {
-                if (originalEvent.detail === 2) { // Duplo clique
-                    this.removeConnection(conn);
-                }
-            });
-            
-            // Habilitar remoção com botão direito
-            this.instance.bind('contextmenu', (conn, originalEvent) => {
-                originalEvent.preventDefault();
-                this.removeConnection(conn);
-            });
-            
-            console.log('✅ jsPlumb inicializado');
-        }, 100);
+        // Configurar canvas
+        this.setupCanvas();
         
         // Renderizar steps existentes
         this.renderAllSteps();
         
-        // Habilitar zoom com scroll
+        // Habilitar interações
         this.enableZoom();
-        
-        // Habilitar seleção ao clicar
+        this.enablePan();
         this.enableSelection();
     }
     
     /**
-     * Habilita zoom com scroll do mouse
+     * Configura o canvas com grid background
+     */
+    setupCanvas() {
+        if (!this.canvas) return;
+        
+        // Aplicar estilo do canvas
+        this.canvas.style.background = '#0D0F15';
+        this.canvas.style.backgroundImage = `
+            linear-gradient(#1c1f27 1px, transparent 1px),
+            linear-gradient(90deg, #1c1f27 1px, transparent 1px)
+        `;
+        this.canvas.style.backgroundSize = `${this.gridSize}px ${this.gridSize}px`;
+        this.canvas.style.backgroundPosition = '0 0';
+    }
+    
+    /**
+     * Habilita zoom com scroll
      */
     enableZoom() {
         if (!this.canvas) return;
         
         this.canvas.addEventListener('wheel', (e) => {
-            // Zoom com Ctrl/Cmd + Scroll
             if (e.ctrlKey || e.metaKey) {
                 e.preventDefault();
                 const delta = e.deltaY > 0 ? 0.9 : 1.1;
@@ -180,13 +178,11 @@ class FlowEditor {
      * Aplica zoom ao canvas
      */
     applyZoom() {
-        if (!this.instance || !this.canvas) return;
+        if (!this.canvas) return;
         
-        // Aplicar zoom no canvas diretamente
         this.canvas.style.transform = `scale(${this.zoomLevel})`;
         this.canvas.style.transformOrigin = 'top left';
         
-        // Repintar jsPlumb após zoom
         setTimeout(() => {
             if (this.instance) {
                 this.instance.repaintEverything();
@@ -219,16 +215,59 @@ class FlowEditor {
     }
     
     /**
-     * Habilita seleção visual ao clicar
+     * Habilita pan (arrastar canvas)
+     */
+    enablePan() {
+        if (!this.canvas) return;
+        
+        this.canvas.addEventListener('mousedown', (e) => {
+            if (e.button === 1 || (e.button === 0 && e.altKey)) {
+                e.preventDefault();
+                this.isPanning = true;
+                this.lastPanPoint = { x: e.clientX, y: e.clientY };
+                this.canvas.style.cursor = 'grabbing';
+            }
+        });
+        
+        this.canvas.addEventListener('mousemove', (e) => {
+            if (this.isPanning) {
+                e.preventDefault();
+                const dx = e.clientX - this.lastPanPoint.x;
+                const dy = e.clientY - this.lastPanPoint.y;
+                this.pan.x += dx;
+                this.pan.y += dy;
+                this.lastPanPoint = { x: e.clientX, y: e.clientY };
+                this.updateCanvasTransform();
+            }
+        });
+        
+        this.canvas.addEventListener('mouseup', () => {
+            this.isPanning = false;
+            this.canvas.style.cursor = 'grab';
+        });
+        
+        this.canvas.addEventListener('mouseleave', () => {
+            this.isPanning = false;
+            this.canvas.style.cursor = 'grab';
+        });
+    }
+    
+    /**
+     * Atualiza transform do canvas (zoom + pan)
+     */
+    updateCanvasTransform() {
+        if (!this.canvas) return;
+        this.canvas.style.transform = `translate(${this.pan.x}px, ${this.pan.y}px) scale(${this.zoomLevel})`;
+    }
+    
+    /**
+     * Habilita seleção visual
      */
     enableSelection() {
         if (!this.canvas) return;
         
         this.canvas.addEventListener('click', (e) => {
-            // Ignorar cliques em botões
-            if (e.target.closest('button')) {
-                return;
-            }
+            if (e.target.closest('button')) return;
             
             const stepElement = e.target.closest('.flow-step-block');
             if (stepElement) {
@@ -243,7 +282,6 @@ class FlowEditor {
      * Seleciona um step
      */
     selectStep(stepId) {
-        // Deselecionar anterior
         this.deselectStep();
         
         const element = this.steps.get(String(stepId));
@@ -267,7 +305,7 @@ class FlowEditor {
     }
     
     /**
-     * Renderiza todos os steps do fluxo
+     * Renderiza todos os steps
      */
     renderAllSteps() {
         if (!this.alpine || !this.alpine.config || !this.alpine.config.flow_steps) {
@@ -275,19 +313,13 @@ class FlowEditor {
         }
         
         const steps = this.alpine.config.flow_steps;
-        
-        // Limpar canvas
         this.clearCanvas();
         
-        // Renderizar cada step
         steps.forEach(step => {
             this.renderStep(step);
         });
         
-        // Reconectar todas as conexões
         this.reconnectAll();
-        
-        console.log(`✅ ${steps.length} steps renderizados`);
     }
     
     /**
@@ -303,34 +335,28 @@ class FlowEditor {
         const stepType = step.type || 'message';
         const stepConfig = step.config || {};
         
-        // Verificar se já existe
         if (this.steps.has(stepId)) {
             this.updateStep(step);
             return;
         }
         
-        // Criar elemento DOM
         const stepElement = document.createElement('div');
         stepElement.id = `step-${stepId}`;
         stepElement.className = 'flow-step-block';
         stepElement.dataset.stepId = stepId;
         
-        // Posição (restaurar ou padrão)
         const position = step.position || { x: 100, y: 100 };
         stepElement.style.left = `${position.x}px`;
         stepElement.style.top = `${position.y}px`;
         
-        // Cor e ícone
         const color = this.stepColors[stepType] || '#6B7280';
         const icon = this.stepIcons[stepType] || 'fa-circle';
-        
-        // Verificar se é step inicial
         const isStartStep = this.alpine.config.flow_start_step_id === stepId;
         
-        // HTML do bloco
+        // HTML do bloco (Dashboard Style)
         stepElement.innerHTML = `
-            <div class="flow-step-header" style="background: ${color};">
-                <div class="flow-step-icon">
+            <div class="flow-step-header" style="border-left: 3px solid ${color};">
+                <div class="flow-step-icon" style="background: ${color}20; color: ${color};">
                     <i class="fas ${icon}"></i>
                 </div>
                 <div class="flow-step-title">
@@ -354,13 +380,12 @@ class FlowEditor {
             </div>
         `;
         
-        // Adicionar ao canvas
         this.canvas.appendChild(stepElement);
         
         // Tornar arrastável
         this.instance.draggable(stepElement, {
             containment: 'parent',
-            grid: [10, 10],
+            grid: this.snapToGrid ? [this.gridSize, this.gridSize] : false,
             drag: (params) => this.onStepDrag(params),
             stop: (params) => this.onStepDragStop(params)
         });
@@ -368,10 +393,8 @@ class FlowEditor {
         // Adicionar endpoints
         this.addEndpoints(stepElement, stepId);
         
-        // Salvar referência
         this.steps.set(stepId, stepElement);
         
-        // Aplicar estilo de highlight se for step inicial
         if (isStartStep) {
             stepElement.classList.add('flow-step-initial');
         }
@@ -389,18 +412,15 @@ class FlowEditor {
             return;
         }
         
-        // Atualizar posição se mudou
         const position = step.position || { x: 100, y: 100 };
         element.style.left = `${position.x}px`;
         element.style.top = `${position.y}px`;
         
-        // Atualizar preview
         const previewEl = element.querySelector('.flow-step-preview');
         if (previewEl) {
             previewEl.innerHTML = this.getStepPreview(step);
         }
         
-        // Atualizar highlight de step inicial
         const isStartStep = this.alpine.config.flow_start_step_id === stepId;
         if (isStartStep) {
             element.classList.add('flow-step-initial');
@@ -410,51 +430,47 @@ class FlowEditor {
     }
     
     /**
-     * Adiciona endpoints (pontos de conexão) ao step
+     * Adiciona endpoints ao step
      */
     addEndpoints(element, stepId) {
-        // Endpoint superior (entrada) - verde
+        // Endpoint superior (entrada)
         this.instance.addEndpoint(element, {
             uuid: `endpoint-top-${stepId}`,
             anchor: 'Top',
             maxConnections: -1,
             isSource: false,
             isTarget: true,
-            endpoint: ['Dot', { radius: 8 }],
+            endpoint: ['Dot', { radius: 6 }],
             paintStyle: { fill: '#10B981', outlineStroke: '#FFFFFF', outlineWidth: 2 },
             hoverPaintStyle: { fill: '#34D399', outlineStroke: '#FFFFFF', outlineWidth: 3 }
         });
         
-        // Endpoint inferior (saída) - vermelho
+        // Endpoint inferior (saída)
         this.instance.addEndpoint(element, {
             uuid: `endpoint-bottom-${stepId}`,
             anchor: 'Bottom',
             maxConnections: -1,
             isSource: true,
             isTarget: false,
-            endpoint: ['Dot', { radius: 8 }],
+            endpoint: ['Dot', { radius: 6 }],
             paintStyle: { fill: '#EF4444', outlineStroke: '#FFFFFF', outlineWidth: 2 },
             hoverPaintStyle: { fill: '#F87171', outlineStroke: '#FFFFFF', outlineWidth: 3 }
         });
     }
     
     /**
-     * Reconecta todas as conexões baseado nos dados do Alpine
+     * Reconecta todas as conexões
      */
     reconnectAll() {
         if (!this.alpine || !this.alpine.config || !this.alpine.config.flow_steps) {
             return;
         }
         
-        // Limpar conexões existentes
         this.instance.deleteEveryConnection();
         this.connections.clear();
         
-        // Reconectar baseado nos dados
         const steps = this.alpine.config.flow_steps;
-        if (!Array.isArray(steps)) {
-            return;
-        }
+        if (!Array.isArray(steps)) return;
         
         steps.forEach(step => {
             if (!step || !step.id) return;
@@ -462,13 +478,8 @@ class FlowEditor {
             const stepId = String(step.id);
             const connections = step.connections || {};
             
-            // Verificar se step existe no DOM antes de conectar
-            if (!this.steps.has(stepId)) {
-                console.warn(`⚠️ Step ${stepId} não renderizado ainda - pulando conexões`);
-                return;
-            }
+            if (!this.steps.has(stepId)) return;
             
-            // Conexão 'next'
             if (connections.next) {
                 const targetId = String(connections.next);
                 if (this.steps.has(targetId)) {
@@ -476,7 +487,6 @@ class FlowEditor {
                 }
             }
             
-            // Conexão 'pending'
             if (connections.pending) {
                 const targetId = String(connections.pending);
                 if (this.steps.has(targetId)) {
@@ -484,7 +494,6 @@ class FlowEditor {
                 }
             }
             
-            // Conexão 'retry'
             if (connections.retry) {
                 const targetId = String(connections.retry);
                 if (this.steps.has(targetId)) {
@@ -501,24 +510,15 @@ class FlowEditor {
         const sourceId = String(sourceStepId);
         const targetId = String(targetStepId);
         
-        // Validar que não é a mesma step
-        if (sourceId === targetId) {
-            console.warn(`⚠️ Tentativa de conectar step consigo mesmo: ${sourceId}`);
-            return null;
-        }
+        if (sourceId === targetId) return null;
         
         const sourceElement = this.steps.get(sourceId);
         const targetElement = this.steps.get(targetId);
         
-        if (!sourceElement || !targetElement) {
-            console.warn(`⚠️ Step não encontrado para conexão: ${sourceId} → ${targetId}`);
-            return null;
-        }
+        if (!sourceElement || !targetElement) return null;
         
-        // Verificar se conexão já existe
         const connId = `${sourceId}-${targetId}-${connectionType}`;
         if (this.connections.has(connId)) {
-            console.debug(`ℹ️ Conexão já existe: ${connId}`);
             return this.connections.get(connId);
         }
         
@@ -537,12 +537,14 @@ class FlowEditor {
                         location: 0.5,
                         cssClass: 'connection-label',
                         labelStyle: {
-                            color: color,
-                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                            padding: '2px 6px',
-                            borderRadius: '4px',
+                            color: '#FFFFFF',
+                            backgroundColor: '#0D0F15',
+                            border: '1px solid #242836',
+                            padding: '4px 8px',
+                            borderRadius: '6px',
                             fontSize: '10px',
-                            fontWeight: 'bold'
+                            fontWeight: '600',
+                            fontFamily: 'Inter, sans-serif'
                         }
                     }]
                 ],
@@ -556,21 +558,6 @@ class FlowEditor {
             if (connection) {
                 this.connections.set(connId, connection);
                 
-                // Adicionar classe para animação
-            // Adicionar animação de conexão (se possível)
-            try {
-                const overlays = connection.getOverlays();
-                if (overlays && overlays.length > 0) {
-                    // Adicionar classe de animação via CSS
-                    setTimeout(() => {
-                        this.instance.repaint(connection);
-                    }, 10);
-                }
-            } catch (e) {
-                // Ignorar erros de animação
-            }
-                
-                // Atualizar dados no Alpine (apenas se não existir)
                 const step = this.alpine?.config?.flow_steps?.find(s => String(s.id) === sourceId);
                 if (step && (!step.connections || !step.connections[connectionType])) {
                     this.updateAlpineConnection(sourceId, targetId, connectionType);
@@ -579,7 +566,7 @@ class FlowEditor {
             
             return connection;
         } catch (error) {
-            console.error(`❌ Erro ao criar conexão ${sourceId} → ${targetId}:`, error);
+            console.error(`❌ Erro ao criar conexão:`, error);
             return null;
         }
     }
@@ -613,7 +600,6 @@ class FlowEditor {
         if (data) {
             const { sourceStepId, targetStepId, connectionType } = data;
             
-            // Remover do Alpine
             if (this.alpine && this.alpine.config && this.alpine.config.flow_steps) {
                 const steps = this.alpine.config.flow_steps;
                 const sourceStep = steps.find(s => String(s.id) === String(sourceStepId));
@@ -623,12 +609,10 @@ class FlowEditor {
                 }
             }
             
-            // Remover do Map
             const connId = `${sourceStepId}-${targetStepId}-${connectionType}`;
             this.connections.delete(connId);
         }
         
-        // Remover do jsPlumb
         this.instance.deleteConnection(connection);
     }
     
@@ -639,17 +623,13 @@ class FlowEditor {
         const sourceUuid = info.sourceId || info.source?.getUuid?.();
         const targetUuid = info.targetId || info.target?.getUuid?.();
         
-        // Extrair step IDs dos UUIDs dos endpoints
         const sourceStepId = sourceUuid ? sourceUuid.replace('endpoint-bottom-', '').replace('endpoint-top-', '') : null;
         const targetStepId = targetUuid ? targetUuid.replace('endpoint-bottom-', '').replace('endpoint-top-', '') : null;
         
         if (sourceStepId && targetStepId && sourceUuid?.includes('bottom') && targetUuid?.includes('top')) {
-            // Conexão criada via drag - determinar tipo (por padrão 'next')
-            // O usuário pode editar depois no modal
             const connectionType = 'next';
             this.updateAlpineConnection(sourceStepId, targetStepId, connectionType);
             
-            // Atualizar visual da conexão
             if (info.connection) {
                 const color = this.connectionColors[connectionType] || '#10B981';
                 const label = this.getConnectionLabel(connectionType);
@@ -657,22 +637,22 @@ class FlowEditor {
                 info.connection.setPaintStyle({ stroke: color, strokeWidth: 2 });
                 info.connection.setHoverPaintStyle({ stroke: color, strokeWidth: 3 });
                 
-                // Adicionar label
                 info.connection.setLabel({
                     label: label,
                     location: 0.5,
                     cssClass: 'connection-label',
                     labelStyle: {
-                        color: color,
-                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                        padding: '2px 6px',
-                        borderRadius: '4px',
+                        color: '#FFFFFF',
+                        backgroundColor: '#0D0F15',
+                        border: '1px solid #242836',
+                        padding: '4px 8px',
+                        borderRadius: '6px',
                         fontSize: '10px',
-                        fontWeight: 'bold'
+                        fontWeight: '600',
+                        fontFamily: 'Inter, sans-serif'
                     }
                 });
                 
-                // Salvar dados da conexão
                 info.connection.setData({
                     sourceStepId: sourceStepId,
                     targetStepId: targetStepId,
@@ -690,13 +670,6 @@ class FlowEditor {
      */
     onConnectionDetached(info) {
         // Já tratado em removeConnection
-    }
-    
-    /**
-     * Callback quando conexão é movida
-     */
-    onConnectionMoved(info) {
-        // Atualizar se necessário
     }
     
     /**
@@ -721,15 +694,19 @@ class FlowEditor {
         if (stepId) {
             element.classList.remove('dragging');
             
-            // Salvar posição no Alpine
             const rect = element.getBoundingClientRect();
             const canvasRect = this.canvas.getBoundingClientRect();
             
-            const position = {
-                x: rect.left - canvasRect.left,
-                y: rect.top - canvasRect.top
-            };
+            let x = rect.left - canvasRect.left;
+            let y = rect.top - canvasRect.top;
             
+            // Snap to grid se habilitado
+            if (this.snapToGrid) {
+                x = Math.round(x / this.gridSize) * this.gridSize;
+                y = Math.round(y / this.gridSize) * this.gridSize;
+            }
+            
+            const position = { x: Math.round(x), y: Math.round(y) };
             this.updateStepPosition(stepId, position);
         }
     }
@@ -749,8 +726,8 @@ class FlowEditor {
             if (!step.position) {
                 step.position = {};
             }
-            step.position.x = Math.round(position.x);
-            step.position.y = Math.round(position.y);
+            step.position.x = position.x;
+            step.position.y = position.y;
         }
     }
     
@@ -758,7 +735,7 @@ class FlowEditor {
      * Remove um step
      */
     deleteStep(stepId) {
-        if (!confirm(`Tem certeza que deseja remover este step?`)) {
+        if (!confirm('Tem certeza que deseja remover este step?')) {
             return;
         }
         
@@ -766,9 +743,8 @@ class FlowEditor {
         const element = this.steps.get(id);
         
         if (element) {
-            // Remover todas as conexões relacionadas
             const connectionsToRemove = [];
-            this.connections.forEach((conn, connId) => {
+            this.connections.forEach((conn) => {
                 const data = conn.getData();
                 if (data && (data.sourceStepId === id || data.targetStepId === id)) {
                     connectionsToRemove.push(conn);
@@ -779,16 +755,10 @@ class FlowEditor {
                 this.removeConnection(conn);
             });
             
-            // Remover do jsPlumb
             this.instance.remove(element);
-            
-            // Remover do DOM
             element.remove();
-            
-            // Remover do Map
             this.steps.delete(id);
             
-            // Remover do Alpine
             if (this.alpine && this.alpine.config && this.alpine.config.flow_steps) {
                 const steps = this.alpine.config.flow_steps;
                 const index = steps.findIndex(s => String(s.id) === id);
@@ -796,13 +766,10 @@ class FlowEditor {
                     steps.splice(index, 1);
                 }
                 
-                // Limpar step inicial se for este
                 if (this.alpine.config.flow_start_step_id === id) {
                     this.alpine.config.flow_start_step_id = null;
                 }
             }
-            
-            console.log(`✅ Step ${id} removido`);
         }
     }
     
@@ -812,7 +779,7 @@ class FlowEditor {
     setStartStep(stepId) {
         if (this.alpine && this.alpine.config) {
             this.alpine.config.flow_start_step_id = String(stepId);
-            this.renderAllSteps(); // Re-renderizar para atualizar highlight
+            this.renderAllSteps();
         }
     }
     
@@ -829,7 +796,7 @@ class FlowEditor {
      * Limpa o canvas
      */
     clearCanvas() {
-        this.steps.forEach((element, stepId) => {
+        this.steps.forEach((element) => {
             this.instance.remove(element);
             element.remove();
         });
@@ -885,7 +852,11 @@ class FlowEditor {
     destroy() {
         this.clearCanvas();
         if (this.instance) {
-            this.instance.destroy();
+            try {
+                this.instance.destroy();
+            } catch (e) {
+                // Ignorar erros de destroy
+            }
             this.instance = null;
         }
     }
@@ -893,4 +864,3 @@ class FlowEditor {
 
 // Exportar para uso global
 window.FlowEditor = FlowEditor;
-
