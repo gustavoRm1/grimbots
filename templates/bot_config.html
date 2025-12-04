@@ -692,15 +692,17 @@ body {
             </div>
             
             <!-- Instruções -->
-            <div class="mb-6 p-4 bg-blue-500 bg-opacity-10 border border-blue-400 border-opacity-30 rounded-lg">
+            <div class="mb-6 p-4 rounded-lg border-2" style="background: rgba(59, 130, 246, 0.15); border-color: #3B82F6; box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);">
                 <div class="flex items-start gap-3">
-                    <i class="fas fa-info-circle text-blue-400 text-xl mt-0.5"></i>
+                    <div class="flex-shrink-0 w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center" style="box-shadow: 0 0 15px rgba(59, 130, 246, 0.5);">
+                        <i class="fas fa-info-circle text-white text-lg"></i>
+                    </div>
                     <div class="flex-1">
-                        <h4 class="text-sm font-semibold text-blue-300 mb-2">Como obter URLs do Telegram:</h4>
-                        <ul class="text-xs text-blue-200 space-y-1 list-disc list-inside">
-                            <li>Envie a mídia/áudio para o bot @getidsbot ou @userinfobot</li>
-                            <li>Copie o <code class="bg-blue-500 bg-opacity-20 px-1 rounded">file_id</code> ou <code class="bg-blue-500 bg-opacity-20 px-1 rounded">file_unique_id</code></li>
-                            <li>Ou use links diretos do Telegram: <code class="bg-blue-500 bg-opacity-20 px-1 rounded">https://t.me/...</code></li>
+                        <h4 class="text-sm font-bold mb-3" style="color: #93C5FD; text-shadow: 0 0 10px rgba(147, 197, 253, 0.5);">Como obter URLs do Telegram:</h4>
+                        <ul class="text-xs space-y-2 list-disc list-inside" style="color: #DBEAFE;">
+                            <li class="font-semibold">Envie a mídia/áudio para o bot <strong style="color: #FFFFFF;">@getidsbot</strong> ou <strong style="color: #FFFFFF;">@userinfobot</strong></li>
+                            <li class="font-semibold">Copie o <code class="px-2 py-1 rounded font-mono font-bold" style="background: rgba(59, 130, 246, 0.3); color: #FFFFFF; border: 1px solid #3B82F6;">file_id</code> ou <code class="px-2 py-1 rounded font-mono font-bold" style="background: rgba(59, 130, 246, 0.3); color: #FFFFFF; border: 1px solid #3B82F6;">file_unique_id</code></li>
+                            <li class="font-semibold">Ou use links diretos do Telegram: <code class="px-2 py-1 rounded font-mono font-bold" style="background: rgba(59, 130, 246, 0.3); color: #FFFFFF; border: 1px solid #3B82F6;">https://t.me/...</code></li>
                         </ul>
                     </div>
                 </div>
@@ -726,33 +728,33 @@ body {
             </div>
 
             <div class="form-group">
-                <label class="form-label">Tipo de Mídia</label>
-                <select x-model="config.welcome_media_type" class="form-select">
-                    <option value="video">Vídeo</option>
-                    <option value="photo">Foto</option>
-                </select>
-                <p class="text-xs text-gray-500 mt-1">A mídia será enviada junto com a mensagem de boas-vindas</p>
-            </div>
-
-            <div class="form-group">
-                <label class="form-label">URL da Mídia</label>
+                <label class="form-label">URL da Mídia (Foto ou Vídeo)</label>
                 <div class="relative">
                     <input 
                         type="text" 
                         x-model="config.welcome_media_url" 
+                        @input="detectMediaType()"
                         class="form-input"
-                        placeholder="Cole aqui o file_id ou URL do Telegram..."
+                        placeholder="Cole aqui o file_id ou URL do Telegram (foto ou vídeo)..."
                         :class="{
                             'border-green-500': config.welcome_media_url && (config.welcome_media_url.startsWith('http') || config.welcome_media_url.length > 10),
                             'border-red-500': config.welcome_media_url && config.welcome_media_url.length > 0 && !config.welcome_media_url.startsWith('http') && config.welcome_media_url.length < 10
                         }"
                     />
-                    <i class="fas fa-check-circle absolute right-3 top-1/2 transform -translate-y-1/2 text-green-500" 
-                       x-show="config.welcome_media_url && (config.welcome_media_url.startsWith('http') || config.welcome_media_url.length > 10)"></i>
+                    <div class="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center gap-2">
+                        <span x-show="config.welcome_media_url && detectedMediaType" 
+                              class="text-xs font-semibold px-2 py-1 rounded"
+                              :class="detectedMediaType === 'video' ? 'bg-red-500 bg-opacity-20 text-red-300' : 'bg-blue-500 bg-opacity-20 text-blue-300'"
+                              x-text="detectedMediaType === 'video' ? '🎥 Vídeo' : '📷 Foto'"></span>
+                        <i class="fas fa-check-circle text-green-500" 
+                           x-show="config.welcome_media_url && (config.welcome_media_url.startsWith('http') || config.welcome_media_url.length > 10)"></i>
+                    </div>
                 </div>
                 <p class="text-xs text-gray-500 mt-1">
-                    <i class="fas fa-lightbulb"></i> Pode ser um <code class="bg-gray-800 px-1 rounded">file_id</code> do Telegram ou uma URL
+                    <i class="fas fa-magic"></i> O tipo (foto/vídeo) é detectado automaticamente pela URL ou extensão do arquivo
                 </p>
+                <!-- Campo hidden para o backend -->
+                <input type="hidden" x-model="config.welcome_media_type" />
             </div>
 
             <div class="form-group">
@@ -805,11 +807,14 @@ body {
                         <div x-show="config.welcome_media_url" class="bg-gray-900 rounded-lg p-4 border border-gray-600">
                             <div class="flex items-center gap-3">
                                 <div class="w-12 h-12 bg-purple-500 rounded-lg flex items-center justify-center flex-shrink-0">
-                                    <i :class="config.welcome_media_type === 'video' ? 'fas fa-video text-white' : 'fas fa-image text-white'"></i>
+                                    <i :class="(detectedMediaType || config.welcome_media_type) === 'video' ? 'fas fa-video text-white' : 'fas fa-image text-white'"></i>
                                 </div>
                                 <div class="flex-1">
-                                    <p class="text-sm text-white font-semibold" x-text="config.welcome_media_type === 'video' ? 'Vídeo' : 'Foto'"></p>
+                                    <p class="text-sm text-white font-semibold" x-text="(detectedMediaType || config.welcome_media_type) === 'video' ? 'Vídeo' : 'Foto'"></p>
                                     <p class="text-xs text-gray-400 truncate" x-text="config.welcome_media_url"></p>
+                                    <p class="text-xs text-blue-400 mt-1" x-show="detectedMediaType">
+                                        <i class="fas fa-magic"></i> Tipo detectado automaticamente
+                                    </p>
                                 </div>
                                 <i class="fas fa-check-circle text-green-400"></i>
                             </div>
@@ -850,10 +855,10 @@ body {
                         </span>
                     </div>
                     <div class="flex items-center gap-2">
-                        <i :class="config.welcome_media_type === 'video' ? 'fas fa-video' : 'fas fa-image'" 
+                        <i :class="(detectedMediaType || config.welcome_media_type) === 'video' ? 'fas fa-video' : 'fas fa-image'" 
                            :class="config.welcome_media_url ? 'text-green-400' : 'text-gray-500'"></i>
                         <span :class="config.welcome_media_url ? 'text-white' : 'text-gray-500'">
-                            Mídia: <strong x-text="config.welcome_media_url ? 'Configurada' : 'Não configurada'"></strong>
+                            Mídia: <strong x-text="config.welcome_media_url ? ((detectedMediaType || config.welcome_media_type) === 'video' ? 'Vídeo configurado' : 'Foto configurada') : 'Não configurada'"></strong>
                         </span>
                     </div>
                     <div class="flex items-center gap-2">
@@ -1740,6 +1745,62 @@ function botConfigApp() {
         showStepModal: false,
         editingStep: null,
         editingStepIndex: -1,
+        detectedMediaType: null,
+
+        detectMediaType() {
+            const url = this.config.welcome_media_url || '';
+            if (!url) {
+                this.detectedMediaType = null;
+                this.config.welcome_media_type = 'video'; // Default
+                return;
+            }
+
+            // Detectar por extensão de arquivo
+            const videoExtensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.m4v', '.3gp', '.flv'];
+            const photoExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg'];
+            
+            const urlLower = url.toLowerCase();
+            
+            // Verificar extensões de vídeo
+            if (videoExtensions.some(ext => urlLower.includes(ext) || urlLower.endsWith(ext))) {
+                this.detectedMediaType = 'video';
+                this.config.welcome_media_type = 'video';
+                return;
+            }
+            
+            // Verificar extensões de foto
+            if (photoExtensions.some(ext => urlLower.includes(ext) || urlLower.endsWith(ext))) {
+                this.detectedMediaType = 'photo';
+                this.config.welcome_media_type = 'photo';
+                return;
+            }
+            
+            // Verificar padrões de URL do Telegram
+            if (url.includes('video') || url.includes('Video')) {
+                this.detectedMediaType = 'video';
+                this.config.welcome_media_type = 'video';
+                return;
+            }
+            
+            if (url.includes('photo') || url.includes('Photo') || url.includes('image')) {
+                this.detectedMediaType = 'photo';
+                this.config.welcome_media_type = 'photo';
+                return;
+            }
+            
+            // Para file_id do Telegram, assumir vídeo como padrão (mais comum)
+            // O backend pode detectar automaticamente pelo file_id
+            if (url.length > 10 && !url.startsWith('http')) {
+                this.detectedMediaType = 'video'; // Default para file_id
+                this.config.welcome_media_type = 'video';
+                return;
+            }
+            
+            // Para URLs sem extensão clara, manter o tipo atual ou usar vídeo como padrão
+            if (!this.detectedMediaType) {
+                this.detectedMediaType = this.config.welcome_media_type || 'video';
+            }
+        },
 
         async init() {
             await this.loadConfig();
@@ -1763,6 +1824,11 @@ function botConfigApp() {
                     this.config.welcome_media_type = data.welcome_media_type || 'video';
                     this.config.welcome_audio_enabled = data.welcome_audio_enabled || false;
                     this.config.welcome_audio_url = data.welcome_audio_url || '';
+                    
+                    // Detectar tipo de mídia automaticamente ao carregar
+                    if (this.config.welcome_media_url) {
+                        this.detectMediaType();
+                    }
                     
                     const defaultSubscription = {
                         enabled: false,
