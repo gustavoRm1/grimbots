@@ -8938,8 +8938,8 @@ Seu pagamento ainda não foi confirmado.
                             logger.warning(f"⚠️ Preço {btn.get('text', 'Produto')} muito baixo após desconto, pulando")
                             continue
                         
-                        # Texto do botão: Nome + Percentual (sem mostrar valor)
-                        btn_text = f"🔥 {btn.get('text', 'Produto')} ({int(discount_percentage)}% OFF)"
+                        # Texto do botão: Nome + Valor com desconto + Percentual
+                        btn_text = f"{btn.get('text', 'Produto')} R${discounted_price:.2f} ({int(discount_percentage)}% OFF)"
                         
                         buttons.append({
                             'text': btn_text,
@@ -8974,7 +8974,9 @@ Seu pagamento ainda não foi confirmado.
                     
                     button_text = downsell.get('button_text', '').strip()
                     if not button_text:
-                        button_text = f'🛒 Comprar por R$ {price:.2f} ({int(discount_percentage)}% OFF)'
+                        # Se não tiver texto customizado, criar com valor e desconto
+                        product_name = downsell.get('product_name', 'Produto') or 'Produto'
+                        button_text = f'{product_name} R${price:.2f} ({int(discount_percentage)}% OFF)'
                     
                     buttons = [{
                         'text': button_text,
@@ -9387,8 +9389,8 @@ Seu pagamento ainda não foi confirmado.
                             logger.warning(f"⚠️ Preço {btn.get('text', 'Produto')} muito baixo após desconto, pulando")
                             continue
                         
-                        # Texto do botão: Nome + Percentual (sem mostrar valor)
-                        btn_text = f"🔥 {btn.get('text', 'Produto')} ({int(discount_percentage)}% OFF)"
+                        # Texto do botão: Nome + Valor com desconto + Percentual
+                        btn_text = f"{btn.get('text', 'Produto')} R${discounted_price:.2f} ({int(discount_percentage)}% OFF)"
                         
                         buttons.append({
                             'text': btn_text,
