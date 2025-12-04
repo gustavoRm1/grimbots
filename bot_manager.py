@@ -11,6 +11,7 @@ import json
 import subprocess
 import socket
 import urllib3.util.connection
+import re
 from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta
 from redis_manager import get_redis_connection
@@ -8938,8 +8939,15 @@ Seu pagamento ainda não foi confirmado.
                             logger.warning(f"⚠️ Preço {btn.get('text', 'Produto')} muito baixo após desconto, pulando")
                             continue
                         
-                        # Texto do botão: Nome + Valor com desconto + Percentual
-                        btn_text = f"{btn.get('text', 'Produto')} R${discounted_price:.2f} ({int(discount_percentage)}% OFF)"
+                        # Extrair apenas o nome do produto (remover valor se existir)
+                        original_btn_text = btn.get('text', 'Produto')
+                        # Remover padrões como "R$X.XX" ou "R$ X.XX" do texto original
+                        product_name = re.sub(r'\s*R\$\s*\d+[.,]\d+', '', original_btn_text).strip()
+                        if not product_name:
+                            product_name = 'Produto'
+                        
+                        # Texto do botão: Nome + Valor com desconto + Percentual (apenas valor com desconto)
+                        btn_text = f"{product_name} R${discounted_price:.2f} ({int(discount_percentage)}% OFF)"
                         
                         buttons.append({
                             'text': btn_text,
@@ -8972,11 +8980,19 @@ Seu pagamento ainda não foi confirmado.
                         logger.error(f"❌ Preço muito baixo (R$ {price:.2f}), mínimo R$ 0,50")
                         return
                     
-                    button_text = downsell.get('button_text', '').strip()
-                    if not button_text:
-                        # Se não tiver texto customizado, criar com valor e desconto
+                    # No modo percentual, sempre usar apenas o valor com desconto
+                    # Extrair nome do produto (remover valor se existir no button_text customizado)
+                    custom_button_text = downsell.get('button_text', '').strip()
+                    if custom_button_text:
+                        # Remover padrões como "R$X.XX" ou "R$ X.XX" do texto customizado
+                        product_name = re.sub(r'\s*R\$\s*\d+[.,]\d+', '', custom_button_text).strip()
+                        if not product_name:
+                            product_name = downsell.get('product_name', 'Produto') or 'Produto'
+                    else:
                         product_name = downsell.get('product_name', 'Produto') or 'Produto'
-                        button_text = f'{product_name} R${price:.2f} ({int(discount_percentage)}% OFF)'
+                    
+                    # Texto do botão: Nome + Valor com desconto + Percentual (apenas valor com desconto)
+                    button_text = f'{product_name} R${price:.2f} ({int(discount_percentage)}% OFF)'
                     
                     buttons = [{
                         'text': button_text,
@@ -9389,8 +9405,15 @@ Seu pagamento ainda não foi confirmado.
                             logger.warning(f"⚠️ Preço {btn.get('text', 'Produto')} muito baixo após desconto, pulando")
                             continue
                         
-                        # Texto do botão: Nome + Valor com desconto + Percentual
-                        btn_text = f"{btn.get('text', 'Produto')} R${discounted_price:.2f} ({int(discount_percentage)}% OFF)"
+                        # Extrair apenas o nome do produto (remover valor se existir)
+                        original_btn_text = btn.get('text', 'Produto')
+                        # Remover padrões como "R$X.XX" ou "R$ X.XX" do texto original
+                        product_name = re.sub(r'\s*R\$\s*\d+[.,]\d+', '', original_btn_text).strip()
+                        if not product_name:
+                            product_name = 'Produto'
+                        
+                        # Texto do botão: Nome + Valor com desconto + Percentual (apenas valor com desconto)
+                        btn_text = f"{product_name} R${discounted_price:.2f} ({int(discount_percentage)}% OFF)"
                         
                         buttons.append({
                             'text': btn_text,
