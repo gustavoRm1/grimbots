@@ -37,11 +37,11 @@ class FlowEditor {
         this.snapToGrid = false;
         this.gridSize = 20;
         
-        // Cores por tipo de conexão (Dashboard Style)
+        // Cores por tipo de conexão (White with Glow Style)
         this.connectionColors = {
-            next: '#10B981',      // Verde
-            pending: '#FACC15',   // Amarelo (FACC15 = mais próximo do padrão)
-            retry: '#EF4444'      // Vermelho
+            next: '#FFFFFF',      // Branco
+            pending: '#FFFFFF',   // Branco
+            retry: '#FFFFFF'      // Branco
         };
         
         // Cores por tipo de step (Dashboard Style)
@@ -89,15 +89,24 @@ class FlowEditor {
                 this.instance.setContainer(this.canvas);
             }
             
-            // Configurar defaults
+            // Configurar defaults (White Connections with Glow)
             if (typeof this.instance.importDefaults === 'function') {
                 this.instance.importDefaults({
-                    paintStyle: { stroke: '#10B981', strokeWidth: 2 },
-                    hoverPaintStyle: { stroke: '#34D399', strokeWidth: 3 },
-                    connector: ['Bezier', { curviness: 60, stub: [10, 15], gap: 5 }],
+                    paintStyle: { 
+                        stroke: '#FFFFFF', 
+                        strokeWidth: 2,
+                        strokeDasharray: '0',
+                        filter: 'drop-shadow(0 0 2px rgba(255, 255, 255, 0.5))'
+                    },
+                    hoverPaintStyle: { 
+                        stroke: '#FFFFFF', 
+                        strokeWidth: 3,
+                        filter: 'drop-shadow(0 0 4px rgba(255, 255, 255, 0.8))'
+                    },
+                    connector: ['Bezier', { curviness: 70, stub: [10, 15], gap: 5, cornerRadius: 5 }],
                     endpoint: ['Dot', { radius: 6 }],
-                    endpointStyle: { fill: '#10B981', outlineStroke: '#FFFFFF', outlineWidth: 2 },
-                    endpointHoverStyle: { fill: '#34D399', outlineStroke: '#FFFFFF', outlineWidth: 3 },
+                    endpointStyle: { fill: '#FFFFFF', outlineStroke: '#0D0F15', outlineWidth: 2 },
+                    endpointHoverStyle: { fill: '#FFFFFF', outlineStroke: '#0D0F15', outlineWidth: 3 },
                     anchors: ['Top', 'Bottom'],
                     maxConnections: -1
                 });
@@ -143,16 +152,16 @@ class FlowEditor {
     }
     
     /**
-     * Configura o canvas com grid background
+     * Configura o canvas com grid background (pontos translúcidos)
      */
     setupCanvas() {
         if (!this.canvas) return;
         
-        // Aplicar estilo do canvas
+        // Aplicar estilo do canvas com pontos translúcidos
         this.canvas.style.background = '#0D0F15';
+        // Grid com pontos brancos translúcidos (usando radial-gradient)
         this.canvas.style.backgroundImage = `
-            linear-gradient(#1c1f27 1px, transparent 1px),
-            linear-gradient(90deg, #1c1f27 1px, transparent 1px)
+            radial-gradient(circle, rgba(255, 255, 255, 0.15) 1px, transparent 1px)
         `;
         this.canvas.style.backgroundSize = `${this.gridSize}px ${this.gridSize}px`;
         this.canvas.style.backgroundPosition = '0 0';
@@ -215,17 +224,25 @@ class FlowEditor {
     }
     
     /**
-     * Habilita pan (arrastar canvas)
+     * Habilita pan (arrastar canvas) - Botão direito
      */
     enablePan() {
         if (!this.canvas) return;
         
         this.canvas.addEventListener('mousedown', (e) => {
-            if (e.button === 1 || (e.button === 0 && e.altKey)) {
+            // Pan com botão direito (button === 2) ou botão do meio (button === 1)
+            if (e.button === 2 || e.button === 1 || (e.button === 0 && e.altKey)) {
                 e.preventDefault();
                 this.isPanning = true;
                 this.lastPanPoint = { x: e.clientX, y: e.clientY };
                 this.canvas.style.cursor = 'grabbing';
+            }
+        });
+        
+        // Prevenir menu de contexto no botão direito
+        this.canvas.addEventListener('contextmenu', (e) => {
+            if (e.button === 2) {
+                e.preventDefault();
             }
         });
         
@@ -353,16 +370,18 @@ class FlowEditor {
         const icon = this.stepIcons[stepType] || 'fa-circle';
         const isStartStep = this.alpine.config.flow_start_step_id === stepId;
         
-        // HTML do bloco (Dashboard Style)
+        // HTML do bloco (Red Header Style - ManyChat/Make.com)
         stepElement.innerHTML = `
-            <div class="flow-step-header" style="border-left: 3px solid ${color};">
-                <div class="flow-step-icon" style="background: ${color}20; color: ${color};">
-                    <i class="fas ${icon}"></i>
+            <div class="flow-step-header">
+                <div class="flow-step-header-content">
+                    <div class="flow-step-icon-center">
+                        <i class="fas fa-video" style="color: #FFFFFF;"></i>
+                    </div>
+                    <div class="flow-step-title-center">
+                        ${this.getStepTypeLabel(stepType)}
+                    </div>
+                    ${isStartStep ? '<div class="flow-step-start-badge">⭐</div>' : ''}
                 </div>
-                <div class="flow-step-title">
-                    ${this.getStepTypeLabel(stepType)}
-                </div>
-                ${isStartStep ? '<div class="flow-step-start-badge">⭐</div>' : ''}
             </div>
             <div class="flow-step-body">
                 <div class="flow-step-preview">
@@ -370,24 +389,38 @@ class FlowEditor {
                 </div>
             </div>
             <div class="flow-step-footer">
-                <button class="flow-step-btn-edit" onclick="window.flowEditor?.editStep('${stepId}')" title="Editar">
+                <button class="flow-step-btn-action" onclick="window.flowEditor?.editStep('${stepId}')" title="Editar">
                     <i class="fas fa-edit"></i>
                 </button>
-                <button class="flow-step-btn-delete" onclick="window.flowEditor?.deleteStep('${stepId}')" title="Remover">
+                <button class="flow-step-btn-action" onclick="window.flowEditor?.deleteStep('${stepId}')" title="Remover">
                     <i class="fas fa-trash"></i>
                 </button>
-                ${!isStartStep ? `<button class="flow-step-btn-start" onclick="window.flowEditor?.setStartStep('${stepId}')" title="Definir como inicial">⭐</button>` : ''}
+                ${!isStartStep ? `<button class="flow-step-btn-action" onclick="window.flowEditor?.setStartStep('${stepId}')" title="Definir como inicial">⭐</button>` : ''}
             </div>
         `;
         
         this.canvas.appendChild(stepElement);
         
-        // Tornar arrastável
+        // Tornar arrastável (Drag suave e fluido)
         this.instance.draggable(stepElement, {
             containment: 'parent',
             grid: this.snapToGrid ? [this.gridSize, this.gridSize] : false,
-            drag: (params) => this.onStepDrag(params),
-            stop: (params) => this.onStepDragStop(params)
+            drag: (params) => {
+                this.onStepDrag(params);
+                // Repintar conexões durante o drag para suavidade
+                if (this.instance) {
+                    this.instance.repaint(params.el);
+                }
+            },
+            stop: (params) => {
+                this.onStepDragStop(params);
+                // Repintar todas as conexões após parar
+                if (this.instance) {
+                    this.instance.repaintEverything();
+                }
+            },
+            cursor: 'move',
+            zIndex: 1000
         });
         
         // Adicionar endpoints
@@ -433,7 +466,7 @@ class FlowEditor {
      * Adiciona endpoints ao step
      */
     addEndpoints(element, stepId) {
-        // Endpoint superior (entrada)
+        // Endpoint superior (entrada) - Branco
         this.instance.addEndpoint(element, {
             uuid: `endpoint-top-${stepId}`,
             anchor: 'Top',
@@ -441,11 +474,11 @@ class FlowEditor {
             isSource: false,
             isTarget: true,
             endpoint: ['Dot', { radius: 6 }],
-            paintStyle: { fill: '#10B981', outlineStroke: '#FFFFFF', outlineWidth: 2 },
-            hoverPaintStyle: { fill: '#34D399', outlineStroke: '#FFFFFF', outlineWidth: 3 }
+            paintStyle: { fill: '#FFFFFF', outlineStroke: '#0D0F15', outlineWidth: 2 },
+            hoverPaintStyle: { fill: '#FFFFFF', outlineStroke: '#0D0F15', outlineWidth: 3 }
         });
         
-        // Endpoint inferior (saída)
+        // Endpoint inferior (saída) - Branco
         this.instance.addEndpoint(element, {
             uuid: `endpoint-bottom-${stepId}`,
             anchor: 'Bottom',
@@ -453,8 +486,8 @@ class FlowEditor {
             isSource: true,
             isTarget: false,
             endpoint: ['Dot', { radius: 6 }],
-            paintStyle: { fill: '#EF4444', outlineStroke: '#FFFFFF', outlineWidth: 2 },
-            hoverPaintStyle: { fill: '#F87171', outlineStroke: '#FFFFFF', outlineWidth: 3 }
+            paintStyle: { fill: '#FFFFFF', outlineStroke: '#0D0F15', outlineWidth: 2 },
+            hoverPaintStyle: { fill: '#FFFFFF', outlineStroke: '#0D0F15', outlineWidth: 3 }
         });
     }
     
@@ -522,20 +555,28 @@ class FlowEditor {
             return this.connections.get(connId);
         }
         
-        const color = this.connectionColors[connectionType] || '#10B981';
+        const color = this.connectionColors[connectionType] || '#FFFFFF';
         const label = this.getConnectionLabel(connectionType);
         
         try {
             const connection = this.instance.connect({
                 source: `endpoint-bottom-${sourceId}`,
                 target: `endpoint-top-${targetId}`,
-                paintStyle: { stroke: color, strokeWidth: 2 },
-                hoverPaintStyle: { stroke: color, strokeWidth: 3 },
+                paintStyle: { 
+                    stroke: '#FFFFFF', 
+                    strokeWidth: 2,
+                    filter: 'drop-shadow(0 0 2px rgba(255, 255, 255, 0.5))'
+                },
+                hoverPaintStyle: { 
+                    stroke: '#FFFFFF', 
+                    strokeWidth: 3,
+                    filter: 'drop-shadow(0 0 4px rgba(255, 255, 255, 0.8))'
+                },
                 overlays: [
                     ['Label', {
                         label: label,
                         location: 0.5,
-                        cssClass: 'connection-label',
+                        cssClass: 'connection-label-white',
                         labelStyle: {
                             color: '#FFFFFF',
                             backgroundColor: '#0D0F15',
@@ -631,16 +672,24 @@ class FlowEditor {
             this.updateAlpineConnection(sourceStepId, targetStepId, connectionType);
             
             if (info.connection) {
-                const color = this.connectionColors[connectionType] || '#10B981';
+                const color = '#FFFFFF';
                 const label = this.getConnectionLabel(connectionType);
                 
-                info.connection.setPaintStyle({ stroke: color, strokeWidth: 2 });
-                info.connection.setHoverPaintStyle({ stroke: color, strokeWidth: 3 });
+                info.connection.setPaintStyle({ 
+                    stroke: color, 
+                    strokeWidth: 2,
+                    filter: 'drop-shadow(0 0 2px rgba(255, 255, 255, 0.5))'
+                });
+                info.connection.setHoverPaintStyle({ 
+                    stroke: color, 
+                    strokeWidth: 3,
+                    filter: 'drop-shadow(0 0 4px rgba(255, 255, 255, 0.8))'
+                });
                 
                 info.connection.setLabel({
                     label: label,
                     location: 0.5,
-                    cssClass: 'connection-label',
+                    cssClass: 'connection-label-white',
                     labelStyle: {
                         color: '#FFFFFF',
                         backgroundColor: '#0D0F15',
