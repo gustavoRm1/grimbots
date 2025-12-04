@@ -657,9 +657,6 @@ body {
         <button @click="activeTab = 'buttons'" :class="{'active': activeTab === 'buttons'}" class="tab">
             <i class="fas fa-mouse-pointer"></i> Botões Principais
         </button>
-        <button @click="activeTab = 'order_bumps'" :class="{'active': activeTab === 'order_bumps'}" class="tab">
-            <i class="fas fa-plus-circle"></i> Order Bumps
-        </button>
         <button @click="activeTab = 'subscriptions'" :class="{'active': activeTab === 'subscriptions'}" class="tab">
             <i class="fas fa-crown"></i> Assinaturas
         </button>
@@ -891,38 +888,6 @@ body {
                         </div>
                     </div>
                 </template>
-            </div>
-        </div>
-
-        <!-- Order Bumps Tab -->
-        <div x-show="activeTab === 'order_bumps'" class="config-section">
-            <div class="config-section-header">
-                <h2 class="config-section-title">Order Bumps Disponíveis</h2>
-            </div>
-            <p class="text-gray-400 mb-4">Order bumps são gerenciados dentro de cada botão principal. Aqui você pode visualizar todos os order bumps criados.</p>
-            
-            <div class="space-y-4">
-                <template x-for="(bump, index) in getAvailableOrderBumps()" :key="index">
-                    <div class="border border-gray-700 rounded-lg p-4">
-                        <div class="flex justify-between items-center mb-2">
-                            <h3 class="text-md font-semibold text-white">
-                                <span x-text="bump.buttonText"></span> - Order Bump <span x-text="bump.bumpIndex + 1"></span>
-                            </h3>
-                            <span class="text-sm" :class="bump.enabled ? 'text-green-400' : 'text-gray-400'">
-                                <i :class="bump.enabled ? 'fas fa-check-circle' : 'fas fa-times-circle'"></i>
-                                <span x-text="bump.enabled ? 'Habilitado' : 'Desabilitado'"></span>
-                            </span>
-                        </div>
-                        <p class="text-sm text-gray-400 mb-2" x-text="bump.message || 'Sem mensagem'"></p>
-                        <p class="text-sm text-yellow-400" x-show="bump.price">
-                            Preço: R$ <span x-text="bump.price"></span>
-                        </p>
-                    </div>
-                </template>
-                <div x-show="getAvailableOrderBumps().length === 0" class="text-center py-8 text-gray-400">
-                    <i class="fas fa-info-circle text-2xl mb-2"></i>
-                    <p>Nenhum order bump criado ainda. Adicione order bumps nos botões principais.</p>
-                </div>
             </div>
         </div>
 
@@ -2318,24 +2283,6 @@ function botConfigApp() {
         getAvailableStepsForConnection(currentStepId) {
             if (!this.config.flow_steps) return [];
             return this.config.flow_steps.filter(step => String(step.id) !== String(currentStepId));
-        },
-
-        getAvailableOrderBumps() {
-            if (!this.config.main_buttons) return [];
-            const allBumps = [];
-            this.config.main_buttons.forEach((button, btnIndex) => {
-                if (button.order_bumps) {
-                    button.order_bumps.forEach((bump, bumpIndex) => {
-                        allBumps.push({
-                            buttonIndex: btnIndex,
-                            bumpIndex: bumpIndex,
-                            buttonText: button.text || 'Botão sem nome',
-                            ...bump
-                        });
-                    });
-                }
-            });
-            return allBumps;
         },
 
         getWelcomeMessageLength() {
