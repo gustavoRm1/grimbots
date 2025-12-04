@@ -4,11 +4,11 @@
 {% block extra_head %}
 <style>
 /* ============================================
-   FLOW EDITOR V3.0 - CSS CONSOLIDADO E OTIMIZADO
-   Design System: Red Header #E02727, Body #0F0F14, White Connections
+   BOT CONFIG - CSS COMPLETO
+   Design System: Dashboard Dark Theme
    ============================================ */
 
-/* Canvas Background - Grid Premium com pontos translúcidos */
+/* CSS do Flow Editor V3.0 */
 #flow-visual-canvas {
     background: #0D0F15 !important;
     background-image: 
@@ -32,7 +32,6 @@
     -webkit-user-select: text !important;
 }
 
-/* Steps Blocks - Red Header Style Premium */
 .flow-step-block {
     position: absolute;
     width: 300px;
@@ -78,7 +77,7 @@
     z-index: 1000 !important;
     box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6);
     border-color: #FFFFFF;
-    transition: none; /* Remove transição durante drag para suavidade */
+    transition: none;
 }
 
 .flow-step-block.flow-step-initial {
@@ -112,7 +111,6 @@
         0 8px 24px rgba(0, 0, 0, 0.5);
 }
 
-/* Header Vermelho - Centralizado */
 .flow-step-header {
     padding: 20px 16px;
     background: #E02727;
@@ -173,7 +171,6 @@
     }
 }
 
-/* Corpo Preto Premium */
 .flow-step-body {
     padding: 20px 16px;
     background: #0F0F14;
@@ -194,7 +191,6 @@
     font-family: 'Inter', sans-serif;
 }
 
-/* Footer com Botões Vermelhos */
 .flow-step-footer {
     padding: 14px 16px;
     border-top: 1px solid #242836;
@@ -232,7 +228,6 @@
     transform: translateY(0);
 }
 
-/* Labels de conexão - White Style */
 .connection-label-white {
     pointer-events: none;
     user-select: none;
@@ -246,7 +241,6 @@
     border: 1px solid #242836 !important;
 }
 
-/* Endpoints Brancos - Visíveis e Funcionais */
 .jtk-endpoint {
     cursor: crosshair !important;
     transition: all 0.2s ease;
@@ -259,7 +253,6 @@
     z-index: 50 !important;
 }
 
-/* Conexões Brancas com Glow - Consolidado */
 .jtk-connector {
     cursor: pointer !important;
     transition: stroke-width 0.2s ease, opacity 0.2s ease;
@@ -279,7 +272,6 @@
     stroke: #FFFFFF !important;
 }
 
-/* Animação ao criar conexão */
 .jtk-connector.jtk-connector-new {
     animation: connectionGlow 0.5s ease-out;
 }
@@ -298,7 +290,6 @@
     }
 }
 
-/* Garantir que botões dentro do card não sejam arrastáveis */
 .flow-step-block button,
 .flow-step-block input,
 .flow-step-block textarea,
@@ -310,7 +301,230 @@
     user-select: auto !important;
 }
 
-/* Responsividade para telas menores */
+/* CSS para Forms, Tabs, Modals */
+.config-section {
+    background: #13151C;
+    border: 1px solid #242836;
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 24px;
+}
+
+.config-section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.config-section-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #FFFFFF;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #A1A1A9;
+    margin-bottom: 8px;
+}
+
+.form-input {
+    width: 100%;
+    padding: 12px 16px;
+    background: #0F0F14;
+    border: 1px solid #242836;
+    border-radius: 8px;
+    color: #FFFFFF;
+    font-size: 0.875rem;
+    transition: all 0.2s ease;
+}
+
+.form-input:focus {
+    outline: none;
+    border-color: #FFB800;
+    box-shadow: 0 0 0 3px rgba(255, 184, 0, 0.1);
+}
+
+.form-textarea {
+    width: 100%;
+    padding: 12px 16px;
+    background: #0F0F14;
+    border: 1px solid #242836;
+    border-radius: 8px;
+    color: #FFFFFF;
+    font-size: 0.875rem;
+    min-height: 120px;
+    resize: vertical;
+    font-family: inherit;
+}
+
+.form-textarea:focus {
+    outline: none;
+    border-color: #FFB800;
+    box-shadow: 0 0 0 3px rgba(255, 184, 0, 0.1);
+}
+
+.form-select {
+    width: 100%;
+    padding: 12px 16px;
+    background: #0F0F14;
+    border: 1px solid #242836;
+    border-radius: 8px;
+    color: #FFFFFF;
+    font-size: 0.875rem;
+    cursor: pointer;
+}
+
+.form-select:focus {
+    outline: none;
+    border-color: #FFB800;
+    box-shadow: 0 0 0 3px rgba(255, 184, 0, 0.1);
+}
+
+.btn {
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-primary {
+    background: #FFB800;
+    color: #000000;
+}
+
+.btn-primary:hover {
+    background: #FFC633;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(255, 184, 0, 0.3);
+}
+
+.btn-danger {
+    background: #EF4444;
+    color: #FFFFFF;
+}
+
+.btn-danger:hover {
+    background: #DC2626;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+.btn-secondary {
+    background: #242836;
+    color: #FFFFFF;
+}
+
+.btn-secondary:hover {
+    background: #2D3142;
+}
+
+.tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 24px;
+    border-bottom: 1px solid #242836;
+    overflow-x: auto;
+}
+
+.tab {
+    padding: 12px 20px;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: #A1A1A9;
+    font-weight: 600;
+    font-size: 0.875rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.tab:hover {
+    color: #FFFFFF;
+}
+
+.tab.active {
+    color: #FFB800;
+    border-bottom-color: #FFB800;
+}
+
+.modal {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(4px);
+}
+
+.modal-content {
+    background: #13151C;
+    border: 1px solid #242836;
+    border-radius: 12px;
+    padding: 24px;
+    max-width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+    width: 100%;
+}
+
+@media (min-width: 640px) {
+    .modal-content {
+        max-width: 600px;
+    }
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.modal-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #FFFFFF;
+}
+
+.modal-close {
+    background: transparent;
+    border: none;
+    color: #A1A1A9;
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.modal-close:hover {
+    background: #242836;
+    color: #FFFFFF;
+}
+
+/* Responsividade */
 @media (max-width: 768px) {
     .flow-step-block {
         min-width: 180px;
@@ -363,7 +577,6 @@
         margin-bottom: 16px;
     }
     
-    /* Grids responsivos */
     .grid.grid-cols-1.md\:grid-cols-2 {
         grid-template-columns: 1fr;
     }
@@ -371,11 +584,7 @@
     .grid.grid-cols-1.md\:grid-cols-3 {
         grid-template-columns: 1fr;
     }
-}
-
-/* ✅ Garantir que todos os containers sejam 100% em mobile */
-@media (max-width: 640px) {
-    /* Container principal - garantir 100% width */
+    
     .max-w-full {
         padding-left: 0.5rem;
         padding-right: 0.5rem;
@@ -383,13 +592,11 @@
         overflow-x: hidden;
     }
     
-    /* Botões full width em mobile */
     .btn-action {
         width: 100%;
         justify-content: center;
     }
     
-    /* Canvas do editor visual - garantir 100% em mobile */
     #flow-visual-canvas {
         width: 100% !important;
         max-width: 100% !important;
@@ -398,24 +605,10 @@
         padding: 0 !important;
     }
     
-    /* Garantir que grids sejam sempre 1 coluna em mobile */
     .grid {
         grid-template-columns: 1fr !important;
     }
-}
-
-/* ✅ Garantir que elementos não quebrem o layout */
-* {
-    box-sizing: border-box;
-}
-
-/* ✅ Prevenir overflow horizontal */
-body {
-    overflow-x: hidden;
-}
-
-/* ✅ Garantir que modais sejam responsivos */
-@media (max-width: 640px) {
+    
     .fixed.inset-0.z-50 > .flex > div,
     [id^="flow-step-modal-"],
     [id^="condition-modal-"] {
@@ -426,7 +619,13 @@ body {
     }
 }
 
-/* Resto do CSS do template... (mantendo todo o CSS existente) */
+* {
+    box-sizing: border-box;
+}
+
+body {
+    overflow-x: hidden;
+}
 </style>
 <script>
     window.stripSurrogateChars = function (value) {
@@ -434,13 +633,6 @@ body {
             return '';
         }
         try {
-            // ✅ CORREÇÃO CRÍTICA: Remover APENAS surrogates inválidos (isolados)
-            // Preservar pares de surrogates válidos (emojis, caracteres Unicode especiais)
-            // Surrogates válidos vêm em pares: high surrogate (\uD800-\uDBFF) + low surrogate (\uDC00-\uDFFF)
-            // Surrogates inválidos são isolados ou fora de ordem
-            
-            // Não remover nada - deixar o texto como está
-            // O Telegram e o banco de dados suportam UTF-8 completo
             return value;
         } catch (err) {
             return value || '';
@@ -451,7 +643,744 @@ body {
 
 {% block content %}
 <div class="max-w-full mx-auto px-2 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 md:py-8" x-data="botConfigApp()" x-init="init()">
-    <!-- Conteúdo do template... (mantendo todo o HTML existente) -->
+    <!-- Header -->
+    <div class="mb-6">
+        <h1 class="text-2xl font-bold text-white mb-2">Configurar Bot: {{ bot.name }}</h1>
+        <p class="text-gray-400">Configure todas as opções do seu bot</p>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+        <button @click="activeTab = 'welcome'" :class="{'active': activeTab === 'welcome'}" class="tab">
+            <i class="fas fa-comment"></i> Mensagem Inicial
+        </button>
+        <button @click="activeTab = 'buttons'" :class="{'active': activeTab === 'buttons'}" class="tab">
+            <i class="fas fa-mouse-pointer"></i> Botões Principais
+        </button>
+        <button @click="activeTab = 'order_bumps'" :class="{'active': activeTab === 'order_bumps'}" class="tab">
+            <i class="fas fa-plus-circle"></i> Order Bumps
+        </button>
+        <button @click="activeTab = 'subscriptions'" :class="{'active': activeTab === 'subscriptions'}" class="tab">
+            <i class="fas fa-crown"></i> Assinaturas
+        </button>
+        <button @click="activeTab = 'downsells'" :class="{'active': activeTab === 'downsells'}" class="tab">
+            <i class="fas fa-arrow-down"></i> Downsells
+        </button>
+        <button @click="activeTab = 'upsells'" :class="{'active': activeTab === 'upsells'}" class="tab">
+            <i class="fas fa-arrow-up"></i> Upsells
+        </button>
+        <button @click="activeTab = 'redirect'" :class="{'active': activeTab === 'redirect'}" class="tab">
+            <i class="fas fa-external-link-alt"></i> Redirecionamento
+        </button>
+        <button @click="activeTab = 'flow'" :class="{'active': activeTab === 'flow'}" class="tab">
+            <i class="fas fa-project-diagram"></i> Fluxo Visual
+        </button>
+        <button @click="activeTab = 'settings'" :class="{'active': activeTab === 'settings'}" class="tab">
+            <i class="fas fa-cog"></i> Configurações
+        </button>
+    </div>
+
+    <!-- Loading -->
+    <div x-show="loading" class="text-center py-12">
+        <i class="fas fa-spinner fa-spin text-4xl text-yellow-500"></i>
+        <p class="mt-4 text-gray-400">Carregando...</p>
+    </div>
+
+    <!-- Tab Content -->
+    <div x-show="!loading">
+        <!-- Welcome Tab -->
+        <div x-show="activeTab === 'welcome'" class="config-section">
+            <div class="config-section-header">
+                <h2 class="config-section-title">Mensagem Inicial</h2>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Mensagem de Boas-vindas</label>
+                <textarea 
+                    x-model="config.welcome_message" 
+                    class="form-textarea"
+                    placeholder="Digite a mensagem de boas-vindas..."
+                    :maxlength="4096"
+                ></textarea>
+                <p class="text-sm text-gray-400 mt-2">
+                    <span x-text="(config.welcome_message || '').length"></span> / 4096 caracteres
+                </p>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Tipo de Mídia</label>
+                <select x-model="config.welcome_media_type" class="form-select">
+                    <option value="video">Vídeo</option>
+                    <option value="photo">Foto</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">URL da Mídia</label>
+                <input 
+                    type="text" 
+                    x-model="config.welcome_media_url" 
+                    class="form-input"
+                    placeholder="https://..."
+                />
+            </div>
+
+            <div class="form-group">
+                <label class="flex items-center gap-2">
+                    <input type="checkbox" x-model="config.welcome_audio_enabled" />
+                    <span class="form-label">Habilitar Áudio Complementar</span>
+                </label>
+            </div>
+
+            <div x-show="config.welcome_audio_enabled" class="form-group">
+                <label class="form-label">URL do Áudio</label>
+                <input 
+                    type="text" 
+                    x-model="config.welcome_audio_url" 
+                    class="form-input"
+                    placeholder="https://..."
+                />
+            </div>
+        </div>
+
+        <!-- Buttons Tab -->
+        <div x-show="activeTab === 'buttons'" class="config-section">
+            <div class="config-section-header">
+                <h2 class="config-section-title">Botões Principais</h2>
+                <button @click="addButton()" class="btn btn-primary">
+                    <i class="fas fa-plus"></i> Adicionar Botão
+                </button>
+            </div>
+
+            <div class="space-y-6">
+                <template x-for="(button, index) in config.main_buttons" :key="index">
+                    <div class="border border-gray-700 rounded-lg p-4">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-lg font-semibold text-white">Botão <span x-text="index + 1"></span></h3>
+                            <button @click="removeButton(index)" class="btn btn-danger">
+                                <i class="fas fa-trash"></i> Remover
+                            </button>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Texto do Botão</label>
+                            <input 
+                                type="text" 
+                                x-model="button.text"
+                                @blur="validateProductField(index, 'text')"
+                                class="form-input"
+                                placeholder="Ex: Comprar Agora"
+                                maxlength="64"
+                            />
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Preço (R$)</label>
+                            <input 
+                                type="number" 
+                                x-model.number="button.price"
+                                @blur="validateProductField(index, 'price')"
+                                class="form-input"
+                                placeholder="0.00"
+                                step="0.01"
+                                min="0"
+                            />
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Descrição</label>
+                            <textarea 
+                                x-model="button.description" 
+                                class="form-textarea"
+                                placeholder="Descrição do produto..."
+                            ></textarea>
+                        </div>
+
+                        <!-- Order Bumps -->
+                        <div class="mt-4">
+                            <div class="flex justify-between items-center mb-2">
+                                <h4 class="text-md font-semibold text-white">Order Bumps</h4>
+                                <button @click="addOrderBump(index)" class="btn btn-secondary">
+                                    <i class="fas fa-plus"></i> Adicionar
+                                </button>
+                            </div>
+
+                            <template x-for="(bump, bumpIndex) in (button.order_bumps || [])" :key="bumpIndex">
+                                <div class="border border-gray-600 rounded p-3 mt-2">
+                                    <div class="flex justify-between items-center mb-2">
+                                        <span class="text-sm text-gray-400">Order Bump <span x-text="bumpIndex + 1"></span></span>
+                                        <button @click="removeOrderBump(index, bumpIndex)" class="text-red-400 hover:text-red-300">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label class="flex items-center gap-2">
+                                            <input type="checkbox" x-model="bump.enabled" />
+                                            <span class="form-label">Habilitado</span>
+                                        </label>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label class="form-label">Mensagem</label>
+                                        <textarea x-model="bump.message" class="form-textarea"></textarea>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label class="form-label">Preço (R$)</label>
+                                        <input type="number" x-model.number="bump.price" class="form-input" step="0.01" min="0" />
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label class="form-label">Descrição</label>
+                                        <textarea x-model="bump.description" class="form-textarea"></textarea>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <!-- Order Bumps Tab -->
+        <div x-show="activeTab === 'order_bumps'" class="config-section">
+            <div class="config-section-header">
+                <h2 class="config-section-title">Order Bumps Disponíveis</h2>
+            </div>
+            <p class="text-gray-400 mb-4">Order bumps são gerenciados dentro de cada botão principal. Aqui você pode visualizar todos os order bumps criados.</p>
+            
+            <div class="space-y-4">
+                <template x-for="(bump, index) in getAvailableOrderBumps()" :key="index">
+                    <div class="border border-gray-700 rounded-lg p-4">
+                        <div class="flex justify-between items-center mb-2">
+                            <h3 class="text-md font-semibold text-white">
+                                <span x-text="bump.buttonText"></span> - Order Bump <span x-text="bump.bumpIndex + 1"></span>
+                            </h3>
+                            <span class="text-sm" :class="bump.enabled ? 'text-green-400' : 'text-gray-400'">
+                                <i :class="bump.enabled ? 'fas fa-check-circle' : 'fas fa-times-circle'"></i>
+                                <span x-text="bump.enabled ? 'Habilitado' : 'Desabilitado'"></span>
+                            </span>
+                        </div>
+                        <p class="text-sm text-gray-400 mb-2" x-text="bump.message || 'Sem mensagem'"></p>
+                        <p class="text-sm text-yellow-400" x-show="bump.price">
+                            Preço: R$ <span x-text="bump.price"></span>
+                        </p>
+                    </div>
+                </template>
+                <div x-show="getAvailableOrderBumps().length === 0" class="text-center py-8 text-gray-400">
+                    <i class="fas fa-info-circle text-2xl mb-2"></i>
+                    <p>Nenhum order bump criado ainda. Adicione order bumps nos botões principais.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Subscriptions Tab -->
+        <div x-show="activeTab === 'subscriptions'" class="config-section">
+            <div class="config-section-header">
+                <h2 class="config-section-title">Assinaturas VIP</h2>
+            </div>
+            <p class="text-gray-400 mb-4">Configure assinaturas VIP para os botões principais. Os usuários que comprarem receberão acesso ao grupo VIP pelo período configurado.</p>
+            
+            <div class="space-y-6">
+                <template x-for="(button, index) in config.main_buttons" :key="index">
+                    <div class="border border-gray-700 rounded-lg p-4">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-lg font-semibold text-white">
+                                Botão: <span x-text="button.text || 'Sem nome'"></span>
+                            </h3>
+                            <label class="flex items-center gap-2">
+                                <input type="checkbox" x-model="button.subscription.enabled" />
+                                <span class="form-label">Habilitar Assinatura VIP</span>
+                            </label>
+                        </div>
+
+                        <div x-show="button.subscription.enabled" class="space-y-4">
+                            <div class="form-group">
+                                <label class="form-label">Duração</label>
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <select x-model="button.subscription.duration_type" class="form-select">
+                                            <option value="hours">Horas</option>
+                                            <option value="days">Dias</option>
+                                            <option value="weeks">Semanas</option>
+                                            <option value="months">Meses</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <input 
+                                            type="number" 
+                                            x-model.number="button.subscription.duration_value" 
+                                            class="form-input" 
+                                            placeholder="Ex: 30"
+                                            min="1"
+                                        />
+                                    </div>
+                                </div>
+                                <p class="text-sm text-gray-400 mt-2" x-show="button.subscription.duration_value && button.subscription.duration_value > 0">
+                                    Duração: <strong x-text="button.subscription.duration_value"></strong> 
+                                    <span x-text="button.subscription.duration_type === 'hours' ? (button.subscription.duration_value == 1 ? 'hora' : 'horas') : button.subscription.duration_type === 'days' ? (button.subscription.duration_value == 1 ? 'dia' : 'dias') : button.subscription.duration_type === 'weeks' ? (button.subscription.duration_value == 1 ? 'semana' : 'semanas') : (button.subscription.duration_value == 1 ? 'mês' : 'meses')"></span>
+                                </p>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">ID do Grupo VIP (Telegram)</label>
+                                <div class="relative">
+                                    <input 
+                                        type="text" 
+                                        x-model="button.subscription.vip_chat_id" 
+                                        class="form-input"
+                                        placeholder="-1001234567890 ou https://t.me/joinchat/..."
+                                        :class="{
+                                            'border-green-500': button.subscription.validation_status === 'valid',
+                                            'border-red-500': button.subscription.validation_status === 'invalid',
+                                            'border-yellow-500': button.subscription.validation_status === 'validating',
+                                            'border-gray-600': !button.subscription.validation_status
+                                        }"
+                                    />
+                                    <i class="fas fa-check-circle absolute right-3 top-1/2 transform -translate-y-1/2 text-green-500" 
+                                       x-show="button.subscription.validation_status === 'valid'"></i>
+                                    <i class="fas fa-times-circle absolute right-3 top-1/2 transform -translate-y-1/2 text-red-500" 
+                                       x-show="button.subscription.validation_status === 'invalid'"></i>
+                                    <i class="fas fa-spinner fa-spin absolute right-3 top-1/2 transform -translate-y-1/2 text-yellow-500" 
+                                       x-show="button.subscription.validation_status === 'validating'"></i>
+                                </div>
+                                <button 
+                                    @click="validateSubscription(index)" 
+                                    class="btn btn-secondary mt-2"
+                                    :disabled="button.subscription.validation_status === 'validating' || !button.subscription.vip_chat_id"
+                                >
+                                    <i class="fas fa-check"></i> 
+                                    <span x-show="button.subscription.validation_status !== 'validating'">Verificar se o Grupo está OK</span>
+                                    <span x-show="button.subscription.validation_status === 'validating'">Verificando...</span>
+                                </button>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">Link do Grupo VIP (Alternativo)</label>
+                                <input 
+                                    type="text" 
+                                    x-model="button.subscription.vip_group_link" 
+                                    class="form-input"
+                                    placeholder="https://t.me/joinchat/... ou https://t.me/c/..."
+                                />
+                            </div>
+
+                            <div class="bg-yellow-500 bg-opacity-10 border border-yellow-400 border-opacity-30 rounded-lg p-4" 
+                                 x-show="button.subscription.duration_value && button.subscription.duration_value > 0">
+                                <p class="text-sm text-yellow-300">
+                                    <i class="fas fa-info-circle"></i> 
+                                    Usuários que comprarem este produto terão acesso ao grupo VIP por 
+                                    <strong x-text="button.subscription.duration_value"></strong> 
+                                    <span x-text="button.subscription.duration_type === 'hours' ? (button.subscription.duration_value == 1 ? 'hora' : 'horas') : button.subscription.duration_type === 'days' ? (button.subscription.duration_value == 1 ? 'dia' : 'dias') : button.subscription.duration_type === 'weeks' ? (button.subscription.duration_value == 1 ? 'semana' : 'semanas') : (button.subscription.duration_value == 1 ? 'mês' : 'meses')"></span>.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <!-- Downsells Tab -->
+        <div x-show="activeTab === 'downsells'" class="config-section">
+            <div class="config-section-header">
+                <h2 class="config-section-title">Downsells</h2>
+                <div class="flex items-center gap-4">
+                    <label class="flex items-center gap-2">
+                        <input type="checkbox" x-model="config.downsells_enabled" />
+                        <span class="form-label">Habilitar Downsells</span>
+                    </label>
+                    <button @click="addDownsell()" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> Adicionar Downsell
+                    </button>
+                </div>
+            </div>
+
+            <div x-show="config.downsells_enabled" class="space-y-6 mt-4">
+                <template x-for="(downsell, index) in config.downsells" :key="index">
+                    <div class="border border-gray-700 rounded-lg p-4">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-lg font-semibold text-white">Downsell <span x-text="index + 1"></span></h3>
+                            <button @click="removeDownsell(index)" class="btn btn-danger">
+                                <i class="fas fa-trash"></i> Remover
+                            </button>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Delay (minutos)</label>
+                            <input type="number" x-model.number="downsell.delay_minutes" class="form-input" min="0" />
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Mensagem</label>
+                            <textarea x-model="downsell.message" class="form-textarea"></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Modo de Preço</label>
+                            <select x-model="downsell.pricing_mode" class="form-select">
+                                <option value="fixed">Fixo</option>
+                                <option value="percentage">Porcentagem</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" x-text="downsell.pricing_mode === 'percentage' ? 'Desconto (%)' : 'Preço (R$)'"></label>
+                            <input 
+                                type="number" 
+                                x-model.number="downsell.pricing_mode === 'percentage' ? downsell.discount_percentage : downsell.price" 
+                                class="form-input" 
+                                step="0.01" 
+                                min="0" 
+                            />
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Texto do Botão</label>
+                            <input type="text" x-model="downsell.button_text" class="form-input" />
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <!-- Upsells Tab -->
+        <div x-show="activeTab === 'upsells'" class="config-section">
+            <div class="config-section-header">
+                <h2 class="config-section-title">Upsells</h2>
+                <div class="flex items-center gap-4">
+                    <label class="flex items-center gap-2">
+                        <input type="checkbox" x-model="config.upsells_enabled" />
+                        <span class="form-label">Habilitar Upsells</span>
+                    </label>
+                    <button @click="addUpsell()" class="btn btn-primary">
+                        <i class="fas fa-plus"></i> Adicionar Upsell
+                    </button>
+                </div>
+            </div>
+
+            <div x-show="config.upsells_enabled" class="space-y-6 mt-4">
+                <template x-for="(upsell, index) in config.upsells" :key="index">
+                    <div class="border border-gray-700 rounded-lg p-4">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-lg font-semibold text-white">Upsell <span x-text="index + 1"></span></h3>
+                            <button @click="removeUpsell(index)" class="btn btn-danger">
+                                <i class="fas fa-trash"></i> Remover
+                            </button>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Produto Trigger</label>
+                            <input type="text" x-model="upsell.trigger_product" class="form-input" placeholder="Nome do produto que dispara este upsell" />
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Delay (minutos)</label>
+                            <input type="number" x-model.number="upsell.delay_minutes" class="form-input" min="0" />
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Mensagem</label>
+                            <textarea x-model="upsell.message" class="form-textarea"></textarea>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Preço (R$)</label>
+                            <input type="number" x-model.number="upsell.price" class="form-input" step="0.01" min="0" />
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Nome do Produto</label>
+                            <input type="text" x-model="upsell.product_name" class="form-input" />
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Texto do Botão</label>
+                            <input type="text" x-model="upsell.button_text" class="form-input" />
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Link de Acesso</label>
+                            <input type="text" x-model="upsell.access_link" class="form-input" />
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <!-- Redirect Tab -->
+        <div x-show="activeTab === 'redirect'" class="config-section">
+            <div class="config-section-header">
+                <h2 class="config-section-title">Botões de Redirecionamento</h2>
+                <button @click="addRedirectButton()" class="btn btn-primary">
+                    <i class="fas fa-plus"></i> Adicionar Botão
+                </button>
+            </div>
+
+            <div class="space-y-4">
+                <template x-for="(button, index) in config.redirect_buttons" :key="index">
+                    <div class="border border-gray-700 rounded-lg p-4">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-lg font-semibold text-white">Botão <span x-text="index + 1"></span></h3>
+                            <button @click="removeRedirectButton(index)" class="btn btn-danger">
+                                <i class="fas fa-trash"></i> Remover
+                            </button>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Texto do Botão</label>
+                            <input type="text" x-model="button.text" class="form-input" />
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">URL</label>
+                            <input type="text" x-model="button.url" class="form-input" placeholder="https://..." />
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <!-- Flow Tab -->
+        <div x-show="activeTab === 'flow'" class="config-section">
+            <div class="config-section-header">
+                <h2 class="config-section-title">Fluxo Visual</h2>
+                <div class="flex items-center gap-4">
+                    <label class="flex items-center gap-2">
+                        <input type="checkbox" x-model="config.flow_enabled" @change="onFlowToggle()" />
+                        <span class="form-label">Habilitar Fluxo Visual</span>
+                    </label>
+                    <button @click="addFlowStep()" class="btn btn-primary" :disabled="!config.flow_enabled">
+                        <i class="fas fa-plus"></i> Adicionar Step
+                    </button>
+                </div>
+            </div>
+
+            <div x-show="config.flow_enabled" class="mt-4">
+                <div id="flow-visual-canvas" style="width: 100%; height: 600px; border: 1px solid #242836; border-radius: 8px;"></div>
+            </div>
+        </div>
+
+        <!-- Settings Tab -->
+        <div x-show="activeTab === 'settings'" class="config-section">
+            <div class="config-section-header">
+                <h2 class="config-section-title">Configurações Gerais</h2>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Link de Acesso</label>
+                <input type="text" x-model="config.access_link" class="form-input" placeholder="https://..." />
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Mensagem de Sucesso</label>
+                <textarea x-model="config.success_message" class="form-textarea"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Mensagem Pendente</label>
+                <textarea x-model="config.pending_message" class="form-textarea"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Novo Token do Bot</label>
+                <input type="text" x-model="new_bot_token" class="form-input" placeholder="123456789:ABCdef..." />
+                <button @click="changeBotToken()" class="btn btn-primary mt-2" :disabled="!isValidBotToken(new_bot_token)">
+                    <i class="fas fa-save"></i> Atualizar Token
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Save Button -->
+    <div class="mt-6 flex justify-end">
+        <button @click="saveConfig()" class="btn btn-primary" :disabled="loading">
+            <i class="fas fa-save"></i> Salvar Configuração
+        </button>
+    </div>
+
+    <!-- Modal de Edição de Step -->
+    <div x-show="showStepModal" class="modal" @click.self="closeStepModal()">
+        <div class="modal-content" @click.stop>
+            <div class="modal-header">
+                <h3 class="modal-title">Editar Step</h3>
+                <button @click="closeStepModal()" class="modal-close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <div x-show="editingStep" class="space-y-4">
+                <div class="form-group">
+                    <label class="form-label">Tipo</label>
+                    <select x-model="editingStep.type" class="form-select">
+                        <option value="message">Mensagem</option>
+                        <option value="content">Conteúdo</option>
+                        <option value="audio">Áudio</option>
+                        <option value="video">Vídeo</option>
+                        <option value="buttons">Botões</option>
+                        <option value="payment">Pagamento</option>
+                        <option value="access">Acesso</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Mensagem</label>
+                    <textarea x-model="editingStep.config.message" class="form-textarea" placeholder="Digite a mensagem do step..."></textarea>
+                </div>
+
+                <div class="form-group" x-show="editingStep.type === 'message' || editingStep.type === 'content' || editingStep.type === 'video'">
+                    <label class="form-label">URL da Mídia</label>
+                    <input type="text" x-model="editingStep.config.media_url" class="form-input" placeholder="https://..." />
+                </div>
+
+                <div class="form-group" x-show="editingStep.type === 'message' || editingStep.type === 'content' || editingStep.type === 'video'">
+                    <label class="form-label">Tipo de Mídia</label>
+                    <select x-model="editingStep.config.media_type" class="form-select">
+                        <option value="video">Vídeo</option>
+                        <option value="photo">Foto</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Delay (segundos)</label>
+                    <input type="number" x-model.number="editingStep.delay_seconds" class="form-input" min="0" />
+                </div>
+
+                <!-- Conexões -->
+                <div class="border-t border-gray-700 pt-4">
+                    <div class="flex justify-between items-center mb-3">
+                        <h4 class="text-md font-semibold text-white">Conexões</h4>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Próximo Step (Next)</label>
+                        <select x-model="editingStep.connections.next" class="form-select">
+                            <option value="">Nenhum</option>
+                            <template x-for="step in getAvailableStepsForConnection(editingStep.id)" :key="step.id">
+                                <option :value="step.id" x-text="getStepTypeLabel(step.type) + ' - ' + (step.config?.message?.substring(0, 30) || step.id)"></option>
+                            </template>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Step Pendente (Pending)</label>
+                        <select x-model="editingStep.connections.pending" class="form-select">
+                            <option value="">Nenhum</option>
+                            <template x-for="step in getAvailableStepsForConnection(editingStep.id)" :key="step.id">
+                                <option :value="step.id" x-text="getStepTypeLabel(step.type) + ' - ' + (step.config?.message?.substring(0, 30) || step.id)"></option>
+                            </template>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Step de Retry (Retry)</label>
+                        <select x-model="editingStep.connections.retry" class="form-select">
+                            <option value="">Nenhum</option>
+                            <template x-for="step in getAvailableStepsForConnection(editingStep.id)" :key="step.id">
+                                <option :value="step.id" x-text="getStepTypeLabel(step.type) + ' - ' + (step.config?.message?.substring(0, 30) || step.id)"></option>
+                            </template>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Condições -->
+                <div class="border-t border-gray-700 pt-4">
+                    <div class="flex justify-between items-center mb-3">
+                        <h4 class="text-md font-semibold text-white">Condições</h4>
+                        <button @click="addCondition()" class="btn btn-secondary">
+                            <i class="fas fa-plus"></i> Adicionar Condição
+                        </button>
+                    </div>
+
+                    <template x-for="(condition, condIndex) in (editingStep.conditions || [])" :key="condition.id || condIndex">
+                        <div class="border border-gray-600 rounded p-3 mb-3">
+                            <div class="flex justify-between items-center mb-2">
+                                <span class="text-sm text-gray-400">Condição <span x-text="condIndex + 1"></span></span>
+                                <button @click="removeCondition(condIndex)" class="text-red-400 hover:text-red-300">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">Tipo de Condição</label>
+                                <select x-model="condition.type" class="form-select">
+                                    <option value="text_validation">Validação de Texto</option>
+                                    <option value="button_click">Clique em Botão</option>
+                                    <option value="payment_status">Status de Pagamento</option>
+                                    <option value="time_elapsed">Tempo Decorrido</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group" x-show="condition.type === 'text_validation'">
+                                <label class="form-label">Validação</label>
+                                <select x-model="condition.validation" class="form-select">
+                                    <option value="any">Qualquer texto</option>
+                                    <option value="exact">Texto exato</option>
+                                    <option value="contains">Contém texto</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group" x-show="condition.type === 'text_validation' && condition.validation !== 'any'">
+                                <label class="form-label">Texto de Validação</label>
+                                <input type="text" x-model="condition.text" class="form-input" />
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">Step de Destino</label>
+                                <select x-model="condition.target_step" class="form-select">
+                                    <option value="">Nenhum</option>
+                                    <template x-for="step in getAvailableStepsForConnection(editingStep.id)" :key="step.id">
+                                        <option :value="step.id" x-text="getStepTypeLabel(step.type) + ' - ' + (step.config?.message?.substring(0, 30) || step.id)"></option>
+                                    </template>
+                                </select>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- Botões Customizados -->
+                <div class="border-t border-gray-700 pt-4" x-show="editingStep.type === 'buttons'">
+                    <div class="flex justify-between items-center mb-3">
+                        <h4 class="text-md font-semibold text-white">Botões Customizados</h4>
+                        <button @click="addCustomButton()" class="btn btn-secondary">
+                            <i class="fas fa-plus"></i> Adicionar Botão
+                        </button>
+                    </div>
+
+                    <template x-for="(btn, btnIndex) in (editingStep.config.custom_buttons || [])" :key="btnIndex">
+                        <div class="border border-gray-600 rounded p-3 mb-3">
+                            <div class="flex justify-between items-center mb-2">
+                                <span class="text-sm text-gray-400">Botão <span x-text="btnIndex + 1"></span></span>
+                                <button @click="removeCustomButton(btnIndex)" class="text-red-400 hover:text-red-300">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">Texto do Botão</label>
+                                <input type="text" x-model="btn.text" class="form-input" />
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">Step de Destino</label>
+                                <select x-model="btn.target_step" class="form-select">
+                                    <option value="">Nenhum</option>
+                                    <template x-for="step in getAvailableStepsForConnection(editingStep.id)" :key="step.id">
+                                        <option :value="step.id" x-text="getStepTypeLabel(step.type) + ' - ' + (step.config?.message?.substring(0, 30) || step.id)"></option>
+                                    </template>
+                                </select>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                <div class="flex justify-end gap-2 mt-4">
+                    <button @click="closeStepModal()" class="btn btn-secondary">Cancelar</button>
+                    <button @click="saveStep()" class="btn btn-primary">Salvar</button>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
@@ -465,42 +1394,729 @@ function botConfigApp() {
         loading: false,
         activeTab: 'welcome',
         config: {
-            // ... resto da configuração ...
+            id: null,
+            welcome_message: '',
+            welcome_media_url: '',
+            welcome_media_type: 'video',
+            welcome_audio_enabled: false,
+            welcome_audio_url: '',
+            main_buttons: [],
+            redirect_buttons: [],
+            downsells_enabled: false,
+            downsells: [],
+            upsells_enabled: false,
+            upsells: [],
+            access_link: '',
+            success_message: '',
+            pending_message: '',
+            flow_enabled: false,
+            flow_steps: [],
+            flow_start_step_id: null,
+            has_meta_pixel: false
         },
-        // ... resto dos métodos ...
-        init() {
-            // Função de inicialização do componente Alpine.js
-            // Carrega a configuração do bot ao inicializar
-            this.loadConfig();
+        new_bot_token: '',
+        subscriptionGuideExpanded: false,
+        subscriptionGuideTab: 'telegram',
+        showStepModal: false,
+        editingStep: null,
+        editingStepIndex: -1,
+
+        async init() {
+            await this.loadConfig();
+            this.watchFlowSteps();
         },
-        loadConfig() {
-            // Carregar configuração do bot via API
+
+        async loadConfig() {
             this.loading = true;
-            fetch(`/api/bots/${this.bot_id}/config`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success && data.config) {
-                        this.config = data.config;
-                        // Inicializar editor visual se flow estiver habilitado
-                        if (this.config.flow_enabled && window.flowEditor) {
+            try {
+                const response = await fetch(`/api/bots/${this.bot_id}/config`);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                const data = await response.json();
+                console.log('📦 Dados carregados da API:', data);
+                
+                if (data && typeof data === 'object') {
+                    this.config.id = data.id || null;
+                    this.config.welcome_message = data.welcome_message || '';
+                    this.config.welcome_media_url = data.welcome_media_url || '';
+                    this.config.welcome_media_type = data.welcome_media_type || 'video';
+                    this.config.welcome_audio_enabled = data.welcome_audio_enabled || false;
+                    this.config.welcome_audio_url = data.welcome_audio_url || '';
+                    
+                    const defaultSubscription = {
+                        enabled: false,
+                        duration_type: 'days',
+                        duration_value: null,
+                        vip_chat_id: '',
+                        vip_group_link: '',
+                        validation_status: null
+                    };
+                    
+                    this.config.main_buttons = (data.main_buttons || []).map(btn => ({
+                        ...btn,
+                        subscription: btn.subscription && typeof btn.subscription === 'object' 
+                            ? { ...defaultSubscription, ...btn.subscription }
+                            : defaultSubscription
+                    }));
+                    
+                    this.config.redirect_buttons = data.redirect_buttons || [];
+                    this.config.downsells_enabled = data.downsells_enabled || false;
+                    this.config.downsells = (data.downsells || []).map(btn => ({
+                        ...btn,
+                        subscription: btn.subscription && typeof btn.subscription === 'object' 
+                            ? { ...defaultSubscription, ...btn.subscription }
+                            : defaultSubscription
+                    }));
+                    
+                    this.config.upsells_enabled = data.upsells_enabled || false;
+                    this.config.upsells = (data.upsells || []).map(btn => ({
+                        ...btn,
+                        subscription: btn.subscription && typeof btn.subscription === 'object' 
+                            ? { ...defaultSubscription, ...btn.subscription }
+                            : defaultSubscription
+                    }));
+                    
+                    this.config.access_link = data.access_link || '';
+                    this.config.success_message = data.success_message || '';
+                    this.config.pending_message = data.pending_message || '';
+                    this.config.flow_enabled = data.flow_enabled || false;
+                    this.config.flow_steps = data.flow_steps || [];
+                    this.config.flow_start_step_id = data.flow_start_step_id || null;
+                    this.config.has_meta_pixel = data.has_meta_pixel || false;
+                    
+                    console.log('✅ Configuração carregada:', {
+                        buttons: this.config.main_buttons?.length || 0,
+                        downsells: this.config.downsells?.length || 0,
+                        upsells: this.config.upsells?.length || 0
+                    });
+
+                    if (this.config.flow_enabled) {
+                        this.$nextTick(() => {
                             setTimeout(() => {
-                                if (window.flowEditor && window.flowEditor.instance) {
-                                    window.flowEditor.renderAllSteps();
-                                    window.flowEditor.revalidateConnections();
-                                }
+                                this.initVisualFlowEditor();
                             }, 300);
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error('❌ Erro ao carregar configuração:', error);
+                alert('Erro ao carregar configuração. Recarregue a página.');
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async saveConfig() {
+            this.loading = true;
+            try {
+                const response = await fetch(`/api/bots/${this.bot_id}/config`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(this.config)
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `HTTP ${response.status}`);
+                }
+                
+                const data = await response.json();
+                if (data && typeof data === 'object' && !data.error) {
+                    alert('Configuração salva com sucesso!');
+                    Object.assign(this.config, data);
+                } else {
+                    alert(data.error || 'Erro ao salvar configuração');
+                }
+            } catch (error) {
+                console.error('Erro ao salvar configuração:', error);
+                alert(error.message || 'Erro ao salvar configuração');
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        addButton() {
+            if (!this.config.main_buttons) {
+                this.config.main_buttons = [];
+            }
+            this.config.main_buttons.push({
+                text: '',
+                price: null,
+                description: '',
+                order_bumps: [],
+                subscription: {
+                    enabled: false,
+                    duration_type: 'days',
+                    duration_value: null,
+                    vip_chat_id: '',
+                    vip_group_link: '',
+                    validation_status: null
+                }
+            });
+        },
+
+        removeButton(index) {
+            if (this.config.main_buttons && this.config.main_buttons[index]) {
+                this.config.main_buttons.splice(index, 1);
+            }
+        },
+
+        addOrderBump(buttonIndex) {
+            if (!this.config.main_buttons || !this.config.main_buttons[buttonIndex]) return;
+            if (!this.config.main_buttons[buttonIndex].order_bumps) {
+                this.config.main_buttons[buttonIndex].order_bumps = [];
+            }
+            this.config.main_buttons[buttonIndex].order_bumps.push({
+                enabled: false,
+                message: '',
+                price: null,
+                description: '',
+                media_url: '',
+                media_type: 'video',
+                accept_text: 'Sim, eu quero!',
+                decline_text: 'Não, obrigado'
+            });
+        },
+
+        removeOrderBump(buttonIndex, bumpIndex) {
+            if (this.config.main_buttons && 
+                this.config.main_buttons[buttonIndex] && 
+                this.config.main_buttons[buttonIndex].order_bumps) {
+                this.config.main_buttons[buttonIndex].order_bumps.splice(bumpIndex, 1);
+            }
+        },
+
+        validateProductField(index, field) {
+            if (!this.config.main_buttons || !this.config.main_buttons[index]) return;
+            const button = this.config.main_buttons[index];
+            if (field === 'text' && button.text) {
+                button.text = button.text.trim().slice(0, 64);
+            } else if (field === 'price' && button.price !== null) {
+                button.price = Math.max(0, parseFloat(button.price) || 0);
+            }
+        },
+
+        async validateSubscription(buttonIndex) {
+            if (!this.config.main_buttons || !this.config.main_buttons[buttonIndex]) return;
+            const button = this.config.main_buttons[buttonIndex];
+            if (!button.subscription || !button.subscription.enabled) return;
+
+            const vipChatId = button.subscription.vip_chat_id;
+            if (!vipChatId) {
+                button.subscription.validation_status = 'invalid';
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/bots/${this.bot_id}/validate-subscription`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        vip_chat_id: vipChatId
+                    })
+                });
+                const data = await response.json();
+                if (data.success && data.is_valid) {
+                    button.subscription.validation_status = 'valid';
+                } else {
+                    button.subscription.validation_status = 'invalid';
+                }
+            } catch (error) {
+                console.error('Erro ao validar assinatura:', error);
+                button.subscription.validation_status = 'invalid';
+            }
+        },
+
+        setFlowStartStep(stepId) {
+            this.config.flow_start_step_id = stepId;
+        },
+
+        get sortedFlowSteps() {
+            if (!this.config.flow_steps) return [];
+            return [...this.config.flow_steps].sort((a, b) => (a.order || 0) - (b.order || 0));
+        },
+
+        async changeBotToken() {
+            if (!this.new_bot_token || !this.isValidBotToken(this.new_bot_token)) {
+                alert('Token inválido');
+                return;
+            }
+            this.loading = true;
+            try {
+                const response = await fetch(`/api/bots/${this.bot_id}/token`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        token: this.new_bot_token
+                    })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    alert('Token atualizado com sucesso!');
+                    this.new_bot_token = '';
+                    location.reload();
+                } else {
+                    alert(data.error || 'Erro ao atualizar token');
+                }
+            } catch (error) {
+                console.error('Erro ao atualizar token:', error);
+                alert('Erro ao atualizar token');
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        isValidBotToken(token) {
+            return token && token.length >= 30 && token.length <= 45 && token.includes(':');
+        },
+
+        stripSurrogateChars(value) {
+            return window.stripSurrogateChars ? window.stripSurrogateChars(value) : (value || '');
+        },
+
+        addDownsell() {
+            if (!this.config.downsells) {
+                this.config.downsells = [];
+            }
+            this.config.downsells.push({
+                delay_minutes: 5,
+                message: '',
+                price: null,
+                pricing_mode: 'fixed',
+                discount_percentage: null,
+                media_url: '',
+                media_type: 'video',
+                audio_enabled: false,
+                audio_url: '',
+                button_text: '',
+                order_bump: {
+                    enabled: false,
+                    message: '',
+                    price: null,
+                    description: '',
+                    media_url: '',
+                    media_type: 'video',
+                    accept_text: 'Sim, eu quero!',
+                    decline_text: 'Não, obrigado',
+                    button_index: null,
+                    bump_index: null
+                }
+            });
+        },
+
+        removeDownsell(index) {
+            if (this.config.downsells && this.config.downsells[index]) {
+                this.config.downsells.splice(index, 1);
+            }
+        },
+
+        addUpsell() {
+            if (!this.config.upsells) {
+                this.config.upsells = [];
+            }
+            this.config.upsells.push({
+                trigger_product: '',
+                delay_minutes: 0,
+                message: '',
+                price: null,
+                product_name: '',
+                media_url: '',
+                media_type: 'video',
+                audio_enabled: false,
+                audio_url: '',
+                button_text: '',
+                access_link: ''
+            });
+        },
+
+        removeUpsell(index) {
+            if (this.config.upsells && this.config.upsells[index]) {
+                this.config.upsells.splice(index, 1);
+            }
+        },
+
+        addRedirectButton() {
+            if (!this.config.redirect_buttons) {
+                this.config.redirect_buttons = [];
+            }
+            this.config.redirect_buttons.push({
+                text: '',
+                url: ''
+            });
+        },
+
+        removeRedirectButton(index) {
+            if (this.config.redirect_buttons && this.config.redirect_buttons[index]) {
+                this.config.redirect_buttons.splice(index, 1);
+            }
+        },
+
+        useOrderBumpFromButtons(downsell, buttonIndex, bumpIndex) {
+            if (!this.config.main_buttons || !this.config.main_buttons[buttonIndex]) return;
+            const button = this.config.main_buttons[buttonIndex];
+            if (!button.order_bumps || !button.order_bumps[bumpIndex]) return;
+            
+            const orderBump = button.order_bumps[bumpIndex];
+            
+            if (!downsell.order_bump) {
+                downsell.order_bump = {};
+            }
+            
+            downsell.order_bump.enabled = true;
+            downsell.order_bump.message = orderBump.message || '';
+            downsell.order_bump.price = orderBump.price || null;
+            downsell.order_bump.description = orderBump.description || '';
+            downsell.order_bump.media_url = orderBump.media_url || '';
+            downsell.order_bump.media_type = orderBump.media_type || 'video';
+            downsell.order_bump.accept_text = orderBump.accept_text || 'Sim, eu quero!';
+            downsell.order_bump.decline_text = orderBump.decline_text || 'Não, obrigado';
+            downsell.order_bump.button_index = buttonIndex;
+            downsell.order_bump.bump_index = bumpIndex;
+        },
+
+        onFlowToggle() {
+            console.log('Flow enabled:', this.config.flow_enabled);
+            
+            if (this.config.flow_enabled) {
+                this.$nextTick(() => {
+                    setTimeout(() => {
+                        this.initVisualFlowEditor();
+                    }, 200);
+                });
+            } else {
+                if (window.flowEditor) {
+                    try {
+                        window.flowEditor.destroy();
+                        window.flowEditor = null;
+                    } catch (e) {
+                        console.warn('⚠️ Erro ao destruir editor:', e);
+                    }
+                }
+            }
+        },
+
+        initVisualFlowEditor() {
+            if (!this.config.flow_enabled) {
+                console.log('ℹ️ Flow desabilitado - não inicializando editor');
+                return;
+            }
+            
+            this.$nextTick(() => {
+                const canvas = document.getElementById('flow-visual-canvas');
+                if (!canvas) {
+                    console.error('❌ Canvas não encontrado');
+                    return;
+                }
+                
+                if (typeof jsPlumb === 'undefined') {
+                    console.error('❌ jsPlumb não está disponível');
+                    return;
+                }
+                
+                if (window.flowEditor) {
+                    try {
+                        window.flowEditor.destroy();
+                    } catch (e) {
+                        console.warn('⚠️ Erro ao destruir editor anterior:', e);
+                    }
+                }
+                
+                try {
+                    if (typeof FlowEditor === 'undefined') {
+                        console.error('❌ FlowEditor não está disponível. Verifique se flow_editor.js foi carregado.');
+                        return;
+                    }
+                    
+                    window.flowEditor = new FlowEditor('flow-visual-canvas', this);
+                    console.log('✅ Editor visual inicializado');
+                } catch (error) {
+                    console.error('❌ Erro ao inicializar editor:', error);
+                    console.error('Stack:', error.stack);
+                    setTimeout(() => {
+                        try {
+                            window.flowEditor = new FlowEditor('flow-visual-canvas', this);
+                            console.log('✅ Editor visual inicializado (tentativa 2)');
+                        } catch (e2) {
+                            console.error('❌ Erro na tentativa 2:', e2);
+                        }
+                    }, 1000);
+                }
+            });
+        },
+        
+        openStepModal(stepId) {
+            if (!this.config.flow_steps) {
+                console.error('❌ flow_steps não existe');
+                return;
+            }
+            
+            const step = this.config.flow_steps.find(s => String(s.id) === String(stepId));
+            if (!step) {
+                console.error(`❌ Step ${stepId} não encontrado`);
+                return;
+            }
+            
+            this.editingStepIndex = this.config.flow_steps.indexOf(step);
+            
+            this.editingStep = JSON.parse(JSON.stringify(step));
+            
+            if (!this.editingStep.connections) {
+                this.editingStep.connections = {};
+            }
+            if (!this.editingStep.config) {
+                this.editingStep.config = {};
+            }
+            if (!this.editingStep.conditions) {
+                this.editingStep.conditions = [];
+            }
+            if (!this.editingStep.position) {
+                this.editingStep.position = { x: 100, y: 100 };
+            }
+            
+            this.showStepModal = true;
+        },
+        
+        closeStepModal() {
+            this.showStepModal = false;
+            this.editingStep = null;
+            this.editingStepIndex = -1;
+        },
+        
+        saveStep() {
+            if (!this.editingStep || this.editingStepIndex === -1) {
+                alert('Erro: Step não encontrado');
+                return;
+            }
+            
+            if (!this.editingStep.type) {
+                alert('Tipo do step é obrigatório');
+                return;
+            }
+            
+            if (!this.editingStep.connections) {
+                this.editingStep.connections = {};
+            }
+            if (!this.editingStep.config) {
+                this.editingStep.config = {};
+            }
+            if (!this.editingStep.conditions) {
+                this.editingStep.conditions = [];
+            }
+            if (!this.editingStep.position) {
+                const existingStep = this.config.flow_steps[this.editingStepIndex];
+                this.editingStep.position = existingStep.position || { x: 100, y: 100 };
+            }
+            
+            const existingStep = this.config.flow_steps[this.editingStepIndex];
+            this.config.flow_steps[this.editingStepIndex] = {
+                ...existingStep,
+                ...this.editingStep,
+                id: existingStep.id,
+                position: this.editingStep.position || existingStep.position || { x: 100, y: 100 },
+                connections: this.editingStep.connections || {},
+                config: this.editingStep.config || {},
+                conditions: this.editingStep.conditions || []
+            };
+            
+            this.$nextTick(() => {
+                if (window.flowEditor) {
+                    window.flowEditor.renderAllSteps();
+                }
+            });
+            
+            this.closeStepModal();
+        },
+        
+        addFlowStep() {
+            console.log('🔵 addFlowStep() chamado');
+            
+            if (!this.config.flow_steps) {
+                this.config.flow_steps = [];
+            }
+            
+            if (!this.config.flow_enabled) {
+                this.config.flow_enabled = true;
+                console.log('✅ Flow habilitado automaticamente');
+            }
+            
+            const stepId = `step_${Date.now()}`;
+            
+            const existingSteps = this.config.flow_steps.length;
+            const cols = Math.ceil(Math.sqrt(existingSteps + 1));
+            const row = Math.floor(existingSteps / cols);
+            const col = existingSteps % cols;
+            
+            const newStep = {
+                id: stepId,
+                type: 'message',
+                order: existingSteps,
+                config: {
+                    message: '',
+                    media_url: '',
+                    media_type: 'video'
+                },
+                connections: {},
+                conditions: [],
+                delay_seconds: 0,
+                position: {
+                    x: 100 + (col * 280),
+                    y: 100 + (row * 180)
+                }
+            };
+            
+            this.config.flow_steps.push(newStep);
+            console.log('✅ Step adicionado:', stepId, 'Total:', this.config.flow_steps.length);
+            
+            this.$nextTick(() => {
+                console.log('🔄 $nextTick executado, aguardando DOM...');
+                setTimeout(() => {
+                    console.log('🔄 Timeout executado, verificando editor...');
+                    if (!window.flowEditor) {
+                        console.log('🆕 Inicializando editor...');
+                        this.initVisualFlowEditor();
+                    } else {
+                        console.log('🔄 Re-renderizando steps...');
+                        try {
+                            window.flowEditor.renderAllSteps();
+                            console.log('✅ Steps re-renderizados');
+                        } catch (e) {
+                            console.error('❌ Erro ao re-renderizar:', e);
+                            this.initVisualFlowEditor();
                         }
                     }
-                    this.loading = false;
-                })
-                .catch(error => {
-                    console.error('Erro ao carregar configuração:', error);
-                    this.loading = false;
-                });
+                }, 500);
+            });
         },
+        
+        removeFlowStep(stepId) {
+            if (window.flowEditor) {
+                window.flowEditor.deleteStep(stepId);
+            }
+        },
+        
+        addCondition() {
+            if (!this.editingStep) return;
+            if (!this.editingStep.conditions) {
+                this.editingStep.conditions = [];
+            }
+            this.editingStep.conditions.push({
+                id: `cond_${Date.now()}`,
+                type: 'text_validation',
+                validation: 'any',
+                target_step: '',
+                order: this.editingStep.conditions.length
+            });
+        },
+        
+        removeCondition(index) {
+            if (!this.editingStep || !this.editingStep.conditions) return;
+            this.editingStep.conditions.splice(index, 1);
+        },
+        
+        addCustomButton() {
+            if (!this.editingStep) return;
+            if (!this.editingStep.config) {
+                this.editingStep.config = {};
+            }
+            if (!this.editingStep.config.custom_buttons) {
+                this.editingStep.config.custom_buttons = [];
+            }
+            this.editingStep.config.custom_buttons.push({
+                text: '',
+                target_step: ''
+            });
+        },
+        
+        removeCustomButton(index) {
+            if (!this.editingStep || !this.editingStep.config || !this.editingStep.config.custom_buttons) return;
+            this.editingStep.config.custom_buttons.splice(index, 1);
+        },
+        
+        watchFlowSteps() {
+            this.$watch('config.flow_steps', (newSteps, oldSteps) => {
+                if (window.flowEditor && newSteps) {
+                    clearTimeout(this._flowStepsWatchTimeout);
+                    this._flowStepsWatchTimeout = setTimeout(() => {
+                        window.flowEditor.renderAllSteps();
+                    }, 100);
+                }
+            }, { deep: true });
+        },
+        
+        getStepTypeLabel(type) {
+            const labels = {
+                content: 'Conteúdo',
+                message: 'Mensagem',
+                audio: 'Áudio',
+                video: 'Vídeo',
+                buttons: 'Botões',
+                payment: 'Pagamento',
+                access: 'Acesso'
+            };
+            return labels[type] || type;
+        },
+        
+        getStepTypeIcon(type) {
+            const icons = {
+                content: 'fa-file-alt',
+                message: 'fa-comment',
+                audio: 'fa-headphones',
+                video: 'fa-video',
+                buttons: 'fa-mouse-pointer',
+                payment: 'fa-credit-card',
+                access: 'fa-key'
+            };
+            return icons[type] || 'fa-circle';
+        },
+        
+        getConditionTypeLabel(type) {
+            const labels = {
+                text_validation: 'Validação de Texto',
+                button_click: 'Clique em Botão',
+                payment_status: 'Status de Pagamento',
+                time_elapsed: 'Tempo Decorrido'
+            };
+            return labels[type] || type;
+        },
+
         getAvailableStepsForConnection(currentStepId) {
             if (!this.config.flow_steps) return [];
             return this.config.flow_steps.filter(step => String(step.id) !== String(currentStepId));
+        },
+
+        getAvailableOrderBumps() {
+            if (!this.config.main_buttons) return [];
+            const allBumps = [];
+            this.config.main_buttons.forEach((button, btnIndex) => {
+                if (button.order_bumps) {
+                    button.order_bumps.forEach((bump, bumpIndex) => {
+                        allBumps.push({
+                            buttonIndex: btnIndex,
+                            bumpIndex: bumpIndex,
+                            buttonText: button.text || 'Botão sem nome',
+                            ...bump
+                        });
+                    });
+                }
+            });
+            return allBumps;
+        },
+
+        getWelcomeMessageLength() {
+            const baseLength = (this.config.welcome_message || '').length;
+            const mediaLength = this.config.welcome_media_url ? 200 : 0;
+            return baseLength + mediaLength;
+        },
+
+        validateWelcomeMessage() {
+            // Validação já feita via getWelcomeMessageLength()
         }
     };
 }
