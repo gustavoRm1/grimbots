@@ -1,23 +1,18 @@
 /**
- * Flow Editor V2.0 - Editor Visual de Fluxo com jsPlumb
+ * Flow Editor V3.0 - Editor Visual de Fluxo Profissional
  * Sistema completo de edição visual de fluxos de bot
- * Versão: 2.0.0 - Visual Dashboard + jsPlumb 2.x Compatible
+ * Versão: 3.0.0 - Red Header Style + White Connections + Premium UX
  * 
  * Dependências:
  * - jsPlumb 2.15.6 (CDN)
  * - Alpine.js 3.x (CDN)
  * 
  * Design System:
- * - Background: #0D0F15
- * - Cards: #15171F
- * - Borda: #242836
- * - Linhas: #1f232e
- * - Títulos: #FFFFFF
- * - Textos: #A1A1A9
- * - Amarelo: #FFB800 / #FFC633
- * - Verde: #10B981
- * - Azul: #3B82F6
- * - Vermelho: #EF4444
+ * - Header: #E02727 (vermelho)
+ * - Body: #0F0F14 (preto premium)
+ * - Border: #242836
+ * - Connections: #FFFFFF (branco com glow)
+ * - Grid: pontos brancos translúcidos
  * - Fonte: Inter
  */
 
@@ -36,23 +31,13 @@ class FlowEditor {
         this.lastPanPoint = { x: 0, y: 0 };
         this.snapToGrid = false;
         this.gridSize = 20;
+        this.dragRepaintFrame = null;
         
-        // Cores por tipo de conexão (White with Glow Style)
+        // Cores por tipo de conexão (todas brancas)
         this.connectionColors = {
-            next: '#FFFFFF',      // Branco
-            pending: '#FFFFFF',   // Branco
-            retry: '#FFFFFF'      // Branco
-        };
-        
-        // Cores por tipo de step (Dashboard Style)
-        this.stepColors = {
-            content: '#3B82F6',   // Azul
-            message: '#8B5CF6',    // Roxo
-            audio: '#EC4899',      // Rosa
-            video: '#F59E0B',      // Amarelo
-            buttons: '#10B981',    // Verde
-            payment: '#EF4444',    // Vermelho
-            access: '#14B8A6'      // Ciano
+            next: '#FFFFFF',
+            pending: '#FFFFFF',
+            retry: '#FFFFFF'
         };
         
         // Ícones por tipo de step
@@ -80,11 +65,10 @@ class FlowEditor {
             return;
         }
         
-        // Inicializar jsPlumb 2.x (API correta)
+        // Inicializar jsPlumb 2.x
         try {
             this.instance = jsPlumb;
             
-            // Configurar container
             if (typeof this.instance.setContainer === 'function') {
                 this.instance.setContainer(this.canvas);
             }
@@ -94,19 +78,28 @@ class FlowEditor {
                 this.instance.importDefaults({
                     paintStyle: { 
                         stroke: '#FFFFFF', 
-                        strokeWidth: 2,
-                        strokeDasharray: '0',
-                        filter: 'drop-shadow(0 0 2px rgba(255, 255, 255, 0.5))'
+                        strokeWidth: 2.5,
+                        strokeOpacity: 0.9
                     },
                     hoverPaintStyle: { 
                         stroke: '#FFFFFF', 
-                        strokeWidth: 3,
-                        filter: 'drop-shadow(0 0 4px rgba(255, 255, 255, 0.8))'
+                        strokeWidth: 3.5,
+                        strokeOpacity: 1
                     },
-                    connector: ['Bezier', { curviness: 70, stub: [10, 15], gap: 5, cornerRadius: 5 }],
-                    endpoint: ['Dot', { radius: 6 }],
-                    endpointStyle: { fill: '#FFFFFF', outlineStroke: '#0D0F15', outlineWidth: 2 },
-                    endpointHoverStyle: { fill: '#FFFFFF', outlineStroke: '#0D0F15', outlineWidth: 3 },
+                    connector: ['Bezier', { curviness: 75, stub: [10, 15], gap: 5 }],
+                    endpoint: ['Dot', { radius: 7 }],
+                    endpointStyle: { 
+                        fill: '#FFFFFF', 
+                        outlineStroke: '#0D0F15', 
+                        outlineWidth: 2,
+                        strokeWidth: 2
+                    },
+                    endpointHoverStyle: { 
+                        fill: '#FFFFFF', 
+                        outlineStroke: '#0D0F15', 
+                        outlineWidth: 3,
+                        strokeWidth: 3
+                    },
                     anchors: ['Top', 'Bottom'],
                     maxConnections: -1
                 });
@@ -117,14 +110,12 @@ class FlowEditor {
                 this.instance.bind('connection', (info) => this.onConnectionCreated(info));
                 this.instance.bind('connectionDetached', (info) => this.onConnectionDetached(info));
                 
-                // Remover conexão com duplo clique
                 this.instance.bind('click', (conn, originalEvent) => {
                     if (originalEvent && originalEvent.detail === 2) {
                         this.removeConnection(conn);
                     }
                 });
                 
-                // Remover conexão com botão direito
                 this.instance.bind('contextmenu', (conn, originalEvent) => {
                     if (originalEvent) {
                         originalEvent.preventDefault();
@@ -139,36 +130,30 @@ class FlowEditor {
             return;
         }
         
-        // Configurar canvas
         this.setupCanvas();
-        
-        // Renderizar steps existentes
         this.renderAllSteps();
-        
-        // Habilitar interações
         this.enableZoom();
         this.enablePan();
         this.enableSelection();
     }
     
     /**
-     * Configura o canvas com grid background (pontos translúcidos)
+     * Configura o canvas com grid premium (pontos translúcidos)
      */
     setupCanvas() {
         if (!this.canvas) return;
         
-        // Aplicar estilo do canvas com pontos translúcidos
         this.canvas.style.background = '#0D0F15';
-        // Grid com pontos brancos translúcidos (usando radial-gradient)
+        // Grid com pontos brancos translúcidos (opacidade aumentada para melhor visibilidade)
         this.canvas.style.backgroundImage = `
-            radial-gradient(circle, rgba(255, 255, 255, 0.15) 1px, transparent 1px)
+            radial-gradient(circle, rgba(255, 255, 255, 0.25) 1.5px, transparent 1.5px)
         `;
         this.canvas.style.backgroundSize = `${this.gridSize}px ${this.gridSize}px`;
         this.canvas.style.backgroundPosition = '0 0';
     }
     
     /**
-     * Habilita zoom com scroll
+     * Habilita zoom com scroll (Ctrl/Cmd + Scroll)
      */
     enableZoom() {
         if (!this.canvas) return;
@@ -184,13 +169,11 @@ class FlowEditor {
     }
     
     /**
-     * Aplica zoom ao canvas
+     * Aplica zoom ao canvas (combinado com pan)
      */
     applyZoom() {
         if (!this.canvas) return;
-        
-        this.canvas.style.transform = `scale(${this.zoomLevel})`;
-        this.canvas.style.transformOrigin = 'top left';
+        this.updateCanvasTransform();
         
         setTimeout(() => {
             if (this.instance) {
@@ -220,18 +203,20 @@ class FlowEditor {
      */
     zoomReset() {
         this.zoomLevel = 1;
+        this.pan = { x: 0, y: 0 };
         this.applyZoom();
     }
     
     /**
-     * Habilita pan (arrastar canvas) - Botão direito
+     * Habilita pan (arrastar canvas) - Botão direito ou meio
      */
     enablePan() {
         if (!this.canvas) return;
         
         this.canvas.addEventListener('mousedown', (e) => {
-            // Pan com botão direito (button === 2) ou botão do meio (button === 1)
-            if (e.button === 2 || e.button === 1 || (e.button === 0 && e.altKey)) {
+            // Pan apenas se não estiver sobre um step e for botão direito/meio
+            const isOverStep = e.target.closest('.flow-step-block');
+            if (!isOverStep && (e.button === 2 || e.button === 1 || (e.button === 0 && e.altKey))) {
                 e.preventDefault();
                 this.isPanning = true;
                 this.lastPanPoint = { x: e.clientX, y: e.clientY };
@@ -239,9 +224,9 @@ class FlowEditor {
             }
         });
         
-        // Prevenir menu de contexto no botão direito
         this.canvas.addEventListener('contextmenu', (e) => {
-            if (e.button === 2) {
+            const isOverStep = e.target.closest('.flow-step-block');
+            if (!isOverStep) {
                 e.preventDefault();
             }
         });
@@ -270,11 +255,12 @@ class FlowEditor {
     }
     
     /**
-     * Atualiza transform do canvas (zoom + pan)
+     * Atualiza transform do canvas (zoom + pan combinados)
      */
     updateCanvasTransform() {
         if (!this.canvas) return;
         this.canvas.style.transform = `translate(${this.pan.x}px, ${this.pan.y}px) scale(${this.zoomLevel})`;
+        this.canvas.style.transformOrigin = 'top left';
     }
     
     /**
@@ -336,7 +322,10 @@ class FlowEditor {
             this.renderStep(step);
         });
         
-        this.reconnectAll();
+        // Aguardar DOM renderizar antes de conectar
+        setTimeout(() => {
+            this.reconnectAll();
+        }, 50);
     }
     
     /**
@@ -366,7 +355,6 @@ class FlowEditor {
         stepElement.style.left = `${position.x}px`;
         stepElement.style.top = `${position.y}px`;
         
-        const color = this.stepColors[stepType] || '#6B7280';
         const icon = this.stepIcons[stepType] || 'fa-circle';
         const isStartStep = this.alpine.config.flow_start_step_id === stepId;
         
@@ -375,7 +363,7 @@ class FlowEditor {
             <div class="flow-step-header">
                 <div class="flow-step-header-content">
                     <div class="flow-step-icon-center">
-                        <i class="fas fa-video" style="color: #FFFFFF;"></i>
+                        <i class="fas ${icon}" style="color: #FFFFFF;"></i>
                     </div>
                     <div class="flow-step-title-center">
                         ${this.getStepTypeLabel(stepType)}
@@ -401,19 +389,27 @@ class FlowEditor {
         
         this.canvas.appendChild(stepElement);
         
-        // Tornar arrastável (Drag suave e fluido)
+        // Tornar arrastável (Drag otimizado)
         this.instance.draggable(stepElement, {
             containment: 'parent',
             grid: this.snapToGrid ? [this.gridSize, this.gridSize] : false,
             drag: (params) => {
                 this.onStepDrag(params);
-                // Repintar conexões durante o drag para suavidade
-                if (this.instance) {
-                    this.instance.repaint(params.el);
+                // Repintar apenas a conexão do elemento sendo arrastado (otimizado)
+                if (this.dragRepaintFrame) {
+                    cancelAnimationFrame(this.dragRepaintFrame);
                 }
+                this.dragRepaintFrame = requestAnimationFrame(() => {
+                    if (this.instance) {
+                        this.instance.repaint(params.el);
+                    }
+                });
             },
             stop: (params) => {
                 this.onStepDragStop(params);
+                if (this.dragRepaintFrame) {
+                    cancelAnimationFrame(this.dragRepaintFrame);
+                }
                 // Repintar todas as conexões após parar
                 if (this.instance) {
                     this.instance.repaintEverything();
@@ -463,31 +459,51 @@ class FlowEditor {
     }
     
     /**
-     * Adiciona endpoints ao step
+     * Adiciona endpoints ao step (brancos)
      */
     addEndpoints(element, stepId) {
-        // Endpoint superior (entrada) - Branco
+        // Endpoint superior (entrada)
         this.instance.addEndpoint(element, {
             uuid: `endpoint-top-${stepId}`,
             anchor: 'Top',
             maxConnections: -1,
             isSource: false,
             isTarget: true,
-            endpoint: ['Dot', { radius: 6 }],
-            paintStyle: { fill: '#FFFFFF', outlineStroke: '#0D0F15', outlineWidth: 2 },
-            hoverPaintStyle: { fill: '#FFFFFF', outlineStroke: '#0D0F15', outlineWidth: 3 }
+            endpoint: ['Dot', { radius: 7 }],
+            paintStyle: { 
+                fill: '#FFFFFF', 
+                outlineStroke: '#0D0F15', 
+                outlineWidth: 2,
+                strokeWidth: 2
+            },
+            hoverPaintStyle: { 
+                fill: '#FFFFFF', 
+                outlineStroke: '#0D0F15', 
+                outlineWidth: 3,
+                strokeWidth: 3
+            }
         });
         
-        // Endpoint inferior (saída) - Branco
+        // Endpoint inferior (saída)
         this.instance.addEndpoint(element, {
             uuid: `endpoint-bottom-${stepId}`,
             anchor: 'Bottom',
             maxConnections: -1,
             isSource: true,
             isTarget: false,
-            endpoint: ['Dot', { radius: 6 }],
-            paintStyle: { fill: '#FFFFFF', outlineStroke: '#0D0F15', outlineWidth: 2 },
-            hoverPaintStyle: { fill: '#FFFFFF', outlineStroke: '#0D0F15', outlineWidth: 3 }
+            endpoint: ['Dot', { radius: 7 }],
+            paintStyle: { 
+                fill: '#FFFFFF', 
+                outlineStroke: '#0D0F15', 
+                outlineWidth: 2,
+                strokeWidth: 2
+            },
+            hoverPaintStyle: { 
+                fill: '#FFFFFF', 
+                outlineStroke: '#0D0F15', 
+                outlineWidth: 3,
+                strokeWidth: 3
+            }
         });
     }
     
@@ -537,7 +553,7 @@ class FlowEditor {
     }
     
     /**
-     * Cria uma conexão entre dois steps
+     * Cria uma conexão entre dois steps (branca com glow)
      */
     createConnection(sourceStepId, targetStepId, connectionType = 'next') {
         const sourceId = String(sourceStepId);
@@ -555,7 +571,6 @@ class FlowEditor {
             return this.connections.get(connId);
         }
         
-        const color = this.connectionColors[connectionType] || '#FFFFFF';
         const label = this.getConnectionLabel(connectionType);
         
         try {
@@ -564,13 +579,13 @@ class FlowEditor {
                 target: `endpoint-top-${targetId}`,
                 paintStyle: { 
                     stroke: '#FFFFFF', 
-                    strokeWidth: 2,
-                    filter: 'drop-shadow(0 0 2px rgba(255, 255, 255, 0.5))'
+                    strokeWidth: 2.5,
+                    strokeOpacity: 0.9
                 },
                 hoverPaintStyle: { 
                     stroke: '#FFFFFF', 
-                    strokeWidth: 3,
-                    filter: 'drop-shadow(0 0 4px rgba(255, 255, 255, 0.8))'
+                    strokeWidth: 3.5,
+                    strokeOpacity: 1
                 },
                 overlays: [
                     ['Label', {
@@ -598,6 +613,13 @@ class FlowEditor {
             
             if (connection) {
                 this.connections.set(connId, connection);
+                
+                // Adicionar animação de highlight
+                setTimeout(() => {
+                    if (this.instance) {
+                        this.instance.repaint(connection);
+                    }
+                }, 10);
                 
                 const step = this.alpine?.config?.flow_steps?.find(s => String(s.id) === sourceId);
                 if (step && (!step.connections || !step.connections[connectionType])) {
@@ -672,18 +694,17 @@ class FlowEditor {
             this.updateAlpineConnection(sourceStepId, targetStepId, connectionType);
             
             if (info.connection) {
-                const color = '#FFFFFF';
                 const label = this.getConnectionLabel(connectionType);
                 
                 info.connection.setPaintStyle({ 
-                    stroke: color, 
-                    strokeWidth: 2,
-                    filter: 'drop-shadow(0 0 2px rgba(255, 255, 255, 0.5))'
+                    stroke: '#FFFFFF', 
+                    strokeWidth: 2.5,
+                    strokeOpacity: 0.9
                 });
                 info.connection.setHoverPaintStyle({ 
-                    stroke: color, 
-                    strokeWidth: 3,
-                    filter: 'drop-shadow(0 0 4px rgba(255, 255, 255, 0.8))'
+                    stroke: '#FFFFFF', 
+                    strokeWidth: 3.5,
+                    strokeOpacity: 1
                 });
                 
                 info.connection.setLabel({
@@ -710,6 +731,13 @@ class FlowEditor {
                 
                 const connId = `${sourceStepId}-${targetStepId}-${connectionType}`;
                 this.connections.set(connId, info.connection);
+                
+                // Repintar para garantir visibilidade
+                setTimeout(() => {
+                    if (this.instance) {
+                        this.instance.repaint(info.connection);
+                    }
+                }, 10);
             }
         }
     }
@@ -748,6 +776,10 @@ class FlowEditor {
             
             let x = rect.left - canvasRect.left;
             let y = rect.top - canvasRect.top;
+            
+            // Ajustar para zoom e pan
+            x = (x - this.pan.x) / this.zoomLevel;
+            y = (y - this.pan.y) / this.zoomLevel;
             
             // Snap to grid se habilitado
             if (this.snapToGrid) {
