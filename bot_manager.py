@@ -1598,8 +1598,10 @@ class BotManager:
                 buttons = []
                 for index, btn in enumerate(main_buttons):
                     if btn.get('text') and btn.get('price'):
+                        price = float(btn.get('price', 0))
+                        button_text = f"{btn['text']} - R$ {price:.2f}"
                         buttons.append({
-                            'text': btn['text'],
+                            'text': button_text,
                             'callback_data': f"buy_{index}"
                         })
                 
@@ -2544,8 +2546,10 @@ class BotManager:
                     if btn_index < len(main_buttons):
                         btn = main_buttons[btn_index]
                         if btn.get('text') and btn.get('price'):
+                            price = float(btn.get('price', 0))
+                            button_text = f"{btn['text']} - R$ {price:.2f}"
                             buttons.append({
-                                'text': btn['text'],
+                                'text': button_text,
                                 'callback_data': f"buy_{btn_index}"
                             })
                 elif btn_type == 'redirect' and btn_index is not None:
@@ -2668,8 +2672,10 @@ class BotManager:
                             if btn_index < len(main_buttons):
                                 btn = main_buttons[btn_index]
                                 if btn.get('text') and btn.get('price'):
+                                    price = float(btn.get('price', 0))
+                                    button_text = f"{btn['text']} - R$ {price:.2f}"
                                     buttons.append({
-                                        'text': btn['text'],
+                                        'text': button_text,
                                         'callback_data': f"buy_{btn_index}"
                                     })
                         elif btn_type == 'redirect' and btn_index is not None:
@@ -3579,8 +3585,10 @@ class BotManager:
                 buttons = []
                 for index, btn in enumerate(main_buttons):
                     if btn.get('text') and btn.get('price'):
+                        price = float(btn.get('price', 0))
+                        button_text = f"{btn['text']} - R$ {price:.2f}"
                         buttons.append({
-                            'text': btn['text'],
+                            'text': button_text,
                             'callback_data': f"buy_{index}"  # ✅ CORREÇÃO: Usar apenas o índice (max 10 bytes)
                         })
                 
