@@ -691,17 +691,38 @@ body {
                 <h2 class="config-section-title">Mensagem Inicial</h2>
             </div>
             
+            <!-- Instruções -->
+            <div class="mb-6 p-4 bg-blue-500 bg-opacity-10 border border-blue-400 border-opacity-30 rounded-lg">
+                <div class="flex items-start gap-3">
+                    <i class="fas fa-info-circle text-blue-400 text-xl mt-0.5"></i>
+                    <div class="flex-1">
+                        <h4 class="text-sm font-semibold text-blue-300 mb-2">Como obter URLs do Telegram:</h4>
+                        <ul class="text-xs text-blue-200 space-y-1 list-disc list-inside">
+                            <li>Envie a mídia/áudio para o bot @getidsbot ou @userinfobot</li>
+                            <li>Copie o <code class="bg-blue-500 bg-opacity-20 px-1 rounded">file_id</code> ou <code class="bg-blue-500 bg-opacity-20 px-1 rounded">file_unique_id</code></li>
+                            <li>Ou use links diretos do Telegram: <code class="bg-blue-500 bg-opacity-20 px-1 rounded">https://t.me/...</code></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
             <div class="form-group">
                 <label class="form-label">Mensagem de Boas-vindas</label>
                 <textarea 
                     x-model="config.welcome_message" 
                     class="form-textarea"
-                    placeholder="Digite a mensagem de boas-vindas..."
+                    placeholder="Digite a mensagem de boas-vindas que será enviada quando o usuário iniciar uma conversa com o bot..."
                     :maxlength="4096"
+                    rows="6"
                 ></textarea>
-                <p class="text-sm text-gray-400 mt-2">
-                    <span x-text="(config.welcome_message || '').length"></span> / 4096 caracteres
-                </p>
+                <div class="flex justify-between items-center mt-2">
+                    <p class="text-sm" :class="(config.welcome_message || '').length > 4000 ? 'text-red-400' : (config.welcome_message || '').length > 3500 ? 'text-yellow-400' : 'text-gray-400'">
+                        <span x-text="(config.welcome_message || '').length"></span> / 4096 caracteres
+                    </p>
+                    <p class="text-xs text-gray-500" x-show="getWelcomeMessageLength() > 4096">
+                        <i class="fas fa-exclamation-triangle text-yellow-400"></i> Tamanho total excede o limite do Telegram
+                    </p>
+                </div>
             </div>
 
             <div class="form-group">
@@ -710,16 +731,28 @@ body {
                     <option value="video">Vídeo</option>
                     <option value="photo">Foto</option>
                 </select>
+                <p class="text-xs text-gray-500 mt-1">A mídia será enviada junto com a mensagem de boas-vindas</p>
             </div>
 
             <div class="form-group">
                 <label class="form-label">URL da Mídia</label>
-                <input 
-                    type="text" 
-                    x-model="config.welcome_media_url" 
-                    class="form-input"
-                    placeholder="https://..."
-                />
+                <div class="relative">
+                    <input 
+                        type="text" 
+                        x-model="config.welcome_media_url" 
+                        class="form-input"
+                        placeholder="Cole aqui o file_id ou URL do Telegram..."
+                        :class="{
+                            'border-green-500': config.welcome_media_url && (config.welcome_media_url.startsWith('http') || config.welcome_media_url.length > 10),
+                            'border-red-500': config.welcome_media_url && config.welcome_media_url.length > 0 && !config.welcome_media_url.startsWith('http') && config.welcome_media_url.length < 10
+                        }"
+                    />
+                    <i class="fas fa-check-circle absolute right-3 top-1/2 transform -translate-y-1/2 text-green-500" 
+                       x-show="config.welcome_media_url && (config.welcome_media_url.startsWith('http') || config.welcome_media_url.length > 10)"></i>
+                </div>
+                <p class="text-xs text-gray-500 mt-1">
+                    <i class="fas fa-lightbulb"></i> Pode ser um <code class="bg-gray-800 px-1 rounded">file_id</code> do Telegram ou uma URL
+                </p>
             </div>
 
             <div class="form-group">
@@ -727,16 +760,109 @@ body {
                     <input type="checkbox" x-model="config.welcome_audio_enabled" />
                     <span class="form-label">Habilitar Áudio Complementar</span>
                 </label>
+                <p class="text-xs text-gray-500 mt-1">O áudio será enviado após a mídia (se houver) ou após a mensagem</p>
             </div>
 
             <div x-show="config.welcome_audio_enabled" class="form-group">
                 <label class="form-label">URL do Áudio</label>
-                <input 
-                    type="text" 
-                    x-model="config.welcome_audio_url" 
-                    class="form-input"
-                    placeholder="https://..."
-                />
+                <div class="relative">
+                    <input 
+                        type="text" 
+                        x-model="config.welcome_audio_url" 
+                        class="form-input"
+                        placeholder="Cole aqui o file_id ou URL do áudio do Telegram..."
+                        :class="{
+                            'border-green-500': config.welcome_audio_url && (config.welcome_audio_url.startsWith('http') || config.welcome_audio_url.length > 10),
+                            'border-red-500': config.welcome_audio_url && config.welcome_audio_url.length > 0 && !config.welcome_audio_url.startsWith('http') && config.welcome_audio_url.length < 10
+                        }"
+                    />
+                    <i class="fas fa-check-circle absolute right-3 top-1/2 transform -translate-y-1/2 text-green-500" 
+                       x-show="config.welcome_audio_url && (config.welcome_audio_url.startsWith('http') || config.welcome_audio_url.length > 10)"></i>
+                </div>
+                <p class="text-xs text-gray-500 mt-1">
+                    <i class="fas fa-lightbulb"></i> Pode ser um <code class="bg-gray-800 px-1 rounded">file_id</code> do Telegram ou uma URL
+                </p>
+            </div>
+
+            <!-- Preview da Mensagem -->
+            <div class="mt-6 border-t border-gray-700 pt-6">
+                <h3 class="text-md font-semibold text-white mb-4">Preview da Mensagem Inicial</h3>
+                <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+                    <div class="space-y-3">
+                        <!-- Preview da Mensagem -->
+                        <div x-show="config.welcome_message" class="bg-gray-900 rounded-lg p-4 border border-gray-600">
+                            <div class="flex items-start gap-3">
+                                <div class="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
+                                    <i class="fas fa-robot text-white"></i>
+                                </div>
+                                <div class="flex-1">
+                                    <div class="text-white whitespace-pre-wrap" x-text="config.welcome_message || 'Sua mensagem aparecerá aqui...'"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Preview da Mídia -->
+                        <div x-show="config.welcome_media_url" class="bg-gray-900 rounded-lg p-4 border border-gray-600">
+                            <div class="flex items-center gap-3">
+                                <div class="w-12 h-12 bg-purple-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                                    <i :class="config.welcome_media_type === 'video' ? 'fas fa-video text-white' : 'fas fa-image text-white'"></i>
+                                </div>
+                                <div class="flex-1">
+                                    <p class="text-sm text-white font-semibold" x-text="config.welcome_media_type === 'video' ? 'Vídeo' : 'Foto'"></p>
+                                    <p class="text-xs text-gray-400 truncate" x-text="config.welcome_media_url"></p>
+                                </div>
+                                <i class="fas fa-check-circle text-green-400"></i>
+                            </div>
+                        </div>
+
+                        <!-- Preview do Áudio -->
+                        <div x-show="config.welcome_audio_enabled && config.welcome_audio_url" class="bg-gray-900 rounded-lg p-4 border border-gray-600">
+                            <div class="flex items-center gap-3">
+                                <div class="w-12 h-12 bg-green-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                                    <i class="fas fa-headphones text-white"></i>
+                                </div>
+                                <div class="flex-1">
+                                    <p class="text-sm text-white font-semibold">Áudio Complementar</p>
+                                    <p class="text-xs text-gray-400 truncate" x-text="config.welcome_audio_url"></p>
+                                </div>
+                                <i class="fas fa-check-circle text-green-400"></i>
+                            </div>
+                        </div>
+
+                        <!-- Mensagem quando não há conteúdo -->
+                        <div x-show="!config.welcome_message && !config.welcome_media_url && (!config.welcome_audio_enabled || !config.welcome_audio_url)" 
+                             class="text-center py-8 text-gray-500">
+                            <i class="fas fa-comment-slash text-3xl mb-2"></i>
+                            <p class="text-sm">Configure a mensagem inicial acima para ver o preview</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Resumo de Configuração -->
+            <div class="mt-4 p-4 bg-gray-800 rounded-lg border border-gray-700">
+                <h4 class="text-sm font-semibold text-gray-300 mb-3">Resumo da Configuração</h4>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                    <div class="flex items-center gap-2">
+                        <i class="fas fa-comment" :class="config.welcome_message ? 'text-green-400' : 'text-gray-500'"></i>
+                        <span :class="config.welcome_message ? 'text-white' : 'text-gray-500'">
+                            Mensagem: <strong x-text="config.welcome_message ? 'Configurada' : 'Não configurada'"></strong>
+                        </span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <i :class="config.welcome_media_type === 'video' ? 'fas fa-video' : 'fas fa-image'" 
+                           :class="config.welcome_media_url ? 'text-green-400' : 'text-gray-500'"></i>
+                        <span :class="config.welcome_media_url ? 'text-white' : 'text-gray-500'">
+                            Mídia: <strong x-text="config.welcome_media_url ? 'Configurada' : 'Não configurada'"></strong>
+                        </span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <i class="fas fa-headphones" :class="config.welcome_audio_enabled && config.welcome_audio_url ? 'text-green-400' : 'text-gray-500'"></i>
+                        <span :class="config.welcome_audio_enabled && config.welcome_audio_url ? 'text-white' : 'text-gray-500'">
+                            Áudio: <strong x-text="config.welcome_audio_enabled && config.welcome_audio_url ? 'Configurado' : 'Não configurado'"></strong>
+                        </span>
+                    </div>
+                </div>
             </div>
         </div>
 
