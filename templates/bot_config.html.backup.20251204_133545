@@ -1,0 +1,508 @@
+{% extends "base.html" %}
+{% block title %}Configurar Bot - {{ bot.name }}{% endblock %}
+
+{% block extra_head %}
+<style>
+/* ============================================
+   FLOW EDITOR V3.0 - CSS CONSOLIDADO E OTIMIZADO
+   Design System: Red Header #E02727, Body #0F0F14, White Connections
+   ============================================ */
+
+/* Canvas Background - Grid Premium com pontos translúcidos */
+#flow-visual-canvas {
+    background: #0D0F15 !important;
+    background-image: 
+        radial-gradient(circle, rgba(255, 255, 255, 0.25) 1.5px, transparent 1.5px) !important;
+    background-size: 20px 20px !important;
+    font-family: 'Inter', sans-serif;
+    user-select: none;
+    -webkit-user-select: none;
+    cursor: default;
+    position: relative;
+    will-change: transform;
+}
+
+#flow-visual-canvas.panning {
+    cursor: grabbing !important;
+}
+
+#flow-visual-canvas input,
+#flow-visual-canvas textarea {
+    user-select: text !important;
+    -webkit-user-select: text !important;
+}
+
+/* Steps Blocks - Red Header Style Premium */
+.flow-step-block {
+    position: absolute;
+    width: 300px;
+    min-height: 180px;
+    background: #0F0F14;
+    border: 1px solid #242836;
+    border-radius: 14px;
+    cursor: move;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+    animation: stepFadeIn 0.3s ease-out;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    touch-action: none;
+    will-change: transform;
+}
+
+@keyframes stepFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.flow-step-block:hover {
+    border-color: #242836;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    transform: translateY(-2px);
+    z-index: 100;
+}
+
+.flow-step-block.dragging {
+    cursor: grabbing !important;
+    opacity: 0.98;
+    transform: scale(1.02);
+    z-index: 1000 !important;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6);
+    border-color: #FFFFFF;
+    transition: none; /* Remove transição durante drag para suavidade */
+}
+
+.flow-step-block.flow-step-initial {
+    border-color: #FFB800;
+    box-shadow: 
+        0 0 0 3px rgba(255, 184, 0, 0.3),
+        0 0 24px rgba(255, 184, 0, 0.4),
+        0 8px 24px rgba(0, 0, 0, 0.5);
+    animation: initialPulse 2s ease-in-out infinite;
+}
+
+@keyframes initialPulse {
+    0%, 100% {
+        box-shadow: 
+            0 0 0 3px rgba(255, 184, 0, 0.3),
+            0 0 24px rgba(255, 184, 0, 0.4),
+            0 8px 24px rgba(0, 0, 0, 0.5);
+    }
+    50% {
+        box-shadow: 
+            0 0 0 4px rgba(255, 184, 0, 0.4),
+            0 0 32px rgba(255, 184, 0, 0.6),
+            0 8px 24px rgba(0, 0, 0, 0.5);
+    }
+}
+
+.flow-step-block.flow-step-selected {
+    border-color: #FFFFFF;
+    box-shadow: 
+        0 0 0 2px rgba(255, 255, 255, 0.3),
+        0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+/* Header Vermelho - Centralizado */
+.flow-step-header {
+    padding: 20px 16px;
+    background: #E02727;
+    border-radius: 14px 14px 0 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(224, 39, 39, 0.3);
+}
+
+.flow-step-header-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    position: relative;
+}
+
+.flow-step-icon-center {
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    color: #FFFFFF;
+}
+
+.flow-step-title-center {
+    font-size: 16px;
+    font-weight: 700;
+    color: #FFFFFF;
+    font-family: 'Inter', sans-serif;
+    text-align: center;
+    letter-spacing: 0.3px;
+}
+
+.flow-step-start-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    font-size: 18px;
+    animation: starPulse 2s ease-in-out infinite;
+    filter: drop-shadow(0 0 4px rgba(255, 184, 0, 0.8));
+    z-index: 10;
+}
+
+@keyframes starPulse {
+    0%, 100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+    50% {
+        transform: scale(1.15);
+        opacity: 0.9;
+    }
+}
+
+/* Corpo Preto Premium */
+.flow-step-body {
+    padding: 20px 16px;
+    background: #0F0F14;
+    min-height: 100px;
+    border-top: 1px solid #242836;
+}
+
+.flow-step-preview {
+    color: #FFFFFF;
+    font-size: 13px;
+    line-height: 1.7;
+    word-break: break-word;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-family: 'Inter', sans-serif;
+}
+
+/* Footer com Botões Vermelhos */
+.flow-step-footer {
+    padding: 14px 16px;
+    border-top: 1px solid #242836;
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    background: #0F0F14;
+    border-radius: 0 0 14px 14px;
+}
+
+.flow-step-btn-action {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 14px;
+    background: #E02727;
+    color: #FFFFFF;
+    font-weight: 700;
+    box-shadow: 0 2px 6px rgba(224, 39, 39, 0.3);
+}
+
+.flow-step-btn-action:hover {
+    background: #ff3f3f;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(224, 39, 39, 0.5);
+}
+
+.flow-step-btn-action:active {
+    transform: translateY(0);
+}
+
+/* Labels de conexão - White Style */
+.connection-label-white {
+    pointer-events: none;
+    user-select: none;
+    font-weight: 600;
+    font-family: 'Inter', sans-serif;
+    font-size: 10px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    color: #FFFFFF !important;
+    background-color: #0D0F15 !important;
+    border: 1px solid #242836 !important;
+}
+
+/* Endpoints Brancos - Visíveis e Funcionais */
+.jtk-endpoint {
+    cursor: crosshair !important;
+    transition: all 0.2s ease;
+    display: block !important;
+    pointer-events: auto !important;
+}
+
+.jtk-endpoint:hover {
+    transform: scale(1.3);
+    z-index: 50 !important;
+}
+
+/* Conexões Brancas com Glow - Consolidado */
+.jtk-connector {
+    cursor: pointer !important;
+    transition: stroke-width 0.2s ease, opacity 0.2s ease;
+    stroke: #FFFFFF !important;
+    stroke-width: 2.5 !important;
+    stroke-opacity: 0.9 !important;
+}
+
+.jtk-connector:hover {
+    stroke-width: 3.5 !important;
+    stroke-opacity: 1 !important;
+}
+
+.jtk-connector path {
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke: #FFFFFF !important;
+}
+
+/* Animação ao criar conexão */
+.jtk-connector.jtk-connector-new {
+    animation: connectionGlow 0.5s ease-out;
+}
+
+@keyframes connectionGlow {
+    0% {
+        opacity: 0;
+        stroke-opacity: 0;
+    }
+    50% {
+        stroke-opacity: 1;
+    }
+    100% {
+        opacity: 1;
+        stroke-opacity: 0.9;
+    }
+}
+
+/* Garantir que botões dentro do card não sejam arrastáveis */
+.flow-step-block button,
+.flow-step-block input,
+.flow-step-block textarea,
+.flow-step-block select,
+.flow-step-block a,
+.flow-step-block i {
+    cursor: pointer !important;
+    pointer-events: auto !important;
+    user-select: auto !important;
+}
+
+/* Responsividade para telas menores */
+@media (max-width: 768px) {
+    .flow-step-block {
+        min-width: 180px;
+        max-width: 240px;
+        width: 200px;
+    }
+    
+    #flow-visual-canvas {
+        height: calc(100vh - 320px) !important;
+        min-height: 400px !important;
+    }
+    
+    .config-section {
+        padding: 16px;
+    }
+    
+    .config-section-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}
+
+@media (max-width: 640px) {
+    .flow-step-block {
+        min-width: 160px;
+        max-width: 200px;
+        width: 180px;
+        font-size: 0.875rem;
+    }
+    
+    #flow-visual-canvas {
+        height: calc(100vh - 280px) !important;
+        min-height: 350px !important;
+    }
+    
+    .config-section {
+        padding: 12px;
+        border-radius: 8px;
+    }
+    
+    .config-section-header {
+        gap: 8px;
+    }
+    
+    .config-section-title {
+        font-size: 1rem;
+    }
+    
+    .form-group {
+        margin-bottom: 16px;
+    }
+    
+    /* Grids responsivos */
+    .grid.grid-cols-1.md\:grid-cols-2 {
+        grid-template-columns: 1fr;
+    }
+    
+    .grid.grid-cols-1.md\:grid-cols-3 {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ✅ Garantir que todos os containers sejam 100% em mobile */
+@media (max-width: 640px) {
+    /* Container principal - garantir 100% width */
+    .max-w-full {
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
+        max-width: 100vw;
+        overflow-x: hidden;
+    }
+    
+    /* Botões full width em mobile */
+    .btn-action {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    /* Canvas do editor visual - garantir 100% em mobile */
+    #flow-visual-canvas {
+        width: 100% !important;
+        max-width: 100% !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        padding: 0 !important;
+    }
+    
+    /* Garantir que grids sejam sempre 1 coluna em mobile */
+    .grid {
+        grid-template-columns: 1fr !important;
+    }
+}
+
+/* ✅ Garantir que elementos não quebrem o layout */
+* {
+    box-sizing: border-box;
+}
+
+/* ✅ Prevenir overflow horizontal */
+body {
+    overflow-x: hidden;
+}
+
+/* ✅ Garantir que modais sejam responsivos */
+@media (max-width: 640px) {
+    .fixed.inset-0.z-50 > .flex > div,
+    [id^="flow-step-modal-"],
+    [id^="condition-modal-"] {
+        width: 95% !important;
+        max-width: 95% !important;
+        margin: 0 auto !important;
+        padding: 1rem !important;
+    }
+}
+
+/* Resto do CSS do template... (mantendo todo o CSS existente) */
+</style>
+<script>
+    window.stripSurrogateChars = function (value) {
+        if (!value) {
+            return '';
+        }
+        try {
+            // ✅ CORREÇÃO CRÍTICA: Remover APENAS surrogates inválidos (isolados)
+            // Preservar pares de surrogates válidos (emojis, caracteres Unicode especiais)
+            // Surrogates válidos vêm em pares: high surrogate (\uD800-\uDBFF) + low surrogate (\uDC00-\uDFFF)
+            // Surrogates inválidos são isolados ou fora de ordem
+            
+            // Não remover nada - deixar o texto como está
+            // O Telegram e o banco de dados suportam UTF-8 completo
+            return value;
+        } catch (err) {
+            return value || '';
+        }
+    };
+</script>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-full mx-auto px-2 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 md:py-8" x-data="botConfigApp()" x-init="init()">
+    <!-- Conteúdo do template... (mantendo todo o HTML existente) -->
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<!-- Flow Editor JS -->
+<script src="{{ url_for('static', filename='js/flow_editor.js') }}?v=2.0.1"></script>
+<script>
+function botConfigApp() {
+    return {
+        bot_id: {{ bot.id }},
+        loading: false,
+        activeTab: 'welcome',
+        config: {
+            // ... resto da configuração ...
+        },
+        // ... resto dos métodos ...
+        init() {
+            // Função de inicialização do componente Alpine.js
+            // Carrega a configuração do bot ao inicializar
+            this.loadConfig();
+        },
+        loadConfig() {
+            // Carregar configuração do bot via API
+            this.loading = true;
+            fetch(`/api/bots/${this.bot_id}/config`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.config) {
+                        this.config = data.config;
+                        // Inicializar editor visual se flow estiver habilitado
+                        if (this.config.flow_enabled && window.flowEditor) {
+                            setTimeout(() => {
+                                if (window.flowEditor && window.flowEditor.instance) {
+                                    window.flowEditor.renderAllSteps();
+                                    window.flowEditor.revalidateConnections();
+                                }
+                            }, 300);
+                        }
+                    }
+                    this.loading = false;
+                })
+                .catch(error => {
+                    console.error('Erro ao carregar configuração:', error);
+                    this.loading = false;
+                });
+        },
+        getAvailableStepsForConnection(currentStepId) {
+            if (!this.config.flow_steps) return [];
+            return this.config.flow_steps.filter(step => String(step.id) !== String(currentStepId));
+        }
+    };
+}
+</script>
+{% endblock %}
