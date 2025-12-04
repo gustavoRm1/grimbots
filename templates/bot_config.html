@@ -796,6 +796,18 @@ body {
                             ></textarea>
                         </div>
 
+                        <!-- Preview do Botão -->
+                        <div class="mt-4 p-4 bg-gray-800 rounded-lg border border-gray-700">
+                            <h4 class="text-sm font-semibold text-gray-300 mb-2">Preview do Botão</h4>
+                            <div class="bg-gray-900 p-3 rounded border border-gray-600">
+                                <div class="text-white font-semibold mb-1" x-text="button.text || 'Texto do botão'"></div>
+                                <div class="text-gray-400 text-sm mb-2" x-text="button.description || 'Descrição do produto'"></div>
+                                <div class="text-yellow-400 font-bold" x-show="button.price">
+                                    R$ <span x-text="button.price?.toFixed(2) || '0.00'"></span>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Order Bumps -->
                         <div class="mt-4">
                             <div class="flex justify-between items-center mb-2">
@@ -834,6 +846,45 @@ body {
                                     <div class="form-group">
                                         <label class="form-label">Descrição</label>
                                         <textarea x-model="bump.description" class="form-textarea"></textarea>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label class="form-label">Tipo de Mídia</label>
+                                        <select x-model="bump.media_type" class="form-select">
+                                            <option value="video">Vídeo</option>
+                                            <option value="photo">Foto</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label class="form-label">URL da Mídia</label>
+                                        <input type="text" x-model="bump.media_url" class="form-input" placeholder="https://..." />
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label class="form-label">Texto do Botão Aceitar</label>
+                                        <input type="text" x-model="bump.accept_text" class="form-input" placeholder="Sim, eu quero!" />
+                                    </div>
+
+                                    <div class="form-group">
+                                        <label class="form-label">Texto do Botão Recusar</label>
+                                        <input type="text" x-model="bump.decline_text" class="form-input" placeholder="Não, obrigado" />
+                                    </div>
+
+                                    <!-- Preview do Order Bump -->
+                                    <div class="mt-3 p-3 bg-gray-800 rounded border border-gray-600" x-show="bump.enabled">
+                                        <h5 class="text-xs font-semibold text-gray-300 mb-2">Preview do Order Bump</h5>
+                                        <div class="bg-gray-900 p-2 rounded text-sm">
+                                            <div class="text-white mb-1" x-text="bump.message || 'Mensagem do order bump'"></div>
+                                            <div class="text-gray-400 text-xs mb-2" x-text="bump.description || 'Descrição'"></div>
+                                            <div class="flex gap-2">
+                                                <button class="px-3 py-1 bg-green-600 text-white rounded text-xs" x-text="bump.accept_text || 'Sim, eu quero!'"></button>
+                                                <button class="px-3 py-1 bg-gray-600 text-white rounded text-xs" x-text="bump.decline_text || 'Não, obrigado'"></button>
+                                            </div>
+                                            <div class="text-yellow-400 text-xs mt-2" x-show="bump.price">
+                                                + R$ <span x-text="bump.price?.toFixed(2) || '0.00'"></span>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </template>
@@ -975,6 +1026,27 @@ body {
                                     <span x-text="button.subscription.duration_type === 'hours' ? (button.subscription.duration_value == 1 ? 'hora' : 'horas') : button.subscription.duration_type === 'days' ? (button.subscription.duration_value == 1 ? 'dia' : 'dias') : button.subscription.duration_type === 'weeks' ? (button.subscription.duration_value == 1 ? 'semana' : 'semanas') : (button.subscription.duration_value == 1 ? 'mês' : 'meses')"></span>.
                                 </p>
                             </div>
+
+                            <!-- Preview da Assinatura -->
+                            <div class="mt-4 p-4 bg-gray-800 rounded-lg border border-gray-700">
+                                <h4 class="text-sm font-semibold text-gray-300 mb-2">Preview da Assinatura VIP</h4>
+                                <div class="bg-gray-900 p-3 rounded border border-gray-600">
+                                    <div class="flex items-center gap-2 mb-2">
+                                        <i class="fas fa-crown text-yellow-400"></i>
+                                        <span class="text-white font-semibold">Acesso VIP</span>
+                                    </div>
+                                    <div class="text-gray-400 text-sm" x-show="button.subscription.duration_value && button.subscription.duration_value > 0">
+                                        Duração: <span class="text-white" x-text="button.subscription.duration_value"></span> 
+                                        <span x-text="button.subscription.duration_type === 'hours' ? (button.subscription.duration_value == 1 ? 'hora' : 'horas') : button.subscription.duration_type === 'days' ? (button.subscription.duration_value == 1 ? 'dia' : 'dias') : button.subscription.duration_type === 'weeks' ? (button.subscription.duration_value == 1 ? 'semana' : 'semanas') : (button.subscription.duration_value == 1 ? 'mês' : 'meses')"></span>
+                                    </div>
+                                    <div class="text-gray-400 text-sm" x-show="button.subscription.vip_chat_id || button.subscription.vip_group_link">
+                                        <i class="fas fa-check-circle text-green-400"></i> Grupo configurado
+                                    </div>
+                                    <div class="text-gray-400 text-sm" x-show="!button.subscription.vip_chat_id && !button.subscription.vip_group_link">
+                                        <i class="fas fa-exclamation-triangle text-yellow-400"></i> Grupo não configurado
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </template>
@@ -1038,6 +1110,98 @@ body {
                         <div class="form-group">
                             <label class="form-label">Texto do Botão</label>
                             <input type="text" x-model="downsell.button_text" class="form-input" />
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Tipo de Mídia</label>
+                            <select x-model="downsell.media_type" class="form-select">
+                                <option value="video">Vídeo</option>
+                                <option value="photo">Foto</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">URL da Mídia</label>
+                            <input type="text" x-model="downsell.media_url" class="form-input" placeholder="https://..." />
+                        </div>
+
+                        <div class="form-group">
+                            <label class="flex items-center gap-2">
+                                <input type="checkbox" x-model="downsell.audio_enabled" />
+                                <span class="form-label">Habilitar Áudio Complementar</span>
+                            </label>
+                        </div>
+
+                        <div x-show="downsell.audio_enabled" class="form-group">
+                            <label class="form-label">URL do Áudio</label>
+                            <input type="text" x-model="downsell.audio_url" class="form-input" placeholder="https://..." />
+                        </div>
+
+                        <!-- Order Bump do Downsell -->
+                        <div class="border-t border-gray-700 pt-4 mt-4">
+                            <div class="flex justify-between items-center mb-3">
+                                <h4 class="text-md font-semibold text-white">Order Bump (Opcional)</h4>
+                                <label class="flex items-center gap-2">
+                                    <input type="checkbox" x-model="downsell.order_bump.enabled" />
+                                    <span class="form-label">Habilitar Order Bump</span>
+                                </label>
+                            </div>
+
+                            <div x-show="downsell.order_bump.enabled" class="space-y-4">
+                                <!-- Opção: Usar Order Bump dos Botões Principais -->
+                                <div class="form-group">
+                                    <label class="form-label">Usar Order Bump Existente</label>
+                                    <select 
+                                        @change="if ($event.target.value) { const [btnIdx, bumpIdx] = $event.target.value.split('_').map(Number); useOrderBumpFromButtons(downsell, btnIdx, bumpIdx); }"
+                                        class="form-select"
+                                    >
+                                        <option value="">Criar novo Order Bump</option>
+                                        <template x-for="(button, btnIdx) in config.main_buttons" :key="btnIdx">
+                                            <template x-for="(bump, bumpIdx) in (button.order_bumps || [])" :key="bumpIdx">
+                                                <option :value="`${btnIdx}_${bumpIdx}`" x-text="button.text + ' - Order Bump ' + (bumpIdx + 1)"></option>
+                                            </template>
+                                        </template>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="form-label">Mensagem do Order Bump</label>
+                                    <textarea x-model="downsell.order_bump.message" class="form-textarea"></textarea>
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="form-label">Preço do Order Bump (R$)</label>
+                                    <input type="number" x-model.number="downsell.order_bump.price" class="form-input" step="0.01" min="0" />
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="form-label">Descrição</label>
+                                    <textarea x-model="downsell.order_bump.description" class="form-textarea"></textarea>
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="form-label">Tipo de Mídia</label>
+                                    <select x-model="downsell.order_bump.media_type" class="form-select">
+                                        <option value="video">Vídeo</option>
+                                        <option value="photo">Foto</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="form-label">URL da Mídia</label>
+                                    <input type="text" x-model="downsell.order_bump.media_url" class="form-input" placeholder="https://..." />
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="form-label">Texto do Botão Aceitar</label>
+                                    <input type="text" x-model="downsell.order_bump.accept_text" class="form-input" placeholder="Sim, eu quero!" />
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="form-label">Texto do Botão Recusar</label>
+                                    <input type="text" x-model="downsell.order_bump.decline_text" class="form-input" placeholder="Não, obrigado" />
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </template>
@@ -1103,6 +1267,31 @@ body {
                             <label class="form-label">Link de Acesso</label>
                             <input type="text" x-model="upsell.access_link" class="form-input" />
                         </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Tipo de Mídia</label>
+                            <select x-model="upsell.media_type" class="form-select">
+                                <option value="video">Vídeo</option>
+                                <option value="photo">Foto</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">URL da Mídia</label>
+                            <input type="text" x-model="upsell.media_url" class="form-input" placeholder="https://..." />
+                        </div>
+
+                        <div class="form-group">
+                            <label class="flex items-center gap-2">
+                                <input type="checkbox" x-model="upsell.audio_enabled" />
+                                <span class="form-label">Habilitar Áudio Complementar</span>
+                            </label>
+                        </div>
+
+                        <div x-show="upsell.audio_enabled" class="form-group">
+                            <label class="form-label">URL do Áudio</label>
+                            <input type="text" x-model="upsell.audio_url" class="form-input" placeholder="https://..." />
+                        </div>
                     </div>
                 </template>
             </div>
@@ -1157,7 +1346,22 @@ body {
             </div>
 
             <div x-show="config.flow_enabled" class="mt-4">
-                <div id="flow-visual-canvas" style="width: 100%; height: 600px; border: 1px solid #242836; border-radius: 8px;"></div>
+                <div 
+                    id="flow-visual-canvas" 
+                    style="width: 100%; height: 600px; border: 1px solid #242836; border-radius: 8px;"
+                    x-init="
+                        if (config.flow_enabled && activeTab === 'flow') {
+                            setTimeout(() => {
+                                if (typeof FlowEditor !== 'undefined' && !window.flowEditor) {
+                                    initVisualFlowEditor();
+                                } else if (window.flowEditor && window.flowEditor.instance) {
+                                    window.flowEditor.renderAllSteps();
+                                    window.flowEditor.revalidateConnections();
+                                }
+                            }, 400);
+                        }
+                    "
+                ></div>
             </div>
         </div>
 
@@ -1228,7 +1432,7 @@ body {
                     <textarea x-model="editingStep.config.message" class="form-textarea" placeholder="Digite a mensagem do step..."></textarea>
                 </div>
 
-                <div class="form-group" x-show="editingStep.type === 'message' || editingStep.type === 'content' || editingStep.type === 'video'">
+                <div class="form-group" x-show="editingStep.type === 'message' || editingStep.type === 'content' || editingStep.type === 'video' || editingStep.type === 'audio'">
                     <label class="form-label">URL da Mídia</label>
                     <input type="text" x-model="editingStep.config.media_url" class="form-input" placeholder="https://..." />
                 </div>
@@ -1241,9 +1445,34 @@ body {
                     </select>
                 </div>
 
+                <div class="form-group" x-show="editingStep.type === 'audio'">
+                    <label class="form-label">URL do Áudio</label>
+                    <input type="text" x-model="editingStep.config.audio_url" class="form-input" placeholder="https://..." />
+                </div>
+
+                <div class="form-group" x-show="editingStep.type === 'payment'">
+                    <label class="form-label">Preço (R$)</label>
+                    <input type="number" x-model.number="editingStep.config.price" class="form-input" step="0.01" min="0" />
+                </div>
+
+                <div class="form-group" x-show="editingStep.type === 'payment'">
+                    <label class="form-label">Nome do Produto</label>
+                    <input type="text" x-model="editingStep.config.product_name" class="form-input" />
+                </div>
+
+                <div class="form-group" x-show="editingStep.type === 'access'">
+                    <label class="form-label">Link de Acesso</label>
+                    <input type="text" x-model="editingStep.config.access_link" class="form-input" placeholder="https://..." />
+                </div>
+
                 <div class="form-group">
                     <label class="form-label">Delay (segundos)</label>
                     <input type="number" x-model.number="editingStep.delay_seconds" class="form-input" min="0" />
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Título do Step (Opcional)</label>
+                    <input type="text" x-model="editingStep.title" class="form-input" placeholder="Deixe vazio para usar tipo padrão" />
                 </div>
 
                 <!-- Conexões -->
