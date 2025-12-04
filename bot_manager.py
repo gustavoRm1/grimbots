@@ -8941,13 +8941,21 @@ Seu pagamento ainda não foi confirmado.
                         
                         # Extrair apenas o nome do produto (remover valor se existir)
                         original_btn_text = btn.get('text', 'Produto')
-                        # Remover padrões como "R$X.XX" ou "R$ X.XX" do texto original
-                        product_name = re.sub(r'\s*R\$\s*\d+[.,]\d+', '', original_btn_text).strip()
+                        # Verificar se tem "por" no texto original para manter no resultado
+                        has_por = 'por' in original_btn_text.lower()
+                        # Remover padrões como "R$X.XX", "por X.XX", "X,XX", "por 19,97", etc.
+                        # Remove valores com R$ e também valores soltos (19,97, por 19,97, etc)
+                        product_name = re.sub(r'\s*(por\s+)?(R\$\s*)?\d+[.,]\d+', '', original_btn_text, flags=re.IGNORECASE).strip()
+                        # Limpar espaços extras e "por" solto no final (mas vamos adicionar depois se tinha)
+                        product_name = re.sub(r'\s+por\s*$', '', product_name, flags=re.IGNORECASE).strip()
                         if not product_name:
                             product_name = 'Produto'
                         
-                        # Texto do botão: Nome + Valor com desconto + Percentual (apenas valor com desconto)
-                        btn_text = f"{product_name} R${discounted_price:.2f} ({int(discount_percentage)}% OFF)"
+                        # Texto do botão: Nome + "por" (se tinha) + Valor com desconto + Percentual
+                        if has_por:
+                            btn_text = f"{product_name} por R${discounted_price:.2f} ({int(discount_percentage)}% OFF)"
+                        else:
+                            btn_text = f"{product_name} R${discounted_price:.2f} ({int(discount_percentage)}% OFF)"
                         
                         buttons.append({
                             'text': btn_text,
@@ -8983,16 +8991,24 @@ Seu pagamento ainda não foi confirmado.
                     # No modo percentual, sempre usar apenas o valor com desconto
                     # Extrair nome do produto (remover valor se existir no button_text customizado)
                     custom_button_text = downsell.get('button_text', '').strip()
+                    has_por = False
                     if custom_button_text:
-                        # Remover padrões como "R$X.XX" ou "R$ X.XX" do texto customizado
-                        product_name = re.sub(r'\s*R\$\s*\d+[.,]\d+', '', custom_button_text).strip()
+                        # Verificar se tem "por" no texto original para manter no resultado
+                        has_por = 'por' in custom_button_text.lower()
+                        # Remover padrões como "R$X.XX", "por X.XX", "X,XX", etc.
+                        product_name = re.sub(r'\s*(por\s+)?(R\$\s*)?\d+[.,]\d+', '', custom_button_text, flags=re.IGNORECASE).strip()
+                        # Limpar espaços extras e "por" solto no final (mas vamos adicionar depois se tinha)
+                        product_name = re.sub(r'\s+por\s*$', '', product_name, flags=re.IGNORECASE).strip()
                         if not product_name:
                             product_name = downsell.get('product_name', 'Produto') or 'Produto'
                     else:
                         product_name = downsell.get('product_name', 'Produto') or 'Produto'
                     
-                    # Texto do botão: Nome + Valor com desconto + Percentual (apenas valor com desconto)
-                    button_text = f'{product_name} R${price:.2f} ({int(discount_percentage)}% OFF)'
+                    # Texto do botão: Nome + "por" (se tinha) + Valor com desconto + Percentual
+                    if has_por:
+                        button_text = f'{product_name} por R${price:.2f} ({int(discount_percentage)}% OFF)'
+                    else:
+                        button_text = f'{product_name} R${price:.2f} ({int(discount_percentage)}% OFF)'
                     
                     buttons = [{
                         'text': button_text,
@@ -9407,13 +9423,21 @@ Seu pagamento ainda não foi confirmado.
                         
                         # Extrair apenas o nome do produto (remover valor se existir)
                         original_btn_text = btn.get('text', 'Produto')
-                        # Remover padrões como "R$X.XX" ou "R$ X.XX" do texto original
-                        product_name = re.sub(r'\s*R\$\s*\d+[.,]\d+', '', original_btn_text).strip()
+                        # Verificar se tem "por" no texto original para manter no resultado
+                        has_por = 'por' in original_btn_text.lower()
+                        # Remover padrões como "R$X.XX", "por X.XX", "X,XX", "por 19,97", etc.
+                        # Remove valores com R$ e também valores soltos (19,97, por 19,97, etc)
+                        product_name = re.sub(r'\s*(por\s+)?(R\$\s*)?\d+[.,]\d+', '', original_btn_text, flags=re.IGNORECASE).strip()
+                        # Limpar espaços extras e "por" solto no final (mas vamos adicionar depois se tinha)
+                        product_name = re.sub(r'\s+por\s*$', '', product_name, flags=re.IGNORECASE).strip()
                         if not product_name:
                             product_name = 'Produto'
                         
-                        # Texto do botão: Nome + Valor com desconto + Percentual (apenas valor com desconto)
-                        btn_text = f"{product_name} R${discounted_price:.2f} ({int(discount_percentage)}% OFF)"
+                        # Texto do botão: Nome + "por" (se tinha) + Valor com desconto + Percentual
+                        if has_por:
+                            btn_text = f"{product_name} por R${discounted_price:.2f} ({int(discount_percentage)}% OFF)"
+                        else:
+                            btn_text = f"{product_name} R${discounted_price:.2f} ({int(discount_percentage)}% OFF)"
                         
                         buttons.append({
                             'text': btn_text,
