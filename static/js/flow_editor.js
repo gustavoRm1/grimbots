@@ -174,12 +174,13 @@ class FlowEditor {
         } else {
             this.contentContainer = document.createElement('div');
             this.contentContainer.className = 'flow-canvas-content';
+            // CRÍTICO: Tamanho grande para suportar fluxos grandes (não 100% fixo)
             this.contentContainer.style.cssText = `
                 position: absolute;
                 top: 0;
                 left: 0;
-                width: 100%;
-                height: 100%;
+                width: 5000px;
+                height: 5000px;
                 transform-origin: 0 0;
                 will-change: transform;
                 pointer-events: auto;
@@ -203,10 +204,21 @@ class FlowEditor {
             const observer = new MutationObserver((mutations) => {
                 mutations.forEach((mutation) => {
                     if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
-                        // Transform mudou, revalidar endpoints
+                        // Transform mudou, revalidar endpoints (PATCH CIRÚRGICO)
                         if (this.instance && this.steps.size > 0) {
-                            this.steps.forEach((element) => {
-                                this.instance.revalidate(element);
+                            this.steps.forEach((element, stepId) => {
+                                const block = document.getElementById(`step-${stepId}`);
+                                if (!block) return;
+                                
+                                // Revalidar o card
+                                this.instance.revalidate(block);
+                                
+                                // Revalidar nodes específicos dentro do card
+                                const inputs = block.querySelectorAll('.flow-step-node-input');
+                                const outputs = block.querySelectorAll('.flow-step-node-output');
+                                
+                                inputs.forEach(n => this.instance.revalidate(n));
+                                outputs.forEach(n => this.instance.revalidate(n));
                             });
                             this.instance.repaintEverything();
                         }
@@ -243,16 +255,22 @@ class FlowEditor {
         }
         this.repaintTimeout = setTimeout(() => {
             if (this.instance) {
-                // CRÍTICO: Revalidar todos os elementos E seus nodes
+                // CRÍTICO: Revalidar todos os elementos E seus nodes (PATCH CIRÚRGICO)
                 // Os nodes dentro dos cards acompanham o transform via CSS
                 // Mas jsPlumb precisa recalcular as posições das conexões
-                this.steps.forEach((element) => {
-                    this.instance.revalidate(element);
+                this.steps.forEach((element, stepId) => {
+                    const block = document.getElementById(`step-${stepId}`);
+                    if (!block) return;
+                    
+                    // Revalidar o card
+                    this.instance.revalidate(block);
+                    
                     // Revalidar nodes específicos dentro do card
-                    const inputNode = element.querySelector('.flow-step-node-input');
-                    const outputNode = element.querySelector('.flow-step-node-output');
-                    if (inputNode) this.instance.revalidate(inputNode);
-                    if (outputNode) this.instance.revalidate(outputNode);
+                    const inputs = block.querySelectorAll('.flow-step-node-input');
+                    const outputs = block.querySelectorAll('.flow-step-node-output');
+                    
+                    inputs.forEach(n => this.instance.revalidate(n));
+                    outputs.forEach(n => this.instance.revalidate(n));
                 });
                 // Repintar todas as conexões
                 this.instance.repaintEverything();
@@ -425,14 +443,15 @@ class FlowEditor {
         const customButtons = stepConfig.custom_buttons || [];
         const hasButtons = customButtons.length > 0;
         
-        // Criar elemento - CRÍTICO: usar flow-card com position relative
+        // Criar elemento - CRÍTICO: usar flow-card (position absolute para canvas)
         const stepElement = document.createElement('div');
         stepElement.id = `step-${stepId}`;
         stepElement.className = 'flow-step-block flow-card';
         stepElement.dataset.stepId = stepId;
         
-        // CRÍTICO: position relative para nodes absolutos funcionarem
-        stepElement.style.position = 'relative';
+        // CRÍTICO: position absolute para posicionamento no canvas (não relative!)
+        // O .flow-step-block-inner dentro terá position relative para os nodes
+        stepElement.style.position = 'absolute';
         
         // Posição usando transform (GPU acceleration)
         stepElement.style.transform = `translate3d(${position.x}px, ${position.y}px, 0)`;
@@ -450,8 +469,8 @@ class FlowEditor {
         const mediaHTML = mediaUrl ? this.getMediaPreviewHtml(stepConfig, mediaType) : '';
         const buttonsHTML = hasButtons ? this.getButtonPreviewHtml(customButtons) : '';
         
-        // HTML do card - CRÍTICO: Nodes DEVEM estar literalmente dentro do card
-        stepElement.innerHTML = `
+        // HTML do card - CRÍTICO: Embrulhar em .flow-step-block-inner para referência correta dos nodes
+        const cardContent = `
             <div class="flow-step-header">
                 <div class="flow-step-header-content">
                     <div class="flow-step-icon-center">
@@ -482,19 +501,40 @@ class FlowEditor {
             ${!hasButtons ? '<div class="node-output flow-step-node-output" data-node-type="output" data-step-id="' + stepId + '"></div>' : ''}
         `;
         
+        // CRÍTICO: Embrulhar conteúdo em .flow-step-block-inner para referência correta dos nodes
+        stepElement.innerHTML = `
+            <div class="flow-step-block-inner">
+                ${cardContent}
+            </div>
+        `;
+        
         // Adicionar ao container
         const container = this.contentContainer || this.canvas;
         container.appendChild(stepElement);
         
-        // Tornar arrastável (otimizado)
+        // CRÍTICO: Limpar event listeners antigos para evitar duplicação
+        stepElement.onclick = null;
+        stepElement.onmousedown = null;
+        stepElement.onmouseup = null;
+        stepElement.onmousemove = null;
+        
+        // Tornar arrastável (PATCH CIRÚRGICO - ManyChat style)
         this.instance.draggable(stepElement, {
-            containment: 'parent',
-            grid: false,
+            grid: [10, 10],
+            containment: false,
+            start: () => {
+                stepElement.classList.add('dragging');
+            },
             drag: (params) => {
                 this.onStepDrag(params);
             },
             stop: (params) => {
+                stepElement.classList.remove('dragging');
                 this.onStepDragStop(params);
+                // CRÍTICO: Repintar após drag parar
+                if (this.instance) {
+                    this.instance.repaintEverything();
+                }
             },
             cursor: 'move',
             zIndex: 1000
@@ -545,9 +585,19 @@ class FlowEditor {
         if (inputNodeOld) this.instance.removeAllEndpoints(inputNodeOld);
         if (outputNodeOld) this.instance.removeAllEndpoints(outputNodeOld);
         
-        // CRÍTICO: Garantir que o card tenha position relative
-        if (!element.style.position || element.style.position === 'absolute') {
-            element.style.position = 'relative';
+        // CRÍTICO: Garantir que o card tenha position absolute (não relative!)
+        element.style.position = 'absolute';
+        
+        // CRÍTICO: Buscar ou criar wrapper interno para referência correta dos nodes
+        let innerWrapper = element.querySelector('.flow-step-block-inner');
+        if (!innerWrapper) {
+            // Se não existe, criar o wrapper e mover conteúdo existente
+            innerWrapper = document.createElement('div');
+            innerWrapper.className = 'flow-step-block-inner';
+            const existingContent = element.innerHTML;
+            innerWrapper.innerHTML = existingContent;
+            element.innerHTML = '';
+            element.appendChild(innerWrapper);
         }
         
         // Re-renderizar conteúdo
@@ -564,7 +614,7 @@ class FlowEditor {
         const buttonsHTML = hasButtons ? this.getButtonPreviewHtml(customButtons) : '';
         
         // Atualizar header
-        const headerEl = element.querySelector('.flow-step-header-content');
+        const headerEl = innerWrapper.querySelector('.flow-step-header-content');
         if (headerEl) {
             headerEl.innerHTML = `
                 <div class="flow-step-icon-center">
@@ -578,7 +628,7 @@ class FlowEditor {
         }
         
         // Atualizar body
-        const bodyEl = element.querySelector('.flow-step-body');
+        const bodyEl = innerWrapper.querySelector('.flow-step-body');
         if (bodyEl) {
             bodyEl.innerHTML = `
                 ${mediaHTML}
@@ -587,25 +637,25 @@ class FlowEditor {
             `;
         }
         
-        // CRÍTICO: Garantir que os nodes estejam no HTML
-        let inputNode = element.querySelector('.flow-step-node-input');
+        // CRÍTICO: Garantir que os nodes estejam no HTML (dentro do wrapper)
+        let inputNode = innerWrapper.querySelector('.flow-step-node-input');
         if (!inputNode) {
             inputNode = document.createElement('div');
-            inputNode.className = 'flow-step-node-input';
+            inputNode.className = 'node-input flow-step-node-input';
             inputNode.setAttribute('data-node-type', 'input');
             inputNode.setAttribute('data-step-id', stepId);
-            element.appendChild(inputNode);
+            innerWrapper.appendChild(inputNode);
         }
         
         // Remover ou adicionar node de saída global conforme necessário
-        let outputNode = element.querySelector('.flow-step-node-output');
+        let outputNode = innerWrapper.querySelector('.flow-step-node-output:not([data-button-index])');
         if (!hasButtons) {
             if (!outputNode) {
                 outputNode = document.createElement('div');
-                outputNode.className = 'flow-step-node-output';
+                outputNode.className = 'node-output flow-step-node-output';
                 outputNode.setAttribute('data-node-type', 'output');
                 outputNode.setAttribute('data-step-id', stepId);
-                element.appendChild(outputNode);
+                innerWrapper.appendChild(outputNode);
             }
         } else {
             if (outputNode) {
@@ -645,14 +695,16 @@ class FlowEditor {
         const customButtons = stepConfig.custom_buttons || [];
         const hasButtons = customButtons.length > 0;
         
-        // CRÍTICO: Garantir que o card tenha position relative
-        if (!element.style.position || element.style.position === 'absolute') {
-            element.style.position = 'relative';
+        // CRÍTICO: Buscar o wrapper interno (flow-step-block-inner) para referência correta
+        const innerWrapper = element.querySelector('.flow-step-block-inner');
+        if (!innerWrapper) {
+            console.warn('⚠️ .flow-step-block-inner não encontrado no card', element);
+            return;
         }
         
         // 1. ENTRADA - LADO ESQUERDO, CENTRO VERTICAL
         // Usar o elemento HTML dentro do card (não o card inteiro)
-        const inputNode = element.querySelector('.flow-step-node-input');
+        const inputNode = innerWrapper.querySelector('.flow-step-node-input');
         if (inputNode) {
             this.instance.addEndpoint(inputNode, {
                 uuid: `endpoint-left-${stepId}`,
@@ -680,17 +732,27 @@ class FlowEditor {
         
         // 2. SAÍDAS
         if (hasButtons) {
-            // Com botões: endpoint individual por botão
+            // Com botões: endpoint individual por botão (PATCH CIRÚRGICO)
             customButtons.forEach((btn, index) => {
-                const buttonContainer = element.querySelector(`[data-endpoint-button="${index}"]`);
+                const buttonContainer = innerWrapper.querySelector(`[data-endpoint-button="${index}"]`);
                 if (buttonContainer) {
                     // Garantir que o container do botão tenha position relative
                     if (!buttonContainer.style.position) {
                         buttonContainer.style.position = 'relative';
                     }
-                    this.instance.addEndpoint(buttonContainer, {
+                    // CRÍTICO: Criar node de saída para cada botão se não existir
+                    let buttonOutputNode = buttonContainer.querySelector('.flow-step-node-output');
+                    if (!buttonOutputNode) {
+                        buttonOutputNode = document.createElement('div');
+                        buttonOutputNode.className = 'node-output flow-step-node-output';
+                        buttonOutputNode.setAttribute('data-node-type', 'output');
+                        buttonOutputNode.setAttribute('data-step-id', stepId);
+                        buttonOutputNode.setAttribute('data-button-index', index);
+                        buttonContainer.appendChild(buttonOutputNode);
+                    }
+                    this.instance.addEndpoint(buttonOutputNode, {
                         uuid: `endpoint-button-${stepId}-${index}`,
-                        anchor: ['RightMiddle', { dx: 7 }],
+                        anchor: 'Center',
                         maxConnections: 1,
                         isSource: true,
                         isTarget: false,
@@ -715,7 +777,7 @@ class FlowEditor {
             });
         } else {
             // Sem botões: endpoint global - usar elemento HTML dentro do card
-            const outputNode = element.querySelector('.flow-step-node-output');
+            const outputNode = innerWrapper.querySelector('.flow-step-node-output');
             if (outputNode) {
                 this.instance.addEndpoint(outputNode, {
                     uuid: `endpoint-right-${stepId}`,
@@ -1199,9 +1261,13 @@ class FlowEditor {
      * Abre modal de edição
      */
     editStep(stepId) {
-        if (this.alpine && typeof this.alpine.openStepModal === 'function') {
-            this.alpine.openStepModal(stepId);
-        }
+        // CRÍTICO: Abrir modal instantaneamente sem delay (PATCH CIRÚRGICO)
+        // Usar setTimeout 0 para garantir que não há conflito com drag
+        setTimeout(() => {
+            if (this.alpine && typeof this.alpine.openStepModal === 'function') {
+                this.alpine.openStepModal(stepId);
+            }
+        }, 0);
     }
     
     /**
@@ -1270,9 +1336,13 @@ class FlowEditor {
         this.canvas.style.setProperty('width', `${width}px`, 'important');
         this.canvas.style.setProperty('height', `${height}px`, 'important');
         
+        // CRÍTICO: Ajustar tamanho do contentContainer dinamicamente (PATCH CIRÚRGICO)
         if (this.contentContainer) {
-            this.contentContainer.style.width = `${width}px`;
-            this.contentContainer.style.height = `${height}px`;
+            // Usar tamanho calculado ou mínimo de 5000px para fluxos grandes
+            const containerWidth = Math.max(width, 5000);
+            const containerHeight = Math.max(height, 5000);
+            this.contentContainer.style.width = `${containerWidth}px`;
+            this.contentContainer.style.height = `${containerHeight}px`;
         }
     }
     

@@ -86,9 +86,16 @@
     -ms-user-select: none;
     touch-action: none;
     will-change: transform;
-    /* CRÍTICO: position relative é aplicado via JS para nodes absolutos funcionarem */
-    /* O card tem position: absolute para posicionamento no canvas */
-    /* Mas precisa ser relative para elementos absolutos (nodes) dentro dele */
+    /* CRÍTICO: necessário para os nodes ABSOLUTOS terem referência correta */
+    transform-style: preserve-3d;
+    perspective: 1000px;
+}
+
+/* CRÍTICO: Wrapper interno para referência correta dos nodes absolutos */
+.flow-step-block-inner {
+    position: relative;
+    width: 100%;
+    height: 100%;
 }
 
 @keyframes stepFadeIn {
