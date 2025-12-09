@@ -546,7 +546,12 @@ class FlowEditor {
      * Zoom in com foco no card selecionado
      */
     zoomIn() {
+        if (!this.canvas) {
+            console.warn('⚠️ Canvas não encontrado para zoom in');
+            return;
+        }
         const targetZoom = Math.min(5, this.zoomLevel * 1.2);
+        console.log(`🔍 Zoom In: ${this.zoomLevel.toFixed(2)} → ${targetZoom.toFixed(2)}`);
         this.zoomToLevel(targetZoom);
     }
     
@@ -554,7 +559,12 @@ class FlowEditor {
      * Zoom out com foco no card selecionado
      */
     zoomOut() {
+        if (!this.canvas) {
+            console.warn('⚠️ Canvas não encontrado para zoom out');
+            return;
+        }
         const targetZoom = Math.max(0.1, this.zoomLevel * 0.8);
+        console.log(`🔍 Zoom Out: ${this.zoomLevel.toFixed(2)} → ${targetZoom.toFixed(2)}`);
         this.zoomToLevel(targetZoom);
     }
     
@@ -562,7 +572,16 @@ class FlowEditor {
      * Zoom para nível específico com foco automático
      */
     zoomToLevel(targetZoom, focusElement = null) {
-        if (!this.canvas) return;
+        if (!this.canvas) {
+            console.warn('⚠️ Canvas não encontrado para zoomToLevel');
+            return;
+        }
+        
+        // Garantir que contentContainer existe
+        if (!this.contentContainer) {
+            console.warn('⚠️ contentContainer não existe, criando...');
+            this.setupCanvas();
+        }
         
         const rect = this.canvas.getBoundingClientRect();
         let centerX = rect.width / 2;
@@ -585,7 +604,7 @@ class FlowEditor {
         }
         
         // Calcular novo pan para manter o ponto centralizado
-        const zoomChange = targetZoom / this.zoomLevel;
+        // IMPORTANTE: Considerar que o transform está no contentContainer, não no canvas
         const worldX = (centerX - this.pan.x) / this.zoomLevel;
         const worldY = (centerY - this.pan.y) / this.zoomLevel;
         
@@ -593,6 +612,7 @@ class FlowEditor {
         this.pan.x = centerX - worldX * this.zoomLevel;
         this.pan.y = centerY - worldY * this.zoomLevel;
         
+        // Aplicar zoom (que atualiza o transform no contentContainer)
         this.applyZoom();
     }
     
@@ -600,6 +620,11 @@ class FlowEditor {
      * Reset zoom e pan
      */
     zoomReset() {
+        if (!this.canvas) {
+            console.warn('⚠️ Canvas não encontrado para reset zoom');
+            return;
+        }
+        console.log('🔄 Reset Zoom');
         this.zoomLevel = 1;
         this.pan = { x: 0, y: 0 };
         this.applyZoom();
@@ -609,29 +634,45 @@ class FlowEditor {
      * Zoom para fit (ajustar todos os cards na tela)
      */
     zoomToFit() {
-        if (!this.canvas || this.steps.size === 0) return;
+        if (!this.canvas || this.steps.size === 0) {
+            console.warn('⚠️ Canvas ou steps não encontrados para zoomToFit');
+            return;
+        }
+        
+        // Garantir que contentContainer existe
+        if (!this.contentContainer) {
+            console.warn('⚠️ contentContainer não existe, criando...');
+            this.setupCanvas();
+        }
         
         const rect = this.canvas.getBoundingClientRect();
         const padding = 50;
         
-        // Calcular bounding box de todos os steps
+        // Calcular bounding box de todos os steps usando posições do mundo (não transformadas)
         let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
         
         this.steps.forEach((element) => {
-            const stepRect = element.getBoundingClientRect();
-            const canvasRect = this.canvas.getBoundingClientRect();
-            const x = stepRect.left - canvasRect.left;
-            const y = stepRect.top - canvasRect.top;
-            const w = stepRect.width;
-            const h = stepRect.height;
-            
-            minX = Math.min(minX, x);
-            minY = Math.min(minY, y);
-            maxX = Math.max(maxX, x + w);
-            maxY = Math.max(maxY, y + h);
+            const step = this.alpine?.config?.flow_steps?.find(s => 
+                String(s.id) === element.dataset.stepId
+            );
+            if (step && step.position) {
+                // Usar posições do mundo (não transformadas)
+                const x = step.position.x;
+                const y = step.position.y;
+                const w = element.offsetWidth || 200; // Largura estimada do step
+                const h = element.offsetHeight || 150; // Altura estimada do step
+                
+                minX = Math.min(minX, x);
+                minY = Math.min(minY, y);
+                maxX = Math.max(maxX, x + w);
+                maxY = Math.max(maxY, y + h);
+            }
         });
         
-        if (minX === Infinity) return;
+        if (minX === Infinity) {
+            console.warn('⚠️ Não foi possível calcular bounding box para zoomToFit');
+            return;
+        }
         
         const contentWidth = maxX - minX + padding * 2;
         const contentHeight = maxY - minY + padding * 2;
@@ -647,6 +688,8 @@ class FlowEditor {
         this.zoomLevel = newZoom;
         this.pan.x = rect.width / 2 - centerX * newZoom;
         this.pan.y = rect.height / 2 - centerY * newZoom;
+        
+        console.log(`📐 ZoomToFit: zoom=${newZoom.toFixed(2)}, pan=(${this.pan.x.toFixed(0)}, ${this.pan.y.toFixed(0)})`);
         
         this.applyZoom();
     }
