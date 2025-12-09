@@ -1612,7 +1612,7 @@ body {
                 
                 <div 
                     id="flow-visual-canvas" 
-                    style="width: 100%; min-height: 600px; height: 70vh; border: 1px solid #242836; border-radius: 8px;"
+                    style="width: 100%; height: 600px; border: 1px solid #242836; border-radius: 8px; overflow: hidden;"
                     x-init="
                         if (config.flow_enabled && activeTab === 'flow') {
                             setTimeout(() => {

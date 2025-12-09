@@ -167,7 +167,8 @@ class FlowEditor {
         this.canvas.style.position = 'relative';
         this.canvas.style.overflow = 'hidden';
         this.canvas.style.width = '100%';
-        this.canvas.style.height = '100%';
+        // Altura inicial será ajustada dinamicamente pelo applyZoom()
+        this.canvas.style.height = '600px';
         this.canvas.style.minHeight = '600px';
         
         // Background com grid
@@ -382,6 +383,7 @@ class FlowEditor {
     
     /**
      * Aplica zoom ao canvas (combinado com pan) - Otimizado com requestAnimationFrame
+     * Ajusta altura do canvas dinamicamente baseado no zoom
      */
     applyZoom() {
         if (!this.canvas) return;
@@ -393,6 +395,20 @@ class FlowEditor {
         
         this.animationFrameId = requestAnimationFrame(() => {
             this.updateCanvasTransform();
+            
+            // Ajustar altura do canvas baseado no zoom level
+            // Quando zoom diminui (zoom out), canvas aumenta proporcionalmente
+            const baseHeight = 600; // Altura base em pixels
+            const minHeight = 600;
+            const maxHeight = 5000; // Altura máxima
+            
+            // Calcular altura proporcional ao zoom inverso
+            // Zoom 1.0 = altura base, Zoom 0.5 = altura 2x, Zoom 0.1 = altura 10x
+            const calculatedHeight = Math.max(minHeight, Math.min(maxHeight, baseHeight / this.zoomLevel));
+            
+            // Aplicar altura calculada
+            this.canvas.style.height = `${calculatedHeight}px`;
+            this.canvas.style.minHeight = `${calculatedHeight}px`;
             
             // Repintar jsPlumb de forma otimizada
             if (this.instance) {
