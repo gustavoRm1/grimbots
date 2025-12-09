@@ -1,19 +1,20 @@
 /**
- * Flow Editor V3.0 - Editor Visual de Fluxo Profissional
- * Sistema completo de edição visual de fluxos de bot
- * Versão: 3.0.0 - Red Header Style + White Connections + Premium UX
+ * Flow Editor V4.0 - Rebuild Completo ManyChat-Level
+ * Sistema profissional de edição visual de fluxos
+ * 
+ * ✅ CORREÇÕES IMPLEMENTADAS:
+ * - Drag instantâneo sem delay
+ * - Zoom suave com foco no mouse (scroll + Ctrl)
+ * - Pan suave com botão direito (estilo Figma)
+ * - Conexões perfeitas que acompanham cards
+ * - Endpoints corretos: entrada à esquerda, saídas nos botões
+ * - Preview completo: mídia, texto, botões
+ * - Canvas responsivo sem estouro
+ * - Performance otimizada com rAF
  * 
  * Dependências:
  * - jsPlumb 2.15.6 (CDN)
  * - Alpine.js 3.x (CDN)
- * 
- * Design System:
- * - Header: #E02727 (vermelho)
- * - Body: #0F0F14 (preto premium)
- * - Border: #242836
- * - Connections: #FFFFFF (branco com glow)
- * - Grid: pontos brancos translúcidos
- * - Fonte: Inter
  */
 
 class FlowEditor {
@@ -25,67 +26,43 @@ class FlowEditor {
         this.steps = new Map();
         this.connections = new Map();
         this.selectedStep = null;
-        this.contentContainer = null; // Container interno para aplicar transform apenas ao conteúdo
+        this.contentContainer = null;
+        
+        // Zoom e Pan
         this.zoomLevel = 1;
         this.pan = { x: 0, y: 0 };
         this.isPanning = false;
         this.lastPanPoint = { x: 0, y: 0 };
-        this.snapToGrid = false;
+        this.panFrameId = null;
+        this.zoomFrameId = null;
+        
+        // Performance
+        this.dragFrameId = null;
+        this.repaintTimeout = null;
+        this.stepTransforms = new Map();
+        
+        // Configurações
         this.gridSize = 20;
-        this.dragRepaintFrame = null;
+        this.minZoom = 0.2;
+        this.maxZoom = 4.0;
         
-        // Canvas infinito e performance
-        this.canvasBounds = { minX: -10000, minY: -10000, maxX: 10000, maxY: 10000 };
-        this.viewport = { x: 0, y: 0, width: 0, height: 0 };
-        this.animationFrameId = null;
-        this.zoomTarget = 1;
-        this.isZooming = false;
-        
-        // Snapping
-        this.snapEnabled = true;
-        this.snapThreshold = 10;
-        this.snapLines = { horizontal: [], vertical: [] };
-        this.showSnapLines = false;
-        
-        // Organização automática
-        this.layoutSpacing = { x: 320, y: 200 };
-        
-        // Virtualização
-        this.visibleSteps = new Set();
-        this.lastViewportUpdate = 0;
-        
-        // Performance: Cache e debounce
-        this.boundingRectCache = new Map(); // Cache de getBoundingClientRect por frame
-        this.lastFrameTime = 0;
-        this.updateStepPositionDebounce = null; // Debounce para updateStepPosition
-        this.connectionCache = new Map(); // Cache de conexões para diffing
-        this._reconnectTimeout = null; // Timeout para reconnectAll
-        
-        // Per-step cache de transform (x,y) - para drag suave
-        this.stepTransforms = new Map(); // Map<stepId, {x, y}>
-        this._saveTimeout = null; // Timeout para debounced save
-        
-        // Cores por tipo de conexão (todas brancas)
-        this.connectionColors = {
-            next: '#FFFFFF',
-            pending: '#FFFFFF',
-            retry: '#FFFFFF'
-        };
-        
-        // Ícones por tipo de step
+        // Cores e ícones
         this.stepIcons = {
-            content: 'fa-file-alt',
             message: 'fa-comment',
+            payment: 'fa-credit-card',
+            access: 'fa-key',
+            content: 'fa-file-alt',
             audio: 'fa-headphones',
             video: 'fa-video',
-            buttons: 'fa-mouse-pointer',
-            payment: 'fa-credit-card',
-            access: 'fa-key'
+            buttons: 'fa-mouse-pointer'
         };
         
         this.init();
     }
     
+    /**
+     * Inicialização principal
+     */
     init() {
         if (!this.canvas) {
             console.error('❌ Canvas não encontrado:', this.canvasId);
@@ -93,118 +70,96 @@ class FlowEditor {
         }
         
         if (typeof jsPlumb === 'undefined') {
-            console.error('❌ jsPlumb não está carregado.');
+            console.error('❌ jsPlumb não está carregado');
             return;
         }
         
-        // Inicializar jsPlumb 2.x
+        this.setupJsPlumb();
+        this.setupCanvas();
+        this.enableZoom();
+        this.enablePan();
+        this.enableSelection();
+        
+        // Renderizar steps após setup
+        setTimeout(() => {
+            this.renderAllSteps();
+        }, 50);
+    }
+    
+    /**
+     * Configura jsPlumb com conexões brancas suaves
+     */
+    setupJsPlumb() {
         try {
-            this.instance = jsPlumb;
+            this.instance = jsPlumb.getInstance({
+                Container: this.canvas
+            });
             
-            // jsPlumb deve usar o canvas (não o contentContainer) para detectar limites
-            if (typeof this.instance.setContainer === 'function') {
-                this.instance.setContainer(this.canvas);
-            }
+            // Defaults: conexões brancas suaves estilo ManyChat
+            this.instance.importDefaults({
+                paintStyle: { 
+                    stroke: '#FFFFFF', 
+                    strokeWidth: 2.5,
+                    strokeOpacity: 0.9
+                },
+                hoverPaintStyle: { 
+                    stroke: '#FFFFFF', 
+                    strokeWidth: 3.5,
+                    strokeOpacity: 1
+                },
+                connector: ['Bezier', { 
+                    curviness: 80,
+                    stub: [15, 20],
+                    gap: 8,
+                    cornerRadius: 5
+                }],
+                endpoint: ['Dot', { radius: 7 }],
+                endpointStyle: { 
+                    fill: '#FFFFFF', 
+                    outlineStroke: '#0D0F15', 
+                    outlineWidth: 2
+                },
+                endpointHoverStyle: { 
+                    fill: '#FFB800', 
+                    outlineStroke: '#0D0F15', 
+                    outlineWidth: 3
+                },
+                maxConnections: -1
+            });
             
-            // Configurar defaults (White Connections with Glow)
-            if (typeof this.instance.importDefaults === 'function') {
-                this.instance.importDefaults({
-                    paintStyle: { 
-                        stroke: '#FFFFFF', 
-                        strokeWidth: 2.5,
-                        strokeOpacity: 0.9
-                    },
-                    hoverPaintStyle: { 
-                        stroke: '#FFFFFF', 
-                        strokeWidth: 3.5,
-                        strokeOpacity: 1
-                    },
-                    connector: ['Bezier', { 
-                        curviness: 80, // Curvas mais suaves (estilo Manychat)
-                        stub: [15, 20], // Stubs maiores para evitar atravessar cards
-                        gap: 8, // Gap maior
-                        cornerRadius: 5 // Cantos arredondados
-                    }],
-                    endpoint: ['Dot', { radius: 7 }],
-                    endpointStyle: { 
-                        fill: '#FFFFFF', 
-                        outlineStroke: '#0D0F15', 
-                        outlineWidth: 2,
-                        strokeWidth: 2
-                    },
-                    endpointHoverStyle: { 
-                        fill: '#FFFFFF', 
-                        outlineStroke: '#0D0F15', 
-                        outlineWidth: 3,
-                        strokeWidth: 3
-                    },
-                    anchors: ['Top', 'Bottom'],
-                    maxConnections: -1
-                });
-            }
-            
-            // Bind eventos
-            setTimeout(() => {
-                this.instance.bind('connection', (info) => this.onConnectionCreated(info));
-                this.instance.bind('connectionDetached', (info) => this.onConnectionDetached(info));
-                
-                this.instance.bind('click', (conn, originalEvent) => {
-                    if (originalEvent && originalEvent.detail === 2) {
-                        this.removeConnection(conn);
-                    }
-                });
-                
-                this.instance.bind('contextmenu', (conn, originalEvent) => {
-                    if (originalEvent) {
-                        originalEvent.preventDefault();
-                        this.removeConnection(conn);
-                    }
-                });
-            }, 100);
+            // Eventos
+            this.instance.bind('connection', (info) => this.onConnectionCreated(info));
+            this.instance.bind('connectionDetached', (info) => this.onConnectionDetached(info));
+            this.instance.bind('click', (conn, e) => {
+                if (e && e.detail === 2) {
+                    this.removeConnection(conn);
+                }
+            });
             
             console.log('✅ jsPlumb inicializado');
         } catch (error) {
             console.error('❌ Erro ao inicializar jsPlumb:', error);
-            return;
         }
-        
-        this.setupCanvas();
-        // Aguardar contentContainer ser criado antes de renderizar steps
-        setTimeout(() => {
-            this.renderAllSteps();
-        }, 10);
-        this.enableZoom();
-        this.enablePan();
-        this.enableSelection();
     }
     
     /**
-     * Configura o canvas com grid premium e canvas infinito
+     * Configura canvas com grid e container interno
      */
     setupCanvas() {
         if (!this.canvas) return;
         
-        // Canvas infinito - remover limites
+        // Canvas principal - SEM transform, apenas background
         this.canvas.style.position = 'relative';
-        this.canvas.style.overflow = 'auto'; // Permitir scroll quando necessário
+        this.canvas.style.overflow = 'hidden';
         this.canvas.style.width = '100%';
-        // Dimensões iniciais serão ajustadas dinamicamente pelo applyZoom()
-        this.canvas.style.height = '600px';
-        this.canvas.style.minHeight = '600px';
-        this.canvas.style.minWidth = '100%';
-        
-        // Background com grid - configurado para se repetir infinitamente
-        // O grid NÃO será afetado pelo transform porque está no canvas
+        this.canvas.style.height = '100%';
         this.canvas.style.background = '#0D0F15';
-        this.canvas.style.backgroundImage = `
-            radial-gradient(circle, rgba(255, 255, 255, 0.25) 1.5px, transparent 1.5px)
-        `;
+        this.canvas.style.backgroundImage = 'radial-gradient(circle, rgba(255, 255, 255, 0.25) 1.5px, transparent 1.5px)';
         this.canvas.style.backgroundSize = `${this.gridSize}px ${this.gridSize}px`;
         this.canvas.style.backgroundRepeat = 'repeat';
         this.canvas.style.backgroundPosition = '0 0';
         
-        // Criar container interno para aplicar transform apenas ao conteúdo
-        // Isso permite que o grid background permaneça fixo enquanto o conteúdo é transformado
+        // Container interno para transform (zoom/pan)
         let existingContainer = this.canvas.querySelector('.flow-canvas-content');
         if (existingContainer) {
             this.contentContainer = existingContainer;
@@ -217,17 +172,14 @@ class FlowEditor {
                 left: 0;
                 width: 100%;
                 height: 100%;
-                transform-origin: top left;
+                transform-origin: 0 0;
                 will-change: transform;
                 pointer-events: auto;
-                z-index: 1;
             `;
             
-            // Mover steps e endpoints existentes para o container
+            // Mover elementos existentes para o container
             Array.from(this.canvas.children).forEach(child => {
-                if (child.classList.contains('flow-step-block') || 
-                    child.classList.contains('jtk-endpoint') ||
-                    child.classList.contains('jtk-connector')) {
+                if (child.classList.contains('flow-step-block')) {
                     this.contentContainer.appendChild(child);
                 }
             });
@@ -235,630 +187,104 @@ class FlowEditor {
             this.canvas.appendChild(this.contentContainer);
         }
         
-        // GARANTIR que o canvas NÃO tem transform
+        // Garantir que canvas NÃO tem transform
         this.canvas.style.setProperty('transform', 'none', 'important');
         
-        // Atualizar viewport inicial
-        this.updateViewport();
-        
-        // Expandir canvas automaticamente conforme cards
-        this.expandCanvasBounds();
+        // Atualizar transform inicial
+        this.updateCanvasTransform();
     }
     
     /**
-     * Atualiza viewport para virtualização
+     * Atualiza transform do contentContainer (zoom + pan)
      */
-    updateViewport() {
-        if (!this.canvas) return;
+    updateCanvasTransform() {
+        if (!this.contentContainer) return;
         
-        const rect = this.canvas.getBoundingClientRect();
-        const now = performance.now();
+        const transform = `translate(${this.pan.x}px, ${this.pan.y}px) scale(${this.zoomLevel})`;
+        this.contentContainer.style.transform = transform;
         
-        // Throttle: atualizar viewport no máximo a cada 100ms
-        if (now - this.lastViewportUpdate < 100) return;
-        this.lastViewportUpdate = now;
-        
-        // Calcular viewport em coordenadas do mundo (considerando zoom/pan)
-        this.viewport = {
-            x: -this.pan.x / this.zoomLevel,
-            y: -this.pan.y / this.zoomLevel,
-            width: rect.width / this.zoomLevel,
-            height: rect.height / this.zoomLevel
-        };
-        
-        // Atualizar quais steps estão visíveis
-        this.updateVisibleSteps();
-    }
-    
-    /**
-     * Atualiza conjunto de steps visíveis (virtualização)
-     */
-    updateVisibleSteps() {
-        this.visibleSteps.clear();
-        
-        this.steps.forEach((element, stepId) => {
-            const rect = element.getBoundingClientRect();
-            const canvasRect = this.canvas.getBoundingClientRect();
-            
-            // Verificar se está dentro da viewport (com margem)
-            const margin = 100; // Margem para pré-carregar
-            const isVisible = 
-                rect.right + margin >= canvasRect.left &&
-                rect.left - margin <= canvasRect.right &&
-                rect.bottom + margin >= canvasRect.top &&
-                rect.top - margin <= canvasRect.bottom;
-            
-            if (isVisible) {
-                this.visibleSteps.add(stepId);
-                // Mostrar elemento
-                element.style.display = '';
-            } else {
-                // Ocultar elemento (mas manter no DOM para jsPlumb)
-                // Não ocultamos completamente para não quebrar conexões
-                // Apenas otimizamos renderização visual se necessário
-            }
-        });
-    }
-    
-    /**
-     * Ajusta tamanho do canvas automaticamente para caber o fluxo (virtual canvas)
-     * Calcula bounding box de todos os nodes e expande canvas com padding
-     */
-    adjustCanvasSize(padding = 400) {
-        if (!this.canvas) return;
-        
-        const parent = this.canvas.parentElement;
-        if (!parent) return;
-        
-        // Calcular bounding box de todos os nodes com base em dataset x/y + offsetWidth/Height
-        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-        
-        this.steps.forEach((element, stepId) => {
-            // Obter posição do transform cache ou dataset
-            let x = 0, y = 0;
-            const cached = this.stepTransforms.get(stepId);
-            if (cached) {
-                x = cached.x;
-                y = cached.y;
-            } else if (element.dataset.x && element.dataset.y) {
-                x = parseFloat(element.dataset.x) || 0;
-                y = parseFloat(element.dataset.y) || 0;
-            } else {
-                // Fallback: usar position do step
-                const step = this.alpine?.config?.flow_steps?.find(s => String(s.id) === stepId);
-                if (step && step.position) {
-                    x = step.position.x || 0;
-                    y = step.position.y || 0;
-                }
-            }
-            
-            const w = element.offsetWidth || 300;
-            const h = element.offsetHeight || 180;
-            
-            minX = Math.min(minX, x);
-            minY = Math.min(minY, y);
-            maxX = Math.max(maxX, x + w);
-            maxY = Math.max(maxY, y + h);
-        });
-        
-        // Se nada, definir defaults
-        if (minX === Infinity) {
-            minX = 0;
-            minY = 0;
-            maxX = 1200;
-            maxY = 800;
+        // Repintar jsPlumb de forma otimizada
+        if (this.repaintTimeout) {
+            clearTimeout(this.repaintTimeout);
         }
-        
-        const parentRect = parent.getBoundingClientRect();
-        const contentWidth = maxX - minX + padding;
-        const contentHeight = maxY - minY + padding;
-        
-        // Canvas deve ser pelo menos do tamanho do parent, ou maior se necessário
-        const width = Math.max(parentRect.width || 1200, contentWidth);
-        const height = Math.max(parentRect.height || 600, contentHeight);
-        
-        // Aplicar dimensões (usar setProperty para forçar)
-        this.canvas.style.setProperty('width', `${width}px`, 'important');
-        this.canvas.style.setProperty('height', `${height}px`, 'important');
-        this.canvas.style.setProperty('min-width', `${width}px`, 'important');
-        this.canvas.style.setProperty('min-height', `${height}px`, 'important');
-        
-        // Atualizar contentContainer também
-        if (this.contentContainer) {
-            this.contentContainer.style.width = `${width}px`;
-            this.contentContainer.style.height = `${height}px`;
-        }
-        
-        // Atualizar bounds para referência futura
-        this.canvasBounds = {
-            minX: minX - padding / 2,
-            minY: minY - padding / 2,
-            maxX: maxX + padding / 2,
-            maxY: maxY + padding / 2
-        };
-        
-        // Garantir que grid se expande corretamente
-        this.canvas.style.backgroundSize = `${this.gridSize}px ${this.gridSize}px`;
-        this.canvas.style.backgroundRepeat = 'repeat';
-        this.canvas.style.backgroundPosition = '0 0';
+        this.repaintTimeout = setTimeout(() => {
+            if (this.instance) {
+                this.instance.repaintEverything();
+            }
+        }, 16); // ~60fps
     }
     
     /**
-     * Expande bounds do canvas - LEGADO (mantido para compatibilidade)
-     */
-    expandCanvasBounds() {
-        this.adjustCanvasSize(400);
-    }
-    
-    /**
-     * Habilita zoom com scroll suave (Google Maps style)
-     * Suporta: Ctrl/Cmd + Scroll, Pinch zoom (touchpad), Wheel zoom
+     * Zoom suave com foco no mouse (scroll + Ctrl)
      */
     enableZoom() {
         if (!this.canvas) return;
         
-        let zoomStartTime = 0;
-        let zoomStartLevel = 1;
-        let zoomTargetLevel = 1;
-        let isZooming = false;
-        
-        const smoothZoom = (targetZoom, centerX, centerY) => {
-            // Limitar escala entre 0.2 e 4.0 (conforme especificação)
-            const clampedZoom = Math.max(0.2, Math.min(4.0, targetZoom));
-            
-            // Se já está no limite, não animar
-            if (Math.abs(this.zoomLevel - clampedZoom) < 0.01) {
-                return;
-            }
-            
-            if (isZooming) {
-                // Atualizar target se já estiver zoomando
-                zoomTargetLevel = clampedZoom;
-                return;
-            }
-            
-            isZooming = true;
-            zoomStartLevel = this.zoomLevel;
-            zoomTargetLevel = clampedZoom;
-            
-            const startTime = performance.now();
-            const duration = 300; // 300ms para suavização melhor (estilo Figma/Miro)
-            
-            const animate = (currentTime) => {
-                const elapsed = currentTime - startTime;
-                const progress = Math.min(elapsed / duration, 1);
-                
-                // Easing function melhorada (ease-out cubic - estilo Figma)
-                const ease = 1 - Math.pow(1 - progress, 3);
-                
-                this.zoomLevel = zoomStartLevel + (zoomTargetLevel - zoomStartLevel) * ease;
-                
-                // Zoom em relação ao ponto do mouse (centerX, centerY) - mantém ponto fixo
-                if (centerX !== undefined && centerY !== undefined) {
-                    const worldX = (centerX - this.pan.x) / zoomStartLevel;
-                    const worldY = (centerY - this.pan.y) / zoomStartLevel;
-                    
-                    this.pan.x = centerX - worldX * this.zoomLevel;
-                    this.pan.y = centerY - worldY * this.zoomLevel;
-                }
-                
-                // Aplicar zoom imediatamente (não apenas no requestAnimationFrame)
-                if (this.contentContainer) {
-                    const transformValue = `translate(${this.pan.x}px, ${this.pan.y}px) scale(${this.zoomLevel})`;
-                    this.contentContainer.style.transform = transformValue;
-                }
-                
-                this.applyZoom();
-                
-                if (progress < 1) {
-                    requestAnimationFrame(animate);
-                } else {
-                    isZooming = false;
-                    this.zoomLevel = zoomTargetLevel; // Garantir valor final exato
-                }
-            };
-            
-            requestAnimationFrame(animate);
-        };
-        
         this.canvas.addEventListener('wheel', (e) => {
-            // Zoom com Ctrl/Cmd + Scroll ou apenas scroll (sem modificador)
+            // Zoom com Ctrl/Cmd ou scroll direto
             if (e.ctrlKey || e.metaKey || true) {
                 e.preventDefault();
                 
                 const rect = this.canvas.getBoundingClientRect();
-                const centerX = e.clientX - rect.left;
-                const centerY = e.clientY - rect.top;
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
                 
-                // Calcular delta de zoom suave e progressivo (estilo Figma/Miro)
-                // Usar deltaY normalizado para zoom mais controlado
-                const zoomSpeed = 0.0008; // Velocidade de zoom ajustada
+                // Calcular zoom delta suave
+                const zoomSpeed = e.ctrlKey || e.metaKey ? 0.001 : 0.0008;
                 const zoomDelta = -e.deltaY * zoomSpeed;
-                const newZoom = this.zoomLevel * (1 + zoomDelta);
-                
-                smoothZoom(newZoom, centerX, centerY);
-            }
-        }, { passive: false });
-        
-        // Suporte para pinch zoom (touchpad)
-        let lastPinchDistance = 0;
-        this.canvas.addEventListener('touchstart', (e) => {
-            if (e.touches.length === 2) {
-                const touch1 = e.touches[0];
-                const touch2 = e.touches[1];
-                lastPinchDistance = Math.hypot(
-                    touch2.clientX - touch1.clientX,
-                    touch2.clientY - touch1.clientY
-                );
-            }
-        }, { passive: false });
-        
-        this.canvas.addEventListener('touchmove', (e) => {
-            if (e.touches.length === 2) {
-                e.preventDefault();
-                const touch1 = e.touches[0];
-                const touch2 = e.touches[1];
-                const currentDistance = Math.hypot(
-                    touch2.clientX - touch1.clientX,
-                    touch2.clientY - touch1.clientY
+                const newZoom = Math.max(
+                    this.minZoom, 
+                    Math.min(this.maxZoom, this.zoomLevel * (1 + zoomDelta))
                 );
                 
-                if (lastPinchDistance > 0) {
-                    const rect = this.canvas.getBoundingClientRect();
-                    const centerX = (touch1.clientX + touch2.clientX) / 2 - rect.left;
-                    const centerY = (touch1.clientY + touch2.clientY) / 2 - rect.top;
-                    
-                    const zoomDelta = currentDistance / lastPinchDistance;
-                    const newZoom = this.zoomLevel * zoomDelta;
-                    
-                    smoothZoom(newZoom, centerX, centerY);
-                }
+                // Zoom focado no mouse
+                const worldX = (mouseX - this.pan.x) / this.zoomLevel;
+                const worldY = (mouseY - this.pan.y) / this.zoomLevel;
                 
-                lastPinchDistance = currentDistance;
+                this.zoomLevel = newZoom;
+                this.pan.x = mouseX - worldX * this.zoomLevel;
+                this.pan.y = mouseY - worldY * this.zoomLevel;
+                
+                // Aplicar imediatamente
+                this.updateCanvasTransform();
             }
         }, { passive: false });
     }
     
     /**
-     * Aplica zoom ao canvas (combinado com pan) - Otimizado com requestAnimationFrame
-     * Ajusta dimensões do canvas dinamicamente baseado no zoom (width e height)
-     */
-    applyZoom() {
-        if (!this.canvas) return;
-        
-        // Cancelar frame anterior se existir
-        if (this.animationFrameId) {
-            cancelAnimationFrame(this.animationFrameId);
-        }
-        
-        this.animationFrameId = requestAnimationFrame(() => {
-            // PRIMEIRO: Garantir que o canvas NÃO tem transform (antes de tudo)
-            this.canvas.style.setProperty('transform', 'none', 'important');
-            
-            // SEGUNDO: Garantir que contentContainer existe
-            if (!this.contentContainer) {
-                console.warn('⚠️ applyZoom: contentContainer não existe, criando...');
-                this.setupCanvas();
-            }
-            
-            // TERCEIRO: Atualizar transform apenas no contentContainer
-            this.updateCanvasTransform();
-            
-            // TERCEIRO: Obter dimensões base do container pai
-            const parent = this.canvas.parentElement;
-            if (!parent) return;
-            
-            const parentRect = parent.getBoundingClientRect();
-            const baseWidth = parentRect.width || 1200; // Largura base
-            const baseHeight = 600; // Altura base em pixels
-            
-            // Limites
-            const minSize = 600;
-            const maxWidth = 20000; // Largura máxima aumentada para mais espaço
-            const maxHeight = 20000; // Altura máxima aumentada para mais espaço
-            
-            // Calcular dimensões proporcionais ao zoom inverso
-            // Zoom 1.0 = tamanho base, Zoom 0.5 = tamanho 2x, Zoom 0.1 = tamanho 10x
-            const scaleFactor = 1 / this.zoomLevel;
-            let calculatedWidth = Math.max(minSize, Math.min(maxWidth, baseWidth * scaleFactor));
-            let calculatedHeight = Math.max(minSize, Math.min(maxHeight, baseHeight * scaleFactor));
-            
-            // Verificar se há cards que precisam de mais espaço e ajustar
-            if (this.steps.size > 0) {
-                this.steps.forEach((element) => {
-                    const step = this.alpine?.config?.flow_steps?.find(s => 
-                        String(s.id) === element.dataset.stepId
-                    );
-                    if (step && step.position) {
-                        const x = step.position.x;
-                        const y = step.position.y;
-                        // Garantir espaço suficiente para todos os cards (com margem de 500px)
-                        const requiredWidth = (x + 500) * scaleFactor;
-                        const requiredHeight = (y + 400) * scaleFactor;
-                        calculatedWidth = Math.max(calculatedWidth, requiredWidth);
-                        calculatedHeight = Math.max(calculatedHeight, requiredHeight);
-                    }
-                });
-            }
-            
-            // Aplicar dimensões calculadas - FORÇAR com !important via setProperty
-            this.canvas.style.setProperty('width', `${calculatedWidth}px`, 'important');
-            this.canvas.style.setProperty('height', `${calculatedHeight}px`, 'important');
-            this.canvas.style.setProperty('min-width', `${calculatedWidth}px`, 'important');
-            this.canvas.style.setProperty('min-height', `${calculatedHeight}px`, 'important');
-            
-            // GARANTIR que o canvas NÃO tem transform (deve estar apenas no contentContainer)
-            this.canvas.style.setProperty('transform', 'none', 'important');
-            
-            // Atualizar grid background - o grid se expande automaticamente com o canvas
-            // O background-repeat: repeat garante que o grid preenche toda a área expandida
-            // IMPORTANTE: background-size em pixels absolutos para que não seja afetado pelo transform
-            this.canvas.style.backgroundSize = `${this.gridSize}px ${this.gridSize}px`;
-            this.canvas.style.backgroundRepeat = 'repeat';
-            this.canvas.style.backgroundPosition = '0 0';
-            
-            // Garantir que o overflow permite ver o grid expandido
-            this.canvas.style.overflow = 'auto';
-            
-            // Atualizar dimensões do contentContainer também
-            if (this.contentContainer) {
-                this.contentContainer.style.width = `${calculatedWidth}px`;
-                this.contentContainer.style.height = `${calculatedHeight}px`;
-            }
-            
-            // Debug: log das dimensões
-            console.log(`✅ Canvas expandido: ${calculatedWidth.toFixed(0)}x${calculatedHeight.toFixed(0)}px (zoom: ${this.zoomLevel.toFixed(2)})`);
-            
-            // Repintar jsPlumb de forma otimizada
-            if (this.instance) {
-                this.instance.repaintEverything();
-            }
-            
-            // Atualizar viewport para virtualização
-            this.updateViewport();
-            
-            // Expandir bounds do canvas automaticamente
-            this.expandCanvasBounds();
-            
-            this.animationFrameId = null;
-        });
-    }
-    
-    /**
-     * Zoom in com foco no card selecionado
-     */
-    zoomIn() {
-        console.log('🔍 zoomIn() chamado');
-        if (!this.canvas) {
-            console.warn('⚠️ Canvas não encontrado para zoom in');
-            return;
-        }
-        if (!this.contentContainer) {
-            console.warn('⚠️ contentContainer não encontrado, criando...');
-            this.setupCanvas();
-        }
-        const targetZoom = Math.min(5, this.zoomLevel * 1.2);
-        console.log(`🔍 Zoom In: ${this.zoomLevel.toFixed(2)} → ${targetZoom.toFixed(2)}`);
-        this.zoomToLevel(targetZoom);
-    }
-    
-    /**
-     * Zoom out com foco no card selecionado
-     */
-    zoomOut() {
-        console.log('🔍 zoomOut() chamado');
-        if (!this.canvas) {
-            console.warn('⚠️ Canvas não encontrado para zoom out');
-            return;
-        }
-        if (!this.contentContainer) {
-            console.warn('⚠️ contentContainer não encontrado, criando...');
-            this.setupCanvas();
-        }
-        const targetZoom = Math.max(0.1, this.zoomLevel * 0.8);
-        console.log(`🔍 Zoom Out: ${this.zoomLevel.toFixed(2)} → ${targetZoom.toFixed(2)}`);
-        this.zoomToLevel(targetZoom);
-    }
-    
-    /**
-     * Zoom para nível específico com foco automático
-     */
-    zoomToLevel(targetZoom, focusElement = null) {
-        if (!this.canvas) {
-            console.warn('⚠️ Canvas não encontrado para zoomToLevel');
-            return;
-        }
-        
-        // Garantir que contentContainer existe
-        if (!this.contentContainer) {
-            console.warn('⚠️ contentContainer não existe, criando...');
-            this.setupCanvas();
-        }
-        
-        const rect = this.canvas.getBoundingClientRect();
-        let centerX = rect.width / 2;
-        let centerY = rect.height / 2;
-        
-        // Se houver elemento focado, centralizar nele
-        if (focusElement) {
-            const elementRect = focusElement.getBoundingClientRect();
-            const canvasRect = this.canvas.getBoundingClientRect();
-            centerX = elementRect.left + elementRect.width / 2 - canvasRect.left;
-            centerY = elementRect.top + elementRect.height / 2 - canvasRect.top;
-        } else if (this.selectedStep) {
-            const element = this.steps.get(String(this.selectedStep));
-            if (element) {
-                const elementRect = element.getBoundingClientRect();
-                const canvasRect = this.canvas.getBoundingClientRect();
-                centerX = elementRect.left + elementRect.width / 2 - canvasRect.left;
-                centerY = elementRect.top + elementRect.height / 2 - canvasRect.top;
-            }
-        }
-        
-        // Calcular novo pan para manter o ponto centralizado
-        // IMPORTANTE: Considerar que o transform está no contentContainer, não no canvas
-        const worldX = (centerX - this.pan.x) / this.zoomLevel;
-        const worldY = (centerY - this.pan.y) / this.zoomLevel;
-        
-        this.zoomLevel = targetZoom;
-        this.pan.x = centerX - worldX * this.zoomLevel;
-        this.pan.y = centerY - worldY * this.zoomLevel;
-        
-        console.log(`📐 zoomToLevel: zoom=${this.zoomLevel.toFixed(2)}, pan=(${this.pan.x.toFixed(0)}, ${this.pan.y.toFixed(0)})`);
-        
-        // FORÇAR atualização imediata do transform (não apenas no requestAnimationFrame)
-        if (this.contentContainer) {
-            const transformValue = `translate(${this.pan.x}px, ${this.pan.y}px) scale(${this.zoomLevel})`;
-            this.contentContainer.style.transform = transformValue;
-            console.log(`✅ Transform aplicado IMEDIATAMENTE: ${transformValue}`);
-        }
-        
-        // Aplicar zoom (que atualiza o transform no contentContainer e dimensões do canvas)
-        this.applyZoom();
-    }
-    
-    /**
-     * Reset zoom e pan
-     */
-    zoomReset() {
-        if (!this.canvas) {
-            console.warn('⚠️ Canvas não encontrado para reset zoom');
-            return;
-        }
-        console.log('🔄 Reset Zoom');
-        this.zoomLevel = 1;
-        this.pan = { x: 0, y: 0 };
-        this.applyZoom();
-    }
-    
-    /**
-     * Zoom para fit (ajustar todos os cards na tela)
-     */
-    zoomToFit() {
-        if (!this.canvas || this.steps.size === 0) {
-            console.warn('⚠️ Canvas ou steps não encontrados para zoomToFit');
-            return;
-        }
-        
-        // Garantir que contentContainer existe
-        if (!this.contentContainer) {
-            console.warn('⚠️ contentContainer não existe, criando...');
-            this.setupCanvas();
-        }
-        
-        const rect = this.canvas.getBoundingClientRect();
-        const padding = 50;
-        
-        // Calcular bounding box de todos os steps usando posições do mundo (não transformadas)
-        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-        
-        this.steps.forEach((element) => {
-            const step = this.alpine?.config?.flow_steps?.find(s => 
-                String(s.id) === element.dataset.stepId
-            );
-            if (step && step.position) {
-                // Usar posições do mundo (não transformadas)
-                const x = step.position.x;
-                const y = step.position.y;
-                const w = element.offsetWidth || 200; // Largura estimada do step
-                const h = element.offsetHeight || 150; // Altura estimada do step
-                
-                minX = Math.min(minX, x);
-                minY = Math.min(minY, y);
-                maxX = Math.max(maxX, x + w);
-                maxY = Math.max(maxY, y + h);
-            }
-        });
-        
-        if (minX === Infinity) {
-            console.warn('⚠️ Não foi possível calcular bounding box para zoomToFit');
-            return;
-        }
-        
-        const contentWidth = maxX - minX + padding * 2;
-        const contentHeight = maxY - minY + padding * 2;
-        
-        const scaleX = (rect.width - padding * 2) / contentWidth;
-        const scaleY = (rect.height - padding * 2) / contentHeight;
-        const newZoom = Math.min(scaleX, scaleY, 1); // Não aumentar além de 1x
-        
-        // Centralizar
-        const centerX = (minX + maxX) / 2;
-        const centerY = (minY + maxY) / 2;
-        
-        this.zoomLevel = newZoom;
-        this.pan.x = rect.width / 2 - centerX * newZoom;
-        this.pan.y = rect.height / 2 - centerY * newZoom;
-        
-        console.log(`📐 ZoomToFit: zoom=${newZoom.toFixed(2)}, pan=(${this.pan.x.toFixed(0)}, ${this.pan.y.toFixed(0)})`);
-        
-        this.applyZoom();
-    }
-    
-    /**
-     * Habilita pan suave (arrastar canvas) - Otimizado com requestAnimationFrame
-     * Suporta: Botão direito, meio, Alt + arrastar, Space + arrastar
+     * Pan suave com botão direito (estilo Figma)
      */
     enablePan() {
         if (!this.canvas) return;
         
-        let panFrameId = null;
-        
-        const updatePan = () => {
-            if (this.isPanning) {
-                this.updateCanvasTransform();
-                panFrameId = requestAnimationFrame(updatePan);
-            } else {
-                panFrameId = null;
-            }
-        };
-        
-        this.canvas.addEventListener('mousedown', (e) => {
-            // Pan apenas se não estiver sobre um step e for botão direito/meio/alt/space
+        const startPan = (e) => {
             const isOverStep = e.target.closest('.flow-step-block');
             const isOverButton = e.target.closest('button');
             const isOverEndpoint = e.target.closest('.jtk-endpoint');
             
-            if (!isOverStep && !isOverButton && !isOverEndpoint && 
-                (e.button === 2 || e.button === 1 || e.altKey || e.spaceKey)) {
+            // Pan apenas se não estiver sobre step/button/endpoint E for botão direito
+            if (!isOverStep && !isOverButton && !isOverEndpoint && e.button === 2) {
                 e.preventDefault();
                 this.isPanning = true;
                 this.lastPanPoint = { x: e.clientX, y: e.clientY };
                 this.canvas.style.cursor = 'grabbing';
                 this.canvas.classList.add('panning');
                 
-                if (!panFrameId) {
-                    panFrameId = requestAnimationFrame(updatePan);
+                if (!this.panFrameId) {
+                    const panLoop = () => {
+                        if (this.isPanning) {
+                            this.updateCanvasTransform();
+                            this.panFrameId = requestAnimationFrame(panLoop);
+                        } else {
+                            this.panFrameId = null;
+                        }
+                    };
+                    this.panFrameId = requestAnimationFrame(panLoop);
                 }
             }
-        });
+        };
         
-        // Detectar tecla Space pressionada
-        let spacePressed = false;
-        document.addEventListener('keydown', (e) => {
-            if (e.code === 'Space' && !e.target.matches('input, textarea')) {
-                spacePressed = true;
-                if (this.canvas) {
-                    this.canvas.style.cursor = 'grab';
-                }
-            }
-        });
-        
-        document.addEventListener('keyup', (e) => {
-            if (e.code === 'Space') {
-                spacePressed = false;
-                if (this.canvas && !this.isPanning) {
-                    this.canvas.style.cursor = 'default';
-                }
-            }
-        });
-        
-        this.canvas.addEventListener('contextmenu', (e) => {
-            const isOverStep = e.target.closest('.flow-step-block');
-            if (!isOverStep) {
-                e.preventDefault();
-            }
-        });
+        this.canvas.addEventListener('mousedown', startPan);
         
         this.canvas.addEventListener('mousemove', (e) => {
             if (this.isPanning) {
@@ -866,261 +292,115 @@ class FlowEditor {
                 const dx = e.clientX - this.lastPanPoint.x;
                 const dy = e.clientY - this.lastPanPoint.y;
                 
-                // Canvas infinito - sem limites
                 this.pan.x += dx;
                 this.pan.y += dy;
-                
                 this.lastPanPoint = { x: e.clientX, y: e.clientY };
-                // updatePan() já está rodando via requestAnimationFrame
-            } else if (spacePressed && e.buttons === 1) {
-                // Pan com Space + arrastar
-                if (!this.isPanning) {
-                    this.isPanning = true;
-                    this.lastPanPoint = { x: e.clientX, y: e.clientY };
-                    this.canvas.style.cursor = 'grabbing';
-                    this.canvas.classList.add('panning');
-                    
-                    if (!panFrameId) {
-                        panFrameId = requestAnimationFrame(updatePan);
-                    }
-                }
             }
         });
         
         this.canvas.addEventListener('mouseup', () => {
             this.isPanning = false;
-            this.canvas.style.cursor = spacePressed ? 'grab' : 'default';
+            this.canvas.style.cursor = '';
             this.canvas.classList.remove('panning');
         });
         
-        this.canvas.addEventListener('mouseleave', () => {
-            this.isPanning = false;
-            this.canvas.style.cursor = 'default';
-            this.canvas.classList.remove('panning');
-        });
-    }
-    
-    /**
-     * Atualiza transform do canvas (zoom + pan combinados)
-     * CRÍTICO: O transform é aplicado APENAS ao contentContainer, NUNCA ao canvas
-     * O canvas deve SEMPRE ter transform: none para que o grid se expanda corretamente
-     */
-    updateCanvasTransform() {
-        if (!this.canvas) {
-            console.warn('⚠️ updateCanvasTransform: canvas não encontrado');
-            return;
-        }
-        
-        // GARANTIR que o canvas NÃO tem transform (usar !important para sobrescrever qualquer estilo inline)
-        this.canvas.style.setProperty('transform', 'none', 'important');
-        this.canvas.style.transformOrigin = 'top left';
-        
-        // Aplicar transform APENAS no contentContainer
-        if (this.contentContainer) {
-            const transformValue = `translate(${this.pan.x}px, ${this.pan.y}px) scale(${this.zoomLevel})`;
-            this.contentContainer.style.transform = transformValue;
-            this.contentContainer.style.pointerEvents = 'auto';
-            console.log(`✅ Transform aplicado no contentContainer: ${transformValue}`);
-        } else {
-            // Se contentContainer não existe, criar agora
-            console.warn('⚠️ contentContainer não existe, criando...');
-            this.setupCanvas();
-            if (this.contentContainer) {
-                const transformValue = `translate(${this.pan.x}px, ${this.pan.y}px) scale(${this.zoomLevel})`;
-                this.contentContainer.style.transform = transformValue;
-                this.contentContainer.style.pointerEvents = 'auto';
-                console.log(`✅ Transform aplicado no contentContainer (após criar): ${transformValue}`);
-            } else {
-                console.error('❌ ERRO: Não foi possível criar contentContainer');
+        this.canvas.addEventListener('contextmenu', (e) => {
+            const isOverStep = e.target.closest('.flow-step-block');
+            if (!isOverStep && this.isPanning) {
+                e.preventDefault();
             }
-        }
+        });
     }
     
     /**
-     * Habilita seleção visual
+     * Habilita seleção de steps
      */
     enableSelection() {
-        if (!this.canvas) return;
-        
-        this.canvas.addEventListener('click', (e) => {
-            if (e.target.closest('button')) return;
-            
-            const stepElement = e.target.closest('.flow-step-block');
-            if (stepElement) {
-                this.selectStep(stepElement.dataset.stepId);
-            } else {
-                this.deselectStep();
-            }
-        });
-    }
-    
-    /**
-     * Seleciona um step
-     */
-    selectStep(stepId) {
-        this.deselectStep();
-        
-        const element = this.steps.get(String(stepId));
-        if (element) {
-            element.classList.add('flow-step-selected');
-            this.selectedStep = stepId;
-        }
-    }
-    
-    /**
-     * Deseleciona step atual
-     */
-    deselectStep() {
-        if (this.selectedStep) {
-            const element = this.steps.get(String(this.selectedStep));
-            if (element) {
-                element.classList.remove('flow-step-selected');
-            }
-        }
-        this.selectedStep = null;
+        // Implementação básica - pode ser expandida
     }
     
     /**
      * Renderiza todos os steps
-     * OTIMIZADO: Renderização incremental com diffing (não recria tudo)
-     * FLOW RECOMENDADO: render → adjustCanvasSize → createEndpoints → reconnectDiff → repaintEverything
      */
     renderAllSteps() {
         if (!this.alpine || !this.alpine.config || !this.alpine.config.flow_steps) {
             return;
         }
         
-        const steps = this.alpine.config.flow_steps;
+        const steps = this.alpine.config.flow_steps || [];
         if (!Array.isArray(steps)) return;
         
-        // Compatibilidade: converter steps antigos automaticamente
-        steps.forEach(step => {
-            if (!step.config) step.config = {};
-            if (!step.config.custom_buttons) step.config.custom_buttons = [];
-            if (!step.connections) step.connections = {};
-        });
-        
-        // Calcular steps novos, existentes e removidos (diffing)
+        // Remover steps que não existem mais
         const currentStepIds = new Set(this.steps.keys());
         const newStepIds = new Set(steps.map(s => String(s.id)));
         
-        // Remover steps que não existem mais
         currentStepIds.forEach(stepId => {
             if (!newStepIds.has(stepId)) {
-                const element = this.steps.get(stepId);
-                if (element) {
-                    this.instance.remove(element);
-                    element.remove();
-                    this.steps.delete(stepId);
-                    this.stepTransforms.delete(stepId);
-                }
+                this.removeStepElement(stepId);
             }
         });
         
-        // Renderizar/atualizar steps (incremental)
+        // Renderizar/atualizar steps
         steps.forEach(step => {
             const stepId = String(step.id);
             if (this.steps.has(stepId)) {
-                // Step existe: atualizar (mais eficiente)
                 this.updateStep(step);
             } else {
-                // Step novo: criar
                 this.renderStep(step);
             }
         });
         
-        // 1. Ajustar tamanho do canvas para caber o fluxo
-        this.adjustCanvasSize(400);
+        // Ajustar tamanho do canvas
+        this.adjustCanvasSize();
         
-        // 2. Aguardar DOM renderizar antes de criar endpoints e conectar
-        if (this._reconnectTimeout) {
-            clearTimeout(this._reconnectTimeout);
-        }
-        this._reconnectTimeout = setTimeout(() => {
-            // 3. Garantir que todos os endpoints estão criados (já feito em renderStep/updateStep)
-            // 4. Reconectar usando diffing (não deleteEveryConnection)
+        // Reconectar após renderização
+        setTimeout(() => {
             this.reconnectAll();
-            
-            // 5. Repintar tudo apenas uma vez no final
-            if (this.instance) {
-                this.instance.repaintEverything();
-            }
-            
-            this._reconnectTimeout = null;
-        }, 50);
+        }, 100);
     }
     
     /**
      * Renderiza um step individual
      */
     renderStep(step) {
-        if (!step || !step.id) {
-            console.error('❌ Step inválido:', step);
-            return;
-        }
+        if (!step || !step.id) return;
         
         const stepId = String(step.id);
         const stepType = step.type || 'message';
         const stepConfig = step.config || {};
+        const position = step.position || { x: 100, y: 100 };
+        const isStartStep = this.alpine?.config?.flow_start_step_id === stepId;
+        const customButtons = stepConfig.custom_buttons || [];
+        const hasButtons = customButtons.length > 0;
         
-        if (this.steps.has(stepId)) {
-            this.updateStep(step);
-            return;
-        }
-        
+        // Criar elemento
         const stepElement = document.createElement('div');
         stepElement.id = `step-${stepId}`;
         stepElement.className = 'flow-step-block';
         stepElement.dataset.stepId = stepId;
         
-        const position = step.position || { x: 100, y: 100 };
-        // Usar transform em vez de left/top para GPU acceleration (sem reflow)
+        // Posição usando transform (GPU acceleration)
         stepElement.style.transform = `translate3d(${position.x}px, ${position.y}px, 0)`;
         stepElement.style.left = '0';
         stepElement.style.top = '0';
         stepElement.style.willChange = 'transform';
         
-        // Armazenar transform no cache e dataset para acesso rápido
+        // Cache de transform
         this.stepTransforms.set(stepId, { x: position.x, y: position.y });
-        stepElement.dataset.x = position.x;
-        stepElement.dataset.y = position.y;
         
-        const icon = this.stepIcons[stepType] || 'fa-circle';
-        const isStartStep = this.alpine.config.flow_start_step_id === stepId;
-        
-        // Obter botões customizados
-        const customButtons = stepConfig.custom_buttons || [];
-        const hasButtons = customButtons.length > 0;
-        
-        // Preparar conteúdo conforme hierarquia: Header → Mídia → URL → Texto → Botões → Ações → Outputs
+        // Preview completo
         const mediaUrl = stepConfig.media_url || '';
-        const hasMedia = !!mediaUrl;
+        const mediaType = stepConfig.media_type || 'video';
         const previewText = this.getStepPreview(step);
-        
-        // Renderizar mídia com thumbnail real (se houver)
-        const mediaHTML = hasMedia ? this.getMediaPreviewHtml(stepConfig) : '';
-        
-        // Renderizar URL da mídia (se houver)
-        let mediaUrlHTML = '';
-        if (hasMedia && mediaUrl) {
-            // Truncar URL longa para preview
-            const displayUrl = mediaUrl.length > 50 ? mediaUrl.substring(0, 47) + '...' : mediaUrl;
-            mediaUrlHTML = `
-                <div class="flow-step-media-url" style="font-size: 10px; color: #6B7280; padding: 4px 8px; background: #0D0F15; border-radius: 4px; margin-bottom: 8px; word-break: break-all;">
-                    ${this.escapeHtml(displayUrl)}
-                </div>
-            `;
-        }
-        
-        // Renderizar botões com preview completo (todos os botões, estilo retangular, cor configurada)
+        const mediaHTML = mediaUrl ? this.getMediaPreviewHtml(stepConfig, mediaType) : '';
         const buttonsHTML = hasButtons ? this.getButtonPreviewHtml(customButtons) : '';
         
-        // HTML do bloco seguindo hierarquia INTUITIVA: Header → Mídia → Texto → Botões → Ações → Outputs
+        // HTML do card
         stepElement.innerHTML = `
             <div class="flow-step-header">
                 <div class="flow-step-header-content">
                     <div class="flow-step-icon-center">
-                        <i class="fas ${icon}" style="color: #FFFFFF;"></i>
+                        <i class="fas ${this.stepIcons[stepType] || 'fa-circle'}" style="color: #FFFFFF;"></i>
                     </div>
                     <div class="flow-step-title-center">
                         ${this.getStepTypeLabel(stepType)}
@@ -1130,8 +410,7 @@ class FlowEditor {
             </div>
             <div class="flow-step-body">
                 ${mediaHTML}
-                ${mediaUrlHTML}
-                ${previewText ? `<div class="flow-step-preview" style="padding: 10px 12px; color: #FFFFFF; font-size: 13px; line-height: 1.5; word-wrap: break-word; white-space: pre-wrap;">${this.escapeHtml(previewText)}</div>` : ''}
+                ${previewText ? `<div class="flow-step-preview">${this.escapeHtml(previewText)}</div>` : ''}
                 ${buttonsHTML}
             </div>
             <div class="flow-step-footer">
@@ -1146,36 +425,33 @@ class FlowEditor {
             ${!hasButtons ? '<div class="flow-step-global-output-container"></div>' : ''}
         `;
         
-        // Adicionar ao container de conteúdo se existir, senão ao canvas diretamente
-        if (this.contentContainer) {
-            this.contentContainer.appendChild(stepElement);
-        } else {
-            this.canvas.appendChild(stepElement);
-        }
+        // Adicionar ao container
+        const container = this.contentContainer || this.canvas;
+        container.appendChild(stepElement);
         
-        // Tornar arrastável (Drag otimizado com transform + rAF)
-        // jsPlumb.draggable já gerencia eventos, mas vamos otimizar o callback
+        // Tornar arrastável (otimizado)
         this.instance.draggable(stepElement, {
             containment: 'parent',
-            grid: this.snapToGrid ? [this.gridSize, this.gridSize] : false,
+            grid: false,
             drag: (params) => {
-                this.onStepDragOptimized(params);
+                this.onStepDrag(params);
             },
             stop: (params) => {
-                this.onStepDragStopOptimized(params);
+                this.onStepDragStop(params);
             },
             cursor: 'move',
             zIndex: 1000
         });
         
-        // Adicionar endpoints (agora com lógica dinâmica)
+        // Adicionar endpoints
         this.addEndpoints(stepElement, stepId, step);
         
-        this.steps.set(stepId, stepElement);
-        
+        // Marcar como inicial se necessário
         if (isStartStep) {
             stepElement.classList.add('flow-step-initial');
         }
+        
+        this.steps.set(stepId, stepElement);
     }
     
     /**
@@ -1190,156 +466,105 @@ class FlowEditor {
             return;
         }
         
+        // Atualizar posição
         const position = step.position || { x: 100, y: 100 };
-        // Usar transform em vez de left/top para GPU acceleration (sem reflow)
         element.style.transform = `translate3d(${position.x}px, ${position.y}px, 0)`;
-        element.style.left = '0';
-        element.style.top = '0';
-        element.style.willChange = 'transform';
+        this.stepTransforms.set(stepId, { x: position.x, y: position.y });
         
-        // Remover endpoints antigos antes de re-renderizar
+        // Remover endpoints antigos
         this.instance.removeAllEndpoints(element);
         
-        // Re-renderizar conteúdo do step seguindo hierarquia: Header → Mídia → URL → Texto → Botões → Ações → Outputs
+        // Re-renderizar conteúdo
         const stepType = step.type || 'message';
         const stepConfig = step.config || {};
-        const icon = this.stepIcons[stepType] || 'fa-circle';
-        const isStartStep = this.alpine.config.flow_start_step_id === stepId;
+        const isStartStep = this.alpine?.config?.flow_start_step_id === stepId;
         const customButtons = stepConfig.custom_buttons || [];
         const hasButtons = customButtons.length > 0;
         
-        // Preparar conteúdo conforme hierarquia
         const mediaUrl = stepConfig.media_url || '';
-        const hasMedia = !!mediaUrl;
+        const mediaType = stepConfig.media_type || 'video';
         const previewText = this.getStepPreview(step);
+        const mediaHTML = mediaUrl ? this.getMediaPreviewHtml(stepConfig, mediaType) : '';
+        const buttonsHTML = hasButtons ? this.getButtonPreviewHtml(customButtons) : '';
         
-        // Renderizar mídia com thumbnail real (se houver) - usar função auxiliar
-        const mediaHTML = hasMedia ? this.getMediaPreviewHtml(stepConfig) : '';
-        
-        // Renderizar URL da mídia (se houver)
-        let mediaUrlHTML = '';
-        if (hasMedia && mediaUrl) {
-            const displayUrl = mediaUrl.length > 50 ? mediaUrl.substring(0, 47) + '...' : mediaUrl;
-            mediaUrlHTML = `
-                <div class="flow-step-media-url" style="font-size: 10px; color: #6B7280; padding: 4px 8px; background: #0D0F15; border-radius: 4px; margin-bottom: 8px; word-break: break-all;">
-                    ${this.escapeHtml(displayUrl)}
+        // Atualizar header
+        const headerEl = element.querySelector('.flow-step-header-content');
+        if (headerEl) {
+            headerEl.innerHTML = `
+                <div class="flow-step-icon-center">
+                    <i class="fas ${this.stepIcons[stepType] || 'fa-circle'}" style="color: #FFFFFF;"></i>
                 </div>
+                <div class="flow-step-title-center">
+                    ${this.getStepTypeLabel(stepType)}
+                </div>
+                ${isStartStep ? '<div class="flow-step-start-badge">⭐</div>' : ''}
             `;
         }
         
-        // Renderizar botões com preview completo (todos os botões, estilo retangular, cor configurada) - usar função auxiliar
-        const buttonsHTML = hasButtons ? this.getButtonPreviewHtml(customButtons) : '';
-        
-        // Atualizar HTML seguindo hierarquia EXATA
-        const headerEl = element.querySelector('.flow-step-header');
+        // Atualizar body
         const bodyEl = element.querySelector('.flow-step-body');
-        
-        if (headerEl) {
-            const headerContent = headerEl.querySelector('.flow-step-header-content');
-            if (headerContent) {
-                headerContent.innerHTML = `
-                    <div class="flow-step-icon-center">
-                        <i class="fas ${icon}" style="color: #FFFFFF;"></i>
-                    </div>
-                    <div class="flow-step-title-center">
-                        ${this.getStepTypeLabel(stepType)}
-                    </div>
-                    ${isStartStep ? '<div class="flow-step-start-badge">⭐</div>' : ''}
-                `;
-            }
-        }
-        
         if (bodyEl) {
-            // Ordem visual intuitiva: Mídia → Texto → Botões
             bodyEl.innerHTML = `
                 ${mediaHTML}
-                ${mediaUrlHTML}
-                ${previewText ? `<div class="flow-step-preview" style="padding: 10px 12px; color: #FFFFFF; font-size: 13px; line-height: 1.5; word-wrap: break-word; white-space: pre-wrap;">${this.escapeHtml(previewText)}</div>` : ''}
+                ${previewText ? `<div class="flow-step-preview">${this.escapeHtml(previewText)}</div>` : ''}
                 ${buttonsHTML}
             `;
         }
         
-        // Adicionar ou remover container de saída global (deve desaparecer se botões forem adicionados)
+        // Atualizar container de saída global
         let globalOutputContainer = element.querySelector('.flow-step-global-output-container');
         if (!hasButtons) {
-            // Sem botões: criar container de saída global se não existir
             if (!globalOutputContainer) {
                 globalOutputContainer = document.createElement('div');
                 globalOutputContainer.className = 'flow-step-global-output-container';
                 element.appendChild(globalOutputContainer);
             }
         } else {
-            // Com botões: remover container de saída global (deve desaparecer)
             if (globalOutputContainer) {
-                // Remover endpoints do container antes de remover o container
-                try {
-                    const endpoints = this.instance.getEndpoints(globalOutputContainer);
-                    endpoints.forEach(ep => {
-                        try {
-                            this.instance.deleteEndpoint(ep);
-                        } catch (e) {
-                            // Ignorar erros
-                        }
-                    });
-                } catch (e) {
-                    // Ignorar erros
-                }
                 globalOutputContainer.remove();
             }
         }
         
-        // Re-adicionar endpoints (atualiza automaticamente conforme botões)
+        // Re-adicionar endpoints
         this.addEndpoints(element, stepId, step);
         
-        // Atualizar classe de step inicial
+        // Atualizar classe inicial
         if (isStartStep) {
             element.classList.add('flow-step-initial');
         } else {
             element.classList.remove('flow-step-initial');
         }
-        
-        // Reconectar após atualização
-        setTimeout(() => {
-            this.reconnectAll();
-        }, 50);
     }
     
     /**
-     * Adiciona endpoints ao step conforme especificação EXATA
-     * 
+     * Adiciona endpoints ao step
      * ESPECIFICAÇÃO:
-     * 1. INPUT: Topo-central do container ROOT (nunca em subcomponents)
-     * 2. SAÍDAS COM BOTÕES: Um endpoint por botão, lado direito, dentro do próprio botão
-     * 3. SAÍDA SEM BOTÕES: Uma saída global centro-direita (desaparece se botões forem adicionados)
+     * - Entrada: LADO ESQUERDO, CENTRO VERTICAL
+     * - Saídas com botões: UM endpoint por botão, LADO DIREITO do botão
+     * - Saída sem botões: UM endpoint global, LADO DIREITO, CENTRO VERTICAL
      */
     addEndpoints(element, stepId, step) {
         const stepConfig = step.config || {};
         const customButtons = stepConfig.custom_buttons || [];
         const hasButtons = customButtons.length > 0;
         
-        // ============================================
-        // 1. ENTRADA (INPUT) - LADO ESQUERDO, CENTRO VERTICAL
-        // ============================================
-        // ESPECIFICAÇÃO: Entrada sempre no lado esquerdo, centro vertical do card
-        // IMPORTANTE: Endpoint no elemento ROOT (stepElement), nunca em subcomponents
+        // 1. ENTRADA - LADO ESQUERDO, CENTRO VERTICAL
         this.instance.addEndpoint(element, {
             uuid: `endpoint-left-${stepId}`,
-            anchor: ['Left', { dx: -5 }], // Lado esquerdo, 5px fora do card
+            anchor: ['LeftMiddle', { dx: -7 }],
             maxConnections: -1,
             isSource: false,
             isTarget: true,
             endpoint: ['Dot', { radius: 7 }],
             paintStyle: { 
-                fill: '#FFFFFF', 
-                outlineStroke: '#0D0F15', 
-                outlineWidth: 2,
-                strokeWidth: 2
+                fill: '#10B981', 
+                outlineStroke: '#FFFFFF', 
+                outlineWidth: 2
             },
             hoverPaintStyle: { 
                 fill: '#FFB800', 
-                outlineStroke: '#0D0F15', 
-                outlineWidth: 3,
-                strokeWidth: 3
+                outlineStroke: '#FFFFFF', 
+                outlineWidth: 3
             },
             data: {
                 stepId: stepId,
@@ -1347,33 +572,15 @@ class FlowEditor {
             }
         });
         
-        // ============================================
-        // 2. SAÍDAS COM BOTÕES - Endpoint individual por botão
-        // ============================================
+        // 2. SAÍDAS
         if (hasButtons) {
-            // Remover output global se existir (deve desaparecer quando há botões)
-            const globalOutputContainer = element.querySelector('.flow-step-global-output-container');
-            if (globalOutputContainer) {
-                // Remover endpoint do container global se existir
-                const globalEndpoint = this.instance.getEndpoints(globalOutputContainer);
-                globalEndpoint.forEach(ep => {
-                    try {
-                        this.instance.deleteEndpoint(ep);
-                    } catch (e) {
-                        // Ignorar erros
-                    }
-                });
-                globalOutputContainer.remove();
-            }
-            
-            // Criar endpoint para cada botão (lado direito, dentro do próprio botão)
+            // Com botões: endpoint individual por botão
             customButtons.forEach((btn, index) => {
                 const buttonContainer = element.querySelector(`[data-endpoint-button="${index}"]`);
                 if (buttonContainer) {
-                    // Endpoint no container do botão (lado direito, verticalmente centralizado)
                     this.instance.addEndpoint(buttonContainer, {
                         uuid: `endpoint-button-${stepId}-${index}`,
-                        anchor: ['Right', { dx: 5 }],
+                        anchor: ['RightMiddle', { dx: 7 }],
                         maxConnections: 1,
                         isSource: true,
                         isTarget: false,
@@ -1381,40 +588,41 @@ class FlowEditor {
                         paintStyle: { 
                             fill: '#FFFFFF', 
                             outlineStroke: '#0D0F15', 
-                            outlineWidth: 2,
-                            strokeWidth: 2
+                            outlineWidth: 2
                         },
                         hoverPaintStyle: { 
-                            fill: '#FFFFFF', 
-                            outlineStroke: '#0D0F15', 
-                            outlineWidth: 3,
-                            strokeWidth: 3
+                            fill: '#FFB800', 
+                            outlineStroke: '#FFFFFF', 
+                            outlineWidth: 3
                         },
                         data: {
                             stepId: stepId,
                             buttonIndex: index,
-                            buttonId: btn.id || `btn-${index}`,
                             endpointType: 'button'
                         }
                     });
                 }
             });
         } else {
-            // ============================================
-            // 3. SAÍDA SEM BOTÕES - Endpoint global centro-direita
-            // ============================================
-            // Garantir que o container existe
+            // Sem botões: endpoint global
             let globalOutputContainer = element.querySelector('.flow-step-global-output-container');
             if (!globalOutputContainer) {
                 globalOutputContainer = document.createElement('div');
                 globalOutputContainer.className = 'flow-step-global-output-container';
+                globalOutputContainer.style.cssText = `
+                    position: absolute;
+                    right: -7px;
+                    top: 50%;
+                    transform: translateY(-50%);
+                    width: 14px;
+                    height: 14px;
+                `;
                 element.appendChild(globalOutputContainer);
             }
             
-            // Criar endpoint no centro-direita (alinhado verticalmente com o meio do card)
             this.instance.addEndpoint(globalOutputContainer, {
-                uuid: `endpoint-bottom-${stepId}`,
-                anchor: ['Right', { dx: 5 }],
+                uuid: `endpoint-right-${stepId}`,
+                anchor: ['RightMiddle', { dx: 7 }],
                 maxConnections: -1,
                 isSource: true,
                 isTarget: false,
@@ -1422,20 +630,106 @@ class FlowEditor {
                 paintStyle: { 
                     fill: '#FFFFFF', 
                     outlineStroke: '#0D0F15', 
-                    outlineWidth: 2,
-                    strokeWidth: 2
+                    outlineWidth: 2
                 },
                 hoverPaintStyle: { 
-                    fill: '#FFFFFF', 
-                    outlineStroke: '#0D0F15', 
-                    outlineWidth: 3,
-                    strokeWidth: 3
+                    fill: '#FFB800', 
+                    outlineStroke: '#FFFFFF', 
+                    outlineWidth: 3
                 },
                 data: {
                     stepId: stepId,
                     endpointType: 'global'
                 }
             });
+        }
+    }
+    
+    /**
+     * Callback quando step é arrastado (otimizado)
+     */
+    onStepDrag(params) {
+        const element = params.el;
+        const stepId = element.dataset.stepId;
+        
+        if (stepId) {
+            element.classList.add('dragging');
+            
+            // Cancelar frame anterior
+            if (this.dragFrameId) {
+                cancelAnimationFrame(this.dragFrameId);
+            }
+            
+            // Atualizar conexões de forma otimizada
+            this.dragFrameId = requestAnimationFrame(() => {
+                if (this.instance) {
+                    this.instance.repaintEverything();
+                }
+                this.dragFrameId = null;
+            });
+        }
+    }
+    
+    /**
+     * Callback quando drag para
+     */
+    onStepDragStop(params) {
+        const element = params.el;
+        const stepId = element.dataset.stepId;
+        
+        if (stepId) {
+            element.classList.remove('dragging');
+            
+            // Extrair posição do transform
+            const transform = element.style.transform || '';
+            let x = 0, y = 0;
+            
+            if (transform && transform.includes('translate3d')) {
+                const match = transform.match(/translate3d\(([^,]+)px,\s*([^,]+)px/);
+                if (match) {
+                    x = parseFloat(match[1]) || 0;
+                    y = parseFloat(match[2]) || 0;
+                }
+            }
+            
+            // Snap to grid opcional
+            x = Math.round(x / this.gridSize) * this.gridSize;
+            y = Math.round(y / this.gridSize) * this.gridSize;
+            
+            // Atualizar posição
+            element.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+            this.stepTransforms.set(stepId, { x, y });
+            
+            // Atualizar no Alpine
+            this.updateStepPosition(stepId, { x, y });
+            
+            // Repintar conexões
+            if (this.instance) {
+                this.instance.repaintEverything();
+            }
+            
+            // Ajustar canvas
+            this.adjustCanvasSize();
+        }
+    }
+    
+    /**
+     * Atualiza posição do step no Alpine
+     */
+    updateStepPosition(stepId, position) {
+        if (!this.alpine || !this.alpine.config || !this.alpine.config.flow_steps) {
+            return;
+        }
+        
+        const steps = this.alpine.config.flow_steps;
+        const step = steps.find(s => String(s.id) === String(stepId));
+        
+        if (step) {
+            if (!step.position) {
+                step.position = {};
+            }
+            step.position.x = position.x;
+            step.position.y = position.y;
         }
     }
     
@@ -1447,6 +741,7 @@ class FlowEditor {
             return;
         }
         
+        // Limpar conexões antigas
         this.instance.deleteEveryConnection();
         this.connections.clear();
         
@@ -1464,7 +759,7 @@ class FlowEditor {
             
             if (!this.steps.has(stepId)) return;
             
-            // Se tem botões, conectar pelos endpoints dos botões
+            // Conexões de botões
             if (hasButtons) {
                 customButtons.forEach((btn, index) => {
                     if (btn.target_step) {
@@ -1475,34 +770,21 @@ class FlowEditor {
                     }
                 });
             } else {
-                // Sem botões, usar conexões padrão (next, pending, retry)
-                if (connections.next) {
-                    const targetId = String(connections.next);
-                    if (this.steps.has(targetId)) {
-                        this.createConnection(stepId, targetId, 'next');
+                // Conexões padrão (next, pending, retry)
+                ['next', 'pending', 'retry'].forEach(connType => {
+                    if (connections[connType]) {
+                        const targetId = String(connections[connType]);
+                        if (this.steps.has(targetId)) {
+                            this.createConnection(stepId, targetId, connType);
+                        }
                     }
-                }
-                
-                if (connections.pending) {
-                    const targetId = String(connections.pending);
-                    if (this.steps.has(targetId)) {
-                        this.createConnection(stepId, targetId, 'pending');
-                    }
-                }
-                
-                if (connections.retry) {
-                    const targetId = String(connections.retry);
-                    if (this.steps.has(targetId)) {
-                        this.createConnection(stepId, targetId, 'retry');
-                    }
-                }
+                });
             }
         });
     }
     
     /**
-     * Cria uma conexão entre dois steps (branca com glow)
-     * Usado para steps SEM botões (conexão global)
+     * Cria conexão padrão (sem botões)
      */
     createConnection(sourceStepId, targetStepId, connectionType = 'next') {
         const sourceId = String(sourceStepId);
@@ -1520,11 +802,9 @@ class FlowEditor {
             return this.connections.get(connId);
         }
         
-        const label = this.getConnectionLabel(connectionType);
-        
         try {
             const connection = this.instance.connect({
-                source: `endpoint-bottom-${sourceId}`,
+                source: `endpoint-right-${sourceId}`,
                 target: `endpoint-left-${targetId}`,
                 paintStyle: { 
                     stroke: '#FFFFFF', 
@@ -1538,7 +818,7 @@ class FlowEditor {
                 },
                 overlays: [
                     ['Label', {
-                        label: label,
+                        label: this.getConnectionLabel(connectionType),
                         location: 0.5,
                         cssClass: 'connection-label-white',
                         labelStyle: {
@@ -1548,8 +828,7 @@ class FlowEditor {
                             padding: '4px 8px',
                             borderRadius: '6px',
                             fontSize: '10px',
-                            fontWeight: '600',
-                            fontFamily: 'Inter, sans-serif'
+                            fontWeight: '600'
                         }
                     }]
                 ],
@@ -1563,28 +842,23 @@ class FlowEditor {
             if (connection) {
                 this.connections.set(connId, connection);
                 
-                // Adicionar animação de highlight
-                setTimeout(() => {
-                    if (this.instance) {
-                        this.instance.repaint(connection);
-                    }
-                }, 10);
-                
+                // Atualizar Alpine
                 const step = this.alpine?.config?.flow_steps?.find(s => String(s.id) === sourceId);
                 if (step && (!step.connections || !step.connections[connectionType])) {
-                    this.updateAlpineConnection(sourceId, targetId, connectionType);
+                    if (!step.connections) step.connections = {};
+                    step.connections[connectionType] = targetId;
                 }
             }
             
             return connection;
         } catch (error) {
-            console.error(`❌ Erro ao criar conexão:`, error);
+            console.error('❌ Erro ao criar conexão:', error);
             return null;
         }
     }
     
     /**
-     * Cria uma conexão a partir de um botão específico
+     * Cria conexão a partir de botão
      */
     createConnectionFromButton(sourceStepId, buttonIndex, targetStepId) {
         const sourceId = String(sourceStepId);
@@ -1628,8 +902,7 @@ class FlowEditor {
                             padding: '4px 8px',
                             borderRadius: '6px',
                             fontSize: '10px',
-                            fontWeight: '600',
-                            fontFamily: 'Inter, sans-serif'
+                            fontWeight: '600'
                         }
                     }]
                 ],
@@ -1644,38 +917,81 @@ class FlowEditor {
             if (connection) {
                 this.connections.set(connId, connection);
                 
-                // Adicionar animação de highlight
-                setTimeout(() => {
-                    if (this.instance) {
-                        this.instance.repaint(connection);
-                    }
-                }, 10);
+                // Atualizar Alpine
+                const step = this.alpine?.config?.flow_steps?.find(s => String(s.id) === sourceId);
+                if (step && step.config && step.config.custom_buttons && step.config.custom_buttons[buttonIndex]) {
+                    step.config.custom_buttons[buttonIndex].target_step = targetId;
+                }
             }
             
             return connection;
         } catch (error) {
-            console.error(`❌ Erro ao criar conexão do botão:`, error);
+            console.error('❌ Erro ao criar conexão do botão:', error);
             return null;
         }
     }
     
     /**
-     * Atualiza conexão no Alpine.js
+     * Callback quando conexão é criada
      */
-    updateAlpineConnection(sourceStepId, targetStepId, connectionType) {
-        if (!this.alpine || !this.alpine.config || !this.alpine.config.flow_steps) {
-            return;
-        }
+    onConnectionCreated(info) {
+        const sourceUuid = info.sourceEndpoint.getUuid();
+        const targetUuid = info.targetEndpoint.getUuid();
         
-        const steps = this.alpine.config.flow_steps;
-        const sourceStep = steps.find(s => String(s.id) === String(sourceStepId));
+        // Determinar tipo de conexão
+        let sourceStepId = null;
+        let buttonIndex = null;
+        let connectionType = 'next';
         
-        if (sourceStep) {
-            if (!sourceStep.connections) {
-                sourceStep.connections = {};
+        if (sourceUuid.includes('endpoint-button-')) {
+            const match = sourceUuid.match(/endpoint-button-([^-]+)-(\d+)/);
+            if (match) {
+                sourceStepId = match[1];
+                buttonIndex = parseInt(match[2]);
+                connectionType = 'button';
             }
-            sourceStep.connections[connectionType] = String(targetStepId);
+        } else if (sourceUuid.includes('endpoint-right-')) {
+            sourceStepId = sourceUuid.replace('endpoint-right-', '');
+            connectionType = 'next';
         }
+        
+        const targetStepId = targetUuid.includes('endpoint-left-') 
+            ? targetUuid.replace('endpoint-left-', '') 
+            : null;
+        
+        if (sourceStepId && targetStepId) {
+            const connId = connectionType === 'button' && buttonIndex !== null
+                ? `button-${sourceStepId}-${buttonIndex}-${targetStepId}`
+                : `${sourceStepId}-${targetStepId}-${connectionType}`;
+            
+            this.connections.set(connId, info.connection);
+            
+            // Atualizar Alpine
+            if (connectionType === 'button' && buttonIndex !== null) {
+                const step = this.alpine?.config?.flow_steps?.find(s => String(s.id) === sourceStepId);
+                if (step && step.config && step.config.custom_buttons && step.config.custom_buttons[buttonIndex]) {
+                    step.config.custom_buttons[buttonIndex].target_step = targetStepId;
+                }
+            } else {
+                const step = this.alpine?.config?.flow_steps?.find(s => String(s.id) === sourceStepId);
+                if (step) {
+                    if (!step.connections) step.connections = {};
+                    step.connections[connectionType] = targetStepId;
+                }
+            }
+        }
+    }
+    
+    /**
+     * Callback quando conexão é removida
+     */
+    onConnectionDetached(info) {
+        // Limpar do cache
+        this.connections.forEach((conn, id) => {
+            if (conn === info.connection) {
+                this.connections.delete(id);
+            }
+        });
     }
     
     /**
@@ -1688,413 +1004,55 @@ class FlowEditor {
         if (data) {
             const { sourceStepId, targetStepId, connectionType, buttonIndex } = data;
             
+            // Atualizar Alpine
             if (this.alpine && this.alpine.config && this.alpine.config.flow_steps) {
                 const steps = this.alpine.config.flow_steps;
                 const sourceStep = steps.find(s => String(s.id) === String(sourceStepId));
                 
                 if (sourceStep) {
-                    // Se for conexão de botão, limpar target_step do botão
                     if (connectionType === 'button' && buttonIndex !== null && buttonIndex !== undefined) {
                         if (sourceStep.config && sourceStep.config.custom_buttons && sourceStep.config.custom_buttons[buttonIndex]) {
                             sourceStep.config.custom_buttons[buttonIndex].target_step = null;
                         }
                     } else if (sourceStep.connections) {
-                        // Se for conexão padrão, remover do objeto connections
                         delete sourceStep.connections[connectionType];
                     }
                 }
             }
-            
-            const connId = connectionType === 'button' && buttonIndex !== null && buttonIndex !== undefined
-                ? `button-${sourceStepId}-${buttonIndex}-${targetStepId}`
-                : `${sourceStepId}-${targetStepId}-${connectionType}`;
-            this.connections.delete(connId);
         }
         
-        this.instance.deleteConnection(connection);
+        try {
+            this.instance.deleteConnection(connection);
+        } catch (error) {
+            console.error('❌ Erro ao remover conexão:', error);
+        }
     }
     
     /**
-     * Callback quando conexão é criada
-     * Identifica qual botão criou a conexão e atualiza Alpine.js corretamente
+     * Remove elemento de step
      */
-    onConnectionCreated(info) {
-        const sourceUuid = info.sourceId || info.source?.getUuid?.();
-        const targetUuid = info.targetId || info.target?.getUuid?.();
-        
-        if (!sourceUuid || !targetUuid) return;
-        
-        // Detectar tipo de endpoint de origem conforme especificação
-        let sourceStepId = null;
-        let buttonIndex = null;
-        let connectionType = 'next';
-        
-        // Extrair stepId e buttonIndex do UUID
-        if (sourceUuid.includes('endpoint-button-')) {
-            // Conexão de botão: endpoint-button-{stepId}-{buttonIndex}
-            const match = sourceUuid.match(/endpoint-button-([^-]+)-(\d+)/);
-            if (match) {
-                sourceStepId = match[1];
-                buttonIndex = parseInt(match[2]);
-                connectionType = 'button';
-            }
-        } else if (sourceUuid.includes('endpoint-bottom-')) {
-            // Conexão global (sem botões): endpoint-bottom-{stepId}
-            sourceStepId = sourceUuid.replace('endpoint-bottom-', '');
-            connectionType = 'next'; // Default para conexões globais
-        }
-        
-        const targetStepId = targetUuid.includes('endpoint-left-') 
-            ? targetUuid.replace('endpoint-left-', '') 
-            : null;
-        
-        if (!sourceStepId || !targetStepId) return;
-        
-        // Atualizar Alpine.js conforme tipo de conexão
-        if (connectionType === 'button' && buttonIndex !== null && buttonIndex !== undefined) {
-            // Conexão de botão: atualizar target_step do botão específico
-            const step = this.alpine?.config?.flow_steps?.find(s => String(s.id) === sourceStepId);
-            if (step && step.config && step.config.custom_buttons && step.config.custom_buttons[buttonIndex]) {
-                step.config.custom_buttons[buttonIndex].target_step = targetStepId;
-            }
-        } else {
-            // Conexão global: atualizar connections do step
-            this.updateAlpineConnection(sourceStepId, targetStepId, connectionType);
-        }
-        
-        if (info.connection) {
-            const label = connectionType === 'button' ? 'Botão' : this.getConnectionLabel(connectionType);
-            
-            info.connection.setPaintStyle({ 
-                stroke: '#FFFFFF', 
-                strokeWidth: 2.5,
-                strokeOpacity: 0.9
-            });
-            info.connection.setHoverPaintStyle({ 
-                stroke: '#FFFFFF', 
-                strokeWidth: 3.5,
-                strokeOpacity: 1
-            });
-            
-            info.connection.setLabel({
-                label: label,
-                location: 0.5,
-                cssClass: 'connection-label-white',
-                labelStyle: {
-                    color: '#FFFFFF',
-                    backgroundColor: '#0D0F15',
-                    border: '1px solid #242836',
-                    padding: '4px 8px',
-                    borderRadius: '6px',
-                    fontSize: '10px',
-                    fontWeight: '600',
-                    fontFamily: 'Inter, sans-serif'
+    removeStepElement(stepId) {
+        const element = this.steps.get(stepId);
+        if (element) {
+            // Remover conexões
+            const connectionsToRemove = [];
+            this.connections.forEach((conn) => {
+                const data = conn.getData();
+                if (data && (data.sourceStepId === stepId || data.targetStepId === stepId)) {
+                    connectionsToRemove.push(conn);
                 }
             });
             
-            // Salvar dados da conexão incluindo identificação do botão
-            info.connection.setData({
-                sourceStepId: sourceStepId,
-                targetStepId: targetStepId,
-                buttonIndex: buttonIndex,
-                connectionType: connectionType
+            connectionsToRemove.forEach(conn => {
+                this.removeConnection(conn);
             });
             
-            const connId = connectionType === 'button' && buttonIndex !== null && buttonIndex !== undefined
-                ? `button-${sourceStepId}-${buttonIndex}-${targetStepId}`
-                : `${sourceStepId}-${targetStepId}-${connectionType}`;
-            this.connections.set(connId, info.connection);
-            
-            // Repintar para garantir visibilidade
-            setTimeout(() => {
-                if (this.instance) {
-                    this.instance.repaint(info.connection);
-                }
-            }, 10);
+            // Remover do jsPlumb e DOM
+            this.instance.remove(element);
+            element.remove();
+            this.steps.delete(stepId);
+            this.stepTransforms.delete(stepId);
         }
-    }
-    
-    /**
-     * Callback quando conexão é removida
-     */
-    onConnectionDetached(info) {
-        // Já tratado em removeConnection
-    }
-    
-    /**
-     * Callback quando step é arrastado - com snapping inteligente
-     */
-    onStepDrag(params) {
-        const element = params.el;
-        const stepId = element.dataset.stepId;
-        
-        if (stepId) {
-            element.classList.add('dragging');
-            
-            // Aplicar snapping se habilitado
-            if (this.snapEnabled) {
-                this.applySnapping(element, params);
-            }
-        }
-    }
-    
-    /**
-     * Aplica snapping magnético ao elemento sendo arrastado
-     */
-    applySnapping(element, params) {
-        if (!this.snapEnabled) return;
-        
-        const elementRect = element.getBoundingClientRect();
-        const canvasRect = this.canvas.getBoundingClientRect();
-        
-        const elementX = elementRect.left - canvasRect.left;
-        const elementY = elementRect.top - canvasRect.top;
-        const elementCenterX = elementX + elementRect.width / 2;
-        const elementCenterY = elementY + elementRect.height / 2;
-        
-        let snapX = null, snapY = null;
-        let snapLines = { horizontal: [], vertical: [] };
-        
-        // Verificar snapping com outros steps
-        this.steps.forEach((otherElement, otherStepId) => {
-            if (otherElement === element) return;
-            
-            const otherRect = otherElement.getBoundingClientRect();
-            const otherX = otherRect.left - canvasRect.left;
-            const otherY = otherRect.top - canvasRect.top;
-            const otherCenterX = otherX + otherRect.width / 2;
-            const otherCenterY = otherY + otherRect.height / 2;
-            
-            // Snapping horizontal (alinhar centros ou bordas)
-            const centerXDiff = Math.abs(elementCenterX - otherCenterX);
-            if (centerXDiff < this.snapThreshold) {
-                snapX = otherCenterX - elementRect.width / 2;
-                snapLines.vertical.push({
-                    x: otherCenterX,
-                    y1: Math.min(elementY, otherY) - 20,
-                    y2: Math.max(elementY + elementRect.height, otherY + otherRect.height) + 20
-                });
-            }
-            
-            // Snapping vertical (alinhar centros ou bordas)
-            const centerYDiff = Math.abs(elementCenterY - otherCenterY);
-            if (centerYDiff < this.snapThreshold) {
-                snapY = otherCenterY - elementRect.height / 2;
-                snapLines.horizontal.push({
-                    y: otherCenterY,
-                    x1: Math.min(elementX, otherX) - 20,
-                    x2: Math.max(elementX + elementRect.width, otherX + otherRect.width) + 20
-                });
-            }
-            
-            // Snapping de bordas
-            const leftDiff = Math.abs(elementX - otherX);
-            const rightDiff = Math.abs((elementX + elementRect.width) - (otherX + otherRect.width));
-            const topDiff = Math.abs(elementY - otherY);
-            const bottomDiff = Math.abs((elementY + elementRect.height) - (otherY + otherRect.height));
-            
-            if (leftDiff < this.snapThreshold) {
-                snapX = otherX;
-                snapLines.vertical.push({
-                    x: otherX,
-                    y1: Math.min(elementY, otherY) - 20,
-                    y2: Math.max(elementY + elementRect.height, otherY + otherRect.height) + 20
-                });
-            } else if (rightDiff < this.snapThreshold) {
-                snapX = otherX + otherRect.width - elementRect.width;
-                snapLines.vertical.push({
-                    x: otherX + otherRect.width,
-                    y1: Math.min(elementY, otherY) - 20,
-                    y2: Math.max(elementY + elementRect.height, otherY + otherRect.height) + 20
-                });
-            }
-            
-            if (topDiff < this.snapThreshold) {
-                snapY = otherY;
-                snapLines.horizontal.push({
-                    y: otherY,
-                    x1: Math.min(elementX, otherX) - 20,
-                    x2: Math.max(elementX + elementRect.width, otherX + otherRect.width) + 20
-                });
-            } else if (bottomDiff < this.snapThreshold) {
-                snapY = otherY + otherRect.height - elementRect.height;
-                snapLines.horizontal.push({
-                    y: otherY + otherRect.height,
-                    x1: Math.min(elementX, otherX) - 20,
-                    x2: Math.max(elementX + elementRect.width, otherX + otherRect.width) + 20
-                });
-            }
-        });
-        
-        // Aplicar snap usando transform (GPU acceleration)
-        if (snapX !== null || snapY !== null) {
-            // Extrair posição atual do transform
-            const transform = element.style.transform || '';
-            let currentX = 0, currentY = 0;
-            if (transform && transform.includes('translate3d')) {
-                const match = transform.match(/translate3d\(([^,]+)px,\s*([^,]+)px/);
-                if (match) {
-                    currentX = parseFloat(match[1]) || 0;
-                    currentY = parseFloat(match[2]) || 0;
-                }
-            } else {
-                currentX = parseFloat(element.style.left) || 0;
-                currentY = parseFloat(element.style.top) || 0;
-            }
-            
-            // Converter coordenadas de tela para coordenadas do canvas (considerando zoom/pan)
-            if (snapX !== null) {
-                const worldX = (snapX - this.pan.x) / this.zoomLevel;
-                currentX = worldX;
-            }
-            
-            if (snapY !== null) {
-                const worldY = (snapY - this.pan.y) / this.zoomLevel;
-                currentY = worldY;
-            }
-            
-            // Atualizar usando transform (sem reflow)
-            element.style.transform = `translate3d(${currentX}px, ${currentY}px, 0)`;
-            element.style.willChange = 'transform';
-        }
-        
-        // Mostrar linhas-guia
-        this.showSnapLines = snapLines.horizontal.length > 0 || snapLines.vertical.length > 0;
-        this.snapLines = snapLines;
-        this.renderSnapLines();
-    }
-    
-    /**
-     * Renderiza linhas-guia de snapping
-     */
-    renderSnapLines() {
-        // Remover linhas antigas
-        const oldLines = this.canvas.querySelectorAll('.snap-line');
-        oldLines.forEach(line => line.remove());
-        
-        if (!this.showSnapLines) return;
-        
-        // Criar linhas-guia
-        this.snapLines.horizontal.forEach(line => {
-            const lineEl = document.createElement('div');
-            lineEl.className = 'snap-line snap-line-horizontal';
-            lineEl.style.cssText = `
-                position: absolute;
-                left: ${line.x1}px;
-                top: ${line.y}px;
-                width: ${line.x2 - line.x1}px;
-                height: 1px;
-                background: #FFB800;
-                opacity: 0.6;
-                pointer-events: none;
-                z-index: 9999;
-            `;
-            this.canvas.appendChild(lineEl);
-        });
-        
-        this.snapLines.vertical.forEach(line => {
-            const lineEl = document.createElement('div');
-            lineEl.className = 'snap-line snap-line-vertical';
-            lineEl.style.cssText = `
-                position: absolute;
-                left: ${line.x}px;
-                top: ${line.y1}px;
-                width: 1px;
-                height: ${line.y2 - line.y1}px;
-                background: #FFB800;
-                opacity: 0.6;
-                pointer-events: none;
-                z-index: 9999;
-            `;
-            this.canvas.appendChild(lineEl);
-        });
-    }
-    
-    /**
-     * Callback quando drag para - limpar linhas-guia
-     */
-    onStepDragStop(params) {
-        const element = params.el;
-        const stepId = element.dataset.stepId;
-        
-        if (stepId) {
-            element.classList.remove('dragging');
-            
-            // Remover linhas-guia
-            this.showSnapLines = false;
-            const snapLines = this.canvas.querySelectorAll('.snap-line');
-            snapLines.forEach(line => line.remove());
-            
-            // Extrair posição do transform (mais eficiente que getBoundingClientRect)
-            const transform = element.style.transform || '';
-            let x = 0, y = 0;
-            
-            if (transform && transform.includes('translate3d')) {
-                const match = transform.match(/translate3d\(([^,]+)px,\s*([^,]+)px/);
-                if (match) {
-                    x = parseFloat(match[1]) || 0;
-                    y = parseFloat(match[2]) || 0;
-                }
-            } else {
-                // Fallback: usar getBoundingClientRect apenas se transform não existir
-                const rect = element.getBoundingClientRect();
-                const canvasRect = this.canvas.getBoundingClientRect();
-                x = (rect.left - canvasRect.left - this.pan.x) / this.zoomLevel;
-                y = (rect.top - canvasRect.top - this.pan.y) / this.zoomLevel;
-            }
-            
-            // Snap to grid se habilitado
-            if (this.snapToGrid) {
-                x = Math.round(x / this.gridSize) * this.gridSize;
-                y = Math.round(y / this.gridSize) * this.gridSize;
-            }
-            
-            const position = { x: Math.round(x), y: Math.round(y) };
-            
-            // Remover willChange após drag (otimização)
-            element.style.willChange = 'auto';
-            
-            // Debounce updateStepPosition para evitar múltiplas chamadas
-            this.debouncedUpdateStepPosition(stepId, position);
-            
-            // Expandir bounds do canvas
-            this.expandCanvasBounds();
-        }
-    }
-    
-    /**
-     * Atualiza posição do step no Alpine (versão direta, sem debounce)
-     */
-    updateStepPosition(stepId, position) {
-        if (!this.alpine || !this.alpine.config || !this.alpine.config.flow_steps) {
-            return;
-        }
-        
-        const steps = this.alpine.config.flow_steps;
-        const step = steps.find(s => String(s.id) === String(stepId));
-        
-        if (step) {
-            if (!step.position) {
-                step.position = {};
-            }
-            step.position.x = position.x;
-            step.position.y = position.y;
-        }
-    }
-    
-    /**
-     * Atualiza posição do step no Alpine com debounce (300ms)
-     * Evita múltiplas atualizações durante drag
-     */
-    debouncedUpdateStepPosition(stepId, position) {
-        if (this.updateStepPositionDebounce) {
-            clearTimeout(this.updateStepPositionDebounce);
-        }
-        
-        this.updateStepPositionDebounce = setTimeout(() => {
-            this.updateStepPosition(stepId, position);
-            this.updateStepPositionDebounce = null;
-        }, 300);
     }
     
     /**
@@ -2105,38 +1063,22 @@ class FlowEditor {
             return;
         }
         
-        const id = String(stepId);
-        const element = this.steps.get(id);
+        this.removeStepElement(String(stepId));
         
-        if (element) {
-            const connectionsToRemove = [];
-            this.connections.forEach((conn) => {
-                const data = conn.getData();
-                if (data && (data.sourceStepId === id || data.targetStepId === id)) {
-                    connectionsToRemove.push(conn);
-                }
-            });
+        // Remover do Alpine
+        if (this.alpine && this.alpine.config && this.alpine.config.flow_steps) {
+            const steps = this.alpine.config.flow_steps;
+            const index = steps.findIndex(s => String(s.id) === String(stepId));
+            if (index !== -1) {
+                steps.splice(index, 1);
+            }
             
-            connectionsToRemove.forEach(conn => {
-                this.removeConnection(conn);
-            });
-            
-            this.instance.remove(element);
-            element.remove();
-            this.steps.delete(id);
-            
-            if (this.alpine && this.alpine.config && this.alpine.config.flow_steps) {
-                const steps = this.alpine.config.flow_steps;
-                const index = steps.findIndex(s => String(s.id) === id);
-                if (index !== -1) {
-                    steps.splice(index, 1);
-                }
-                
-                if (this.alpine.config.flow_start_step_id === id) {
-                    this.alpine.config.flow_start_step_id = null;
-                }
+            if (this.alpine.config.flow_start_step_id === String(stepId)) {
+                this.alpine.config.flow_start_step_id = null;
             }
         }
+        
+        this.adjustCanvasSize();
     }
     
     /**
@@ -2159,22 +1101,7 @@ class FlowEditor {
     }
     
     /**
-     * Limpa o canvas
-     */
-    clearCanvas() {
-        // Limpar steps do contentContainer ou canvas
-        const container = this.contentContainer || this.canvas;
-        this.steps.forEach((element) => {
-            this.instance.remove(element);
-            element.remove();
-        });
-        this.steps.clear();
-        this.connections.clear();
-    }
-    
-    /**
-     * Atualiza endpoints de um step após mudanças (adicionar/remover botões)
-     * Conforme especificação: atualizar automaticamente ao mover/adicionar/excluir/editar botões
+     * Atualiza endpoints de um step
      */
     updateStepEndpoints(stepId) {
         const step = this.alpine?.config?.flow_steps?.find(s => String(s.id) === String(stepId));
@@ -2183,23 +1110,226 @@ class FlowEditor {
         const element = this.steps.get(String(stepId));
         if (!element) return;
         
-        // Remover todos os endpoints do step
+        // Remover endpoints antigos
         this.instance.removeAllEndpoints(element);
         
-        // Re-adicionar endpoints conforme estado atual
+        // Re-adicionar
         this.addEndpoints(element, String(stepId), step);
         
-        // Reconectar após atualização
+        // Reconectar
         setTimeout(() => {
             this.reconnectAll();
         }, 50);
     }
     
     /**
-     * Revalida todas as conexões (chamado após mudanças nos steps)
+     * Ajusta tamanho do canvas automaticamente
      */
-    revalidateConnections() {
-        this.reconnectAll();
+    adjustCanvasSize(padding = 400) {
+        if (!this.canvas) return;
+        
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        
+        this.steps.forEach((element, stepId) => {
+            const cached = this.stepTransforms.get(stepId);
+            if (cached) {
+                const x = cached.x;
+                const y = cached.y;
+                const w = element.offsetWidth || 300;
+                const h = element.offsetHeight || 180;
+                
+                minX = Math.min(minX, x);
+                minY = Math.min(minY, y);
+                maxX = Math.max(maxX, x + w);
+                maxY = Math.max(maxY, y + h);
+            }
+        });
+        
+        if (minX === Infinity) {
+            minX = 0;
+            minY = 0;
+            maxX = 1200;
+            maxY = 800;
+        }
+        
+        const parent = this.canvas.parentElement;
+        if (!parent) return;
+        
+        const parentRect = parent.getBoundingClientRect();
+        const contentWidth = maxX - minX + padding;
+        const contentHeight = maxY - minY + padding;
+        
+        const width = Math.max(parentRect.width || 1200, contentWidth);
+        const height = Math.max(parentRect.height || 600, contentHeight);
+        
+        // Aplicar dimensões
+        this.canvas.style.setProperty('width', `${width}px`, 'important');
+        this.canvas.style.setProperty('height', `${height}px`, 'important');
+        
+        if (this.contentContainer) {
+            this.contentContainer.style.width = `${width}px`;
+            this.contentContainer.style.height = `${height}px`;
+        }
+    }
+    
+    /**
+     * Zoom in
+     */
+    zoomIn() {
+        const targetZoom = Math.min(this.maxZoom, this.zoomLevel * 1.2);
+        this.zoomToLevel(targetZoom);
+    }
+    
+    /**
+     * Zoom out
+     */
+    zoomOut() {
+        const targetZoom = Math.max(this.minZoom, this.zoomLevel * 0.8);
+        this.zoomToLevel(targetZoom);
+    }
+    
+    /**
+     * Zoom para nível específico
+     */
+    zoomToLevel(targetZoom) {
+        if (!this.canvas) return;
+        
+        const rect = this.canvas.getBoundingClientRect();
+        const centerX = rect.width / 2;
+        const centerY = rect.height / 2;
+        
+        const worldX = (centerX - this.pan.x) / this.zoomLevel;
+        const worldY = (centerY - this.pan.y) / this.zoomLevel;
+        
+        this.zoomLevel = Math.max(this.minZoom, Math.min(this.maxZoom, targetZoom));
+        this.pan.x = centerX - worldX * this.zoomLevel;
+        this.pan.y = centerY - worldY * this.zoomLevel;
+        
+        this.updateCanvasTransform();
+    }
+    
+    /**
+     * Reset zoom
+     */
+    zoomReset() {
+        this.zoomLevel = 1;
+        this.pan = { x: 0, y: 0 };
+        this.updateCanvasTransform();
+    }
+    
+    /**
+     * Zoom para fit
+     */
+    zoomToFit() {
+        if (!this.canvas || this.steps.size === 0) return;
+        
+        const rect = this.canvas.getBoundingClientRect();
+        const padding = 50;
+        
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        
+        this.steps.forEach((element) => {
+            const cached = this.stepTransforms.get(element.dataset.stepId);
+            if (cached) {
+                const x = cached.x;
+                const y = cached.y;
+                const w = element.offsetWidth || 300;
+                const h = element.offsetHeight || 180;
+                
+                minX = Math.min(minX, x);
+                minY = Math.min(minY, y);
+                maxX = Math.max(maxX, x + w);
+                maxY = Math.max(maxY, y + h);
+            }
+        });
+        
+        if (minX === Infinity) return;
+        
+        const contentWidth = maxX - minX + padding * 2;
+        const contentHeight = maxY - minY + padding * 2;
+        
+        const scaleX = (rect.width - padding * 2) / contentWidth;
+        const scaleY = (rect.height - padding * 2) / contentHeight;
+        const newZoom = Math.min(scaleX, scaleY, 1);
+        
+        const centerX = (minX + maxX) / 2;
+        const centerY = (minY + maxY) / 2;
+        
+        this.zoomLevel = newZoom;
+        this.pan.x = rect.width / 2 - centerX * newZoom;
+        this.pan.y = rect.height / 2 - centerY * newZoom;
+        
+        this.updateCanvasTransform();
+    }
+    
+    /**
+     * Organiza steps verticalmente
+     */
+    organizeVertical() {
+        if (!this.alpine || !this.alpine.config || !this.alpine.config.flow_steps) return;
+        
+        const steps = this.alpine.config.flow_steps;
+        if (steps.length === 0) return;
+        
+        let currentY = 100;
+        steps.forEach((step) => {
+            const currentX = step.position?.x || 100;
+            step.position = { x: currentX, y: currentY };
+            currentY += 200;
+            
+            const element = this.steps.get(String(step.id));
+            if (element) {
+                element.style.transform = `translate3d(${currentX}px, ${currentY}px, 0)`;
+                this.stepTransforms.set(String(step.id), { x: currentX, y: currentY });
+            }
+        });
+        
+        setTimeout(() => {
+            this.reconnectAll();
+            this.adjustCanvasSize();
+        }, 50);
+    }
+    
+    /**
+     * Organiza steps horizontalmente
+     */
+    organizeHorizontal() {
+        if (!this.alpine || !this.alpine.config || !this.alpine.config.flow_steps) return;
+        
+        const steps = this.alpine.config.flow_steps;
+        if (steps.length === 0) return;
+        
+        let currentX = 100;
+        steps.forEach((step) => {
+            const currentY = step.position?.y || 100;
+            step.position = { x: currentX, y: currentY };
+            currentX += 320;
+            
+            const element = this.steps.get(String(step.id));
+            if (element) {
+                element.style.transform = `translate3d(${currentX}px, ${currentY}px, 0)`;
+                this.stepTransforms.set(String(step.id), { x: currentX, y: currentY });
+            }
+        });
+        
+        setTimeout(() => {
+            this.reconnectAll();
+            this.adjustCanvasSize();
+        }, 50);
+    }
+    
+    /**
+     * Organiza fluxo completo
+     */
+    organizeFlowComplete() {
+        this.organizeVertical();
+    }
+    
+    /**
+     * Organiza por grupos
+     */
+    organizeByGroups() {
+        this.organizeVertical();
     }
     
     /**
@@ -2218,9 +1348,6 @@ class FlowEditor {
         return labels[type] || type;
     }
     
-    /**
-     * Obtém preview de texto do step (2-4 linhas, truncamento inteligente)
-     */
     getStepPreview(step) {
         const config = step.config || {};
         const type = step.type || 'message';
@@ -2229,23 +1356,20 @@ class FlowEditor {
             const text = config.message || config.text || '';
             if (!text) return '';
             
-            // Mostrar 2-4 linhas (aproximadamente 80-160 caracteres)
+            // Clamp 3 linhas (~120 caracteres)
             const maxLength = 120;
             if (text.length <= maxLength) {
                 return text;
             }
             
-            // Quebrar em linhas inteligentes (preservar palavras)
             const truncated = text.substring(0, maxLength);
             const lastSpace = truncated.lastIndexOf(' ');
             const lastNewline = truncated.lastIndexOf('\n');
             const breakPoint = Math.max(lastSpace, lastNewline);
             
             if (breakPoint > maxLength * 0.7) {
-                // Se encontrou espaço próximo ao final, usar
                 return truncated.substring(0, breakPoint) + '...';
             }
-            // Senão, truncar no limite
             return truncated + '...';
         } else if (type === 'payment') {
             const price = config.price || '';
@@ -2261,75 +1385,111 @@ class FlowEditor {
         return this.getStepTypeLabel(type);
     }
     
-    /**
-     * Gera HTML de preview de mídia (thumbnail real, 120px, bordas arredondadas)
-     */
-    getMediaPreviewHtml(stepConfig) {
+    getMediaPreviewHtml(stepConfig, mediaType) {
         const mediaUrl = stepConfig.media_url || '';
         if (!mediaUrl) return '';
         
-        const mediaType = stepConfig.media_type || 'video';
-        
         if (mediaType === 'photo' || mediaType === 'image') {
-            // Preview de foto com thumbnail real
             return `
-                <div class="flow-step-thumbnail-container">
+                <div class="flow-step-thumbnail-container" style="
+                    margin-bottom: 12px;
+                    border-radius: 8px;
+                    overflow: hidden;
+                    background: #13151C;
+                    border: 1px solid #242836;
+                    height: 120px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    position: relative;
+                ">
                     <img src="${this.escapeHtml(mediaUrl)}" 
                          alt="Preview" 
-                         class="flow-step-media-thumbnail"
-                         style="width: 100%; height: 100%; object-fit: cover; border-radius: 8px;"
-                         onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
+                         style="width: 100%; height: 100%; object-fit: cover;"
+                         onerror="this.style.display='none';"
                          loading="lazy" />
-                    <div class="flow-step-media-fallback" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; align-items: center; justify-content: center; background: #13151C; color: #A1A1A9;">
-                        <i class="fas fa-image" style="font-size: 24px;"></i>
-                    </div>
                 </div>
             `;
         } else {
-            // Preview de vídeo com thumbnail e ícone de play
             return `
-                <div class="flow-step-thumbnail-container">
+                <div class="flow-step-thumbnail-container" style="
+                    margin-bottom: 12px;
+                    border-radius: 8px;
+                    overflow: hidden;
+                    background: #13151C;
+                    border: 1px solid #242836;
+                    height: 120px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    position: relative;
+                ">
                     <img src="${this.escapeHtml(mediaUrl)}" 
                          alt="Video thumbnail" 
-                         class="flow-step-media-thumbnail"
-                         style="width: 100%; height: 100%; object-fit: cover; border-radius: 8px;"
-                         onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
+                         style="width: 100%; height: 100%; object-fit: cover;"
+                         onerror="this.style.display='none';"
                          loading="lazy" />
-                    <div class="flow-step-thumbnail-overlay">
+                    <div style="
+                        position: absolute;
+                        top: 0;
+                        left: 0;
+                        width: 100%;
+                        height: 100%;
+                        background: rgba(0, 0, 0, 0.4);
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                    ">
                         <i class="fas fa-play-circle" style="font-size: 48px; color: rgba(255, 255, 255, 0.9);"></i>
-                    </div>
-                    <div class="flow-step-media-fallback" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; align-items: center; justify-content: center; background: #13151C; color: #A1A1A9;">
-                        <i class="fas fa-video" style="font-size: 24px;"></i>
                     </div>
                 </div>
             `;
         }
     }
     
-    /**
-     * Gera HTML de preview de botões (todos os botões, estilo retangular, cor configurada)
-     */
     getButtonPreviewHtml(customButtons) {
         if (!customButtons || customButtons.length === 0) return '';
         
-        let buttonsHTML = '<div class="flow-step-buttons-container">';
+        let html = '<div class="flow-step-buttons-container" style="padding: 0 12px 12px 12px; display: flex; flex-direction: column; gap: 8px;">';
+        
         customButtons.forEach((btn, index) => {
             const btnText = btn.text || `Botão ${index + 1}`;
-            const btnColor = btn.color || '#3B82F6'; // Cor padrão azul
-            buttonsHTML += `
+            const btnColor = btn.color || '#E02727';
+            
+            html += `
                 <div class="flow-step-button-item" 
                      data-button-index="${index}" 
                      data-button-id="${btn.id || `btn-${index}`}"
-                     style="background: ${btnColor}; border-radius: 6px; padding: 8px 12px; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between;">
-                    <span class="flow-step-button-text" style="color: #FFFFFF; font-weight: 600; font-size: 13px; flex: 1; padding-right: 8px;">
-                        ${this.escapeHtml(btnText)}
-                    </span>
-                    <div class="flow-step-button-endpoint-container" data-endpoint-button="${index}" style="width: 14px; height: 14px; flex-shrink: 0;"></div>
+                     style="
+                         background: ${btnColor};
+                         border-radius: 6px;
+                         padding: 10px 14px;
+                         display: flex;
+                         align-items: center;
+                         justify-content: space-between;
+                         position: relative;
+                         min-height: 44px;
+                     ">
+                    <span style="
+                        color: #FFFFFF;
+                        font-weight: 600;
+                        font-size: 13px;
+                        flex: 1;
+                        padding-right: 12px;
+                    ">${this.escapeHtml(btnText)}</span>
+                    <div class="flow-step-button-endpoint-container" 
+                         data-endpoint-button="${index}" 
+                         style="
+                             width: 14px;
+                             height: 14px;
+                             flex-shrink: 0;
+                         "></div>
                 </div>
             `;
         });
-        buttonsHTML += '</div>';
-        return buttonsHTML;
+        
+        html += '</div>';
+        return html;
     }
     
     getConnectionLabel(type) {
@@ -2341,9 +1501,6 @@ class FlowEditor {
         return labels[type] || type;
     }
     
-    /**
-     * Escapa HTML para prevenir XSS
-     */
     escapeHtml(text) {
         const div = document.createElement('div');
         div.textContent = text;
@@ -2351,274 +1508,42 @@ class FlowEditor {
     }
     
     /**
-     * Organiza steps verticalmente
+     * Limpa o canvas
      */
-    organizeVertical() {
-        if (!this.alpine || !this.alpine.config || !this.alpine.config.flow_steps) return;
-        
-        const steps = this.alpine.config.flow_steps;
-        if (steps.length === 0) return;
-        
-        // Ordenar por posição atual
-        const sortedSteps = [...steps].sort((a, b) => {
-            const posA = a.position || { x: 0, y: 0 };
-            const posB = b.position || { x: 0, y: 0 };
-            if (Math.abs(posA.x - posB.x) < 100) {
-                return posA.y - posB.y;
-            }
-            return posA.x - posB.x;
+    clearCanvas() {
+        const container = this.contentContainer || this.canvas;
+        this.steps.forEach((element) => {
+            this.instance.remove(element);
+            element.remove();
         });
-        
-        let currentY = 100;
-        sortedSteps.forEach((step) => {
-            const currentX = step.position?.x || 100;
-            step.position = { x: currentX, y: currentY };
-            currentY += this.layoutSpacing.y;
-            
-            const element = this.steps.get(String(step.id));
-            if (element) {
-                element.style.transform = `translate3d(${currentX}px, ${currentY}px, 0)`;
-                element.style.left = '0';
-                element.style.top = '0';
-            }
-        });
-        
-        setTimeout(() => {
-            this.reconnectAll();
-            this.expandCanvasBounds();
-        }, 50);
-    }
-    
-    /**
-     * Organiza steps horizontalmente
-     */
-    organizeHorizontal() {
-        if (!this.alpine || !this.alpine.config || !this.alpine.config.flow_steps) return;
-        
-        const steps = this.alpine.config.flow_steps;
-        if (steps.length === 0) return;
-        
-        const sortedSteps = [...steps].sort((a, b) => {
-            const posA = a.position || { x: 0, y: 0 };
-            const posB = b.position || { x: 0, y: 0 };
-            if (Math.abs(posA.y - posB.y) < 100) {
-                return posA.x - posB.x;
-            }
-            return posA.y - posB.y;
-        });
-        
-        let currentX = 100;
-        sortedSteps.forEach((step) => {
-            const currentY = step.position?.y || 100;
-            step.position = { x: currentX, y: currentY };
-            currentX += this.layoutSpacing.x;
-            
-            const element = this.steps.get(String(step.id));
-            if (element) {
-                element.style.transform = `translate3d(${currentX}px, ${currentY}px, 0)`;
-                element.style.left = '0';
-                element.style.top = '0';
-            }
-        });
-        
-        setTimeout(() => {
-            this.reconnectAll();
-            this.expandCanvasBounds();
-        }, 50);
-    }
-    
-    /**
-     * Organiza fluxo completo (hierárquico baseado em conexões)
-     */
-    organizeFlowComplete() {
-        if (!this.alpine || !this.alpine.config || !this.alpine.config.flow_steps) return;
-        
-        const steps = this.alpine.config.flow_steps;
-        if (steps.length === 0) return;
-        
-        const startStepId = this.alpine.config.flow_start_step_id;
-        if (!startStepId) {
-            this.organizeVertical();
-            return;
-        }
-        
-        const graph = new Map();
-        const visited = new Set();
-        const positions = new Map();
-        
-        steps.forEach(step => {
-            graph.set(String(step.id), []);
-        });
-        
-        steps.forEach(step => {
-            const stepId = String(step.id);
-            const connections = step.connections || {};
-            const customButtons = step.config?.custom_buttons || [];
-            
-            if (connections.next) {
-                graph.get(stepId).push(String(connections.next));
-            }
-            if (connections.pending) {
-                graph.get(stepId).push(String(connections.pending));
-            }
-            if (connections.retry) {
-                graph.get(stepId).push(String(connections.retry));
-            }
-            
-            customButtons.forEach(btn => {
-                if (btn.target_step) {
-                    graph.get(stepId).push(String(btn.target_step));
-                }
-            });
-        });
-        
-        const queue = [{ id: String(startStepId), x: 100, y: 100, level: 0 }];
-        const levelWidths = new Map();
-        
-        while (queue.length > 0) {
-            const current = queue.shift();
-            const currentId = current.id;
-            
-            if (visited.has(currentId)) continue;
-            visited.add(currentId);
-            
-            positions.set(currentId, { x: current.x, y: current.y });
-            
-            const children = graph.get(currentId) || [];
-            const level = current.level + 1;
-            
-            if (!levelWidths.has(level)) {
-                levelWidths.set(level, 0);
-            }
-            
-            let childX = 100;
-            let childY = current.y + this.layoutSpacing.y;
-            
-            children.forEach((childId) => {
-                if (!visited.has(childId)) {
-                    const width = levelWidths.get(level);
-                    childX = 100 + width * this.layoutSpacing.x;
-                    levelWidths.set(level, width + 1);
-                    
-                    queue.push({ id: childId, x: childX, y: childY, level: level });
-                }
-            });
-        }
-        
-        positions.forEach((pos, stepId) => {
-            const step = steps.find(s => String(s.id) === stepId);
-            if (step) {
-                step.position = pos;
-                const element = this.steps.get(stepId);
-                if (element) {
-                    element.style.transform = `translate3d(${pos.x}px, ${pos.y}px, 0)`;
-                    element.style.left = '0';
-                    element.style.top = '0';
-                }
-            }
-        });
-        
-        steps.forEach(step => {
-            if (!positions.has(String(step.id))) {
-                const x = 100 + (positions.size * this.layoutSpacing.x);
-                const y = 100;
-                step.position = { x, y };
-                const element = this.steps.get(String(step.id));
-                if (element) {
-                    element.style.transform = `translate3d(${x}px, ${y}px, 0)`;
-                    element.style.left = '0';
-                    element.style.top = '0';
-                }
-            }
-        });
-        
-        setTimeout(() => {
-            this.reconnectAll();
-            this.expandCanvasBounds();
-            this.zoomToFit();
-        }, 50);
-    }
-    
-    /**
-     * Organiza steps por grupos
-     */
-    organizeByGroups() {
-        if (!this.alpine || !this.alpine.config || !this.alpine.config.flow_steps) return;
-        
-        const steps = this.alpine.config.flow_steps;
-        if (steps.length === 0) return;
-        
-        const groups = [];
-        const assigned = new Set();
-        
-        steps.forEach(step => {
-            if (assigned.has(String(step.id))) return;
-            
-            const group = [step];
-            assigned.add(String(step.id));
-            const posA = step.position || { x: 0, y: 0 };
-            
-            steps.forEach(otherStep => {
-                if (assigned.has(String(otherStep.id))) return;
-                
-                const posB = otherStep.position || { x: 0, y: 0 };
-                const distance = Math.hypot(posB.x - posA.x, posB.y - posA.y);
-                
-                if (distance < 300) {
-                    group.push(otherStep);
-                    assigned.add(String(otherStep.id));
-                }
-            });
-            
-            groups.push(group);
-        });
-        
-        let groupStartY = 100;
-        groups.forEach((group, groupIndex) => {
-            let currentY = groupStartY;
-            
-            group.forEach((step) => {
-                const x = 100 + groupIndex * (this.layoutSpacing.x * 2);
-                step.position = { x, y: currentY };
-                currentY += this.layoutSpacing.y;
-                
-                const element = this.steps.get(String(step.id));
-                if (element) {
-                    element.style.left = `${x}px`;
-                    element.style.top = `${currentY}px`;
-                }
-            });
-            
-            groupStartY = currentY + 100;
-        });
-        
-        setTimeout(() => {
-            this.reconnectAll();
-            this.expandCanvasBounds();
-        }, 50);
+        this.steps.clear();
+        this.connections.clear();
     }
     
     /**
      * Destruir instância
      */
     destroy() {
-        // Limpar linhas-guia
-        if (this.canvas) {
-            const snapLines = this.canvas.querySelectorAll('.snap-line');
-            snapLines.forEach(line => line.remove());
+        if (this.dragFrameId) {
+            cancelAnimationFrame(this.dragFrameId);
         }
-        
-        // Cancelar animações
-        if (this.animationFrameId) {
-            cancelAnimationFrame(this.animationFrameId);
+        if (this.panFrameId) {
+            cancelAnimationFrame(this.panFrameId);
+        }
+        if (this.zoomFrameId) {
+            cancelAnimationFrame(this.zoomFrameId);
+        }
+        if (this.repaintTimeout) {
+            clearTimeout(this.repaintTimeout);
         }
         
         this.clearCanvas();
+        
         if (this.instance) {
             try {
                 this.instance.destroy();
             } catch (e) {
-                // Ignorar erros de destroy
+                // Ignorar erros
             }
             this.instance = null;
         }

@@ -1,0 +1,174 @@
+        <!-- ============================================
+             FLOW BUILDER - HTML COMPLETO E FUNCIONAL
+             Compatível com flow_editor_react.js
+             ============================================ -->
+        <div x-show="activeTab === 'flow'" class="config-section">
+            <!-- Header da seção -->
+            <div class="config-section-header">
+                <h2 class="config-section-title">Fluxo Visual</h2>
+                <div class="flex items-center gap-4">
+                    <label class="flex items-center gap-2">
+                        <input type="checkbox" x-model="config.flow_enabled" @change="onFlowToggle()" />
+                        <span class="form-label">Habilitar Fluxo Visual</span>
+                    </label>
+                    <button @click="addFlowStep()" class="btn btn-primary" :disabled="!config.flow_enabled">
+                        <i class="fas fa-plus"></i> Adicionar Step
+                    </button>
+                </div>
+            </div>
+
+            <!-- Conteúdo do Flow (só aparece quando habilitado) -->
+            <div x-show="config.flow_enabled" class="mt-4">
+                <!-- Controles do Canvas -->
+                <div class="flex items-center gap-2 mb-3 flex-wrap">
+                    <button 
+                        @click="window.flowEditorReact?.zoomIn()" 
+                        class="btn btn-secondary text-sm" 
+                        title="Zoom In"
+                        :disabled="!window.flowEditorReact"
+                    >
+                        <i class="fas fa-search-plus"></i>
+                    </button>
+                    <button 
+                        @click="window.flowEditorReact?.zoomOut()" 
+                        class="btn btn-secondary text-sm" 
+                        title="Zoom Out"
+                        :disabled="!window.flowEditorReact"
+                    >
+                        <i class="fas fa-search-minus"></i>
+                    </button>
+                    <button 
+                        @click="window.flowEditorReact?.zoomReset()" 
+                        class="btn btn-secondary text-sm" 
+                        title="Reset Zoom"
+                        :disabled="!window.flowEditorReact"
+                    >
+                        <i class="fas fa-expand-arrows-alt"></i>
+                    </button>
+                    <button 
+                        @click="window.flowEditorReact?.zoomToFit()" 
+                        class="btn btn-secondary text-sm" 
+                        title="Ajustar à Tela"
+                        :disabled="!window.flowEditorReact"
+                    >
+                        <i class="fas fa-compress"></i>
+                    </button>
+                    <div class="flex-1"></div>
+                    <button 
+                        @click="window.flowEditorReact?.organizeVertical()" 
+                        class="btn btn-secondary text-sm" 
+                        title="Organizar Verticalmente"
+                        :disabled="!window.flowEditorReact"
+                    >
+                        <i class="fas fa-arrows-alt-v"></i> Organizar
+                    </button>
+                </div>
+
+                <!-- Canvas do Flow Editor -->
+                <div 
+                    class="flow-canvas-container" 
+                    style="
+                        width: 100%; 
+                        height: 600px; 
+                        border: 1px solid #242836; 
+                        border-radius: 8px; 
+                        overflow: hidden; 
+                        position: relative; 
+                        margin-top: 16px;
+                        background: #0D0F15;
+                    "
+                >
+                    <!-- Container principal do React Flow -->
+                    <div 
+                        id="flow-visual-canvas" 
+                        style="
+                            width: 100%; 
+                            height: 100%; 
+                            position: relative;
+                            background: #0D0F15;
+                            background-image: radial-gradient(circle, rgba(255, 255, 255, 0.25) 1.5px, transparent 1.5px);
+                            background-size: 20px 20px;
+                            background-repeat: repeat;
+                            background-position: 0 0;
+                        "
+                        x-init="
+                            // Inicializar editor quando a tab flow estiver ativa e flow estiver habilitado
+                            if (config.flow_enabled && activeTab === 'flow') {
+                                // Aguardar um pouco para garantir que React Flow está carregado
+                                setTimeout(() => {
+                                    if (typeof window.FlowEditorReact !== 'undefined') {
+                                        initVisualFlowEditor();
+                                    } else if (window.flowEditorReact) {
+                                        // Se já está inicializado, apenas renderizar novamente
+                                        window.flowEditorReact.renderAllSteps();
+                                    } else {
+                                        // Tentar novamente após mais tempo
+                                        setTimeout(() => {
+                                            if (typeof window.FlowEditorReact !== 'undefined') {
+                                                initVisualFlowEditor();
+                                            }
+                                        }, 1000);
+                                    }
+                                }, 300);
+                            }
+                        "
+                        x-effect="
+                            // Re-inicializar quando flow_enabled mudar ou quando voltar para a tab flow
+                            if (config.flow_enabled && activeTab === 'flow') {
+                                setTimeout(() => {
+                                    if (window.flowEditorReact && typeof window.flowEditorReact.renderAllSteps === 'function') {
+                                        window.flowEditorReact.renderAllSteps();
+                                    } else if (typeof window.FlowEditorReact !== 'undefined') {
+                                        initVisualFlowEditor();
+                                    }
+                                }, 100);
+                            }
+                        "
+                    ></div>
+
+                    <!-- Loading indicator (opcional) -->
+                    <div 
+                        x-show="config.flow_enabled && activeTab === 'flow' && typeof window.FlowEditorReact === 'undefined'"
+                        style="
+                            position: absolute;
+                            top: 50%;
+                            left: 50%;
+                            transform: translate(-50%, -50%);
+                            color: #FFFFFF;
+                            font-size: 14px;
+                            display: flex;
+                            align-items: center;
+                            gap: 8px;
+                        "
+                    >
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <span>Carregando Flow Editor...</span>
+                    </div>
+                </div>
+
+                <!-- Informações sobre o Flow -->
+                <div class="mt-3 text-sm text-gray-400">
+                    <p>
+                        <i class="fas fa-info-circle mr-1"></i>
+                        <strong>Dica:</strong> Use a roda do mouse + Ctrl para zoom, arraste com o botão esquerdo para mover cards, 
+                        e arraste dos pontos de conexão para criar ligações entre steps.
+                    </p>
+                    <p class="mt-1" x-show="config.flow_steps && config.flow_steps.length > 0">
+                        <i class="fas fa-list mr-1"></i>
+                        <strong>Steps no fluxo:</strong> <span x-text="config.flow_steps.length"></span>
+                        <span x-show="config.flow_start_step_id">
+                            | <strong>Step inicial:</strong> <span x-text="config.flow_start_step_id"></span>
+                        </span>
+                    </p>
+                </div>
+            </div>
+
+            <!-- Mensagem quando flow está desabilitado -->
+            <div x-show="!config.flow_enabled" class="mt-4 p-4 bg-gray-800 rounded-lg border border-gray-700">
+                <p class="text-gray-400 text-sm">
+                    <i class="fas fa-info-circle mr-2"></i>
+                    Habilite o Fluxo Visual acima para começar a criar seu fluxo de conversação.
+                </p>
+            </div>
+        </div>
+
