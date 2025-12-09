@@ -85,7 +85,9 @@
     -ms-user-select: none;
     touch-action: none;
     will-change: transform;
-    /* Elementos com position: absolute dentro deste card serão relativos a ele */
+    /* CRÍTICO: position relative é aplicado via JS para nodes absolutos funcionarem */
+    /* O card tem position: absolute para posicionamento no canvas */
+    /* Mas precisa ser relative para elementos absolutos dentro dele */
 }
 
 @keyframes stepFadeIn {
@@ -273,6 +275,53 @@
     align-items: center;
     justify-content: center;
     z-index: 10;
+}
+
+/* ============================================
+   NODES (ENTRADAS/SAÍDAS) - ESTILO MANYCHAT
+   ============================================ */
+
+.flow-step-node-input,
+.flow-step-node-output {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #FFFFFF;
+    border: 2px solid #10B981;
+    cursor: pointer;
+    z-index: 20;
+    pointer-events: auto;
+}
+
+/* Entrada - lado esquerdo, centro vertical */
+.flow-step-node-input {
+    left: -6px;
+    top: 50%;
+    transform: translateY(-50%);
+    border-color: #10B981;
+    background: #10B981;
+}
+
+.flow-step-node-input:hover {
+    background: #FFB800;
+    border-color: #FFB800;
+    transform: translateY(-50%) scale(1.2);
+}
+
+/* Saída - lado direito, centro vertical */
+.flow-step-node-output {
+    right: -6px;
+    top: 50%;
+    transform: translateY(-50%);
+    border-color: #FFFFFF;
+    background: #FFFFFF;
+}
+
+.flow-step-node-output:hover {
+    background: #FFB800;
+    border-color: #FFB800;
+    transform: translateY(-50%) scale(1.2);
 }
 
 .flow-step-media-preview {

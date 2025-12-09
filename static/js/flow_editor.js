@@ -418,6 +418,9 @@ class FlowEditor {
         stepElement.className = 'flow-step-block';
         stepElement.dataset.stepId = stepId;
         
+        // CRÍTICO: Garantir position relative para endpoints absolutos funcionarem
+        stepElement.style.position = 'relative';
+        
         // Posição usando transform (GPU acceleration)
         stepElement.style.transform = `translate3d(${position.x}px, ${position.y}px, 0)`;
         stepElement.style.left = '0';
@@ -434,7 +437,7 @@ class FlowEditor {
         const mediaHTML = mediaUrl ? this.getMediaPreviewHtml(stepConfig, mediaType) : '';
         const buttonsHTML = hasButtons ? this.getButtonPreviewHtml(customButtons) : '';
         
-        // HTML do card
+        // HTML do card - CRÍTICO: Endpoints DEVEM estar dentro do card
         stepElement.innerHTML = `
             <div class="flow-step-header">
                 <div class="flow-step-header-content">
@@ -461,7 +464,9 @@ class FlowEditor {
                 </button>
                 ${!isStartStep ? `<button class="flow-step-btn-action" onclick="window.flowEditor?.setStartStep('${stepId}')" title="Definir como inicial">⭐</button>` : ''}
             </div>
-            ${!hasButtons ? '<div class="flow-step-global-output-container"></div>' : ''}
+            <!-- CRÍTICO: Endpoints DENTRO do card para acompanhar transform -->
+            <div class="flow-step-node-input" data-node-type="input" data-step-id="${stepId}"></div>
+            ${!hasButtons ? '<div class="flow-step-node-output" data-node-type="output" data-step-id="' + stepId + '"></div>' : ''}
         `;
         
         // Adicionar ao container
@@ -520,8 +525,17 @@ class FlowEditor {
         element.style.transform = `translate3d(${position.x}px, ${position.y}px, 0)`;
         this.stepTransforms.set(stepId, { x: position.x, y: position.y });
         
-        // Remover endpoints antigos
+        // Remover endpoints antigos (todos os elementos do card)
         this.instance.removeAllEndpoints(element);
+        const inputNodeOld = element.querySelector('.flow-step-node-input');
+        const outputNodeOld = element.querySelector('.flow-step-node-output');
+        if (inputNodeOld) this.instance.removeAllEndpoints(inputNodeOld);
+        if (outputNodeOld) this.instance.removeAllEndpoints(outputNodeOld);
+        
+        // CRÍTICO: Garantir que o card tenha position relative
+        if (!element.style.position || element.style.position === 'absolute') {
+            element.style.position = 'relative';
+        }
         
         // Re-renderizar conteúdo
         const stepType = step.type || 'message';
@@ -560,17 +574,29 @@ class FlowEditor {
             `;
         }
         
-        // Atualizar container de saída global
-        let globalOutputContainer = element.querySelector('.flow-step-global-output-container');
+        // CRÍTICO: Garantir que os nodes estejam no HTML
+        let inputNode = element.querySelector('.flow-step-node-input');
+        if (!inputNode) {
+            inputNode = document.createElement('div');
+            inputNode.className = 'flow-step-node-input';
+            inputNode.setAttribute('data-node-type', 'input');
+            inputNode.setAttribute('data-step-id', stepId);
+            element.appendChild(inputNode);
+        }
+        
+        // Remover ou adicionar node de saída global conforme necessário
+        let outputNode = element.querySelector('.flow-step-node-output');
         if (!hasButtons) {
-            if (!globalOutputContainer) {
-                globalOutputContainer = document.createElement('div');
-                globalOutputContainer.className = 'flow-step-global-output-container';
-                element.appendChild(globalOutputContainer);
+            if (!outputNode) {
+                outputNode = document.createElement('div');
+                outputNode.className = 'flow-step-node-output';
+                outputNode.setAttribute('data-node-type', 'output');
+                outputNode.setAttribute('data-step-id', stepId);
+                element.appendChild(outputNode);
             }
         } else {
-            if (globalOutputContainer) {
-                globalOutputContainer.remove();
+            if (outputNode) {
+                outputNode.remove();
             }
         }
         
@@ -597,39 +623,47 @@ class FlowEditor {
     /**
      * Adiciona endpoints ao step
      * ESPECIFICAÇÃO:
-     * - Entrada: LADO ESQUERDO, CENTRO VERTICAL
+     * - Entrada: LADO ESQUERDO, CENTRO VERTICAL (dentro do card)
      * - Saídas com botões: UM endpoint por botão, LADO DIREITO do botão
-     * - Saída sem botões: UM endpoint global, LADO DIREITO, CENTRO VERTICAL
+     * - Saída sem botões: UM endpoint global, LADO DIREITO, CENTRO VERTICAL (dentro do card)
      */
     addEndpoints(element, stepId, step) {
         const stepConfig = step.config || {};
         const customButtons = stepConfig.custom_buttons || [];
         const hasButtons = customButtons.length > 0;
         
+        // CRÍTICO: Garantir que o card tenha position relative
+        if (!element.style.position || element.style.position === 'absolute') {
+            element.style.position = 'relative';
+        }
+        
         // 1. ENTRADA - LADO ESQUERDO, CENTRO VERTICAL
-        // Usar anchor com offset para garantir posição exata na borda
-        this.instance.addEndpoint(element, {
-            uuid: `endpoint-left-${stepId}`,
-            anchor: ['LeftMiddle', { dx: -7 }],
-            maxConnections: -1,
-            isSource: false,
-            isTarget: true,
-            endpoint: ['Dot', { radius: 7 }],
-            paintStyle: { 
-                fill: '#10B981', 
-                outlineStroke: '#FFFFFF', 
-                outlineWidth: 2
-            },
-            hoverPaintStyle: { 
-                fill: '#FFB800', 
-                outlineStroke: '#FFFFFF', 
-                outlineWidth: 3
-            },
-            data: {
-                stepId: stepId,
-                endpointType: 'input'
-            }
-        });
+        // Usar o elemento HTML dentro do card (não o card inteiro)
+        const inputNode = element.querySelector('.flow-step-node-input');
+        if (inputNode) {
+            this.instance.addEndpoint(inputNode, {
+                uuid: `endpoint-left-${stepId}`,
+                anchor: 'Center',
+                maxConnections: -1,
+                isSource: false,
+                isTarget: true,
+                endpoint: ['Dot', { radius: 7 }],
+                paintStyle: { 
+                    fill: '#10B981', 
+                    outlineStroke: '#FFFFFF', 
+                    outlineWidth: 2
+                },
+                hoverPaintStyle: { 
+                    fill: '#FFB800', 
+                    outlineStroke: '#FFFFFF', 
+                    outlineWidth: 3
+                },
+                data: {
+                    stepId: stepId,
+                    endpointType: 'input'
+                }
+            });
+        }
         
         // 2. SAÍDAS
         if (hasButtons) {
@@ -667,46 +701,32 @@ class FlowEditor {
                 }
             });
         } else {
-            // Sem botões: endpoint global
-            let globalOutputContainer = element.querySelector('.flow-step-global-output-container');
-            if (!globalOutputContainer) {
-                globalOutputContainer = document.createElement('div');
-                globalOutputContainer.className = 'flow-step-global-output-container';
-                globalOutputContainer.style.cssText = `
-                    position: absolute;
-                    right: -7px;
-                    top: 50%;
-                    transform: translateY(-50%);
-                    width: 14px;
-                    height: 14px;
-                `;
-                element.appendChild(globalOutputContainer);
+            // Sem botões: endpoint global - usar elemento HTML dentro do card
+            const outputNode = element.querySelector('.flow-step-node-output');
+            if (outputNode) {
+                this.instance.addEndpoint(outputNode, {
+                    uuid: `endpoint-right-${stepId}`,
+                    anchor: 'Center',
+                    maxConnections: -1,
+                    isSource: true,
+                    isTarget: false,
+                    endpoint: ['Dot', { radius: 7 }],
+                    paintStyle: { 
+                        fill: '#FFFFFF', 
+                        outlineStroke: '#0D0F15', 
+                        outlineWidth: 2
+                    },
+                    hoverPaintStyle: { 
+                        fill: '#FFB800', 
+                        outlineStroke: '#FFFFFF', 
+                        outlineWidth: 3
+                    },
+                    data: {
+                        stepId: stepId,
+                        endpointType: 'global'
+                    }
+                });
             }
-            
-            // Container global já tem position absolute com right: -7px e top: 50%
-            // Usar anchor Center para ficar exatamente no centro do container
-            this.instance.addEndpoint(globalOutputContainer, {
-                uuid: `endpoint-right-${stepId}`,
-                anchor: 'Center',
-                maxConnections: -1,
-                isSource: true,
-                isTarget: false,
-                endpoint: ['Dot', { radius: 7 }],
-                paintStyle: { 
-                    fill: '#FFFFFF', 
-                    outlineStroke: '#0D0F15', 
-                    outlineWidth: 2
-                },
-                hoverPaintStyle: { 
-                    fill: '#FFB800', 
-                    outlineStroke: '#FFFFFF', 
-                    outlineWidth: 3
-                },
-                data: {
-                    stepId: stepId,
-                    endpointType: 'global'
-                }
-            });
         }
     }
     
