@@ -74,8 +74,12 @@ class FlowEditor {
             return;
         }
         
-        this.setupJsPlumb();
+        // CRÍTICO: Setup canvas PRIMEIRO para criar contentContainer
         this.setupCanvas();
+        
+        // CRÍTICO: Setup jsPlumb DEPOIS, usando contentContainer como Container
+        this.setupJsPlumb();
+        
         this.enableZoom();
         this.enablePan();
         this.enableSelection();
@@ -91,8 +95,12 @@ class FlowEditor {
      */
     setupJsPlumb() {
         try {
+            // CRÍTICO: Container deve ser o contentContainer (onde os elementos estão)
+            // Não usar this.canvas porque os elementos estão dentro de contentContainer
+            const container = this.contentContainer || this.canvas;
+            
             this.instance = jsPlumb.getInstance({
-                Container: this.canvas
+                Container: container
             });
             
             // Defaults: conexões brancas suaves estilo ManyChat
@@ -190,6 +198,31 @@ class FlowEditor {
         // Garantir que canvas NÃO tem transform
         this.canvas.style.setProperty('transform', 'none', 'important');
         
+        // CRÍTICO: Observar mudanças no transform do contentContainer para revalidar endpoints
+        if (window.MutationObserver && this.contentContainer) {
+            const observer = new MutationObserver((mutations) => {
+                mutations.forEach((mutation) => {
+                    if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
+                        // Transform mudou, revalidar endpoints
+                        if (this.instance && this.steps.size > 0) {
+                            this.steps.forEach((element) => {
+                                this.instance.revalidate(element);
+                            });
+                            this.instance.repaintEverything();
+                        }
+                    }
+                });
+            });
+            
+            observer.observe(this.contentContainer, {
+                attributes: true,
+                attributeFilter: ['style']
+            });
+            
+            // Guardar observer para cleanup
+            this.transformObserver = observer;
+        }
+        
         // Atualizar transform inicial
         this.updateCanvasTransform();
     }
@@ -203,12 +236,18 @@ class FlowEditor {
         const transform = `translate(${this.pan.x}px, ${this.pan.y}px) scale(${this.zoomLevel})`;
         this.contentContainer.style.transform = transform;
         
-        // Repintar jsPlumb de forma otimizada
+        // CRÍTICO: Revalidar e repintar jsPlumb após transform
+        // Revalidar recalcula as posições dos endpoints considerando o transform
         if (this.repaintTimeout) {
             clearTimeout(this.repaintTimeout);
         }
         this.repaintTimeout = setTimeout(() => {
             if (this.instance) {
+                // Revalidar todos os elementos para recalcular endpoints
+                this.steps.forEach((element) => {
+                    this.instance.revalidate(element);
+                });
+                // Repintar todas as conexões
                 this.instance.repaintEverything();
             }
         }, 16); // ~60fps
@@ -245,7 +284,7 @@ class FlowEditor {
                 this.pan.x = mouseX - worldX * this.zoomLevel;
                 this.pan.y = mouseY - worldY * this.zoomLevel;
                 
-                // Aplicar imediatamente
+                // Aplicar imediatamente (já inclui revalidate)
                 this.updateCanvasTransform();
             }
         }, { passive: false });
@@ -443,15 +482,18 @@ class FlowEditor {
             zIndex: 1000
         });
         
-        // Adicionar endpoints APÓS o DOM estar pronto
-        // Usar setTimeout para garantir que o DOM foi renderizado
-        setTimeout(() => {
-            this.addEndpoints(stepElement, stepId, step);
-            // Repintar após adicionar endpoints
-            if (this.instance) {
-                this.instance.repaintEverything();
-            }
-        }, 10);
+        // CRÍTICO: Adicionar endpoints APÓS o DOM estar completamente renderizado
+        // Usar requestAnimationFrame para garantir que o layout foi calculado
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                this.addEndpoints(stepElement, stepId, step);
+                // Revalidar e repintar após adicionar endpoints
+                if (this.instance) {
+                    this.instance.revalidate(stepElement);
+                    this.instance.repaintEverything();
+                }
+            });
+        });
         
         // Marcar como inicial se necessário
         if (isStartStep) {
@@ -532,14 +574,17 @@ class FlowEditor {
             }
         }
         
-        // Re-adicionar endpoints APÓS o DOM estar pronto
-        setTimeout(() => {
-            this.addEndpoints(element, stepId, step);
-            // Repintar após adicionar endpoints
-            if (this.instance) {
-                this.instance.repaintEverything();
-            }
-        }, 10);
+        // CRÍTICO: Re-adicionar endpoints APÓS o DOM estar completamente renderizado
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                this.addEndpoints(element, stepId, step);
+                // Revalidar e repintar após adicionar endpoints
+                if (this.instance) {
+                    this.instance.revalidate(element);
+                    this.instance.repaintEverything();
+                }
+            });
+        });
         
         // Atualizar classe inicial
         if (isStartStep) {
@@ -562,10 +607,10 @@ class FlowEditor {
         const hasButtons = customButtons.length > 0;
         
         // 1. ENTRADA - LADO ESQUERDO, CENTRO VERTICAL
-        // Usar anchor fixo que se recalcula automaticamente
+        // Usar anchor com offset para garantir posição exata na borda
         this.instance.addEndpoint(element, {
             uuid: `endpoint-left-${stepId}`,
-            anchor: 'LeftMiddle',
+            anchor: ['LeftMiddle', { dx: -7 }],
             maxConnections: -1,
             isSource: false,
             isTarget: true,
@@ -598,7 +643,7 @@ class FlowEditor {
                     }
                     this.instance.addEndpoint(buttonContainer, {
                         uuid: `endpoint-button-${stepId}-${index}`,
-                        anchor: 'RightMiddle',
+                        anchor: ['RightMiddle', { dx: 7 }],
                         maxConnections: 1,
                         isSource: true,
                         isTarget: false,
@@ -638,10 +683,8 @@ class FlowEditor {
                 element.appendChild(globalOutputContainer);
             }
             
-            // Garantir que o container global tenha position relative
-            if (!globalOutputContainer.style.position) {
-                globalOutputContainer.style.position = 'relative';
-            }
+            // Container global já tem position absolute com right: -7px e top: 50%
+            // Usar anchor Center para ficar exatamente no centro do container
             this.instance.addEndpoint(globalOutputContainer, {
                 uuid: `endpoint-right-${stepId}`,
                 anchor: 'Center',
@@ -682,10 +725,12 @@ class FlowEditor {
                 cancelAnimationFrame(this.dragFrameId);
             }
             
-            // Atualizar conexões de forma otimizada
+            // CRÍTICO: Revalidar e repintar durante drag
             this.dragFrameId = requestAnimationFrame(() => {
                 if (this.instance) {
-                    // Repintar todas as conexões (jsPlumb recalcula automaticamente)
+                    // Revalidar o elemento arrastado para recalcular endpoints
+                    this.instance.revalidate(element);
+                    // Repintar todas as conexões
                     this.instance.repaintEverything();
                 }
                 this.dragFrameId = null;
@@ -726,8 +771,10 @@ class FlowEditor {
             // Atualizar no Alpine
             this.updateStepPosition(stepId, { x, y });
             
-            // Repintar conexões (jsPlumb recalcula endpoints automaticamente)
+            // CRÍTICO: Revalidar e repintar após drag parar
             if (this.instance) {
+                // Revalidar o elemento para recalcular endpoints na nova posição
+                this.instance.revalidate(element);
                 // Repintar todas as conexões
                 this.instance.repaintEverything();
             }
@@ -1560,6 +1607,12 @@ class FlowEditor {
         }
         if (this.repaintTimeout) {
             clearTimeout(this.repaintTimeout);
+        }
+        
+        // Desconectar observer
+        if (this.transformObserver) {
+            this.transformObserver.disconnect();
+            this.transformObserver = null;
         }
         
         this.clearCanvas();
