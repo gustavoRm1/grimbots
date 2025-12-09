@@ -1651,30 +1651,17 @@ body {
             <div x-show="config.flow_enabled" class="mt-4">
                 <!-- Controles do Canvas -->
                 <div class="flex items-center gap-2 mb-3 flex-wrap">
-                    <button @click="window.flowEditor?.zoomIn()" class="btn btn-secondary text-sm" title="Zoom In">
+                    <button @click="window.flowEditorReact?.zoomIn()" class="btn btn-secondary text-sm" title="Zoom In">
                         <i class="fas fa-search-plus"></i>
                     </button>
-                    <button @click="window.flowEditor?.zoomOut()" class="btn btn-secondary text-sm" title="Zoom Out">
+                    <button @click="window.flowEditorReact?.zoomOut()" class="btn btn-secondary text-sm" title="Zoom Out">
                         <i class="fas fa-search-minus"></i>
                     </button>
-                    <button @click="window.flowEditor?.zoomReset()" class="btn btn-secondary text-sm" title="Reset Zoom">
+                    <button @click="window.flowEditorReact?.zoomReset()" class="btn btn-secondary text-sm" title="Reset Zoom">
                         <i class="fas fa-expand-arrows-alt"></i>
                     </button>
-                    <button @click="window.flowEditor?.zoomToFit()" class="btn btn-secondary text-sm" title="Ajustar à Tela">
+                    <button @click="window.flowEditorReact?.zoomToFit()" class="btn btn-secondary text-sm" title="Ajustar à Tela">
                         <i class="fas fa-compress"></i>
-                    </button>
-                    <div class="border-l border-gray-600 h-6 mx-2"></div>
-                    <button @click="window.flowEditor?.organizeVertical()" class="btn btn-secondary text-sm" title="Organizar Vertical">
-                        <i class="fas fa-arrows-alt-v"></i> Vertical
-                    </button>
-                    <button @click="window.flowEditor?.organizeHorizontal()" class="btn btn-secondary text-sm" title="Organizar Horizontal">
-                        <i class="fas fa-arrows-alt-h"></i> Horizontal
-                    </button>
-                    <button @click="window.flowEditor?.organizeFlowComplete()" class="btn btn-secondary text-sm" title="Organizar Fluxo Completo">
-                        <i class="fas fa-sitemap"></i> Fluxo
-                    </button>
-                    <button @click="window.flowEditor?.organizeByGroups()" class="btn btn-secondary text-sm" title="Organizar por Grupos">
-                        <i class="fas fa-layer-group"></i> Grupos
                     </button>
                 </div>
             </div>
