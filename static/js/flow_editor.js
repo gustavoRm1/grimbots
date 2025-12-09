@@ -426,13 +426,13 @@ class FlowEditor {
         const stepElement = document.createElement('div');
         stepElement.id = `step-${stepId}`;
         stepElement.className = 'flow-step-block';
-        // POSITION absolute for canvas placement
-        stepElement.style.position = 'absolute';
-        stepElement.style.left = '0';
-        stepElement.style.top = '0';
-        stepElement.style.transform = `translate3d(${position.x}px, ${position.y}px, 0)`;
+        // CRÍTICO: position relative para jsPlumb calcular anchors corretamente
+        // Posicionamento via left/top ao invés de transform para jsPlumb acompanhar
+        stepElement.style.position = 'relative';
+        stepElement.style.left = `${position.x}px`;
+        stepElement.style.top = `${position.y}px`;
         stepElement.dataset.stepId = stepId;
-        stepElement.style.willChange = 'transform';
+        stepElement.style.willChange = 'left, top';
         
         // INNER wrapper (ensures nodes positioned relative to inner)
         const inner = document.createElement('div');
@@ -475,13 +475,24 @@ class FlowEditor {
         container.appendChild(stepElement);
         
         // Make draggable via jsPlumb (pass DOM element)
+        // CRÍTICO: usar left/top ao invés de transform para jsPlumb acompanhar
         this.instance.draggable(stepElement, {
             containment: false,
             grid: [this.gridSize, this.gridSize],
             start: (params) => {
                 stepElement.classList.add('dragging');
             },
-            drag: (params) => this.onStepDrag(params),
+            drag: (params) => {
+                // CRÍTICO: Revalidar durante drag para endpoints acompanharem
+                this.instance.revalidate(stepElement);
+                const inner = stepElement.querySelector('.flow-step-block-inner');
+                if (inner) {
+                    const nodes = inner.querySelectorAll('.flow-step-node-input, .flow-step-node-output, .flow-step-button-endpoint-container');
+                    nodes.forEach(n => this.instance.revalidate(n));
+                }
+                this.instance.repaintEverything();
+                this.onStepDrag(params);
+            },
             stop: (params) => this.onStepDragStop(params),
             cursor: 'move',
             zIndex: 1000
@@ -512,9 +523,10 @@ class FlowEditor {
             return;
         }
         
-        // Atualizar posição
+        // Atualizar posição - usar left/top ao invés de transform
         const position = step.position || { x: 100, y: 100 };
-        element.style.transform = `translate3d(${position.x}px, ${position.y}px, 0)`;
+        element.style.left = `${position.x}px`;
+        element.style.top = `${position.y}px`;
         this.stepTransforms.set(stepId, { x: position.x, y: position.y });
         
         // Remover endpoints antigos (todos os elementos do card)
@@ -524,8 +536,8 @@ class FlowEditor {
         if (inputNodeOld) this.instance.removeAllEndpoints(inputNodeOld);
         if (outputNodeOld) this.instance.removeAllEndpoints(outputNodeOld);
         
-        // CRÍTICO: Garantir que o card tenha position absolute (não relative!)
-        element.style.position = 'absolute';
+        // CRÍTICO: Garantir que o card tenha position relative para jsPlumb
+        element.style.position = 'relative';
         
         // CRÍTICO: Buscar ou criar wrapper interno para referência correta dos nodes
         let innerWrapper = element.querySelector('.flow-step-block-inner');
@@ -646,13 +658,14 @@ class FlowEditor {
         };
         
         // INPUT - LEFT CENTER (one per card)
+        // CRÍTICO: Anchor fixo à esquerda, centro vertical
         const inputUuid = `endpoint-left-${stepId}`;
         safeRemoveEndpoint(inputUuid);
         const inputNode = inner.querySelector('.flow-step-node-input');
         if (inputNode) {
             this.instance.addEndpoint(inputNode, {
                 uuid: inputUuid,
-                anchor: ['Left', { x: 0, y: 0 }],
+                anchor: ['LeftMiddle', [0, 0.5, -1, 0]], // Fixo à esquerda, centro vertical
                 maxConnections: -1,
                 isSource: false,
                 isTarget: true,
@@ -672,6 +685,7 @@ class FlowEditor {
         // OUTPUTS
         if (hasButtons) {
             // One endpoint per button - anchor RightMiddle aligned to button endpoint container
+            // CRÍTICO: Anchor fixo à direita do botão, centro vertical
             customButtons.forEach((btn, idx) => {
                 const buttonContainer = inner.querySelector(`[data-endpoint-button="${idx}"]`);
                 const btnUuid = `endpoint-button-${stepId}-${idx}`;
@@ -681,7 +695,7 @@ class FlowEditor {
                     if (!buttonContainer.style.position) buttonContainer.style.position = 'relative';
                     this.instance.addEndpoint(buttonContainer, {
                         uuid: btnUuid,
-                        anchor: ['RightMiddle', { x: 0, y: 0 }],
+                        anchor: ['RightMiddle', [1, 0.5, 1, 0, 10, 0]], // Fixo à direita, centro vertical, offset 10px
                         maxConnections: 1,
                         isSource: true,
                         isTarget: false,
@@ -694,12 +708,13 @@ class FlowEditor {
             });
         } else {
             // Global output present
+            // CRÍTICO: Anchor fixo à direita, centro vertical
             const outputNode = inner.querySelector('.flow-step-node-output');
             safeRemoveEndpoint(globalUuid);
             if (outputNode) {
                 this.instance.addEndpoint(outputNode, {
                     uuid: globalUuid,
-                    anchor: 'RightMiddle',
+                    anchor: ['RightMiddle', [1, 0.5, 1, 0]], // Fixo à direita, centro vertical
                     maxConnections: -1,
                     isSource: true,
                     isTarget: false,
@@ -728,10 +743,17 @@ class FlowEditor {
             }
             
             // CRÍTICO: Revalidar e repintar durante drag
+            // Nota: revalidate já está sendo chamado no callback drag do jsPlumb
+            // Este é um fallback adicional
             this.dragFrameId = requestAnimationFrame(() => {
                 if (this.instance) {
-                    // Revalidar o elemento arrastado para recalcular endpoints
+                    // Revalidar o elemento arrastado e seus nodes internos
                     this.instance.revalidate(element);
+                    const inner = element.querySelector('.flow-step-block-inner');
+                    if (inner) {
+                        const nodes = inner.querySelectorAll('.flow-step-node-input, .flow-step-node-output, .flow-step-button-endpoint-container');
+                        nodes.forEach(n => this.instance.revalidate(n));
+                    }
                     // Repintar todas as conexões
                     this.instance.repaintEverything();
                 }
@@ -750,24 +772,17 @@ class FlowEditor {
         if (stepId) {
             element.classList.remove('dragging');
             
-            // Extrair posição do transform
-            const transform = element.style.transform || '';
-            let x = 0, y = 0;
-            
-            if (transform && transform.includes('translate3d')) {
-                const match = transform.match(/translate3d\(([^,]+)px,\s*([^,]+)px/);
-                if (match) {
-                    x = parseFloat(match[1]) || 0;
-                    y = parseFloat(match[2]) || 0;
-                }
-            }
+            // Extrair posição de left/top (não mais de transform)
+            let x = parseFloat(element.style.left) || 0;
+            let y = parseFloat(element.style.top) || 0;
             
             // Snap to grid opcional
             x = Math.round(x / this.gridSize) * this.gridSize;
             y = Math.round(y / this.gridSize) * this.gridSize;
             
-            // Atualizar posição
-            element.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+            // Atualizar posição usando left/top
+            element.style.left = `${x}px`;
+            element.style.top = `${y}px`;
             this.stepTransforms.set(stepId, { x, y });
             
             // Atualizar no Alpine

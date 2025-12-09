@@ -69,7 +69,7 @@
 
 .flow-step-block,
 .flow-card {
-    position: absolute; /* Para posicionamento no canvas */
+    position: relative; /* CRÍTICO: relative para jsPlumb calcular anchors corretamente */
     width: 300px;
     min-height: 180px;
     background: #0F0F14;
@@ -85,7 +85,7 @@
     -moz-user-select: none;
     -ms-user-select: none;
     touch-action: none;
-    will-change: transform;
+    will-change: left, top; /* Mudado de transform para left/top */
     /* CRÍTICO: necessário para os nodes ABSOLUTOS terem referência correta */
     transform-style: preserve-3d;
     perspective: 1000px;
