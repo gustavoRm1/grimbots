@@ -1579,15 +1579,21 @@ body {
 
                 <div class="form-group" x-show="editingStep.type === 'message' || editingStep.type === 'content' || editingStep.type === 'video' || editingStep.type === 'audio'">
                     <label class="form-label">URL da Mídia</label>
-                    <input type="text" x-model="editingStep.config.media_url" class="form-input" placeholder="https://..." />
-                </div>
-
-                <div class="form-group" x-show="editingStep.type === 'message' || editingStep.type === 'content' || editingStep.type === 'video'">
-                    <label class="form-label">Tipo de Mídia</label>
-                    <select x-model="editingStep.config.media_type" class="form-select">
-                        <option value="video">Vídeo</option>
-                        <option value="photo">Foto</option>
-                    </select>
+                    <div class="relative">
+                        <input type="text" x-model="editingStep.config.media_url" @input="detectStepMediaType()" class="form-input pr-20" placeholder="https://..." />
+                        <div x-show="editingStep.config.media_url" class="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center gap-2">
+                            <span x-show="(detectedStepMediaType || editingStep.config.media_type) === 'video'" class="text-xs font-semibold px-2 py-1 rounded" style="background: rgba(59, 130, 246, 0.2); color: #93C5FD; border: 1px solid rgba(59, 130, 246, 0.4);">
+                                <i class="fas fa-video mr-1"></i>Vídeo
+                            </span>
+                            <span x-show="(detectedStepMediaType || editingStep.config.media_type) === 'photo'" class="text-xs font-semibold px-2 py-1 rounded" style="background: rgba(16, 185, 129, 0.2); color: #6EE7B7; border: 1px solid rgba(16, 185, 129, 0.4);">
+                                <i class="fas fa-image mr-1"></i>Foto
+                            </span>
+                        </div>
+                    </div>
+                    <input type="hidden" x-model="editingStep.config.media_type" />
+                    <p class="text-xs text-gray-500 mt-1">
+                        <i class="fas fa-magic mr-1"></i> O tipo (foto/vídeo) é detectado automaticamente pela URL ou extensão do arquivo
+                    </p>
                 </div>
 
                 <div class="form-group" x-show="editingStep.type === 'audio'">
@@ -1773,6 +1779,7 @@ function botConfigApp() {
         editingStep: null,
         editingStepIndex: -1,
         detectedMediaType: null,
+        detectedStepMediaType: null,
 
         detectMediaType() {
             const url = this.config.welcome_media_url || '';
@@ -1826,6 +1833,62 @@ function botConfigApp() {
             // Para URLs sem extensão clara, manter o tipo atual ou usar vídeo como padrão
             if (!this.detectedMediaType) {
                 this.detectedMediaType = this.config.welcome_media_type || 'video';
+            }
+        },
+
+        detectStepMediaType() {
+            if (!this.editingStep || !this.editingStep.config) return;
+            
+            const url = this.editingStep.config.media_url || '';
+            if (!url) {
+                this.detectedStepMediaType = null;
+                this.editingStep.config.media_type = 'video'; // Default
+                return;
+            }
+
+            // Detectar por extensão de arquivo
+            const videoExtensions = ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.m4v', '.3gp', '.flv'];
+            const photoExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg'];
+            
+            const urlLower = url.toLowerCase();
+            
+            // Verificar extensões de vídeo
+            if (videoExtensions.some(ext => urlLower.includes(ext) || urlLower.endsWith(ext))) {
+                this.detectedStepMediaType = 'video';
+                this.editingStep.config.media_type = 'video';
+                return;
+            }
+            
+            // Verificar extensões de foto
+            if (photoExtensions.some(ext => urlLower.includes(ext) || urlLower.endsWith(ext))) {
+                this.detectedStepMediaType = 'photo';
+                this.editingStep.config.media_type = 'photo';
+                return;
+            }
+            
+            // Verificar padrões de URL do Telegram
+            if (url.includes('video') || url.includes('Video')) {
+                this.detectedStepMediaType = 'video';
+                this.editingStep.config.media_type = 'video';
+                return;
+            }
+            
+            if (url.includes('photo') || url.includes('Photo') || url.includes('image')) {
+                this.detectedStepMediaType = 'photo';
+                this.editingStep.config.media_type = 'photo';
+                return;
+            }
+            
+            // Para file_id do Telegram, assumir vídeo como padrão (mais comum)
+            if (url.length > 10 && !url.startsWith('http')) {
+                this.detectedStepMediaType = 'video'; // Default para file_id
+                this.editingStep.config.media_type = 'video';
+                return;
+            }
+            
+            // Para URLs sem extensão clara, manter o tipo atual ou usar vídeo como padrão
+            if (!this.detectedStepMediaType) {
+                this.detectedStepMediaType = this.editingStep.config.media_type || 'video';
             }
         },
 
@@ -2291,6 +2354,11 @@ function botConfigApp() {
             }
             if (!this.editingStep.position) {
                 this.editingStep.position = { x: 100, y: 100 };
+            }
+            
+            // Detectar tipo de mídia automaticamente se houver URL
+            if (this.editingStep.config && this.editingStep.config.media_url) {
+                this.detectStepMediaType();
             }
             
             this.showStepModal = true;
