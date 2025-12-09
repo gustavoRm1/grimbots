@@ -8,13 +8,17 @@
    Design System: Dashboard Dark Theme
    ============================================ */
 
-/* CSS do Flow Editor V3.0 */
-/* Container do editor - confina o grid */
+/* ============================================
+   CSS DO FLOW EDITOR V3.0
+   ============================================ */
+
+/* Container do editor - confina o grid e controla overflow */
 .flow-canvas-container {
     position: relative;
     overflow: hidden; /* Impede o grid de escapar da div */
     width: 100%;
     height: 100%;
+    border-radius: 8px;
 }
 
 #flow-visual-canvas {
@@ -1629,6 +1633,7 @@ body {
 
         <!-- Flow Tab -->
         <div x-show="activeTab === 'flow'" class="config-section">
+            <!-- Header da seção -->
             <div class="config-section-header">
                 <h2 class="config-section-title">Fluxo Visual</h2>
                 <div class="flex items-center gap-4">
@@ -1642,6 +1647,7 @@ body {
                 </div>
             </div>
 
+            <!-- Conteúdo do Flow (só aparece quando habilitado) -->
             <div x-show="config.flow_enabled" class="mt-4">
                 <!-- Controles do Canvas -->
                 <div class="flex items-center gap-2 mb-3 flex-wrap">
@@ -1671,10 +1677,13 @@ body {
                         <i class="fas fa-layer-group"></i> Grupos
                     </button>
                 </div>
-                
+            </div>
+
+            <!-- Canvas do Flow Editor (dentro de x-show="activeTab === 'flow'") -->
+            <div x-show="config.flow_enabled" class="flow-canvas-container" style="width: 100%; height: 600px; border: 1px solid #242836; border-radius: 8px; overflow: hidden; position: relative; margin-top: 16px;">
                 <div 
                     id="flow-visual-canvas" 
-                    style="width: 100%; height: 600px; border: 1px solid #242836; border-radius: 8px; overflow: auto; position: relative;"
+                    style="width: 100%; height: 100%; position: relative;"
                     x-init="
                         if (config.flow_enabled && activeTab === 'flow') {
                             setTimeout(() => {
