@@ -261,12 +261,10 @@ class FlowEditor {
             const isOverStep = e.target.closest('.flow-step-block');
             const isOverButton = e.target.closest('button');
             const isOverEndpoint = e.target.closest('.jtk-endpoint');
-            const isOverInput = e.target.closest('input, textarea, select');
             
-            // Pan apenas se não estiver sobre step/button/endpoint/input E for botão direito
-            if (!isOverStep && !isOverButton && !isOverEndpoint && !isOverInput && e.button === 2) {
+            // Pan apenas se não estiver sobre step/button/endpoint E for botão direito
+            if (!isOverStep && !isOverButton && !isOverEndpoint && e.button === 2) {
                 e.preventDefault();
-                e.stopPropagation();
                 this.isPanning = true;
                 this.lastPanPoint = { x: e.clientX, y: e.clientY };
                 this.canvas.style.cursor = 'grabbing';
@@ -306,19 +304,10 @@ class FlowEditor {
             this.canvas.classList.remove('panning');
         });
         
-        // Prevenir menu de contexto quando clicar com botão direito no canvas
         this.canvas.addEventListener('contextmenu', (e) => {
             const isOverStep = e.target.closest('.flow-step-block');
-            const isOverButton = e.target.closest('button');
-            const isOverEndpoint = e.target.closest('.jtk-endpoint');
-            const isOverInput = e.target.closest('input, textarea, select');
-            
-            // Permitir menu de contexto apenas em steps, botões, endpoints e inputs
-            // Bloquear em qualquer outro lugar do canvas (para permitir pan)
-            if (!isOverStep && !isOverButton && !isOverEndpoint && !isOverInput) {
+            if (!isOverStep && this.isPanning) {
                 e.preventDefault();
-                e.stopPropagation();
-                return false;
             }
         });
     }
