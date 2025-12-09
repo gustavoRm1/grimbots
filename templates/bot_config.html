@@ -1866,7 +1866,13 @@ body {
 
 {% block extra_scripts %}
 <!-- Flow Editor JS -->
-<script src="{{ url_for('static', filename='js/flow_editor.js') }}?v=2.0.1"></script>
+<!-- React Flow Dependencies (CDN) -->
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@xyflow/react@11/dist/xyflow.js"></script>
+<script src="https://unpkg.com/dagre@0.8.5/dist/dagre.min.js"></script>
+<!-- Flow Editor React (Novo) -->
+<script src="{{ url_for('static', filename='js/flow_editor_react.js') }}?v=4.0.0"></script>
 <script>
 function botConfigApp() {
     return {
@@ -2408,12 +2414,22 @@ function botConfigApp() {
                     }, 200);
                 });
             } else {
+                // Limpar React root
+                if (window.flowEditorReactRoot) {
+                    try {
+                        window.flowEditorReactRoot.unmount();
+                        window.flowEditorReactRoot = null;
+                    } catch (e) {
+                        console.warn('⚠️ Erro ao desmontar editor React:', e);
+                    }
+                }
+                // Limpar referências antigas (jsPlumb)
                 if (window.flowEditor) {
                     try {
                         window.flowEditor.destroy();
                         window.flowEditor = null;
                     } catch (e) {
-                        console.warn('⚠️ Erro ao destruir editor:', e);
+                        console.warn('⚠️ Erro ao destruir editor antigo:', e);
                     }
                 }
             }
