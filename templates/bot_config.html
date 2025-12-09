@@ -1612,12 +1612,12 @@ body {
                     </select>
                 </div>
 
-                <div class="form-group">
+                <div class="form-group" x-show="editingStep.type !== 'payment'">
                     <label class="form-label">Mensagem</label>
                     <textarea x-model="editingStep.config.message" class="form-textarea" placeholder="Digite a mensagem do step..."></textarea>
                 </div>
 
-                <div class="form-group">
+                <div class="form-group" x-show="editingStep.type !== 'payment'">
                     <label class="form-label">URL da Mídia</label>
                     <div class="relative">
                         <input type="text" x-model="editingStep.config.media_url" @input="detectStepMediaType()" class="form-input pr-20" placeholder="https://..." />
@@ -1636,7 +1636,7 @@ body {
                     </p>
                 </div>
 
-                <div class="form-group">
+                <div class="form-group" x-show="editingStep.type !== 'payment'">
                     <label class="form-label">URL do Áudio</label>
                     <input type="text" x-model="editingStep.config.audio_url" class="form-input" placeholder="https://..." />
                     <p class="text-xs text-gray-500 mt-1">
@@ -1654,17 +1654,22 @@ body {
                     <input type="text" x-model="editingStep.config.product_name" class="form-input" />
                 </div>
 
+                <div class="form-group" x-show="editingStep.type === 'payment'">
+                    <label class="form-label">Nome do Botão</label>
+                    <input type="text" x-model="editingStep.config.button_text" class="form-input" placeholder="Ex: Comprar Agora" />
+                </div>
+
                 <div class="form-group" x-show="editingStep.type === 'access'">
                     <label class="form-label">Link de Acesso</label>
                     <input type="text" x-model="editingStep.config.access_link" class="form-input" placeholder="https://..." />
                 </div>
 
-                <div class="form-group">
+                <div class="form-group" x-show="editingStep.type !== 'payment'">
                     <label class="form-label">Delay (segundos)</label>
                     <input type="number" x-model.number="editingStep.delay_seconds" class="form-input" min="0" />
                 </div>
 
-                <div class="form-group">
+                <div class="form-group" x-show="editingStep.type !== 'payment'">
                     <label class="form-label">Título do Step (Opcional)</label>
                     <input type="text" x-model="editingStep.title" class="form-input" placeholder="Deixe vazio para usar tipo padrão" />
                 </div>
@@ -1672,7 +1677,7 @@ body {
 
 
                 <!-- Botões Customizados -->
-                <div class="border-t border-gray-700 pt-4">
+                <div class="border-t border-gray-700 pt-4" x-show="editingStep.type !== 'payment'">
                     <div class="flex justify-between items-center mb-3">
                         <h4 class="text-md font-semibold text-white">Botões Customizados</h4>
                         <button @click="addCustomButton()" class="btn btn-secondary">
@@ -2323,6 +2328,10 @@ function botConfigApp() {
             // Garantir que audio_url existe (para todos os tipos de steps)
             if (!this.editingStep.config.audio_url) {
                 this.editingStep.config.audio_url = '';
+            }
+            // Garantir que button_text existe (para steps de pagamento)
+            if (this.editingStep.type === 'payment' && !this.editingStep.config.button_text) {
+                this.editingStep.config.button_text = '';
             }
             if (!this.editingStep.conditions) {
                 this.editingStep.conditions = [];
