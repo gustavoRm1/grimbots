@@ -132,7 +132,12 @@ class FlowEditor {
                     outlineStroke: '#0D0F15', 
                     outlineWidth: 3
                 },
-                maxConnections: -1
+                maxConnections: -1,
+                // CRÍTICO: Habilitar conexões arrastáveis
+                ConnectionsDetachable: true,
+                ConnectionOverlays: [
+                    ['Arrow', { width: 10, length: 12, location: 1 }]
+                ]
             });
             
             // Eventos
@@ -426,11 +431,12 @@ class FlowEditor {
         const stepElement = document.createElement('div');
         stepElement.id = `step-${stepId}`;
         stepElement.className = 'flow-step-block';
-        // CRÍTICO: position relative para jsPlumb calcular anchors corretamente
-        // Posicionamento via left/top ao invés de transform para jsPlumb acompanhar
-        stepElement.style.position = 'relative';
+        // CRÍTICO: position absolute para posicionamento no canvas
+        // Usar APENAS left/top, NUNCA transform (jsPlumb não acompanha transform)
+        stepElement.style.position = 'absolute';
         stepElement.style.left = `${position.x}px`;
         stepElement.style.top = `${position.y}px`;
+        stepElement.style.transform = 'none'; // Garantir que não há transform
         stepElement.dataset.stepId = stepId;
         stepElement.style.willChange = 'left, top';
         
@@ -465,8 +471,8 @@ class FlowEditor {
                 ${!isStartStep?`<button class="flow-step-btn-action" data-action="set-start" data-step-id="${stepId}" title="Definir como inicial">⭐</button>` : ''}
             </div>
             <!-- Nodes INSIDE the card -->
-            <div class="flow-step-node-input" data-node-type="input" data-step-id="${stepId}" title="Entrada"></div>
-            ${!hasButtons ? `<div class="flow-step-node-output" data-node-type="output" data-step-id="${stepId}" title="Saída"></div>` : ''}
+            <div class="flow-step-node-input" data-node-type="input" data-step-id="${stepId}" title="Entrada" style="width: 14px; height: 14px;"></div>
+            ${!hasButtons ? `<div class="flow-step-node-output" data-node-type="output" data-step-id="${stepId}" title="Saída" style="width: 14px; height: 14px;"></div>` : ''}
         `;
         
         // Append inner to step and to contentContainer
@@ -475,14 +481,18 @@ class FlowEditor {
         container.appendChild(stepElement);
         
         // Make draggable via jsPlumb (pass DOM element)
-        // CRÍTICO: usar left/top ao invés de transform para jsPlumb acompanhar
+        // CRÍTICO: jsPlumb usa left/top automaticamente, não transform
         this.instance.draggable(stepElement, {
             containment: false,
             grid: [this.gridSize, this.gridSize],
             start: (params) => {
                 stepElement.classList.add('dragging');
+                // Garantir que não há transform
+                stepElement.style.transform = 'none';
             },
             drag: (params) => {
+                // CRÍTICO: Garantir que não há transform durante drag
+                stepElement.style.transform = 'none';
                 // CRÍTICO: Revalidar durante drag para endpoints acompanharem
                 this.instance.revalidate(stepElement);
                 const inner = stepElement.querySelector('.flow-step-block-inner');
@@ -493,7 +503,11 @@ class FlowEditor {
                 this.instance.repaintEverything();
                 this.onStepDrag(params);
             },
-            stop: (params) => this.onStepDragStop(params),
+            stop: (params) => {
+                // Garantir que não há transform após drag
+                stepElement.style.transform = 'none';
+                this.onStepDragStop(params);
+            },
             cursor: 'move',
             zIndex: 1000
         });
@@ -539,8 +553,9 @@ class FlowEditor {
         if (inputNodeOld) this.instance.removeAllEndpoints(inputNodeOld);
         if (outputNodeOld) this.instance.removeAllEndpoints(outputNodeOld);
         
-        // CRÍTICO: Garantir que o card tenha position relative para jsPlumb
-        element.style.position = 'relative';
+        // CRÍTICO: Garantir que o card tenha position absolute e sem transform
+        element.style.position = 'absolute';
+        element.style.transform = 'none';
         
         // CRÍTICO: Buscar ou criar wrapper interno para referência correta dos nodes
         let innerWrapper = element.querySelector('.flow-step-block-inner');
@@ -646,8 +661,9 @@ class FlowEditor {
         const customButtons = stepConfig.custom_buttons || [];
         const hasButtons = customButtons.length > 0;
         
-        // ensure absolute/relative
-        element.style.position = element.style.position || 'absolute';
+        // CRÍTICO: Garantir position absolute e sem transform
+        element.style.position = 'absolute';
+        element.style.transform = 'none';
         const inner = element.querySelector('.flow-step-block-inner') || element;
         
         // Helper to safely remove endpoint by uuid
@@ -666,10 +682,13 @@ class FlowEditor {
         safeRemoveEndpoint(inputUuid);
         const inputNode = inner.querySelector('.flow-step-node-input');
         if (inputNode) {
+            // Garantir dimensões do node
+            if (!inputNode.style.width) inputNode.style.width = '14px';
+            if (!inputNode.style.height) inputNode.style.height = '14px';
             try {
                 const ep = this.instance.addEndpoint(inputNode, {
                     uuid: inputUuid,
-                    anchor: ['LeftMiddle', [0, 0.5, -1, 0]], // Fixo à esquerda, centro vertical
+                    anchor: 'LeftMiddle', // Anchor simples - jsPlumb calcula automaticamente
                     maxConnections: -1,
                     isSource: false,
                     isTarget: true,
@@ -703,10 +722,13 @@ class FlowEditor {
                 if (buttonContainer) {
                     // Ensure buttonContainer is positioned relative inside card
                     if (!buttonContainer.style.position) buttonContainer.style.position = 'relative';
+                    // Garantir dimensões do container
+                    if (!buttonContainer.style.width) buttonContainer.style.width = '14px';
+                    if (!buttonContainer.style.height) buttonContainer.style.height = '14px';
                     try {
                         const ep = this.instance.addEndpoint(buttonContainer, {
                             uuid: btnUuid,
-                            anchor: ['RightMiddle', [1, 0.5, 1, 0, 10, 0]], // Fixo à direita, centro vertical, offset 10px
+                            anchor: 'RightMiddle', // Anchor simples - jsPlumb calcula automaticamente
                             maxConnections: 1,
                             isSource: true,
                             isTarget: false,
@@ -727,10 +749,13 @@ class FlowEditor {
             const outputNode = inner.querySelector('.flow-step-node-output');
             safeRemoveEndpoint(globalUuid);
             if (outputNode) {
+                // Garantir dimensões do node
+                if (!outputNode.style.width) outputNode.style.width = '14px';
+                if (!outputNode.style.height) outputNode.style.height = '14px';
                 try {
                     const ep = this.instance.addEndpoint(outputNode, {
                         uuid: globalUuid,
-                        anchor: ['RightMiddle', [1, 0.5, 1, 0]], // Fixo à direita, centro vertical
+                        anchor: 'RightMiddle', // Anchor simples - jsPlumb calcula automaticamente
                         maxConnections: -1,
                         isSource: true,
                         isTarget: false,
@@ -794,7 +819,7 @@ class FlowEditor {
         if (stepId) {
             element.classList.remove('dragging');
             
-            // Extrair posição de left/top (não mais de transform)
+            // Extrair posição de left/top (jsPlumb usa left/top, não transform)
             let x = parseFloat(element.style.left) || 0;
             let y = parseFloat(element.style.top) || 0;
             
@@ -802,9 +827,10 @@ class FlowEditor {
             x = Math.round(x / this.gridSize) * this.gridSize;
             y = Math.round(y / this.gridSize) * this.gridSize;
             
-            // Atualizar posição usando left/top
+            // Atualizar posição usando left/top e garantir que não há transform
             element.style.left = `${x}px`;
             element.style.top = `${y}px`;
+            element.style.transform = 'none'; // CRÍTICO: remover qualquer transform
             this.stepTransforms.set(stepId, { x, y });
             
             // Atualizar no Alpine
@@ -853,13 +879,15 @@ class FlowEditor {
     reconnectAll() {
         if (!this.alpine || !this.alpine.config || !this.alpine.config.flow_steps) return;
         if (!this.instance) {
-            console.warn('⚠️ jsPlumb instance não disponível');
+            console.warn('⚠️ jsPlumb instance não disponível em reconnectAll()');
             return;
         }
         
         // remove existing connections but keep endpoints
         try {
-            this.instance.deleteEveryConnection();
+            if (this.instance && typeof this.instance.deleteEveryConnection === 'function') {
+                this.instance.deleteEveryConnection();
+            }
         } catch (e) { 
             console.warn('⚠️ Erro ao deletar conexões:', e); 
         }
