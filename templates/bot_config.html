@@ -1651,16 +1651,16 @@ body {
             <div x-show="config.flow_enabled" class="mt-4">
                 <!-- Controles do Canvas -->
                 <div class="flex items-center gap-2 mb-3 flex-wrap">
-                    <button @click="window.flowEditorReact?.zoomIn()" class="btn btn-secondary text-sm" title="Zoom In">
+                    <button @click="window.flowEditor?.zoomIn()" class="btn btn-secondary text-sm" title="Zoom In">
                         <i class="fas fa-search-plus"></i>
                     </button>
-                    <button @click="window.flowEditorReact?.zoomOut()" class="btn btn-secondary text-sm" title="Zoom Out">
+                    <button @click="window.flowEditor?.zoomOut()" class="btn btn-secondary text-sm" title="Zoom Out">
                         <i class="fas fa-search-minus"></i>
                     </button>
-                    <button @click="window.flowEditorReact?.zoomReset()" class="btn btn-secondary text-sm" title="Reset Zoom">
+                    <button @click="window.flowEditor?.zoomReset()" class="btn btn-secondary text-sm" title="Reset Zoom">
                         <i class="fas fa-expand-arrows-alt"></i>
                     </button>
-                    <button @click="window.flowEditorReact?.zoomToFit()" class="btn btn-secondary text-sm" title="Ajustar à Tela">
+                    <button @click="window.flowEditor?.zoomToFit()" class="btn btn-secondary text-sm" title="Ajustar à Tela">
                         <i class="fas fa-compress"></i>
                     </button>
                 </div>
@@ -1674,10 +1674,10 @@ body {
                     x-init="
                         if (config.flow_enabled && activeTab === 'flow') {
                             setTimeout(() => {
-                                if (typeof FlowEditorReact !== 'undefined') {
+                                if (typeof FlowEditor !== 'undefined' && typeof jsPlumb !== 'undefined') {
                                     initVisualFlowEditor();
-                                } else if (window.flowEditorReact) {
-                                    window.flowEditorReact.renderAllSteps();
+                                } else if (window.flowEditor) {
+                                    window.flowEditor.renderAllSteps();
                                 }
                             }, 400);
                         }
@@ -1746,23 +1746,23 @@ body {
 
                 <div class="form-group" x-show="editingStep && editingStep.type !== 'payment'">
                     <label class="form-label">Mensagem</label>
-                    <textarea x-model="editingStep?.config?.message" class="form-textarea" placeholder="Digite a mensagem do step..."></textarea>
+                    <textarea x-model="editingStep.config.message" class="form-textarea" placeholder="Digite a mensagem do step..."></textarea>
                 </div>
 
                 <div class="form-group" x-show="editingStep && editingStep.type !== 'payment'">
                     <label class="form-label">URL da Mídia</label>
                     <div class="relative">
-                        <input type="text" x-model="editingStep?.config?.media_url" @input="detectStepMediaType()" class="form-input pr-20" placeholder="https://..." />
-                        <div x-show="editingStep?.config?.media_url" class="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center gap-2">
-                            <span x-show="(detectedStepMediaType || editingStep?.config?.media_type) === 'video'" class="text-xs font-semibold px-2 py-1 rounded" style="background: rgba(59, 130, 246, 0.2); color: #93C5FD; border: 1px solid rgba(59, 130, 246, 0.4);">
+                        <input type="text" x-model="editingStep.config.media_url" @input="detectStepMediaType()" class="form-input pr-20" placeholder="https://..." />
+                        <div x-show="editingStep.config.media_url" class="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center gap-2">
+                            <span x-show="(detectedStepMediaType || editingStep.config.media_type) === 'video'" class="text-xs font-semibold px-2 py-1 rounded" style="background: rgba(59, 130, 246, 0.2); color: #93C5FD; border: 1px solid rgba(59, 130, 246, 0.4);">
                                 <i class="fas fa-video mr-1"></i>Vídeo
                             </span>
-                            <span x-show="(detectedStepMediaType || editingStep?.config?.media_type) === 'photo'" class="text-xs font-semibold px-2 py-1 rounded" style="background: rgba(16, 185, 129, 0.2); color: #6EE7B7; border: 1px solid rgba(16, 185, 129, 0.4);">
+                            <span x-show="(detectedStepMediaType || editingStep.config.media_type) === 'photo'" class="text-xs font-semibold px-2 py-1 rounded" style="background: rgba(16, 185, 129, 0.2); color: #6EE7B7; border: 1px solid rgba(16, 185, 129, 0.4);">
                                 <i class="fas fa-image mr-1"></i>Foto
                             </span>
                         </div>
                     </div>
-                    <input type="hidden" x-model="editingStep?.config?.media_type" />
+                    <input type="hidden" x-model="editingStep.config.media_type" />
                     <p class="text-xs text-gray-500 mt-1">
                         <i class="fas fa-magic mr-1"></i> O tipo (foto/vídeo) é detectado automaticamente pela URL ou extensão do arquivo
                     </p>
@@ -1770,28 +1770,28 @@ body {
 
                 <div class="form-group" x-show="editingStep && editingStep.type !== 'payment'">
                     <label class="form-label">URL do Áudio</label>
-                    <input type="text" x-model="editingStep?.config?.audio_url" class="form-input" placeholder="https://..." />
+                    <input type="text" x-model="editingStep.config.audio_url" class="form-input" placeholder="https://..." />
                     <p class="text-xs text-gray-500 mt-1">
                         <i class="fas fa-info-circle"></i> Áudio complementar (opcional) - será enviado após a mídia principal
                     </p>
                 </div>
 
-                <div class="form-group" x-show="editingStep.type === 'payment'">
+                <div class="form-group" x-show="editingStep && editingStep.type === 'payment'">
                     <label class="form-label">Preço (R$)</label>
                     <input type="number" x-model.number="editingStep.config.price" class="form-input" step="0.01" min="0" />
                 </div>
 
-                <div class="form-group" x-show="editingStep.type === 'payment'">
+                <div class="form-group" x-show="editingStep && editingStep.type === 'payment'">
                     <label class="form-label">Nome do Produto</label>
                     <input type="text" x-model="editingStep.config.product_name" class="form-input" />
                 </div>
 
-                <div class="form-group" x-show="editingStep.type === 'payment'">
+                <div class="form-group" x-show="editingStep && editingStep.type === 'payment'">
                     <label class="form-label">Nome do Botão</label>
                     <input type="text" x-model="editingStep.config.button_text" class="form-input" placeholder="Ex: Comprar Agora" />
                 </div>
 
-                <div class="form-group" x-show="editingStep.type === 'access'">
+                <div class="form-group" x-show="editingStep && editingStep.type === 'access'">
                     <label class="form-label">Link de Acesso</label>
                     <input type="text" x-model="editingStep.config.access_link" class="form-input" placeholder="https://..." />
                 </div>
@@ -1851,30 +1851,17 @@ body {
 {% endblock %}
 
 {% block extra_scripts %}
-<!-- Flow Editor JS -->
-<!-- React Flow Dependencies (CDN) -->
-<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<!-- React Flow via unpkg (mais confiável) -->
-<script src="https://unpkg.com/@xyflow/react@11/dist/xyflow.umd.js"></script>
+<!-- Flow Editor JS (jsPlumb) -->
+<!-- jsPlumb 2.15.6 -->
+<script src="https://cdn.jsdelivr.net/npm/jsplumb@2.15.6/dist/js/jsplumb.min.js"></script>
+<!-- Flow Editor (jsPlumb) -->
+<script src="{{ url_for('static', filename='js/flow_editor.js') }}?v=4.0.0"></script>
 <script>
-// Garantir que ReactFlow está disponível globalmente
-if (typeof window.xyflow !== 'undefined' && typeof window.ReactFlow === 'undefined') {
-    window.ReactFlow = window.xyflow;
-    console.log('✅ ReactFlow exposto como window.ReactFlow');
-}
-</script>
-<script src="https://unpkg.com/dagre@0.8.5/dist/dagre.min.js"></script>
-<!-- Flow Editor React (Novo) -->
-<script src="{{ url_for('static', filename='js/flow_editor_react.js') }}?v=5.0.0"></script>
-<script>
-// Debug: Verificar se FlowEditorReact foi carregado
+// Debug: Verificar se FlowEditor foi carregado
 setTimeout(function() {
-    console.log('🔍 Verificando FlowEditorReact:', typeof window.FlowEditorReact);
-    console.log('🔍 Verificando React:', typeof React);
-    console.log('🔍 Verificando ReactDOM:', typeof ReactDOM);
-    console.log('🔍 Verificando ReactFlow:', typeof ReactFlow);
-}, 2000);
+    console.log('🔍 Verificando jsPlumb:', typeof jsPlumb);
+    console.log('🔍 Verificando FlowEditor:', typeof window.FlowEditor);
+}, 1000);
 </script>
 <script>
 function botConfigApp() {
@@ -2417,16 +2404,7 @@ function botConfigApp() {
                     }, 200);
                 });
             } else {
-                // Limpar React root
-                if (window.flowEditorReactRoot) {
-                    try {
-                        window.flowEditorReactRoot.unmount();
-                        window.flowEditorReactRoot = null;
-                    } catch (e) {
-                        console.warn('⚠️ Erro ao desmontar editor React:', e);
-                    }
-                }
-                // Limpar referências antigas (jsPlumb)
+                // Limpar Flow Editor (jsPlumb)
                 if (window.flowEditor) {
                     try {
                         window.flowEditor.destroy();
@@ -2451,15 +2429,27 @@ function botConfigApp() {
                     return;
                 }
                 
-                // Verificar React Flow
-                if (typeof React === 'undefined' || typeof ReactFlow === 'undefined' || typeof ReactDOM === 'undefined') {
-                    console.error('❌ React, ReactDOM ou ReactFlow não está disponível.');
-                    console.error('React:', typeof React);
-                    console.error('ReactDOM:', typeof ReactDOM);
-                    console.error('ReactFlow:', typeof ReactFlow);
-                    console.error('Aguardando 500ms e tentando novamente...');
+                // Verificar jsPlumb e FlowEditor
+                if (typeof jsPlumb === 'undefined') {
+                    console.error('❌ jsPlumb não está disponível. Aguardando carregamento...');
                     setTimeout(() => this.initVisualFlowEditor(), 500);
                     return;
+                }
+                
+                if (typeof window.FlowEditor === 'undefined') {
+                    console.error('❌ FlowEditor não está disponível. Aguardando carregamento...');
+                    setTimeout(() => this.initVisualFlowEditor(), 500);
+                    return;
+                }
+                
+                // Limpar editor anterior se existir
+                if (window.flowEditor) {
+                    try {
+                        window.flowEditor.destroy();
+                        window.flowEditor = null;
+                    } catch (e) {
+                        console.warn('⚠️ Erro ao destruir editor antigo:', e);
+                    }
                 }
                 
                 // Limpar canvas
@@ -2469,28 +2459,11 @@ function botConfigApp() {
                 window.alpineFlowEditor = this;
                 
                 try {
-                    // Verificar se FlowEditorReact está disponível
-                    if (typeof window.FlowEditorReact === 'undefined') {
-                        console.error('❌ FlowEditorReact não está disponível. Aguardando carregamento...');
-                        setTimeout(() => this.initVisualFlowEditor(), 500);
-                        return;
-                    }
-                    
-                    // Criar root do React
-                    const root = ReactDOM.createRoot(canvas);
-                    
-                    // Renderizar FlowEditorReact
-                    root.render(
-                        React.createElement(window.FlowEditorReact, {
-                            alpineContext: this,
-                            canvasId: 'flow-visual-canvas'
-                        })
-                    );
-                    
-                    window.flowEditorReactRoot = root;
-                    console.log('✅ Editor React Flow inicializado');
+                    // Criar instância do FlowEditor (jsPlumb)
+                    window.flowEditor = new window.FlowEditor('flow-visual-canvas', this);
+                    console.log('✅ Editor jsPlumb inicializado');
                 } catch (error) {
-                    console.error('❌ Erro ao inicializar editor React Flow:', error);
+                    console.error('❌ Erro ao inicializar editor jsPlumb:', error);
                     console.error('Stack:', error.stack);
                     // Tentar novamente após 1 segundo
                     setTimeout(() => this.initVisualFlowEditor(), 1000);
@@ -2514,19 +2487,46 @@ function botConfigApp() {
             
             this.editingStep = JSON.parse(JSON.stringify(step));
             
+            // Garantir que todas as propriedades existem ANTES de abrir o modal
             if (!this.editingStep.connections) {
                 this.editingStep.connections = {};
             }
             if (!this.editingStep.config) {
                 this.editingStep.config = {};
             }
-            // Garantir que audio_url existe (para todos os tipos de steps)
-            if (!this.editingStep.config.audio_url) {
+            // Garantir propriedades do config
+            if (this.editingStep.config.message === undefined) {
+                this.editingStep.config.message = '';
+            }
+            if (this.editingStep.config.media_url === undefined) {
+                this.editingStep.config.media_url = '';
+            }
+            if (this.editingStep.config.media_type === undefined) {
+                this.editingStep.config.media_type = 'video';
+            }
+            if (this.editingStep.config.audio_url === undefined) {
                 this.editingStep.config.audio_url = '';
             }
-            // Garantir que button_text existe (para steps de pagamento)
-            if (this.editingStep.type === 'payment' && !this.editingStep.config.button_text) {
+            if (this.editingStep.config.price === undefined) {
+                this.editingStep.config.price = '';
+            }
+            if (this.editingStep.config.product_name === undefined) {
+                this.editingStep.config.product_name = '';
+            }
+            if (this.editingStep.config.button_text === undefined) {
                 this.editingStep.config.button_text = '';
+            }
+            if (this.editingStep.config.access_link === undefined) {
+                this.editingStep.config.access_link = '';
+            }
+            if (this.editingStep.config.custom_buttons === undefined) {
+                this.editingStep.config.custom_buttons = [];
+            }
+            if (this.editingStep.delay_seconds === undefined) {
+                this.editingStep.delay_seconds = 0;
+            }
+            if (this.editingStep.title === undefined) {
+                this.editingStep.title = '';
             }
             if (!this.editingStep.conditions) {
                 this.editingStep.conditions = [];
@@ -2598,9 +2598,10 @@ function botConfigApp() {
             this.config.flow_steps[this.editingStepIndex] = updatedStep;
             
             this.$nextTick(() => {
-                // Atualizar step no React Flow
-                if (window.flowEditorReact && window.flowEditorReact.updateStep) {
-                    window.flowEditorReact.updateStep(existingStep.id, updatedStep);
+                // Atualizar step no Flow Editor (jsPlumb)
+                if (window.flowEditor && window.flowEditor.updateStepEndpoints) {
+                    window.flowEditor.updateStepEndpoints(existingStep.id);
+                    window.flowEditor.renderAllSteps();
                 }
             });
             
@@ -2658,9 +2659,9 @@ function botConfigApp() {
             this.$nextTick(() => {
                 // Função para tentar renderizar
                 const tryRender = () => {
-                    if (window.flowEditorReact && typeof window.flowEditorReact.renderAllSteps === 'function') {
-                        window.flowEditorReact.renderAllSteps();
-                        console.log('✅ Steps re-renderizados (React Flow)');
+                    if (window.flowEditor && typeof window.flowEditor.renderAllSteps === 'function') {
+                        window.flowEditor.renderAllSteps();
+                        console.log('✅ Steps re-renderizados (jsPlumb)');
                         return true;
                     }
                     return false;
@@ -2674,24 +2675,24 @@ function botConfigApp() {
                 // Se não funcionou, tentar inicializar o editor
                 console.log('🆕 Editor não inicializado. Inicializando agora...');
                 
-                // Verificar se FlowEditorReact está disponível
-                if (typeof window.FlowEditorReact === 'undefined') {
-                    console.warn('⚠️ FlowEditorReact não está disponível. Aguardando carregamento...');
-                    // Aguardar até FlowEditorReact estar disponível
+                // Verificar se FlowEditor e jsPlumb estão disponíveis
+                if (typeof window.FlowEditor === 'undefined' || typeof jsPlumb === 'undefined') {
+                    console.warn('⚠️ FlowEditor ou jsPlumb não está disponível. Aguardando carregamento...');
+                    // Aguardar até FlowEditor e jsPlumb estarem disponíveis
                     let attempts = 0;
                     const checkInterval = setInterval(() => {
                         attempts++;
-                        if (typeof window.FlowEditorReact !== 'undefined') {
+                        if (typeof window.FlowEditor !== 'undefined' && typeof jsPlumb !== 'undefined') {
                             clearInterval(checkInterval);
                             this.initVisualFlowEditor();
                             setTimeout(() => tryRender(), 500);
                         } else if (attempts > 20) {
                             clearInterval(checkInterval);
-                            console.error('❌ FlowEditorReact não carregou após 4 segundos');
+                            console.error('❌ FlowEditor ou jsPlumb não carregou após 4 segundos');
                         }
                     }, 200);
                 } else {
-                    // FlowEditorReact está disponível, inicializar
+                    // FlowEditor está disponível, inicializar
                     this.initVisualFlowEditor();
                     // Aguardar um pouco e tentar renderizar
                     setTimeout(() => {
@@ -2713,9 +2714,9 @@ function botConfigApp() {
                 }
             }
             
-            // Remover do React Flow
-            if (window.flowEditorReact && window.flowEditorReact.deleteStep) {
-                window.flowEditorReact.deleteStep(stepId);
+            // Remover do Flow Editor (jsPlumb)
+            if (window.flowEditor && window.flowEditor.deleteStep) {
+                window.flowEditor.deleteStep(stepId);
             }
         },
         
@@ -2763,23 +2764,23 @@ function botConfigApp() {
             if (!this.editingStep || !this.editingStep.config || !this.editingStep.config.custom_buttons) return;
             this.editingStep.config.custom_buttons.splice(index, 1);
             
-            // Atualizar no React Flow
+            // Atualizar no Flow Editor (jsPlumb)
             this.$nextTick(() => {
-                if (window.flowEditorReact && this.editingStep && window.flowEditorReact.updateStep) {
-                    window.flowEditorReact.updateStep(this.editingStep.id, this.editingStep);
+                if (window.flowEditor && this.editingStep && window.flowEditor.updateStepEndpoints) {
+                    window.flowEditor.updateStepEndpoints(this.editingStep.id);
                 }
             });
         },
         
         watchFlowSteps() {
-            // Watcher otimizado para React Flow
+            // Watcher otimizado para Flow Editor (jsPlumb)
             this.$watch('config.flow_steps', (newSteps, oldSteps) => {
-                if (window.flowEditorReact && newSteps) {
+                if (window.flowEditor && newSteps) {
                     clearTimeout(this._flowStepsWatchTimeout);
                     this._flowStepsWatchTimeout = setTimeout(() => {
-                        // Re-renderizar tudo no React Flow
-                        if (window.flowEditorReact && window.flowEditorReact.renderAllSteps) {
-                            window.flowEditorReact.renderAllSteps();
+                        // Re-renderizar tudo no Flow Editor
+                        if (window.flowEditor && window.flowEditor.renderAllSteps) {
+                            window.flowEditor.renderAllSteps();
                         }
                     }, 300);
                 }
