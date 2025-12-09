@@ -54,6 +54,12 @@ class FlowEditor {
         this.visibleSteps = new Set();
         this.lastViewportUpdate = 0;
         
+        // Performance: Cache e debounce
+        this.boundingRectCache = new Map(); // Cache de getBoundingClientRect por frame
+        this.lastFrameTime = 0;
+        this.updateStepPositionDebounce = null; // Debounce para updateStepPosition
+        this.connectionCache = new Map(); // Cache de conexões para diffing
+        
         // Cores por tipo de conexão (todas brancas)
         this.connectionColors = {
             next: '#FFFFFF',
@@ -991,8 +997,11 @@ class FlowEditor {
         stepElement.dataset.stepId = stepId;
         
         const position = step.position || { x: 100, y: 100 };
-        stepElement.style.left = `${position.x}px`;
-        stepElement.style.top = `${position.y}px`;
+        // Usar transform em vez de left/top para GPU acceleration (sem reflow)
+        stepElement.style.transform = `translate3d(${position.x}px, ${position.y}px, 0)`;
+        stepElement.style.left = '0';
+        stepElement.style.top = '0';
+        stepElement.style.willChange = 'transform';
         
         const icon = this.stepIcons[stepType] || 'fa-circle';
         const isStartStep = this.alpine.config.flow_start_step_id === stepId;
@@ -1115,8 +1124,11 @@ class FlowEditor {
         }
         
         const position = step.position || { x: 100, y: 100 };
-        element.style.left = `${position.x}px`;
-        element.style.top = `${position.y}px`;
+        // Usar transform em vez de left/top para GPU acceleration (sem reflow)
+        element.style.transform = `translate3d(${position.x}px, ${position.y}px, 0)`;
+        element.style.left = '0';
+        element.style.top = '0';
+        element.style.willChange = 'transform';
         
         // Remover endpoints antigos antes de re-renderizar
         this.instance.removeAllEndpoints(element);
@@ -1847,21 +1859,36 @@ class FlowEditor {
             }
         });
         
-        // Aplicar snap
+        // Aplicar snap usando transform (GPU acceleration)
         if (snapX !== null || snapY !== null) {
-            const currentLeft = parseFloat(element.style.left) || 0;
-            const currentTop = parseFloat(element.style.top) || 0;
+            // Extrair posição atual do transform
+            const transform = element.style.transform || '';
+            let currentX = 0, currentY = 0;
+            if (transform && transform.includes('translate3d')) {
+                const match = transform.match(/translate3d\(([^,]+)px,\s*([^,]+)px/);
+                if (match) {
+                    currentX = parseFloat(match[1]) || 0;
+                    currentY = parseFloat(match[2]) || 0;
+                }
+            } else {
+                currentX = parseFloat(element.style.left) || 0;
+                currentY = parseFloat(element.style.top) || 0;
+            }
             
             // Converter coordenadas de tela para coordenadas do canvas (considerando zoom/pan)
             if (snapX !== null) {
                 const worldX = (snapX - this.pan.x) / this.zoomLevel;
-                element.style.left = `${worldX}px`;
+                currentX = worldX;
             }
             
             if (snapY !== null) {
                 const worldY = (snapY - this.pan.y) / this.zoomLevel;
-                element.style.top = `${worldY}px`;
+                currentY = worldY;
             }
+            
+            // Atualizar usando transform (sem reflow)
+            element.style.transform = `translate3d(${currentX}px, ${currentY}px, 0)`;
+            element.style.willChange = 'transform';
         }
         
         // Mostrar linhas-guia
@@ -1931,15 +1958,23 @@ class FlowEditor {
             const snapLines = this.canvas.querySelectorAll('.snap-line');
             snapLines.forEach(line => line.remove());
             
-            const rect = element.getBoundingClientRect();
-            const canvasRect = this.canvas.getBoundingClientRect();
+            // Extrair posição do transform (mais eficiente que getBoundingClientRect)
+            const transform = element.style.transform || '';
+            let x = 0, y = 0;
             
-            let x = rect.left - canvasRect.left;
-            let y = rect.top - canvasRect.top;
-            
-            // Ajustar para zoom e pan
-            x = (x - this.pan.x) / this.zoomLevel;
-            y = (y - this.pan.y) / this.zoomLevel;
+            if (transform && transform.includes('translate3d')) {
+                const match = transform.match(/translate3d\(([^,]+)px,\s*([^,]+)px/);
+                if (match) {
+                    x = parseFloat(match[1]) || 0;
+                    y = parseFloat(match[2]) || 0;
+                }
+            } else {
+                // Fallback: usar getBoundingClientRect apenas se transform não existir
+                const rect = element.getBoundingClientRect();
+                const canvasRect = this.canvas.getBoundingClientRect();
+                x = (rect.left - canvasRect.left - this.pan.x) / this.zoomLevel;
+                y = (rect.top - canvasRect.top - this.pan.y) / this.zoomLevel;
+            }
             
             // Snap to grid se habilitado
             if (this.snapToGrid) {
@@ -1948,7 +1983,12 @@ class FlowEditor {
             }
             
             const position = { x: Math.round(x), y: Math.round(y) };
-            this.updateStepPosition(stepId, position);
+            
+            // Remover willChange após drag (otimização)
+            element.style.willChange = 'auto';
+            
+            // Debounce updateStepPosition para evitar múltiplas chamadas
+            this.debouncedUpdateStepPosition(stepId, position);
             
             // Expandir bounds do canvas
             this.expandCanvasBounds();
@@ -1956,7 +1996,7 @@ class FlowEditor {
     }
     
     /**
-     * Atualiza posição do step no Alpine
+     * Atualiza posição do step no Alpine (versão direta, sem debounce)
      */
     updateStepPosition(stepId, position) {
         if (!this.alpine || !this.alpine.config || !this.alpine.config.flow_steps) {
@@ -1973,6 +2013,21 @@ class FlowEditor {
             step.position.x = position.x;
             step.position.y = position.y;
         }
+    }
+    
+    /**
+     * Atualiza posição do step no Alpine com debounce (300ms)
+     * Evita múltiplas atualizações durante drag
+     */
+    debouncedUpdateStepPosition(stepId, position) {
+        if (this.updateStepPositionDebounce) {
+            clearTimeout(this.updateStepPositionDebounce);
+        }
+        
+        this.updateStepPositionDebounce = setTimeout(() => {
+            this.updateStepPosition(stepId, position);
+            this.updateStepPositionDebounce = null;
+        }, 300);
     }
     
     /**
@@ -2255,8 +2310,9 @@ class FlowEditor {
             
             const element = this.steps.get(String(step.id));
             if (element) {
-                element.style.left = `${currentX}px`;
-                element.style.top = `${currentY}px`;
+                element.style.transform = `translate3d(${currentX}px, ${currentY}px, 0)`;
+                element.style.left = '0';
+                element.style.top = '0';
             }
         });
         
@@ -2292,8 +2348,9 @@ class FlowEditor {
             
             const element = this.steps.get(String(step.id));
             if (element) {
-                element.style.left = `${currentX}px`;
-                element.style.top = `${currentY}px`;
+                element.style.transform = `translate3d(${currentX}px, ${currentY}px, 0)`;
+                element.style.left = '0';
+                element.style.top = '0';
             }
         });
         
@@ -2387,8 +2444,9 @@ class FlowEditor {
                 step.position = pos;
                 const element = this.steps.get(stepId);
                 if (element) {
-                    element.style.left = `${pos.x}px`;
-                    element.style.top = `${pos.y}px`;
+                    element.style.transform = `translate3d(${pos.x}px, ${pos.y}px, 0)`;
+                    element.style.left = '0';
+                    element.style.top = '0';
                 }
             }
         });
@@ -2400,8 +2458,9 @@ class FlowEditor {
                 step.position = { x, y };
                 const element = this.steps.get(String(step.id));
                 if (element) {
-                    element.style.left = `${x}px`;
-                    element.style.top = `${y}px`;
+                    element.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+                    element.style.left = '0';
+                    element.style.top = '0';
                 }
             }
         });

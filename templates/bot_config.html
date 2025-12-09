@@ -90,11 +90,11 @@
 .flow-step-block.dragging {
     cursor: grabbing !important;
     opacity: 0.98;
-    transform: scale(1.02);
+    /* Transform será aplicado via JS (translate3d) - não usar scale aqui */
     z-index: 1000 !important;
     box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6);
     border-color: #FFFFFF;
-    transition: none;
+    transition: none !important; /* CRÍTICO: Desabilitar transições durante drag */
 }
 
 .flow-step-block.flow-step-initial {
@@ -2082,35 +2082,50 @@ function botConfigApp() {
             }
         },
 
+        // Debounce para saveConfig (500ms) - evita múltiplas chamadas
+        _saveConfigDebounce: null,
+        
         async saveConfig() {
-            this.loading = true;
-            try {
-                const response = await fetch(`/api/bots/${this.bot_id}/config`, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(this.config)
-                });
-                
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error || `HTTP ${response.status}`);
-                }
-                
-                const data = await response.json();
-                if (data && typeof data === 'object' && !data.error) {
-                    alert('Configuração salva com sucesso!');
-                    Object.assign(this.config, data);
-                } else {
-                    alert(data.error || 'Erro ao salvar configuração');
-                }
-            } catch (error) {
-                console.error('Erro ao salvar configuração:', error);
-                alert(error.message || 'Erro ao salvar configuração');
-            } finally {
-                this.loading = false;
+            // Cancelar debounce anterior
+            if (this._saveConfigDebounce) {
+                clearTimeout(this._saveConfigDebounce);
             }
+            
+            // Debounce de 500ms
+            this._saveConfigDebounce = setTimeout(async () => {
+                this.loading = true;
+                try {
+                    const response = await fetch(`/api/bots/${this.bot_id}/config`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(this.config)
+                    });
+                    
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || `HTTP ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    if (data && typeof data === 'object' && !data.error) {
+                        // Não mostrar alert durante debounce (só no final)
+                        if (!this._saveConfigDebounce) {
+                            alert('Configuração salva com sucesso!');
+                        }
+                        Object.assign(this.config, data);
+                    } else {
+                        alert(data.error || 'Erro ao salvar configuração');
+                    }
+                } catch (error) {
+                    console.error('Erro ao salvar configuração:', error);
+                    alert(error.message || 'Erro ao salvar configuração');
+                } finally {
+                    this.loading = false;
+                    this._saveConfigDebounce = null;
+                }
+            }, 500);
         },
 
         addButton() {
@@ -2657,12 +2672,33 @@ function botConfigApp() {
         },
         
         watchFlowSteps() {
+            // Watcher otimizado com debounce maior (300ms) e diffing simples
             this.$watch('config.flow_steps', (newSteps, oldSteps) => {
                 if (window.flowEditor && newSteps) {
                     clearTimeout(this._flowStepsWatchTimeout);
                     this._flowStepsWatchTimeout = setTimeout(() => {
-                        window.flowEditor.renderAllSteps();
-                    }, 100);
+                        // Verificar se realmente mudou (diffing simples)
+                        const newLength = Array.isArray(newSteps) ? newSteps.length : 0;
+                        const oldLength = Array.isArray(oldSteps) ? oldSteps.length : 0;
+                        
+                        // Se apenas posições mudaram, não precisa re-renderizar tudo
+                        if (newLength === oldLength && newLength > 0) {
+                            // Apenas atualizar posições (mais eficiente)
+                            newSteps.forEach(step => {
+                                if (step && step.id && step.position) {
+                                    const element = window.flowEditor.steps.get(String(step.id));
+                                    if (element) {
+                                        element.style.transform = `translate3d(${step.position.x}px, ${step.position.y}px, 0)`;
+                                    }
+                                }
+                            });
+                            // Reconectar apenas se necessário
+                            window.flowEditor.reconnectAll();
+                        } else {
+                            // Mudança estrutural: re-renderizar tudo
+                            window.flowEditor.renderAllSteps();
+                        }
+                    }, 300); // Debounce aumentado para 300ms
                 }
             }, { deep: true });
         },
