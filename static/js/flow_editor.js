@@ -108,7 +108,12 @@ class FlowEditor {
                         strokeWidth: 3.5,
                         strokeOpacity: 1
                     },
-                    connector: ['Bezier', { curviness: 75, stub: [10, 15], gap: 5 }],
+                    connector: ['Bezier', { 
+                        curviness: 80, // Curvas mais suaves (estilo Manychat)
+                        stub: [15, 20], // Stubs maiores para evitar atravessar cards
+                        gap: 8, // Gap maior
+                        cornerRadius: 5 // Cantos arredondados
+                    }],
                     endpoint: ['Dot', { radius: 7 }],
                     endpointStyle: { 
                         fill: '#FFFFFF', 
@@ -348,31 +353,49 @@ class FlowEditor {
         let isZooming = false;
         
         const smoothZoom = (targetZoom, centerX, centerY) => {
-            if (isZooming) return;
+            // Limitar escala entre 0.2 e 4.0 (conforme especificação)
+            const clampedZoom = Math.max(0.2, Math.min(4.0, targetZoom));
+            
+            // Se já está no limite, não animar
+            if (Math.abs(this.zoomLevel - clampedZoom) < 0.01) {
+                return;
+            }
+            
+            if (isZooming) {
+                // Atualizar target se já estiver zoomando
+                zoomTargetLevel = clampedZoom;
+                return;
+            }
+            
             isZooming = true;
             zoomStartLevel = this.zoomLevel;
-            zoomTargetLevel = Math.max(0.1, Math.min(5, targetZoom));
+            zoomTargetLevel = clampedZoom;
             
             const startTime = performance.now();
-            const duration = 200; // 200ms para suavização
+            const duration = 300; // 300ms para suavização melhor (estilo Figma/Miro)
             
             const animate = (currentTime) => {
                 const elapsed = currentTime - startTime;
                 const progress = Math.min(elapsed / duration, 1);
                 
-                // Easing function (ease-out cubic)
+                // Easing function melhorada (ease-out cubic - estilo Figma)
                 const ease = 1 - Math.pow(1 - progress, 3);
                 
                 this.zoomLevel = zoomStartLevel + (zoomTargetLevel - zoomStartLevel) * ease;
                 
-                // Zoom em relação ao ponto do mouse (centerX, centerY)
+                // Zoom em relação ao ponto do mouse (centerX, centerY) - mantém ponto fixo
                 if (centerX !== undefined && centerY !== undefined) {
-                    const zoomChange = this.zoomLevel / zoomStartLevel;
                     const worldX = (centerX - this.pan.x) / zoomStartLevel;
                     const worldY = (centerY - this.pan.y) / zoomStartLevel;
                     
                     this.pan.x = centerX - worldX * this.zoomLevel;
                     this.pan.y = centerY - worldY * this.zoomLevel;
+                }
+                
+                // Aplicar zoom imediatamente (não apenas no requestAnimationFrame)
+                if (this.contentContainer) {
+                    const transformValue = `translate(${this.pan.x}px, ${this.pan.y}px) scale(${this.zoomLevel})`;
+                    this.contentContainer.style.transform = transformValue;
                 }
                 
                 this.applyZoom();
@@ -381,6 +404,7 @@ class FlowEditor {
                     requestAnimationFrame(animate);
                 } else {
                     isZooming = false;
+                    this.zoomLevel = zoomTargetLevel; // Garantir valor final exato
                 }
             };
             
@@ -396,8 +420,10 @@ class FlowEditor {
                 const centerX = e.clientX - rect.left;
                 const centerY = e.clientY - rect.top;
                 
-                // Calcular delta de zoom suave
-                const zoomDelta = -e.deltaY * 0.001;
+                // Calcular delta de zoom suave e progressivo (estilo Figma/Miro)
+                // Usar deltaY normalizado para zoom mais controlado
+                const zoomSpeed = 0.0008; // Velocidade de zoom ajustada
+                const zoomDelta = -e.deltaY * zoomSpeed;
                 const newZoom = this.zoomLevel * (1 + zoomDelta);
                 
                 smoothZoom(newZoom, centerX, centerY);
@@ -980,34 +1006,23 @@ class FlowEditor {
         const hasMedia = !!mediaUrl;
         const previewText = this.getStepPreview(step);
         
-        // Renderizar mídia (se houver)
-        let mediaHTML = '';
-        if (hasMedia) {
-            const mediaType = stepConfig.media_type || 'video';
-            const mediaIcon = mediaType === 'video' ? 'fa-video' : 'fa-image';
-            mediaHTML = `
-                <div class="flow-step-media-preview">
-                    <i class="fas ${mediaIcon}"></i>
-                    <span>${mediaType === 'video' ? 'Vídeo' : 'Foto'}</span>
+        // Renderizar mídia com thumbnail real (se houver)
+        const mediaHTML = hasMedia ? this.getMediaPreviewHtml(stepConfig) : '';
+        
+        // Renderizar URL da mídia (se houver)
+        let mediaUrlHTML = '';
+        if (hasMedia && mediaUrl) {
+            // Truncar URL longa para preview
+            const displayUrl = mediaUrl.length > 50 ? mediaUrl.substring(0, 47) + '...' : mediaUrl;
+            mediaUrlHTML = `
+                <div class="flow-step-media-url" style="font-size: 10px; color: #6B7280; padding: 4px 8px; background: #0D0F15; border-radius: 4px; margin-bottom: 8px; word-break: break-all;">
+                    ${this.escapeHtml(displayUrl)}
                 </div>
             `;
         }
         
-        // Renderizar botões no body (conforme especificação: dentro do próprio botão)
-        let buttonsHTML = '';
-        if (hasButtons) {
-            buttonsHTML = '<div class="flow-step-buttons-container">';
-            customButtons.forEach((btn, index) => {
-                const btnText = btn.text || `Botão ${index + 1}`;
-                buttonsHTML += `
-                    <div class="flow-step-button-item" data-button-index="${index}" data-button-id="${btn.id || `btn-${index}`}">
-                        <span class="flow-step-button-text">${this.escapeHtml(btnText)}</span>
-                        <div class="flow-step-button-endpoint-container" data-endpoint-button="${index}"></div>
-                    </div>
-                `;
-            });
-            buttonsHTML += '</div>';
-        }
+        // Renderizar botões com preview completo (todos os botões, estilo retangular, cor configurada)
+        const buttonsHTML = hasButtons ? this.getButtonPreviewHtml(customButtons) : '';
         
         // HTML do bloco seguindo hierarquia INTUITIVA: Header → Mídia → Texto → Botões → Ações → Outputs
         stepElement.innerHTML = `
@@ -1024,7 +1039,8 @@ class FlowEditor {
             </div>
             <div class="flow-step-body">
                 ${mediaHTML}
-                ${previewText ? `<div class="flow-step-preview">${previewText}</div>` : ''}
+                ${mediaUrlHTML}
+                ${previewText ? `<div class="flow-step-preview" style="padding: 10px 12px; color: #FFFFFF; font-size: 13px; line-height: 1.5; word-wrap: break-word; white-space: pre-wrap;">${this.escapeHtml(previewText)}</div>` : ''}
                 ${buttonsHTML}
             </div>
             <div class="flow-step-footer">
@@ -1118,59 +1134,22 @@ class FlowEditor {
         const hasMedia = !!mediaUrl;
         const previewText = this.getStepPreview(step);
         
-        // Renderizar mídia (se houver) - com thumbnail real
-        let mediaHTML = '';
-        if (hasMedia) {
-            const mediaType = stepConfig.media_type || 'video';
-            const mediaIcon = mediaType === 'video' ? 'fa-video' : 'fa-image';
-            
-            if (mediaType === 'photo' || mediaType === 'image') {
-                mediaHTML = `
-                    <div class="flow-step-media-preview">
-                        <img src="${this.escapeHtml(mediaUrl)}" 
-                             alt="Preview" 
-                             class="flow-step-media-thumbnail"
-                             onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
-                             loading="lazy" />
-                        <div class="flow-step-media-fallback" style="display: none;">
-                            <i class="fas ${mediaIcon}"></i>
-                            <span>Foto</span>
-                        </div>
-                    </div>
-                `;
-            } else {
-                mediaHTML = `
-                    <div class="flow-step-media-preview flow-step-video-preview">
-                        <div class="flow-step-video-thumbnail-container">
-                            <img src="${this.escapeHtml(mediaUrl)}" 
-                                 alt="Video thumbnail" 
-                                 class="flow-step-video-thumbnail"
-                                 onerror="this.style.display='none';"
-                                 loading="lazy" />
-                            <div class="flow-step-video-overlay">
-                                <i class="fas fa-play-circle"></i>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            }
+        // Renderizar mídia com thumbnail real (se houver) - usar função auxiliar
+        const mediaHTML = hasMedia ? this.getMediaPreviewHtml(stepConfig) : '';
+        
+        // Renderizar URL da mídia (se houver)
+        let mediaUrlHTML = '';
+        if (hasMedia && mediaUrl) {
+            const displayUrl = mediaUrl.length > 50 ? mediaUrl.substring(0, 47) + '...' : mediaUrl;
+            mediaUrlHTML = `
+                <div class="flow-step-media-url" style="font-size: 10px; color: #6B7280; padding: 4px 8px; background: #0D0F15; border-radius: 4px; margin-bottom: 8px; word-break: break-all;">
+                    ${this.escapeHtml(displayUrl)}
+                </div>
+            `;
         }
         
-        // Renderizar botões no body (dentro do próprio botão conforme especificação)
-        let buttonsHTML = '';
-        if (hasButtons) {
-            buttonsHTML = '<div class="flow-step-buttons-container">';
-            customButtons.forEach((btn, index) => {
-                const btnText = btn.text || `Botão ${index + 1}`;
-                buttonsHTML += `
-                    <div class="flow-step-button-item" data-button-index="${index}" data-button-id="${btn.id || `btn-${index}`}">
-                        <span class="flow-step-button-text">${this.escapeHtml(btnText)}</span>
-                        <div class="flow-step-button-endpoint-container" data-endpoint-button="${index}"></div>
-                    </div>
-                `;
-            });
-            buttonsHTML += '</div>';
-        }
+        // Renderizar botões com preview completo (todos os botões, estilo retangular, cor configurada) - usar função auxiliar
+        const buttonsHTML = hasButtons ? this.getButtonPreviewHtml(customButtons) : '';
         
         // Atualizar HTML seguindo hierarquia EXATA
         const headerEl = element.querySelector('.flow-step-header');
@@ -1195,7 +1174,8 @@ class FlowEditor {
             // Ordem visual intuitiva: Mídia → Texto → Botões
             bodyEl.innerHTML = `
                 ${mediaHTML}
-                ${previewText ? `<div class="flow-step-preview">${previewText}</div>` : ''}
+                ${mediaUrlHTML}
+                ${previewText ? `<div class="flow-step-preview" style="padding: 10px 12px; color: #FFFFFF; font-size: 13px; line-height: 1.5; word-wrap: break-word; white-space: pre-wrap;">${this.escapeHtml(previewText)}</div>` : ''}
                 ${buttonsHTML}
             `;
         }
@@ -1259,12 +1239,13 @@ class FlowEditor {
         const hasButtons = customButtons.length > 0;
         
         // ============================================
-        // 1. ENTRADA (INPUT) - Topo-central do container ROOT
+        // 1. ENTRADA (INPUT) - LADO ESQUERDO, CENTRO VERTICAL
         // ============================================
+        // ESPECIFICAÇÃO: Entrada sempre no lado esquerdo, centro vertical do card
         // IMPORTANTE: Endpoint no elemento ROOT (stepElement), nunca em subcomponents
         this.instance.addEndpoint(element, {
-            uuid: `endpoint-top-${stepId}`,
-            anchor: ['TopCenter', { dy: -5 }],
+            uuid: `endpoint-left-${stepId}`,
+            anchor: ['Left', { dx: -5 }], // Lado esquerdo, 5px fora do card
             maxConnections: -1,
             isSource: false,
             isTarget: true,
@@ -1276,7 +1257,7 @@ class FlowEditor {
                 strokeWidth: 2
             },
             hoverPaintStyle: { 
-                fill: '#FFFFFF', 
+                fill: '#FFB800', 
                 outlineStroke: '#0D0F15', 
                 outlineWidth: 3,
                 strokeWidth: 3
@@ -1465,7 +1446,7 @@ class FlowEditor {
         try {
             const connection = this.instance.connect({
                 source: `endpoint-bottom-${sourceId}`,
-                target: `endpoint-top-${targetId}`,
+                target: `endpoint-left-${targetId}`,
                 paintStyle: { 
                     stroke: '#FFFFFF', 
                     strokeWidth: 2.5,
@@ -1545,7 +1526,7 @@ class FlowEditor {
         try {
             const connection = this.instance.connect({
                 source: `endpoint-button-${sourceId}-${buttonIndex}`,
-                target: `endpoint-top-${targetId}`,
+                target: `endpoint-left-${targetId}`,
                 paintStyle: { 
                     stroke: '#FFFFFF', 
                     strokeWidth: 2.5,
@@ -1684,8 +1665,8 @@ class FlowEditor {
             connectionType = 'next'; // Default para conexões globais
         }
         
-        const targetStepId = targetUuid.includes('endpoint-top-') 
-            ? targetUuid.replace('endpoint-top-', '') 
+        const targetStepId = targetUuid.includes('endpoint-left-') 
+            ? targetUuid.replace('endpoint-left-', '') 
             : null;
         
         if (!sourceStepId || !targetStepId) return;
@@ -2115,25 +2096,38 @@ class FlowEditor {
         return labels[type] || type;
     }
     
+    /**
+     * Obtém preview de texto do step (2-4 linhas, truncamento inteligente)
+     */
     getStepPreview(step) {
         const config = step.config || {};
         const type = step.type || 'message';
         
         if (type === 'message' || type === 'content') {
             const text = config.message || config.text || '';
-            // Mostrar 2-4 linhas (aproximadamente 100-200 caracteres)
-            const maxLength = 150;
+            if (!text) return '';
+            
+            // Mostrar 2-4 linhas (aproximadamente 80-160 caracteres)
+            const maxLength = 120;
             if (text.length <= maxLength) {
                 return text;
             }
-            // Quebrar em linhas inteligentes
+            
+            // Quebrar em linhas inteligentes (preservar palavras)
             const truncated = text.substring(0, maxLength);
             const lastSpace = truncated.lastIndexOf(' ');
-            return (lastSpace > 0 ? truncated.substring(0, lastSpace) : truncated) + '...';
+            const lastNewline = truncated.lastIndexOf('\n');
+            const breakPoint = Math.max(lastSpace, lastNewline);
+            
+            if (breakPoint > maxLength * 0.7) {
+                // Se encontrou espaço próximo ao final, usar
+                return truncated.substring(0, breakPoint) + '...';
+            }
+            // Senão, truncar no limite
+            return truncated + '...';
         } else if (type === 'payment') {
             const price = config.price || '';
             const productName = config.product_name || '';
-            const buttonText = config.button_text || '';
             if (price && productName) {
                 return `${productName} - R$ ${price}`;
             }
@@ -2143,6 +2137,77 @@ class FlowEditor {
         }
         
         return this.getStepTypeLabel(type);
+    }
+    
+    /**
+     * Gera HTML de preview de mídia (thumbnail real, 120px, bordas arredondadas)
+     */
+    getMediaPreviewHtml(stepConfig) {
+        const mediaUrl = stepConfig.media_url || '';
+        if (!mediaUrl) return '';
+        
+        const mediaType = stepConfig.media_type || 'video';
+        
+        if (mediaType === 'photo' || mediaType === 'image') {
+            // Preview de foto com thumbnail real
+            return `
+                <div class="flow-step-thumbnail-container">
+                    <img src="${this.escapeHtml(mediaUrl)}" 
+                         alt="Preview" 
+                         class="flow-step-media-thumbnail"
+                         style="width: 100%; height: 100%; object-fit: cover; border-radius: 8px;"
+                         onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
+                         loading="lazy" />
+                    <div class="flow-step-media-fallback" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; align-items: center; justify-content: center; background: #13151C; color: #A1A1A9;">
+                        <i class="fas fa-image" style="font-size: 24px;"></i>
+                    </div>
+                </div>
+            `;
+        } else {
+            // Preview de vídeo com thumbnail e ícone de play
+            return `
+                <div class="flow-step-thumbnail-container">
+                    <img src="${this.escapeHtml(mediaUrl)}" 
+                         alt="Video thumbnail" 
+                         class="flow-step-media-thumbnail"
+                         style="width: 100%; height: 100%; object-fit: cover; border-radius: 8px;"
+                         onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
+                         loading="lazy" />
+                    <div class="flow-step-thumbnail-overlay">
+                        <i class="fas fa-play-circle" style="font-size: 48px; color: rgba(255, 255, 255, 0.9);"></i>
+                    </div>
+                    <div class="flow-step-media-fallback" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; align-items: center; justify-content: center; background: #13151C; color: #A1A1A9;">
+                        <i class="fas fa-video" style="font-size: 24px;"></i>
+                    </div>
+                </div>
+            `;
+        }
+    }
+    
+    /**
+     * Gera HTML de preview de botões (todos os botões, estilo retangular, cor configurada)
+     */
+    getButtonPreviewHtml(customButtons) {
+        if (!customButtons || customButtons.length === 0) return '';
+        
+        let buttonsHTML = '<div class="flow-step-buttons-container">';
+        customButtons.forEach((btn, index) => {
+            const btnText = btn.text || `Botão ${index + 1}`;
+            const btnColor = btn.color || '#3B82F6'; // Cor padrão azul
+            buttonsHTML += `
+                <div class="flow-step-button-item" 
+                     data-button-index="${index}" 
+                     data-button-id="${btn.id || `btn-${index}`}"
+                     style="background: ${btnColor}; border-radius: 6px; padding: 8px 12px; margin-bottom: 6px; display: flex; align-items: center; justify-content: space-between;">
+                    <span class="flow-step-button-text" style="color: #FFFFFF; font-weight: 600; font-size: 13px; flex: 1; padding-right: 8px;">
+                        ${this.escapeHtml(btnText)}
+                    </span>
+                    <div class="flow-step-button-endpoint-container" data-endpoint-button="${index}" style="width: 14px; height: 14px; flex-shrink: 0;"></div>
+                </div>
+            `;
+        });
+        buttonsHTML += '</div>';
+        return buttonsHTML;
     }
     
     getConnectionLabel(type) {
