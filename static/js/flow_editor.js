@@ -243,9 +243,16 @@ class FlowEditor {
         }
         this.repaintTimeout = setTimeout(() => {
             if (this.instance) {
-                // Revalidar todos os elementos para recalcular endpoints
+                // CRÍTICO: Revalidar todos os elementos E seus nodes
+                // Os nodes dentro dos cards acompanham o transform via CSS
+                // Mas jsPlumb precisa recalcular as posições das conexões
                 this.steps.forEach((element) => {
                     this.instance.revalidate(element);
+                    // Revalidar nodes específicos dentro do card
+                    const inputNode = element.querySelector('.flow-step-node-input');
+                    const outputNode = element.querySelector('.flow-step-node-output');
+                    if (inputNode) this.instance.revalidate(inputNode);
+                    if (outputNode) this.instance.revalidate(outputNode);
                 });
                 // Repintar todas as conexões
                 this.instance.repaintEverything();
@@ -254,37 +261,43 @@ class FlowEditor {
     }
     
     /**
-     * Zoom suave com foco no mouse (scroll + Ctrl)
+     * Zoom suave com foco no mouse (padrão ManyChat)
+     * CRÍTICO: Zoom sempre focado no ponto do cursor, não no centro
      */
     enableZoom() {
         if (!this.canvas) return;
         
         this.canvas.addEventListener('wheel', (e) => {
-            // Zoom com Ctrl/Cmd ou scroll direto
+            // Zoom com Ctrl/Cmd ou scroll direto (padrão ManyChat)
             if (e.ctrlKey || e.metaKey || true) {
                 e.preventDefault();
                 
+                // Obter posição do mouse relativa ao canvas
                 const rect = this.canvas.getBoundingClientRect();
                 const mouseX = e.clientX - rect.left;
                 const mouseY = e.clientY - rect.top;
                 
-                // Calcular zoom delta suave
-                const zoomSpeed = e.ctrlKey || e.metaKey ? 0.001 : 0.0008;
+                // Calcular zoom delta suave (ManyChat style)
+                const zoomSpeed = e.ctrlKey || e.metaKey ? 0.0015 : 0.001;
                 const zoomDelta = -e.deltaY * zoomSpeed;
                 const newZoom = Math.max(
                     this.minZoom, 
                     Math.min(this.maxZoom, this.zoomLevel * (1 + zoomDelta))
                 );
                 
-                // Zoom focado no mouse
+                // CRÍTICO: Zoom focado no ponto do cursor (não no centro)
+                // Converter coordenadas do mouse para coordenadas do mundo (antes do zoom)
                 const worldX = (mouseX - this.pan.x) / this.zoomLevel;
                 const worldY = (mouseY - this.pan.y) / this.zoomLevel;
                 
+                // Aplicar novo zoom
                 this.zoomLevel = newZoom;
+                
+                // Ajustar pan para manter o ponto do cursor fixo
                 this.pan.x = mouseX - worldX * this.zoomLevel;
                 this.pan.y = mouseY - worldY * this.zoomLevel;
                 
-                // Aplicar imediatamente (já inclui revalidate)
+                // Aplicar imediatamente (já inclui revalidate de todos os nodes)
                 this.updateCanvasTransform();
             }
         }, { passive: false });
@@ -412,13 +425,13 @@ class FlowEditor {
         const customButtons = stepConfig.custom_buttons || [];
         const hasButtons = customButtons.length > 0;
         
-        // Criar elemento
+        // Criar elemento - CRÍTICO: usar flow-card com position relative
         const stepElement = document.createElement('div');
         stepElement.id = `step-${stepId}`;
-        stepElement.className = 'flow-step-block';
+        stepElement.className = 'flow-step-block flow-card';
         stepElement.dataset.stepId = stepId;
         
-        // CRÍTICO: Garantir position relative para endpoints absolutos funcionarem
+        // CRÍTICO: position relative para nodes absolutos funcionarem
         stepElement.style.position = 'relative';
         
         // Posição usando transform (GPU acceleration)
@@ -437,7 +450,7 @@ class FlowEditor {
         const mediaHTML = mediaUrl ? this.getMediaPreviewHtml(stepConfig, mediaType) : '';
         const buttonsHTML = hasButtons ? this.getButtonPreviewHtml(customButtons) : '';
         
-        // HTML do card - CRÍTICO: Endpoints DEVEM estar dentro do card
+        // HTML do card - CRÍTICO: Nodes DEVEM estar literalmente dentro do card
         stepElement.innerHTML = `
             <div class="flow-step-header">
                 <div class="flow-step-header-content">
@@ -464,9 +477,9 @@ class FlowEditor {
                 </button>
                 ${!isStartStep ? `<button class="flow-step-btn-action" onclick="window.flowEditor?.setStartStep('${stepId}')" title="Definir como inicial">⭐</button>` : ''}
             </div>
-            <!-- CRÍTICO: Endpoints DENTRO do card para acompanhar transform -->
-            <div class="flow-step-node-input" data-node-type="input" data-step-id="${stepId}"></div>
-            ${!hasButtons ? '<div class="flow-step-node-output" data-node-type="output" data-step-id="' + stepId + '"></div>' : ''}
+            <!-- CRÍTICO: Nodes DENTRO do card (padrão ManyChat) -->
+            <div class="node-input flow-step-node-input" data-node-type="input" data-step-id="${stepId}"></div>
+            ${!hasButtons ? '<div class="node-output flow-step-node-output" data-node-type="output" data-step-id="' + stepId + '"></div>' : ''}
         `;
         
         // Adicionar ao container
