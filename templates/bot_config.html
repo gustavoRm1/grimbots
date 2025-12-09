@@ -1136,7 +1136,7 @@ body {
                                 <div class="text-white font-semibold mb-1" x-text="button.text || 'Texto do botão'"></div>
                                 <div class="text-gray-400 text-sm mb-2" x-text="button.description || 'Descrição do produto'"></div>
                                 <div class="text-yellow-400 font-bold" x-show="button.price">
-                                    R$ <span x-text="button.price?.toFixed(2) || '0.00'"></span>
+                                    R$ <span x-text="(typeof button.price === 'number' ? button.price.toFixed(2) : (parseFloat(button.price) || 0).toFixed(2))"></span>
                                 </div>
                             </div>
                         </div>
@@ -1215,7 +1215,7 @@ body {
                                                 <button class="px-3 py-1 bg-gray-600 text-white rounded text-xs" x-text="bump.decline_text || 'Não, obrigado'"></button>
                                             </div>
                                             <div class="text-yellow-400 text-xs mt-2" x-show="bump.price">
-                                                + R$ <span x-text="bump.price?.toFixed(2) || '0.00'"></span>
+                                                + R$ <span x-text="(typeof bump.price === 'number' ? bump.price.toFixed(2) : (parseFloat(bump.price) || 0).toFixed(2))"></span>
                                             </div>
                                         </div>
                                     </div>
@@ -1734,7 +1734,7 @@ body {
                 </button>
             </div>
 
-            <div x-show="editingStep" class="space-y-4">
+            <div x-show="editingStep && editingStep !== null" class="space-y-4">
                 <div class="form-group">
                     <label class="form-label">Tipo</label>
                     <select x-model="editingStep.type" class="form-select">
@@ -1744,33 +1744,33 @@ body {
                     </select>
                 </div>
 
-                <div class="form-group" x-show="editingStep.type !== 'payment'">
+                <div class="form-group" x-show="editingStep && editingStep.type !== 'payment'">
                     <label class="form-label">Mensagem</label>
-                    <textarea x-model="editingStep.config.message" class="form-textarea" placeholder="Digite a mensagem do step..."></textarea>
+                    <textarea x-model="editingStep?.config?.message" class="form-textarea" placeholder="Digite a mensagem do step..."></textarea>
                 </div>
 
-                <div class="form-group" x-show="editingStep.type !== 'payment'">
+                <div class="form-group" x-show="editingStep && editingStep.type !== 'payment'">
                     <label class="form-label">URL da Mídia</label>
                     <div class="relative">
-                        <input type="text" x-model="editingStep.config.media_url" @input="detectStepMediaType()" class="form-input pr-20" placeholder="https://..." />
-                        <div x-show="editingStep.config.media_url" class="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center gap-2">
-                            <span x-show="(detectedStepMediaType || editingStep.config.media_type) === 'video'" class="text-xs font-semibold px-2 py-1 rounded" style="background: rgba(59, 130, 246, 0.2); color: #93C5FD; border: 1px solid rgba(59, 130, 246, 0.4);">
+                        <input type="text" x-model="editingStep?.config?.media_url" @input="detectStepMediaType()" class="form-input pr-20" placeholder="https://..." />
+                        <div x-show="editingStep?.config?.media_url" class="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center gap-2">
+                            <span x-show="(detectedStepMediaType || editingStep?.config?.media_type) === 'video'" class="text-xs font-semibold px-2 py-1 rounded" style="background: rgba(59, 130, 246, 0.2); color: #93C5FD; border: 1px solid rgba(59, 130, 246, 0.4);">
                                 <i class="fas fa-video mr-1"></i>Vídeo
                             </span>
-                            <span x-show="(detectedStepMediaType || editingStep.config.media_type) === 'photo'" class="text-xs font-semibold px-2 py-1 rounded" style="background: rgba(16, 185, 129, 0.2); color: #6EE7B7; border: 1px solid rgba(16, 185, 129, 0.4);">
+                            <span x-show="(detectedStepMediaType || editingStep?.config?.media_type) === 'photo'" class="text-xs font-semibold px-2 py-1 rounded" style="background: rgba(16, 185, 129, 0.2); color: #6EE7B7; border: 1px solid rgba(16, 185, 129, 0.4);">
                                 <i class="fas fa-image mr-1"></i>Foto
                             </span>
                         </div>
                     </div>
-                    <input type="hidden" x-model="editingStep.config.media_type" />
+                    <input type="hidden" x-model="editingStep?.config?.media_type" />
                     <p class="text-xs text-gray-500 mt-1">
                         <i class="fas fa-magic mr-1"></i> O tipo (foto/vídeo) é detectado automaticamente pela URL ou extensão do arquivo
                     </p>
                 </div>
 
-                <div class="form-group" x-show="editingStep.type !== 'payment'">
+                <div class="form-group" x-show="editingStep && editingStep.type !== 'payment'">
                     <label class="form-label">URL do Áudio</label>
-                    <input type="text" x-model="editingStep.config.audio_url" class="form-input" placeholder="https://..." />
+                    <input type="text" x-model="editingStep?.config?.audio_url" class="form-input" placeholder="https://..." />
                     <p class="text-xs text-gray-500 mt-1">
                         <i class="fas fa-info-circle"></i> Áudio complementar (opcional) - será enviado após a mídia principal
                     </p>
@@ -1796,12 +1796,12 @@ body {
                     <input type="text" x-model="editingStep.config.access_link" class="form-input" placeholder="https://..." />
                 </div>
 
-                <div class="form-group" x-show="editingStep.type !== 'payment'">
+                <div class="form-group" x-show="editingStep && editingStep.type !== 'payment'">
                     <label class="form-label">Delay (segundos)</label>
                     <input type="number" x-model.number="editingStep.delay_seconds" class="form-input" min="0" />
                 </div>
 
-                <div class="form-group" x-show="editingStep.type !== 'payment'">
+                <div class="form-group" x-show="editingStep && editingStep.type !== 'payment'">
                     <label class="form-label">Título do Step (Opcional)</label>
                     <input type="text" x-model="editingStep.title" class="form-input" placeholder="Deixe vazio para usar tipo padrão" />
                 </div>
@@ -1809,7 +1809,7 @@ body {
 
 
                 <!-- Botões Customizados -->
-                <div class="border-t border-gray-700 pt-4" x-show="editingStep.type !== 'payment'">
+                <div class="border-t border-gray-700 pt-4" x-show="editingStep && editingStep.type !== 'payment'">
                     <div class="flex justify-between items-center mb-3">
                         <h4 class="text-md font-semibold text-white">Botões Customizados</h4>
                         <button @click="addCustomButton()" class="btn btn-secondary">
@@ -1817,7 +1817,7 @@ body {
                         </button>
                     </div>
 
-                    <template x-for="(btn, btnIndex) in (editingStep.config.custom_buttons || [])" :key="btnIndex">
+                    <template x-for="(btn, btnIndex) in (editingStep?.config?.custom_buttons || [])" :key="btnIndex">
                         <div class="border border-gray-600 rounded p-3 mb-3">
                             <div class="flex justify-between items-center mb-2">
                                 <span class="text-sm text-gray-400">Botão <span x-text="btnIndex + 1"></span></span>
@@ -1834,7 +1834,7 @@ body {
                         </div>
                     </template>
                     
-                    <div x-show="(!editingStep.config.custom_buttons || editingStep.config.custom_buttons.length === 0)" class="text-center py-4 text-gray-500 text-sm">
+                    <div x-show="(!editingStep?.config?.custom_buttons || editingStep?.config?.custom_buttons?.length === 0)" class="text-center py-4 text-gray-500 text-sm">
                         <i class="fas fa-info-circle mb-2"></i>
                         <p>Nenhum botão customizado adicionado. Clique em "Adicionar Botão" para criar.</p>
                     </div>
@@ -1855,7 +1855,15 @@ body {
 <!-- React Flow Dependencies (CDN) -->
 <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@xyflow/react@11/dist/xyflow.js"></script>
+<!-- React Flow via unpkg (mais confiável) -->
+<script src="https://unpkg.com/@xyflow/react@11/dist/xyflow.umd.js"></script>
+<script>
+// Garantir que ReactFlow está disponível globalmente
+if (typeof window.xyflow !== 'undefined' && typeof window.ReactFlow === 'undefined') {
+    window.ReactFlow = window.xyflow;
+    console.log('✅ ReactFlow exposto como window.ReactFlow');
+}
+</script>
 <script src="https://unpkg.com/dagre@0.8.5/dist/dagre.min.js"></script>
 <!-- Flow Editor React (Novo) -->
 <script src="{{ url_for('static', filename='js/flow_editor_react.js') }}?v=5.0.0"></script>

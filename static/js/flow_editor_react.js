@@ -13,30 +13,57 @@
     'use strict';
 
     // Aguardar carregamento do React Flow
-    function waitForReactFlow(callback) {
-        if (typeof React !== 'undefined' && typeof ReactFlow !== 'undefined') {
-            callback();
-        } else {
-            setTimeout(() => waitForReactFlow(callback), 100);
+    function waitForReactFlow(callback, maxAttempts) {
+        maxAttempts = maxAttempts || 200; // 20 segundos máximo
+        let attempts = 0;
+        
+        function check() {
+            attempts++;
+            // Verificar diferentes nomes globais possíveis
+            const ReactFlowGlobal = window.ReactFlow || window.xyflow || window.XyflowReact;
+            if (typeof React !== 'undefined' && ReactFlowGlobal) {
+                window.ReactFlow = ReactFlowGlobal; // Garantir que ReactFlow está disponível
+                console.log('✅ ReactFlow detectado:', typeof ReactFlowGlobal);
+                callback();
+            } else if (attempts < maxAttempts) {
+                setTimeout(check, 100);
+            } else {
+                console.error('❌ ReactFlow não carregou após', maxAttempts * 100, 'ms');
+                console.error('React disponível:', typeof React !== 'undefined');
+                console.error('ReactFlow disponível:', typeof window.ReactFlow !== 'undefined');
+                console.error('xyflow disponível:', typeof window.xyflow !== 'undefined');
+            }
         }
+        check();
     }
 
     waitForReactFlow(function() {
         const { useState, useCallback, useMemo, useEffect, useRef } = React;
-        const ReactFlowLib = ReactFlow;
+        // Tentar diferentes nomes globais possíveis
+        const ReactFlowLib = window.ReactFlow || window.xyflow || window.XyflowReact || ReactFlow;
         
         // Extrair componentes do React Flow
-        const ReactFlowComponent = ReactFlowLib.ReactFlow || ReactFlowLib.default;
-        const Background = ReactFlowLib.Background;
-        const Controls = ReactFlowLib.Controls;
-        const MiniMap = ReactFlowLib.MiniMap;
-        const useNodesState = ReactFlowLib.useNodesState;
-        const useEdgesState = ReactFlowLib.useEdgesState;
-        const addEdge = ReactFlowLib.addEdge;
-        const Position = ReactFlowLib.Position;
-        const Handle = ReactFlowLib.Handle;
-        const MarkerType = ReactFlowLib.MarkerType;
-        const useReactFlow = ReactFlowLib.useReactFlow;
+        const ReactFlowComponent = ReactFlowLib?.ReactFlow || ReactFlowLib?.default || ReactFlowLib;
+        const Background = ReactFlowLib?.Background;
+        const Controls = ReactFlowLib?.Controls;
+        const MiniMap = ReactFlowLib?.MiniMap;
+        const useNodesState = ReactFlowLib?.useNodesState;
+        const useEdgesState = ReactFlowLib?.useEdgesState;
+        const addEdge = ReactFlowLib?.addEdge;
+        const Position = ReactFlowLib?.Position;
+        const Handle = ReactFlowLib?.Handle;
+        const MarkerType = ReactFlowLib?.MarkerType;
+        const useReactFlow = ReactFlowLib?.useReactFlow;
+        
+        // Verificar se todos os componentes necessários estão disponíveis
+        if (!ReactFlowComponent || !useNodesState || !useEdgesState) {
+            console.error('❌ ReactFlow não está carregado corretamente. Componentes faltando:', {
+                ReactFlowComponent: !!ReactFlowComponent,
+                useNodesState: !!useNodesState,
+                useEdgesState: !!useEdgesState
+            });
+            return;
+        }
 
         // Verificar Dagre
         let dagre = null;
