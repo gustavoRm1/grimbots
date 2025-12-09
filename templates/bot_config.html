@@ -1607,7 +1607,6 @@ body {
                     <label class="form-label">Tipo</label>
                     <select x-model="editingStep.type" class="form-select">
                         <option value="message">Mensagem</option>
-                        <option value="content">Conteúdo</option>
                         <option value="payment">Pagamento</option>
                         <option value="access">Acesso</option>
                     </select>
@@ -1670,75 +1669,7 @@ body {
                     <input type="text" x-model="editingStep.title" class="form-input" placeholder="Deixe vazio para usar tipo padrão" />
                 </div>
 
-                <!-- Aviso sobre Conexões -->
-                <div class="border-t border-gray-700 pt-4 mb-4">
-                    <div class="p-3 rounded-lg" style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3);">
-                        <div class="flex items-start gap-2">
-                            <i class="fas fa-info-circle text-blue-400 mt-0.5"></i>
-                            <div>
-                                <p class="text-sm text-blue-300 font-semibold mb-1">Conexões Visuais</p>
-                                <p class="text-xs text-gray-400">
-                                    As conexões (Next, Pending, Retry) são feitas visualmente no canvas arrastando do endpoint de saída para o endpoint de entrada de outro step.
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
 
-                <!-- Condições -->
-                <div class="border-t border-gray-700 pt-4">
-                    <div class="flex justify-between items-center mb-3">
-                        <h4 class="text-md font-semibold text-white">Condições</h4>
-                        <button @click="addCondition()" class="btn btn-secondary">
-                            <i class="fas fa-plus"></i> Adicionar Condição
-                        </button>
-                    </div>
-
-                    <template x-for="(condition, condIndex) in (editingStep.conditions || [])" :key="condition.id || condIndex">
-                        <div class="border border-gray-600 rounded p-3 mb-3">
-                            <div class="flex justify-between items-center mb-2">
-                                <span class="text-sm text-gray-400">Condição <span x-text="condIndex + 1"></span></span>
-                                <button @click="removeCondition(condIndex)" class="text-red-400 hover:text-red-300">
-                                    <i class="fas fa-times"></i>
-                                </button>
-                            </div>
-
-                            <div class="form-group">
-                                <label class="form-label">Tipo de Condição</label>
-                                <select x-model="condition.type" class="form-select">
-                                    <option value="text_validation">Validação de Texto</option>
-                                    <option value="button_click">Clique em Botão</option>
-                                    <option value="payment_status">Status de Pagamento</option>
-                                    <option value="time_elapsed">Tempo Decorrido</option>
-                                </select>
-                            </div>
-
-                            <div class="form-group" x-show="condition.type === 'text_validation'">
-                                <label class="form-label">Validação</label>
-                                <select x-model="condition.validation" class="form-select">
-                                    <option value="any">Qualquer texto</option>
-                                    <option value="exact">Texto exato</option>
-                                    <option value="contains">Contém texto</option>
-                                </select>
-                            </div>
-
-                            <div class="form-group" x-show="condition.type === 'text_validation' && condition.validation !== 'any'">
-                                <label class="form-label">Texto de Validação</label>
-                                <input type="text" x-model="condition.text" class="form-input" />
-                            </div>
-
-                            <div class="form-group">
-                                <label class="form-label">Step de Destino</label>
-                                <select x-model="condition.target_step" class="form-select">
-                                    <option value="">Nenhum</option>
-                                    <template x-for="step in getAvailableStepsForConnection(editingStep.id)" :key="step.id">
-                                        <option :value="step.id" x-text="getStepTypeLabel(step.type) + ' - ' + (step.config?.message?.substring(0, 30) || step.id)"></option>
-                                    </template>
-                                </select>
-                            </div>
-                        </div>
-                    </template>
-                </div>
 
                 <!-- Botões Customizados -->
                 <div class="border-t border-gray-700 pt-4">
@@ -1763,10 +1694,6 @@ body {
                                 <input type="text" x-model="btn.text" class="form-input" />
                             </div>
 
-                            <div class="p-2 rounded text-xs text-gray-400" style="background: rgba(59, 130, 246, 0.05); border: 1px solid rgba(59, 130, 246, 0.2);">
-                                <i class="fas fa-info-circle text-blue-400 mr-1"></i>
-                                A conexão com o step de destino é feita visualmente no canvas arrastando do endpoint do botão.
-                            </div>
                         </div>
                     </template>
                     
