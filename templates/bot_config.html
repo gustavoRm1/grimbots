@@ -1608,8 +1608,6 @@ body {
                     <select x-model="editingStep.type" class="form-select">
                         <option value="message">Mensagem</option>
                         <option value="content">Conteúdo</option>
-                        <option value="audio">Áudio</option>
-                        <option value="video">Vídeo</option>
                         <option value="payment">Pagamento</option>
                         <option value="access">Acesso</option>
                     </select>
@@ -1620,7 +1618,7 @@ body {
                     <textarea x-model="editingStep.config.message" class="form-textarea" placeholder="Digite a mensagem do step..."></textarea>
                 </div>
 
-                <div class="form-group" x-show="editingStep.type === 'message' || editingStep.type === 'content' || editingStep.type === 'video' || editingStep.type === 'audio'">
+                <div class="form-group">
                     <label class="form-label">URL da Mídia</label>
                     <div class="relative">
                         <input type="text" x-model="editingStep.config.media_url" @input="detectStepMediaType()" class="form-input pr-20" placeholder="https://..." />
@@ -1639,9 +1637,12 @@ body {
                     </p>
                 </div>
 
-                <div class="form-group" x-show="editingStep.type === 'audio'">
+                <div class="form-group">
                     <label class="form-label">URL do Áudio</label>
                     <input type="text" x-model="editingStep.config.audio_url" class="form-input" placeholder="https://..." />
+                    <p class="text-xs text-gray-500 mt-1">
+                        <i class="fas fa-info-circle"></i> Áudio complementar (opcional) - será enviado após a mídia principal
+                    </p>
                 </div>
 
                 <div class="form-group" x-show="editingStep.type === 'payment'">
@@ -2392,6 +2393,10 @@ function botConfigApp() {
             if (!this.editingStep.config) {
                 this.editingStep.config = {};
             }
+            // Garantir que audio_url existe (para todos os tipos de steps)
+            if (!this.editingStep.config.audio_url) {
+                this.editingStep.config.audio_url = '';
+            }
             if (!this.editingStep.conditions) {
                 this.editingStep.conditions = [];
             }
@@ -2498,6 +2503,7 @@ function botConfigApp() {
                 config: {
                     message: '',
                     media_url: '',
+                    audio_url: '',
                     media_type: 'video'
                 },
                 connections: {},
