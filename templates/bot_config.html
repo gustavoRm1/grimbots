@@ -21,8 +21,22 @@
     -webkit-user-select: none;
     cursor: default;
     position: relative;
-    will-change: transform;
     overflow: auto !important;
+    /* CRÍTICO: Canvas NUNCA deve ter transform - apenas o contentContainer */
+    transform: none !important;
+}
+
+/* Container interno que recebe o transform */
+.flow-canvas-content {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    transform-origin: top left;
+    will-change: transform;
+    pointer-events: auto;
+    z-index: 1;
 }
 
 #flow-visual-canvas.panning {
