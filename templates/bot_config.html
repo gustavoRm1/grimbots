@@ -219,13 +219,45 @@
 .flow-step-global-output-container {
     position: absolute;
     right: -15px;
-    bottom: 50%;
-    transform: translateY(50%);
+    top: 50%;
+    transform: translateY(-50%);
     width: 20px;
     height: 20px;
     display: flex;
     align-items: center;
     justify-content: center;
+    z-index: 10;
+}
+
+.flow-step-media-preview {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    background: #13151C;
+    border: 1px solid #242836;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    color: #FFFFFF;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.flow-step-media-preview i {
+    color: #93C5FD;
+    font-size: 16px;
+}
+
+.flow-step-media-url {
+    color: #A1A1A9;
+    font-size: 11px;
+    font-family: 'Courier New', monospace;
+    padding: 6px 12px;
+    background: #0D0F15;
+    border-radius: 6px;
+    margin-bottom: 12px;
+    word-break: break-all;
+    border: 1px solid #242836;
 }
 
 .flow-step-preview {
@@ -239,6 +271,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     font-family: 'Inter', sans-serif;
+    margin-bottom: 12px;
 }
 
 .flow-step-footer {
@@ -2399,7 +2432,8 @@ function botConfigApp() {
             }
             
             // Mesclar preservando conexões existentes do step original
-            this.config.flow_steps[this.editingStepIndex] = {
+            // Compatibilidade: converter steps antigos automaticamente
+            const updatedStep = {
                 ...existingStep,
                 ...this.editingStep,
                 id: existingStep.id,
@@ -2410,9 +2444,18 @@ function botConfigApp() {
                 conditions: this.editingStep.conditions || []
             };
             
+            // Compatibilidade: garantir que custom_buttons existe e está inicializado
+            if (!updatedStep.config.custom_buttons) {
+                updatedStep.config.custom_buttons = [];
+            }
+            
+            this.config.flow_steps[this.editingStepIndex] = updatedStep;
+            
             this.$nextTick(() => {
                 if (window.flowEditor) {
-                    window.flowEditor.renderAllSteps();
+                    // Atualizar endpoints do step após salvar (conforme especificação)
+                    // Isso garante que endpoints são atualizados ao mover/adicionar/excluir/editar botões
+                    window.flowEditor.updateStepEndpoints(existingStep.id);
                 }
             });
             
@@ -2517,11 +2560,25 @@ function botConfigApp() {
                 text: '',
                 target_step: ''
             });
+            
+            // Atualizar endpoints automaticamente após adicionar botão (conforme especificação)
+            this.$nextTick(() => {
+                if (window.flowEditor && this.editingStep) {
+                    window.flowEditor.updateStepEndpoints(this.editingStep.id);
+                }
+            });
         },
         
         removeCustomButton(index) {
             if (!this.editingStep || !this.editingStep.config || !this.editingStep.config.custom_buttons) return;
             this.editingStep.config.custom_buttons.splice(index, 1);
+            
+            // Atualizar endpoints automaticamente após remover botão (conforme especificação)
+            this.$nextTick(() => {
+                if (window.flowEditor && this.editingStep) {
+                    window.flowEditor.updateStepEndpoints(this.editingStep.id);
+                }
+            });
         },
         
         watchFlowSteps() {

@@ -318,6 +318,22 @@ class FlowEditor {
         const steps = this.alpine.config.flow_steps;
         this.clearCanvas();
         
+        // Compatibilidade: converter steps antigos automaticamente
+        steps.forEach(step => {
+            // Garantir que config existe
+            if (!step.config) {
+                step.config = {};
+            }
+            // Garantir que custom_buttons existe
+            if (!step.config.custom_buttons) {
+                step.config.custom_buttons = [];
+            }
+            // Garantir que connections existe
+            if (!step.connections) {
+                step.connections = {};
+            }
+        });
+        
         steps.forEach(step => {
             this.renderStep(step);
         });
@@ -362,14 +378,32 @@ class FlowEditor {
         const customButtons = stepConfig.custom_buttons || [];
         const hasButtons = customButtons.length > 0;
         
-        // Renderizar botões no body
+        // Preparar conteúdo conforme hierarquia: Header → Mídia → URL → Texto → Botões → Ações → Outputs
+        const mediaUrl = stepConfig.media_url || '';
+        const hasMedia = !!mediaUrl;
+        const previewText = this.getStepPreview(step);
+        
+        // Renderizar mídia (se houver)
+        let mediaHTML = '';
+        if (hasMedia) {
+            const mediaType = stepConfig.media_type || 'video';
+            const mediaIcon = mediaType === 'video' ? 'fa-video' : 'fa-image';
+            mediaHTML = `
+                <div class="flow-step-media-preview">
+                    <i class="fas ${mediaIcon}"></i>
+                    <span>${mediaType === 'video' ? 'Vídeo' : 'Foto'}</span>
+                </div>
+            `;
+        }
+        
+        // Renderizar botões no body (conforme especificação: dentro do próprio botão)
         let buttonsHTML = '';
         if (hasButtons) {
             buttonsHTML = '<div class="flow-step-buttons-container">';
             customButtons.forEach((btn, index) => {
                 const btnText = btn.text || `Botão ${index + 1}`;
                 buttonsHTML += `
-                    <div class="flow-step-button-item" data-button-index="${index}">
+                    <div class="flow-step-button-item" data-button-index="${index}" data-button-id="${btn.id || `btn-${index}`}">
                         <span class="flow-step-button-text">${this.escapeHtml(btnText)}</span>
                         <div class="flow-step-button-endpoint-container" data-endpoint-button="${index}"></div>
                     </div>
@@ -378,7 +412,7 @@ class FlowEditor {
             buttonsHTML += '</div>';
         }
         
-        // HTML do bloco (Red Header Style - ManyChat/Make.com)
+        // HTML do bloco seguindo hierarquia EXATA: Header → Mídia → URL → Texto → Botões → Ações → Outputs
         stepElement.innerHTML = `
             <div class="flow-step-header">
                 <div class="flow-step-header-content">
@@ -392,9 +426,9 @@ class FlowEditor {
                 </div>
             </div>
             <div class="flow-step-body">
-                <div class="flow-step-preview">
-                    ${this.getStepPreview(step)}
-                </div>
+                ${mediaHTML}
+                ${hasMedia ? `<div class="flow-step-media-url">${this.escapeHtml(mediaUrl.substring(0, 40))}${mediaUrl.length > 40 ? '...' : ''}</div>` : ''}
+                ${previewText ? `<div class="flow-step-preview">${previewText}</div>` : ''}
                 ${buttonsHTML}
             </div>
             <div class="flow-step-footer">
@@ -470,7 +504,7 @@ class FlowEditor {
         // Remover endpoints antigos antes de re-renderizar
         this.instance.removeAllEndpoints(element);
         
-        // Re-renderizar conteúdo do step
+        // Re-renderizar conteúdo do step seguindo hierarquia: Header → Mídia → URL → Texto → Botões → Ações → Outputs
         const stepType = step.type || 'message';
         const stepConfig = step.config || {};
         const icon = this.stepIcons[stepType] || 'fa-circle';
@@ -478,14 +512,32 @@ class FlowEditor {
         const customButtons = stepConfig.custom_buttons || [];
         const hasButtons = customButtons.length > 0;
         
-        // Renderizar botões no body
+        // Preparar conteúdo conforme hierarquia
+        const mediaUrl = stepConfig.media_url || '';
+        const hasMedia = !!mediaUrl;
+        const previewText = this.getStepPreview(step);
+        
+        // Renderizar mídia (se houver)
+        let mediaHTML = '';
+        if (hasMedia) {
+            const mediaType = stepConfig.media_type || 'video';
+            const mediaIcon = mediaType === 'video' ? 'fa-video' : 'fa-image';
+            mediaHTML = `
+                <div class="flow-step-media-preview">
+                    <i class="fas ${mediaIcon}"></i>
+                    <span>${mediaType === 'video' ? 'Vídeo' : 'Foto'}</span>
+                </div>
+            `;
+        }
+        
+        // Renderizar botões no body (dentro do próprio botão conforme especificação)
         let buttonsHTML = '';
         if (hasButtons) {
             buttonsHTML = '<div class="flow-step-buttons-container">';
             customButtons.forEach((btn, index) => {
                 const btnText = btn.text || `Botão ${index + 1}`;
                 buttonsHTML += `
-                    <div class="flow-step-button-item" data-button-index="${index}">
+                    <div class="flow-step-button-item" data-button-index="${index}" data-button-id="${btn.id || `btn-${index}`}">
                         <span class="flow-step-button-text">${this.escapeHtml(btnText)}</span>
                         <div class="flow-step-button-endpoint-container" data-endpoint-button="${index}"></div>
                     </div>
@@ -494,7 +546,7 @@ class FlowEditor {
             buttonsHTML += '</div>';
         }
         
-        // Atualizar HTML
+        // Atualizar HTML seguindo hierarquia EXATA
         const headerEl = element.querySelector('.flow-step-header');
         const bodyEl = element.querySelector('.flow-step-body');
         
@@ -515,24 +567,43 @@ class FlowEditor {
         
         if (bodyEl) {
             bodyEl.innerHTML = `
-                <div class="flow-step-preview">
-                    ${this.getStepPreview(step)}
-                </div>
+                ${mediaHTML}
+                ${hasMedia ? `<div class="flow-step-media-url">${this.escapeHtml(mediaUrl.substring(0, 40))}${mediaUrl.length > 40 ? '...' : ''}</div>` : ''}
+                ${previewText ? `<div class="flow-step-preview">${previewText}</div>` : ''}
                 ${buttonsHTML}
             `;
         }
         
-        // Adicionar ou remover container de saída global
+        // Adicionar ou remover container de saída global (deve desaparecer se botões forem adicionados)
         let globalOutputContainer = element.querySelector('.flow-step-global-output-container');
-        if (!hasButtons && !globalOutputContainer) {
-            globalOutputContainer = document.createElement('div');
-            globalOutputContainer.className = 'flow-step-global-output-container';
-            element.appendChild(globalOutputContainer);
-        } else if (hasButtons && globalOutputContainer) {
-            globalOutputContainer.remove();
+        if (!hasButtons) {
+            // Sem botões: criar container de saída global se não existir
+            if (!globalOutputContainer) {
+                globalOutputContainer = document.createElement('div');
+                globalOutputContainer.className = 'flow-step-global-output-container';
+                element.appendChild(globalOutputContainer);
+            }
+        } else {
+            // Com botões: remover container de saída global (deve desaparecer)
+            if (globalOutputContainer) {
+                // Remover endpoints do container antes de remover o container
+                try {
+                    const endpoints = this.instance.getEndpoints(globalOutputContainer);
+                    endpoints.forEach(ep => {
+                        try {
+                            this.instance.deleteEndpoint(ep);
+                        } catch (e) {
+                            // Ignorar erros
+                        }
+                    });
+                } catch (e) {
+                    // Ignorar erros
+                }
+                globalOutputContainer.remove();
+            }
         }
         
-        // Re-adicionar endpoints
+        // Re-adicionar endpoints (atualiza automaticamente conforme botões)
         this.addEndpoints(element, stepId, step);
         
         // Atualizar classe de step inicial
@@ -549,12 +620,12 @@ class FlowEditor {
     }
     
     /**
-     * Adiciona endpoints ao step conforme regras profissionais
+     * Adiciona endpoints ao step conforme especificação EXATA
      * 
-     * REGRAS:
-     * 1. ENTRADA: Sempre no topo-central do card (container ROOT)
-     * 2. SAÍDAS COM BOTÕES: Um endpoint por botão, no lado direito de cada botão
-     * 3. SAÍDA SEM BOTÕES: Uma saída global no centro-direita do card
+     * ESPECIFICAÇÃO:
+     * 1. INPUT: Topo-central do container ROOT (nunca em subcomponents)
+     * 2. SAÍDAS COM BOTÕES: Um endpoint por botão, lado direito, dentro do próprio botão
+     * 3. SAÍDA SEM BOTÕES: Uma saída global centro-direita (desaparece se botões forem adicionados)
      */
     addEndpoints(element, stepId, step) {
         const stepConfig = step.config || {};
@@ -562,8 +633,9 @@ class FlowEditor {
         const hasButtons = customButtons.length > 0;
         
         // ============================================
-        // 1. ENTRADA (INPUT) - Sempre no topo-central
+        // 1. ENTRADA (INPUT) - Topo-central do container ROOT
         // ============================================
+        // IMPORTANTE: Endpoint no elemento ROOT (stepElement), nunca em subcomponents
         this.instance.addEndpoint(element, {
             uuid: `endpoint-top-${stepId}`,
             anchor: ['TopCenter', { dy: -5 }],
@@ -582,17 +654,37 @@ class FlowEditor {
                 outlineStroke: '#0D0F15', 
                 outlineWidth: 3,
                 strokeWidth: 3
+            },
+            data: {
+                stepId: stepId,
+                endpointType: 'input'
             }
         });
         
         // ============================================
-        // 2. SAÍDAS COM BOTÕES - Um endpoint por botão
+        // 2. SAÍDAS COM BOTÕES - Endpoint individual por botão
         // ============================================
         if (hasButtons) {
+            // Remover output global se existir (deve desaparecer quando há botões)
+            const globalOutputContainer = element.querySelector('.flow-step-global-output-container');
+            if (globalOutputContainer) {
+                // Remover endpoint do container global se existir
+                const globalEndpoint = this.instance.getEndpoints(globalOutputContainer);
+                globalEndpoint.forEach(ep => {
+                    try {
+                        this.instance.deleteEndpoint(ep);
+                    } catch (e) {
+                        // Ignorar erros
+                    }
+                });
+                globalOutputContainer.remove();
+            }
+            
+            // Criar endpoint para cada botão (lado direito, dentro do próprio botão)
             customButtons.forEach((btn, index) => {
                 const buttonContainer = element.querySelector(`[data-endpoint-button="${index}"]`);
                 if (buttonContainer) {
-                    // Criar endpoint no container do botão (lado direito)
+                    // Endpoint no container do botão (lado direito, verticalmente centralizado)
                     this.instance.addEndpoint(buttonContainer, {
                         uuid: `endpoint-button-${stepId}-${index}`,
                         anchor: ['Right', { dx: 5 }],
@@ -615,7 +707,8 @@ class FlowEditor {
                         data: {
                             stepId: stepId,
                             buttonIndex: index,
-                            buttonId: btn.id || `btn-${index}`
+                            buttonId: btn.id || `btn-${index}`,
+                            endpointType: 'button'
                         }
                     });
                 }
@@ -624,29 +717,39 @@ class FlowEditor {
             // ============================================
             // 3. SAÍDA SEM BOTÕES - Endpoint global centro-direita
             // ============================================
-            const globalOutputContainer = element.querySelector('.flow-step-global-output-container');
-            if (globalOutputContainer) {
-                this.instance.addEndpoint(globalOutputContainer, {
-                    uuid: `endpoint-bottom-${stepId}`,
-                    anchor: ['Right', { dx: 5 }],
-                    maxConnections: -1,
-                    isSource: true,
-                    isTarget: false,
-                    endpoint: ['Dot', { radius: 7 }],
-                    paintStyle: { 
-                        fill: '#FFFFFF', 
-                        outlineStroke: '#0D0F15', 
-                        outlineWidth: 2,
-                        strokeWidth: 2
-                    },
-                    hoverPaintStyle: { 
-                        fill: '#FFFFFF', 
-                        outlineStroke: '#0D0F15', 
-                        outlineWidth: 3,
-                        strokeWidth: 3
-                    }
-                });
+            // Garantir que o container existe
+            let globalOutputContainer = element.querySelector('.flow-step-global-output-container');
+            if (!globalOutputContainer) {
+                globalOutputContainer = document.createElement('div');
+                globalOutputContainer.className = 'flow-step-global-output-container';
+                element.appendChild(globalOutputContainer);
             }
+            
+            // Criar endpoint no centro-direita (alinhado verticalmente com o meio do card)
+            this.instance.addEndpoint(globalOutputContainer, {
+                uuid: `endpoint-bottom-${stepId}`,
+                anchor: ['Right', { dx: 5 }],
+                maxConnections: -1,
+                isSource: true,
+                isTarget: false,
+                endpoint: ['Dot', { radius: 7 }],
+                paintStyle: { 
+                    fill: '#FFFFFF', 
+                    outlineStroke: '#0D0F15', 
+                    outlineWidth: 2,
+                    strokeWidth: 2
+                },
+                hoverPaintStyle: { 
+                    fill: '#FFFFFF', 
+                    outlineStroke: '#0D0F15', 
+                    outlineWidth: 3,
+                    strokeWidth: 3
+                },
+                data: {
+                    stepId: stepId,
+                    endpointType: 'global'
+                }
+            });
         }
     }
     
@@ -927,6 +1030,7 @@ class FlowEditor {
     
     /**
      * Callback quando conexão é criada
+     * Identifica qual botão criou a conexão e atualiza Alpine.js corretamente
      */
     onConnectionCreated(info) {
         const sourceUuid = info.sourceId || info.source?.getUuid?.();
@@ -934,23 +1038,24 @@ class FlowEditor {
         
         if (!sourceUuid || !targetUuid) return;
         
-        // Detectar tipo de endpoint de origem
+        // Detectar tipo de endpoint de origem conforme especificação
         let sourceStepId = null;
         let buttonIndex = null;
         let connectionType = 'next';
         
+        // Extrair stepId e buttonIndex do UUID
         if (sourceUuid.includes('endpoint-button-')) {
-            // Conexão de botão
-            const match = sourceUuid.match(/endpoint-button-(\d+)-(\d+)/);
+            // Conexão de botão: endpoint-button-{stepId}-{buttonIndex}
+            const match = sourceUuid.match(/endpoint-button-([^-]+)-(\d+)/);
             if (match) {
                 sourceStepId = match[1];
                 buttonIndex = parseInt(match[2]);
                 connectionType = 'button';
             }
         } else if (sourceUuid.includes('endpoint-bottom-')) {
-            // Conexão global (sem botões)
+            // Conexão global (sem botões): endpoint-bottom-{stepId}
             sourceStepId = sourceUuid.replace('endpoint-bottom-', '');
-            connectionType = 'next';
+            connectionType = 'next'; // Default para conexões globais
         }
         
         const targetStepId = targetUuid.includes('endpoint-top-') 
@@ -960,14 +1065,14 @@ class FlowEditor {
         if (!sourceStepId || !targetStepId) return;
         
         // Atualizar Alpine.js conforme tipo de conexão
-        if (connectionType === 'button' && buttonIndex !== null) {
-            // Atualizar target_step do botão
+        if (connectionType === 'button' && buttonIndex !== null && buttonIndex !== undefined) {
+            // Conexão de botão: atualizar target_step do botão específico
             const step = this.alpine?.config?.flow_steps?.find(s => String(s.id) === sourceStepId);
             if (step && step.config && step.config.custom_buttons && step.config.custom_buttons[buttonIndex]) {
                 step.config.custom_buttons[buttonIndex].target_step = targetStepId;
             }
         } else {
-            // Atualizar conexão padrão
+            // Conexão global: atualizar connections do step
             this.updateAlpineConnection(sourceStepId, targetStepId, connectionType);
         }
         
@@ -1001,6 +1106,7 @@ class FlowEditor {
                 }
             });
             
+            // Salvar dados da conexão incluindo identificação do botão
             info.connection.setData({
                 sourceStepId: sourceStepId,
                 targetStepId: targetStepId,
@@ -1008,7 +1114,7 @@ class FlowEditor {
                 connectionType: connectionType
             });
             
-            const connId = connectionType === 'button' 
+            const connId = connectionType === 'button' && buttonIndex !== null && buttonIndex !== undefined
                 ? `button-${sourceStepId}-${buttonIndex}-${targetStepId}`
                 : `${sourceStepId}-${targetStepId}-${connectionType}`;
             this.connections.set(connId, info.connection);
@@ -1163,6 +1269,36 @@ class FlowEditor {
         });
         this.steps.clear();
         this.connections.clear();
+    }
+    
+    /**
+     * Atualiza endpoints de um step após mudanças (adicionar/remover botões)
+     * Conforme especificação: atualizar automaticamente ao mover/adicionar/excluir/editar botões
+     */
+    updateStepEndpoints(stepId) {
+        const step = this.alpine?.config?.flow_steps?.find(s => String(s.id) === String(stepId));
+        if (!step) return;
+        
+        const element = this.steps.get(String(stepId));
+        if (!element) return;
+        
+        // Remover todos os endpoints do step
+        this.instance.removeAllEndpoints(element);
+        
+        // Re-adicionar endpoints conforme estado atual
+        this.addEndpoints(element, String(stepId), step);
+        
+        // Reconectar após atualização
+        setTimeout(() => {
+            this.reconnectAll();
+        }, 50);
+    }
+    
+    /**
+     * Revalida todas as conexões (chamado após mudanças nos steps)
+     */
+    revalidateConnections() {
+        this.reconnectAll();
     }
     
     /**
