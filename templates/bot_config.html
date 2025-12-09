@@ -1692,7 +1692,7 @@ body {
                 </div>
 
                 <!-- Botões Customizados -->
-                <div class="border-t border-gray-700 pt-4" x-show="editingStep.type === 'buttons'">
+                <div class="border-t border-gray-700 pt-4">
                     <div class="flex justify-between items-center mb-3">
                         <h4 class="text-md font-semibold text-white">Botões Customizados</h4>
                         <button @click="addCustomButton()" class="btn btn-secondary">
@@ -1725,6 +1725,11 @@ body {
                             </div>
                         </div>
                     </template>
+                    
+                    <div x-show="(!editingStep.config.custom_buttons || editingStep.config.custom_buttons.length === 0)" class="text-center py-4 text-gray-500 text-sm">
+                        <i class="fas fa-info-circle mb-2"></i>
+                        <p>Nenhum botão customizado adicionado. Clique em "Adicionar Botão" para criar.</p>
+                    </div>
                 </div>
 
                 <div class="flex justify-end gap-2 mt-4">
