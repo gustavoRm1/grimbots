@@ -165,11 +165,12 @@ class FlowEditor {
         
         // Canvas infinito - remover limites
         this.canvas.style.position = 'relative';
-        this.canvas.style.overflow = 'hidden';
+        this.canvas.style.overflow = 'auto'; // Mudado para 'auto' para permitir scroll quando necessário
         this.canvas.style.width = '100%';
-        // Altura inicial será ajustada dinamicamente pelo applyZoom()
+        // Dimensões iniciais serão ajustadas dinamicamente pelo applyZoom()
         this.canvas.style.height = '600px';
         this.canvas.style.minHeight = '600px';
+        this.canvas.style.minWidth = '100%';
         
         // Background com grid
         this.canvas.style.background = '#0D0F15';
@@ -243,26 +244,29 @@ class FlowEditor {
     
     /**
      * Expande bounds do canvas automaticamente conforme posição dos cards
+     * E ajusta dimensões do canvas se necessário para acomodar todos os cards
      */
     expandCanvasBounds() {
-        if (!this.canvas || this.steps.size === 0) return;
+        if (!this.canvas) return;
         
         const rect = this.canvas.getBoundingClientRect();
         let minX = 0, minY = 0, maxX = rect.width, maxY = rect.height;
         
-        this.steps.forEach((element) => {
-            const step = this.alpine?.config?.flow_steps?.find(s => 
-                String(s.id) === element.dataset.stepId
-            );
-            if (step && step.position) {
-                const x = step.position.x;
-                const y = step.position.y;
-                minX = Math.min(minX, x - 200);
-                minY = Math.min(minY, y - 200);
-                maxX = Math.max(maxX, x + 500);
-                maxY = Math.max(maxY, y + 400);
-            }
-        });
+        if (this.steps.size > 0) {
+            this.steps.forEach((element) => {
+                const step = this.alpine?.config?.flow_steps?.find(s => 
+                    String(s.id) === element.dataset.stepId
+                );
+                if (step && step.position) {
+                    const x = step.position.x;
+                    const y = step.position.y;
+                    minX = Math.min(minX, x - 200);
+                    minY = Math.min(minY, y - 200);
+                    maxX = Math.max(maxX, x + 500);
+                    maxY = Math.max(maxY, y + 400);
+                }
+            });
+        }
         
         // Atualizar bounds (com margem)
         this.canvasBounds = {
@@ -271,6 +275,22 @@ class FlowEditor {
             maxX: maxX + 1000,
             maxY: maxY + 1000
         };
+        
+        // Ajustar dimensões do canvas se os cards estiverem fora dos limites atuais
+        // Considerar o zoom level para calcular dimensões necessárias
+        const requiredWidth = Math.max(rect.width, maxX + 500);
+        const requiredHeight = Math.max(rect.height, maxY + 500);
+        
+        // Se necessário, expandir canvas (mas respeitando o zoom atual)
+        // O applyZoom() já ajusta baseado no zoom, mas aqui garantimos espaço mínimo
+        const currentWidth = parseFloat(this.canvas.style.width) || rect.width;
+        const currentHeight = parseFloat(this.canvas.style.height) || rect.height;
+        
+        if (requiredWidth > currentWidth || requiredHeight > currentHeight) {
+            // Aplicar dimensões mínimas necessárias
+            this.canvas.style.width = `${Math.max(currentWidth, requiredWidth)}px`;
+            this.canvas.style.height = `${Math.max(currentHeight, requiredHeight)}px`;
+        }
     }
     
     /**
@@ -383,7 +403,7 @@ class FlowEditor {
     
     /**
      * Aplica zoom ao canvas (combinado com pan) - Otimizado com requestAnimationFrame
-     * Ajusta altura do canvas dinamicamente baseado no zoom
+     * Ajusta dimensões do canvas dinamicamente baseado no zoom (width e height)
      */
     applyZoom() {
         if (!this.canvas) return;
@@ -396,19 +416,51 @@ class FlowEditor {
         this.animationFrameId = requestAnimationFrame(() => {
             this.updateCanvasTransform();
             
-            // Ajustar altura do canvas baseado no zoom level
-            // Quando zoom diminui (zoom out), canvas aumenta proporcionalmente
+            // Obter dimensões base do container pai
+            const parent = this.canvas.parentElement;
+            if (!parent) return;
+            
+            const parentRect = parent.getBoundingClientRect();
+            const baseWidth = parentRect.width || 1200; // Largura base
             const baseHeight = 600; // Altura base em pixels
-            const minHeight = 600;
-            const maxHeight = 5000; // Altura máxima
             
-            // Calcular altura proporcional ao zoom inverso
-            // Zoom 1.0 = altura base, Zoom 0.5 = altura 2x, Zoom 0.1 = altura 10x
-            const calculatedHeight = Math.max(minHeight, Math.min(maxHeight, baseHeight / this.zoomLevel));
+            // Limites
+            const minSize = 600;
+            const maxWidth = 20000; // Largura máxima aumentada para mais espaço
+            const maxHeight = 20000; // Altura máxima aumentada para mais espaço
             
-            // Aplicar altura calculada
+            // Calcular dimensões proporcionais ao zoom inverso
+            // Zoom 1.0 = tamanho base, Zoom 0.5 = tamanho 2x, Zoom 0.1 = tamanho 10x
+            const scaleFactor = 1 / this.zoomLevel;
+            let calculatedWidth = Math.max(minSize, Math.min(maxWidth, baseWidth * scaleFactor));
+            let calculatedHeight = Math.max(minSize, Math.min(maxHeight, baseHeight * scaleFactor));
+            
+            // Verificar se há cards que precisam de mais espaço e ajustar
+            if (this.steps.size > 0) {
+                this.steps.forEach((element) => {
+                    const step = this.alpine?.config?.flow_steps?.find(s => 
+                        String(s.id) === element.dataset.stepId
+                    );
+                    if (step && step.position) {
+                        const x = step.position.x;
+                        const y = step.position.y;
+                        // Garantir espaço suficiente para todos os cards (com margem de 500px)
+                        const requiredWidth = (x + 500) * scaleFactor;
+                        const requiredHeight = (y + 400) * scaleFactor;
+                        calculatedWidth = Math.max(calculatedWidth, requiredWidth);
+                        calculatedHeight = Math.max(calculatedHeight, requiredHeight);
+                    }
+                });
+            }
+            
+            // Aplicar dimensões calculadas
+            this.canvas.style.width = `${calculatedWidth}px`;
             this.canvas.style.height = `${calculatedHeight}px`;
+            this.canvas.style.minWidth = `${calculatedWidth}px`;
             this.canvas.style.minHeight = `${calculatedHeight}px`;
+            
+            // Atualizar grid background - o grid se expande automaticamente com o canvas
+            this.canvas.style.backgroundSize = `${this.gridSize}px ${this.gridSize}px`;
             
             // Repintar jsPlumb de forma otimizada
             if (this.instance) {
@@ -417,6 +469,9 @@ class FlowEditor {
             
             // Atualizar viewport para virtualização
             this.updateViewport();
+            
+            // Expandir bounds do canvas automaticamente
+            this.expandCanvasBounds();
             
             this.animationFrameId = null;
         });
