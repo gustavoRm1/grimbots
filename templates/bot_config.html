@@ -176,6 +176,56 @@
     background: #0F0F14;
     min-height: 100px;
     border-top: 1px solid #242836;
+    position: relative;
+}
+
+.flow-step-buttons-container {
+    margin-top: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.flow-step-button-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    background: #13151C;
+    border: 1px solid #242836;
+    border-radius: 8px;
+    position: relative;
+    min-height: 40px;
+}
+
+.flow-step-button-text {
+    color: #FFFFFF;
+    font-size: 13px;
+    font-weight: 500;
+    flex: 1;
+    padding-right: 8px;
+}
+
+.flow-step-button-endpoint-container {
+    position: relative;
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.flow-step-global-output-container {
+    position: absolute;
+    right: -15px;
+    bottom: 50%;
+    transform: translateY(50%);
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .flow-step-preview {
@@ -1571,40 +1621,18 @@ body {
                     <input type="text" x-model="editingStep.title" class="form-input" placeholder="Deixe vazio para usar tipo padrão" />
                 </div>
 
-                <!-- Conexões -->
-                <div class="border-t border-gray-700 pt-4">
-                    <div class="flex justify-between items-center mb-3">
-                        <h4 class="text-md font-semibold text-white">Conexões</h4>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">Próximo Step (Next)</label>
-                        <select x-model="editingStep.connections.next" class="form-select">
-                            <option value="">Nenhum</option>
-                            <template x-for="step in getAvailableStepsForConnection(editingStep.id)" :key="step.id">
-                                <option :value="step.id" x-text="getStepTypeLabel(step.type) + ' - ' + (step.config?.message?.substring(0, 30) || step.id)"></option>
-                            </template>
-                        </select>
-                    </div>
-
-                    <div class="form-group">
-                        <label class="form-label">Step Pendente (Pending)</label>
-                        <select x-model="editingStep.connections.pending" class="form-select">
-                            <option value="">Nenhum</option>
-                            <template x-for="step in getAvailableStepsForConnection(editingStep.id)" :key="step.id">
-                                <option :value="step.id" x-text="getStepTypeLabel(step.type) + ' - ' + (step.config?.message?.substring(0, 30) || step.id)"></option>
-                            </template>
-                        </select>
-                    </div>
-
-                    <div class="form-group">
-                        <label class="form-label">Step de Retry (Retry)</label>
-                        <select x-model="editingStep.connections.retry" class="form-select">
-                            <option value="">Nenhum</option>
-                            <template x-for="step in getAvailableStepsForConnection(editingStep.id)" :key="step.id">
-                                <option :value="step.id" x-text="getStepTypeLabel(step.type) + ' - ' + (step.config?.message?.substring(0, 30) || step.id)"></option>
-                            </template>
-                        </select>
+                <!-- Aviso sobre Conexões -->
+                <div class="border-t border-gray-700 pt-4 mb-4">
+                    <div class="p-3 rounded-lg" style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3);">
+                        <div class="flex items-start gap-2">
+                            <i class="fas fa-info-circle text-blue-400 mt-0.5"></i>
+                            <div>
+                                <p class="text-sm text-blue-300 font-semibold mb-1">Conexões Visuais</p>
+                                <p class="text-xs text-gray-400">
+                                    As conexões (Next, Pending, Retry) são feitas visualmente no canvas arrastando do endpoint de saída para o endpoint de entrada de outro step.
+                                </p>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -2286,8 +2314,12 @@ function botConfigApp() {
                 return;
             }
             
+            const existingStep = this.config.flow_steps[this.editingStepIndex];
+            
+            // Preservar conexões existentes (feitas visualmente no canvas)
+            // Não sobrescrever com conexões do editingStep, pois elas não existem mais no modal
             if (!this.editingStep.connections) {
-                this.editingStep.connections = {};
+                this.editingStep.connections = existingStep.connections || {};
             }
             if (!this.editingStep.config) {
                 this.editingStep.config = {};
@@ -2296,17 +2328,17 @@ function botConfigApp() {
                 this.editingStep.conditions = [];
             }
             if (!this.editingStep.position) {
-                const existingStep = this.config.flow_steps[this.editingStepIndex];
                 this.editingStep.position = existingStep.position || { x: 100, y: 100 };
             }
             
-            const existingStep = this.config.flow_steps[this.editingStepIndex];
+            // Mesclar preservando conexões existentes do step original
             this.config.flow_steps[this.editingStepIndex] = {
                 ...existingStep,
                 ...this.editingStep,
                 id: existingStep.id,
                 position: this.editingStep.position || existingStep.position || { x: 100, y: 100 },
-                connections: this.editingStep.connections || {},
+                // Preservar conexões existentes (gerenciadas visualmente pelo jsPlumb)
+                connections: existingStep.connections || {},
                 config: this.editingStep.config || {},
                 conditions: this.editingStep.conditions || []
             };

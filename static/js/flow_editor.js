@@ -358,6 +358,26 @@ class FlowEditor {
         const icon = this.stepIcons[stepType] || 'fa-circle';
         const isStartStep = this.alpine.config.flow_start_step_id === stepId;
         
+        // Obter botões customizados
+        const customButtons = stepConfig.custom_buttons || [];
+        const hasButtons = customButtons.length > 0;
+        
+        // Renderizar botões no body
+        let buttonsHTML = '';
+        if (hasButtons) {
+            buttonsHTML = '<div class="flow-step-buttons-container">';
+            customButtons.forEach((btn, index) => {
+                const btnText = btn.text || `Botão ${index + 1}`;
+                buttonsHTML += `
+                    <div class="flow-step-button-item" data-button-index="${index}">
+                        <span class="flow-step-button-text">${this.escapeHtml(btnText)}</span>
+                        <div class="flow-step-button-endpoint-container" data-endpoint-button="${index}"></div>
+                    </div>
+                `;
+            });
+            buttonsHTML += '</div>';
+        }
+        
         // HTML do bloco (Red Header Style - ManyChat/Make.com)
         stepElement.innerHTML = `
             <div class="flow-step-header">
@@ -375,6 +395,7 @@ class FlowEditor {
                 <div class="flow-step-preview">
                     ${this.getStepPreview(step)}
                 </div>
+                ${buttonsHTML}
             </div>
             <div class="flow-step-footer">
                 <button class="flow-step-btn-action" onclick="window.flowEditor?.editStep('${stepId}')" title="Editar">
@@ -385,6 +406,7 @@ class FlowEditor {
                 </button>
                 ${!isStartStep ? `<button class="flow-step-btn-action" onclick="window.flowEditor?.setStartStep('${stepId}')" title="Definir como inicial">⭐</button>` : ''}
             </div>
+            ${!hasButtons ? '<div class="flow-step-global-output-container"></div>' : ''}
         `;
         
         this.canvas.appendChild(stepElement);
@@ -419,8 +441,8 @@ class FlowEditor {
             zIndex: 1000
         });
         
-        // Adicionar endpoints
-        this.addEndpoints(stepElement, stepId);
+        // Adicionar endpoints (agora com lógica dinâmica)
+        this.addEndpoints(stepElement, stepId, step);
         
         this.steps.set(stepId, stepElement);
         
@@ -445,27 +467,106 @@ class FlowEditor {
         element.style.left = `${position.x}px`;
         element.style.top = `${position.y}px`;
         
-        const previewEl = element.querySelector('.flow-step-preview');
-        if (previewEl) {
-            previewEl.innerHTML = this.getStepPreview(step);
+        // Remover endpoints antigos antes de re-renderizar
+        this.instance.removeAllEndpoints(element);
+        
+        // Re-renderizar conteúdo do step
+        const stepType = step.type || 'message';
+        const stepConfig = step.config || {};
+        const icon = this.stepIcons[stepType] || 'fa-circle';
+        const isStartStep = this.alpine.config.flow_start_step_id === stepId;
+        const customButtons = stepConfig.custom_buttons || [];
+        const hasButtons = customButtons.length > 0;
+        
+        // Renderizar botões no body
+        let buttonsHTML = '';
+        if (hasButtons) {
+            buttonsHTML = '<div class="flow-step-buttons-container">';
+            customButtons.forEach((btn, index) => {
+                const btnText = btn.text || `Botão ${index + 1}`;
+                buttonsHTML += `
+                    <div class="flow-step-button-item" data-button-index="${index}">
+                        <span class="flow-step-button-text">${this.escapeHtml(btnText)}</span>
+                        <div class="flow-step-button-endpoint-container" data-endpoint-button="${index}"></div>
+                    </div>
+                `;
+            });
+            buttonsHTML += '</div>';
         }
         
-        const isStartStep = this.alpine.config.flow_start_step_id === stepId;
+        // Atualizar HTML
+        const headerEl = element.querySelector('.flow-step-header');
+        const bodyEl = element.querySelector('.flow-step-body');
+        
+        if (headerEl) {
+            const headerContent = headerEl.querySelector('.flow-step-header-content');
+            if (headerContent) {
+                headerContent.innerHTML = `
+                    <div class="flow-step-icon-center">
+                        <i class="fas ${icon}" style="color: #FFFFFF;"></i>
+                    </div>
+                    <div class="flow-step-title-center">
+                        ${this.getStepTypeLabel(stepType)}
+                    </div>
+                    ${isStartStep ? '<div class="flow-step-start-badge">⭐</div>' : ''}
+                `;
+            }
+        }
+        
+        if (bodyEl) {
+            bodyEl.innerHTML = `
+                <div class="flow-step-preview">
+                    ${this.getStepPreview(step)}
+                </div>
+                ${buttonsHTML}
+            `;
+        }
+        
+        // Adicionar ou remover container de saída global
+        let globalOutputContainer = element.querySelector('.flow-step-global-output-container');
+        if (!hasButtons && !globalOutputContainer) {
+            globalOutputContainer = document.createElement('div');
+            globalOutputContainer.className = 'flow-step-global-output-container';
+            element.appendChild(globalOutputContainer);
+        } else if (hasButtons && globalOutputContainer) {
+            globalOutputContainer.remove();
+        }
+        
+        // Re-adicionar endpoints
+        this.addEndpoints(element, stepId, step);
+        
+        // Atualizar classe de step inicial
         if (isStartStep) {
             element.classList.add('flow-step-initial');
         } else {
             element.classList.remove('flow-step-initial');
         }
+        
+        // Reconectar após atualização
+        setTimeout(() => {
+            this.reconnectAll();
+        }, 50);
     }
     
     /**
-     * Adiciona endpoints ao step (brancos)
+     * Adiciona endpoints ao step conforme regras profissionais
+     * 
+     * REGRAS:
+     * 1. ENTRADA: Sempre no topo-central do card (container ROOT)
+     * 2. SAÍDAS COM BOTÕES: Um endpoint por botão, no lado direito de cada botão
+     * 3. SAÍDA SEM BOTÕES: Uma saída global no centro-direita do card
      */
-    addEndpoints(element, stepId) {
-        // Endpoint superior (entrada)
+    addEndpoints(element, stepId, step) {
+        const stepConfig = step.config || {};
+        const customButtons = stepConfig.custom_buttons || [];
+        const hasButtons = customButtons.length > 0;
+        
+        // ============================================
+        // 1. ENTRADA (INPUT) - Sempre no topo-central
+        // ============================================
         this.instance.addEndpoint(element, {
             uuid: `endpoint-top-${stepId}`,
-            anchor: 'Top',
+            anchor: ['TopCenter', { dy: -5 }],
             maxConnections: -1,
             isSource: false,
             isTarget: true,
@@ -484,27 +585,69 @@ class FlowEditor {
             }
         });
         
-        // Endpoint inferior (saída)
-        this.instance.addEndpoint(element, {
-            uuid: `endpoint-bottom-${stepId}`,
-            anchor: 'Bottom',
-            maxConnections: -1,
-            isSource: true,
-            isTarget: false,
-            endpoint: ['Dot', { radius: 7 }],
-            paintStyle: { 
-                fill: '#FFFFFF', 
-                outlineStroke: '#0D0F15', 
-                outlineWidth: 2,
-                strokeWidth: 2
-            },
-            hoverPaintStyle: { 
-                fill: '#FFFFFF', 
-                outlineStroke: '#0D0F15', 
-                outlineWidth: 3,
-                strokeWidth: 3
+        // ============================================
+        // 2. SAÍDAS COM BOTÕES - Um endpoint por botão
+        // ============================================
+        if (hasButtons) {
+            customButtons.forEach((btn, index) => {
+                const buttonContainer = element.querySelector(`[data-endpoint-button="${index}"]`);
+                if (buttonContainer) {
+                    // Criar endpoint no container do botão (lado direito)
+                    this.instance.addEndpoint(buttonContainer, {
+                        uuid: `endpoint-button-${stepId}-${index}`,
+                        anchor: ['Right', { dx: 5 }],
+                        maxConnections: 1,
+                        isSource: true,
+                        isTarget: false,
+                        endpoint: ['Dot', { radius: 6 }],
+                        paintStyle: { 
+                            fill: '#FFFFFF', 
+                            outlineStroke: '#0D0F15', 
+                            outlineWidth: 2,
+                            strokeWidth: 2
+                        },
+                        hoverPaintStyle: { 
+                            fill: '#FFFFFF', 
+                            outlineStroke: '#0D0F15', 
+                            outlineWidth: 3,
+                            strokeWidth: 3
+                        },
+                        data: {
+                            stepId: stepId,
+                            buttonIndex: index,
+                            buttonId: btn.id || `btn-${index}`
+                        }
+                    });
+                }
+            });
+        } else {
+            // ============================================
+            // 3. SAÍDA SEM BOTÕES - Endpoint global centro-direita
+            // ============================================
+            const globalOutputContainer = element.querySelector('.flow-step-global-output-container');
+            if (globalOutputContainer) {
+                this.instance.addEndpoint(globalOutputContainer, {
+                    uuid: `endpoint-bottom-${stepId}`,
+                    anchor: ['Right', { dx: 5 }],
+                    maxConnections: -1,
+                    isSource: true,
+                    isTarget: false,
+                    endpoint: ['Dot', { radius: 7 }],
+                    paintStyle: { 
+                        fill: '#FFFFFF', 
+                        outlineStroke: '#0D0F15', 
+                        outlineWidth: 2,
+                        strokeWidth: 2
+                    },
+                    hoverPaintStyle: { 
+                        fill: '#FFFFFF', 
+                        outlineStroke: '#0D0F15', 
+                        outlineWidth: 3,
+                        strokeWidth: 3
+                    }
+                });
             }
-        });
+        }
     }
     
     /**
@@ -525,28 +668,44 @@ class FlowEditor {
             if (!step || !step.id) return;
             
             const stepId = String(step.id);
+            const stepConfig = step.config || {};
+            const customButtons = stepConfig.custom_buttons || [];
+            const hasButtons = customButtons.length > 0;
             const connections = step.connections || {};
             
             if (!this.steps.has(stepId)) return;
             
-            if (connections.next) {
-                const targetId = String(connections.next);
-                if (this.steps.has(targetId)) {
-                    this.createConnection(stepId, targetId, 'next');
+            // Se tem botões, conectar pelos endpoints dos botões
+            if (hasButtons) {
+                customButtons.forEach((btn, index) => {
+                    if (btn.target_step) {
+                        const targetId = String(btn.target_step);
+                        if (this.steps.has(targetId)) {
+                            this.createConnectionFromButton(stepId, index, targetId);
+                        }
+                    }
+                });
+            } else {
+                // Sem botões, usar conexões padrão (next, pending, retry)
+                if (connections.next) {
+                    const targetId = String(connections.next);
+                    if (this.steps.has(targetId)) {
+                        this.createConnection(stepId, targetId, 'next');
+                    }
                 }
-            }
-            
-            if (connections.pending) {
-                const targetId = String(connections.pending);
-                if (this.steps.has(targetId)) {
-                    this.createConnection(stepId, targetId, 'pending');
+                
+                if (connections.pending) {
+                    const targetId = String(connections.pending);
+                    if (this.steps.has(targetId)) {
+                        this.createConnection(stepId, targetId, 'pending');
+                    }
                 }
-            }
-            
-            if (connections.retry) {
-                const targetId = String(connections.retry);
-                if (this.steps.has(targetId)) {
-                    this.createConnection(stepId, targetId, 'retry');
+                
+                if (connections.retry) {
+                    const targetId = String(connections.retry);
+                    if (this.steps.has(targetId)) {
+                        this.createConnection(stepId, targetId, 'retry');
+                    }
                 }
             }
         });
@@ -554,6 +713,7 @@ class FlowEditor {
     
     /**
      * Cria uma conexão entre dois steps (branca com glow)
+     * Usado para steps SEM botões (conexão global)
      */
     createConnection(sourceStepId, targetStepId, connectionType = 'next') {
         const sourceId = String(sourceStepId);
@@ -635,6 +795,82 @@ class FlowEditor {
     }
     
     /**
+     * Cria uma conexão a partir de um botão específico
+     */
+    createConnectionFromButton(sourceStepId, buttonIndex, targetStepId) {
+        const sourceId = String(sourceStepId);
+        const targetId = String(targetStepId);
+        
+        if (sourceId === targetId) return null;
+        
+        const sourceElement = this.steps.get(sourceId);
+        const targetElement = this.steps.get(targetId);
+        
+        if (!sourceElement || !targetElement) return null;
+        
+        const connId = `button-${sourceId}-${buttonIndex}-${targetId}`;
+        if (this.connections.has(connId)) {
+            return this.connections.get(connId);
+        }
+        
+        try {
+            const connection = this.instance.connect({
+                source: `endpoint-button-${sourceId}-${buttonIndex}`,
+                target: `endpoint-top-${targetId}`,
+                paintStyle: { 
+                    stroke: '#FFFFFF', 
+                    strokeWidth: 2.5,
+                    strokeOpacity: 0.9
+                },
+                hoverPaintStyle: { 
+                    stroke: '#FFFFFF', 
+                    strokeWidth: 3.5,
+                    strokeOpacity: 1
+                },
+                overlays: [
+                    ['Label', {
+                        label: 'Botão',
+                        location: 0.5,
+                        cssClass: 'connection-label-white',
+                        labelStyle: {
+                            color: '#FFFFFF',
+                            backgroundColor: '#0D0F15',
+                            border: '1px solid #242836',
+                            padding: '4px 8px',
+                            borderRadius: '6px',
+                            fontSize: '10px',
+                            fontWeight: '600',
+                            fontFamily: 'Inter, sans-serif'
+                        }
+                    }]
+                ],
+                data: {
+                    sourceStepId: sourceId,
+                    targetStepId: targetId,
+                    buttonIndex: buttonIndex,
+                    connectionType: 'button'
+                }
+            });
+            
+            if (connection) {
+                this.connections.set(connId, connection);
+                
+                // Adicionar animação de highlight
+                setTimeout(() => {
+                    if (this.instance) {
+                        this.instance.repaint(connection);
+                    }
+                }, 10);
+            }
+            
+            return connection;
+        } catch (error) {
+            console.error(`❌ Erro ao criar conexão do botão:`, error);
+            return null;
+        }
+    }
+    
+    /**
      * Atualiza conexão no Alpine.js
      */
     updateAlpineConnection(sourceStepId, targetStepId, connectionType) {
@@ -661,18 +897,28 @@ class FlowEditor {
         
         const data = connection.getData();
         if (data) {
-            const { sourceStepId, targetStepId, connectionType } = data;
+            const { sourceStepId, targetStepId, connectionType, buttonIndex } = data;
             
             if (this.alpine && this.alpine.config && this.alpine.config.flow_steps) {
                 const steps = this.alpine.config.flow_steps;
                 const sourceStep = steps.find(s => String(s.id) === String(sourceStepId));
                 
-                if (sourceStep && sourceStep.connections) {
-                    delete sourceStep.connections[connectionType];
+                if (sourceStep) {
+                    // Se for conexão de botão, limpar target_step do botão
+                    if (connectionType === 'button' && buttonIndex !== null && buttonIndex !== undefined) {
+                        if (sourceStep.config && sourceStep.config.custom_buttons && sourceStep.config.custom_buttons[buttonIndex]) {
+                            sourceStep.config.custom_buttons[buttonIndex].target_step = null;
+                        }
+                    } else if (sourceStep.connections) {
+                        // Se for conexão padrão, remover do objeto connections
+                        delete sourceStep.connections[connectionType];
+                    }
                 }
             }
             
-            const connId = `${sourceStepId}-${targetStepId}-${connectionType}`;
+            const connId = connectionType === 'button' && buttonIndex !== null && buttonIndex !== undefined
+                ? `button-${sourceStepId}-${buttonIndex}-${targetStepId}`
+                : `${sourceStepId}-${targetStepId}-${connectionType}`;
             this.connections.delete(connId);
         }
         
@@ -686,59 +932,93 @@ class FlowEditor {
         const sourceUuid = info.sourceId || info.source?.getUuid?.();
         const targetUuid = info.targetId || info.target?.getUuid?.();
         
-        const sourceStepId = sourceUuid ? sourceUuid.replace('endpoint-bottom-', '').replace('endpoint-top-', '') : null;
-        const targetStepId = targetUuid ? targetUuid.replace('endpoint-bottom-', '').replace('endpoint-top-', '') : null;
+        if (!sourceUuid || !targetUuid) return;
         
-        if (sourceStepId && targetStepId && sourceUuid?.includes('bottom') && targetUuid?.includes('top')) {
-            const connectionType = 'next';
-            this.updateAlpineConnection(sourceStepId, targetStepId, connectionType);
-            
-            if (info.connection) {
-                const label = this.getConnectionLabel(connectionType);
-                
-                info.connection.setPaintStyle({ 
-                    stroke: '#FFFFFF', 
-                    strokeWidth: 2.5,
-                    strokeOpacity: 0.9
-                });
-                info.connection.setHoverPaintStyle({ 
-                    stroke: '#FFFFFF', 
-                    strokeWidth: 3.5,
-                    strokeOpacity: 1
-                });
-                
-                info.connection.setLabel({
-                    label: label,
-                    location: 0.5,
-                    cssClass: 'connection-label-white',
-                    labelStyle: {
-                        color: '#FFFFFF',
-                        backgroundColor: '#0D0F15',
-                        border: '1px solid #242836',
-                        padding: '4px 8px',
-                        borderRadius: '6px',
-                        fontSize: '10px',
-                        fontWeight: '600',
-                        fontFamily: 'Inter, sans-serif'
-                    }
-                });
-                
-                info.connection.setData({
-                    sourceStepId: sourceStepId,
-                    targetStepId: targetStepId,
-                    connectionType: connectionType
-                });
-                
-                const connId = `${sourceStepId}-${targetStepId}-${connectionType}`;
-                this.connections.set(connId, info.connection);
-                
-                // Repintar para garantir visibilidade
-                setTimeout(() => {
-                    if (this.instance) {
-                        this.instance.repaint(info.connection);
-                    }
-                }, 10);
+        // Detectar tipo de endpoint de origem
+        let sourceStepId = null;
+        let buttonIndex = null;
+        let connectionType = 'next';
+        
+        if (sourceUuid.includes('endpoint-button-')) {
+            // Conexão de botão
+            const match = sourceUuid.match(/endpoint-button-(\d+)-(\d+)/);
+            if (match) {
+                sourceStepId = match[1];
+                buttonIndex = parseInt(match[2]);
+                connectionType = 'button';
             }
+        } else if (sourceUuid.includes('endpoint-bottom-')) {
+            // Conexão global (sem botões)
+            sourceStepId = sourceUuid.replace('endpoint-bottom-', '');
+            connectionType = 'next';
+        }
+        
+        const targetStepId = targetUuid.includes('endpoint-top-') 
+            ? targetUuid.replace('endpoint-top-', '') 
+            : null;
+        
+        if (!sourceStepId || !targetStepId) return;
+        
+        // Atualizar Alpine.js conforme tipo de conexão
+        if (connectionType === 'button' && buttonIndex !== null) {
+            // Atualizar target_step do botão
+            const step = this.alpine?.config?.flow_steps?.find(s => String(s.id) === sourceStepId);
+            if (step && step.config && step.config.custom_buttons && step.config.custom_buttons[buttonIndex]) {
+                step.config.custom_buttons[buttonIndex].target_step = targetStepId;
+            }
+        } else {
+            // Atualizar conexão padrão
+            this.updateAlpineConnection(sourceStepId, targetStepId, connectionType);
+        }
+        
+        if (info.connection) {
+            const label = connectionType === 'button' ? 'Botão' : this.getConnectionLabel(connectionType);
+            
+            info.connection.setPaintStyle({ 
+                stroke: '#FFFFFF', 
+                strokeWidth: 2.5,
+                strokeOpacity: 0.9
+            });
+            info.connection.setHoverPaintStyle({ 
+                stroke: '#FFFFFF', 
+                strokeWidth: 3.5,
+                strokeOpacity: 1
+            });
+            
+            info.connection.setLabel({
+                label: label,
+                location: 0.5,
+                cssClass: 'connection-label-white',
+                labelStyle: {
+                    color: '#FFFFFF',
+                    backgroundColor: '#0D0F15',
+                    border: '1px solid #242836',
+                    padding: '4px 8px',
+                    borderRadius: '6px',
+                    fontSize: '10px',
+                    fontWeight: '600',
+                    fontFamily: 'Inter, sans-serif'
+                }
+            });
+            
+            info.connection.setData({
+                sourceStepId: sourceStepId,
+                targetStepId: targetStepId,
+                buttonIndex: buttonIndex,
+                connectionType: connectionType
+            });
+            
+            const connId = connectionType === 'button' 
+                ? `button-${sourceStepId}-${buttonIndex}-${targetStepId}`
+                : `${sourceStepId}-${targetStepId}-${connectionType}`;
+            this.connections.set(connId, info.connection);
+            
+            // Repintar para garantir visibilidade
+            setTimeout(() => {
+                if (this.instance) {
+                    this.instance.repaint(info.connection);
+                }
+            }, 10);
         }
     }
     
@@ -925,6 +1205,15 @@ class FlowEditor {
             retry: 'Retry'
         };
         return labels[type] || type;
+    }
+    
+    /**
+     * Escapa HTML para prevenir XSS
+     */
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
     
     /**
