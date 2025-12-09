@@ -98,6 +98,34 @@
     height: 100%;
 }
 
+/* Input on left center, anchored to card */
+.flow-step-node-input {
+    left: -8px;
+    top: 50%;
+    transform: translateY(-50%);
+    position: absolute;
+    z-index: 60;
+}
+
+/* Global output right center when exists */
+.flow-step-node-output {
+    right: -8px;
+    top: 50%;
+    transform: translateY(-50%);
+    position: absolute;
+    z-index: 60;
+}
+
+/* Button endpoint container sits inside button item - right aligned */
+.flow-step-button-endpoint-container {
+    position: relative;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
 @keyframes stepFadeIn {
     from {
         opacity: 0;
@@ -2556,7 +2584,9 @@ function botConfigApp() {
             
             this.editingStepIndex = this.config.flow_steps.indexOf(step);
             
-            this.editingStep = JSON.parse(JSON.stringify(step));
+            // PATCH V4.0: Null-safety - garantir estrutura completa
+            this.editingStep = JSON.parse(JSON.stringify(step || { config: {} }));
+            if (!this.editingStep.config) this.editingStep.config = {};
             
             // Garantir que todas as propriedades existem ANTES de abrir o modal
             if (!this.editingStep.connections) {
