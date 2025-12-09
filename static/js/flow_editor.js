@@ -412,7 +412,7 @@ class FlowEditor {
             buttonsHTML += '</div>';
         }
         
-        // HTML do bloco seguindo hierarquia EXATA: Header → Mídia → URL → Texto → Botões → Ações → Outputs
+        // HTML do bloco seguindo hierarquia INTUITIVA: Header → Mídia → Texto → Botões → Ações → Outputs
         stepElement.innerHTML = `
             <div class="flow-step-header">
                 <div class="flow-step-header-content">
@@ -427,7 +427,6 @@ class FlowEditor {
             </div>
             <div class="flow-step-body">
                 ${mediaHTML}
-                ${hasMedia ? `<div class="flow-step-media-url">${this.escapeHtml(mediaUrl.substring(0, 40))}${mediaUrl.length > 40 ? '...' : ''}</div>` : ''}
                 ${previewText ? `<div class="flow-step-preview">${previewText}</div>` : ''}
                 ${buttonsHTML}
             </div>
@@ -566,9 +565,9 @@ class FlowEditor {
         }
         
         if (bodyEl) {
+            // Ordem visual intuitiva: Mídia → Texto → Botões
             bodyEl.innerHTML = `
                 ${mediaHTML}
-                ${hasMedia ? `<div class="flow-step-media-url">${this.escapeHtml(mediaUrl.substring(0, 40))}${mediaUrl.length > 40 ? '...' : ''}</div>` : ''}
                 ${previewText ? `<div class="flow-step-preview">${previewText}</div>` : ''}
                 ${buttonsHTML}
             `;

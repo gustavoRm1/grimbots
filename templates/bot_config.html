@@ -180,30 +180,40 @@
 }
 
 .flow-step-buttons-container {
-    margin-top: 16px;
     display: flex;
     flex-direction: column;
     gap: 10px;
+    margin-top: 0;
 }
 
 .flow-step-button-item {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 10px 12px;
-    background: #13151C;
-    border: 1px solid #242836;
-    border-radius: 8px;
+    padding: 12px 16px;
+    background: linear-gradient(135deg, rgba(224, 39, 39, 0.15) 0%, rgba(239, 68, 68, 0.15) 100%);
+    border: 2px solid rgba(224, 39, 39, 0.4);
+    border-radius: 10px;
     position: relative;
-    min-height: 40px;
+    min-height: 44px;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 6px rgba(224, 39, 39, 0.15);
+}
+
+.flow-step-button-item:hover {
+    background: linear-gradient(135deg, rgba(224, 39, 39, 0.25) 0%, rgba(239, 68, 68, 0.25) 100%);
+    border-color: rgba(224, 39, 39, 0.6);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(224, 39, 39, 0.25);
 }
 
 .flow-step-button-text {
     color: #FFFFFF;
-    font-size: 13px;
-    font-weight: 500;
+    font-size: 14px;
+    font-weight: 600;
     flex: 1;
-    padding-right: 8px;
+    padding-right: 12px;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 .flow-step-button-endpoint-container {
@@ -232,46 +242,46 @@
 .flow-step-media-preview {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 10px 12px;
-    background: #13151C;
-    border: 1px solid #242836;
-    border-radius: 8px;
-    margin-bottom: 12px;
+    gap: 10px;
+    padding: 14px 16px;
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(16, 185, 129, 0.15) 100%);
+    border: 2px solid rgba(59, 130, 246, 0.4);
+    border-radius: 10px;
+    margin-bottom: 16px;
     color: #FFFFFF;
-    font-size: 13px;
-    font-weight: 500;
+    font-size: 14px;
+    font-weight: 600;
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.2);
 }
 
 .flow-step-media-preview i {
-    color: #93C5FD;
-    font-size: 16px;
+    color: #60A5FA;
+    font-size: 20px;
+    filter: drop-shadow(0 0 4px rgba(96, 165, 250, 0.6));
 }
 
-.flow-step-media-url {
-    color: #A1A1A9;
-    font-size: 11px;
-    font-family: 'Courier New', monospace;
-    padding: 6px 12px;
-    background: #0D0F15;
-    border-radius: 6px;
-    margin-bottom: 12px;
-    word-break: break-all;
-    border: 1px solid #242836;
+.flow-step-media-preview span {
+    color: #DBEAFE;
+    text-shadow: 0 0 8px rgba(147, 197, 253, 0.5);
 }
 
 .flow-step-preview {
     color: #FFFFFF;
-    font-size: 13px;
-    line-height: 1.7;
+    font-size: 14px;
+    line-height: 1.8;
     word-break: break-word;
+    padding: 14px 16px;
+    background: #13151C;
+    border: 1px solid #242836;
+    border-radius: 10px;
+    margin-bottom: 16px;
+    min-height: 50px;
+    font-family: 'Inter', sans-serif;
     display: -webkit-box;
-    -webkit-line-clamp: 3;
+    -webkit-line-clamp: 4;
     -webkit-box-orient: vertical;
     overflow: hidden;
     text-overflow: ellipsis;
-    font-family: 'Inter', sans-serif;
-    margin-bottom: 12px;
 }
 
 .flow-step-footer {
