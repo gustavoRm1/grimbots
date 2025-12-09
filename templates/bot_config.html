@@ -9,6 +9,14 @@
    ============================================ */
 
 /* CSS do Flow Editor V3.0 */
+/* Container do editor - confina o grid */
+.flow-canvas-container {
+    position: relative;
+    overflow: hidden; /* Impede o grid de escapar da div */
+    width: 100%;
+    height: 100%;
+}
+
 #flow-visual-canvas {
     background: #0D0F15 !important;
     background-image: 
@@ -20,10 +28,16 @@
     user-select: none;
     -webkit-user-select: none;
     cursor: default;
-    position: relative;
-    overflow: auto !important;
+    position: absolute; /* Canvas interno que pode ser maior que container (virtual) */
+    left: 0;
+    top: 0;
+    transform-origin: 0 0; /* Para zoom via transform */
+    will-change: transform;
     /* CRÍTICO: Canvas NUNCA deve ter transform - apenas o contentContainer */
     transform: none !important;
+    /* Canvas pode ser maior que container (virtual canvas) */
+    min-width: 1200px;
+    min-height: 800px;
 }
 
 /* Container interno que recebe o transform */
@@ -2082,7 +2096,7 @@ function botConfigApp() {
             }
         },
 
-        // Debounce para saveConfig (500ms) - evita múltiplas chamadas
+        // Debounce para saveConfig (600ms) - evita múltiplas chamadas e não bloqueia UI
         _saveConfigDebounce: null,
         
         async saveConfig() {
@@ -2091,7 +2105,7 @@ function botConfigApp() {
                 clearTimeout(this._saveConfigDebounce);
             }
             
-            // Debounce de 500ms
+            // Debounce de 600ms (conforme recomendação)
             this._saveConfigDebounce = setTimeout(async () => {
                 this.loading = true;
                 try {
@@ -2110,11 +2124,8 @@ function botConfigApp() {
                     
                     const data = await response.json();
                     if (data && typeof data === 'object' && !data.error) {
-                        // Não mostrar alert durante debounce (só no final)
-                        if (!this._saveConfigDebounce) {
-                            alert('Configuração salva com sucesso!');
-                        }
                         Object.assign(this.config, data);
+                        // Não mostrar alert durante debounce (só no final, se necessário)
                     } else {
                         alert(data.error || 'Erro ao salvar configuração');
                     }
@@ -2125,7 +2136,14 @@ function botConfigApp() {
                     this.loading = false;
                     this._saveConfigDebounce = null;
                 }
-            }, 500);
+            }, 600);
+        },
+        
+        /**
+         * Versão debounced de saveConfig (chamada externamente)
+         */
+        saveConfigDebounced() {
+            this.saveConfig();
         },
 
         addButton() {

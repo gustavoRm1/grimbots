@@ -59,6 +59,11 @@ class FlowEditor {
         this.lastFrameTime = 0;
         this.updateStepPositionDebounce = null; // Debounce para updateStepPosition
         this.connectionCache = new Map(); // Cache de conexões para diffing
+        this._reconnectTimeout = null; // Timeout para reconnectAll
+        
+        // Per-step cache de transform (x,y) - para drag suave
+        this.stepTransforms = new Map(); // Map<stepId, {x, y}>
+        this._saveTimeout = null; // Timeout para debounced save
         
         // Cores por tipo de conexão (todas brancas)
         this.connectionColors = {
@@ -296,54 +301,93 @@ class FlowEditor {
     }
     
     /**
-     * Expande bounds do canvas automaticamente conforme posição dos cards
-     * E ajusta dimensões do canvas se necessário para acomodar todos os cards
+     * Ajusta tamanho do canvas automaticamente para caber o fluxo (virtual canvas)
+     * Calcula bounding box de todos os nodes e expande canvas com padding
      */
-    expandCanvasBounds() {
+    adjustCanvasSize(padding = 400) {
         if (!this.canvas) return;
         
-        const rect = this.canvas.getBoundingClientRect();
-        let minX = 0, minY = 0, maxX = rect.width, maxY = rect.height;
+        const parent = this.canvas.parentElement;
+        if (!parent) return;
         
-        if (this.steps.size > 0) {
-            this.steps.forEach((element) => {
-                const step = this.alpine?.config?.flow_steps?.find(s => 
-                    String(s.id) === element.dataset.stepId
-                );
+        // Calcular bounding box de todos os nodes com base em dataset x/y + offsetWidth/Height
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        
+        this.steps.forEach((element, stepId) => {
+            // Obter posição do transform cache ou dataset
+            let x = 0, y = 0;
+            const cached = this.stepTransforms.get(stepId);
+            if (cached) {
+                x = cached.x;
+                y = cached.y;
+            } else if (element.dataset.x && element.dataset.y) {
+                x = parseFloat(element.dataset.x) || 0;
+                y = parseFloat(element.dataset.y) || 0;
+            } else {
+                // Fallback: usar position do step
+                const step = this.alpine?.config?.flow_steps?.find(s => String(s.id) === stepId);
                 if (step && step.position) {
-                    const x = step.position.x;
-                    const y = step.position.y;
-                    minX = Math.min(minX, x - 200);
-                    minY = Math.min(minY, y - 200);
-                    maxX = Math.max(maxX, x + 500);
-                    maxY = Math.max(maxY, y + 400);
+                    x = step.position.x || 0;
+                    y = step.position.y || 0;
                 }
-            });
+            }
+            
+            const w = element.offsetWidth || 300;
+            const h = element.offsetHeight || 180;
+            
+            minX = Math.min(minX, x);
+            minY = Math.min(minY, y);
+            maxX = Math.max(maxX, x + w);
+            maxY = Math.max(maxY, y + h);
+        });
+        
+        // Se nada, definir defaults
+        if (minX === Infinity) {
+            minX = 0;
+            minY = 0;
+            maxX = 1200;
+            maxY = 800;
         }
         
-        // Atualizar bounds (com margem)
+        const parentRect = parent.getBoundingClientRect();
+        const contentWidth = maxX - minX + padding;
+        const contentHeight = maxY - minY + padding;
+        
+        // Canvas deve ser pelo menos do tamanho do parent, ou maior se necessário
+        const width = Math.max(parentRect.width || 1200, contentWidth);
+        const height = Math.max(parentRect.height || 600, contentHeight);
+        
+        // Aplicar dimensões (usar setProperty para forçar)
+        this.canvas.style.setProperty('width', `${width}px`, 'important');
+        this.canvas.style.setProperty('height', `${height}px`, 'important');
+        this.canvas.style.setProperty('min-width', `${width}px`, 'important');
+        this.canvas.style.setProperty('min-height', `${height}px`, 'important');
+        
+        // Atualizar contentContainer também
+        if (this.contentContainer) {
+            this.contentContainer.style.width = `${width}px`;
+            this.contentContainer.style.height = `${height}px`;
+        }
+        
+        // Atualizar bounds para referência futura
         this.canvasBounds = {
-            minX: minX - 1000,
-            minY: minY - 1000,
-            maxX: maxX + 1000,
-            maxY: maxY + 1000
+            minX: minX - padding / 2,
+            minY: minY - padding / 2,
+            maxX: maxX + padding / 2,
+            maxY: maxY + padding / 2
         };
         
-        // Ajustar dimensões do canvas se os cards estiverem fora dos limites atuais
-        // Considerar o zoom level para calcular dimensões necessárias
-        const requiredWidth = Math.max(rect.width, maxX + 500);
-        const requiredHeight = Math.max(rect.height, maxY + 500);
-        
-        // Se necessário, expandir canvas (mas respeitando o zoom atual)
-        // O applyZoom() já ajusta baseado no zoom, mas aqui garantimos espaço mínimo
-        const currentWidth = parseFloat(this.canvas.style.width) || rect.width;
-        const currentHeight = parseFloat(this.canvas.style.height) || rect.height;
-        
-        if (requiredWidth > currentWidth || requiredHeight > currentHeight) {
-            // Aplicar dimensões mínimas necessárias
-            this.canvas.style.width = `${Math.max(currentWidth, requiredWidth)}px`;
-            this.canvas.style.height = `${Math.max(currentHeight, requiredHeight)}px`;
-        }
+        // Garantir que grid se expande corretamente
+        this.canvas.style.backgroundSize = `${this.gridSize}px ${this.gridSize}px`;
+        this.canvas.style.backgroundRepeat = 'repeat';
+        this.canvas.style.backgroundPosition = '0 0';
+    }
+    
+    /**
+     * Expande bounds do canvas - LEGADO (mantido para compatibilidade)
+     */
+    expandCanvasBounds() {
+        this.adjustCanvasSize(400);
     }
     
     /**
@@ -938,6 +982,8 @@ class FlowEditor {
     
     /**
      * Renderiza todos os steps
+     * OTIMIZADO: Renderização incremental com diffing (não recria tudo)
+     * FLOW RECOMENDADO: render → adjustCanvasSize → createEndpoints → reconnectDiff → repaintEverything
      */
     renderAllSteps() {
         if (!this.alpine || !this.alpine.config || !this.alpine.config.flow_steps) {
@@ -945,31 +991,62 @@ class FlowEditor {
         }
         
         const steps = this.alpine.config.flow_steps;
-        this.clearCanvas();
+        if (!Array.isArray(steps)) return;
         
         // Compatibilidade: converter steps antigos automaticamente
         steps.forEach(step => {
-            // Garantir que config existe
-            if (!step.config) {
-                step.config = {};
-            }
-            // Garantir que custom_buttons existe
-            if (!step.config.custom_buttons) {
-                step.config.custom_buttons = [];
-            }
-            // Garantir que connections existe
-            if (!step.connections) {
-                step.connections = {};
+            if (!step.config) step.config = {};
+            if (!step.config.custom_buttons) step.config.custom_buttons = [];
+            if (!step.connections) step.connections = {};
+        });
+        
+        // Calcular steps novos, existentes e removidos (diffing)
+        const currentStepIds = new Set(this.steps.keys());
+        const newStepIds = new Set(steps.map(s => String(s.id)));
+        
+        // Remover steps que não existem mais
+        currentStepIds.forEach(stepId => {
+            if (!newStepIds.has(stepId)) {
+                const element = this.steps.get(stepId);
+                if (element) {
+                    this.instance.remove(element);
+                    element.remove();
+                    this.steps.delete(stepId);
+                    this.stepTransforms.delete(stepId);
+                }
             }
         });
         
+        // Renderizar/atualizar steps (incremental)
         steps.forEach(step => {
-            this.renderStep(step);
+            const stepId = String(step.id);
+            if (this.steps.has(stepId)) {
+                // Step existe: atualizar (mais eficiente)
+                this.updateStep(step);
+            } else {
+                // Step novo: criar
+                this.renderStep(step);
+            }
         });
         
-        // Aguardar DOM renderizar antes de conectar
-        setTimeout(() => {
+        // 1. Ajustar tamanho do canvas para caber o fluxo
+        this.adjustCanvasSize(400);
+        
+        // 2. Aguardar DOM renderizar antes de criar endpoints e conectar
+        if (this._reconnectTimeout) {
+            clearTimeout(this._reconnectTimeout);
+        }
+        this._reconnectTimeout = setTimeout(() => {
+            // 3. Garantir que todos os endpoints estão criados (já feito em renderStep/updateStep)
+            // 4. Reconectar usando diffing (não deleteEveryConnection)
             this.reconnectAll();
+            
+            // 5. Repintar tudo apenas uma vez no final
+            if (this.instance) {
+                this.instance.repaintEverything();
+            }
+            
+            this._reconnectTimeout = null;
         }, 50);
     }
     
@@ -1002,6 +1079,11 @@ class FlowEditor {
         stepElement.style.left = '0';
         stepElement.style.top = '0';
         stepElement.style.willChange = 'transform';
+        
+        // Armazenar transform no cache e dataset para acesso rápido
+        this.stepTransforms.set(stepId, { x: position.x, y: position.y });
+        stepElement.dataset.x = position.x;
+        stepElement.dataset.y = position.y;
         
         const icon = this.stepIcons[stepType] || 'fa-circle';
         const isStartStep = this.alpine.config.flow_start_step_id === stepId;
@@ -1071,31 +1153,16 @@ class FlowEditor {
             this.canvas.appendChild(stepElement);
         }
         
-        // Tornar arrastável (Drag otimizado)
+        // Tornar arrastável (Drag otimizado com transform + rAF)
+        // jsPlumb.draggable já gerencia eventos, mas vamos otimizar o callback
         this.instance.draggable(stepElement, {
             containment: 'parent',
             grid: this.snapToGrid ? [this.gridSize, this.gridSize] : false,
             drag: (params) => {
-                this.onStepDrag(params);
-                // Repintar apenas a conexão do elemento sendo arrastado (otimizado)
-                if (this.dragRepaintFrame) {
-                    cancelAnimationFrame(this.dragRepaintFrame);
-                }
-                this.dragRepaintFrame = requestAnimationFrame(() => {
-                    if (this.instance) {
-                        this.instance.repaint(params.el);
-                    }
-                });
+                this.onStepDragOptimized(params);
             },
             stop: (params) => {
-                this.onStepDragStop(params);
-                if (this.dragRepaintFrame) {
-                    cancelAnimationFrame(this.dragRepaintFrame);
-                }
-                // Repintar todas as conexões após parar
-                if (this.instance) {
-                    this.instance.repaintEverything();
-                }
+                this.onStepDragStopOptimized(params);
             },
             cursor: 'move',
             zIndex: 1000
