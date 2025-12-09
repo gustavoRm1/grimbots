@@ -9962,16 +9962,45 @@ Seu pagamento ainda não foi confirmado.
                             if buyer_ids:
                                 query = query.filter(~BotUser.telegram_user_id.in_(buyer_ids))
                     
-                    leads = query.all()
-                    campaign.total_targets = len(leads)
-                    db.session.commit()
+                    # ✅ CORREÇÃO CRÍTICA: Contar leads sem carregar todos na memória (evita sobrecarga)
+                    total_leads = query.count()
+                    campaign.total_targets = total_leads
+                    try:
+                        db.session.commit()
+                        db.session.refresh(campaign)  # ✅ CRÍTICO: Refresh após commit
+                    except Exception as commit_error:
+                        logger.error(f"❌ Erro ao salvar total_targets: {commit_error}")
+                        db.session.rollback()
                     
                     logger.info(f"🎯 {campaign.total_targets} leads elegíveis")
                     
-                    # Enviar em batches (20 msgs/segundo)
+                    if total_leads == 0:
+                        logger.warning(f"⚠️ Nenhum lead elegível para campanha {campaign_id}")
+                        campaign.status = 'completed'
+                        from models import get_brazil_time
+                        campaign.completed_at = get_brazil_time()
+                        db.session.commit()
+                        return
+                    
+                    # ✅ CORREÇÃO CRÍTICA: Processar em batches com paginação (evita sobrecarga de memória)
                     batch_size = 20
-                    for i in range(0, len(leads), batch_size):
-                        batch = leads[i:i+batch_size]
+                    offset = 0
+                    batch_number = 0
+                    
+                    while offset < total_leads:
+                        batch_number += 1
+                        logger.info(f"📦 Processando batch {batch_number} (offset: {offset}, total: {total_leads})")
+                        
+                        # ✅ Buscar apenas o batch atual (paginação)
+                        batch = query.offset(offset).limit(batch_size).all()
+                        
+                        if not batch:
+                            logger.warning(f"⚠️ Batch {batch_number} vazio, interrompendo...")
+                            break
+                        
+                        batch_sent = 0
+                        batch_failed = 0
+                        batch_blocked = 0
                         
                         for lead in batch:
                             try:
@@ -10006,11 +10035,6 @@ Seu pagamento ainda não foi confirmado.
                                                 'url': btn.get('url')
                                             })
                                 
-                                # Log dos botões para debug
-                                logger.info(f"📤 Enviando para {lead.first_name} com {len(remarketing_buttons)} botão(ões)")
-                                for btn in remarketing_buttons:
-                                    logger.info(f"   🔘 Botão: {btn.get('text')} | callback: {btn.get('callback_data', 'N/A')[:50]}")
-                                
                                 # Enviar mensagem
                                 result = self.send_telegram_message(
                                     token=bot_token,
@@ -10022,67 +10046,120 @@ Seu pagamento ainda não foi confirmado.
                                 )
                                 
                                 if result:
-                                    campaign.total_sent += 1
+                                    batch_sent += 1
                                     
                                     # ✅ Enviar áudio adicional se habilitado
                                     if campaign.audio_enabled and campaign.audio_url:
-                                        logger.info(f"🎤 Enviando áudio complementar para {lead.first_name}...")
-                                        audio_result = self.send_telegram_message(
-                                            token=bot_token,
-                                            chat_id=lead.telegram_user_id,
-                                            message="",
-                                            media_url=campaign.audio_url,
-                                            media_type='audio',
-                                            buttons=None
-                                        )
+                                        try:
+                                            audio_result = self.send_telegram_message(
+                                                token=bot_token,
+                                                chat_id=lead.telegram_user_id,
+                                                message="",
+                                                media_url=campaign.audio_url,
+                                                media_type='audio',
+                                                buttons=None
+                                            )
+                                        except Exception as audio_error:
+                                            logger.warning(f"⚠️ Erro ao enviar áudio para {lead.telegram_user_id}: {audio_error}")
                                 else:
-                                    campaign.total_failed += 1
+                                    batch_failed += 1
                                     
                             except Exception as e:
                                 logger.warning(f"⚠️ Erro ao enviar para {lead.telegram_user_id}: {e}")
                                 if "bot was blocked" in str(e).lower():
-                                    campaign.total_blocked += 1
+                                    batch_blocked += 1
                                     # Adicionar na blacklist
-                                    blacklist = RemarketingBlacklist(
-                                        bot_id=campaign.bot_id,
-                                        telegram_user_id=lead.telegram_user_id,
-                                        reason='bot_blocked'
-                                    )
-                                    db.session.add(blacklist)
+                                    try:
+                                        blacklist = RemarketingBlacklist(
+                                            bot_id=campaign.bot_id,
+                                            telegram_user_id=lead.telegram_user_id,
+                                            reason='bot_blocked'
+                                        )
+                                        db.session.add(blacklist)
+                                    except Exception as blacklist_error:
+                                        logger.warning(f"⚠️ Erro ao adicionar blacklist: {blacklist_error}")
                                 else:
-                                    campaign.total_failed += 1
+                                    batch_failed += 1
                         
-                        # Commit do batch
+                        # ✅ CRÍTICO: Atualizar contadores e fazer commit com tratamento de erro
+                        try:
+                            # ✅ CRÍTICO: Recarregar campaign do banco para garantir dados atualizados
+                            db.session.refresh(campaign)
+                            campaign.total_sent += batch_sent
+                            campaign.total_failed += batch_failed
+                            campaign.total_blocked += batch_blocked
+                            
+                            db.session.commit()
+                            db.session.refresh(campaign)  # ✅ Refresh após commit
+                            
+                            logger.info(f"✅ Batch {batch_number} concluído: {batch_sent} enviados, {batch_failed} falhas, {batch_blocked} bloqueados | Total: {campaign.total_sent}/{campaign.total_targets}")
+                            
+                        except Exception as commit_error:
+                            logger.error(f"❌ Erro ao commitar batch {batch_number}: {commit_error}", exc_info=True)
+                            try:
+                                db.session.rollback()
+                                # Tentar novamente com refresh
+                                db.session.refresh(campaign)
+                                campaign.total_sent += batch_sent
+                                campaign.total_failed += batch_failed
+                                campaign.total_blocked += batch_blocked
+                                db.session.commit()
+                                logger.info(f"✅ Batch {batch_number} recuperado após rollback")
+                            except Exception as retry_error:
+                                logger.error(f"❌ Erro crítico ao recuperar batch {batch_number}: {retry_error}", exc_info=True)
+                                # Continuar mesmo com erro para não perder progresso
+                        
+                        # ✅ Emitir progresso via WebSocket com tratamento de erro
+                        try:
+                            socketio.emit('remarketing_progress', {
+                                'campaign_id': campaign.id,
+                                'sent': campaign.total_sent,
+                                'failed': campaign.total_failed,
+                                'blocked': campaign.total_blocked,
+                                'total': campaign.total_targets,
+                                'percentage': round((campaign.total_sent / campaign.total_targets) * 100, 1) if campaign.total_targets > 0 else 0
+                            })
+                        except Exception as socket_error:
+                            logger.warning(f"⚠️ Erro ao emitir progresso WebSocket: {socket_error}")
+                        
+                        # ✅ Rate limiting (20 msgs/segundo) - aumentar sleep para evitar sobrecarga
+                        time.sleep(1.2)  # ✅ Aumentado para 1.2s para dar mais margem
+                        
+                        offset += batch_size
+                    
+                    # ✅ Finalizar campanha com tratamento robusto
+                    try:
+                        db.session.refresh(campaign)  # ✅ CRÍTICO: Refresh antes de finalizar
+                        campaign.status = 'completed'
+                        from models import get_brazil_time
+                        campaign.completed_at = get_brazil_time()
                         db.session.commit()
+                        db.session.refresh(campaign)  # ✅ Refresh após commit final
                         
-                        # Emitir progresso via WebSocket
-                        socketio.emit('remarketing_progress', {
+                        logger.info(f"✅ Campanha concluída: {campaign.total_sent}/{campaign.total_targets} enviados | Falhas: {campaign.total_failed} | Bloqueados: {campaign.total_blocked}")
+                        
+                    except Exception as final_error:
+                        logger.error(f"❌ Erro ao finalizar campanha: {final_error}", exc_info=True)
+                        try:
+                            db.session.rollback()
+                            db.session.refresh(campaign)
+                            campaign.status = 'completed'
+                            campaign.completed_at = get_brazil_time()
+                            db.session.commit()
+                            logger.info(f"✅ Campanha finalizada após rollback")
+                        except Exception as retry_error:
+                            logger.error(f"❌ Erro crítico ao finalizar campanha: {retry_error}", exc_info=True)
+                    
+                    # ✅ Emitir conclusão com tratamento de erro
+                    try:
+                        socketio.emit('remarketing_completed', {
                             'campaign_id': campaign.id,
-                            'sent': campaign.total_sent,
-                            'failed': campaign.total_failed,
-                            'blocked': campaign.total_blocked,
-                            'total': campaign.total_targets,
-                            'percentage': round((campaign.total_sent / campaign.total_targets) * 100, 1) if campaign.total_targets > 0 else 0
+                            'total_sent': campaign.total_sent,
+                            'total_failed': campaign.total_failed,
+                            'total_blocked': campaign.total_blocked
                         })
-                        
-                        # Rate limiting (20 msgs/segundo)
-                        time.sleep(1)
-                    
-                    # Finalizar campanha
-                    campaign.status = 'completed'
-                    from models import get_brazil_time
-                    campaign.completed_at = get_brazil_time()
-                    db.session.commit()
-                    
-                    logger.info(f"✅ Campanha concluída: {campaign.total_sent}/{campaign.total_targets} enviados")
-                    
-                    # Emitir conclusão
-                    socketio.emit('remarketing_completed', {
-                        'campaign_id': campaign.id,
-                        'total_sent': campaign.total_sent,
-                        'total_failed': campaign.total_failed,
-                        'total_blocked': campaign.total_blocked
-                    })
+                    except Exception as socket_error:
+                        logger.warning(f"⚠️ Erro ao emitir conclusão WebSocket: {socket_error}")
                 except Exception as e:
                     logger.error(f"❌ Erro ao enviar campanha de remarketing {campaign_id}: {e}", exc_info=True)
                     # ✅ GARANTIR: Atualizar status mesmo em caso de erro
