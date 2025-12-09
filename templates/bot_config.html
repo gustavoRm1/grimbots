@@ -2444,8 +2444,12 @@ function botConfigApp() {
                 }
                 
                 // Verificar React Flow
-                if (typeof React === 'undefined' || typeof ReactFlow === 'undefined') {
-                    console.error('❌ React ou React Flow não está disponível. Aguardando...');
+                if (typeof React === 'undefined' || typeof ReactFlow === 'undefined' || typeof ReactDOM === 'undefined') {
+                    console.error('❌ React, ReactDOM ou ReactFlow não está disponível.');
+                    console.error('React:', typeof React);
+                    console.error('ReactDOM:', typeof ReactDOM);
+                    console.error('ReactFlow:', typeof ReactFlow);
+                    console.error('Aguardando 500ms e tentando novamente...');
                     setTimeout(() => this.initVisualFlowEditor(), 500);
                     return;
                 }
@@ -2605,6 +2609,11 @@ function botConfigApp() {
             if (!this.config.flow_enabled) {
                 this.config.flow_enabled = true;
                 console.log('✅ Flow habilitado automaticamente');
+                // Garantir que estamos na tab flow
+                if (this.activeTab !== 'flow') {
+                    this.activeTab = 'flow';
+                    console.log('✅ Tab Flow ativada automaticamente');
+                }
             }
             
             const stepId = `step_${Date.now()}`;

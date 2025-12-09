@@ -338,18 +338,29 @@
 
             // Converter steps para nodes
             const convertStepsToNodes = useCallback(function(flowSteps, startStepId) {
-                if (!flowSteps || !Array.isArray(flowSteps)) return [];
-                return flowSteps.map(function(step) {
+                if (!flowSteps || !Array.isArray(flowSteps)) {
+                    console.warn('⚠️ convertStepsToNodes: flowSteps não é array válido');
+                    return [];
+                }
+                console.log('🔄 Convertendo', flowSteps.length, 'steps para nodes');
+                const nodes = flowSteps.map(function(step) {
+                    if (!step || !step.id) {
+                        console.warn('⚠️ Step inválido:', step);
+                        return null;
+                    }
                     const position = step.position || { x: 100, y: 100 };
                     const isStart = String(step.id) === String(startStepId);
-                    return {
+                    const node = {
                         id: String(step.id),
                         type: 'messageNode',
                         position: { x: position.x || 100, y: position.y || 100 },
                         data: Object.assign({}, step, { is_start: isStart }),
                         selected: false
                     };
-                });
+                    return node;
+                }).filter(function(node) { return node !== null; });
+                console.log('✅ Nodes convertidos:', nodes.length);
+                return nodes;
             }, []);
 
             // Converter conexões para edges
@@ -396,19 +407,29 @@
                 return edges;
             }, []);
 
-            // Carregar dados do Alpine
-            useEffect(function() {
-                if (!alpineContext || !alpineContext.config) return;
+            // Função para atualizar nodes e edges
+            const updateNodesAndEdges = useCallback(function() {
+                if (!alpineContext || !alpineContext.config) {
+                    console.warn('⚠️ alpineContext ou config não disponível');
+                    return;
+                }
                 const flowSteps = alpineContext.config.flow_steps || [];
                 const startStepId = alpineContext.config.flow_start_step_id;
+                console.log('🔄 Atualizando nodes e edges. Steps:', flowSteps.length);
                 const newNodes = convertStepsToNodes(flowSteps, startStepId);
                 const newEdges = convertConnectionsToEdges(flowSteps);
+                console.log('📊 Nodes criados:', newNodes.length, 'Edges criados:', newEdges.length);
                 setNodes(newNodes);
                 setEdges(newEdges);
                 setTimeout(function() {
                     fitView({ padding: 0.2, duration: 400 });
                 }, 100);
-            }, [alpineContext?.config?.flow_steps, alpineContext?.config?.flow_start_step_id]);
+            }, [alpineContext, convertStepsToNodes, convertConnectionsToEdges, fitView]);
+
+            // Carregar dados do Alpine inicialmente
+            useEffect(function() {
+                updateNodesAndEdges();
+            }, [updateNodesAndEdges]);
 
             // Snapping ao grid
             const onNodeDragStop = useCallback(function(event, node) {
@@ -617,16 +638,28 @@
                         });
                     },
                     renderAllSteps: function() {
+                        console.log('🔄 renderAllSteps() chamado');
+                        // Forçar atualização direta
                         if (alpineContext && alpineContext.config) {
                             const flowSteps = alpineContext.config.flow_steps || [];
                             const startStepId = alpineContext.config.flow_start_step_id;
+                            console.log('📋 Flow steps encontrados:', flowSteps.length);
                             const newNodes = convertStepsToNodes(flowSteps, startStepId);
                             const newEdges = convertConnectionsToEdges(flowSteps);
+                            console.log('✅ Nodes convertidos:', newNodes.length, 'Edges convertidos:', newEdges.length);
                             setNodes(newNodes);
                             setEdges(newEdges);
+                            setTimeout(function() {
+                                if (fitView) {
+                                    fitView({ padding: 0.2, duration: 400 });
+                                }
+                            }, 100);
+                        } else {
+                            console.warn('⚠️ alpineContext ou config não disponível em renderAllSteps');
                         }
                     }
                 };
+                console.log('✅ window.flowEditorReact criado com sucesso');
             }, [getViewport, zoomTo, setViewport, fitView, organizeLayout, convertStepsToNodes, convertConnectionsToEdges, setNodes, setEdges, alpineContext]);
 
             const nodeTypes = useMemo(function() {
