@@ -25,6 +25,7 @@ class FlowEditor {
         this.steps = new Map();
         this.connections = new Map();
         this.selectedStep = null;
+        this.contentContainer = null; // Container interno para aplicar transform apenas ao conteúdo
         this.zoomLevel = 1;
         this.pan = { x: 0, y: 0 };
         this.isPanning = false;
@@ -89,6 +90,7 @@ class FlowEditor {
         try {
             this.instance = jsPlumb;
             
+            // jsPlumb deve usar o canvas (não o contentContainer) para detectar limites
             if (typeof this.instance.setContainer === 'function') {
                 this.instance.setContainer(this.canvas);
             }
@@ -165,20 +167,46 @@ class FlowEditor {
         
         // Canvas infinito - remover limites
         this.canvas.style.position = 'relative';
-        this.canvas.style.overflow = 'auto'; // Mudado para 'auto' para permitir scroll quando necessário
+        this.canvas.style.overflow = 'auto'; // Permitir scroll quando necessário
         this.canvas.style.width = '100%';
         // Dimensões iniciais serão ajustadas dinamicamente pelo applyZoom()
         this.canvas.style.height = '600px';
         this.canvas.style.minHeight = '600px';
         this.canvas.style.minWidth = '100%';
         
-        // Background com grid
+        // Background com grid - configurado para se repetir infinitamente
+        // O grid NÃO será afetado pelo transform porque está no canvas
         this.canvas.style.background = '#0D0F15';
         this.canvas.style.backgroundImage = `
             radial-gradient(circle, rgba(255, 255, 255, 0.25) 1.5px, transparent 1.5px)
         `;
         this.canvas.style.backgroundSize = `${this.gridSize}px ${this.gridSize}px`;
+        this.canvas.style.backgroundRepeat = 'repeat';
         this.canvas.style.backgroundPosition = '0 0';
+        
+        // Criar container interno para aplicar transform apenas ao conteúdo
+        // Isso permite que o grid background permaneça fixo enquanto o conteúdo é transformado
+        this.contentContainer = document.createElement('div');
+        this.contentContainer.className = 'flow-canvas-content';
+        this.contentContainer.style.cssText = `
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            transform-origin: top left;
+            will-change: transform;
+            pointer-events: auto;
+        `;
+        
+        // Mover steps existentes para o container (se houver)
+        Array.from(this.canvas.children).forEach(child => {
+            if (child.classList.contains('flow-step-block')) {
+                this.contentContainer.appendChild(child);
+            }
+        });
+        
+        this.canvas.appendChild(this.contentContainer);
         
         // Atualizar viewport inicial
         this.updateViewport();
@@ -460,7 +488,17 @@ class FlowEditor {
             this.canvas.style.minHeight = `${calculatedHeight}px`;
             
             // Atualizar grid background - o grid se expande automaticamente com o canvas
+            // O background-repeat: repeat garante que o grid preenche toda a área expandida
+            // IMPORTANTE: background-size em pixels absolutos para que não seja afetado pelo transform
             this.canvas.style.backgroundSize = `${this.gridSize}px ${this.gridSize}px`;
+            this.canvas.style.backgroundRepeat = 'repeat';
+            this.canvas.style.backgroundPosition = '0 0';
+            
+            // Garantir que o overflow permite ver o grid expandido
+            this.canvas.style.overflow = 'auto';
+            
+            // Debug: log das dimensões (pode remover depois)
+            console.log(`Canvas expandido: ${calculatedWidth}x${calculatedHeight}px (zoom: ${this.zoomLevel.toFixed(2)})`);
             
             // Repintar jsPlumb de forma otimizada
             if (this.instance) {
@@ -693,10 +731,22 @@ class FlowEditor {
     
     /**
      * Atualiza transform do canvas (zoom + pan combinados)
+     * IMPORTANTE: O transform é aplicado apenas ao container de conteúdo, NÃO ao canvas
+     * Isso permite que o grid background permaneça fixo e se expanda corretamente
      */
     updateCanvasTransform() {
         if (!this.canvas) return;
-        this.canvas.style.transform = `translate(${this.pan.x}px, ${this.pan.y}px) scale(${this.zoomLevel})`;
+        
+        // Aplicar transform apenas ao container de conteúdo, não ao canvas
+        // O canvas mantém o grid background fixo que se repete conforme expande
+        if (this.contentContainer) {
+            this.contentContainer.style.transform = `translate(${this.pan.x}px, ${this.pan.y}px) scale(${this.zoomLevel})`;
+            this.contentContainer.style.pointerEvents = 'auto'; // Habilitar interação quando transformado
+        } else {
+            // Fallback: aplicar no canvas se container não existir
+            this.canvas.style.transform = `translate(${this.pan.x}px, ${this.pan.y}px) scale(${this.zoomLevel})`;
+        }
+        
         this.canvas.style.transformOrigin = 'top left';
     }
     
@@ -879,7 +929,12 @@ class FlowEditor {
             ${!hasButtons ? '<div class="flow-step-global-output-container"></div>' : ''}
         `;
         
-        this.canvas.appendChild(stepElement);
+        // Adicionar ao container de conteúdo se existir, senão ao canvas diretamente
+        if (this.contentContainer) {
+            this.contentContainer.appendChild(stepElement);
+        } else {
+            this.canvas.appendChild(stepElement);
+        }
         
         // Tornar arrastável (Drag otimizado)
         this.instance.draggable(stepElement, {
