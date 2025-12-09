@@ -499,11 +499,14 @@ class FlowEditor {
         });
         
         // After DOM painted, add endpoints to inner nodes and per-button containers
+        // CRÍTICO: Usar double rAF para garantir DOM completamente renderizado
         requestAnimationFrame(() => {
-            // add endpoints and ensure deduplication
-            this.addEndpoints(stepElement, stepId, step);
-            this.instance.revalidate(stepElement);
-            this.instance.repaintEverything();
+            requestAnimationFrame(() => {
+                // add endpoints and ensure deduplication
+                this.addEndpoints(stepElement, stepId, step);
+                this.instance.revalidate(stepElement);
+                this.instance.repaintEverything();
+            });
         });
         
         // cache
@@ -663,17 +666,24 @@ class FlowEditor {
         safeRemoveEndpoint(inputUuid);
         const inputNode = inner.querySelector('.flow-step-node-input');
         if (inputNode) {
-            this.instance.addEndpoint(inputNode, {
-                uuid: inputUuid,
-                anchor: ['LeftMiddle', [0, 0.5, -1, 0]], // Fixo à esquerda, centro vertical
-                maxConnections: -1,
-                isSource: false,
-                isTarget: true,
-                endpoint: ['Dot', { radius: 7 }],
-                paintStyle: { fill: '#10B981', outlineStroke: '#FFFFFF', outlineWidth: 2 },
-                hoverPaintStyle: { fill: '#FFB800', outlineStroke: '#FFFFFF', outlineWidth: 3 },
-                data: { stepId, endpointType: 'input' }
-            });
+            try {
+                const ep = this.instance.addEndpoint(inputNode, {
+                    uuid: inputUuid,
+                    anchor: ['LeftMiddle', [0, 0.5, -1, 0]], // Fixo à esquerda, centro vertical
+                    maxConnections: -1,
+                    isSource: false,
+                    isTarget: true,
+                    endpoint: ['Dot', { radius: 7 }],
+                    paintStyle: { fill: '#10B981', outlineStroke: '#FFFFFF', outlineWidth: 2 },
+                    hoverPaintStyle: { fill: '#FFB800', outlineStroke: '#FFFFFF', outlineWidth: 3 },
+                    data: { stepId, endpointType: 'input' }
+                });
+                console.log(`✅ Endpoint input criado: ${inputUuid}`, ep);
+            } catch (e) {
+                console.error(`❌ Erro ao criar endpoint input ${inputUuid}:`, e);
+            }
+        } else {
+            console.warn(`⚠️ Input node não encontrado para step ${stepId}`);
         }
         
         // Remove any global output if will create button endpoints
@@ -693,17 +703,22 @@ class FlowEditor {
                 if (buttonContainer) {
                     // Ensure buttonContainer is positioned relative inside card
                     if (!buttonContainer.style.position) buttonContainer.style.position = 'relative';
-                    this.instance.addEndpoint(buttonContainer, {
-                        uuid: btnUuid,
-                        anchor: ['RightMiddle', [1, 0.5, 1, 0, 10, 0]], // Fixo à direita, centro vertical, offset 10px
-                        maxConnections: 1,
-                        isSource: true,
-                        isTarget: false,
-                        endpoint: ['Dot', { radius: 6 }],
-                        paintStyle: { fill: '#FFFFFF', outlineStroke: '#0D0F15', outlineWidth: 2 },
-                        hoverPaintStyle: { fill: '#FFB800', outlineStroke: '#FFFFFF', outlineWidth: 3 },
-                        data: { stepId, buttonIndex: idx, endpointType: 'button' }
-                    });
+                    try {
+                        const ep = this.instance.addEndpoint(buttonContainer, {
+                            uuid: btnUuid,
+                            anchor: ['RightMiddle', [1, 0.5, 1, 0, 10, 0]], // Fixo à direita, centro vertical, offset 10px
+                            maxConnections: 1,
+                            isSource: true,
+                            isTarget: false,
+                            endpoint: ['Dot', { radius: 6 }],
+                            paintStyle: { fill: '#FFFFFF', outlineStroke: '#0D0F15', outlineWidth: 2 },
+                            hoverPaintStyle: { fill: '#FFB800', outlineStroke: '#FFFFFF', outlineWidth: 3 },
+                            data: { stepId, buttonIndex: idx, endpointType: 'button' }
+                        });
+                        console.log(`✅ Endpoint botão criado: ${btnUuid}`, ep);
+                    } catch (e) {
+                        console.error(`❌ Erro ao criar endpoint botão ${btnUuid}:`, e);
+                    }
                 }
             });
         } else {
@@ -712,17 +727,24 @@ class FlowEditor {
             const outputNode = inner.querySelector('.flow-step-node-output');
             safeRemoveEndpoint(globalUuid);
             if (outputNode) {
-                this.instance.addEndpoint(outputNode, {
-                    uuid: globalUuid,
-                    anchor: ['RightMiddle', [1, 0.5, 1, 0]], // Fixo à direita, centro vertical
-                    maxConnections: -1,
-                    isSource: true,
-                    isTarget: false,
-                    endpoint: ['Dot', { radius: 7 }],
-                    paintStyle: { fill: '#FFFFFF', outlineStroke: '#0D0F15', outlineWidth: 2 },
-                    hoverPaintStyle: { fill: '#FFB800', outlineStroke: '#FFFFFF', outlineWidth: 3 },
-                    data: { stepId, endpointType: 'global' }
-                });
+                try {
+                    const ep = this.instance.addEndpoint(outputNode, {
+                        uuid: globalUuid,
+                        anchor: ['RightMiddle', [1, 0.5, 1, 0]], // Fixo à direita, centro vertical
+                        maxConnections: -1,
+                        isSource: true,
+                        isTarget: false,
+                        endpoint: ['Dot', { radius: 7 }],
+                        paintStyle: { fill: '#FFFFFF', outlineStroke: '#0D0F15', outlineWidth: 2 },
+                        hoverPaintStyle: { fill: '#FFB800', outlineStroke: '#FFFFFF', outlineWidth: 3 },
+                        data: { stepId, endpointType: 'global' }
+                    });
+                    console.log(`✅ Endpoint output global criado: ${globalUuid}`, ep);
+                } catch (e) {
+                    console.error(`❌ Erro ao criar endpoint output global ${globalUuid}:`, e);
+                }
+            } else {
+                console.warn(`⚠️ Output node não encontrado para step ${stepId}`);
             }
         }
     }
@@ -830,65 +852,93 @@ class FlowEditor {
      */
     reconnectAll() {
         if (!this.alpine || !this.alpine.config || !this.alpine.config.flow_steps) return;
+        if (!this.instance) {
+            console.warn('⚠️ jsPlumb instance não disponível');
+            return;
+        }
+        
         // remove existing connections but keep endpoints
         try {
             this.instance.deleteEveryConnection();
-        } catch (e) { console.warn(e); }
+        } catch (e) { 
+            console.warn('⚠️ Erro ao deletar conexões:', e); 
+        }
         this.connections.clear();
         
         const steps = this.alpine.config.flow_steps;
         if (!Array.isArray(steps)) return;
         
-        steps.forEach(step => {
-            if (!step || !step.id) return;
-            const stepId = String(step.id);
-            const stepConfig = step.config || {};
-            const customButtons = stepConfig.custom_buttons || [];
-            const hasButtons = customButtons.length > 0;
-            const connections = step.connections || {};
+        // CRÍTICO: Aguardar um frame para garantir que endpoints foram criados
+        requestAnimationFrame(() => {
+            steps.forEach(step => {
+                if (!step || !step.id) return;
+                const stepId = String(step.id);
+                const stepConfig = step.config || {};
+                const customButtons = stepConfig.custom_buttons || [];
+                const hasButtons = customButtons.length > 0;
+                const connections = step.connections || {};
+                
+                // Buttons targets
+                if (hasButtons) {
+                    customButtons.forEach((btn, idx) => {
+                        if (btn.target_step) {
+                            const targetId = String(btn.target_step);
+                            // endpoint-button-{stepId}-{idx} -> endpoint-left-{targetId}
+                            const srcUuid = `endpoint-button-${stepId}-${idx}`;
+                            const tgtUuid = `endpoint-left-${targetId}`;
+                            try {
+                                const srcEp = this.instance.getEndpoint(srcUuid);
+                                const tgtEp = this.instance.getEndpoint(tgtUuid);
+                                if (srcEp && tgtEp) {
+                                    const conn = this.instance.connect({ 
+                                        source: srcEp,
+                                        target: tgtEp
+                                    });
+                                    if (conn) {
+                                        const connId = `button-${stepId}-${idx}-${targetId}`;
+                                        this.connections.set(connId, conn);
+                                    }
+                                } else {
+                                    console.warn(`⚠️ Endpoints não encontrados: ${srcUuid} ou ${tgtUuid}`);
+                                }
+                            } catch (e) { 
+                                console.warn(`⚠️ Erro ao conectar botão ${idx} do step ${stepId}:`, e); 
+                            }
+                        }
+                    });
+                } else {
+                    // standard next/pending/retry connections using global output
+                    ['next','pending','retry'].forEach(type => {
+                        if (connections[type]) {
+                            const targetId = String(connections[type]);
+                            const srcUuid = `endpoint-right-${stepId}`;
+                            const tgtUuid = `endpoint-left-${targetId}`;
+                            try {
+                                const srcEp = this.instance.getEndpoint(srcUuid);
+                                const tgtEp = this.instance.getEndpoint(tgtUuid);
+                                if (srcEp && tgtEp) {
+                                    const conn = this.instance.connect({ 
+                                        source: srcEp,
+                                        target: tgtEp
+                                    });
+                                    if (conn) {
+                                        const connId = `${stepId}-${targetId}-${type}`;
+                                        this.connections.set(connId, conn);
+                                    }
+                                } else {
+                                    console.warn(`⚠️ Endpoints não encontrados: ${srcUuid} ou ${tgtUuid}`);
+                                }
+                            } catch (e) {
+                                console.warn(`⚠️ Erro ao conectar ${type} do step ${stepId}:`, e);
+                            }
+                        }
+                    });
+                }
+            });
             
-            // Buttons targets
-            if (hasButtons) {
-                customButtons.forEach((btn, idx) => {
-                    if (btn.target_step) {
-                        const targetId = String(btn.target_step);
-                        // endpoint-button-{stepId}-{idx} -> endpoint-left-{targetId}
-                        const srcUuid = `endpoint-button-${stepId}-${idx}`;
-                        const tgtUuid = `endpoint-left-${targetId}`;
-                        try {
-                            const srcEp = this.instance.getEndpoint(srcUuid);
-                            const tgtEp = this.instance.getEndpoint(tgtUuid);
-                            if (srcEp && tgtEp) {
-                                const conn = this.instance.connect({ uuids: [srcUuid, tgtUuid] });
-                                const connId = `button-${stepId}-${idx}-${targetId}`;
-                                this.connections.set(connId, conn);
-                            }
-                        } catch (e) { /* ignore individual failures */ }
-                    }
-                });
-            } else {
-                // standard next/pending/retry connections using global output
-                ['next','pending','retry'].forEach(type => {
-                    if (connections[type]) {
-                        const targetId = String(connections[type]);
-                        const srcUuid = `endpoint-right-${stepId}`;
-                        const tgtUuid = `endpoint-left-${targetId}`;
-                        try {
-                            const srcEp = this.instance.getEndpoint(srcUuid);
-                            const tgtEp = this.instance.getEndpoint(tgtUuid);
-                            if (srcEp && tgtEp) {
-                                const conn = this.instance.connect({ uuids: [srcUuid, tgtUuid] });
-                                const connId = `${stepId}-${targetId}-${type}`;
-                                this.connections.set(connId, conn);
-                            }
-                        } catch (e) {}
-                    }
-                });
-            }
+            // Final repaint
+            this.instance.repaintEverything();
         });
-        
-        // Final repaint
-        this.instance.repaintEverything();
     }
     
     /**
@@ -1047,13 +1097,44 @@ class FlowEditor {
         try {
             const srcEndpoint = info.sourceEndpoint;
             const tgtEndpoint = info.targetEndpoint;
-            const sourceUuid = srcEndpoint.getUuid ? srcEndpoint.getUuid() : (srcEndpoint.canvas && srcEndpoint.canvas.getAttribute('data-uuid')) || '';
-            const targetUuid = tgtEndpoint.getUuid ? tgtEndpoint.getUuid() : (tgtEndpoint.canvas && tgtEndpoint.canvas.getAttribute('data-uuid')) || '';
+            
+            // CRÍTICO: Múltiplos métodos para obter UUID (compatibilidade)
+            let sourceUuid = '';
+            let targetUuid = '';
+            
+            if (srcEndpoint.getUuid) {
+                sourceUuid = srcEndpoint.getUuid();
+            } else if (srcEndpoint.uuid) {
+                sourceUuid = srcEndpoint.uuid;
+            } else if (srcEndpoint.id) {
+                sourceUuid = srcEndpoint.id;
+            } else if (srcEndpoint.canvas && srcEndpoint.canvas.getAttribute) {
+                sourceUuid = srcEndpoint.canvas.getAttribute('data-uuid') || '';
+            }
+            
+            if (tgtEndpoint.getUuid) {
+                targetUuid = tgtEndpoint.getUuid();
+            } else if (tgtEndpoint.uuid) {
+                targetUuid = tgtEndpoint.uuid;
+            } else if (tgtEndpoint.id) {
+                targetUuid = tgtEndpoint.id;
+            } else if (tgtEndpoint.canvas && tgtEndpoint.canvas.getAttribute) {
+                targetUuid = tgtEndpoint.canvas.getAttribute('data-uuid') || '';
+            }
+            
+            if (!sourceUuid || !targetUuid) {
+                console.warn('⚠️ UUIDs não encontrados:', { sourceUuid, targetUuid, srcEndpoint, tgtEndpoint });
+                return;
+            }
             
             let sourceStepId=null, buttonIndex=null, connectionType='next';
             if (sourceUuid.startsWith('endpoint-button-')) {
                 const m = sourceUuid.match(/^endpoint-button-([^-\s]+)-(\d+)$/);
-                if (m) { sourceStepId = m[1]; buttonIndex = parseInt(m[2]); connectionType = 'button'; }
+                if (m) { 
+                    sourceStepId = m[1]; 
+                    buttonIndex = parseInt(m[2]); 
+                    connectionType = 'button'; 
+                }
             } else if (sourceUuid.startsWith('endpoint-right-')) {
                 sourceStepId = sourceUuid.replace('endpoint-right-','');
                 connectionType = 'next';
@@ -1062,7 +1143,10 @@ class FlowEditor {
             const targetMatch = targetUuid.startsWith('endpoint-left-') ? targetUuid.replace('endpoint-left-','') : null;
             const targetStepId = targetMatch;
             
-            if (!sourceStepId || !targetStepId) return;
+            if (!sourceStepId || !targetStepId) {
+                console.warn('⚠️ Step IDs não encontrados:', { sourceUuid, targetUuid, sourceStepId, targetStepId });
+                return;
+            }
             
             const connId = connectionType === 'button' && buttonIndex !== null
                 ? `button-${sourceStepId}-${buttonIndex}-${targetStepId}`
@@ -1081,7 +1165,11 @@ class FlowEditor {
             
             // Persist to Alpine state
             const step = this.alpine?.config?.flow_steps?.find(s => String(s.id) === String(sourceStepId));
-            if (!step) return;
+            if (!step) {
+                console.warn('⚠️ Step não encontrado no Alpine:', sourceStepId);
+                return;
+            }
+            
             if (connectionType === 'button' && buttonIndex !== null) {
                 if (!step.config) step.config = {};
                 if (!step.config.custom_buttons) step.config.custom_buttons = [];
@@ -1091,8 +1179,10 @@ class FlowEditor {
                 if (!step.connections) step.connections = {};
                 step.connections[connectionType] = targetStepId;
             }
+            
+            console.log('✅ Conexão criada:', connId);
         } catch (e) {
-            console.error('onConnectionCreated error', e);
+            console.error('❌ onConnectionCreated error', e);
         }
     }
     
