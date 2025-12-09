@@ -459,7 +459,13 @@ class FlowEditor {
             // PRIMEIRO: Garantir que o canvas NÃO tem transform (antes de tudo)
             this.canvas.style.setProperty('transform', 'none', 'important');
             
-            // SEGUNDO: Atualizar transform apenas no contentContainer
+            // SEGUNDO: Garantir que contentContainer existe
+            if (!this.contentContainer) {
+                console.warn('⚠️ applyZoom: contentContainer não existe, criando...');
+                this.setupCanvas();
+            }
+            
+            // TERCEIRO: Atualizar transform apenas no contentContainer
             this.updateCanvasTransform();
             
             // TERCEIRO: Obter dimensões base do container pai
@@ -546,9 +552,14 @@ class FlowEditor {
      * Zoom in com foco no card selecionado
      */
     zoomIn() {
+        console.log('🔍 zoomIn() chamado');
         if (!this.canvas) {
             console.warn('⚠️ Canvas não encontrado para zoom in');
             return;
+        }
+        if (!this.contentContainer) {
+            console.warn('⚠️ contentContainer não encontrado, criando...');
+            this.setupCanvas();
         }
         const targetZoom = Math.min(5, this.zoomLevel * 1.2);
         console.log(`🔍 Zoom In: ${this.zoomLevel.toFixed(2)} → ${targetZoom.toFixed(2)}`);
@@ -559,9 +570,14 @@ class FlowEditor {
      * Zoom out com foco no card selecionado
      */
     zoomOut() {
+        console.log('🔍 zoomOut() chamado');
         if (!this.canvas) {
             console.warn('⚠️ Canvas não encontrado para zoom out');
             return;
+        }
+        if (!this.contentContainer) {
+            console.warn('⚠️ contentContainer não encontrado, criando...');
+            this.setupCanvas();
         }
         const targetZoom = Math.max(0.1, this.zoomLevel * 0.8);
         console.log(`🔍 Zoom Out: ${this.zoomLevel.toFixed(2)} → ${targetZoom.toFixed(2)}`);
@@ -612,7 +628,16 @@ class FlowEditor {
         this.pan.x = centerX - worldX * this.zoomLevel;
         this.pan.y = centerY - worldY * this.zoomLevel;
         
-        // Aplicar zoom (que atualiza o transform no contentContainer)
+        console.log(`📐 zoomToLevel: zoom=${this.zoomLevel.toFixed(2)}, pan=(${this.pan.x.toFixed(0)}, ${this.pan.y.toFixed(0)})`);
+        
+        // FORÇAR atualização imediata do transform (não apenas no requestAnimationFrame)
+        if (this.contentContainer) {
+            const transformValue = `translate(${this.pan.x}px, ${this.pan.y}px) scale(${this.zoomLevel})`;
+            this.contentContainer.style.transform = transformValue;
+            console.log(`✅ Transform aplicado IMEDIATAMENTE: ${transformValue}`);
+        }
+        
+        // Aplicar zoom (que atualiza o transform no contentContainer e dimensões do canvas)
         this.applyZoom();
     }
     
@@ -801,29 +826,38 @@ class FlowEditor {
     
     /**
      * Atualiza transform do canvas (zoom + pan combinados)
-     * IMPORTANTE: O transform é aplicado APENAS ao container de conteúdo, NUNCA ao canvas
-     * Isso permite que o grid background permaneça fixo e se expanda corretamente
+     * CRÍTICO: O transform é aplicado APENAS ao contentContainer, NUNCA ao canvas
+     * O canvas deve SEMPRE ter transform: none para que o grid se expanda corretamente
      */
     updateCanvasTransform() {
-        if (!this.canvas) return;
-        
-        // SEMPRE aplicar transform apenas no contentContainer, NUNCA no canvas
-        // O canvas NÃO deve ter transform para que o grid se expanda corretamente
-        if (this.contentContainer) {
-            this.contentContainer.style.transform = `translate(${this.pan.x}px, ${this.pan.y}px) scale(${this.zoomLevel})`;
-            this.contentContainer.style.pointerEvents = 'auto';
-        } else {
-            // Se contentContainer não existe, criar agora
-            this.setupCanvas();
-            if (this.contentContainer) {
-                this.contentContainer.style.transform = `translate(${this.pan.x}px, ${this.pan.y}px) scale(${this.zoomLevel})`;
-                this.contentContainer.style.pointerEvents = 'auto';
-            }
+        if (!this.canvas) {
+            console.warn('⚠️ updateCanvasTransform: canvas não encontrado');
+            return;
         }
         
         // GARANTIR que o canvas NÃO tem transform (usar !important para sobrescrever qualquer estilo inline)
         this.canvas.style.setProperty('transform', 'none', 'important');
         this.canvas.style.transformOrigin = 'top left';
+        
+        // Aplicar transform APENAS no contentContainer
+        if (this.contentContainer) {
+            const transformValue = `translate(${this.pan.x}px, ${this.pan.y}px) scale(${this.zoomLevel})`;
+            this.contentContainer.style.transform = transformValue;
+            this.contentContainer.style.pointerEvents = 'auto';
+            console.log(`✅ Transform aplicado no contentContainer: ${transformValue}`);
+        } else {
+            // Se contentContainer não existe, criar agora
+            console.warn('⚠️ contentContainer não existe, criando...');
+            this.setupCanvas();
+            if (this.contentContainer) {
+                const transformValue = `translate(${this.pan.x}px, ${this.pan.y}px) scale(${this.zoomLevel})`;
+                this.contentContainer.style.transform = transformValue;
+                this.contentContainer.style.pointerEvents = 'auto';
+                console.log(`✅ Transform aplicado no contentContainer (após criar): ${transformValue}`);
+            } else {
+                console.error('❌ ERRO: Não foi possível criar contentContainer');
+            }
+        }
     }
     
     /**
