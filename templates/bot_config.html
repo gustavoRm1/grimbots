@@ -38,12 +38,12 @@
     min-height: 180px;
     background: #0F0F14;
     border: 1px solid #242836;
-    border-radius: 14px;
+    border-radius: 12px;
     cursor: move;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     overflow: hidden;
     animation: stepFadeIn 0.3s ease-out;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3), 0 0 0 0 rgba(255, 255, 255, 0);
     user-select: none;
     -webkit-user-select: none;
     -moz-user-select: none;
@@ -64,9 +64,9 @@
 }
 
 .flow-step-block:hover {
-    border-color: #242836;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
-    transform: translateY(-2px);
+    border-color: #3B82F6;
+    box-shadow: 0 4px 20px rgba(59, 130, 246, 0.3), 0 0 0 1px rgba(59, 130, 246, 0.2);
+    transform: translateY(-1px);
     z-index: 100;
 }
 
@@ -240,42 +240,88 @@
 }
 
 .flow-step-media-preview {
+    margin-bottom: 12px;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #13151C;
+    border: 1px solid #242836;
+}
+
+.flow-step-media-thumbnail {
+    width: 100%;
+    height: 120px;
+    object-fit: cover;
+    display: block;
+}
+
+.flow-step-media-fallback {
     display: flex;
     align-items: center;
     gap: 10px;
     padding: 14px 16px;
     background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(16, 185, 129, 0.15) 100%);
     border: 2px solid rgba(59, 130, 246, 0.4);
-    border-radius: 10px;
-    margin-bottom: 16px;
     color: #FFFFFF;
     font-size: 14px;
     font-weight: 600;
-    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.2);
 }
 
-.flow-step-media-preview i {
+.flow-step-media-fallback i {
     color: #60A5FA;
     font-size: 20px;
-    filter: drop-shadow(0 0 4px rgba(96, 165, 250, 0.6));
 }
 
-.flow-step-media-preview span {
-    color: #DBEAFE;
-    text-shadow: 0 0 8px rgba(147, 197, 253, 0.5);
+.flow-step-video-preview {
+    position: relative;
+}
+
+.flow-step-video-thumbnail-container {
+    position: relative;
+    width: 100%;
+    height: 120px;
+    overflow: hidden;
+    background: #0D0F15;
+}
+
+.flow-step-video-thumbnail {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.flow-step-video-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.3);
+    cursor: pointer;
+}
+
+.flow-step-video-overlay i {
+    font-size: 48px;
+    color: #FFFFFF;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+    opacity: 0.9;
 }
 
 .flow-step-preview {
     color: #FFFFFF;
-    font-size: 14px;
-    line-height: 1.8;
+    font-size: 13px;
+    line-height: 1.6;
     word-break: break-word;
-    padding: 14px 16px;
+    padding: 12px 14px;
     background: #13151C;
     border: 1px solid #242836;
-    border-radius: 10px;
-    margin-bottom: 16px;
-    min-height: 50px;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    min-height: 40px;
+    max-height: 100px;
+    overflow: hidden;
     font-family: 'Inter', sans-serif;
     display: -webkit-box;
     -webkit-line-clamp: 4;
@@ -1535,9 +1581,38 @@ body {
             </div>
 
             <div x-show="config.flow_enabled" class="mt-4">
+                <!-- Controles do Canvas -->
+                <div class="flex items-center gap-2 mb-3 flex-wrap">
+                    <button @click="window.flowEditor?.zoomIn()" class="btn btn-secondary text-sm" title="Zoom In">
+                        <i class="fas fa-search-plus"></i>
+                    </button>
+                    <button @click="window.flowEditor?.zoomOut()" class="btn btn-secondary text-sm" title="Zoom Out">
+                        <i class="fas fa-search-minus"></i>
+                    </button>
+                    <button @click="window.flowEditor?.zoomReset()" class="btn btn-secondary text-sm" title="Reset Zoom">
+                        <i class="fas fa-expand-arrows-alt"></i>
+                    </button>
+                    <button @click="window.flowEditor?.zoomToFit()" class="btn btn-secondary text-sm" title="Ajustar à Tela">
+                        <i class="fas fa-compress"></i>
+                    </button>
+                    <div class="border-l border-gray-600 h-6 mx-2"></div>
+                    <button @click="window.flowEditor?.organizeVertical()" class="btn btn-secondary text-sm" title="Organizar Vertical">
+                        <i class="fas fa-arrows-alt-v"></i> Vertical
+                    </button>
+                    <button @click="window.flowEditor?.organizeHorizontal()" class="btn btn-secondary text-sm" title="Organizar Horizontal">
+                        <i class="fas fa-arrows-alt-h"></i> Horizontal
+                    </button>
+                    <button @click="window.flowEditor?.organizeFlowComplete()" class="btn btn-secondary text-sm" title="Organizar Fluxo Completo">
+                        <i class="fas fa-sitemap"></i> Fluxo
+                    </button>
+                    <button @click="window.flowEditor?.organizeByGroups()" class="btn btn-secondary text-sm" title="Organizar por Grupos">
+                        <i class="fas fa-layer-group"></i> Grupos
+                    </button>
+                </div>
+                
                 <div 
                     id="flow-visual-canvas" 
-                    style="width: 100%; height: 600px; border: 1px solid #242836; border-radius: 8px;"
+                    style="width: 100%; min-height: 600px; height: 70vh; border: 1px solid #242836; border-radius: 8px;"
                     x-init="
                         if (config.flow_enabled && activeTab === 'flow') {
                             setTimeout(() => {

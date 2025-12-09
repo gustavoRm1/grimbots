@@ -33,6 +33,26 @@ class FlowEditor {
         this.gridSize = 20;
         this.dragRepaintFrame = null;
         
+        // Canvas infinito e performance
+        this.canvasBounds = { minX: -10000, minY: -10000, maxX: 10000, maxY: 10000 };
+        this.viewport = { x: 0, y: 0, width: 0, height: 0 };
+        this.animationFrameId = null;
+        this.zoomTarget = 1;
+        this.isZooming = false;
+        
+        // Snapping
+        this.snapEnabled = true;
+        this.snapThreshold = 10;
+        this.snapLines = { horizontal: [], vertical: [] };
+        this.showSnapLines = false;
+        
+        // Organização automática
+        this.layoutSpacing = { x: 320, y: 200 };
+        
+        // Virtualização
+        this.visibleSteps = new Set();
+        this.lastViewportUpdate = 0;
+        
         // Cores por tipo de conexão (todas brancas)
         this.connectionColors = {
             next: '#FFFFFF',
@@ -138,68 +158,310 @@ class FlowEditor {
     }
     
     /**
-     * Configura o canvas com grid premium (pontos translúcidos)
+     * Configura o canvas com grid premium e canvas infinito
      */
     setupCanvas() {
         if (!this.canvas) return;
         
+        // Canvas infinito - remover limites
+        this.canvas.style.position = 'relative';
+        this.canvas.style.overflow = 'hidden';
+        this.canvas.style.width = '100%';
+        this.canvas.style.height = '100%';
+        this.canvas.style.minHeight = '600px';
+        
+        // Background com grid
         this.canvas.style.background = '#0D0F15';
-        // Grid com pontos brancos translúcidos (opacidade aumentada para melhor visibilidade)
         this.canvas.style.backgroundImage = `
             radial-gradient(circle, rgba(255, 255, 255, 0.25) 1.5px, transparent 1.5px)
         `;
         this.canvas.style.backgroundSize = `${this.gridSize}px ${this.gridSize}px`;
         this.canvas.style.backgroundPosition = '0 0';
+        
+        // Atualizar viewport inicial
+        this.updateViewport();
+        
+        // Expandir canvas automaticamente conforme cards
+        this.expandCanvasBounds();
     }
     
     /**
-     * Habilita zoom com scroll (Ctrl/Cmd + Scroll)
+     * Atualiza viewport para virtualização
+     */
+    updateViewport() {
+        if (!this.canvas) return;
+        
+        const rect = this.canvas.getBoundingClientRect();
+        const now = performance.now();
+        
+        // Throttle: atualizar viewport no máximo a cada 100ms
+        if (now - this.lastViewportUpdate < 100) return;
+        this.lastViewportUpdate = now;
+        
+        // Calcular viewport em coordenadas do mundo (considerando zoom/pan)
+        this.viewport = {
+            x: -this.pan.x / this.zoomLevel,
+            y: -this.pan.y / this.zoomLevel,
+            width: rect.width / this.zoomLevel,
+            height: rect.height / this.zoomLevel
+        };
+        
+        // Atualizar quais steps estão visíveis
+        this.updateVisibleSteps();
+    }
+    
+    /**
+     * Atualiza conjunto de steps visíveis (virtualização)
+     */
+    updateVisibleSteps() {
+        this.visibleSteps.clear();
+        
+        this.steps.forEach((element, stepId) => {
+            const rect = element.getBoundingClientRect();
+            const canvasRect = this.canvas.getBoundingClientRect();
+            
+            // Verificar se está dentro da viewport (com margem)
+            const margin = 100; // Margem para pré-carregar
+            const isVisible = 
+                rect.right + margin >= canvasRect.left &&
+                rect.left - margin <= canvasRect.right &&
+                rect.bottom + margin >= canvasRect.top &&
+                rect.top - margin <= canvasRect.bottom;
+            
+            if (isVisible) {
+                this.visibleSteps.add(stepId);
+                // Mostrar elemento
+                element.style.display = '';
+            } else {
+                // Ocultar elemento (mas manter no DOM para jsPlumb)
+                // Não ocultamos completamente para não quebrar conexões
+                // Apenas otimizamos renderização visual se necessário
+            }
+        });
+    }
+    
+    /**
+     * Expande bounds do canvas automaticamente conforme posição dos cards
+     */
+    expandCanvasBounds() {
+        if (!this.canvas || this.steps.size === 0) return;
+        
+        const rect = this.canvas.getBoundingClientRect();
+        let minX = 0, minY = 0, maxX = rect.width, maxY = rect.height;
+        
+        this.steps.forEach((element) => {
+            const step = this.alpine?.config?.flow_steps?.find(s => 
+                String(s.id) === element.dataset.stepId
+            );
+            if (step && step.position) {
+                const x = step.position.x;
+                const y = step.position.y;
+                minX = Math.min(minX, x - 200);
+                minY = Math.min(minY, y - 200);
+                maxX = Math.max(maxX, x + 500);
+                maxY = Math.max(maxY, y + 400);
+            }
+        });
+        
+        // Atualizar bounds (com margem)
+        this.canvasBounds = {
+            minX: minX - 1000,
+            minY: minY - 1000,
+            maxX: maxX + 1000,
+            maxY: maxY + 1000
+        };
+    }
+    
+    /**
+     * Habilita zoom com scroll suave (Google Maps style)
+     * Suporta: Ctrl/Cmd + Scroll, Pinch zoom (touchpad), Wheel zoom
      */
     enableZoom() {
         if (!this.canvas) return;
         
-        this.canvas.addEventListener('wheel', (e) => {
-            if (e.ctrlKey || e.metaKey) {
-                e.preventDefault();
-                const delta = e.deltaY > 0 ? 0.9 : 1.1;
-                this.zoomLevel = Math.max(0.5, Math.min(2, this.zoomLevel * delta));
+        let zoomStartTime = 0;
+        let zoomStartLevel = 1;
+        let zoomTargetLevel = 1;
+        let isZooming = false;
+        
+        const smoothZoom = (targetZoom, centerX, centerY) => {
+            if (isZooming) return;
+            isZooming = true;
+            zoomStartLevel = this.zoomLevel;
+            zoomTargetLevel = Math.max(0.1, Math.min(5, targetZoom));
+            
+            const startTime = performance.now();
+            const duration = 200; // 200ms para suavização
+            
+            const animate = (currentTime) => {
+                const elapsed = currentTime - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                
+                // Easing function (ease-out cubic)
+                const ease = 1 - Math.pow(1 - progress, 3);
+                
+                this.zoomLevel = zoomStartLevel + (zoomTargetLevel - zoomStartLevel) * ease;
+                
+                // Zoom em relação ao ponto do mouse (centerX, centerY)
+                if (centerX !== undefined && centerY !== undefined) {
+                    const zoomChange = this.zoomLevel / zoomStartLevel;
+                    const worldX = (centerX - this.pan.x) / zoomStartLevel;
+                    const worldY = (centerY - this.pan.y) / zoomStartLevel;
+                    
+                    this.pan.x = centerX - worldX * this.zoomLevel;
+                    this.pan.y = centerY - worldY * this.zoomLevel;
+                }
+                
                 this.applyZoom();
+                
+                if (progress < 1) {
+                    requestAnimationFrame(animate);
+                } else {
+                    isZooming = false;
+                }
+            };
+            
+            requestAnimationFrame(animate);
+        };
+        
+        this.canvas.addEventListener('wheel', (e) => {
+            // Zoom com Ctrl/Cmd + Scroll ou apenas scroll (sem modificador)
+            if (e.ctrlKey || e.metaKey || true) {
+                e.preventDefault();
+                
+                const rect = this.canvas.getBoundingClientRect();
+                const centerX = e.clientX - rect.left;
+                const centerY = e.clientY - rect.top;
+                
+                // Calcular delta de zoom suave
+                const zoomDelta = -e.deltaY * 0.001;
+                const newZoom = this.zoomLevel * (1 + zoomDelta);
+                
+                smoothZoom(newZoom, centerX, centerY);
+            }
+        }, { passive: false });
+        
+        // Suporte para pinch zoom (touchpad)
+        let lastPinchDistance = 0;
+        this.canvas.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 2) {
+                const touch1 = e.touches[0];
+                const touch2 = e.touches[1];
+                lastPinchDistance = Math.hypot(
+                    touch2.clientX - touch1.clientX,
+                    touch2.clientY - touch1.clientY
+                );
+            }
+        }, { passive: false });
+        
+        this.canvas.addEventListener('touchmove', (e) => {
+            if (e.touches.length === 2) {
+                e.preventDefault();
+                const touch1 = e.touches[0];
+                const touch2 = e.touches[1];
+                const currentDistance = Math.hypot(
+                    touch2.clientX - touch1.clientX,
+                    touch2.clientY - touch1.clientY
+                );
+                
+                if (lastPinchDistance > 0) {
+                    const rect = this.canvas.getBoundingClientRect();
+                    const centerX = (touch1.clientX + touch2.clientX) / 2 - rect.left;
+                    const centerY = (touch1.clientY + touch2.clientY) / 2 - rect.top;
+                    
+                    const zoomDelta = currentDistance / lastPinchDistance;
+                    const newZoom = this.zoomLevel * zoomDelta;
+                    
+                    smoothZoom(newZoom, centerX, centerY);
+                }
+                
+                lastPinchDistance = currentDistance;
             }
         }, { passive: false });
     }
     
     /**
-     * Aplica zoom ao canvas (combinado com pan)
+     * Aplica zoom ao canvas (combinado com pan) - Otimizado com requestAnimationFrame
      */
     applyZoom() {
         if (!this.canvas) return;
-        this.updateCanvasTransform();
         
-        setTimeout(() => {
+        // Cancelar frame anterior se existir
+        if (this.animationFrameId) {
+            cancelAnimationFrame(this.animationFrameId);
+        }
+        
+        this.animationFrameId = requestAnimationFrame(() => {
+            this.updateCanvasTransform();
+            
+            // Repintar jsPlumb de forma otimizada
             if (this.instance) {
                 this.instance.repaintEverything();
             }
-        }, 10);
+            
+            // Atualizar viewport para virtualização
+            this.updateViewport();
+            
+            this.animationFrameId = null;
+        });
     }
     
     /**
-     * Zoom in
+     * Zoom in com foco no card selecionado
      */
     zoomIn() {
-        this.zoomLevel = Math.min(2, this.zoomLevel * 1.2);
-        this.applyZoom();
+        const targetZoom = Math.min(5, this.zoomLevel * 1.2);
+        this.zoomToLevel(targetZoom);
     }
     
     /**
-     * Zoom out
+     * Zoom out com foco no card selecionado
      */
     zoomOut() {
-        this.zoomLevel = Math.max(0.5, this.zoomLevel * 0.8);
+        const targetZoom = Math.max(0.1, this.zoomLevel * 0.8);
+        this.zoomToLevel(targetZoom);
+    }
+    
+    /**
+     * Zoom para nível específico com foco automático
+     */
+    zoomToLevel(targetZoom, focusElement = null) {
+        if (!this.canvas) return;
+        
+        const rect = this.canvas.getBoundingClientRect();
+        let centerX = rect.width / 2;
+        let centerY = rect.height / 2;
+        
+        // Se houver elemento focado, centralizar nele
+        if (focusElement) {
+            const elementRect = focusElement.getBoundingClientRect();
+            const canvasRect = this.canvas.getBoundingClientRect();
+            centerX = elementRect.left + elementRect.width / 2 - canvasRect.left;
+            centerY = elementRect.top + elementRect.height / 2 - canvasRect.top;
+        } else if (this.selectedStep) {
+            const element = this.steps.get(String(this.selectedStep));
+            if (element) {
+                const elementRect = element.getBoundingClientRect();
+                const canvasRect = this.canvas.getBoundingClientRect();
+                centerX = elementRect.left + elementRect.width / 2 - canvasRect.left;
+                centerY = elementRect.top + elementRect.height / 2 - canvasRect.top;
+            }
+        }
+        
+        // Calcular novo pan para manter o ponto centralizado
+        const zoomChange = targetZoom / this.zoomLevel;
+        const worldX = (centerX - this.pan.x) / this.zoomLevel;
+        const worldY = (centerY - this.pan.y) / this.zoomLevel;
+        
+        this.zoomLevel = targetZoom;
+        this.pan.x = centerX - worldX * this.zoomLevel;
+        this.pan.y = centerY - worldY * this.zoomLevel;
+        
         this.applyZoom();
     }
     
     /**
-     * Reset zoom
+     * Reset zoom e pan
      */
     zoomReset() {
         this.zoomLevel = 1;
@@ -208,19 +470,106 @@ class FlowEditor {
     }
     
     /**
-     * Habilita pan (arrastar canvas) - Botão direito ou meio
+     * Zoom para fit (ajustar todos os cards na tela)
+     */
+    zoomToFit() {
+        if (!this.canvas || this.steps.size === 0) return;
+        
+        const rect = this.canvas.getBoundingClientRect();
+        const padding = 50;
+        
+        // Calcular bounding box de todos os steps
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        
+        this.steps.forEach((element) => {
+            const stepRect = element.getBoundingClientRect();
+            const canvasRect = this.canvas.getBoundingClientRect();
+            const x = stepRect.left - canvasRect.left;
+            const y = stepRect.top - canvasRect.top;
+            const w = stepRect.width;
+            const h = stepRect.height;
+            
+            minX = Math.min(minX, x);
+            minY = Math.min(minY, y);
+            maxX = Math.max(maxX, x + w);
+            maxY = Math.max(maxY, y + h);
+        });
+        
+        if (minX === Infinity) return;
+        
+        const contentWidth = maxX - minX + padding * 2;
+        const contentHeight = maxY - minY + padding * 2;
+        
+        const scaleX = (rect.width - padding * 2) / contentWidth;
+        const scaleY = (rect.height - padding * 2) / contentHeight;
+        const newZoom = Math.min(scaleX, scaleY, 1); // Não aumentar além de 1x
+        
+        // Centralizar
+        const centerX = (minX + maxX) / 2;
+        const centerY = (minY + maxY) / 2;
+        
+        this.zoomLevel = newZoom;
+        this.pan.x = rect.width / 2 - centerX * newZoom;
+        this.pan.y = rect.height / 2 - centerY * newZoom;
+        
+        this.applyZoom();
+    }
+    
+    /**
+     * Habilita pan suave (arrastar canvas) - Otimizado com requestAnimationFrame
+     * Suporta: Botão direito, meio, Alt + arrastar, Space + arrastar
      */
     enablePan() {
         if (!this.canvas) return;
         
+        let panFrameId = null;
+        
+        const updatePan = () => {
+            if (this.isPanning) {
+                this.updateCanvasTransform();
+                panFrameId = requestAnimationFrame(updatePan);
+            } else {
+                panFrameId = null;
+            }
+        };
+        
         this.canvas.addEventListener('mousedown', (e) => {
-            // Pan apenas se não estiver sobre um step e for botão direito/meio
+            // Pan apenas se não estiver sobre um step e for botão direito/meio/alt/space
             const isOverStep = e.target.closest('.flow-step-block');
-            if (!isOverStep && (e.button === 2 || e.button === 1 || (e.button === 0 && e.altKey))) {
+            const isOverButton = e.target.closest('button');
+            const isOverEndpoint = e.target.closest('.jtk-endpoint');
+            
+            if (!isOverStep && !isOverButton && !isOverEndpoint && 
+                (e.button === 2 || e.button === 1 || e.altKey || e.spaceKey)) {
                 e.preventDefault();
                 this.isPanning = true;
                 this.lastPanPoint = { x: e.clientX, y: e.clientY };
                 this.canvas.style.cursor = 'grabbing';
+                this.canvas.classList.add('panning');
+                
+                if (!panFrameId) {
+                    panFrameId = requestAnimationFrame(updatePan);
+                }
+            }
+        });
+        
+        // Detectar tecla Space pressionada
+        let spacePressed = false;
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' && !e.target.matches('input, textarea')) {
+                spacePressed = true;
+                if (this.canvas) {
+                    this.canvas.style.cursor = 'grab';
+                }
+            }
+        });
+        
+        document.addEventListener('keyup', (e) => {
+            if (e.code === 'Space') {
+                spacePressed = false;
+                if (this.canvas && !this.isPanning) {
+                    this.canvas.style.cursor = 'default';
+                }
             }
         });
         
@@ -236,21 +585,38 @@ class FlowEditor {
                 e.preventDefault();
                 const dx = e.clientX - this.lastPanPoint.x;
                 const dy = e.clientY - this.lastPanPoint.y;
+                
+                // Canvas infinito - sem limites
                 this.pan.x += dx;
                 this.pan.y += dy;
+                
                 this.lastPanPoint = { x: e.clientX, y: e.clientY };
-                this.updateCanvasTransform();
+                // updatePan() já está rodando via requestAnimationFrame
+            } else if (spacePressed && e.buttons === 1) {
+                // Pan com Space + arrastar
+                if (!this.isPanning) {
+                    this.isPanning = true;
+                    this.lastPanPoint = { x: e.clientX, y: e.clientY };
+                    this.canvas.style.cursor = 'grabbing';
+                    this.canvas.classList.add('panning');
+                    
+                    if (!panFrameId) {
+                        panFrameId = requestAnimationFrame(updatePan);
+                    }
+                }
             }
         });
         
         this.canvas.addEventListener('mouseup', () => {
             this.isPanning = false;
-            this.canvas.style.cursor = 'grab';
+            this.canvas.style.cursor = spacePressed ? 'grab' : 'default';
+            this.canvas.classList.remove('panning');
         });
         
         this.canvas.addEventListener('mouseleave', () => {
             this.isPanning = false;
-            this.canvas.style.cursor = 'grab';
+            this.canvas.style.cursor = 'default';
+            this.canvas.classList.remove('panning');
         });
     }
     
@@ -516,17 +882,42 @@ class FlowEditor {
         const hasMedia = !!mediaUrl;
         const previewText = this.getStepPreview(step);
         
-        // Renderizar mídia (se houver)
+        // Renderizar mídia (se houver) - com thumbnail real
         let mediaHTML = '';
         if (hasMedia) {
             const mediaType = stepConfig.media_type || 'video';
             const mediaIcon = mediaType === 'video' ? 'fa-video' : 'fa-image';
-            mediaHTML = `
-                <div class="flow-step-media-preview">
-                    <i class="fas ${mediaIcon}"></i>
-                    <span>${mediaType === 'video' ? 'Vídeo' : 'Foto'}</span>
-                </div>
-            `;
+            
+            if (mediaType === 'photo' || mediaType === 'image') {
+                mediaHTML = `
+                    <div class="flow-step-media-preview">
+                        <img src="${this.escapeHtml(mediaUrl)}" 
+                             alt="Preview" 
+                             class="flow-step-media-thumbnail"
+                             onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
+                             loading="lazy" />
+                        <div class="flow-step-media-fallback" style="display: none;">
+                            <i class="fas ${mediaIcon}"></i>
+                            <span>Foto</span>
+                        </div>
+                    </div>
+                `;
+            } else {
+                mediaHTML = `
+                    <div class="flow-step-media-preview flow-step-video-preview">
+                        <div class="flow-step-video-thumbnail-container">
+                            <img src="${this.escapeHtml(mediaUrl)}" 
+                                 alt="Video thumbnail" 
+                                 class="flow-step-video-thumbnail"
+                                 onerror="this.style.display='none';"
+                                 loading="lazy" />
+                            <div class="flow-step-video-overlay">
+                                <i class="fas fa-play-circle"></i>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
         }
         
         // Renderizar botões no body (dentro do próprio botão conforme especificação)
@@ -1135,7 +1526,7 @@ class FlowEditor {
     }
     
     /**
-     * Callback quando step é arrastado
+     * Callback quando step é arrastado - com snapping inteligente
      */
     onStepDrag(params) {
         const element = params.el;
@@ -1143,11 +1534,173 @@ class FlowEditor {
         
         if (stepId) {
             element.classList.add('dragging');
+            
+            // Aplicar snapping se habilitado
+            if (this.snapEnabled) {
+                this.applySnapping(element, params);
+            }
         }
     }
     
     /**
-     * Callback quando drag para
+     * Aplica snapping magnético ao elemento sendo arrastado
+     */
+    applySnapping(element, params) {
+        if (!this.snapEnabled) return;
+        
+        const elementRect = element.getBoundingClientRect();
+        const canvasRect = this.canvas.getBoundingClientRect();
+        
+        const elementX = elementRect.left - canvasRect.left;
+        const elementY = elementRect.top - canvasRect.top;
+        const elementCenterX = elementX + elementRect.width / 2;
+        const elementCenterY = elementY + elementRect.height / 2;
+        
+        let snapX = null, snapY = null;
+        let snapLines = { horizontal: [], vertical: [] };
+        
+        // Verificar snapping com outros steps
+        this.steps.forEach((otherElement, otherStepId) => {
+            if (otherElement === element) return;
+            
+            const otherRect = otherElement.getBoundingClientRect();
+            const otherX = otherRect.left - canvasRect.left;
+            const otherY = otherRect.top - canvasRect.top;
+            const otherCenterX = otherX + otherRect.width / 2;
+            const otherCenterY = otherY + otherRect.height / 2;
+            
+            // Snapping horizontal (alinhar centros ou bordas)
+            const centerXDiff = Math.abs(elementCenterX - otherCenterX);
+            if (centerXDiff < this.snapThreshold) {
+                snapX = otherCenterX - elementRect.width / 2;
+                snapLines.vertical.push({
+                    x: otherCenterX,
+                    y1: Math.min(elementY, otherY) - 20,
+                    y2: Math.max(elementY + elementRect.height, otherY + otherRect.height) + 20
+                });
+            }
+            
+            // Snapping vertical (alinhar centros ou bordas)
+            const centerYDiff = Math.abs(elementCenterY - otherCenterY);
+            if (centerYDiff < this.snapThreshold) {
+                snapY = otherCenterY - elementRect.height / 2;
+                snapLines.horizontal.push({
+                    y: otherCenterY,
+                    x1: Math.min(elementX, otherX) - 20,
+                    x2: Math.max(elementX + elementRect.width, otherX + otherRect.width) + 20
+                });
+            }
+            
+            // Snapping de bordas
+            const leftDiff = Math.abs(elementX - otherX);
+            const rightDiff = Math.abs((elementX + elementRect.width) - (otherX + otherRect.width));
+            const topDiff = Math.abs(elementY - otherY);
+            const bottomDiff = Math.abs((elementY + elementRect.height) - (otherY + otherRect.height));
+            
+            if (leftDiff < this.snapThreshold) {
+                snapX = otherX;
+                snapLines.vertical.push({
+                    x: otherX,
+                    y1: Math.min(elementY, otherY) - 20,
+                    y2: Math.max(elementY + elementRect.height, otherY + otherRect.height) + 20
+                });
+            } else if (rightDiff < this.snapThreshold) {
+                snapX = otherX + otherRect.width - elementRect.width;
+                snapLines.vertical.push({
+                    x: otherX + otherRect.width,
+                    y1: Math.min(elementY, otherY) - 20,
+                    y2: Math.max(elementY + elementRect.height, otherY + otherRect.height) + 20
+                });
+            }
+            
+            if (topDiff < this.snapThreshold) {
+                snapY = otherY;
+                snapLines.horizontal.push({
+                    y: otherY,
+                    x1: Math.min(elementX, otherX) - 20,
+                    x2: Math.max(elementX + elementRect.width, otherX + otherRect.width) + 20
+                });
+            } else if (bottomDiff < this.snapThreshold) {
+                snapY = otherY + otherRect.height - elementRect.height;
+                snapLines.horizontal.push({
+                    y: otherY + otherRect.height,
+                    x1: Math.min(elementX, otherX) - 20,
+                    x2: Math.max(elementX + elementRect.width, otherX + otherRect.width) + 20
+                });
+            }
+        });
+        
+        // Aplicar snap
+        if (snapX !== null || snapY !== null) {
+            const currentLeft = parseFloat(element.style.left) || 0;
+            const currentTop = parseFloat(element.style.top) || 0;
+            
+            // Converter coordenadas de tela para coordenadas do canvas (considerando zoom/pan)
+            if (snapX !== null) {
+                const worldX = (snapX - this.pan.x) / this.zoomLevel;
+                element.style.left = `${worldX}px`;
+            }
+            
+            if (snapY !== null) {
+                const worldY = (snapY - this.pan.y) / this.zoomLevel;
+                element.style.top = `${worldY}px`;
+            }
+        }
+        
+        // Mostrar linhas-guia
+        this.showSnapLines = snapLines.horizontal.length > 0 || snapLines.vertical.length > 0;
+        this.snapLines = snapLines;
+        this.renderSnapLines();
+    }
+    
+    /**
+     * Renderiza linhas-guia de snapping
+     */
+    renderSnapLines() {
+        // Remover linhas antigas
+        const oldLines = this.canvas.querySelectorAll('.snap-line');
+        oldLines.forEach(line => line.remove());
+        
+        if (!this.showSnapLines) return;
+        
+        // Criar linhas-guia
+        this.snapLines.horizontal.forEach(line => {
+            const lineEl = document.createElement('div');
+            lineEl.className = 'snap-line snap-line-horizontal';
+            lineEl.style.cssText = `
+                position: absolute;
+                left: ${line.x1}px;
+                top: ${line.y}px;
+                width: ${line.x2 - line.x1}px;
+                height: 1px;
+                background: #FFB800;
+                opacity: 0.6;
+                pointer-events: none;
+                z-index: 9999;
+            `;
+            this.canvas.appendChild(lineEl);
+        });
+        
+        this.snapLines.vertical.forEach(line => {
+            const lineEl = document.createElement('div');
+            lineEl.className = 'snap-line snap-line-vertical';
+            lineEl.style.cssText = `
+                position: absolute;
+                left: ${line.x}px;
+                top: ${line.y1}px;
+                width: 1px;
+                height: ${line.y2 - line.y1}px;
+                background: #FFB800;
+                opacity: 0.6;
+                pointer-events: none;
+                z-index: 9999;
+            `;
+            this.canvas.appendChild(lineEl);
+        });
+    }
+    
+    /**
+     * Callback quando drag para - limpar linhas-guia
      */
     onStepDragStop(params) {
         const element = params.el;
@@ -1155,6 +1708,11 @@ class FlowEditor {
         
         if (stepId) {
             element.classList.remove('dragging');
+            
+            // Remover linhas-guia
+            this.showSnapLines = false;
+            const snapLines = this.canvas.querySelectorAll('.snap-line');
+            snapLines.forEach(line => line.remove());
             
             const rect = element.getBoundingClientRect();
             const canvasRect = this.canvas.getBoundingClientRect();
@@ -1174,6 +1732,9 @@ class FlowEditor {
             
             const position = { x: Math.round(x), y: Math.round(y) };
             this.updateStepPosition(stepId, position);
+            
+            // Expandir bounds do canvas
+            this.expandCanvasBounds();
         }
     }
     
@@ -1322,12 +1883,25 @@ class FlowEditor {
         
         if (type === 'message' || type === 'content') {
             const text = config.message || config.text || '';
-            return text.substring(0, 50) + (text.length > 50 ? '...' : '');
+            // Mostrar 2-4 linhas (aproximadamente 100-200 caracteres)
+            const maxLength = 150;
+            if (text.length <= maxLength) {
+                return text;
+            }
+            // Quebrar em linhas inteligentes
+            const truncated = text.substring(0, maxLength);
+            const lastSpace = truncated.lastIndexOf(' ');
+            return (lastSpace > 0 ? truncated.substring(0, lastSpace) : truncated) + '...';
         } else if (type === 'payment') {
-            const amount = config.amount || '';
-            return amount ? `R$ ${amount}` : 'Pagamento';
+            const price = config.price || '';
+            const productName = config.product_name || '';
+            const buttonText = config.button_text || '';
+            if (price && productName) {
+                return `${productName} - R$ ${price}`;
+            }
+            return price ? `R$ ${price}` : 'Pagamento';
         } else if (type === 'access') {
-            return config.message || 'Acesso liberado';
+            return config.message || config.access_link || 'Acesso liberado';
         }
         
         return this.getStepTypeLabel(type);
@@ -1352,9 +1926,264 @@ class FlowEditor {
     }
     
     /**
+     * Organiza steps verticalmente
+     */
+    organizeVertical() {
+        if (!this.alpine || !this.alpine.config || !this.alpine.config.flow_steps) return;
+        
+        const steps = this.alpine.config.flow_steps;
+        if (steps.length === 0) return;
+        
+        // Ordenar por posição atual
+        const sortedSteps = [...steps].sort((a, b) => {
+            const posA = a.position || { x: 0, y: 0 };
+            const posB = b.position || { x: 0, y: 0 };
+            if (Math.abs(posA.x - posB.x) < 100) {
+                return posA.y - posB.y;
+            }
+            return posA.x - posB.x;
+        });
+        
+        let currentY = 100;
+        sortedSteps.forEach((step) => {
+            const currentX = step.position?.x || 100;
+            step.position = { x: currentX, y: currentY };
+            currentY += this.layoutSpacing.y;
+            
+            const element = this.steps.get(String(step.id));
+            if (element) {
+                element.style.left = `${currentX}px`;
+                element.style.top = `${currentY}px`;
+            }
+        });
+        
+        setTimeout(() => {
+            this.reconnectAll();
+            this.expandCanvasBounds();
+        }, 50);
+    }
+    
+    /**
+     * Organiza steps horizontalmente
+     */
+    organizeHorizontal() {
+        if (!this.alpine || !this.alpine.config || !this.alpine.config.flow_steps) return;
+        
+        const steps = this.alpine.config.flow_steps;
+        if (steps.length === 0) return;
+        
+        const sortedSteps = [...steps].sort((a, b) => {
+            const posA = a.position || { x: 0, y: 0 };
+            const posB = b.position || { x: 0, y: 0 };
+            if (Math.abs(posA.y - posB.y) < 100) {
+                return posA.x - posB.x;
+            }
+            return posA.y - posB.y;
+        });
+        
+        let currentX = 100;
+        sortedSteps.forEach((step) => {
+            const currentY = step.position?.y || 100;
+            step.position = { x: currentX, y: currentY };
+            currentX += this.layoutSpacing.x;
+            
+            const element = this.steps.get(String(step.id));
+            if (element) {
+                element.style.left = `${currentX}px`;
+                element.style.top = `${currentY}px`;
+            }
+        });
+        
+        setTimeout(() => {
+            this.reconnectAll();
+            this.expandCanvasBounds();
+        }, 50);
+    }
+    
+    /**
+     * Organiza fluxo completo (hierárquico baseado em conexões)
+     */
+    organizeFlowComplete() {
+        if (!this.alpine || !this.alpine.config || !this.alpine.config.flow_steps) return;
+        
+        const steps = this.alpine.config.flow_steps;
+        if (steps.length === 0) return;
+        
+        const startStepId = this.alpine.config.flow_start_step_id;
+        if (!startStepId) {
+            this.organizeVertical();
+            return;
+        }
+        
+        const graph = new Map();
+        const visited = new Set();
+        const positions = new Map();
+        
+        steps.forEach(step => {
+            graph.set(String(step.id), []);
+        });
+        
+        steps.forEach(step => {
+            const stepId = String(step.id);
+            const connections = step.connections || {};
+            const customButtons = step.config?.custom_buttons || [];
+            
+            if (connections.next) {
+                graph.get(stepId).push(String(connections.next));
+            }
+            if (connections.pending) {
+                graph.get(stepId).push(String(connections.pending));
+            }
+            if (connections.retry) {
+                graph.get(stepId).push(String(connections.retry));
+            }
+            
+            customButtons.forEach(btn => {
+                if (btn.target_step) {
+                    graph.get(stepId).push(String(btn.target_step));
+                }
+            });
+        });
+        
+        const queue = [{ id: String(startStepId), x: 100, y: 100, level: 0 }];
+        const levelWidths = new Map();
+        
+        while (queue.length > 0) {
+            const current = queue.shift();
+            const currentId = current.id;
+            
+            if (visited.has(currentId)) continue;
+            visited.add(currentId);
+            
+            positions.set(currentId, { x: current.x, y: current.y });
+            
+            const children = graph.get(currentId) || [];
+            const level = current.level + 1;
+            
+            if (!levelWidths.has(level)) {
+                levelWidths.set(level, 0);
+            }
+            
+            let childX = 100;
+            let childY = current.y + this.layoutSpacing.y;
+            
+            children.forEach((childId) => {
+                if (!visited.has(childId)) {
+                    const width = levelWidths.get(level);
+                    childX = 100 + width * this.layoutSpacing.x;
+                    levelWidths.set(level, width + 1);
+                    
+                    queue.push({ id: childId, x: childX, y: childY, level: level });
+                }
+            });
+        }
+        
+        positions.forEach((pos, stepId) => {
+            const step = steps.find(s => String(s.id) === stepId);
+            if (step) {
+                step.position = pos;
+                const element = this.steps.get(stepId);
+                if (element) {
+                    element.style.left = `${pos.x}px`;
+                    element.style.top = `${pos.y}px`;
+                }
+            }
+        });
+        
+        steps.forEach(step => {
+            if (!positions.has(String(step.id))) {
+                const x = 100 + (positions.size * this.layoutSpacing.x);
+                const y = 100;
+                step.position = { x, y };
+                const element = this.steps.get(String(step.id));
+                if (element) {
+                    element.style.left = `${x}px`;
+                    element.style.top = `${y}px`;
+                }
+            }
+        });
+        
+        setTimeout(() => {
+            this.reconnectAll();
+            this.expandCanvasBounds();
+            this.zoomToFit();
+        }, 50);
+    }
+    
+    /**
+     * Organiza steps por grupos
+     */
+    organizeByGroups() {
+        if (!this.alpine || !this.alpine.config || !this.alpine.config.flow_steps) return;
+        
+        const steps = this.alpine.config.flow_steps;
+        if (steps.length === 0) return;
+        
+        const groups = [];
+        const assigned = new Set();
+        
+        steps.forEach(step => {
+            if (assigned.has(String(step.id))) return;
+            
+            const group = [step];
+            assigned.add(String(step.id));
+            const posA = step.position || { x: 0, y: 0 };
+            
+            steps.forEach(otherStep => {
+                if (assigned.has(String(otherStep.id))) return;
+                
+                const posB = otherStep.position || { x: 0, y: 0 };
+                const distance = Math.hypot(posB.x - posA.x, posB.y - posA.y);
+                
+                if (distance < 300) {
+                    group.push(otherStep);
+                    assigned.add(String(otherStep.id));
+                }
+            });
+            
+            groups.push(group);
+        });
+        
+        let groupStartY = 100;
+        groups.forEach((group, groupIndex) => {
+            let currentY = groupStartY;
+            
+            group.forEach((step) => {
+                const x = 100 + groupIndex * (this.layoutSpacing.x * 2);
+                step.position = { x, y: currentY };
+                currentY += this.layoutSpacing.y;
+                
+                const element = this.steps.get(String(step.id));
+                if (element) {
+                    element.style.left = `${x}px`;
+                    element.style.top = `${currentY}px`;
+                }
+            });
+            
+            groupStartY = currentY + 100;
+        });
+        
+        setTimeout(() => {
+            this.reconnectAll();
+            this.expandCanvasBounds();
+        }, 50);
+    }
+    
+    /**
      * Destruir instância
      */
     destroy() {
+        // Limpar linhas-guia
+        if (this.canvas) {
+            const snapLines = this.canvas.querySelectorAll('.snap-line');
+            snapLines.forEach(line => line.remove());
+        }
+        
+        // Cancelar animações
+        if (this.animationFrameId) {
+            cancelAnimationFrame(this.animationFrameId);
+        }
+        
         this.clearCanvas();
         if (this.instance) {
             try {
