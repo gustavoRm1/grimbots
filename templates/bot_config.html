@@ -1687,11 +1687,10 @@ body {
                     x-init="
                         if (config.flow_enabled && activeTab === 'flow') {
                             setTimeout(() => {
-                                if (typeof FlowEditor !== 'undefined' && !window.flowEditor) {
+                                if (typeof FlowEditorReact !== 'undefined') {
                                     initVisualFlowEditor();
-                                } else if (window.flowEditor && window.flowEditor.instance) {
-                                    window.flowEditor.renderAllSteps();
-                                    window.flowEditor.revalidateConnections();
+                                } else if (window.flowEditorReact) {
+                                    window.flowEditorReact.renderAllSteps();
                                 }
                             }, 400);
                         }
@@ -1869,7 +1868,7 @@ body {
 <!-- React Flow Dependencies (CDN) -->
 <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://unpkg.com/@xyflow/react@11/dist/xyflow.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@xyflow/react@11/dist/xyflow.js"></script>
 <script src="https://unpkg.com/dagre@0.8.5/dist/dagre.min.js"></script>
 <!-- Flow Editor React (Novo) -->
 <script src="{{ url_for('static', filename='js/flow_editor_react.js') }}?v=4.0.0"></script>
@@ -2448,38 +2447,36 @@ function botConfigApp() {
                     return;
                 }
                 
-                if (typeof jsPlumb === 'undefined') {
-                    console.error('❌ jsPlumb não está disponível');
+                // Verificar React Flow
+                if (typeof React === 'undefined' || typeof ReactFlow === 'undefined') {
+                    console.error('❌ React ou React Flow não está disponível. Aguardando...');
+                    setTimeout(() => this.initVisualFlowEditor(), 500);
                     return;
                 }
                 
-                if (window.flowEditor) {
-                    try {
-                        window.flowEditor.destroy();
-                    } catch (e) {
-                        console.warn('⚠️ Erro ao destruir editor anterior:', e);
-                    }
-                }
+                // Limpar canvas
+                canvas.innerHTML = '';
+                
+                // Expor Alpine context
+                window.alpineFlowEditor = this;
                 
                 try {
-                    if (typeof FlowEditor === 'undefined') {
-                        console.error('❌ FlowEditor não está disponível. Verifique se flow_editor.js foi carregado.');
-                        return;
-                    }
+                    // Criar root do React
+                    const root = ReactDOM.createRoot(canvas);
                     
-                    window.flowEditor = new FlowEditor('flow-visual-canvas', this);
-                    console.log('✅ Editor visual inicializado');
+                    // Renderizar FlowEditorReact
+                    root.render(
+                        React.createElement(window.FlowEditorReact, {
+                            alpineContext: this,
+                            canvasId: 'flow-visual-canvas'
+                        })
+                    );
+                    
+                    window.flowEditorReactRoot = root;
+                    console.log('✅ Editor React Flow inicializado');
                 } catch (error) {
-                    console.error('❌ Erro ao inicializar editor:', error);
+                    console.error('❌ Erro ao inicializar editor React Flow:', error);
                     console.error('Stack:', error.stack);
-                    setTimeout(() => {
-                        try {
-                            window.flowEditor = new FlowEditor('flow-visual-canvas', this);
-                            console.log('✅ Editor visual inicializado (tentativa 2)');
-                        } catch (e2) {
-                            console.error('❌ Erro na tentativa 2:', e2);
-                        }
-                    }, 1000);
                 }
             });
         },
@@ -2584,10 +2581,9 @@ function botConfigApp() {
             this.config.flow_steps[this.editingStepIndex] = updatedStep;
             
             this.$nextTick(() => {
-                if (window.flowEditor) {
-                    // Atualizar endpoints do step após salvar (conforme especificação)
-                    // Isso garante que endpoints são atualizados ao mover/adicionar/excluir/editar botões
-                    window.flowEditor.updateStepEndpoints(existingStep.id);
+                // Atualizar step no React Flow
+                if (window.flowEditorReact && window.flowEditorReact.updateStep) {
+                    window.flowEditorReact.updateStep(existingStep.id, updatedStep);
                 }
             });
             
@@ -2638,27 +2634,30 @@ function botConfigApp() {
             this.$nextTick(() => {
                 console.log('🔄 $nextTick executado, aguardando DOM...');
                 setTimeout(() => {
-                    console.log('🔄 Timeout executado, verificando editor...');
-                    if (!window.flowEditor) {
-                        console.log('🆕 Inicializando editor...');
-                        this.initVisualFlowEditor();
+                    // React Flow
+                    if (window.flowEditorReact && window.flowEditorReact.renderAllSteps) {
+                        window.flowEditorReact.renderAllSteps();
+                        console.log('✅ Steps re-renderizados (React Flow)');
                     } else {
-                        console.log('🔄 Re-renderizando steps...');
-                        try {
-                            window.flowEditor.renderAllSteps();
-                            console.log('✅ Steps re-renderizados');
-                        } catch (e) {
-                            console.error('❌ Erro ao re-renderizar:', e);
-                            this.initVisualFlowEditor();
-                        }
+                        console.log('🆕 Inicializando editor React Flow...');
+                        this.initVisualFlowEditor();
                     }
-                }, 500);
+                }, 300);
             });
         },
         
         removeFlowStep(stepId) {
-            if (window.flowEditor) {
-                window.flowEditor.deleteStep(stepId);
+            // Remover do Alpine
+            if (this.config.flow_steps) {
+                const index = this.config.flow_steps.findIndex(s => String(s.id) === String(stepId));
+                if (index !== -1) {
+                    this.config.flow_steps.splice(index, 1);
+                }
+            }
+            
+            // Remover do React Flow
+            if (window.flowEditorReact && window.flowEditorReact.deleteStep) {
+                window.flowEditorReact.deleteStep(stepId);
             }
         },
         
@@ -2706,42 +2705,25 @@ function botConfigApp() {
             if (!this.editingStep || !this.editingStep.config || !this.editingStep.config.custom_buttons) return;
             this.editingStep.config.custom_buttons.splice(index, 1);
             
-            // Atualizar endpoints automaticamente após remover botão (conforme especificação)
+            // Atualizar no React Flow
             this.$nextTick(() => {
-                if (window.flowEditor && this.editingStep) {
-                    window.flowEditor.updateStepEndpoints(this.editingStep.id);
+                if (window.flowEditorReact && this.editingStep && window.flowEditorReact.updateStep) {
+                    window.flowEditorReact.updateStep(this.editingStep.id, this.editingStep);
                 }
             });
         },
         
         watchFlowSteps() {
-            // Watcher otimizado com debounce maior (300ms) e diffing simples
+            // Watcher otimizado para React Flow
             this.$watch('config.flow_steps', (newSteps, oldSteps) => {
-                if (window.flowEditor && newSteps) {
+                if (window.flowEditorReact && newSteps) {
                     clearTimeout(this._flowStepsWatchTimeout);
                     this._flowStepsWatchTimeout = setTimeout(() => {
-                        // Verificar se realmente mudou (diffing simples)
-                        const newLength = Array.isArray(newSteps) ? newSteps.length : 0;
-                        const oldLength = Array.isArray(oldSteps) ? oldSteps.length : 0;
-                        
-                        // Se apenas posições mudaram, não precisa re-renderizar tudo
-                        if (newLength === oldLength && newLength > 0) {
-                            // Apenas atualizar posições (mais eficiente)
-                            newSteps.forEach(step => {
-                                if (step && step.id && step.position) {
-                                    const element = window.flowEditor.steps.get(String(step.id));
-                                    if (element) {
-                                        element.style.transform = `translate3d(${step.position.x}px, ${step.position.y}px, 0)`;
-                                    }
-                                }
-                            });
-                            // Reconectar apenas se necessário
-                            window.flowEditor.reconnectAll();
-                        } else {
-                            // Mudança estrutural: re-renderizar tudo
-                            window.flowEditor.renderAllSteps();
+                        // Re-renderizar tudo no React Flow
+                        if (window.flowEditorReact && window.flowEditorReact.renderAllSteps) {
+                            window.flowEditorReact.renderAllSteps();
                         }
-                    }, 300); // Debounce aumentado para 300ms
+                    }, 300);
                 }
             }, { deep: true });
         },
