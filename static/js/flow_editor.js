@@ -443,8 +443,15 @@ class FlowEditor {
             zIndex: 1000
         });
         
-        // Adicionar endpoints
-        this.addEndpoints(stepElement, stepId, step);
+        // Adicionar endpoints APÓS o DOM estar pronto
+        // Usar setTimeout para garantir que o DOM foi renderizado
+        setTimeout(() => {
+            this.addEndpoints(stepElement, stepId, step);
+            // Repintar após adicionar endpoints
+            if (this.instance) {
+                this.instance.repaintEverything();
+            }
+        }, 10);
         
         // Marcar como inicial se necessário
         if (isStartStep) {
@@ -525,8 +532,14 @@ class FlowEditor {
             }
         }
         
-        // Re-adicionar endpoints
-        this.addEndpoints(element, stepId, step);
+        // Re-adicionar endpoints APÓS o DOM estar pronto
+        setTimeout(() => {
+            this.addEndpoints(element, stepId, step);
+            // Repintar após adicionar endpoints
+            if (this.instance) {
+                this.instance.repaintEverything();
+            }
+        }, 10);
         
         // Atualizar classe inicial
         if (isStartStep) {
@@ -549,9 +562,10 @@ class FlowEditor {
         const hasButtons = customButtons.length > 0;
         
         // 1. ENTRADA - LADO ESQUERDO, CENTRO VERTICAL
+        // Usar anchor fixo que se recalcula automaticamente
         this.instance.addEndpoint(element, {
             uuid: `endpoint-left-${stepId}`,
-            anchor: ['LeftMiddle', { dx: -7 }],
+            anchor: 'LeftMiddle',
             maxConnections: -1,
             isSource: false,
             isTarget: true,
@@ -578,9 +592,13 @@ class FlowEditor {
             customButtons.forEach((btn, index) => {
                 const buttonContainer = element.querySelector(`[data-endpoint-button="${index}"]`);
                 if (buttonContainer) {
+                    // Garantir que o container do botão tenha position relative
+                    if (!buttonContainer.style.position) {
+                        buttonContainer.style.position = 'relative';
+                    }
                     this.instance.addEndpoint(buttonContainer, {
                         uuid: `endpoint-button-${stepId}-${index}`,
-                        anchor: ['RightMiddle', { dx: 7 }],
+                        anchor: 'RightMiddle',
                         maxConnections: 1,
                         isSource: true,
                         isTarget: false,
@@ -620,9 +638,13 @@ class FlowEditor {
                 element.appendChild(globalOutputContainer);
             }
             
+            // Garantir que o container global tenha position relative
+            if (!globalOutputContainer.style.position) {
+                globalOutputContainer.style.position = 'relative';
+            }
             this.instance.addEndpoint(globalOutputContainer, {
                 uuid: `endpoint-right-${stepId}`,
-                anchor: ['RightMiddle', { dx: 7 }],
+                anchor: 'Center',
                 maxConnections: -1,
                 isSource: true,
                 isTarget: false,
@@ -663,6 +685,7 @@ class FlowEditor {
             // Atualizar conexões de forma otimizada
             this.dragFrameId = requestAnimationFrame(() => {
                 if (this.instance) {
+                    // Repintar todas as conexões (jsPlumb recalcula automaticamente)
                     this.instance.repaintEverything();
                 }
                 this.dragFrameId = null;
@@ -703,8 +726,9 @@ class FlowEditor {
             // Atualizar no Alpine
             this.updateStepPosition(stepId, { x, y });
             
-            // Repintar conexões
+            // Repintar conexões (jsPlumb recalcula endpoints automaticamente)
             if (this.instance) {
+                // Repintar todas as conexões
                 this.instance.repaintEverything();
             }
             
@@ -1483,6 +1507,7 @@ class FlowEditor {
                              width: 14px;
                              height: 14px;
                              flex-shrink: 0;
+                             position: relative;
                          "></div>
                 </div>
             `;

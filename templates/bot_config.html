@@ -68,7 +68,7 @@
 }
 
 .flow-step-block {
-    position: absolute;
+    position: absolute; /* Para posicionamento no canvas */
     width: 300px;
     min-height: 180px;
     background: #0F0F14;
@@ -76,7 +76,7 @@
     border-radius: 12px;
     cursor: move;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    overflow: hidden;
+    overflow: visible; /* CRÍTICO: visible para endpoints ficarem visíveis fora do card */
     animation: stepFadeIn 0.3s ease-out;
     box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3), 0 0 0 0 rgba(255, 255, 255, 0);
     user-select: none;
@@ -85,6 +85,7 @@
     -ms-user-select: none;
     touch-action: none;
     will-change: transform;
+    /* Elementos com position: absolute dentro deste card serão relativos a ele */
 }
 
 @keyframes stepFadeIn {
