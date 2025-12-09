@@ -694,5 +694,15 @@
         // Expor globalmente
         window.FlowEditorReact = FlowEditorReact;
         window.MessageNode = MessageNode;
+        
+        console.log('✅ FlowEditorReact carregado e disponível globalmente');
     });
+    
+    // Se React Flow não carregar em 10 segundos, logar erro
+    setTimeout(function() {
+        if (typeof window.FlowEditorReact === 'undefined') {
+            console.error('❌ FlowEditorReact não foi carregado após 10 segundos');
+            console.error('Verifique se React, ReactDOM e ReactFlow estão carregados via CDN');
+        }
+    }, 10000);
 })();

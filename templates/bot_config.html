@@ -1871,7 +1871,16 @@ body {
 <script src="https://cdn.jsdelivr.net/npm/@xyflow/react@11/dist/xyflow.js"></script>
 <script src="https://unpkg.com/dagre@0.8.5/dist/dagre.min.js"></script>
 <!-- Flow Editor React (Novo) -->
-<script src="{{ url_for('static', filename='js/flow_editor_react.js') }}?v=4.0.0"></script>
+<script src="{{ url_for('static', filename='js/flow_editor_react.js') }}?v=5.0.0"></script>
+<script>
+// Debug: Verificar se FlowEditorReact foi carregado
+setTimeout(function() {
+    console.log('🔍 Verificando FlowEditorReact:', typeof window.FlowEditorReact);
+    console.log('🔍 Verificando React:', typeof React);
+    console.log('🔍 Verificando ReactDOM:', typeof ReactDOM);
+    console.log('🔍 Verificando ReactFlow:', typeof ReactFlow);
+}, 2000);
+</script>
 <script>
 function botConfigApp() {
     return {
@@ -2461,6 +2470,13 @@ function botConfigApp() {
                 window.alpineFlowEditor = this;
                 
                 try {
+                    // Verificar se FlowEditorReact está disponível
+                    if (typeof window.FlowEditorReact === 'undefined') {
+                        console.error('❌ FlowEditorReact não está disponível. Aguardando carregamento...');
+                        setTimeout(() => this.initVisualFlowEditor(), 500);
+                        return;
+                    }
+                    
                     // Criar root do React
                     const root = ReactDOM.createRoot(canvas);
                     
@@ -2477,6 +2493,8 @@ function botConfigApp() {
                 } catch (error) {
                     console.error('❌ Erro ao inicializar editor React Flow:', error);
                     console.error('Stack:', error.stack);
+                    // Tentar novamente após 1 segundo
+                    setTimeout(() => this.initVisualFlowEditor(), 1000);
                 }
             });
         },
@@ -2617,7 +2635,8 @@ function botConfigApp() {
                     message: '',
                     media_url: '',
                     audio_url: '',
-                    media_type: 'video'
+                    media_type: 'video',
+                    custom_buttons: []
                 },
                 connections: {},
                 conditions: [],
@@ -2629,20 +2648,55 @@ function botConfigApp() {
             };
             
             this.config.flow_steps.push(newStep);
-            console.log('✅ Step adicionado:', stepId, 'Total:', this.config.flow_steps.length);
+            console.log('✅ Step adicionado ao Alpine:', stepId, 'Total:', this.config.flow_steps.length);
             
+            // Garantir que o editor está inicializado e renderizar
             this.$nextTick(() => {
-                console.log('🔄 $nextTick executado, aguardando DOM...');
-                setTimeout(() => {
-                    // React Flow
-                    if (window.flowEditorReact && window.flowEditorReact.renderAllSteps) {
+                // Função para tentar renderizar
+                const tryRender = () => {
+                    if (window.flowEditorReact && typeof window.flowEditorReact.renderAllSteps === 'function') {
                         window.flowEditorReact.renderAllSteps();
                         console.log('✅ Steps re-renderizados (React Flow)');
-                    } else {
-                        console.log('🆕 Inicializando editor React Flow...');
-                        this.initVisualFlowEditor();
+                        return true;
                     }
-                }, 300);
+                    return false;
+                };
+                
+                // Tentar renderizar imediatamente
+                if (tryRender()) {
+                    return;
+                }
+                
+                // Se não funcionou, tentar inicializar o editor
+                console.log('🆕 Editor não inicializado. Inicializando agora...');
+                
+                // Verificar se FlowEditorReact está disponível
+                if (typeof window.FlowEditorReact === 'undefined') {
+                    console.warn('⚠️ FlowEditorReact não está disponível. Aguardando carregamento...');
+                    // Aguardar até FlowEditorReact estar disponível
+                    let attempts = 0;
+                    const checkInterval = setInterval(() => {
+                        attempts++;
+                        if (typeof window.FlowEditorReact !== 'undefined') {
+                            clearInterval(checkInterval);
+                            this.initVisualFlowEditor();
+                            setTimeout(() => tryRender(), 500);
+                        } else if (attempts > 20) {
+                            clearInterval(checkInterval);
+                            console.error('❌ FlowEditorReact não carregou após 4 segundos');
+                        }
+                    }, 200);
+                } else {
+                    // FlowEditorReact está disponível, inicializar
+                    this.initVisualFlowEditor();
+                    // Aguardar um pouco e tentar renderizar
+                    setTimeout(() => {
+                        if (!tryRender()) {
+                            console.warn('⚠️ Editor inicializado mas renderAllSteps ainda não está disponível. Tentando novamente...');
+                            setTimeout(() => tryRender(), 500);
+                        }
+                    }, 500);
+                }
             });
         },
         
