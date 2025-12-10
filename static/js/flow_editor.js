@@ -595,10 +595,10 @@ class FlowEditor {
                 ${previewText}
                 ${buttonsHtml}
             </div>
-            <div class="flow-step-footer">
-                <button class="flow-step-btn-action" data-action="edit" data-step-id="${stepId}" title="Editar" onclick="event.stopPropagation(); event.preventDefault(); if(window.flowEditor) window.flowEditor.editStep('${stepId}'); return false;"><i class="fas fa-edit"></i></button>
-                <button class="flow-step-btn-action" data-action="remove" data-step-id="${stepId}" title="Remover" onclick="event.stopPropagation(); event.preventDefault(); if(window.flowEditor) window.flowEditor.deleteStep('${stepId}'); return false;"><i class="fas fa-trash"></i></button>
-                ${!isStartStep?`<button class="flow-step-btn-action" data-action="set-start" data-step-id="${stepId}" title="Definir como inicial" onclick="event.stopPropagation(); event.preventDefault(); if(window.flowEditor) window.flowEditor.setStartStep('${stepId}'); return false;">⭐</button>` : ''}
+            <div class="flow-step-footer" data-jtk-not-draggable="true">
+                <button class="flow-step-btn-action" data-action="edit" data-step-id="${stepId}" data-jtk-not-draggable="true" title="Editar" onclick="event.stopImmediatePropagation(); event.stopPropagation(); event.preventDefault(); (window.flowEditorActions && window.flowEditorActions.editStep) ? window.flowEditorActions.editStep('${stepId}') : (window.flowEditor && window.flowEditor.editStep('${stepId}')); return false;"><i class="fas fa-edit"></i></button>
+                <button class="flow-step-btn-action" data-action="remove" data-step-id="${stepId}" data-jtk-not-draggable="true" title="Remover" onclick="event.stopImmediatePropagation(); event.stopPropagation(); event.preventDefault(); (window.flowEditorActions && window.flowEditorActions.deleteStep) ? window.flowEditorActions.deleteStep('${stepId}') : (window.flowEditor && window.flowEditor.deleteStep('${stepId}')); return false;"><i class="fas fa-trash"></i></button>
+                ${!isStartStep?`<button class="flow-step-btn-action" data-action="set-start" data-step-id="${stepId}" data-jtk-not-draggable="true" title="Definir como inicial" onclick="event.stopImmediatePropagation(); event.stopPropagation(); event.preventDefault(); (window.flowEditorActions && window.flowEditorActions.setStartStep) ? window.flowEditorActions.setStartStep('${stepId}') : (window.flowEditor && window.flowEditor.setStartStep('${stepId}')); return false;">⭐</button>` : ''}
             </div>
             <!-- Nodes INSIDE the card -->
             <div class="flow-step-node-input" data-node-type="input" data-step-id="${stepId}" title="Entrada" style="width: 14px; height: 14px;"></div>
@@ -610,22 +610,43 @@ class FlowEditor {
         const container = this.contentContainer || this.canvas;
         container.appendChild(stepElement);
         
+        // CRÍTICO: Desabilitar draggable explicitamente no footer e botões ANTES de tornar o step draggable
+        const footer = inner.querySelector('.flow-step-footer');
+        if (footer) {
+            footer.setAttribute('data-jtk-not-draggable', 'true');
+            footer.style.pointerEvents = 'auto';
+            const footerButtons = footer.querySelectorAll('.flow-step-btn-action');
+            footerButtons.forEach(btn => {
+                btn.setAttribute('data-jtk-not-draggable', 'true');
+                btn.style.pointerEvents = 'auto';
+                btn.style.cursor = 'pointer';
+                btn.style.position = 'relative';
+                btn.style.zIndex = '9999';
+            });
+        }
+        
         // Make draggable via jsPlumb (pass DOM element)
         // CRÍTICO: jsPlumb usa left/top automaticamente, não transform
+        // CRÍTICO: Usar apenas cancel (mais confiável que filter)
         this.instance.draggable(stepElement, {
             containment: false,
             grid: [this.gridSize, this.gridSize],
-            filter: '.flow-step-btn-action, .flow-step-btn-action *, .flow-step-btn-action i, i.fa-edit, i.fa-trash, button[data-action]', // CRÍTICO: Não arrastar quando clicar nos botões ou ícones
+            // CRÍTICO: cancel - cancela drag quando clique é em elementos que correspondem ao seletor
+            cancel: '.flow-step-btn-action, .flow-step-btn-action *, .flow-step-footer, .flow-step-footer *, button[data-action], button[data-action] *, i.fa-edit, i.fa-trash',
             start: (params) => {
                 // CRÍTICO: Verificar se o clique foi em um botão de ação ANTES de qualquer coisa
                 const target = params.e && params.e.target;
                 if (target) {
                     const isButton = target.closest('.flow-step-btn-action[data-action]');
                     const isIconInButton = target.closest('i') && target.closest('.flow-step-btn-action[data-action]');
-                    if (isButton || isIconInButton) {
-                        console.log('🚫 Drag cancelado - clique em botão:', target);
+                    const isInFooter = target.closest('.flow-step-footer');
+                    if (isButton || isIconInButton || isInFooter) {
+                        console.log('🚫 Drag cancelado - clique em botão/footer:', target);
                         // CRÍTICO: Cancelar drag E deixar evento passar
-                        params.e.stopPropagation();
+                        if (params.e) {
+                            params.e.stopPropagation();
+                            params.e.stopImmediatePropagation();
+                        }
                         return false; // Cancelar drag se for um botão
                     }
                 }
@@ -659,26 +680,31 @@ class FlowEditor {
         // CRÍTICO: Usar double rAF para garantir DOM completamente renderizado
         requestAnimationFrame(() => {
             requestAnimationFrame(() => {
-                // CRÍTICO: Configurar event listeners para botões de ação APÓS DOM estar pronto
-                this.attachActionButtons(stepElement, stepId);
-                
                 // add endpoints and ensure deduplication
                 this.addEndpoints(stepElement, stepId, step);
                 this.instance.revalidate(stepElement);
                 this.instance.repaintEverything();
                 
-                // CRÍTICO: Testar se os botões existem e adicionar listener adicional
-                setTimeout(() => {
-                    const testButtons = stepElement.querySelectorAll('.flow-step-btn-action');
-                    console.log(`🔍 Step ${stepId}: ${testButtons.length} botões encontrados após renderização`);
-                    testButtons.forEach((btn, idx) => {
-                        console.log(`  Botão ${idx}:`, {
-                            action: btn.getAttribute('data-action'),
-                            stepId: btn.getAttribute('data-step-id'),
-                            element: btn
+                // CRÍTICO: Configurar event listeners DEPOIS do jsPlumb estar configurado
+                // Aguardar mais um frame para garantir que draggable foi aplicado
+                requestAnimationFrame(() => {
+                    this.attachActionButtons(stepElement, stepId);
+                    
+                    // CRÍTICO: Testar se os botões existem e adicionar listener adicional
+                    setTimeout(() => {
+                        const testButtons = stepElement.querySelectorAll('.flow-step-btn-action');
+                        console.log(`🔍 Step ${stepId}: ${testButtons.length} botões encontrados após renderização`);
+                        testButtons.forEach((btn, idx) => {
+                            console.log(`  Botão ${idx}:`, {
+                                action: btn.getAttribute('data-action'),
+                                stepId: btn.getAttribute('data-step-id'),
+                                element: btn,
+                                onclick: btn.onclick ? 'EXISTS' : 'NULL',
+                                hasEventListeners: btn.onclick !== null || btn.getAttribute('onclick') !== null
+                            });
                         });
-                    });
-                }, 200);
+                    }, 100);
+                });
             });
         });
         
@@ -719,21 +745,14 @@ class FlowEditor {
             
             console.log(`🔵 Configurando listener para botão ${index}: action=${action}, stepId=${buttonStepId}`);
             
-            // Remover listeners anteriores clonando o botão (remove todos os listeners)
-            const newButton = button.cloneNode(true);
-            if (button.parentNode) {
-                button.parentNode.replaceChild(newButton, button);
-            } else {
-                console.error('❌ Botão não tem parentNode:', button);
-                return;
-            }
-            
+            // CRÍTICO: NÃO clonar o botão - isso remove o onclick inline!
+            // Ao invés disso, apenas adicionar listeners adicionais
             // Garantir z-index alto para botões não serem bloqueados
-            newButton.style.position = 'relative';
-            newButton.style.zIndex = '9999';
-            newButton.style.pointerEvents = 'auto';
+            button.style.position = 'relative';
+            button.style.zIndex = '9999';
+            button.style.pointerEvents = 'auto';
             
-            // CRÍTICO: Usar mousedown COM capture:true para capturar ANTES do jsPlumb
+            // CRÍTICO: Handler que funciona mesmo se outros interceptarem
             const handleButtonAction = (e) => {
                 console.log(`🔵 [Direct Listener] Botão ${action} clicado: stepId=${buttonStepId}`, e);
                 // CRÍTICO: Parar propagação IMEDIATAMENTE
@@ -746,17 +765,11 @@ class FlowEditor {
             };
             
             // CRÍTICO: Adicionar listeners com capture:true para executar ANTES de tudo
-            newButton.addEventListener('mousedown', handleButtonAction, true);
-            newButton.addEventListener('click', handleButtonAction, true);
+            button.addEventListener('mousedown', handleButtonAction, true);
+            button.addEventListener('click', handleButtonAction, true);
             
-            // Backup adicional: usar onclick inline como última camada
-            newButton.onclick = (e) => {
-                e.stopImmediatePropagation();
-                e.stopPropagation();
-                e.preventDefault();
-                console.log(`🔵 [onclick inline] Botão ${action} clicado: stepId=${buttonStepId}`);
-                this.handleActionClick(action, buttonStepId);
-            };
+            // CRÍTICO: Backup usando onclick - será preservado se não clonarmos
+            // O onclick inline já está no HTML, então não precisamos sobrescrever
         });
     }
     
@@ -841,10 +854,11 @@ class FlowEditor {
         // Atualizar footer com botões de ação
         const footerEl = innerWrapper.querySelector('.flow-step-footer');
         if (footerEl) {
+            footerEl.setAttribute('data-jtk-not-draggable', 'true');
             footerEl.innerHTML = `
-                <button class="flow-step-btn-action" data-action="edit" data-step-id="${stepId}" title="Editar" onclick="event.stopPropagation(); event.preventDefault(); if(window.flowEditor) window.flowEditor.editStep('${stepId}'); return false;"><i class="fas fa-edit"></i></button>
-                <button class="flow-step-btn-action" data-action="remove" data-step-id="${stepId}" title="Remover" onclick="event.stopPropagation(); event.preventDefault(); if(window.flowEditor) window.flowEditor.deleteStep('${stepId}'); return false;"><i class="fas fa-trash"></i></button>
-                ${!isStartStep ? `<button class="flow-step-btn-action" data-action="set-start" data-step-id="${stepId}" title="Definir como inicial" onclick="event.stopPropagation(); event.preventDefault(); if(window.flowEditor) window.flowEditor.setStartStep('${stepId}'); return false;">⭐</button>` : ''}
+                <button class="flow-step-btn-action" data-action="edit" data-step-id="${stepId}" data-jtk-not-draggable="true" title="Editar" onclick="event.stopImmediatePropagation(); event.stopPropagation(); event.preventDefault(); (window.flowEditorActions && window.flowEditorActions.editStep) ? window.flowEditorActions.editStep('${stepId}') : (window.flowEditor && window.flowEditor.editStep('${stepId}')); return false;"><i class="fas fa-edit"></i></button>
+                <button class="flow-step-btn-action" data-action="remove" data-step-id="${stepId}" data-jtk-not-draggable="true" title="Remover" onclick="event.stopImmediatePropagation(); event.stopPropagation(); event.preventDefault(); (window.flowEditorActions && window.flowEditorActions.deleteStep) ? window.flowEditorActions.deleteStep('${stepId}') : (window.flowEditor && window.flowEditor.deleteStep('${stepId}')); return false;"><i class="fas fa-trash"></i></button>
+                ${!isStartStep ? `<button class="flow-step-btn-action" data-action="set-start" data-step-id="${stepId}" data-jtk-not-draggable="true" title="Definir como inicial" onclick="event.stopImmediatePropagation(); event.stopPropagation(); event.preventDefault(); (window.flowEditorActions && window.flowEditorActions.setStartStep) ? window.flowEditorActions.setStartStep('${stepId}') : (window.flowEditor && window.flowEditor.setStartStep('${stepId}')); return false;">⭐</button>` : ''}
             `;
         }
         
@@ -1572,32 +1586,33 @@ class FlowEditor {
      * Abre modal de edição
      */
     editStep(stepId) {
-        console.log('🔵 editStep chamado com stepId:', stepId);
+        console.log('🔵 editStep chamado com stepId:', stepId, {
+            hasThisAlpine: !!this.alpine,
+            hasWindowAlpineFlowEditor: !!window.alpineFlowEditor,
+            hasFlowEditor: !!window.flowEditor
+        });
         
-        // CRÍTICO: Abrir modal instantaneamente sem delay (PATCH CIRÚRGICO)
-        // Usar setTimeout 0 para garantir que não há conflito com drag
-        setTimeout(() => {
-            // Estratégia 1: Usar this.alpine (passado no construtor)
-            if (this.alpine && typeof this.alpine.openStepModal === 'function') {
-                console.log('✅ Usando this.alpine.openStepModal');
-                this.alpine.openStepModal(stepId);
-                return;
-            }
-            
-            // Estratégia 2: Usar window.alpineFlowEditor (exposto globalmente)
-            if (window.alpineFlowEditor && typeof window.alpineFlowEditor.openStepModal === 'function') {
-                console.log('✅ Usando window.alpineFlowEditor.openStepModal');
-                window.alpineFlowEditor.openStepModal(stepId);
-                return;
-            }
-            
-            // Estratégia 3: Tentar buscar pelo contexto Alpine diretamente
-            console.error('❌ Não foi possível encontrar contexto Alpine:', {
-                hasThisAlpine: !!this.alpine,
-                hasWindowAlpineFlowEditor: !!window.alpineFlowEditor,
-                stepId: stepId
-            });
-        }, 0);
+        // CRÍTICO: Abrir modal instantaneamente SEM setTimeout para resposta imediata
+        // Estratégia 1: Usar this.alpine (passado no construtor)
+        if (this.alpine && typeof this.alpine.openStepModal === 'function') {
+            console.log('✅ Usando this.alpine.openStepModal');
+            this.alpine.openStepModal(stepId);
+            return;
+        }
+        
+        // Estratégia 2: Usar window.alpineFlowEditor (exposto globalmente)
+        if (window.alpineFlowEditor && typeof window.alpineFlowEditor.openStepModal === 'function') {
+            console.log('✅ Usando window.alpineFlowEditor.openStepModal');
+            window.alpineFlowEditor.openStepModal(stepId);
+            return;
+        }
+        
+        // Estratégia 3: Tentar buscar pelo contexto Alpine diretamente
+        console.error('❌ Não foi possível encontrar contexto Alpine:', {
+            hasThisAlpine: !!this.alpine,
+            hasWindowAlpineFlowEditor: !!window.alpineFlowEditor,
+            stepId: stepId
+        });
     }
     
     /**
@@ -2063,4 +2078,50 @@ class FlowEditor {
 
 // Exportar para uso global
 window.FlowEditor = FlowEditor;
+
+// CRÍTICO: Expor métodos diretamente no window para uso em onclick inline
+// Criar objeto global antes de qualquer coisa
+if (!window.flowEditorActions) {
+    window.flowEditorActions = {};
+}
+
+// Atualizar métodos quando necessário
+window.flowEditorActions.editStep = function(stepId) {
+    console.log('🔵 [Global Action] editStep chamado:', stepId, {
+        hasFlowEditor: !!window.flowEditor,
+        hasAlpineFlowEditor: !!window.alpineFlowEditor
+    });
+    
+    // Estratégia 1: Usar window.flowEditor
+    if (window.flowEditor && typeof window.flowEditor.editStep === 'function') {
+        console.log('✅ Usando window.flowEditor.editStep');
+        window.flowEditor.editStep(stepId);
+        return;
+    }
+    
+    // Estratégia 2: Usar window.alpineFlowEditor diretamente
+    if (window.alpineFlowEditor && typeof window.alpineFlowEditor.openStepModal === 'function') {
+        console.log('✅ Usando window.alpineFlowEditor.openStepModal diretamente');
+        window.alpineFlowEditor.openStepModal(stepId);
+        return;
+    }
+    
+    console.error('❌ Nem flowEditor nem alpineFlowEditor disponíveis');
+};
+
+window.flowEditorActions.deleteStep = function(stepId) {
+    console.log('🔵 [Global Action] deleteStep chamado:', stepId);
+    if (window.flowEditor && typeof window.flowEditor.deleteStep === 'function') {
+        window.flowEditor.deleteStep(stepId);
+    }
+};
+
+window.flowEditorActions.setStartStep = function(stepId) {
+    console.log('🔵 [Global Action] setStartStep chamado:', stepId);
+    if (window.flowEditor && typeof window.flowEditor.setStartStep === 'function') {
+        window.flowEditor.setStartStep(stepId);
+    }
+};
+
+console.log('✅ window.flowEditorActions inicializado');
 
