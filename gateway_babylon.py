@@ -230,7 +230,48 @@ class BabylonGateway(PaymentGateway):
                 transaction_id = data.get('id')
                 status = data.get('status', 'pending')
                 
-                # ✅ Extrair dados do PIX
+                # ✅ CRÍTICO: Verificar se transação foi recusada ANTES de tentar extrair código PIX
+                if status in ['refused', 'failed', 'cancelled', 'canceled']:
+                    refused_reason = data.get('refusedReason', {})
+                    if isinstance(refused_reason, dict):
+                        reason_code = refused_reason.get('acquirerCode')
+                        reason_description = refused_reason.get('description', 'Transação recusada')
+                        is_antifraud = refused_reason.get('antifraud', False)
+                        
+                        logger.error(f"❌ [{self.get_gateway_name()}] Transação RECUSADA pela adquirente!")
+                        logger.error(f"   Status: {status}")
+                        logger.error(f"   Código: {reason_code}")
+                        logger.error(f"   Descrição: {reason_description}")
+                        logger.error(f"   Antifraude: {is_antifraud}")
+                        logger.error(f"   Transaction ID: {transaction_id}")
+                        
+                        # ✅ Log detalhado de possíveis causas
+                        logger.error(f"")
+                        logger.error(f"   🔍 POSSÍVEIS CAUSAS:")
+                        logger.error(f"")
+                        logger.error(f"   1. ❌ Credenciais inválidas (Secret Key ou Company ID)")
+                        logger.error(f"      → Verificar se Secret Key e Company ID estão corretos")
+                        logger.error(f"   2. ❌ Dados do cliente inválidos")
+                        logger.error(f"      → CPF: {data.get('customer', {}).get('document', {}).get('number', 'N/A')}")
+                        logger.error(f"      → Telefone: {data.get('customer', {}).get('phone', 'N/A')}")
+                        logger.error(f"   3. ❌ Valor fora dos limites permitidos")
+                        logger.error(f"      → Valor enviado: {data.get('amount', 0)} centavos (R$ {amount:.2f})")
+                        logger.error(f"   4. ❌ Split configurado incorretamente")
+                        if data.get('splits'):
+                            logger.error(f"      → Splits: {data.get('splits')}")
+                        logger.error(f"   5. ❌ Conta do Babylon com restrições ou bloqueada")
+                        logger.error(f"")
+                        logger.error(f"   💡 AÇÃO: Verificar configurações do gateway e tentar novamente")
+                        logger.error(f"")
+                    else:
+                        logger.error(f"❌ [{self.get_gateway_name()}] Transação recusada (status: {status})")
+                        logger.error(f"   Transaction ID: {transaction_id}")
+                        logger.error(f"   Motivo: {refused_reason if refused_reason else 'Não especificado'}")
+                    
+                    # ✅ Retornar None para indicar falha (não gerar PIX quando recusado)
+                    return None
+                
+                # ✅ Extrair dados do PIX (apenas se transação não foi recusada)
                 pix_info = data.get('pix', {})
                 
                 logger.debug(f"🔍 [{self.get_gateway_name()}] Objeto pix: {pix_info}")
@@ -277,10 +318,15 @@ class BabylonGateway(PaymentGateway):
                     return None
                 
                 if not pix_code:
-                    logger.error(f"❌ [{self.get_gateway_name()}] Resposta não contém código PIX: {data}")
-                    logger.error(f"📋 Estrutura da resposta: {list(data.keys())}")
+                    # ✅ Log mais detalhado quando não há código PIX (mas status não é refused)
+                    logger.error(f"❌ [{self.get_gateway_name()}] Resposta não contém código PIX")
+                    logger.error(f"   Status da transação: {status}")
+                    logger.error(f"   Transaction ID: {transaction_id}")
+                    logger.error(f"   Estrutura da resposta: {list(data.keys())}")
                     if isinstance(pix_info, dict):
-                        logger.error(f"📋 Campos do objeto pix: {list(pix_info.keys())}")
+                        logger.error(f"   Campos do objeto pix: {list(pix_info.keys())}")
+                        logger.error(f"   Valores do pix: {pix_info}")
+                    logger.error(f"   💡 Possível causa: Transação criada mas PIX não foi gerado (verificar configurações)")
                     return None
                 
                 logger.info(f"✅ [{self.get_gateway_name()}] PIX gerado com sucesso!")
