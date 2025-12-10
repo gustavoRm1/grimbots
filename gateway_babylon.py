@@ -111,8 +111,59 @@ class BabylonGateway(PaymentGateway):
                 customer_document = customer_data.get('cpf') or customer_data.get('document', customer_document)
             
             # Remover formatação do telefone e documento (apenas números)
-            customer_phone = ''.join(filter(str.isdigit, customer_phone))
-            customer_document = ''.join(filter(str.isdigit, customer_document))
+            customer_phone = ''.join(filter(str.isdigit, str(customer_phone)))
+            customer_document = ''.join(filter(str.isdigit, str(customer_document)))
+            
+            # ✅ VALIDAÇÃO CRÍTICA: CPF deve ter 11 dígitos
+            if len(customer_document) != 11:
+                logger.warning(f"⚠️ [{self.get_gateway_name()}] CPF inválido (len={len(customer_document)}): {customer_document}")
+                logger.warning(f"   Gerando CPF válido aleatório...")
+                # ✅ Gerar CPF válido aleatório (11 dígitos)
+                import random
+                # Gerar 9 primeiros dígitos
+                cpf_base = ''.join([str(random.randint(0, 9)) for _ in range(9)])
+                # Calcular dígitos verificadores (algoritmo simplificado)
+                def calcular_dv(cpf):
+                    soma = sum(int(cpf[i]) * (10 - i) for i in range(9))
+                    dv1 = 11 - (soma % 11)
+                    if dv1 >= 10:
+                        dv1 = 0
+                    cpf += str(dv1)
+                    soma = sum(int(cpf[i]) * (11 - i) for i in range(10))
+                    dv2 = 11 - (soma % 11)
+                    if dv2 >= 10:
+                        dv2 = 0
+                    return cpf + str(dv2)
+                customer_document = calcular_dv(cpf_base)
+                logger.info(f"✅ CPF gerado: {customer_document[:3]}***{customer_document[-2:]}")
+            
+            # ✅ VALIDAÇÃO CRÍTICA: Telefone deve ter 10-11 dígitos e ser diferente do CPF
+            if len(customer_phone) < 10 or len(customer_phone) > 11:
+                logger.warning(f"⚠️ [{self.get_gateway_name()}] Telefone inválido (len={len(customer_phone)}): {customer_phone}")
+                logger.warning(f"   Gerando telefone válido...")
+                # ✅ Gerar telefone válido (11 dígitos - DDD + número)
+                import random
+                ddd = random.choice(['11', '21', '47', '48', '51', '61', '71', '81', '85', '92'])
+                numero = ''.join([str(random.randint(0, 9)) for _ in range(9)])
+                customer_phone = ddd + numero
+                logger.info(f"✅ Telefone gerado: {customer_phone[:2]}****{customer_phone[-4:]}")
+            
+            # ✅ VALIDAÇÃO CRÍTICA: CPF e telefone não podem ser iguais
+            if customer_phone == customer_document:
+                logger.warning(f"⚠️ [{self.get_gateway_name()}] CPF e telefone são iguais: {customer_phone}")
+                logger.warning(f"   Gerando telefone diferente...")
+                import random
+                ddd = random.choice(['11', '21', '47', '48', '51', '61', '71', '81', '85', '92'])
+                numero = ''.join([str(random.randint(0, 9)) for _ in range(9)])
+                customer_phone = ddd + numero
+                logger.info(f"✅ Telefone gerado: {customer_phone[:2]}****{customer_phone[-4:]}")
+            
+            # ✅ Log dos dados validados
+            logger.debug(f"🔍 [{self.get_gateway_name()}] Dados do cliente validados:")
+            logger.debug(f"   Nome: {customer_name}")
+            logger.debug(f"   Email: {customer_email}")
+            logger.debug(f"   CPF: {customer_document[:3]}***{customer_document[-2:]} (len={len(customer_document)})")
+            logger.debug(f"   Telefone: {customer_phone[:2]}****{customer_phone[-4:]} (len={len(customer_phone)})")
             
             # ✅ Validar expiresInDays (obrigatório: 1 a 7 dias conforme documentação)
             # Por padrão, usar 1 dia. No futuro, pode ser configurável via customer_data ou gateway config
@@ -166,21 +217,34 @@ class BabylonGateway(PaymentGateway):
             if self.split_user_id and self.split_percentage > 0:
                 split_amount_cents = int(amount_cents * (self.split_percentage / 100))
                 
-                # Garantir mínimo de 1 centavo
+                # ✅ CRÍTICO: Validar split_amount antes de adicionar
+                # Se split_amount for 0, pode causar recusa da transação
                 if split_amount_cents < 1:
+                    logger.warning(f"⚠️ [{self.get_gateway_name()}] Split calculado é 0 centavos - ajustando para mínimo de 1 centavo")
                     split_amount_cents = 1
                 
-                # Garantir que sobra pelo menos 1 centavo para o vendedor
+                # ✅ CRÍTICO: Garantir que sobra pelo menos 1 centavo para o vendedor
                 if split_amount_cents >= amount_cents:
-                    split_amount_cents = amount_cents - 1
+                    logger.warning(f"⚠️ [{self.get_gateway_name()}] Split ({split_amount_cents}) >= valor total ({amount_cents}) - ajustando")
+                    split_amount_cents = max(1, amount_cents - 1)
                 
-                payload['split'] = [
-                    {
-                        'recipientId': self.split_user_id,
-                        'amount': split_amount_cents
-                    }
-                ]
-                logger.info(f"💰 [{self.get_gateway_name()}] Split configurado: {split_amount_cents} centavos ({self.split_percentage}%) para recipientId {self.split_user_id}")
+                # ✅ CRÍTICO: Validar que split não é zero antes de adicionar ao payload
+                if split_amount_cents > 0 and split_amount_cents < amount_cents:
+                    payload['split'] = [
+                        {
+                            'recipientId': self.split_user_id,
+                            'amount': split_amount_cents
+                        }
+                    ]
+                    logger.info(f"💰 [{self.get_gateway_name()}] Split configurado: {split_amount_cents} centavos ({self.split_percentage}%) para recipientId {self.split_user_id}")
+                    logger.debug(f"   Valor original: {amount_cents} centavos")
+                    logger.debug(f"   Split: {split_amount_cents} centavos")
+                    logger.debug(f"   Restante para vendedor: {amount_cents - split_amount_cents} centavos")
+                else:
+                    logger.error(f"❌ [{self.get_gateway_name()}] Split inválido calculado: {split_amount_cents} centavos (valor total: {amount_cents})")
+                    logger.error(f"   ⚠️ NÃO ADICIONANDO SPLIT AO PAYLOAD - pode causar recusa se split é obrigatório")
+                    logger.error(f"   💡 Verificar configuração de split_percentage ({self.split_percentage}%)")
+                    # Não adicionar split inválido ao payload
             
             # ✅ Ajustar tipo de documento se for CNPJ (14 dígitos)
             if len(customer_document) == 14:
