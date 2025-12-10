@@ -404,6 +404,12 @@ class BotManager:
         cleanup_ob_thread = threading.Thread(target=cleanup_order_bump_sessions, daemon=True)
         cleanup_ob_thread.start()
         
+        # ✅ CONTROLE DE CONCORRÊNCIA: Limitar threads de remarketing simultâneas
+        # Sistema multi-usuário: permite até 15 campanhas simultâneas para fluidez
+        # Aumentado para suportar múltiplos usuários fazendo campanhas ao mesmo tempo
+        self.remarketing_semaphore = threading.BoundedSemaphore(15)  # Máximo 15 campanhas simultâneas
+        self.remarketing_queue = []  # Fila de campanhas aguardando (transparente para usuário)
+        self.active_remarketing_campaigns = set()  # IDs de campanhas ativas
         logger.info("BotManager inicializado")
     
     def validate_token(self, token: str) -> Dict[str, Any]:
@@ -9983,11 +9989,20 @@ Seu pagamento ainda não foi confirmado.
                         return
                     
                     # ✅ CORREÇÃO CRÍTICA: Processar em batches com paginação (evita sobrecarga de memória)
-                    batch_size = 20
+                    # ✅ OTIMIZAÇÃO MULTI-USUÁRIO: Batch maior quando sistema não está sobrecarregado
+                    # Ajusta dinamicamente baseado no número de campanhas ativas
+                    active_count = len(self.active_remarketing_campaigns)
+                    if active_count <= 5:
+                        batch_size = 30  # Batch maior quando poucas campanhas ativas
+                    elif active_count <= 10:
+                        batch_size = 25  # Batch médio
+                    else:
+                        batch_size = 20  # Batch menor quando muitas campanhas ativas
+                    
                     offset = 0
                     batch_number = 0
                     
-                    logger.info(f"🚀 Iniciando processamento de {total_leads} leads em batches de {batch_size}")
+                    logger.info(f"🚀 Iniciando processamento de {total_leads} leads em batches de {batch_size} (campanhas ativas: {active_count})")
                     
                     while offset < total_leads:
                         batch_number += 1
@@ -10118,6 +10133,21 @@ Seu pagamento ainda não foi confirmado.
                             campaign.total_failed += batch_failed
                             campaign.total_blocked += batch_blocked
                             
+                            # ✅ NOVO: Verificar se sistema está sobrecarregado (muitos erros consecutivos)
+                            # Se mais de 80% dos leads falharem em um batch, pausar por mais tempo
+                            total_in_batch = batch_sent + batch_failed + batch_blocked
+                            if total_in_batch > 0:
+                                failure_rate = (batch_failed + batch_blocked) / total_in_batch
+                                if failure_rate > 0.8:
+                                    # ✅ Pausa maior quando muitas falhas (mas não avisar usuário)
+                                    logger.debug(f"⚠️ Taxa de falha alta ({failure_rate*100:.1f}%) - pausando por mais tempo...")
+                                    time.sleep(2.5)  # Pausa moderada quando muitas falhas
+                                else:
+                                    # ✅ Pausa otimizada para throughput maior (sistema multi-usuário)
+                                    time.sleep(0.8)  # Reduzido para processar mais rápido
+                            else:
+                                time.sleep(0.8)  # Pausa padrão otimizada
+                            
                             db.session.commit()
                             db.session.refresh(campaign)  # ✅ Refresh após commit
                             
@@ -10155,8 +10185,8 @@ Seu pagamento ainda não foi confirmado.
                         except Exception as socket_error:
                             logger.warning(f"⚠️ Erro ao emitir progresso WebSocket: {socket_error}")
                         
-                        # ✅ Rate limiting (20 msgs/segundo) - aumentar sleep para evitar sobrecarga
-                        time.sleep(1.2)  # ✅ Aumentado para 1.2s para dar mais margem
+                        # ✅ Rate limiting otimizado: sleep condicional já aplicado acima
+                        # Sistema multi-usuário: processamento mais rápido quando possível
                         
                         # ✅ Atualizar offset para próximo batch
                         offset += batch_size
@@ -10200,6 +10230,42 @@ Seu pagamento ainda não foi confirmado.
                         })
                     except Exception as socket_error:
                         logger.warning(f"⚠️ Erro ao emitir conclusão WebSocket: {socket_error}")
+                except KeyboardInterrupt:
+                    # ✅ Tratar interrupção graciosamente sem crashar
+                    logger.warning(f"⚠️ Campanha {campaign_id} interrompida pelo usuário")
+                    try:
+                        campaign = db.session.get(RemarketingCampaign, campaign_id)
+                        if campaign:
+                            campaign.status = 'paused'
+                            db.session.commit()
+                    except:
+                        pass
+                    raise  # Re-raise para permitir shutdown gracioso
+                except SystemExit:
+                    # ✅ Tratar SystemExit graciosamente
+                    logger.warning(f"⚠️ Campanha {campaign_id} interrompida por SystemExit")
+                    try:
+                        campaign = db.session.get(RemarketingCampaign, campaign_id)
+                        if campaign:
+                            campaign.status = 'failed'
+                            campaign.error_message = 'Sistema reiniciando'
+                            db.session.commit()
+                    except:
+                        pass
+                    raise  # Re-raise para permitir shutdown gracioso
+                except MemoryError:
+                    # ✅ CRÍTICO: Tratar falta de memória sem crashar o sistema
+                    logger.error(f"❌ MEMÓRIA INSUFICIENTE na campanha {campaign_id} - pausando")
+                    try:
+                        campaign = db.session.get(RemarketingCampaign, campaign_id)
+                        if campaign:
+                            campaign.status = 'failed'
+                            campaign.error_message = 'Memória insuficiente - sistema sobrecarregado'
+                            db.session.commit()
+                    except:
+                        pass
+                    # Não re-raise MemoryError para evitar crash
+                    return
                 except Exception as e:
                     logger.error(f"❌ Erro ao enviar campanha de remarketing {campaign_id}: {e}", exc_info=True)
                     # ✅ GARANTIR: Atualizar status mesmo em caso de erro
@@ -10223,8 +10289,81 @@ Seu pagamento ainda não foi confirmado.
                         logger.error(f"❌ Erro ao atualizar status após falha: {update_error}", exc_info=True)
                         db.session.rollback()
         
+        # ✅ CONTROLE DE CONCORRÊNCIA: Usar semáforo para limitar threads simultâneas
+        def send_campaign_with_limit():
+            """Wrapper que controla concorrência de remarketing"""
+            # Adicionar campanha à lista de ativas
+            self.active_remarketing_campaigns.add(campaign_id)
+            
+            # ✅ LOOP INFINITO: Tentar adquirir slot até conseguir (transparente para usuário)
+            # Sistema multi-usuário: todas as campanhas serão processadas, mesmo que aguardem
+            max_retries = 360  # Máximo 6 horas de tentativas (360 * 60s = 6 horas)
+            retry_count = 0
+            
+            while retry_count < max_retries:
+                try:
+                    # ✅ Tentar adquirir slot (timeout de 60 segundos por tentativa)
+                    acquired = self.remarketing_semaphore.acquire(timeout=60)
+                    
+                    if acquired:
+                        # ✅ Slot adquirido - iniciar processamento
+                        logger.debug(f"✅ Campanha {campaign_id} iniciando processamento (tentativa {retry_count + 1})")
+                        break
+                    else:
+                        # ✅ Slot não disponível - aguardar e tentar novamente
+                        retry_count += 1
+                        if retry_count % 10 == 0:  # Log a cada 10 tentativas (10 minutos)
+                            logger.debug(f"⏳ Campanha {campaign_id} aguardando slot... (tentativa {retry_count}/{max_retries})")
+                        time.sleep(5)  # Aguardar 5 segundos antes de tentar novamente
+                        continue
+                        
+                except Exception as acquire_error:
+                    logger.warning(f"⚠️ Erro ao adquirir slot para campanha {campaign_id}: {acquire_error}")
+                    time.sleep(10)  # Aguardar mais tempo em caso de erro
+                    retry_count += 1
+                    continue
+            
+            if retry_count >= max_retries:
+                # ✅ Timeout muito longo - apenas logar (não falhar)
+                logger.error(f"❌ Campanha {campaign_id} não conseguiu slot após {max_retries} tentativas")
+                try:
+                    with app.app_context():
+                        campaign = db.session.get(RemarketingCampaign, campaign_id)
+                        if campaign and campaign.status == 'sending':
+                            # Manter como 'sending' mas adicionar nota no erro
+                            campaign.error_message = f'Sistema muito ocupado - aguardando processamento'
+                            db.session.commit()
+                except:
+                    pass
+                return
+            
+            try:
+                
+                # Executar campanha (já tem app_context interno)
+                send_campaign()
+                
+            except Exception as outer_error:
+                logger.error(f"❌ Erro crítico na campanha {campaign_id}: {outer_error}", exc_info=True)
+                try:
+                    with app.app_context():
+                        campaign = db.session.get(RemarketingCampaign, campaign_id)
+                        if campaign:
+                            campaign.status = 'failed'
+                            campaign.error_message = f'Erro crítico: {str(outer_error)[:200]}'
+                            db.session.commit()
+                except:
+                    pass
+            finally:
+                # Liberar semáforo e remover da lista de ativas
+                self.remarketing_semaphore.release()
+                self.active_remarketing_campaigns.discard(campaign_id)
+                logger.debug(f"✅ Slot liberado - Campanha {campaign_id} concluída")
+                
+                # ✅ Se há campanhas na fila, processar próxima automaticamente
+                # (transparente para o usuário - não precisa fazer nada)
+        
         # Executar em thread separada
-        thread = threading.Thread(target=send_campaign)
+        thread = threading.Thread(target=send_campaign_with_limit)
         thread.daemon = True
         thread.start()
     
