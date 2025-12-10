@@ -480,15 +480,17 @@ class FlowEditor {
         const container = this.contentContainer || this.canvas;
         container.appendChild(stepElement);
         
-        // CRÍTICO: Configurar event listeners para botões de ação
-        this.attachActionButtons(stepElement, stepId);
-        
         // Make draggable via jsPlumb (pass DOM element)
         // CRÍTICO: jsPlumb usa left/top automaticamente, não transform
         this.instance.draggable(stepElement, {
             containment: false,
             grid: [this.gridSize, this.gridSize],
+            filter: '.flow-step-btn-action, .flow-step-btn-action *', // CRÍTICO: Não arrastar quando clicar nos botões
             start: (params) => {
+                // Verificar se o clique foi em um botão de ação
+                if (params.e && params.e.target && params.e.target.closest('.flow-step-btn-action')) {
+                    return false; // Cancelar drag se for um botão
+                }
                 stepElement.classList.add('dragging');
                 // Garantir que não há transform
                 stepElement.style.transform = 'none';
@@ -519,6 +521,9 @@ class FlowEditor {
         // CRÍTICO: Usar double rAF para garantir DOM completamente renderizado
         requestAnimationFrame(() => {
             requestAnimationFrame(() => {
+                // CRÍTICO: Configurar event listeners para botões de ação APÓS DOM estar pronto
+                this.attachActionButtons(stepElement, stepId);
+                
                 // add endpoints and ensure deduplication
                 this.addEndpoints(stepElement, stepId, step);
                 this.instance.revalidate(stepElement);
@@ -535,25 +540,69 @@ class FlowEditor {
      * Anexa event listeners aos botões de ação do step
      */
     attachActionButtons(stepElement, stepId) {
-        if (!stepElement) return;
+        if (!stepElement) {
+            console.warn('⚠️ attachActionButtons: stepElement não existe');
+            return;
+        }
         
-        const actionButtons = stepElement.querySelectorAll('.flow-step-btn-action[data-action]');
-        actionButtons.forEach(button => {
+        // Buscar dentro do stepElement (incluindo innerWrapper se existir)
+        const innerWrapper = stepElement.querySelector('.flow-step-block-inner') || stepElement;
+        const actionButtons = innerWrapper.querySelectorAll('.flow-step-btn-action[data-action]');
+        
+        console.log(`🔵 attachActionButtons: encontrados ${actionButtons.length} botões para step ${stepId}`, {
+            stepElement: stepElement,
+            innerWrapper: innerWrapper,
+            buttons: actionButtons
+        });
+        
+        if (actionButtons.length === 0) {
+            console.warn('⚠️ attachActionButtons: nenhum botão encontrado no step', stepId, {
+                stepElementHTML: stepElement.innerHTML.substring(0, 200)
+            });
+            return;
+        }
+        
+        actionButtons.forEach((button, index) => {
             const action = button.getAttribute('data-action');
             const buttonStepId = button.getAttribute('data-step-id') || stepId;
             
+            console.log(`🔵 Configurando listener para botão ${index}: action=${action}, stepId=${buttonStepId}`);
+            
             // Remover listeners anteriores clonando o botão (remove todos os listeners)
             const newButton = button.cloneNode(true);
-            button.parentNode.replaceChild(newButton, button);
+            if (button.parentNode) {
+                button.parentNode.replaceChild(newButton, button);
+            } else {
+                console.error('❌ Botão não tem parentNode:', button);
+                return;
+            }
             
-            // Adicionar novo listener
+            // Garantir z-index alto para botões não serem bloqueados
+            newButton.style.position = 'relative';
+            newButton.style.zIndex = '9999';
+            newButton.style.pointerEvents = 'auto';
+            
+            // Adicionar novo listener com capture phase
             newButton.addEventListener('click', (e) => {
+                console.log(`🔵 Botão clicado: action=${action}, stepId=${buttonStepId}`, e);
                 e.stopPropagation(); // Prevenir propagação para o canvas
+                e.stopImmediatePropagation(); // Prevenir outros listeners
                 e.preventDefault();
                 
+                // Forçar chamada mesmo se houver algum problema
                 switch (action) {
                     case 'edit':
-                        this.editStep(buttonStepId);
+                        console.log('🔵 Chamando editStep para:', buttonStepId);
+                        // Tentar múltiplas vezes para garantir
+                        if (typeof this.editStep === 'function') {
+                            this.editStep(buttonStepId);
+                        } else {
+                            console.error('❌ this.editStep não é uma função');
+                            // Fallback direto
+                            if (window.alpineFlowEditor && window.alpineFlowEditor.openStepModal) {
+                                window.alpineFlowEditor.openStepModal(buttonStepId);
+                            }
+                        }
                         break;
                     case 'remove':
                         this.deleteStep(buttonStepId);
@@ -564,7 +613,7 @@ class FlowEditor {
                     default:
                         console.warn('⚠️ Ação desconhecida:', action);
                 }
-            });
+            }, true); // Usar capture phase para garantir que seja executado primeiro
         });
     }
     
@@ -1380,12 +1429,31 @@ class FlowEditor {
      * Abre modal de edição
      */
     editStep(stepId) {
+        console.log('🔵 editStep chamado com stepId:', stepId);
+        
         // CRÍTICO: Abrir modal instantaneamente sem delay (PATCH CIRÚRGICO)
         // Usar setTimeout 0 para garantir que não há conflito com drag
         setTimeout(() => {
+            // Estratégia 1: Usar this.alpine (passado no construtor)
             if (this.alpine && typeof this.alpine.openStepModal === 'function') {
+                console.log('✅ Usando this.alpine.openStepModal');
                 this.alpine.openStepModal(stepId);
+                return;
             }
+            
+            // Estratégia 2: Usar window.alpineFlowEditor (exposto globalmente)
+            if (window.alpineFlowEditor && typeof window.alpineFlowEditor.openStepModal === 'function') {
+                console.log('✅ Usando window.alpineFlowEditor.openStepModal');
+                window.alpineFlowEditor.openStepModal(stepId);
+                return;
+            }
+            
+            // Estratégia 3: Tentar buscar pelo contexto Alpine diretamente
+            console.error('❌ Não foi possível encontrar contexto Alpine:', {
+                hasThisAlpine: !!this.alpine,
+                hasWindowAlpineFlowEditor: !!window.alpineFlowEditor,
+                stepId: stepId
+            });
         }, 0);
     }
     
