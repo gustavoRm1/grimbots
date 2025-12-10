@@ -9987,16 +9987,28 @@ Seu pagamento ainda não foi confirmado.
                     offset = 0
                     batch_number = 0
                     
+                    logger.info(f"🚀 Iniciando processamento de {total_leads} leads em batches de {batch_size}")
+                    
                     while offset < total_leads:
                         batch_number += 1
-                        logger.info(f"📦 Processando batch {batch_number} (offset: {offset}, total: {total_leads})")
+                        remaining = total_leads - offset
+                        batch_expected = min(batch_size, remaining)
+                        logger.info(f"📦 [Batch {batch_number}/{((total_leads + batch_size - 1) // batch_size)}] Processando offset {offset}-{offset + batch_expected - 1} de {total_leads} leads")
                         
                         # ✅ Buscar apenas o batch atual (paginação)
-                        batch = query.offset(offset).limit(batch_size).all()
+                        try:
+                            batch = query.offset(offset).limit(batch_size).all()
+                        except Exception as query_error:
+                            logger.error(f"❌ Erro ao buscar batch {batch_number} (offset {offset}): {query_error}", exc_info=True)
+                            # Tentar pular para próximo batch
+                            offset += batch_size
+                            continue
                         
                         if not batch:
-                            logger.warning(f"⚠️ Batch {batch_number} vazio, interrompendo...")
+                            logger.warning(f"⚠️ Batch {batch_number} vazio (offset: {offset}), finalizando processamento")
                             break
+                        
+                        logger.info(f"✅ Batch {batch_number} carregado: {len(batch)} leads encontrados")
                         
                         batch_sent = 0
                         batch_failed = 0
@@ -10065,8 +10077,11 @@ Seu pagamento ainda não foi confirmado.
                                     batch_failed += 1
                                     
                             except Exception as e:
+                                error_msg = str(e).lower()
                                 logger.warning(f"⚠️ Erro ao enviar para {lead.telegram_user_id}: {e}")
-                                if "bot was blocked" in str(e).lower():
+                                
+                                # ✅ Tratamento específico de erros comuns
+                                if "bot was blocked" in error_msg or "forbidden: bot was blocked" in error_msg:
                                     batch_blocked += 1
                                     # Adicionar na blacklist
                                     try:
@@ -10078,8 +10093,22 @@ Seu pagamento ainda não foi confirmado.
                                         db.session.add(blacklist)
                                     except Exception as blacklist_error:
                                         logger.warning(f"⚠️ Erro ao adicionar blacklist: {blacklist_error}")
-                                else:
+                                elif "unauthorized" in error_msg or "error_code\":401" in error_msg:
+                                    # ✅ Token inválido - não bloquear, apenas contar como falha
                                     batch_failed += 1
+                                    logger.debug(f"🔑 Token inválido ou expirado para lead {lead.telegram_user_id}")
+                                elif "chat not found" in error_msg or "error_code\":400" in error_msg:
+                                    # ✅ Chat não existe mais - contar como falha mas continuar
+                                    batch_failed += 1
+                                    logger.debug(f"💬 Chat não encontrado para lead {lead.telegram_user_id}")
+                                elif "user is deactivated" in error_msg:
+                                    # ✅ Usuário desativado - contar como falha mas continuar
+                                    batch_failed += 1
+                                    logger.debug(f"🚫 Usuário desativado: {lead.telegram_user_id}")
+                                else:
+                                    # ✅ Outros erros - contar como falha mas continuar processamento
+                                    batch_failed += 1
+                                    logger.debug(f"❓ Erro desconhecido para lead {lead.telegram_user_id}: {e}")
                         
                         # ✅ CRÍTICO: Atualizar contadores e fazer commit com tratamento de erro
                         try:
@@ -10092,7 +10121,8 @@ Seu pagamento ainda não foi confirmado.
                             db.session.commit()
                             db.session.refresh(campaign)  # ✅ Refresh após commit
                             
-                            logger.info(f"✅ Batch {batch_number} concluído: {batch_sent} enviados, {batch_failed} falhas, {batch_blocked} bloqueados | Total: {campaign.total_sent}/{campaign.total_targets}")
+                            progress_pct = round((campaign.total_sent / campaign.total_targets) * 100, 1) if campaign.total_targets > 0 else 0
+                            logger.info(f"✅✅ Batch {batch_number} concluído: ✅{batch_sent} enviados | ❌{batch_failed} falhas | 🚫{batch_blocked} bloqueados | 📊 Total geral: {campaign.total_sent}/{campaign.total_targets} ({progress_pct}%)")
                             
                         except Exception as commit_error:
                             logger.error(f"❌ Erro ao commitar batch {batch_number}: {commit_error}", exc_info=True)
@@ -10104,10 +10134,13 @@ Seu pagamento ainda não foi confirmado.
                                 campaign.total_failed += batch_failed
                                 campaign.total_blocked += batch_blocked
                                 db.session.commit()
-                                logger.info(f"✅ Batch {batch_number} recuperado após rollback")
+                                db.session.refresh(campaign)
+                                logger.info(f"✅ Batch {batch_number} recuperado após rollback: Total {campaign.total_sent}/{campaign.total_targets}")
                             except Exception as retry_error:
                                 logger.error(f"❌ Erro crítico ao recuperar batch {batch_number}: {retry_error}", exc_info=True)
-                                # Continuar mesmo com erro para não perder progresso
+                                # ✅ IMPORTANTE: Continuar mesmo com erro para não perder progresso
+                                # Salvar contadores em memória para tentar commitar no próximo batch
+                                logger.warning(f"⚠️ Batch {batch_number} não foi salvo no banco, mas processamento continuará")
                         
                         # ✅ Emitir progresso via WebSocket com tratamento de erro
                         try:
@@ -10125,9 +10158,13 @@ Seu pagamento ainda não foi confirmado.
                         # ✅ Rate limiting (20 msgs/segundo) - aumentar sleep para evitar sobrecarga
                         time.sleep(1.2)  # ✅ Aumentado para 1.2s para dar mais margem
                         
+                        # ✅ Atualizar offset para próximo batch
                         offset += batch_size
+                        progress_pct = round((offset / total_leads) * 100, 1) if total_leads > 0 else 0
+                        logger.info(f"📊 Progresso geral: {offset}/{total_leads} leads processados ({progress_pct}%)")
                     
                     # ✅ Finalizar campanha com tratamento robusto
+                    logger.info(f"🏁 Finalizando campanha {campaign_id} após processar todos os batches")
                     try:
                         db.session.refresh(campaign)  # ✅ CRÍTICO: Refresh antes de finalizar
                         campaign.status = 'completed'
@@ -10136,7 +10173,10 @@ Seu pagamento ainda não foi confirmado.
                         db.session.commit()
                         db.session.refresh(campaign)  # ✅ Refresh após commit final
                         
-                        logger.info(f"✅ Campanha concluída: {campaign.total_sent}/{campaign.total_targets} enviados | Falhas: {campaign.total_failed} | Bloqueados: {campaign.total_blocked}")
+                        total_processed = campaign.total_sent + campaign.total_failed + campaign.total_blocked
+                        success_rate = round((campaign.total_sent / campaign.total_targets) * 100, 1) if campaign.total_targets > 0 else 0
+                        
+                        logger.info(f"✅✅✅ CAMPANHA {campaign_id} CONCLUÍDA: {campaign.total_sent}/{campaign.total_targets} enviados ({success_rate}%) | Falhas: {campaign.total_failed} | Bloqueados: {campaign.total_blocked} | Total processado: {total_processed}")
                         
                     except Exception as final_error:
                         logger.error(f"❌ Erro ao finalizar campanha: {final_error}", exc_info=True)

@@ -12544,46 +12544,131 @@ def send_push_notification(user_id, title, body, data=None, color='green'):
             logger.warning("⚠️ VAPID_PRIVATE_KEY não configurada. Push notifications desabilitadas.")
             return
         
-        # ✅ CORREÇÃO: Converter chave privada para formato PEM se necessário
-        # pywebpush espera formato PEM, então vamos garantir que sempre seja PEM
+        # ✅ CORREÇÃO ROBUSTA: Validar e converter chave privada VAPID para formato PEM
+        # pywebpush espera formato PEM válido, então vamos garantir validação completa
         from cryptography.hazmat.primitives import serialization
         from cryptography.hazmat.backends import default_backend
+        from cryptography.hazmat.primitives.asymmetric import ec
         import base64
+        import re
         
         vapid_private_key = None
+        
         try:
-            # Se já é PEM, usar direto
+            # ✅ PASSO 1: Limpar a chave (remover espaços, quebras de linha extras, etc.)
+            vapid_private_key_raw = vapid_private_key_raw.strip()
+            vapid_private_key_raw = re.sub(r'\s+', ' ', vapid_private_key_raw)  # Normalizar espaços
+            
+            # ✅ PASSO 2: Verificar se já é PEM válido
             if vapid_private_key_raw.startswith("-----BEGIN"):
-                vapid_private_key = vapid_private_key_raw
-                logger.debug("VAPID key already in PEM format")
-            else:
-                # Formato base64 (DER) - converter para PEM
+                # Tentar validar se é PEM válido
                 try:
-                    # Decodificar base64 para DER
-                    private_key_der = base64.urlsafe_b64decode(
-                        vapid_private_key_raw + '=' * (4 - len(vapid_private_key_raw) % 4)
-                    )
-                    # Carregar como objeto
-                    private_key_obj = serialization.load_der_private_key(
-                        private_key_der,
+                    # Tentar carregar como PEM para validar
+                    serialization.load_pem_private_key(
+                        vapid_private_key_raw.encode('utf-8'),
                         password=None,
                         backend=default_backend()
                     )
-                    # Converter de volta para PEM (formato que pywebpush espera)
+                    vapid_private_key = vapid_private_key_raw
+                    logger.debug("✅ VAPID key já está em formato PEM válido")
+                except Exception as pem_error:
+                    logger.warning(f"⚠️ Chave parece ser PEM mas está inválida: {pem_error}")
+                    # Tentar corrigir removendo caracteres problemáticos
+                    vapid_private_key_raw = '\n'.join([
+                        line.strip() for line in vapid_private_key_raw.split('\n')
+                        if line.strip() and not line.strip().startswith('#')
+                    ])
+                    try:
+                        serialization.load_pem_private_key(
+                            vapid_private_key_raw.encode('utf-8'),
+                            password=None,
+                            backend=default_backend()
+                        )
+                        vapid_private_key = vapid_private_key_raw
+                        logger.info("✅ Chave PEM corrigida (removidos caracteres inválidos)")
+                    except:
+                        logger.error("❌ Chave PEM não pode ser corrigida, tentando outros formatos...")
+                        vapid_private_key_raw = vapid_private_key_raw  # Continuar para tentar outros formatos
+            
+            # ✅ PASSO 3: Se não é PEM, tentar como base64 (DER)
+            if not vapid_private_key:
+                try:
+                    # Remover espaços e quebras de linha para base64
+                    base64_key = vapid_private_key_raw.replace(' ', '').replace('\n', '').replace('\r', '')
+                    
+                    # Tentar decodificar base64 para DER
+                    padding = '=' * (4 - len(base64_key) % 4) if len(base64_key) % 4 else ''
+                    try:
+                        private_key_der = base64.urlsafe_b64decode(base64_key + padding)
+                    except:
+                        # Tentar base64 padrão se urlsafe falhar
+                        private_key_der = base64.b64decode(base64_key + padding)
+                    
+                    # ✅ CRÍTICO: Tentar carregar como DER primeiro (formato mais comum)
+                    try:
+                        private_key_obj = serialization.load_der_private_key(
+                            private_key_der,
+                            password=None,
+                            backend=default_backend()
+                        )
+                    except:
+                        # Se DER falhar, tentar PEM embutido
+                        private_key_obj = serialization.load_pem_private_key(
+                            private_key_der,
+                            password=None,
+                            backend=default_backend()
+                        )
+                    
+                    # ✅ Validar que é chave EC (Elliptic Curve) - necessário para VAPID
+                    if not isinstance(private_key_obj, ec.EllipticCurvePrivateKey):
+                        raise ValueError("Chave não é uma chave privada de curva elíptica (EC)")
+                    
+                    # Converter para PEM (formato que pywebpush espera)
                     vapid_private_key = private_key_obj.private_bytes(
                         encoding=serialization.Encoding.PEM,
                         format=serialization.PrivateFormat.PKCS8,
                         encryption_algorithm=serialization.NoEncryption()
                     ).decode('utf-8')
-                    logger.debug("VAPID key converted from base64 (DER) to PEM format")
+                    
+                    logger.info("✅ VAPID key convertida de base64 (DER) para PEM format com sucesso")
+                    
                 except Exception as der_error:
                     logger.error(f"❌ Erro ao converter chave de base64 para PEM: {der_error}")
-                    logger.warning("⚠️ Tentando usar chave como está (pode falhar)")
-                    vapid_private_key = vapid_private_key_raw
+                    logger.error(f"   Tipo de erro: {type(der_error).__name__}")
+                    logger.error(f"   Detalhes: {str(der_error)}")
+                    
+                    # ✅ ÚLTIMA TENTATIVA: Verificar se a chave está corrompida
+                    logger.error(f"❌ Chave VAPID parece estar corrompida ou em formato inválido")
+                    logger.error(f"   Primeiros 50 caracteres: {vapid_private_key_raw[:50]}...")
+                    logger.error(f"   Últimos 50 caracteres: ...{vapid_private_key_raw[-50:]}")
+                    logger.error(f"   Comprimento: {len(vapid_private_key_raw)} caracteres")
+                    logger.error(f"   ❌ IMPOSSÍVEL USAR ESTA CHAVE - Gerar nova chave VAPID!")
+                    return  # ✅ PARAR AQUI - não continuar com chave inválida
+            
+            # ✅ PASSO 4: Validação final antes de usar
+            if vapid_private_key:
+                try:
+                    # Validar uma última vez que a chave é válida
+                    test_key = serialization.load_pem_private_key(
+                        vapid_private_key.encode('utf-8'),
+                        password=None,
+                        backend=default_backend()
+                    )
+                    if not isinstance(test_key, ec.EllipticCurvePrivateKey):
+                        logger.error("❌ Chave VAPID não é uma chave EC válida")
+                        return
+                    logger.debug("✅ Chave VAPID validada com sucesso")
+                except Exception as validation_error:
+                    logger.error(f"❌ Erro na validação final da chave VAPID: {validation_error}")
+                    return
+            else:
+                logger.error("❌ Não foi possível processar chave VAPID - formato desconhecido ou corrompida")
+                return
+                
         except Exception as e:
-            logger.error(f"❌ Erro ao processar VAPID private key: {e}")
-            logger.warning("⚠️ Tentando usar chave como está (pode falhar)")
-            vapid_private_key = vapid_private_key_raw
+            logger.error(f"❌ Erro crítico ao processar VAPID private key: {e}", exc_info=True)
+            logger.error(f"   ❌ IMPOSSÍVEL ENVIAR PUSH NOTIFICATIONS - Gerar nova chave VAPID!")
+            return
         
         # Preparar payload com cor
         # ✅ IMPORTANTE: Incluir todos os dados no nível raiz para fácil acesso no Service Worker
