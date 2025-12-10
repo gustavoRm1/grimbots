@@ -548,17 +548,72 @@
     border: 1px solid #242836 !important;
 }
 
-.jtk-endpoint {
+/* === ManyChat-like endpoints & z-index fix === */
+
+/* Force cards absolute (positions controlled by JS) and internal relative for nodes */
+.flow-step-block,
+.flow-card {
+    position: absolute !important;
+    width: 300px;
+    min-height: 180px;
+    background: #0F0F14;
+    border: 1px solid #242836;
+    border-radius: 12px;
+    overflow: visible; /* allow endpoints to be visible outside */
+    will-change: transform;
+}
+
+/* Ensure inner elements can use absolute positioning relative to card */
+.flow-step-block > * { position: relative; }
+
+/* Global endpoint visual (jsPlumb renders svgs but ensure correct stacking) */
+.jtk-endpoint, .jtk-endpoint * {
+    z-index: 2000 !important;
+    pointer-events: auto !important;
     cursor: crosshair !important;
     transition: all 0.2s ease;
     display: block !important;
-    pointer-events: auto !important;
-    z-index: 20 !important;
 }
 
 .jtk-endpoint:hover {
     transform: scale(1.3);
     z-index: 50 !important;
+    filter: drop-shadow(0 0 6px rgba(255,255,255,0.6));
+}
+
+/* Provide a visible pin outside the card for custom fallback */
+.flow-step-pin {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #FFFFFF;
+    border: 3px solid #0D0F15;
+    box-shadow: 0 0 8px rgba(255,255,255,0.07);
+    position: absolute;
+    z-index: 1999;
+    pointer-events: none; /* real interaction via jsPlumb endpoints */
+}
+
+/* Input pin positioning (left, centered vertically) */
+.flow-step-pin.input {
+    left: -10px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+/* Output pin positioning (right, centered vertically) */
+.flow-step-pin.output {
+    right: -10px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+/* Button endpoint container inside button (visual only) */
+.flow-step-button-endpoint-container {
+    position: relative;
+    pointer-events: none; /* let jsPlumb endpoint overlay be clickable */
+    width: 20px;
+    height: 20px;
 }
 
 .jtk-connector {
@@ -1770,11 +1825,11 @@ body {
             </div>
 
             <!-- Canvas do Flow Editor (dentro de x-show="activeTab === 'flow'") -->
-            <div x-show="config.flow_enabled" class="flow-canvas-container" style="width: 100%; height: 600px; border: 1px solid #242836; border-radius: 8px; overflow: hidden; position: relative; margin-top: 16px;">
-                <div 
-                    id="flow-visual-canvas" 
-                    style="width: 100%; height: 100%; position: relative;"
-                    x-init="
+            <div x-show="config.flow_enabled" class="flow-canvas-container" style="width:100%; height:600px; position:relative; border:1px solid #242836; border-radius:8px; overflow:hidden; margin-top:16px;">
+                <!-- Canvas (background + grid) -->
+                <div id="flow-visual-canvas" 
+                     style="position:absolute; left:0; top:0; width:100%; height:100%; background:#0D0F15; background-image: radial-gradient(circle, rgba(255,255,255,0.12) 1.5px, transparent 1.5px); background-size: 20px 20px; transform-origin:0 0;"
+                     x-init="
                         if (config.flow_enabled && activeTab === 'flow') {
                             setTimeout(() => {
                                 if (typeof FlowEditor !== 'undefined' && typeof jsPlumb !== 'undefined') {
@@ -1784,8 +1839,10 @@ body {
                                 }
                             }, 400);
                         }
-                    "
-                ></div>
+                     ">
+                    <!-- Content container: all flow-step-block elements must be children of this -->
+                    <div class="flow-canvas-content" style="position:absolute; left:0; top:0; width:100%; height:100%; transform-origin:0 0;"></div>
+                </div>
             </div>
         </div>
 
@@ -2575,21 +2632,10 @@ function botConfigApp() {
         },
         
         openStepModal(stepId) {
-            if (!this.config.flow_steps) {
-                console.error('❌ flow_steps não existe');
-                return;
-            }
-            
             const step = this.config.flow_steps.find(s => String(s.id) === String(stepId));
-            if (!step) {
-                console.error(`❌ Step ${stepId} não encontrado`);
-                return;
-            }
-            
-            this.editingStepIndex = this.config.flow_steps.indexOf(step);
-            
-            // PATCH V4.0: Null-safety - garantir estrutura completa
-            this.editingStep = JSON.parse(JSON.stringify(step || { config: {} }));
+            if (!step) return;
+            // deep clone to avoid direct mutation until save
+            this.editingStep = JSON.parse(JSON.stringify(step));
             if (!this.editingStep.config) this.editingStep.config = {};
             
             // Garantir que todas as propriedades existem ANTES de abrir o modal
