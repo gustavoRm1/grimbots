@@ -110,7 +110,7 @@ class FlowEditor {
         
         console.log('✅ Event delegation configurado no container:', container);
         
-        // CRÍTICO: Usar mousedown para capturar ANTES do jsPlumb processar
+        // CRÍTICO: Usar mousedown COM capture:true para capturar ANTES de tudo
         // Usar event delegation no container para capturar cliques nos botões
         container.addEventListener('mousedown', (e) => {
             // Verificar se o clique foi em um botão de ação OU em um ícone dentro do botão
@@ -151,9 +151,9 @@ class FlowEditor {
             e.stopImmediatePropagation();
             
             this.handleActionClick(action, stepId);
-        }, true); // Capture phase para garantir que seja executado primeiro
+        }, true); // Capture phase para garantir que seja executado ANTES de tudo
         
-        // Também adicionar listener de click como backup
+        // CRÍTICO: Também adicionar listener de click como backup (capture phase)
         container.addEventListener('click', (e) => {
             const button = e.target.closest('.flow-step-btn-action[data-action]');
             if (!button) {
@@ -188,7 +188,7 @@ class FlowEditor {
             e.stopImmediatePropagation();
             
             this.handleActionClick(action, stepId);
-        }, true);
+        }, true); // Capture phase para garantir execução antes de outros handlers
     }
     
     /**
@@ -430,6 +430,13 @@ class FlowEditor {
         if (!this.canvas) return;
         
         const startPan = (e) => {
+            // CRÍTICO: NUNCA processar pan se for clique em botão de ação
+            const isOverActionButton = e.target.closest('.flow-step-btn-action[data-action]');
+            if (isOverActionButton) {
+                // Deixar o evento passar para os handlers dos botões
+                return;
+            }
+            
             const isOverStep = e.target.closest('.flow-step-block');
             const isOverButton = e.target.closest('button');
             const isOverEndpoint = e.target.closest('.jtk-endpoint');
@@ -456,7 +463,8 @@ class FlowEditor {
             }
         };
         
-        this.canvas.addEventListener('mousedown', startPan);
+        // CRÍTICO: Usar capture: false para não interceptar antes dos botões
+        this.canvas.addEventListener('mousedown', startPan, false);
         
         this.canvas.addEventListener('mousemove', (e) => {
             if (this.isPanning) {
@@ -588,9 +596,9 @@ class FlowEditor {
                 ${buttonsHtml}
             </div>
             <div class="flow-step-footer">
-                <button class="flow-step-btn-action" data-action="edit" data-step-id="${stepId}" title="Editar"><i class="fas fa-edit"></i></button>
-                <button class="flow-step-btn-action" data-action="remove" data-step-id="${stepId}" title="Remover"><i class="fas fa-trash"></i></button>
-                ${!isStartStep?`<button class="flow-step-btn-action" data-action="set-start" data-step-id="${stepId}" title="Definir como inicial">⭐</button>` : ''}
+                <button class="flow-step-btn-action" data-action="edit" data-step-id="${stepId}" title="Editar" onclick="event.stopPropagation(); event.preventDefault(); if(window.flowEditor) window.flowEditor.editStep('${stepId}'); return false;"><i class="fas fa-edit"></i></button>
+                <button class="flow-step-btn-action" data-action="remove" data-step-id="${stepId}" title="Remover" onclick="event.stopPropagation(); event.preventDefault(); if(window.flowEditor) window.flowEditor.deleteStep('${stepId}'); return false;"><i class="fas fa-trash"></i></button>
+                ${!isStartStep?`<button class="flow-step-btn-action" data-action="set-start" data-step-id="${stepId}" title="Definir como inicial" onclick="event.stopPropagation(); event.preventDefault(); if(window.flowEditor) window.flowEditor.setStartStep('${stepId}'); return false;">⭐</button>` : ''}
             </div>
             <!-- Nodes INSIDE the card -->
             <div class="flow-step-node-input" data-node-type="input" data-step-id="${stepId}" title="Entrada" style="width: 14px; height: 14px;"></div>
@@ -607,15 +615,17 @@ class FlowEditor {
         this.instance.draggable(stepElement, {
             containment: false,
             grid: [this.gridSize, this.gridSize],
-            filter: '.flow-step-btn-action, .flow-step-btn-action *, i.fa-edit, i.fa-trash', // CRÍTICO: Não arrastar quando clicar nos botões ou ícones
+            filter: '.flow-step-btn-action, .flow-step-btn-action *, .flow-step-btn-action i, i.fa-edit, i.fa-trash, button[data-action]', // CRÍTICO: Não arrastar quando clicar nos botões ou ícones
             start: (params) => {
-                // Verificar se o clique foi em um botão de ação ou ícone dentro
+                // CRÍTICO: Verificar se o clique foi em um botão de ação ANTES de qualquer coisa
                 const target = params.e && params.e.target;
                 if (target) {
-                    const isButton = target.closest('.flow-step-btn-action');
-                    const isIconInButton = target.closest('i') && target.closest('.flow-step-btn-action');
+                    const isButton = target.closest('.flow-step-btn-action[data-action]');
+                    const isIconInButton = target.closest('i') && target.closest('.flow-step-btn-action[data-action]');
                     if (isButton || isIconInButton) {
                         console.log('🚫 Drag cancelado - clique em botão:', target);
+                        // CRÍTICO: Cancelar drag E deixar evento passar
+                        params.e.stopPropagation();
                         return false; // Cancelar drag se for um botão
                     }
                 }
@@ -723,20 +733,30 @@ class FlowEditor {
             newButton.style.zIndex = '9999';
             newButton.style.pointerEvents = 'auto';
             
-            // CRÍTICO: Usar mousedown para capturar ANTES do jsPlumb processar
+            // CRÍTICO: Usar mousedown COM capture:true para capturar ANTES do jsPlumb
             const handleButtonAction = (e) => {
                 console.log(`🔵 [Direct Listener] Botão ${action} clicado: stepId=${buttonStepId}`, e);
+                // CRÍTICO: Parar propagação IMEDIATAMENTE
+                e.stopImmediatePropagation(); // Prevenir outros listeners (deve ser PRIMEIRO)
                 e.stopPropagation(); // Prevenir propagação para o canvas
-                e.stopImmediatePropagation(); // Prevenir outros listeners
                 e.preventDefault();
                 
                 // Forçar chamada mesmo se houver algum problema
                 this.handleActionClick(action, buttonStepId);
             };
             
-            // Adicionar listeners para mousedown e click
+            // CRÍTICO: Adicionar listeners com capture:true para executar ANTES de tudo
             newButton.addEventListener('mousedown', handleButtonAction, true);
             newButton.addEventListener('click', handleButtonAction, true);
+            
+            // Backup adicional: usar onclick inline como última camada
+            newButton.onclick = (e) => {
+                e.stopImmediatePropagation();
+                e.stopPropagation();
+                e.preventDefault();
+                console.log(`🔵 [onclick inline] Botão ${action} clicado: stepId=${buttonStepId}`);
+                this.handleActionClick(action, buttonStepId);
+            };
         });
     }
     
@@ -822,9 +842,9 @@ class FlowEditor {
         const footerEl = innerWrapper.querySelector('.flow-step-footer');
         if (footerEl) {
             footerEl.innerHTML = `
-                <button class="flow-step-btn-action" data-action="edit" data-step-id="${stepId}" title="Editar"><i class="fas fa-edit"></i></button>
-                <button class="flow-step-btn-action" data-action="remove" data-step-id="${stepId}" title="Remover"><i class="fas fa-trash"></i></button>
-                ${!isStartStep ? `<button class="flow-step-btn-action" data-action="set-start" data-step-id="${stepId}" title="Definir como inicial">⭐</button>` : ''}
+                <button class="flow-step-btn-action" data-action="edit" data-step-id="${stepId}" title="Editar" onclick="event.stopPropagation(); event.preventDefault(); if(window.flowEditor) window.flowEditor.editStep('${stepId}'); return false;"><i class="fas fa-edit"></i></button>
+                <button class="flow-step-btn-action" data-action="remove" data-step-id="${stepId}" title="Remover" onclick="event.stopPropagation(); event.preventDefault(); if(window.flowEditor) window.flowEditor.deleteStep('${stepId}'); return false;"><i class="fas fa-trash"></i></button>
+                ${!isStartStep ? `<button class="flow-step-btn-action" data-action="set-start" data-step-id="${stepId}" title="Definir como inicial" onclick="event.stopPropagation(); event.preventDefault(); if(window.flowEditor) window.flowEditor.setStartStep('${stepId}'); return false;">⭐</button>` : ''}
             `;
         }
         
