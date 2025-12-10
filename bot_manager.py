@@ -10011,6 +10011,7 @@ Seu pagamento ainda não foi confirmado.
         import time
         
         def send_campaign():
+            import time  # ✅ CRÍTICO: Importar time no início da função para evitar UnboundLocalError
             with app.app_context():
                 try:
                     campaign = db.session.get(RemarketingCampaign, campaign_id)
@@ -10331,7 +10332,6 @@ Seu pagamento ainda não foi confirmado.
                                     # ✅ Rate limiting do Telegram - aguardar e tentar novamente
                                     batch_failed += 1
                                     logger.warning(f"⏱️ Rate limit do Telegram atingido para {lead.telegram_user_id} - aguardando 1 segundo...")
-                                    import time
                                     time.sleep(1)  # Aguardar 1 segundo antes de continuar
                                 elif "unauthorized" in error_msg or "error_code\":401" in error_msg:
                                     # ✅ Token inválido - não bloquear, apenas contar como falha
