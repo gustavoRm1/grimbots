@@ -1609,12 +1609,49 @@ class FlowEditor {
             return;
         }
         
-        // Estratégia 3: Tentar buscar pelo contexto Alpine diretamente
-        console.error('❌ Não foi possível encontrar contexto Alpine:', {
+        // Estratégia 3: Buscar contexto Alpine diretamente do DOM usando Alpine.$data()
+        try {
+            if (typeof Alpine !== 'undefined' && Alpine.$data) {
+                const alpineElement = document.querySelector('[x-data*="botConfigApp"]');
+                if (alpineElement) {
+                    const alpineApp = Alpine.$data(alpineElement);
+                    if (alpineApp && typeof alpineApp.openStepModal === 'function') {
+                        console.log('✅ Usando Alpine.$data() para buscar botConfigApp');
+                        alpineApp.openStepModal(stepId);
+                        return;
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn('⚠️ Erro ao buscar contexto Alpine via DOM:', e);
+        }
+        
+        // Estratégia 4: Fallback final - tentar abrir modal diretamente via DOM
+        console.error('❌ Não foi possível encontrar contexto Alpine. Tentando fallback direto:', {
             hasThisAlpine: !!this.alpine,
             hasWindowAlpineFlowEditor: !!window.alpineFlowEditor,
             stepId: stepId
         });
+        
+        // Última tentativa: buscar qualquer elemento com x-data="botConfigApp" e tentar acessar
+        try {
+            const allAlpineElements = document.querySelectorAll('[x-data]');
+            for (const el of allAlpineElements) {
+                const xData = el.getAttribute('x-data');
+                if (xData && xData.includes('botConfigApp')) {
+                    if (typeof Alpine !== 'undefined' && Alpine.$data) {
+                        const app = Alpine.$data(el);
+                        if (app && typeof app.openStepModal === 'function') {
+                            console.log('✅ Fallback: encontrado via querySelectorAll');
+                            app.openStepModal(stepId);
+                            return;
+                        }
+                    }
+                }
+            }
+        } catch (e) {
+            console.error('❌ Erro no fallback final:', e);
+        }
     }
     
     /**
@@ -2108,7 +2145,44 @@ window.flowEditorActions.editStep = function(stepId) {
         return;
     }
     
-    console.error('❌ Nem flowEditor nem alpineFlowEditor disponíveis');
+    // Estratégia 3: Buscar contexto Alpine diretamente do DOM usando Alpine.$data()
+    try {
+        if (typeof Alpine !== 'undefined' && Alpine.$data) {
+            const alpineElement = document.querySelector('[x-data*="botConfigApp"]');
+            if (alpineElement) {
+                const alpineApp = Alpine.$data(alpineElement);
+                if (alpineApp && typeof alpineApp.openStepModal === 'function') {
+                    console.log('✅ [Global Action] Usando Alpine.$data() para buscar botConfigApp');
+                    alpineApp.openStepModal(stepId);
+                    return;
+                }
+            }
+        }
+    } catch (e) {
+        console.warn('⚠️ [Global Action] Erro ao buscar contexto Alpine via DOM:', e);
+    }
+    
+    // Estratégia 4: Fallback final - tentar abrir modal diretamente via DOM
+    try {
+        const allAlpineElements = document.querySelectorAll('[x-data]');
+        for (const el of allAlpineElements) {
+            const xData = el.getAttribute('x-data');
+            if (xData && xData.includes('botConfigApp')) {
+                if (typeof Alpine !== 'undefined' && Alpine.$data) {
+                    const app = Alpine.$data(el);
+                    if (app && typeof app.openStepModal === 'function') {
+                        console.log('✅ [Global Action] Fallback: encontrado via querySelectorAll');
+                        app.openStepModal(stepId);
+                        return;
+                    }
+                }
+            }
+        }
+    } catch (e) {
+        console.error('❌ [Global Action] Erro no fallback final:', e);
+    }
+    
+    console.error('❌ [Global Action] Nem flowEditor nem alpineFlowEditor disponíveis');
 };
 
 window.flowEditorActions.deleteStep = function(stepId) {
