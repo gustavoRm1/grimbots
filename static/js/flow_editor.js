@@ -83,11 +83,51 @@ class FlowEditor {
         this.enableZoom();
         this.enablePan();
         this.enableSelection();
+        this.enableActionButtonsDelegation(); // Event delegation como fallback
         
         // Renderizar steps após setup
         setTimeout(() => {
             this.renderAllSteps();
         }, 50);
+    }
+    
+    /**
+     * Event delegation para botões de ação (fallback)
+     * CRÍTICO: Garante que cliques nos botões sejam capturados mesmo se attachActionButtons falhar
+     */
+    enableActionButtonsDelegation() {
+        if (!this.canvas) return;
+        
+        // Usar event delegation no canvas para capturar cliques nos botões
+        this.canvas.addEventListener('click', (e) => {
+            // Verificar se o clique foi em um botão de ação
+            const button = e.target.closest('.flow-step-btn-action[data-action]');
+            if (!button) return;
+            
+            const action = button.getAttribute('data-action');
+            const stepId = button.getAttribute('data-step-id');
+            
+            if (!action || !stepId) return;
+            
+            console.log('🔵 [Delegation] Botão clicado:', { action, stepId, target: e.target });
+            
+            e.stopPropagation();
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            
+            switch (action) {
+                case 'edit':
+                    console.log('🔵 [Delegation] Chamando editStep para:', stepId);
+                    this.editStep(stepId);
+                    break;
+                case 'remove':
+                    this.deleteStep(stepId);
+                    break;
+                case 'set-start':
+                    this.setStartStep(stepId);
+                    break;
+            }
+        }, true); // Capture phase para garantir que seja executado primeiro
     }
     
     /**

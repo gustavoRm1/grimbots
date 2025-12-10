@@ -1839,7 +1839,7 @@ body {
             <div x-show="editingStep && editingStep !== null" class="space-y-4">
                 <div class="form-group">
                     <label class="form-label">Tipo</label>
-                    <select x-model="editingStep && editingStep !== null ? editingStep.type : 'message'" class="form-select">
+                    <select x-model="editingStep.type" class="form-select">
                         <option value="message">Mensagem</option>
                         <option value="payment">Pagamento</option>
                         <option value="access">Acesso</option>
@@ -1848,13 +1848,13 @@ body {
 
                 <div class="form-group" x-show="editingStep && editingStep.type !== 'payment'">
                     <label class="form-label">Mensagem</label>
-                    <textarea x-model="editingStep && editingStep.config ? editingStep.config.message : ''" class="form-textarea" placeholder="Digite a mensagem do step..."></textarea>
+                    <textarea x-model="editingStep.config.message" class="form-textarea" placeholder="Digite a mensagem do step..."></textarea>
                 </div>
 
                 <div class="form-group" x-show="editingStep && editingStep.type !== 'payment'">
                     <label class="form-label">URL da Mídia</label>
                     <div class="relative">
-                        <input type="text" x-model="editingStep && editingStep.config ? editingStep.config.media_url : ''" @input="detectStepMediaType()" class="form-input pr-20" placeholder="https://..." />
+                        <input type="text" x-model="editingStep.config.media_url" @input="detectStepMediaType()" class="form-input pr-20" placeholder="https://..." />
                         <div x-show="editingStep && editingStep.config && editingStep.config.media_url" class="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center gap-2">
                             <span x-show="editingStep && editingStep.config && (detectedStepMediaType || editingStep.config.media_type) === 'video'" class="text-xs font-semibold px-2 py-1 rounded" style="background: rgba(59, 130, 246, 0.2); color: #93C5FD; border: 1px solid rgba(59, 130, 246, 0.4);">
                                 <i class="fas fa-video mr-1"></i>Vídeo
@@ -1864,7 +1864,7 @@ body {
                             </span>
                         </div>
                     </div>
-                    <input type="hidden" x-model="editingStep && editingStep.config ? editingStep.config.media_type : 'video'" />
+                    <input type="hidden" x-model="editingStep.config.media_type" />
                     <p class="text-xs text-gray-500 mt-1">
                         <i class="fas fa-magic mr-1"></i> O tipo (foto/vídeo) é detectado automaticamente pela URL ou extensão do arquivo
                     </p>
@@ -1872,7 +1872,7 @@ body {
 
                 <div class="form-group" x-show="editingStep && editingStep.type !== 'payment'">
                     <label class="form-label">URL do Áudio</label>
-                    <input type="text" x-model="editingStep && editingStep.config ? editingStep.config.audio_url : ''" class="form-input" placeholder="https://..." />
+                    <input type="text" x-model="editingStep.config.audio_url" class="form-input" placeholder="https://..." />
                     <p class="text-xs text-gray-500 mt-1">
                         <i class="fas fa-info-circle"></i> Áudio complementar (opcional) - será enviado após a mídia principal
                     </p>
@@ -1880,32 +1880,32 @@ body {
 
                 <div class="form-group" x-show="editingStep && editingStep.type === 'payment'">
                     <label class="form-label">Preço (R$)</label>
-                    <input type="number" x-model.number="editingStep && editingStep.config ? editingStep.config.price : 0" class="form-input" step="0.01" min="0" />
+                    <input type="number" x-model.number="editingStep.config.price" class="form-input" step="0.01" min="0" />
                 </div>
 
                 <div class="form-group" x-show="editingStep && editingStep.type === 'payment'">
                     <label class="form-label">Nome do Produto</label>
-                    <input type="text" x-model="editingStep && editingStep.config ? editingStep.config.product_name : ''" class="form-input" />
+                    <input type="text" x-model="editingStep.config.product_name" class="form-input" />
                 </div>
 
                 <div class="form-group" x-show="editingStep && editingStep.type === 'payment'">
                     <label class="form-label">Nome do Botão</label>
-                    <input type="text" x-model="editingStep && editingStep.config ? editingStep.config.button_text : ''" class="form-input" placeholder="Ex: Comprar Agora" />
+                    <input type="text" x-model="editingStep.config.button_text" class="form-input" placeholder="Ex: Comprar Agora" />
                 </div>
 
                 <div class="form-group" x-show="editingStep && editingStep.type === 'access'">
                     <label class="form-label">Link de Acesso</label>
-                    <input type="text" x-model="editingStep && editingStep.config ? editingStep.config.access_link : ''" class="form-input" placeholder="https://..." />
+                    <input type="text" x-model="editingStep.config.access_link" class="form-input" placeholder="https://..." />
                 </div>
 
                 <div class="form-group" x-show="editingStep && editingStep.type !== 'payment'">
                     <label class="form-label">Delay (segundos)</label>
-                    <input type="number" x-model.number="editingStep ? editingStep.delay_seconds : 0" class="form-input" min="0" />
+                    <input type="number" x-model.number="editingStep.delay_seconds" class="form-input" min="0" />
                 </div>
 
                 <div class="form-group" x-show="editingStep && editingStep.type !== 'payment'">
                     <label class="form-label">Título do Step (Opcional)</label>
-                    <input type="text" x-model="editingStep ? editingStep.title : ''" class="form-input" placeholder="Deixe vazio para usar tipo padrão" />
+                    <input type="text" x-model="editingStep.title" class="form-input" placeholder="Deixe vazio para usar tipo padrão" />
                 </div>
 
 
@@ -2612,7 +2612,7 @@ function botConfigApp() {
                 this.editingStep.config.audio_url = '';
             }
             if (this.editingStep.config.price === undefined) {
-                this.editingStep.config.price = '';
+                this.editingStep.config.price = 0;
             }
             if (this.editingStep.config.product_name === undefined) {
                 this.editingStep.config.product_name = '';
