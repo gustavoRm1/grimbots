@@ -9,10 +9,64 @@ if [[ ! -d "venv" ]]; then
 fi
 
 # Exportar variáveis do .env (para SECRET_KEY, ENCRYPTION_KEY, REDIS_URL, etc.)
+# ✅ CORREÇÃO: Usar python-dotenv para carregar .env de forma segura
+# Isso evita problemas quando VAPID_PRIVATE_KEY tem quebras de linha
 if [[ -f ".env" ]]; then
-  set -a
-  source .env
-  set +a
+  # Tentar usar python-dotenv se disponível (mais seguro)
+  if python3 -c "import dotenv" 2>/dev/null; then
+    # Usar dotenv para carregar e exportar
+    eval "$(python3 << 'PYEOF'
+from dotenv import dotenv_values
+import os
+
+env_vars = dotenv_values('.env')
+for key, value in env_vars.items():
+    if value is not None:
+        # Escapar para bash de forma segura
+        import shlex
+        # Preservar \n literal como string
+        if isinstance(value, str) and '\n' in value:
+            # Substituir quebras reais por \n literal para export
+            value = value.replace('\n', '\\n').replace('\r', '')
+        print(f"export {key}={shlex.quote(str(value))}")
+PYEOF
+)"
+  else
+    # Fallback: carregar manualmente, mas pular linhas problemáticas
+    set -a
+    while IFS= read -r line || [ -n "$line" ]; do
+      # Ignorar comentários, linhas vazias e linhas que não são KEY=VALUE
+      [[ "$line" =~ ^[[:space:]]*# ]] && continue
+      [[ -z "${line// }" ]] && continue
+      [[ ! "$line" =~ ^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*= ]] && continue
+      
+      # ✅ Pular VAPID_PRIVATE_KEY aqui (será carregada via Python se necessário)
+      [[ "$line" =~ ^[[:space:]]*VAPID_PRIVATE_KEY= ]] && continue
+      
+      # Exportar outras variáveis normalmente
+      export "$line"
+    done < <(grep -v "^VAPID_PRIVATE_KEY=" .env | grep -v "^[[:space:]]*#")
+    set +a
+    
+    # ✅ Carregar VAPID_PRIVATE_KEY separadamente se existir
+    if grep -q "^VAPID_PRIVATE_KEY=" .env; then
+      VAPID_PRIVATE_KEY_VALUE=$(python3 -c "
+import re
+with open('.env', 'r') as f:
+    content = f.read()
+    match = re.search(r'^VAPID_PRIVATE_KEY=(.*?)(?=^[A-Z_]|$)', content, re.MULTILINE | re.DOTALL)
+    if match:
+        value = match.group(1).strip()
+        # Se contém \n literal, manter; se tem quebras reais, converter para \n literal
+        if '\n' in value and '\\n' not in value:
+            value = value.replace('\n', '\\n')
+        print(value)
+" 2>/dev/null)
+      if [ -n "$VAPID_PRIVATE_KEY_VALUE" ]; then
+        export VAPID_PRIVATE_KEY="$VAPID_PRIVATE_KEY_VALUE"
+      fi
+    fi
+  fi
 fi
 
 source venv/bin/activate
