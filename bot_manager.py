@@ -1575,11 +1575,46 @@ class BotManager:
         """
         Envia apenas a mensagem de boas-vindas (sem Meta Pixel)
         Usado para mensagens de texto que reiniciam o funil
+        
+        ✅ CRÍTICO: Respeita flow_enabled - se fluxo visual está ativo, não envia welcome_message
         """
         try:
             from app import app, db
             from models import BotUser
             from datetime import datetime
+            import json
+            
+            # ✅ CRÍTICO: Verificar se fluxo visual está ativo ANTES de enviar welcome
+            flow_enabled = config.get('flow_enabled', False)
+            flow_steps_raw = config.get('flow_steps', [])
+            
+            # Parsear flow_steps se necessário
+            flow_steps = []
+            if flow_steps_raw:
+                if isinstance(flow_steps_raw, str):
+                    try:
+                        flow_steps = json.loads(flow_steps_raw)
+                    except Exception:
+                        flow_steps = []
+                elif isinstance(flow_steps_raw, list):
+                    flow_steps = flow_steps_raw
+            
+            # ✅ Se fluxo visual está ativo e tem steps válidos, NÃO enviar welcome_message
+            if flow_enabled and flow_steps and isinstance(flow_steps, list) and len(flow_steps) > 0:
+                logger.info(f"🚫 _send_welcome_message_only: Fluxo visual ativo - BLOQUEANDO welcome_message")
+                logger.info(f"🚫 Usuário retornou mas fluxo visual está ativo - executando fluxo em vez de welcome")
+                
+                # Executar fluxo visual em vez de enviar welcome_message
+                try:
+                    user_from = message.get('from', {})
+                    telegram_user_id = str(user_from.get('id', ''))
+                    self._execute_flow(bot_id, token, config, chat_id, telegram_user_id)
+                    logger.info(f"✅ Fluxo visual executado em _send_welcome_message_only")
+                except Exception as e:
+                    logger.error(f"❌ Erro ao executar fluxo em _send_welcome_message_only: {e}", exc_info=True)
+                    # Mesmo com erro, não enviar welcome_message quando fluxo está ativo
+                
+                return  # ✅ SAIR SEM ENVIAR welcome_message
             
             with app.app_context():
                 # Buscar usuário para atualizar welcome_sent
@@ -3581,14 +3616,25 @@ class BotManager:
             should_send_welcome = True  # Default: enviar welcome
             
             logger.info(f"🔍 Verificação de fluxo: flow_enabled={flow_enabled}, flow_steps_count={len(flow_steps) if isinstance(flow_steps, list) else 0}")
+            logger.info(f"🔍 Tipo de flow_steps_raw: {type(flow_steps_raw)}, Valor: {str(flow_steps_raw)[:100] if flow_steps_raw else 'None'}")
             
             if flow_enabled and flow_steps and isinstance(flow_steps, list) and len(flow_steps) > 0:
-                # ✅ NOVO: Executar fluxo visual - IGNORAR welcome_message completamente
+                # ✅ CRÍTICO: Quando fluxo visual está ATIVO, NUNCA enviar welcome_message
+                # Mesmo se o fluxo falhar, não usar welcome_message como fallback
+                # O fluxo visual substitui completamente o sistema tradicional
                 logger.info(f"🎯 FLUXO VISUAL ATIVO - Executando fluxo visual ({len(flow_steps)} steps)")
-                logger.info(f"🚫 IGNORANDO welcome_message, main_buttons, redirect_buttons, welcome_audio")
+                logger.info(f"🚫 BLOQUEANDO welcome_message, main_buttons, redirect_buttons, welcome_audio")
+                logger.info(f"🚫 should_send_welcome será False independentemente do resultado do fluxo")
+                
+                # ✅ CRÍTICO: Definir should_send_welcome = False ANTES de executar
+                # Isso garante que mesmo se _execute_flow falhar, welcome não será enviado
+                should_send_welcome = False
                 
                 try:
+                    logger.info(f"🚀 Chamando _execute_flow...")
                     self._execute_flow(bot_id, token, config, chat_id, telegram_user_id)
+                    logger.info(f"✅ _execute_flow concluído sem exceções")
+                    
                     # Marcar welcome_sent após fluxo iniciar
                     with app.app_context():
                         try:
@@ -3605,19 +3651,20 @@ class BotManager:
                         except Exception as e:
                             logger.error(f"Erro ao marcar welcome_sent: {e}")
                     
-                    # ✅ CRÍTICO: Fluxo executado com sucesso - NÃO enviar welcome
-                    should_send_welcome = False
-                    logger.info(f"✅ Fluxo visual executado com sucesso - should_send_welcome=False")
+                    logger.info(f"✅ Fluxo visual executado com sucesso - should_send_welcome=False (confirmado)")
                     
                 except Exception as e:
                     logger.error(f"❌ Erro ao executar fluxo: {e}", exc_info=True)
-                    # ✅ FALLBACK: Se fluxo falhar, usar welcome_message como backup
-                    should_send_welcome = True
-                    logger.warning(f"⚠️ Fallback para welcome_message devido a erro no fluxo")
+                    # ✅ CRÍTICO: Mesmo com erro, NÃO enviar welcome_message
+                    # O fluxo visual está ativo, então não deve usar sistema tradicional
+                    should_send_welcome = False
+                    logger.warning(f"⚠️ Fluxo falhou mas welcome_message está BLOQUEADO (flow_enabled=True)")
+                    logger.warning(f"⚠️ Usuário não receberá welcome_message nem mensagem do fluxo")
             else:
                 # Fluxo não está ativo ou está vazio - usar welcome_message normalmente
                 if flow_enabled:
                     logger.warning(f"⚠️ flow_enabled=True mas flow_steps está vazio ou inválido - usando welcome_message")
+                    logger.warning(f"⚠️ flow_steps_raw tipo: {type(flow_steps_raw)}, valor: {flow_steps_raw}")
                 else:
                     logger.info(f"📝 Fluxo visual desabilitado - usando welcome_message normalmente")
             
@@ -3625,6 +3672,8 @@ class BotManager:
             # ✅ QI 200: ENVIAR MENSAGEM IMEDIATAMENTE (<50ms)
             # Processamento pesado foi enfileirado para background
             # ============================================================================
+            logger.info(f"🔍 should_send_welcome={should_send_welcome} (flow_enabled={flow_enabled})")
+            
             if should_send_welcome:
                 welcome_message = config.get('welcome_message', 'Olá! Bem-vindo!')
                 welcome_media_url = config.get('welcome_media_url')
@@ -3712,8 +3761,9 @@ class BotManager:
                 else:
                     logger.error(f"❌ Falha ao enviar mensagem")
             else:
-                # Não deve chegar aqui após reset, mas manter para segurança
-                logger.warning(f"⚠️ should_send_welcome=False após reset - isso não deveria acontecer")
+                # ✅ Fluxo visual está ativo - welcome_message está bloqueado
+                logger.info(f"✅ should_send_welcome=False - welcome_message BLOQUEADO (fluxo visual ativo)")
+                logger.info(f"✅ Apenas o fluxo visual será executado, sem welcome_message tradicional")
             
             # ✅ CORREÇÃO: Emitir evento via WebSocket apenas para o dono do bot
             try:
