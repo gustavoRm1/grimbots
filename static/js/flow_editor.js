@@ -110,13 +110,14 @@ class FlowEditor {
         
         console.log('✅ Event delegation configurado no container:', container);
         
-        // CRÍTICO: Usar mousedown COM capture:true para capturar ANTES de tudo
-        // Usar event delegation no container para capturar cliques nos botões
-        container.addEventListener('mousedown', (e) => {
-            // Verificar se o clique foi em um botão de ação OU em um ícone dentro do botão
+        // CRÍTICO: Interceptar ANTES do jsPlumb usando capture phase
+        const handleButtonClick = (e) => {
+            // Verificar se é um botão ou está dentro do footer
             const button = e.target.closest('.flow-step-btn-action[data-action]');
-            if (!button) {
-                // Tentar também se o clique foi em um ícone dentro do botão
+            const isInFooter = e.target.closest('.flow-step-footer');
+            
+            if (!button && !isInFooter) {
+                // Verificar se é um ícone dentro de botão
                 const icon = e.target.closest('i');
                 if (icon) {
                     const parentButton = icon.closest('.flow-step-btn-action[data-action]');
@@ -124,10 +125,26 @@ class FlowEditor {
                         const action = parentButton.getAttribute('data-action');
                         const stepId = parentButton.getAttribute('data-step-id');
                         if (action && stepId) {
-                            console.log('🔵 [Delegation] Ícone dentro de botão clicado:', { action, stepId });
+                            console.log('🔵 [Delegation CAPTURE] Ícone dentro de botão clicado:', { action, stepId, target: e.target });
+                            e.stopImmediatePropagation(); // CRÍTICO: Primeiro, antes de tudo
                             e.stopPropagation();
                             e.preventDefault();
-                            e.stopImmediatePropagation();
+                            
+                            // Desabilitar draggable temporariamente
+                            const stepElement = parentButton.closest('.flow-step-block');
+                            if (stepElement && this.instance) {
+                                try {
+                                    this.instance.setDraggable(stepElement, false);
+                                    setTimeout(() => {
+                                        if (this.instance && stepElement.parentNode) {
+                                            this.instance.setDraggable(stepElement, true);
+                                        }
+                                    }, 200);
+                                } catch (err) {
+                                    console.warn('⚠️ Erro ao desabilitar draggable:', err);
+                                }
+                            }
+                            
                             this.handleActionClick(action, stepId);
                             return;
                         }
@@ -136,75 +153,60 @@ class FlowEditor {
                 return;
             }
             
-            const action = button.getAttribute('data-action');
-            const stepId = button.getAttribute('data-step-id');
-            
-            if (!action || !stepId) {
-                console.warn('⚠️ Botão sem action ou stepId:', button);
-                return;
+            if (button) {
+                const action = button.getAttribute('data-action');
+                const stepId = button.getAttribute('data-step-id');
+                if (!action || !stepId) {
+                    return;
+                }
+                
+                console.log('🔵 [Delegation CAPTURE] Botão clicado:', { action, stepId, target: e.target });
+                e.stopImmediatePropagation(); // CRÍTICO: Primeiro, antes de tudo
+                e.stopPropagation();
+                e.preventDefault();
+                
+                // Desabilitar draggable temporariamente
+                const stepElement = button.closest('.flow-step-block');
+                if (stepElement && this.instance) {
+                    try {
+                        this.instance.setDraggable(stepElement, false);
+                        setTimeout(() => {
+                            if (this.instance && stepElement.parentNode) {
+                                this.instance.setDraggable(stepElement, true);
+                            }
+                        }, 200);
+                    } catch (err) {
+                        console.warn('⚠️ Erro ao desabilitar draggable:', err);
+                    }
+                }
+                
+                this.handleActionClick(action, stepId);
             }
-            
-            console.log('🔵 [Delegation] Botão clicado (mousedown):', { action, stepId, target: e.target, button });
-            
-            e.stopPropagation();
-            e.preventDefault();
-            e.stopImmediatePropagation();
-            
-            this.handleActionClick(action, stepId);
-        }, true); // Capture phase para garantir que seja executado ANTES de tudo
+        };
+        
+        // CRÍTICO: Adicionar na fase de captura (true) para interceptar ANTES do jsPlumb
+        container.addEventListener('mousedown', handleButtonClick, true);
         
         // CRÍTICO: Também adicionar listener de click como backup (capture phase)
-        container.addEventListener('click', (e) => {
-            const button = e.target.closest('.flow-step-btn-action[data-action]');
-            if (!button) {
-                const icon = e.target.closest('i');
-                if (icon) {
-                    const parentButton = icon.closest('.flow-step-btn-action[data-action]');
-                    if (parentButton) {
-                        const action = parentButton.getAttribute('data-action');
-                        const stepId = parentButton.getAttribute('data-step-id');
-                        if (action && stepId) {
-                            console.log('🔵 [Delegation Click] Ícone dentro de botão clicado:', { action, stepId });
-                            e.stopPropagation();
-                            e.preventDefault();
-                            e.stopImmediatePropagation();
-                            this.handleActionClick(action, stepId);
-                            return;
-                        }
-                    }
-                }
-                return;
-            }
-            
-            const action = button.getAttribute('data-action');
-            const stepId = button.getAttribute('data-step-id');
-            
-            if (!action || !stepId) return;
-            
-            console.log('🔵 [Delegation Click] Botão clicado:', { action, stepId });
-            
-            e.stopPropagation();
-            e.preventDefault();
-            e.stopImmediatePropagation();
-            
-            this.handleActionClick(action, stepId);
-        }, true); // Capture phase para garantir execução antes de outros handlers
+        container.addEventListener('click', handleButtonClick, true);
     }
     
     /**
      * Handler centralizado para ações dos botões
      */
     handleActionClick(action, stepId) {
-        console.log('🔵 handleActionClick:', { action, stepId });
+        console.log('🔵 handleActionClick chamado:', { action, stepId, hasThis: !!this, hasAlpine: !!this.alpine, hasWindowFlowEditor: !!window.flowEditor });
         switch (action) {
             case 'edit':
                 console.log('🔵 [Handler] Chamando editStep para:', stepId);
                 this.editStep(stepId);
                 break;
             case 'remove':
+                console.log('🔵 [Handler] Chamando deleteStep para:', stepId);
                 this.deleteStep(stepId);
                 break;
             case 'set-start':
+                console.log('🔵 [Handler] Chamando setStartStep para:', stepId);
                 this.setStartStep(stepId);
                 break;
             default:
@@ -595,10 +597,10 @@ class FlowEditor {
                 ${previewText}
                 ${buttonsHtml}
             </div>
-            <div class="flow-step-footer" data-jtk-not-draggable="true">
-                <button class="flow-step-btn-action" data-action="edit" data-step-id="${stepId}" data-jtk-not-draggable="true" title="Editar" onclick="event.stopImmediatePropagation(); event.stopPropagation(); event.preventDefault(); (window.flowEditorActions && window.flowEditorActions.editStep) ? window.flowEditorActions.editStep('${stepId}') : (window.flowEditor && window.flowEditor.editStep('${stepId}')); return false;"><i class="fas fa-edit"></i></button>
-                <button class="flow-step-btn-action" data-action="remove" data-step-id="${stepId}" data-jtk-not-draggable="true" title="Remover" onclick="event.stopImmediatePropagation(); event.stopPropagation(); event.preventDefault(); (window.flowEditorActions && window.flowEditorActions.deleteStep) ? window.flowEditorActions.deleteStep('${stepId}') : (window.flowEditor && window.flowEditor.deleteStep('${stepId}')); return false;"><i class="fas fa-trash"></i></button>
-                ${!isStartStep?`<button class="flow-step-btn-action" data-action="set-start" data-step-id="${stepId}" data-jtk-not-draggable="true" title="Definir como inicial" onclick="event.stopImmediatePropagation(); event.stopPropagation(); event.preventDefault(); (window.flowEditorActions && window.flowEditorActions.setStartStep) ? window.flowEditorActions.setStartStep('${stepId}') : (window.flowEditor && window.flowEditor.setStartStep('${stepId}')); return false;">⭐</button>` : ''}
+            <div class="flow-step-footer" data-jtk-not-draggable="true" style="pointer-events: auto; z-index: 10000;">
+                <button class="flow-step-btn-action" data-action="edit" data-step-id="${stepId}" data-jtk-not-draggable="true" title="Editar" style="pointer-events: auto; cursor: pointer; z-index: 10001; position: relative;" onclick="console.log('🔵 [ONCLICK INLINE] editStep:', '${stepId}'); event.stopImmediatePropagation(); event.stopPropagation(); event.preventDefault(); if(window.flowEditor && window.flowEditor.handleActionClick) { window.flowEditor.handleActionClick('edit', '${stepId}'); } else if(window.flowEditorActions && window.flowEditorActions.editStep) { window.flowEditorActions.editStep('${stepId}'); } return false;"><i class="fas fa-edit"></i></button>
+                <button class="flow-step-btn-action" data-action="remove" data-step-id="${stepId}" data-jtk-not-draggable="true" title="Remover" style="pointer-events: auto; cursor: pointer; z-index: 10001; position: relative;" onclick="console.log('🔵 [ONCLICK INLINE] deleteStep:', '${stepId}'); event.stopImmediatePropagation(); event.stopPropagation(); event.preventDefault(); if(window.flowEditor && window.flowEditor.handleActionClick) { window.flowEditor.handleActionClick('remove', '${stepId}'); } else if(window.flowEditorActions && window.flowEditorActions.deleteStep) { window.flowEditorActions.deleteStep('${stepId}'); } return false;"><i class="fas fa-trash"></i></button>
+                ${!isStartStep?`<button class="flow-step-btn-action" data-action="set-start" data-step-id="${stepId}" data-jtk-not-draggable="true" title="Definir como inicial" style="pointer-events: auto; cursor: pointer; z-index: 10001; position: relative;" onclick="console.log('🔵 [ONCLICK INLINE] setStartStep:', '${stepId}'); event.stopImmediatePropagation(); event.stopPropagation(); event.preventDefault(); if(window.flowEditor && window.flowEditor.handleActionClick) { window.flowEditor.handleActionClick('set-start', '${stepId}'); } else if(window.flowEditorActions && window.flowEditorActions.setStartStep) { window.flowEditorActions.setStartStep('${stepId}'); } return false;">⭐</button>` : ''}
             </div>
             <!-- Nodes INSIDE the card -->
             <div class="flow-step-node-input" data-node-type="input" data-step-id="${stepId}" title="Entrada" style="width: 14px; height: 14px;"></div>
