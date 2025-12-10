@@ -8836,7 +8836,8 @@ Seu pagamento ainda não foi confirmado.
                 error_code = result_data.get('error_code', response.status_code) if result_data else response.status_code
                 logger.error(f"❌ Erro ao enviar mensagem para chat {chat_id}: status={response.status_code}, error_code={error_code}, description={error_description}")
                 logger.error(f"❌ Resposta completa: {response.text[:500]}")
-                return False
+                # ✅ Retornar dict com informações do erro para permitir detecção de 401
+                return {'error': True, 'error_code': error_code, 'description': error_description}
                 
         except requests.exceptions.Timeout:
             logger.error(f"⏱️ Timeout ao enviar mensagem para chat {chat_id}")
@@ -10243,9 +10244,19 @@ Seu pagamento ainda não foi confirmado.
                         batch_sent = 0
                         batch_failed = 0
                         batch_blocked = 0
+                        consecutive_401_errors = 0  # ✅ Contador de erros 401 consecutivos
+                        max_401_errors = 20  # ✅ Parar se 20 erros 401 consecutivos (token claramente inválido) - limite aumentado por segurança
                         
                         for lead in batch:
                             try:
+                                # ✅ CRÍTICO: Se muitos erros 401 consecutivos, token está inválido - pular batch
+                                if consecutive_401_errors >= max_401_errors:
+                                    logger.error(f"🛑 Token do bot {campaign.bot_id} está INVÁLIDO ({consecutive_401_errors} erros 401 consecutivos) - PARANDO envio para este bot")
+                                    logger.error(f"🛑 Ação necessária: Verificar/atualizar token do bot {campaign.bot_id} no painel")
+                                    # Marcar todos os leads restantes como falha
+                                    batch_failed += len(batch) - (batch_sent + batch_failed + batch_blocked)
+                                    break  # Sair do loop de leads
+                                
                                 # Personalizar mensagem
                                 message = campaign.message.replace('{nome}', lead.first_name or 'Cliente')
                                 message = message.replace('{primeiro_nome}', (lead.first_name or 'Cliente').split()[0])
@@ -10288,9 +10299,32 @@ Seu pagamento ainda não foi confirmado.
                                     buttons=remarketing_buttons
                                 )
                                 
-                                if result:
+                                # ✅ CRÍTICO: Verificar se result é dict com erro (novo formato) ou bool/True (formato antigo)
+                                if isinstance(result, dict) and result.get('error'):
+                                    # ✅ Novo formato: result contém informações do erro
+                                    error_code = result.get('error_code', 0)
+                                    if error_code == 401:
+                                        # ✅ Erro 401 - token inválido
+                                        consecutive_401_errors += 1
+                                        batch_failed += 1
+                                        logger.error(f"🔑 Token INVÁLIDO para bot {campaign.bot_id} (erro 401 #{consecutive_401_errors}/{max_401_errors}) - lead {lead.telegram_user_id}")
+                                        if consecutive_401_errors >= max_401_errors:
+                                            logger.error(f"🛑 Token do bot {campaign.bot_id} está claramente INVÁLIDO - PARANDO envio para evitar desperdício de recursos")
+                                            logger.error(f"🛑 Ação necessária: Verificar/atualizar token do bot {campaign.bot_id} no painel de configuração")
+                                            # Marcar todos os leads restantes como falha
+                                            remaining_leads = len(batch) - (batch_sent + batch_failed + batch_blocked)
+                                            batch_failed += remaining_leads
+                                            break  # Sair do loop de leads
+                                    else:
+                                        # Outro erro - reset contador 401
+                                        consecutive_401_errors = 0
+                                        batch_failed += 1
+                                        logger.warning(f"❌ Remarketing NÃO foi enviado para {lead.telegram_user_id} (erro {error_code}) - verificar logs acima para detalhes")
+                                elif result:
+                                    # ✅ Sucesso (result é True ou dict com dados)
                                     logger.debug(f"✅ Remarketing enviado com sucesso para {lead.telegram_user_id}")
                                     batch_sent += 1
+                                    consecutive_401_errors = 0  # ✅ Reset contador se sucesso
                                     
                                     # ✅ Enviar áudio adicional se habilitado
                                     if campaign.audio_enabled and campaign.audio_url:
@@ -10303,11 +10337,14 @@ Seu pagamento ainda não foi confirmado.
                                                 media_type='audio',
                                                 buttons=None
                                             )
-                                            if not audio_result:
+                                            if isinstance(audio_result, dict) and audio_result.get('error'):
+                                                logger.warning(f"⚠️ Áudio não foi enviado para {lead.telegram_user_id} (erro {audio_result.get('error_code', 'desconhecido')})")
+                                            elif not audio_result:
                                                 logger.warning(f"⚠️ Áudio não foi enviado para {lead.telegram_user_id} (result=False)")
                                         except Exception as audio_error:
                                             logger.warning(f"⚠️ Erro ao enviar áudio para {lead.telegram_user_id}: {audio_error}")
                                 else:
+                                    # ✅ Result é False (formato antigo - compatibilidade)
                                     logger.warning(f"❌ Remarketing NÃO foi enviado para {lead.telegram_user_id} (result=False) - verificar logs acima para detalhes")
                                     batch_failed += 1
                                     
@@ -10318,6 +10355,7 @@ Seu pagamento ainda não foi confirmado.
                                 # ✅ Tratamento específico de erros comuns
                                 if "bot was blocked" in error_msg or "forbidden: bot was blocked" in error_msg:
                                     batch_blocked += 1
+                                    consecutive_401_errors = 0  # Reset (não é erro de token)
                                     # Adicionar na blacklist
                                     try:
                                         blacklist = RemarketingBlacklist(
@@ -10331,23 +10369,31 @@ Seu pagamento ainda não foi confirmado.
                                 elif "rate limit" in error_msg or "too many requests" in error_msg or "error_code\":429" in error_msg:
                                     # ✅ Rate limiting do Telegram - aguardar e tentar novamente
                                     batch_failed += 1
+                                    consecutive_401_errors = 0  # Reset (não é erro de token)
                                     logger.warning(f"⏱️ Rate limit do Telegram atingido para {lead.telegram_user_id} - aguardando 1 segundo...")
                                     time.sleep(1)  # Aguardar 1 segundo antes de continuar
                                 elif "unauthorized" in error_msg or "error_code\":401" in error_msg:
-                                    # ✅ Token inválido - não bloquear, apenas contar como falha
+                                    # ✅ Token inválido - incrementar contador e parar se muitos consecutivos
                                     batch_failed += 1
-                                    logger.warning(f"🔑 Token inválido ou expirado para lead {lead.telegram_user_id}")
+                                    consecutive_401_errors += 1
+                                    logger.error(f"🔑 Token INVÁLIDO para bot {campaign.bot_id} (erro 401 #{consecutive_401_errors}/{max_401_errors}) - lead {lead.telegram_user_id}")
+                                    if consecutive_401_errors >= max_401_errors:
+                                        logger.error(f"🛑 Token do bot {campaign.bot_id} está claramente INVÁLIDO - PARANDO envio para evitar desperdício de recursos")
+                                        logger.error(f"🛑 Ação necessária: Verificar/atualizar token do bot {campaign.bot_id} no painel de configuração")
                                 elif "chat not found" in error_msg or "error_code\":400" in error_msg:
                                     # ✅ Chat não existe mais - contar como falha mas continuar
                                     batch_failed += 1
+                                    consecutive_401_errors = 0  # Reset (não é erro de token)
                                     logger.warning(f"💬 Chat não encontrado para lead {lead.telegram_user_id}")
                                 elif "user is deactivated" in error_msg:
                                     # ✅ Usuário desativado - contar como falha mas continuar
                                     batch_failed += 1
+                                    consecutive_401_errors = 0  # Reset (não é erro de token)
                                     logger.warning(f"🚫 Usuário desativado: {lead.telegram_user_id}")
                                 else:
                                     # ✅ Outros erros - contar como falha mas continuar processamento
                                     batch_failed += 1
+                                    consecutive_401_errors = 0  # Reset (não é erro de token)
                                     logger.warning(f"❓ Erro desconhecido para lead {lead.telegram_user_id}: {e}")
                         
                         # ✅ CRÍTICO: Atualizar contadores e fazer commit com tratamento de erro
