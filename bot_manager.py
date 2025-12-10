@@ -8641,13 +8641,20 @@ Seu pagamento ainda não foi confirmado.
                             
                             # Enviar mensagem completa separadamente
                             if response.status_code == 200:
-                                url_msg = f"{base_url}/sendMessage"
-                                payload_msg = {
-                                    'chat_id': chat_id,
-                                    'text': message,
-                                    'parse_mode': 'HTML'
-                                }
-                                requests.post(url_msg, json=payload_msg, timeout=3)
+                                try:
+                                    result_data = response.json()
+                                    if result_data.get('ok'):
+                                        url_msg = f"{base_url}/sendMessage"
+                                        payload_msg = {
+                                            'chat_id': chat_id,
+                                            'text': message,
+                                            'parse_mode': 'HTML'
+                                        }
+                                        msg_response = requests.post(url_msg, json=payload_msg, timeout=3)
+                                        if msg_response.status_code != 200:
+                                            logger.warning(f"⚠️ Erro ao enviar mensagem separada para chat {chat_id}: {msg_response.text[:200]}")
+                                except Exception as e:
+                                    logger.warning(f"⚠️ Erro ao processar resposta da foto para chat {chat_id}: {e}")
                         else:
                             url = f"{base_url}/sendPhoto"
                             payload = {
@@ -8674,13 +8681,20 @@ Seu pagamento ainda não foi confirmado.
                         
                         # Enviar mensagem completa separadamente
                         if response.status_code == 200:
-                            url_msg = f"{base_url}/sendMessage"
-                            payload_msg = {
-                                'chat_id': chat_id,
-                                'text': message,
-                                'parse_mode': 'HTML'
-                            }
-                            requests.post(url_msg, json=payload_msg, timeout=3)
+                            try:
+                                result_data = response.json()
+                                if result_data.get('ok'):
+                                    url_msg = f"{base_url}/sendMessage"
+                                    payload_msg = {
+                                        'chat_id': chat_id,
+                                        'text': message,
+                                        'parse_mode': 'HTML'
+                                    }
+                                    msg_response = requests.post(url_msg, json=payload_msg, timeout=3)
+                                    if msg_response.status_code != 200:
+                                        logger.warning(f"⚠️ Erro ao enviar mensagem separada para chat {chat_id}: {msg_response.text[:200]}")
+                            except Exception as e:
+                                logger.warning(f"⚠️ Erro ao processar resposta do vídeo para chat {chat_id}: {e}")
                     else:
                         url = f"{base_url}/sendVideo"
                         payload = {
@@ -8707,13 +8721,20 @@ Seu pagamento ainda não foi confirmado.
                         
                         # Enviar mensagem completa separadamente
                         if response.status_code == 200:
-                            url_msg = f"{base_url}/sendMessage"
-                            payload_msg = {
-                                'chat_id': chat_id,
-                                'text': message,
-                                'parse_mode': 'HTML'
-                            }
-                            requests.post(url_msg, json=payload_msg, timeout=3)
+                            try:
+                                result_data = response.json()
+                                if result_data.get('ok'):
+                                    url_msg = f"{base_url}/sendMessage"
+                                    payload_msg = {
+                                        'chat_id': chat_id,
+                                        'text': message,
+                                        'parse_mode': 'HTML'
+                                    }
+                                    msg_response = requests.post(url_msg, json=payload_msg, timeout=3)
+                                    if msg_response.status_code != 200:
+                                        logger.warning(f"⚠️ Erro ao enviar mensagem separada para chat {chat_id}: {msg_response.text[:200]}")
+                            except Exception as e:
+                                logger.warning(f"⚠️ Erro ao processar resposta do áudio para chat {chat_id}: {e}")
                     else:
                         url = f"{base_url}/sendAudio"
                         payload = {
@@ -8739,74 +8760,82 @@ Seu pagamento ainda não foi confirmado.
                 
                 response = requests.post(url, json=payload, timeout=3)
             
-            if response.status_code == 200:
+            # ✅ CRÍTICO: Verificar resposta da API do Telegram
+            try:
                 result_data = response.json()
-                if result_data.get('ok'):
-                    logger.info(f"✅ Mensagem enviada para chat {chat_id}")
+            except Exception as json_error:
+                logger.error(f"❌ Erro ao parsear resposta JSON do Telegram para chat {chat_id}: {json_error}")
+                logger.error(f"❌ Resposta raw: {response.text[:200]}")
+                return False
+            
+            # ✅ CRÍTICO: Verificar se status_code é 200 E se result_data.get('ok') é True
+            if response.status_code == 200 and result_data.get('ok'):
+                logger.debug(f"✅ Mensagem enviada para chat {chat_id}")
+                
+                # ✅ CHAT: Salvar mensagem enviada pelo bot no banco
+                try:
+                    from app import app, db
+                    from models import BotUser, BotMessage, Bot
+                    import json
+                    import uuid as uuid_lib
                     
-                    # ✅ CHAT: Salvar mensagem enviada pelo bot no banco
-                    try:
-                        from app import app, db
-                        from models import BotUser, BotMessage, Bot
-                        import json
-                        import uuid as uuid_lib
+                    with app.app_context():
+                        # Buscar bot pelo token para obter bot_id
+                        bot_id = None
+                        with self._bots_lock:
+                            for bid, bot_info in self.active_bots.items():
+                                if bot_info.get('token') == token:
+                                    bot_id = bid
+                                    break
                         
-                        with app.app_context():
-                            # Buscar bot pelo token para obter bot_id
-                            bot_id = None
-                            with self._bots_lock:
-                                for bid, bot_info in self.active_bots.items():
-                                    if bot_info.get('token') == token:
-                                        bot_id = bid
-                                        break
+                        # Se não encontrou pelos bots ativos, buscar no banco
+                        if not bot_id:
+                            bot = Bot.query.filter_by(token=token).first()
+                            if bot:
+                                bot_id = bot.id
+                        
+                        if bot_id:
+                            # Buscar bot_user pelo bot_id e telegram_user_id
+                            bot_user = BotUser.query.filter_by(
+                                bot_id=bot_id,
+                                telegram_user_id=str(chat_id),
+                                archived=False
+                            ).first()
                             
-                            # Se não encontrou pelos bots ativos, buscar no banco
-                            if not bot_id:
-                                bot = Bot.query.filter_by(token=token).first()
-                                if bot:
-                                    bot_id = bot.id
-                            
-                            if bot_id:
-                                # Buscar bot_user pelo bot_id e telegram_user_id
-                                bot_user = BotUser.query.filter_by(
-                                    bot_id=bot_id,
-                                    telegram_user_id=str(chat_id),
-                                    archived=False
-                                ).first()
+                            if bot_user:
+                                telegram_msg_id = result_data.get('result', {}).get('message_id')
+                                message_id = str(telegram_msg_id) if telegram_msg_id else str(uuid_lib.uuid4().hex)
                                 
-                                if bot_user:
-                                    telegram_msg_id = result_data.get('result', {}).get('message_id')
-                                    message_id = str(telegram_msg_id) if telegram_msg_id else str(uuid_lib.uuid4().hex)
-                                    
-                                    bot_message = BotMessage(
-                                        bot_id=bot_id,
-                                        bot_user_id=bot_user.id,
-                                        telegram_user_id=str(chat_id),
-                                        message_id=message_id,
-                                        message_text=message,
-                                        message_type='text' if not media_url else media_type,
-                                        direction='outgoing',
-                                        is_read=True,  # Mensagens do bot já são "lidas"
-                                        raw_data=json.dumps(result_data) if result_data else None
-                                    )
-                                    db.session.add(bot_message)
-                                    db.session.commit()
-                                    logger.debug(f"✅ Mensagem enviada pelo bot salva no banco: {message[:50]}...")
-                                else:
-                                    logger.debug(f"⚠️ BotUser não encontrado para salvar mensagem enviada: bot_id={bot_id}, chat_id={chat_id}")
+                                bot_message = BotMessage(
+                                    bot_id=bot_id,
+                                    bot_user_id=bot_user.id,
+                                    telegram_user_id=str(chat_id),
+                                    message_id=message_id,
+                                    message_text=message,
+                                    message_type='text' if not media_url else media_type,
+                                    direction='outgoing',
+                                    is_read=True,  # Mensagens do bot já são "lidas"
+                                    raw_data=json.dumps(result_data) if result_data else None
+                                )
+                                db.session.add(bot_message)
+                                db.session.commit()
+                                logger.debug(f"✅ Mensagem enviada pelo bot salva no banco: {message[:50]}...")
                             else:
-                                logger.debug(f"⚠️ Bot não encontrado pelo token para salvar mensagem enviada")
-                    except Exception as e:
-                        logger.error(f"❌ Erro ao salvar mensagem enviada pelo bot: {e}")
-                        # Não interromper o fluxo se falhar ao salvar
-                    
-                    # Retornar dados completos se sucesso, senão True para compatibilidade
-                    return result_data if result_data.get('result') else True
-                else:
-                    logger.error(f"❌ Telegram API retornou erro: {result_data.get('description', 'Erro desconhecido')}")
-                    return False
+                                logger.debug(f"⚠️ BotUser não encontrado para salvar mensagem enviada: bot_id={bot_id}, chat_id={chat_id}")
+                        else:
+                            logger.debug(f"⚠️ Bot não encontrado pelo token para salvar mensagem enviada")
+                except Exception as e:
+                    logger.error(f"❌ Erro ao salvar mensagem enviada pelo bot: {e}")
+                    # Não interromper o fluxo se falhar ao salvar
+                
+                # Retornar dados completos se sucesso, senão True para compatibilidade
+                return result_data if result_data.get('result') else True
             else:
-                logger.error(f"❌ Erro ao enviar mensagem: {response.text}")
+                # ✅ CRÍTICO: Log detalhado do erro
+                error_description = result_data.get('description', 'Erro desconhecido') if result_data else 'Resposta inválida'
+                error_code = result_data.get('error_code', response.status_code) if result_data else response.status_code
+                logger.error(f"❌ Erro ao enviar mensagem para chat {chat_id}: status={response.status_code}, error_code={error_code}, description={error_description}")
+                logger.error(f"❌ Resposta completa: {response.text[:500]}")
                 return False
                 
         except requests.exceptions.Timeout:
@@ -10248,6 +10277,7 @@ Seu pagamento ainda não foi confirmado.
                                             })
                                 
                                 # Enviar mensagem
+                                logger.debug(f"📤 Enviando remarketing para {lead.telegram_user_id} (lead: {lead.id})")
                                 result = self.send_telegram_message(
                                     token=bot_token,
                                     chat_id=lead.telegram_user_id,
@@ -10258,6 +10288,7 @@ Seu pagamento ainda não foi confirmado.
                                 )
                                 
                                 if result:
+                                    logger.debug(f"✅ Remarketing enviado com sucesso para {lead.telegram_user_id}")
                                     batch_sent += 1
                                     
                                     # ✅ Enviar áudio adicional se habilitado
@@ -10271,9 +10302,12 @@ Seu pagamento ainda não foi confirmado.
                                                 media_type='audio',
                                                 buttons=None
                                             )
+                                            if not audio_result:
+                                                logger.warning(f"⚠️ Áudio não foi enviado para {lead.telegram_user_id} (result=False)")
                                         except Exception as audio_error:
                                             logger.warning(f"⚠️ Erro ao enviar áudio para {lead.telegram_user_id}: {audio_error}")
                                 else:
+                                    logger.warning(f"❌ Remarketing NÃO foi enviado para {lead.telegram_user_id} (result=False) - verificar logs acima para detalhes")
                                     batch_failed += 1
                                     
                             except Exception as e:
@@ -10293,22 +10327,28 @@ Seu pagamento ainda não foi confirmado.
                                         db.session.add(blacklist)
                                     except Exception as blacklist_error:
                                         logger.warning(f"⚠️ Erro ao adicionar blacklist: {blacklist_error}")
+                                elif "rate limit" in error_msg or "too many requests" in error_msg or "error_code\":429" in error_msg:
+                                    # ✅ Rate limiting do Telegram - aguardar e tentar novamente
+                                    batch_failed += 1
+                                    logger.warning(f"⏱️ Rate limit do Telegram atingido para {lead.telegram_user_id} - aguardando 1 segundo...")
+                                    import time
+                                    time.sleep(1)  # Aguardar 1 segundo antes de continuar
                                 elif "unauthorized" in error_msg or "error_code\":401" in error_msg:
                                     # ✅ Token inválido - não bloquear, apenas contar como falha
                                     batch_failed += 1
-                                    logger.debug(f"🔑 Token inválido ou expirado para lead {lead.telegram_user_id}")
+                                    logger.warning(f"🔑 Token inválido ou expirado para lead {lead.telegram_user_id}")
                                 elif "chat not found" in error_msg or "error_code\":400" in error_msg:
                                     # ✅ Chat não existe mais - contar como falha mas continuar
                                     batch_failed += 1
-                                    logger.debug(f"💬 Chat não encontrado para lead {lead.telegram_user_id}")
+                                    logger.warning(f"💬 Chat não encontrado para lead {lead.telegram_user_id}")
                                 elif "user is deactivated" in error_msg:
                                     # ✅ Usuário desativado - contar como falha mas continuar
                                     batch_failed += 1
-                                    logger.debug(f"🚫 Usuário desativado: {lead.telegram_user_id}")
+                                    logger.warning(f"🚫 Usuário desativado: {lead.telegram_user_id}")
                                 else:
                                     # ✅ Outros erros - contar como falha mas continuar processamento
                                     batch_failed += 1
-                                    logger.debug(f"❓ Erro desconhecido para lead {lead.telegram_user_id}: {e}")
+                                    logger.warning(f"❓ Erro desconhecido para lead {lead.telegram_user_id}: {e}")
                         
                         # ✅ CRÍTICO: Atualizar contadores e fazer commit com tratamento de erro
                         try:
