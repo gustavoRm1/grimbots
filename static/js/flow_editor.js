@@ -83,7 +83,12 @@ class FlowEditor {
         this.enableZoom();
         this.enablePan();
         this.enableSelection();
-        this.enableActionButtonsDelegation(); // Event delegation como fallback
+        
+        // CRÍTICO: Configurar event delegation DEPOIS do contentContainer existir
+        // Aguardar um pouco para garantir que o container está pronto
+        setTimeout(() => {
+            this.enableActionButtonsDelegation(); // Event delegation como fallback
+        }, 100);
         
         // Renderizar steps após setup
         setTimeout(() => {
@@ -96,38 +101,115 @@ class FlowEditor {
      * CRÍTICO: Garante que cliques nos botões sejam capturados mesmo se attachActionButtons falhar
      */
     enableActionButtonsDelegation() {
-        if (!this.canvas) return;
+        // CRÍTICO: Usar contentContainer onde os elementos realmente estão
+        const container = this.contentContainer || this.canvas;
+        if (!container) {
+            console.warn('⚠️ enableActionButtonsDelegation: container não encontrado');
+            return;
+        }
         
-        // Usar event delegation no canvas para capturar cliques nos botões
-        this.canvas.addEventListener('click', (e) => {
-            // Verificar se o clique foi em um botão de ação
+        console.log('✅ Event delegation configurado no container:', container);
+        
+        // CRÍTICO: Usar mousedown para capturar ANTES do jsPlumb processar
+        // Usar event delegation no container para capturar cliques nos botões
+        container.addEventListener('mousedown', (e) => {
+            // Verificar se o clique foi em um botão de ação OU em um ícone dentro do botão
             const button = e.target.closest('.flow-step-btn-action[data-action]');
-            if (!button) return;
+            if (!button) {
+                // Tentar também se o clique foi em um ícone dentro do botão
+                const icon = e.target.closest('i');
+                if (icon) {
+                    const parentButton = icon.closest('.flow-step-btn-action[data-action]');
+                    if (parentButton) {
+                        const action = parentButton.getAttribute('data-action');
+                        const stepId = parentButton.getAttribute('data-step-id');
+                        if (action && stepId) {
+                            console.log('🔵 [Delegation] Ícone dentro de botão clicado:', { action, stepId });
+                            e.stopPropagation();
+                            e.preventDefault();
+                            e.stopImmediatePropagation();
+                            this.handleActionClick(action, stepId);
+                            return;
+                        }
+                    }
+                }
+                return;
+            }
+            
+            const action = button.getAttribute('data-action');
+            const stepId = button.getAttribute('data-step-id');
+            
+            if (!action || !stepId) {
+                console.warn('⚠️ Botão sem action ou stepId:', button);
+                return;
+            }
+            
+            console.log('🔵 [Delegation] Botão clicado (mousedown):', { action, stepId, target: e.target, button });
+            
+            e.stopPropagation();
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            
+            this.handleActionClick(action, stepId);
+        }, true); // Capture phase para garantir que seja executado primeiro
+        
+        // Também adicionar listener de click como backup
+        container.addEventListener('click', (e) => {
+            const button = e.target.closest('.flow-step-btn-action[data-action]');
+            if (!button) {
+                const icon = e.target.closest('i');
+                if (icon) {
+                    const parentButton = icon.closest('.flow-step-btn-action[data-action]');
+                    if (parentButton) {
+                        const action = parentButton.getAttribute('data-action');
+                        const stepId = parentButton.getAttribute('data-step-id');
+                        if (action && stepId) {
+                            console.log('🔵 [Delegation Click] Ícone dentro de botão clicado:', { action, stepId });
+                            e.stopPropagation();
+                            e.preventDefault();
+                            e.stopImmediatePropagation();
+                            this.handleActionClick(action, stepId);
+                            return;
+                        }
+                    }
+                }
+                return;
+            }
             
             const action = button.getAttribute('data-action');
             const stepId = button.getAttribute('data-step-id');
             
             if (!action || !stepId) return;
             
-            console.log('🔵 [Delegation] Botão clicado:', { action, stepId, target: e.target });
+            console.log('🔵 [Delegation Click] Botão clicado:', { action, stepId });
             
             e.stopPropagation();
             e.preventDefault();
             e.stopImmediatePropagation();
             
-            switch (action) {
-                case 'edit':
-                    console.log('🔵 [Delegation] Chamando editStep para:', stepId);
-                    this.editStep(stepId);
-                    break;
-                case 'remove':
-                    this.deleteStep(stepId);
-                    break;
-                case 'set-start':
-                    this.setStartStep(stepId);
-                    break;
-            }
-        }, true); // Capture phase para garantir que seja executado primeiro
+            this.handleActionClick(action, stepId);
+        }, true);
+    }
+    
+    /**
+     * Handler centralizado para ações dos botões
+     */
+    handleActionClick(action, stepId) {
+        console.log('🔵 handleActionClick:', { action, stepId });
+        switch (action) {
+            case 'edit':
+                console.log('🔵 [Handler] Chamando editStep para:', stepId);
+                this.editStep(stepId);
+                break;
+            case 'remove':
+                this.deleteStep(stepId);
+                break;
+            case 'set-start':
+                this.setStartStep(stepId);
+                break;
+            default:
+                console.warn('⚠️ Ação desconhecida:', action);
+        }
     }
     
     /**
@@ -525,11 +607,17 @@ class FlowEditor {
         this.instance.draggable(stepElement, {
             containment: false,
             grid: [this.gridSize, this.gridSize],
-            filter: '.flow-step-btn-action, .flow-step-btn-action *', // CRÍTICO: Não arrastar quando clicar nos botões
+            filter: '.flow-step-btn-action, .flow-step-btn-action *, i.fa-edit, i.fa-trash', // CRÍTICO: Não arrastar quando clicar nos botões ou ícones
             start: (params) => {
-                // Verificar se o clique foi em um botão de ação
-                if (params.e && params.e.target && params.e.target.closest('.flow-step-btn-action')) {
-                    return false; // Cancelar drag se for um botão
+                // Verificar se o clique foi em um botão de ação ou ícone dentro
+                const target = params.e && params.e.target;
+                if (target) {
+                    const isButton = target.closest('.flow-step-btn-action');
+                    const isIconInButton = target.closest('i') && target.closest('.flow-step-btn-action');
+                    if (isButton || isIconInButton) {
+                        console.log('🚫 Drag cancelado - clique em botão:', target);
+                        return false; // Cancelar drag se for um botão
+                    }
                 }
                 stepElement.classList.add('dragging');
                 // Garantir que não há transform
@@ -568,6 +656,19 @@ class FlowEditor {
                 this.addEndpoints(stepElement, stepId, step);
                 this.instance.revalidate(stepElement);
                 this.instance.repaintEverything();
+                
+                // CRÍTICO: Testar se os botões existem e adicionar listener adicional
+                setTimeout(() => {
+                    const testButtons = stepElement.querySelectorAll('.flow-step-btn-action');
+                    console.log(`🔍 Step ${stepId}: ${testButtons.length} botões encontrados após renderização`);
+                    testButtons.forEach((btn, idx) => {
+                        console.log(`  Botão ${idx}:`, {
+                            action: btn.getAttribute('data-action'),
+                            stepId: btn.getAttribute('data-step-id'),
+                            element: btn
+                        });
+                    });
+                }, 200);
             });
         });
         
@@ -622,38 +723,20 @@ class FlowEditor {
             newButton.style.zIndex = '9999';
             newButton.style.pointerEvents = 'auto';
             
-            // Adicionar novo listener com capture phase
-            newButton.addEventListener('click', (e) => {
-                console.log(`🔵 Botão clicado: action=${action}, stepId=${buttonStepId}`, e);
+            // CRÍTICO: Usar mousedown para capturar ANTES do jsPlumb processar
+            const handleButtonAction = (e) => {
+                console.log(`🔵 [Direct Listener] Botão ${action} clicado: stepId=${buttonStepId}`, e);
                 e.stopPropagation(); // Prevenir propagação para o canvas
                 e.stopImmediatePropagation(); // Prevenir outros listeners
                 e.preventDefault();
                 
                 // Forçar chamada mesmo se houver algum problema
-                switch (action) {
-                    case 'edit':
-                        console.log('🔵 Chamando editStep para:', buttonStepId);
-                        // Tentar múltiplas vezes para garantir
-                        if (typeof this.editStep === 'function') {
-                            this.editStep(buttonStepId);
-                        } else {
-                            console.error('❌ this.editStep não é uma função');
-                            // Fallback direto
-                            if (window.alpineFlowEditor && window.alpineFlowEditor.openStepModal) {
-                                window.alpineFlowEditor.openStepModal(buttonStepId);
-                            }
-                        }
-                        break;
-                    case 'remove':
-                        this.deleteStep(buttonStepId);
-                        break;
-                    case 'set-start':
-                        this.setStartStep(buttonStepId);
-                        break;
-                    default:
-                        console.warn('⚠️ Ação desconhecida:', action);
-                }
-            }, true); // Usar capture phase para garantir que seja executado primeiro
+                this.handleActionClick(action, buttonStepId);
+            };
+            
+            // Adicionar listeners para mousedown e click
+            newButton.addEventListener('mousedown', handleButtonAction, true);
+            newButton.addEventListener('click', handleButtonAction, true);
         });
     }
     
