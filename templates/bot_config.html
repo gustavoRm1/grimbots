@@ -548,9 +548,9 @@
     border: 1px solid #242836 !important;
 }
 
-/* === ManyChat-like endpoints & z-index fix === */
+/* === 🔥 V5.0 - ManyChat-Level Endpoints === */
 
-/* Force cards absolute (positions controlled by JS) and internal relative for nodes */
+/* Force cards absolute (positions controlled by JS) */
 .flow-step-block,
 .flow-card {
     position: absolute !important;
@@ -559,26 +559,47 @@
     background: #0F0F14;
     border: 1px solid #242836;
     border-radius: 12px;
-    overflow: visible; /* allow endpoints to be visible outside */
+    overflow: visible !important; /* allow endpoints to be visible outside */
     will-change: transform;
 }
 
 /* Ensure inner elements can use absolute positioning relative to card */
 .flow-step-block > * { position: relative; }
 
-/* Global endpoint visual (jsPlumb renders svgs but ensure correct stacking) */
-.jtk-endpoint, .jtk-endpoint * {
-    z-index: 2000 !important;
+/* 🔥 V5.0 - Endpoints ManyChat-Level: 14x14, totalmente fora do card (±6px), z-index máximo */
+.jtk-endpoint {
+    z-index: 9999 !important;
     pointer-events: auto !important;
     cursor: crosshair !important;
-    transition: all 0.2s ease;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     display: block !important;
 }
 
-.jtk-endpoint:hover {
-    transform: scale(1.3);
-    z-index: 50 !important;
-    filter: drop-shadow(0 0 6px rgba(255,255,255,0.6));
+.jtk-endpoint circle {
+    r: 7 !important; /* 14x14 total */
+    fill: #10B981 !important; /* Verde quando ativo */
+    stroke: #FFFFFF !important;
+    stroke-width: 2 !important;
+}
+
+.jtk-endpoint:hover circle {
+    fill: #FFB800 !important; /* Amarelo no hover */
+    transform: scale(1.2);
+    filter: drop-shadow(0 0 8px rgba(255, 184, 0, 0.8));
+}
+
+.jtk-endpoint.jtk-endpoint-connected circle {
+    fill: #10B981 !important; /* Verde quando conectado */
+}
+
+.jtk-endpoint.jtk-endpoint-disconnected circle {
+    fill: #6B7280 !important; /* Cinza quando desconectado */
+}
+
+/* Garantir que endpoints não sejam bloqueados */
+.jtk-endpoint * {
+    pointer-events: auto !important;
+    z-index: 9999 !important;
 }
 
 /* Provide a visible pin outside the card for custom fallback */

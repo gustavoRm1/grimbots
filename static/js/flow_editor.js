@@ -41,6 +41,11 @@ class FlowEditor {
         this.repaintTimeout = null;
         this.stepTransforms = new Map();
         
+        // Endpoint management - V5.0 Anti-duplication system
+        this.endpointRegistry = new Map(); // stepId -> Set of endpoint UUIDs
+        this.endpointEventListeners = new WeakMap(); // endpoint -> Set of listeners
+        this.endpointCreationLock = new Set(); // UUIDs being created (prevent race conditions)
+        
         // Configurações
         this.gridSize = 20;
         this.minZoom = 0.2;
@@ -79,6 +84,9 @@ class FlowEditor {
         
         // CRÍTICO: Setup jsPlumb DEPOIS, usando contentContainer como Container
         this.setupJsPlumb();
+        
+        // 🔥 V5.0: Ativar sistema de proteção contra duplicação
+        this.preventEndpointDuplication();
         
         this.enableZoom();
         this.enablePan();
@@ -710,9 +718,15 @@ class FlowEditor {
         element.style.top = `${position.y}px`;
         this.stepTransforms.set(stepId, { x: position.x, y: position.y });
         
+        // 🔥 V5.0: Corrigir endpoints antes de remover (remove duplicados primeiro)
+        this.fixEndpoints(element);
+        
         // Remover endpoints antigos (todos os endpoints do card)
         // Endpoints agora são criados diretamente no elemento, não há mais nodes HTML
         this.instance.removeAllEndpoints(element);
+        
+        // Limpar registro
+        this.endpointRegistry.delete(stepId);
         
         // CRÍTICO: Garantir que o card tenha position absolute e sem transform
         element.style.position = 'absolute';
@@ -805,126 +819,277 @@ class FlowEditor {
     }
     
     /**
+     * 🔥 V5.0 - Sistema Anti-Duplicação de Endpoints
+     * Remove endpoints duplicados e órfãos antes de criar novos
+     */
+    fixEndpoints(cardElement) {
+        if (!cardElement || !this.instance) return;
+        
+        const stepId = cardElement.dataset.stepId;
+        if (!stepId) return;
+        
+        try {
+            // Obter todos os endpoints do elemento
+            const allEndpoints = this.instance.getEndpoints(cardElement) || [];
+            const expectedUuids = new Set();
+            
+            // Calcular UUIDs esperados
+            const step = this.alpine?.config?.flow_steps?.find(s => String(s.id) === stepId);
+            if (step) {
+                expectedUuids.add(`endpoint-left-${stepId}`);
+                const hasButtons = (step.config?.custom_buttons || []).length > 0;
+                if (hasButtons) {
+                    (step.config.custom_buttons || []).forEach((btn, idx) => {
+                        expectedUuids.add(`endpoint-button-${stepId}-${idx}`);
+                    });
+                } else {
+                    expectedUuids.add(`endpoint-right-${stepId}`);
+                }
+            }
+            
+            // Remover endpoints órfãos (que não estão na lista esperada)
+            allEndpoints.forEach(ep => {
+                try {
+                    const uuid = ep.getUuid ? ep.getUuid() : null;
+                    if (uuid && !expectedUuids.has(uuid)) {
+                        console.log(`🧹 Removendo endpoint órfão: ${uuid}`);
+                        this.instance.deleteEndpoint(ep);
+                    }
+                } catch(e) {}
+            });
+            
+            // Verificar duplicação por UUID
+            const uuidCounts = new Map();
+            allEndpoints.forEach(ep => {
+                try {
+                    const uuid = ep.getUuid ? ep.getUuid() : null;
+                    if (uuid) {
+                        uuidCounts.set(uuid, (uuidCounts.get(uuid) || 0) + 1);
+                    }
+                } catch(e) {}
+            });
+            
+            // Remover duplicados (manter apenas o primeiro)
+            uuidCounts.forEach((count, uuid) => {
+                if (count > 1) {
+                    console.log(`🧹 Removendo ${count - 1} duplicado(s) do endpoint: ${uuid}`);
+                    let foundFirst = false;
+                    allEndpoints.forEach(ep => {
+                        try {
+                            const epUuid = ep.getUuid ? ep.getUuid() : null;
+                            if (epUuid === uuid) {
+                                if (!foundFirst) {
+                                    foundFirst = true;
+                                } else {
+                                    this.instance.deleteEndpoint(ep);
+                                }
+                            }
+                        } catch(e) {}
+                    });
+                }
+            });
+            
+        } catch(e) {
+            console.error('❌ Erro em fixEndpoints:', e);
+        }
+    }
+    
+    /**
+     * 🔥 V5.0 - Sistema de Proteção Contra Duplicação
+     * Monitora e previne criação duplicada de endpoints
+     */
+    preventEndpointDuplication() {
+        if (!this.instance) return;
+        
+        // Interceptar addEndpoint para prevenir duplicação
+        const originalAddEndpoint = this.instance.addEndpoint.bind(this.instance);
+        this.instance.addEndpoint = (element, params) => {
+            const uuid = params.uuid;
+            if (!uuid) {
+                return originalAddEndpoint(element, params);
+            }
+            
+            // Verificar se já existe
+            try {
+                const existing = this.instance.getEndpoint(uuid);
+                if (existing) {
+                    console.warn(`⚠️ Endpoint ${uuid} já existe, ignorando criação duplicada`);
+                    return existing;
+                }
+            } catch(e) {}
+            
+            // Verificar lock de criação
+            if (this.endpointCreationLock.has(uuid)) {
+                console.warn(`⚠️ Endpoint ${uuid} está sendo criado, ignorando duplicação`);
+                return null;
+            }
+            
+            // Adicionar lock
+            this.endpointCreationLock.add(uuid);
+            
+            try {
+                const endpoint = originalAddEndpoint(element, params);
+                
+                // Registrar endpoint
+                const stepId = element.dataset.stepId;
+                if (stepId) {
+                    if (!this.endpointRegistry.has(stepId)) {
+                        this.endpointRegistry.set(stepId, new Set());
+                    }
+                    this.endpointRegistry.get(stepId).add(uuid);
+                }
+                
+                // Configurar event listeners uma única vez
+                this.setupEndpointEventListeners(endpoint, uuid);
+                
+                return endpoint;
+            } finally {
+                // Remover lock após criação
+                setTimeout(() => {
+                    this.endpointCreationLock.delete(uuid);
+                }, 100);
+            }
+        };
+    }
+    
+    /**
+     * 🔥 V5.0 - Configura event listeners nos endpoints (uma única vez)
+     */
+    setupEndpointEventListeners(endpoint, uuid) {
+        if (!endpoint || !endpoint.canvas) return;
+        
+        // Verificar se já tem listeners configurados
+        if (this.endpointEventListeners.has(endpoint)) {
+            return; // Já configurado
+        }
+        
+        const listeners = new Set();
+        
+        // Handler para prevenir drag do card
+        const preventCardDrag = (ev) => {
+            ev.stopPropagation();
+            ev.stopImmediatePropagation();
+        };
+        
+        // Adicionar listeners
+        endpoint.canvas.addEventListener('mousedown', preventCardDrag, { capture: true });
+        endpoint.canvas.addEventListener('pointerdown', preventCardDrag, { capture: true });
+        endpoint.canvas.addEventListener('touchstart', preventCardDrag, { capture: true });
+        
+        listeners.add(preventCardDrag);
+        this.endpointEventListeners.set(endpoint, listeners);
+        
+        // Garantir z-index e pointer-events
+        if (endpoint.canvas) {
+            endpoint.canvas.style.zIndex = '9999';
+            endpoint.canvas.style.pointerEvents = 'auto';
+        }
+    }
+    
+    /**
      * Adiciona endpoints ao step
-     * PATCH V4.0 - ManyChat Perfect
+     * 🔥 V5.0 - ManyChat Perfect com Anti-Duplicação Robusta
      */
     addEndpoints(element, stepId, step) {
-        if (!this.instance) return;
+        if (!this.instance || !element) return;
+        
+        // CRÍTICO: Corrigir endpoints antes de criar novos
+        this.fixEndpoints(element);
+        
         const stepConfig = step.config || {};
         const customButtons = stepConfig.custom_buttons || [];
         const hasButtons = customButtons.length > 0;
         
-        // Ensure element position relative for internal placement but endpoints will be outside by anchor offsets
+        // Ensure element position absolute
         element.style.position = 'absolute';
         
-        // Helper to check existing endpoints by uuid
-        const hasEndpoint = (uuid) => {
+        // Helper robusto para verificar endpoint existente
+        const getEndpointByUuid = (uuid) => {
             try {
-                const eps = this.instance.getEndpoints(element);
-                if (!eps) return false;
-                for (let e of eps) {
-                    if (e && e.getUuid && e.getUuid() === uuid) return true;
-                }
-            } catch(e) {}
-            return false;
+                return this.instance.getEndpoint(uuid);
+            } catch(e) {
+                return null;
+            }
         };
         
-        // 1) INPUT endpoint (left outside)
+        // 1) INPUT endpoint (left outside) - SEMPRE FIXO
         const inputUuid = `endpoint-left-${stepId}`;
-        // Create or revalidate
-        if (!hasEndpoint(inputUuid)) {
-            this.instance.addEndpoint(element, {
+        const existingInput = getEndpointByUuid(inputUuid);
+        if (!existingInput) {
+            const inputEp = this.instance.addEndpoint(element, {
                 uuid: inputUuid,
-                anchor: [0, 0.5, -1, 0, -8, 0], // left outside
+                anchor: [0, 0.5, -1, 0, -8, 0], // left outside, center vertical, -8px offset
                 isSource: false,
                 isTarget: true,
                 maxConnections: -1,
                 endpoint: ['Dot', { radius: 7 }],
-                paintStyle: { fill:'#FFFFFF', outlineStroke:'#0D0F15', outlineWidth:2 },
-                hoverPaintStyle: { fill:'#FFB800' },
+                paintStyle: { fill:'#10B981', outlineStroke:'#FFFFFF', outlineWidth:2 },
+                hoverPaintStyle: { fill:'#FFB800', outlineStroke:'#FFFFFF', outlineWidth:3 },
                 data: { stepId, endpointType: 'input' }
             });
-        } else {
-            try { this.instance.revalidate(element); } catch(e){}
+            if (inputEp) this.setupEndpointEventListeners(inputEp, inputUuid);
         }
         
         // 2) OUTPUT endpoints
         if (hasButtons) {
-            // Remove global output if exists
+            // Remover output global se existir
             const globalUuid = `endpoint-right-${stepId}`;
-            try {
-                const ep = this.instance.getEndpoint(globalUuid);
-                if (ep) { this.instance.deleteEndpoint(ep); }
-            } catch(e){}
+            const existingGlobal = getEndpointByUuid(globalUuid);
+            if (existingGlobal) {
+                try { this.instance.deleteEndpoint(existingGlobal); } catch(e) {}
+            }
             
-            // create one endpoint per button
+            // Criar um endpoint por botão - ANCHOR FIXO baseado no índice
             customButtons.forEach((btn, index) => {
-                const btnSelector = element.querySelector(`[data-endpoint-button="${index}"]`);
-                // attach endpoint to the card element but anchored to the right-middle with an offset computed per button vertical position
                 const uuid = `endpoint-button-${stepId}-${index}`;
-                if (this.instance.getEndpoint(uuid)) return;
+                const existingBtn = getEndpointByUuid(uuid);
                 
-                // compute relative Y of the button inside element for an accurate anchor (Middle + offset)
-                let anchorY = 0.5;
-                if (btnSelector) {
-                    const btnRect = btnSelector.getBoundingClientRect();
-                    const cardRect = element.getBoundingClientRect();
-                    if (cardRect.height > 0) {
-                        const centerY = (btnRect.top + btnRect.height/2) - cardRect.top;
-                        anchorY = Math.max(0, Math.min(1, centerY / cardRect.height));
-                    }
+                if (!existingBtn) {
+                    // Anchor fixo: calcular Y baseado no índice do botão (mais estável que getBoundingClientRect)
+                    // Assumindo que botões estão distribuídos uniformemente
+                    const buttonCount = customButtons.length;
+                    const buttonSpacing = 1 / (buttonCount + 1); // Espaçamento uniforme
+                    const anchorY = Math.max(0.2, Math.min(0.8, 0.3 + (index * buttonSpacing))); // Entre 30% e 80% do card
+                    
+                    const btnEp = this.instance.addEndpoint(element, {
+                        uuid,
+                        anchor: [1, anchorY, 1, 0, 8, 0], // right outside, Y calculado, +8px offset
+                        isSource: true,
+                        isTarget: false,
+                        maxConnections: 1,
+                        endpoint: ['Dot', { radius: 6 }],
+                        paintStyle: { fill:'#FFFFFF', outlineStroke:'#0D0F15', outlineWidth:2 },
+                        hoverPaintStyle: { fill:'#FFB800', outlineStroke:'#FFFFFF', outlineWidth:3 },
+                        data: { stepId, buttonIndex: index, endpointType: 'button' }
+                    });
+                    if (btnEp) this.setupEndpointEventListeners(btnEp, uuid);
                 }
-                
-                // anchor array: [x, y, dx, dy, offsetX, offsetY] where x=1 means right side
-                const anchor = [1, anchorY, 1, 0, 8, 0];
-                
-                this.instance.addEndpoint(element, {
-                    uuid,
-                    anchor,
-                    isSource: true,
-                    isTarget: false,
-                    maxConnections: 1,
-                    endpoint: ['Dot', { radius: 6 }],
-                    paintStyle: { fill:'#FFFFFF', outlineStroke:'#0D0F15', outlineWidth:2 },
-                    hoverPaintStyle: { fill:'#FFB800' },
-                    data: { stepId, buttonIndex: index, endpointType: 'button' }
-                });
-                
-                // Prevent pointer events from bubbling to card when interacting with endpoint DOM
-                // Use event capture on jsPlumb's overlay (if present)
-                try {
-                    const eps = this.instance.getEndpoints(element) || [];
-                    const ep = eps.find(e => e.getUuid && e.getUuid() === uuid);
-                    if (ep && ep.canvas) {
-                        ep.canvas.addEventListener('mousedown', (ev) => ev.stopPropagation(), { capture: true });
-                        ep.canvas.addEventListener('pointerdown', (ev) => ev.stopPropagation(), { capture: true });
-                    }
-                } catch(e){}
             });
         } else {
-            // Without buttons: create a single global output on the right-middle
+            // Sem botões: criar output global único - SEMPRE FIXO
             const outUuid = `endpoint-right-${stepId}`;
-            if (!hasEndpoint(outUuid)) {
-                this.instance.addEndpoint(element, {
+            const existingOut = getEndpointByUuid(outUuid);
+            
+            if (!existingOut) {
+                const outEp = this.instance.addEndpoint(element, {
                     uuid: outUuid,
-                    anchor: [1, 0.5, 1, 0, 8, 0], // right outside
+                    anchor: [1, 0.5, 1, 0, 8, 0], // right outside, center vertical, +8px offset
                     isSource: true,
                     isTarget: false,
                     maxConnections: -1,
                     endpoint: ['Dot', { radius: 7 }],
                     paintStyle: { fill:'#FFFFFF', outlineStroke:'#0D0F15', outlineWidth:2 },
-                    hoverPaintStyle: { fill:'#FFB800' },
+                    hoverPaintStyle: { fill:'#FFB800', outlineStroke:'#FFFFFF', outlineWidth:3 },
                     data: { stepId, endpointType: 'global' }
                 });
-                try {
-                    const ep = this.instance.getEndpoint(outUuid);
-                    if (ep && ep.canvas) {
-                        ep.canvas.addEventListener('mousedown', (ev) => ev.stopPropagation(), { capture: true });
-                        ep.canvas.addEventListener('pointerdown', (ev) => ev.stopPropagation(), { capture: true });
-                    }
-                } catch(e){}
+                if (outEp) this.setupEndpointEventListeners(outEp, outUuid);
             }
         }
+        
+        // Revalidar após criar endpoints
+        try {
+            this.instance.revalidate(element);
+        } catch(e) {}
     }
     
     /**
@@ -947,8 +1112,9 @@ class FlowEditor {
             // Este é um fallback adicional
             this.dragFrameId = requestAnimationFrame(() => {
                 if (this.instance) {
+                    // 🔥 V5.0: Corrigir endpoints durante drag (remove duplicados que podem aparecer)
+                    this.fixEndpoints(element);
                     // Revalidar o elemento arrastado
-                    // Endpoints agora são gerenciados 100% pelo jsPlumb, não há mais nodes HTML
                     this.instance.revalidate(element);
                     // Repintar todas as conexões
                     this.instance.repaintEverything();
@@ -991,6 +1157,9 @@ class FlowEditor {
             
             // Atualizar no Alpine
             this.updateStepPosition(stepId, { x, y });
+            
+            // 🔥 V5.0: Corrigir endpoints após drag (remove duplicados)
+            this.fixEndpoints(element);
             
             // CRÍTICO: Revalidar e repintar após drag parar
             if (this.instance) {
@@ -1508,8 +1677,14 @@ class FlowEditor {
         const element = this.steps.get(String(stepId));
         if (!element) return;
         
+        // 🔥 V5.0: Corrigir endpoints antes de remover
+        this.fixEndpoints(element);
+        
         // Remover endpoints antigos
         this.instance.removeAllEndpoints(element);
+        
+        // Limpar registro
+        this.endpointRegistry.delete(String(stepId));
         
         // Re-adicionar
         this.addEndpoints(element, String(stepId), step);
