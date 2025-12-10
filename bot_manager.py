@@ -2099,20 +2099,35 @@ class BotManager:
         Busca step por ID no fluxo
         
         ✅ VALIDAÇÃO: Sanitiza step_id antes de buscar
+        ✅ CRÍTICO: Compara IDs como strings (pode vir como número ou string)
         """
-        if not step_id or not isinstance(step_id, str) or not step_id.strip():
+        if not step_id:
             return None
         
-        step_id = step_id.strip()
+        # Converter step_id para string para comparação
+        step_id_str = str(step_id).strip()
+        
+        if not step_id_str:
+            return None
         
         if not flow_steps or not isinstance(flow_steps, list):
+            logger.warning(f"⚠️ _find_step_by_id: flow_steps inválido (tipo: {type(flow_steps)})")
             return None
         
         for step in flow_steps:
             if not isinstance(step, dict):
                 continue
-            if step.get('id') == step_id:
+            
+            step_id_candidate = step.get('id')
+            if step_id_candidate is None:
+                continue
+            
+            # ✅ CRÍTICO: Comparar como strings (pode ser número ou string)
+            if str(step_id_candidate).strip() == step_id_str:
+                logger.info(f"✅ Step encontrado: id={step_id_candidate} (tipo: {type(step_id_candidate)})")
                 return step
+        
+        logger.warning(f"⚠️ Step {step_id_str} não encontrado em {len(flow_steps)} steps")
         return None
     
     def _validate_condition(self, condition: Dict[str, Any]) -> tuple:
@@ -2610,6 +2625,8 @@ class BotManager:
         """
         import time
         
+        logger.info(f"🎬 _execute_step chamado: step_id={step.get('id')}, step_type={step.get('type')}")
+        
         # ✅ VALIDAÇÃO: Verificar se step é válido
         if not step or not isinstance(step, dict):
             logger.error(f"❌ Step inválido: {step}")
@@ -2624,13 +2641,16 @@ class BotManager:
         if config is None:
             config = {}
         
+        logger.info(f"🎬 Executando step tipo '{step_type}' com config: {step_config}")
+        
         # ✅ TRATAMENTO DE ERRO: Try/except para cada tipo de step
         try:
             if step_type == 'content':
                 # ✅ Processar botões (customizados + cadastrados)
                 buttons = self._build_step_buttons(step, config)
                 
-                self.send_funnel_step_sequential(
+                logger.info(f"📤 Enviando step 'content' com mensagem: {step_config.get('message', '')[:50]}...")
+                result = self.send_funnel_step_sequential(
                     token=token,
                     chat_id=str(chat_id),
                     text=step_config.get('message', ''),
@@ -2639,16 +2659,19 @@ class BotManager:
                     buttons=buttons,
                     delay_between=delay
                 )
+                logger.info(f"✅ Step 'content' enviado: resultado={result}")
             elif step_type == 'message':
                 # ✅ Processar botões (customizados + cadastrados)
                 buttons = self._build_step_buttons(step, config)
                 
-                self.send_telegram_message(
+                logger.info(f"📤 Enviando step 'message' com mensagem: {step_config.get('message', '')[:50]}...")
+                result = self.send_telegram_message(
                     token=token,
                     chat_id=str(chat_id),
                     message=step_config.get('message', ''),
                     buttons=buttons
                 )
+                logger.info(f"✅ Step 'message' enviado: resultado={result}")
             elif step_type == 'audio':
                 # ✅ Processar botões (customizados + cadastrados)
                 buttons = self._build_step_buttons(step, config)
@@ -2959,13 +2982,19 @@ class BotManager:
             start_step_id = config.get('flow_start_step_id')
             start_step = None
             
+            logger.info(f"🔍 Buscando step inicial: flow_start_step_id={start_step_id} (tipo: {type(start_step_id)})")
+            logger.info(f"🔍 Total de steps no fluxo: {len(flow_steps)}")
+            logger.info(f"🔍 IDs dos steps: {[str(s.get('id')) for s in flow_steps if isinstance(s, dict)]}")
+            
             if start_step_id:
                 # Buscar step específico marcado como inicial
+                logger.info(f"🔍 Tentando encontrar step inicial com ID: {start_step_id}")
                 start_step = self._find_step_by_id(flow_steps, start_step_id)
                 if start_step:
-                    logger.info(f"🎯 Usando step inicial definido: {start_step_id}")
+                    logger.info(f"✅ Step inicial encontrado: {start_step_id} (tipo: {start_step.get('type')}, order: {start_step.get('order', 0)})")
                 else:
                     logger.warning(f"⚠️ Step inicial {start_step_id} não encontrado - usando fallback")
+                    logger.warning(f"⚠️ IDs disponíveis: {[str(s.get('id')) for s in flow_steps if isinstance(s, dict)]}")
                     start_step_id = None
             
             if not start_step:
@@ -2996,13 +3025,18 @@ class BotManager:
                 logger.warning(f"⚠️ Executando mesmo com ciclos detectados - visited_steps vai prevenir loops")
             
             # Executar recursivamente a partir do step inicial
-            logger.info(f"🚀 Iniciando fluxo a partir do step inicial: {start_step_id} (order={start_step.get('order', 0)})")
+            logger.info(f"🚀 Iniciando fluxo a partir do step inicial: {start_step_id} (tipo: {type(start_step_id)}, order={start_step.get('order', 0)})")
+            logger.info(f"🚀 Step inicial completo: {start_step}")
+            logger.info(f"🚀 Chamando _execute_flow_recursive com step_id={start_step_id}")
+            
             self._execute_flow_recursive(
-                bot_id, token, config, chat_id, telegram_user_id, start_step_id,
+                bot_id, token, config, chat_id, telegram_user_id, str(start_step_id),  # ✅ Garantir string
                 recursion_depth=0,
                 visited_steps=set(),
                 flow_snapshot=flow_snapshot
             )
+            
+            logger.info(f"✅ _execute_flow_recursive concluído para step {start_step_id}")
             
         except Exception as e:
             logger.error(f"❌ Erro ao executar fluxo: {e}", exc_info=True)
@@ -3074,12 +3108,33 @@ class BotManager:
                 # Mesclar com config atual (priorizar snapshot, mas manter outros campos)
                 config = {**config, **config_from_snapshot}
             else:
-                flow_steps = config.get('flow_steps', [])
+                # ✅ CRÍTICO: Parsear flow_steps se necessário (pode vir como string JSON)
+                flow_steps_raw = config.get('flow_steps', [])
+                flow_steps = []
+                if flow_steps_raw:
+                    if isinstance(flow_steps_raw, str):
+                        try:
+                            import json
+                            flow_steps = json.loads(flow_steps_raw)
+                            logger.info(f"✅ flow_steps parseado de JSON em _execute_flow_recursive: {len(flow_steps)} steps")
+                        except Exception as e:
+                            logger.error(f"❌ Erro ao parsear flow_steps em _execute_flow_recursive: {e}")
+                            flow_steps = []
+                    elif isinstance(flow_steps_raw, list):
+                        flow_steps = flow_steps_raw
+                    else:
+                        logger.error(f"❌ flow_steps tem tipo inválido em _execute_flow_recursive: {type(flow_steps_raw)}")
+                        flow_steps = []
+            
+            logger.info(f"🔍 Buscando step {step_id} em {len(flow_steps)} steps disponíveis")
+            logger.info(f"🔍 IDs dos steps disponíveis: {[s.get('id') for s in flow_steps if isinstance(s, dict)]}")
             
             step = self._find_step_by_id(flow_steps, step_id)
             
             if not step:
                 logger.error(f"❌ Step {step_id} não encontrado no fluxo")
+                logger.error(f"❌ flow_steps tem {len(flow_steps)} steps")
+                logger.error(f"❌ Tipos dos steps: {[type(s) for s in flow_steps]}")
                 # ✅ FALLBACK: Tentar encontrar step inicial ou enviar mensagem de erro
                 self._handle_missing_step(bot_id, token, config, chat_id, telegram_user_id)
                 return
@@ -3089,7 +3144,10 @@ class BotManager:
             delay = step.get('delay_seconds', 0)
             connections = step.get('connections', {})
             
+            logger.info(f"✅ Step {step_id} encontrado!")
             logger.info(f"🎯 Executando step {step_id} (tipo: {step_type}, ordem: {step.get('order', 0)})")
+            logger.info(f"🎯 Config do step: {step_config}")
+            logger.info(f"🎯 Connections: {connections}")
             
             # ✅ Payment para aqui (aguarda callback verify_)
             if step_type == 'payment':
