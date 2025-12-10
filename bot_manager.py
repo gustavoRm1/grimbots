@@ -2877,7 +2877,24 @@ class BotManager:
             import json
             import time
             
-            flow_steps = config.get('flow_steps', [])
+            # ✅ CRÍTICO: Parsear flow_steps se for string JSON
+            flow_steps_raw = config.get('flow_steps', [])
+            flow_steps = []
+            
+            if flow_steps_raw:
+                if isinstance(flow_steps_raw, str):
+                    try:
+                        flow_steps = json.loads(flow_steps_raw)
+                        logger.info(f"✅ flow_steps parseado de JSON em _execute_flow: {len(flow_steps)} steps")
+                    except Exception as e:
+                        logger.error(f"❌ Erro ao parsear flow_steps em _execute_flow: {e}")
+                        raise ValueError(f"Fluxo inválido (JSON malformado): {e}")
+                elif isinstance(flow_steps_raw, list):
+                    flow_steps = flow_steps_raw
+                else:
+                    logger.error(f"❌ flow_steps tem tipo inválido em _execute_flow: {type(flow_steps_raw)}")
+                    raise ValueError("Fluxo inválido (tipo incorreto)")
+            
             if not flow_steps or len(flow_steps) == 0:
                 logger.warning("⚠️ Fluxo vazio - usando welcome_message")
                 raise ValueError("Fluxo vazio")
@@ -3520,10 +3537,6 @@ class BotManager:
                     bot_user_check.welcome_sent_at = None
                     db.session.commit()
                 
-                # ✅ QI 500: Após reset confirmado, SEMPRE enviar welcome
-                should_send_welcome = True
-                logger.info(f"✅ Reset confirmado - should_send_welcome={should_send_welcome}")
-                
                 # Enfileirar processamento pesado (tracking, Redis, device parsing, etc)
                 try:
                     from tasks_async import task_queue, process_start_async
@@ -3541,14 +3554,39 @@ class BotManager:
                     logger.warning(f"Erro ao enfileirar task async: {e}")
             
             # ============================================================================
-            # ✅ FLUXO VISUAL: Verificar se fluxo está ativo
+            # ✅ FLUXO VISUAL: Verificar se fluxo está ativo ANTES de definir should_send_welcome
             # ============================================================================
             flow_enabled = config.get('flow_enabled', False)
-            flow_steps = config.get('flow_steps', [])
+            flow_steps_raw = config.get('flow_steps', [])
             
-            if flow_enabled and flow_steps and len(flow_steps) > 0:
-                # ✅ NOVO: Executar fluxo visual
-                logger.info(f"🎯 Executando fluxo visual ({len(flow_steps)} steps)")
+            # ✅ CRÍTICO: Garantir que flow_steps é uma lista (pode vir como string JSON)
+            flow_steps = []
+            if flow_steps_raw:
+                if isinstance(flow_steps_raw, str):
+                    try:
+                        import json
+                        flow_steps = json.loads(flow_steps_raw)
+                        logger.info(f"✅ flow_steps parseado de JSON string: {len(flow_steps)} steps")
+                    except Exception as e:
+                        logger.warning(f"⚠️ Erro ao parsear flow_steps como JSON: {e}")
+                        flow_steps = []
+                elif isinstance(flow_steps_raw, list):
+                    flow_steps = flow_steps_raw
+                    logger.info(f"✅ flow_steps já é lista: {len(flow_steps)} steps")
+                else:
+                    logger.warning(f"⚠️ flow_steps tem tipo inesperado: {type(flow_steps_raw)}")
+                    flow_steps = []
+            
+            # ✅ QI 500: Se fluxo está ativo E tem steps válidos, NÃO enviar welcome
+            should_send_welcome = True  # Default: enviar welcome
+            
+            logger.info(f"🔍 Verificação de fluxo: flow_enabled={flow_enabled}, flow_steps_count={len(flow_steps) if isinstance(flow_steps, list) else 0}")
+            
+            if flow_enabled and flow_steps and isinstance(flow_steps, list) and len(flow_steps) > 0:
+                # ✅ NOVO: Executar fluxo visual - IGNORAR welcome_message completamente
+                logger.info(f"🎯 FLUXO VISUAL ATIVO - Executando fluxo visual ({len(flow_steps)} steps)")
+                logger.info(f"🚫 IGNORANDO welcome_message, main_buttons, redirect_buttons, welcome_audio")
+                
                 try:
                     self._execute_flow(bot_id, token, config, chat_id, telegram_user_id)
                     # Marcar welcome_sent após fluxo iniciar
@@ -3566,13 +3604,22 @@ class BotManager:
                                 logger.info(f"✅ Fluxo iniciado - welcome_sent=True")
                         except Exception as e:
                             logger.error(f"Erro ao marcar welcome_sent: {e}")
+                    
+                    # ✅ CRÍTICO: Fluxo executado com sucesso - NÃO enviar welcome
+                    should_send_welcome = False
+                    logger.info(f"✅ Fluxo visual executado com sucesso - should_send_welcome=False")
+                    
                 except Exception as e:
                     logger.error(f"❌ Erro ao executar fluxo: {e}", exc_info=True)
-                    # ✅ FALLBACK: Usar welcome_message se fluxo falhar
+                    # ✅ FALLBACK: Se fluxo falhar, usar welcome_message como backup
                     should_send_welcome = True
+                    logger.warning(f"⚠️ Fallback para welcome_message devido a erro no fluxo")
+            else:
+                # Fluxo não está ativo ou está vazio - usar welcome_message normalmente
+                if flow_enabled:
+                    logger.warning(f"⚠️ flow_enabled=True mas flow_steps está vazio ou inválido - usando welcome_message")
                 else:
-                    # Fluxo executado com sucesso, não enviar welcome
-                    should_send_welcome = False
+                    logger.info(f"📝 Fluxo visual desabilitado - usando welcome_message normalmente")
             
             # ============================================================================
             # ✅ QI 200: ENVIAR MENSAGEM IMEDIATAMENTE (<50ms)
