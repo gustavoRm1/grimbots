@@ -338,7 +338,8 @@ class FlowEditor {
                     // Revalidate cards and their nodes
                     this.steps.forEach((el, id) => {
                         this.instance.revalidate(el);
-                        const inputs = el.querySelectorAll('.flow-step-node-input, .flow-step-node-output, .flow-step-button-endpoint-container');
+                        // Endpoints agora são gerenciados 100% pelo jsPlumb, não há mais nodes HTML
+                    const inputs = [];
                         inputs.forEach(n => this.instance.revalidate(n));
                     });
                     this.instance.repaintEverything();
@@ -374,7 +375,8 @@ class FlowEditor {
                 // CRÍTICO: Revalidar todos os elementos E seus nodes (PATCH V4.0)
                 this.steps.forEach((el, id) => {
                     this.instance.revalidate(el);
-                    const inputs = el.querySelectorAll('.flow-step-node-input, .flow-step-node-output, .flow-step-button-endpoint-container');
+                    // Endpoints agora são gerenciados 100% pelo jsPlumb, não há mais nodes HTML
+                    const inputs = [];
                     inputs.forEach(n => this.instance.revalidate(n));
                 });
                 this.instance.repaintEverything();
@@ -602,9 +604,6 @@ class FlowEditor {
                 <button class="flow-step-btn-action" data-action="remove" data-step-id="${stepId}" data-jtk-not-draggable="true" title="Remover" style="pointer-events: auto; cursor: pointer; z-index: 10001; position: relative;" onclick="console.log('🔵 [ONCLICK INLINE] deleteStep:', '${stepId}'); event.stopImmediatePropagation(); event.stopPropagation(); event.preventDefault(); if(window.flowEditor && window.flowEditor.handleActionClick) { window.flowEditor.handleActionClick('remove', '${stepId}'); } else if(window.flowEditorActions && window.flowEditorActions.deleteStep) { window.flowEditorActions.deleteStep('${stepId}'); } return false;"><i class="fas fa-trash"></i></button>
                 ${!isStartStep?`<button class="flow-step-btn-action" data-action="set-start" data-step-id="${stepId}" data-jtk-not-draggable="true" title="Definir como inicial" style="pointer-events: auto; cursor: pointer; z-index: 10001; position: relative;" onclick="console.log('🔵 [ONCLICK INLINE] setStartStep:', '${stepId}'); event.stopImmediatePropagation(); event.stopPropagation(); event.preventDefault(); if(window.flowEditor && window.flowEditor.handleActionClick) { window.flowEditor.handleActionClick('set-start', '${stepId}'); } else if(window.flowEditorActions && window.flowEditorActions.setStartStep) { window.flowEditorActions.setStartStep('${stepId}'); } return false;">⭐</button>` : ''}
             </div>
-            <!-- Nodes INSIDE the card -->
-            <div class="flow-step-node-input" data-node-type="input" data-step-id="${stepId}" title="Entrada" style="width: 14px; height: 14px;"></div>
-            ${!hasButtons ? `<div class="flow-step-node-output" data-node-type="output" data-step-id="${stepId}" title="Saída" style="width: 14px; height: 14px;"></div>` : ''}
         `;
         
         // Append inner to step and to contentContainer
@@ -634,7 +633,8 @@ class FlowEditor {
             containment: false,
             grid: [this.gridSize, this.gridSize],
             // CRÍTICO: cancel - cancela drag quando clique é em elementos que correspondem ao seletor
-            cancel: '.flow-step-btn-action, .flow-step-btn-action *, .flow-step-footer, .flow-step-footer *, button[data-action], button[data-action] *, i.fa-edit, i.fa-trash',
+            // Inclui endpoints do jsPlumb para prevenir drag quando mouse está sobre endpoint
+            cancel: '.flow-step-btn-action, .flow-step-btn-action *, .flow-step-footer, .flow-step-footer *, button[data-action], button[data-action] *, i.fa-edit, i.fa-trash, .jtk-endpoint, .jtk-endpoint *',
             start: (params) => {
                 // CRÍTICO: Verificar se o clique foi em um botão de ação ANTES de qualquer coisa
                 const target = params.e && params.e.target;
@@ -642,14 +642,15 @@ class FlowEditor {
                     const isButton = target.closest('.flow-step-btn-action[data-action]');
                     const isIconInButton = target.closest('i') && target.closest('.flow-step-btn-action[data-action]');
                     const isInFooter = target.closest('.flow-step-footer');
-                    if (isButton || isIconInButton || isInFooter) {
-                        console.log('🚫 Drag cancelado - clique em botão/footer:', target);
+                    const isEndpoint = target.closest('.jtk-endpoint');
+                    if (isButton || isIconInButton || isInFooter || isEndpoint) {
+                        console.log('🚫 Drag cancelado - clique em botão/footer/endpoint:', target);
                         // CRÍTICO: Cancelar drag E deixar evento passar
                         if (params.e) {
                             params.e.stopPropagation();
                             params.e.stopImmediatePropagation();
                         }
-                        return false; // Cancelar drag se for um botão
+                        return false; // Cancelar drag se for um botão/footer/endpoint
                     }
                 }
                 stepElement.classList.add('dragging');
@@ -661,11 +662,8 @@ class FlowEditor {
                 stepElement.style.transform = 'none';
                 // CRÍTICO: Revalidar durante drag para endpoints acompanharem
                 this.instance.revalidate(stepElement);
-                const inner = stepElement.querySelector('.flow-step-block-inner');
-                if (inner) {
-                    const nodes = inner.querySelectorAll('.flow-step-node-input, .flow-step-node-output, .flow-step-button-endpoint-container');
-                    nodes.forEach(n => this.instance.revalidate(n));
-                }
+                // Revalidar endpoints criados pelo jsPlumb (não há mais nodes HTML)
+                this.instance.revalidate(stepElement);
                 this.instance.repaintEverything();
                 this.onStepDrag(params);
             },
@@ -793,12 +791,9 @@ class FlowEditor {
         element.style.top = `${position.y}px`;
         this.stepTransforms.set(stepId, { x: position.x, y: position.y });
         
-        // Remover endpoints antigos (todos os elementos do card)
+        // Remover endpoints antigos (todos os endpoints do card)
+        // Endpoints agora são criados diretamente no elemento, não há mais nodes HTML
         this.instance.removeAllEndpoints(element);
-        const inputNodeOld = element.querySelector('.flow-step-node-input');
-        const outputNodeOld = element.querySelector('.flow-step-node-output');
-        if (inputNodeOld) this.instance.removeAllEndpoints(inputNodeOld);
-        if (outputNodeOld) this.instance.removeAllEndpoints(outputNodeOld);
         
         // CRÍTICO: Garantir que o card tenha position absolute e sem transform
         element.style.position = 'absolute';
@@ -864,31 +859,8 @@ class FlowEditor {
             `;
         }
         
-        // CRÍTICO: Garantir que os nodes estejam no HTML (dentro do wrapper)
-        let inputNode = innerWrapper.querySelector('.flow-step-node-input');
-        if (!inputNode) {
-            inputNode = document.createElement('div');
-            inputNode.className = 'node-input flow-step-node-input';
-            inputNode.setAttribute('data-node-type', 'input');
-            inputNode.setAttribute('data-step-id', stepId);
-            innerWrapper.appendChild(inputNode);
-        }
-        
-        // Remover ou adicionar node de saída global conforme necessário
-        let outputNode = innerWrapper.querySelector('.flow-step-node-output:not([data-button-index])');
-        if (!hasButtons) {
-            if (!outputNode) {
-                outputNode = document.createElement('div');
-                outputNode.className = 'node-output flow-step-node-output';
-                outputNode.setAttribute('data-node-type', 'output');
-                outputNode.setAttribute('data-step-id', stepId);
-                innerWrapper.appendChild(outputNode);
-            }
-        } else {
-            if (outputNode) {
-                outputNode.remove();
-            }
-        }
+        // CRÍTICO: Endpoints agora são gerenciados 100% pelo jsPlumb
+        // Não há mais nodes HTML para criar/manter
         
         // CRÍTICO: Re-adicionar endpoints APÓS o DOM estar completamente renderizado
         requestAnimationFrame(() => {
@@ -937,19 +909,28 @@ class FlowEditor {
             } catch (e) {}
         };
         
+        // Helper para verificar se endpoint já existe antes de criar
+        const hasEndpoint = (uuid) => {
+            try {
+                return !!this.instance.getEndpoint(uuid);
+            } catch (e) {
+                return false;
+            }
+        };
+        
         // INPUT - LEFT CENTER (one per card)
-        // CRÍTICO: Anchor fixo à esquerda, centro vertical
+        // CRÍTICO: Anchor customizado FORA do card à esquerda, centro vertical
         const inputUuid = `endpoint-left-${stepId}`;
         safeRemoveEndpoint(inputUuid);
-        const inputNode = inner.querySelector('.flow-step-node-input');
-        if (inputNode) {
-            // Garantir dimensões do node
-            if (!inputNode.style.width) inputNode.style.width = '14px';
-            if (!inputNode.style.height) inputNode.style.height = '14px';
+        
+        // Verificar se já existe endpoint antes de criar
+        if (!hasEndpoint(inputUuid)) {
             try {
-                const ep = this.instance.addEndpoint(inputNode, {
+                const ep = this.instance.addEndpoint(element, {
                     uuid: inputUuid,
-                    anchor: 'LeftMiddle', // Anchor simples - jsPlumb calcula automaticamente
+                    // Anchor customizado: [x, y, dx, dy, offsetX, offsetY]
+                    // x=0 (esquerda), y=0.5 (centro vertical), offsetX=-8 (fora do card)
+                    anchor: [0, 0.5, -1, 0, -8, 0],
                     maxConnections: -1,
                     isSource: false,
                     isTarget: true,
@@ -958,12 +939,21 @@ class FlowEditor {
                     hoverPaintStyle: { fill: '#FFB800', outlineStroke: '#FFFFFF', outlineWidth: 3 },
                     data: { stepId, endpointType: 'input' }
                 });
+                
+                // CRÍTICO: Prevenir drag do card quando mouse está sobre endpoint
+                const endpointEl = ep.canvas;
+                if (endpointEl) {
+                    endpointEl.addEventListener('mousedown', (e) => {
+                        e.stopPropagation();
+                    });
+                    endpointEl.style.zIndex = '20';
+                    endpointEl.style.pointerEvents = 'auto';
+                }
+                
                 console.log(`✅ Endpoint input criado: ${inputUuid}`, ep);
             } catch (e) {
                 console.error(`❌ Erro ao criar endpoint input ${inputUuid}:`, e);
             }
-        } else {
-            console.warn(`⚠️ Input node não encontrado para step ${stepId}`);
         }
         
         // Remove any global output if will create button endpoints
@@ -974,22 +964,20 @@ class FlowEditor {
         
         // OUTPUTS
         if (hasButtons) {
-            // One endpoint per button - anchor RightMiddle aligned to button endpoint container
-            // CRÍTICO: Anchor fixo à direita do botão, centro vertical
+            // One endpoint per button - anchor customizado FORA do card à direita de cada botão
             customButtons.forEach((btn, idx) => {
-                const buttonContainer = inner.querySelector(`[data-endpoint-button="${idx}"]`);
                 const btnUuid = `endpoint-button-${stepId}-${idx}`;
                 safeRemoveEndpoint(btnUuid);
-                if (buttonContainer) {
-                    // Ensure buttonContainer is positioned relative inside card
-                    if (!buttonContainer.style.position) buttonContainer.style.position = 'relative';
-                    // Garantir dimensões do container
-                    if (!buttonContainer.style.width) buttonContainer.style.width = '14px';
-                    if (!buttonContainer.style.height) buttonContainer.style.height = '14px';
+                
+                // Buscar o container do botão pelo índice
+                const buttonItem = inner.querySelector(`[data-button-index="${idx}"]`);
+                if (buttonItem && !hasEndpoint(btnUuid)) {
                     try {
-                        const ep = this.instance.addEndpoint(buttonContainer, {
+                        // Anchor customizado: [x, y, dx, dy, offsetX, offsetY]
+                        // x=1 (direita), y=0.5 (centro vertical), offsetX=8 (fora do card)
+                        const ep = this.instance.addEndpoint(buttonItem, {
                             uuid: btnUuid,
-                            anchor: 'RightMiddle', // Anchor simples - jsPlumb calcula automaticamente
+                            anchor: [1, 0.5, 1, 0, 8, 0],
                             maxConnections: 1,
                             isSource: true,
                             isTarget: false,
@@ -998,6 +986,17 @@ class FlowEditor {
                             hoverPaintStyle: { fill: '#FFB800', outlineStroke: '#FFFFFF', outlineWidth: 3 },
                             data: { stepId, buttonIndex: idx, endpointType: 'button' }
                         });
+                        
+                        // CRÍTICO: Prevenir drag do card quando mouse está sobre endpoint
+                        const endpointEl = ep.canvas;
+                        if (endpointEl) {
+                            endpointEl.addEventListener('mousedown', (e) => {
+                                e.stopPropagation();
+                            });
+                            endpointEl.style.zIndex = '20';
+                            endpointEl.style.pointerEvents = 'auto';
+                        }
+                        
                         console.log(`✅ Endpoint botão criado: ${btnUuid}`, ep);
                     } catch (e) {
                         console.error(`❌ Erro ao criar endpoint botão ${btnUuid}:`, e);
@@ -1005,18 +1004,16 @@ class FlowEditor {
                 }
             });
         } else {
-            // Global output present
-            // CRÍTICO: Anchor fixo à direita, centro vertical
-            const outputNode = inner.querySelector('.flow-step-node-output');
+            // Global output - anchor customizado FORA do card à direita
             safeRemoveEndpoint(globalUuid);
-            if (outputNode) {
-                // Garantir dimensões do node
-                if (!outputNode.style.width) outputNode.style.width = '14px';
-                if (!outputNode.style.height) outputNode.style.height = '14px';
+            
+            if (!hasEndpoint(globalUuid)) {
                 try {
-                    const ep = this.instance.addEndpoint(outputNode, {
+                    const ep = this.instance.addEndpoint(element, {
                         uuid: globalUuid,
-                        anchor: 'RightMiddle', // Anchor simples - jsPlumb calcula automaticamente
+                        // Anchor customizado: [x, y, dx, dy, offsetX, offsetY]
+                        // x=1 (direita), y=0.5 (centro vertical), offsetX=8 (fora do card)
+                        anchor: [1, 0.5, 1, 0, 8, 0],
                         maxConnections: -1,
                         isSource: true,
                         isTarget: false,
@@ -1025,12 +1022,21 @@ class FlowEditor {
                         hoverPaintStyle: { fill: '#FFB800', outlineStroke: '#FFFFFF', outlineWidth: 3 },
                         data: { stepId, endpointType: 'global' }
                     });
+                    
+                    // CRÍTICO: Prevenir drag do card quando mouse está sobre endpoint
+                    const endpointEl = ep.canvas;
+                    if (endpointEl) {
+                        endpointEl.addEventListener('mousedown', (e) => {
+                            e.stopPropagation();
+                        });
+                        endpointEl.style.zIndex = '20';
+                        endpointEl.style.pointerEvents = 'auto';
+                    }
+                    
                     console.log(`✅ Endpoint output global criado: ${globalUuid}`, ep);
                 } catch (e) {
                     console.error(`❌ Erro ao criar endpoint output global ${globalUuid}:`, e);
                 }
-            } else {
-                console.warn(`⚠️ Output node não encontrado para step ${stepId}`);
             }
         }
     }
@@ -1055,13 +1061,9 @@ class FlowEditor {
             // Este é um fallback adicional
             this.dragFrameId = requestAnimationFrame(() => {
                 if (this.instance) {
-                    // Revalidar o elemento arrastado e seus nodes internos
+                    // Revalidar o elemento arrastado
+                    // Endpoints agora são gerenciados 100% pelo jsPlumb, não há mais nodes HTML
                     this.instance.revalidate(element);
-                    const inner = element.querySelector('.flow-step-block-inner');
-                    if (inner) {
-                        const nodes = inner.querySelectorAll('.flow-step-node-input, .flow-step-node-output, .flow-step-button-endpoint-container');
-                        nodes.forEach(n => this.instance.revalidate(n));
-                    }
                     // Repintar todas as conexões
                     this.instance.repaintEverything();
                 }
@@ -2035,14 +2037,6 @@ class FlowEditor {
                         flex: 1;
                         padding-right: 12px;
                     ">${this.escapeHtml(btnText)}</span>
-                    <div class="flow-step-button-endpoint-container" 
-                         data-endpoint-button="${index}" 
-                         style="
-                             width: 14px;
-                             height: 14px;
-                             flex-shrink: 0;
-                             position: relative;
-                         "></div>
                 </div>
             `;
         });
