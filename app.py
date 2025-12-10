@@ -12648,7 +12648,7 @@ def send_push_notification(user_id, title, body, data=None, color='green'):
             # ✅ PASSO 4: Validação final antes de usar
             if vapid_private_key:
                 try:
-                    # Validar uma última vez que a chave é válida
+                    # Validar uma última vez que a chave é válida com cryptography
                     test_key = serialization.load_pem_private_key(
                         vapid_private_key.encode('utf-8'),
                         password=None,
@@ -12657,12 +12657,29 @@ def send_push_notification(user_id, title, body, data=None, color='green'):
                     if not isinstance(test_key, ec.EllipticCurvePrivateKey):
                         logger.error("❌ Chave VAPID não é uma chave EC válida")
                         return
-                    logger.debug("✅ Chave VAPID validada com sucesso")
+                    logger.debug("✅ Chave VAPID validada com cryptography")
+                    
+                    # ✅ CRÍTICO: Testar com pywebpush antes de usar (mesmo método que será usado)
+                    try:
+                        from py_vapid import Vapid
+                        # Tentar criar objeto Vapid com a chave (validação real)
+                        test_vapid = Vapid.from_string(private_key=vapid_private_key)
+                        logger.debug("✅ Chave VAPID validada com pywebpush (Vapid.from_string)")
+                    except Exception as vapid_test_error:
+                        logger.error(f"❌ Chave VAPID falha na validação do pywebpush: {vapid_test_error}")
+                        logger.error(f"   Tipo de erro: {type(vapid_test_error).__name__}")
+                        logger.error(f"   Detalhes: {str(vapid_test_error)}")
+                        logger.error(f"   ❌ IMPOSSÍVEL USAR ESTA CHAVE COM PYWEBPUSH - Gerar nova chave VAPID!")
+                        logger.error(f"   💡 A chave pode estar corrompida ou em formato incompatível com pywebpush")
+                        return  # ✅ PARAR AQUI - não continuar com chave que falha no pywebpush
+                    
                 except Exception as validation_error:
                     logger.error(f"❌ Erro na validação final da chave VAPID: {validation_error}")
+                    logger.error(f"   ❌ IMPOSSÍVEL USAR ESTA CHAVE - Gerar nova chave VAPID!")
                     return
             else:
                 logger.error("❌ Não foi possível processar chave VAPID - formato desconhecido ou corrompida")
+                logger.error(f"   💡 Gerar nova chave VAPID usando: python generate_vapid_keys.py")
                 return
                 
         except Exception as e:
