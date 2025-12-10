@@ -2653,8 +2653,25 @@ function botConfigApp() {
         },
         
         openStepModal(stepId) {
+            if (!this.config.flow_steps) {
+                console.error('❌ flow_steps não existe');
+                return;
+            }
+            
             const step = this.config.flow_steps.find(s => String(s.id) === String(stepId));
-            if (!step) return;
+            if (!step) {
+                console.error(`❌ Step ${stepId} não encontrado`);
+                return;
+            }
+            
+            // CRÍTICO: Definir editingStepIndex ANTES de fazer deep clone
+            this.editingStepIndex = this.config.flow_steps.indexOf(step);
+            
+            if (this.editingStepIndex === -1) {
+                console.error(`❌ Step ${stepId} não encontrado no array (index = -1)`);
+                return;
+            }
+            
             // deep clone to avoid direct mutation until save
             this.editingStep = JSON.parse(JSON.stringify(step));
             if (!this.editingStep.config) this.editingStep.config = {};
@@ -2722,9 +2739,32 @@ function botConfigApp() {
         },
         
         saveStep() {
-            if (!this.editingStep || this.editingStepIndex === -1) {
-                alert('Erro: Step não encontrado');
+            if (!this.editingStep) {
+                alert('Erro: Step não encontrado (editingStep é null)');
+                console.error('❌ saveStep: editingStep é null', {
+                    editingStep: this.editingStep,
+                    editingStepIndex: this.editingStepIndex,
+                    flow_steps_length: this.config.flow_steps?.length
+                });
                 return;
+            }
+            
+            // Se editingStepIndex não foi definido ou é inválido, tentar encontrar pelo ID
+            if (this.editingStepIndex === -1 || this.editingStepIndex === undefined || this.editingStepIndex === null) {
+                const stepId = this.editingStep.id;
+                if (stepId) {
+                    this.editingStepIndex = this.config.flow_steps.findIndex(s => String(s.id) === String(stepId));
+                }
+                
+                if (this.editingStepIndex === -1) {
+                    alert('Erro: Step não encontrado (índice inválido)');
+                    console.error('❌ saveStep: editingStepIndex inválido', {
+                        editingStepIndex: this.editingStepIndex,
+                        editingStepId: this.editingStep?.id,
+                        flow_steps: this.config.flow_steps
+                    });
+                    return;
+                }
             }
             
             if (!this.editingStep.type) {
@@ -2733,6 +2773,15 @@ function botConfigApp() {
             }
             
             const existingStep = this.config.flow_steps[this.editingStepIndex];
+            
+            if (!existingStep) {
+                alert('Erro: Step não encontrado no array');
+                console.error('❌ saveStep: existingStep é null', {
+                    editingStepIndex: this.editingStepIndex,
+                    flow_steps_length: this.config.flow_steps?.length
+                });
+                return;
+            }
             
             // Preservar conexões existentes (feitas visualmente no canvas)
             // Não sobrescrever com conexões do editingStep, pois elas não existem mais no modal
