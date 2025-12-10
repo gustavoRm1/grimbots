@@ -480,6 +480,9 @@ class FlowEditor {
         const container = this.contentContainer || this.canvas;
         container.appendChild(stepElement);
         
+        // CRÍTICO: Configurar event listeners para botões de ação
+        this.attachActionButtons(stepElement, stepId);
+        
         // Make draggable via jsPlumb (pass DOM element)
         // CRÍTICO: jsPlumb usa left/top automaticamente, não transform
         this.instance.draggable(stepElement, {
@@ -526,6 +529,43 @@ class FlowEditor {
         // cache
         this.steps.set(stepId, stepElement);
         if (isStartStep) stepElement.classList.add('flow-step-initial');
+    }
+    
+    /**
+     * Anexa event listeners aos botões de ação do step
+     */
+    attachActionButtons(stepElement, stepId) {
+        if (!stepElement) return;
+        
+        const actionButtons = stepElement.querySelectorAll('.flow-step-btn-action[data-action]');
+        actionButtons.forEach(button => {
+            const action = button.getAttribute('data-action');
+            const buttonStepId = button.getAttribute('data-step-id') || stepId;
+            
+            // Remover listeners anteriores clonando o botão (remove todos os listeners)
+            const newButton = button.cloneNode(true);
+            button.parentNode.replaceChild(newButton, button);
+            
+            // Adicionar novo listener
+            newButton.addEventListener('click', (e) => {
+                e.stopPropagation(); // Prevenir propagação para o canvas
+                e.preventDefault();
+                
+                switch (action) {
+                    case 'edit':
+                        this.editStep(buttonStepId);
+                        break;
+                    case 'remove':
+                        this.deleteStep(buttonStepId);
+                        break;
+                    case 'set-start':
+                        this.setStartStep(buttonStepId);
+                        break;
+                    default:
+                        console.warn('⚠️ Ação desconhecida:', action);
+                }
+            });
+        });
     }
     
     /**
@@ -606,6 +646,16 @@ class FlowEditor {
             `;
         }
         
+        // Atualizar footer com botões de ação
+        const footerEl = innerWrapper.querySelector('.flow-step-footer');
+        if (footerEl) {
+            footerEl.innerHTML = `
+                <button class="flow-step-btn-action" data-action="edit" data-step-id="${stepId}" title="Editar"><i class="fas fa-edit"></i></button>
+                <button class="flow-step-btn-action" data-action="remove" data-step-id="${stepId}" title="Remover"><i class="fas fa-trash"></i></button>
+                ${!isStartStep ? `<button class="flow-step-btn-action" data-action="set-start" data-step-id="${stepId}" title="Definir como inicial">⭐</button>` : ''}
+            `;
+        }
+        
         // CRÍTICO: Garantir que os nodes estejam no HTML (dentro do wrapper)
         let inputNode = innerWrapper.querySelector('.flow-step-node-input');
         if (!inputNode) {
@@ -635,6 +685,9 @@ class FlowEditor {
         // CRÍTICO: Re-adicionar endpoints APÓS o DOM estar completamente renderizado
         requestAnimationFrame(() => {
             requestAnimationFrame(() => {
+                // Reanexar listeners dos botões de ação
+                this.attachActionButtons(element, stepId);
+                
                 this.addEndpoints(element, stepId, step);
                 // Revalidar e repintar após adicionar endpoints
                 if (this.instance) {
