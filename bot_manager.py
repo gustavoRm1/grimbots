@@ -23,6 +23,72 @@ logger = logging.getLogger(__name__)
 # Configurar logging para este módulo
 logger.setLevel(logging.INFO)
 
+
+def checkActiveFlow(config: Dict[str, Any]) -> bool:
+    """
+    ✅ V8 ULTRA: Verifica se Flow Editor está ativo e válido
+    
+    Função centralizada para detecção de modo ativo.
+    Garante parse consistente e verificação robusta.
+    
+    Args:
+        config: Dicionário de configuração do bot
+        
+    Returns:
+        True se flow está ativo E tem steps válidos
+        False caso contrário (inclui flow desabilitado, vazio ou inválido)
+    """
+    import json
+    
+    # ✅ Parsear flow_enabled (pode vir como string "True"/"False" ou boolean)
+    flow_enabled_raw = config.get('flow_enabled', False)
+    
+    if isinstance(flow_enabled_raw, str):
+        flow_enabled = flow_enabled_raw.lower().strip() in ('true', '1', 'yes', 'on', 'enabled')
+    elif isinstance(flow_enabled_raw, bool):
+        flow_enabled = flow_enabled_raw
+    elif isinstance(flow_enabled_raw, (int, float)):
+        flow_enabled = bool(flow_enabled_raw)
+    else:
+        flow_enabled = False  # Default seguro: desabilitado
+    
+    # ✅ Se flow não está habilitado, retornar False imediatamente
+    if not flow_enabled:
+        return False
+    
+    # ✅ Parsear flow_steps (pode vir como string JSON ou list)
+    flow_steps_raw = config.get('flow_steps', [])
+    flow_steps = []
+    
+    if flow_steps_raw:
+        if isinstance(flow_steps_raw, str):
+            try:
+                # Tentar parsear como JSON
+                parsed = json.loads(flow_steps_raw)
+                if isinstance(parsed, list):
+                    flow_steps = parsed
+                else:
+                    logger.warning(f"⚠️ flow_steps JSON não é lista: {type(parsed)}")
+                    flow_steps = []
+            except (json.JSONDecodeError, TypeError) as e:
+                logger.warning(f"⚠️ Erro ao parsear flow_steps JSON: {e}")
+                flow_steps = []
+        elif isinstance(flow_steps_raw, list):
+            flow_steps = flow_steps_raw
+        else:
+            logger.warning(f"⚠️ flow_steps tem tipo inesperado: {type(flow_steps_raw)}")
+            flow_steps = []
+    
+    # ✅ Retornar True apenas se flow está ativo E tem steps válidos
+    is_active = flow_enabled is True and flow_steps and isinstance(flow_steps, list) and len(flow_steps) > 0
+    
+    if is_active:
+        logger.info(f"✅ Flow Editor ATIVO: {len(flow_steps)} steps configurados")
+    else:
+        logger.info(f"📝 Flow Editor INATIVO: flow_enabled={flow_enabled}, steps_count={len(flow_steps)}")
+    
+    return is_active
+
 # Forçar urllib3/requests a ignorar IPv6 (evita NameResolutionError com IPv6 instável)
 urllib3.util.connection.HAS_IPV6 = False
 try:
@@ -1584,33 +1650,13 @@ class BotManager:
             from datetime import datetime
             import json
             
-            # ✅ CRÍTICO: Verificar se fluxo visual está ativo ANTES de enviar welcome
-            # ✅ CRÍTICO: Garantir que flow_enabled é boolean (pode vir como string)
-            flow_enabled_raw = config.get('flow_enabled', False)
-            if isinstance(flow_enabled_raw, str):
-                flow_enabled = flow_enabled_raw.lower() in ('true', '1', 'yes', 'on')
-            elif isinstance(flow_enabled_raw, bool):
-                flow_enabled = flow_enabled_raw
-            else:
-                flow_enabled = bool(flow_enabled_raw)
+            # ✅ V8 ULTRA: Verificação centralizada de modo ativo
+            is_flow_active = checkActiveFlow(config)
             
-            flow_steps_raw = config.get('flow_steps', [])
+            logger.info(f"🔍 _send_welcome_message_only: is_flow_active={is_flow_active}")
             
-            # Parsear flow_steps se necessário
-            flow_steps = []
-            if flow_steps_raw:
-                if isinstance(flow_steps_raw, str):
-                    try:
-                        flow_steps = json.loads(flow_steps_raw)
-                    except Exception:
-                        flow_steps = []
-                elif isinstance(flow_steps_raw, list):
-                    flow_steps = flow_steps_raw
-            
-            logger.info(f"🔍 _send_welcome_message_only: flow_enabled={flow_enabled} (tipo: {type(flow_enabled)}), flow_steps_count={len(flow_steps)}")
-            
-            # ✅ Se fluxo visual está ativo e tem steps válidos, NÃO enviar welcome_message
-            if flow_enabled is True and flow_steps and isinstance(flow_steps, list) and len(flow_steps) > 0:
+            # ✅ Se fluxo visual está ativo, NÃO enviar welcome_message
+            if is_flow_active:
                 logger.info(f"🚫 _send_welcome_message_only: Fluxo visual ativo - BLOQUEANDO welcome_message")
                 logger.info(f"🚫 Usuário retornou mas fluxo visual está ativo - executando fluxo em vez de welcome")
                 
@@ -3657,53 +3703,19 @@ class BotManager:
                     logger.warning(f"Erro ao enfileirar task async: {e}")
             
             # ============================================================================
-            # ✅ FLUXO VISUAL: Verificar se fluxo está ativo ANTES de definir should_send_welcome
+            # ✅ V8 ULTRA: Verificação centralizada de modo ativo
             # ============================================================================
-            # ✅ CRÍTICO: Garantir que flow_enabled é boolean (pode vir como string "True"/"False")
-            flow_enabled_raw = config.get('flow_enabled', False)
-            if isinstance(flow_enabled_raw, str):
-                flow_enabled = flow_enabled_raw.lower() in ('true', '1', 'yes', 'on')
-            elif isinstance(flow_enabled_raw, bool):
-                flow_enabled = flow_enabled_raw
-            else:
-                flow_enabled = bool(flow_enabled_raw)
+            is_flow_active = checkActiveFlow(config)
             
-            flow_steps_raw = config.get('flow_steps', [])
-            
-            # ✅ CRÍTICO: Garantir que flow_steps é uma lista (pode vir como string JSON)
-            flow_steps = []
-            if flow_steps_raw:
-                if isinstance(flow_steps_raw, str):
-                    try:
-                        import json
-                        flow_steps = json.loads(flow_steps_raw)
-                        logger.info(f"✅ flow_steps parseado de JSON string: {len(flow_steps)} steps")
-                    except Exception as e:
-                        logger.warning(f"⚠️ Erro ao parsear flow_steps como JSON: {e}")
-                        flow_steps = []
-                elif isinstance(flow_steps_raw, list):
-                    flow_steps = flow_steps_raw
-                    logger.info(f"✅ flow_steps já é lista: {len(flow_steps)} steps")
-                else:
-                    logger.warning(f"⚠️ flow_steps tem tipo inesperado: {type(flow_steps_raw)}")
-                    flow_steps = []
-            
-            # ✅ QI 500: Se fluxo está ativo E tem steps válidos, NÃO enviar welcome
-            # ✅ CRÍTICO: Default é SEMPRE True para garantir que welcome seja enviado quando fluxo não está ativo
+            # ✅ CRÍTICO: Default é SEMPRE True para garantir que welcome seja enviado quando flow não está ativo
             should_send_welcome = True  # Default: enviar welcome (CRÍTICO para clientes sem fluxo)
             
-            logger.info(f"🔍 Verificação de fluxo: flow_enabled={flow_enabled} (tipo: {type(flow_enabled)}), flow_steps_count={len(flow_steps) if isinstance(flow_steps, list) else 0}")
-            logger.info(f"🔍 Tipo de flow_steps_raw: {type(flow_steps_raw)}, Valor: {str(flow_steps_raw)[:100] if flow_steps_raw else 'None'}")
-            logger.info(f"🔍 should_send_welcome inicial: {should_send_welcome}")
+            logger.info(f"🔍 Verificação de modo: is_flow_active={is_flow_active}, should_send_welcome={should_send_welcome}")
             
-            # ✅ CRÍTICO: Só bloquear welcome se fluxo está REALMENTE ativo E tem steps válidos
-            if flow_enabled is True and flow_steps and isinstance(flow_steps, list) and len(flow_steps) > 0:
-                # ✅ CRÍTICO: Quando fluxo visual está ATIVO, NUNCA enviar welcome_message
-                # Mesmo se o fluxo falhar, não usar welcome_message como fallback
-                # O fluxo visual substitui completamente o sistema tradicional
-                logger.info(f"🎯 FLUXO VISUAL ATIVO - Executando fluxo visual ({len(flow_steps)} steps)")
+            # ✅ CRÍTICO: Se flow está ativo, NUNCA enviar welcome_message
+            if is_flow_active:
+                logger.info(f"🎯 FLUXO VISUAL ATIVO - Executando fluxo visual")
                 logger.info(f"🚫 BLOQUEANDO welcome_message, main_buttons, redirect_buttons, welcome_audio")
-                logger.info(f"🚫 should_send_welcome será False independentemente do resultado do fluxo")
                 
                 # ✅ CRÍTICO: Definir should_send_welcome = False ANTES de executar
                 # Isso garante que mesmo se _execute_flow falhar, welcome não será enviado
@@ -3740,25 +3752,16 @@ class BotManager:
                     logger.warning(f"⚠️ Fluxo falhou mas welcome_message está BLOQUEADO (flow_enabled=True)")
                     logger.warning(f"⚠️ Usuário não receberá welcome_message nem mensagem do fluxo")
             else:
-                # ✅ Fluxo não está ativo ou está vazio - usar welcome_message normalmente
-                # ✅ CRÍTICO: should_send_welcome já é True por padrão, então não precisa alterar
-                if flow_enabled is True:
-                    logger.warning(f"⚠️ flow_enabled=True mas flow_steps está vazio ou inválido - usando welcome_message")
-                    logger.warning(f"⚠️ flow_steps_raw tipo: {type(flow_steps_raw)}, valor: {flow_steps_raw}")
-                    # ✅ Garantir que welcome será enviado mesmo se flow_enabled=True mas sem steps
-                    should_send_welcome = True
-                else:
-                    logger.info(f"📝 Fluxo visual desabilitado (flow_enabled={flow_enabled}) - usando welcome_message normalmente")
-                    # ✅ Confirmar que welcome será enviado
-                    should_send_welcome = True
-                
-                logger.info(f"✅ should_send_welcome confirmado como True (fluxo não ativo ou inválido)")
+                # ✅ Fluxo não está ativo - usar welcome_message normalmente
+                logger.info(f"📝 Fluxo visual desabilitado ou vazio - usando welcome_message normalmente")
+                should_send_welcome = True
+                logger.info(f"✅ should_send_welcome confirmado como True (fluxo não ativo)")
             
             # ============================================================================
             # ✅ QI 200: ENVIAR MENSAGEM IMEDIATAMENTE (<50ms)
             # Processamento pesado foi enfileirado para background
             # ============================================================================
-            logger.info(f"🔍 DECISÃO FINAL: should_send_welcome={should_send_welcome} (flow_enabled={flow_enabled}, tipo: {type(flow_enabled)})")
+            logger.info(f"🔍 DECISÃO FINAL: should_send_welcome={should_send_welcome} (is_flow_active={is_flow_active})")
             logger.info(f"🔍 Condição para enviar welcome: should_send_welcome={should_send_welcome}")
             
             if should_send_welcome:
