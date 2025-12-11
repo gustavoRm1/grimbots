@@ -710,17 +710,17 @@ class FlowEditor {
                     // NOTA: Para melhor vertex avoidance, recomenda-se usar Orthogonal ou Straight com constrain
                     // Bezier funciona mas não tem routing inteligente como Orthogonal
                     edgesAvoidVertices: true,        // Ativar vertex avoidance (A* algorithm)
-                    // 🔥 V7 PROFISSIONAL: Bezier Connector conforme documentação oficial jsPlumb 2.15.6
+                    // 🔥 V2.0 CONNECTORS: Bezier Connector melhorado conforme documentação oficial jsPlumb 2.15.6
                     // Opções válidas: curviness, stub, gap, scale, showLoopback, legacyPaint, cssClass, hoverClass
                 connector: ['Bezier', { 
-                        curviness: 150,              // Curvatura padrão (documentação: default 150)
-                        stub: 15,                   // Stub único em pixels (15px) - distância antes da curva começar
-                        gap: 10,                    // Gap entre endpoint e conexão (10px)
-                        scale: 0.45,                // Posição do control point (0.45 = 45% da distância source-target)
+                        curviness: 120,              // Curvatura otimizada (reduzida para melhor visualização)
+                        stub: [20, 20],             // Stub array [source, target] em pixels - melhor controle
+                        gap: 8,                     // Gap entre endpoint e conexão (8px) - reduzido para melhor conexão
+                        scale: 0.5,                 // Posição do control point (0.5 = 50% da distância source-target)
                         showLoopback: true,          // Mostrar conexões loopback (mesmo elemento)
                         legacyPaint: false,          // Usar estratégia moderna de pintura (padrão: false)
-                        cssClass: 'flow-connector',  // Classe CSS para customização
-                        hoverClass: 'flow-connector-hover' // Classe CSS aplicada no hover
+                        cssClass: 'flow-connector-v2',  // Classe CSS V2.0 para customização
+                        hoverClass: 'flow-connector-v2-hover' // Classe CSS aplicada no hover
                     }],
                     // 🔥 V7 PROFISSIONAL: Dot Endpoint padrão conforme documentação oficial
                     endpoint: ['Dot', { 
@@ -1580,7 +1580,11 @@ class FlowEditor {
         const stepId = String(step.id);
         const stepType = step.type || 'message';
         const stepConfig = step.config || {};
-        const position = step.position || { x: 100, y: 100 };
+        // 🔥 V2.0 LAYOUTS: Aplicar snap-to-grid na posição inicial
+        const rawPosition = step.position || { x: 100, y: 100 };
+        const snappedPosition = this.snapToGrid(rawPosition.x || 100, rawPosition.y || 100, false);
+        const position = { x: snappedPosition.x, y: snappedPosition.y };
+        
         const isStartStep = this.alpine?.config?.flow_start_step_id === stepId;
         const customButtons = stepConfig.custom_buttons || [];
         const hasButtons = customButtons.length > 0;
@@ -1606,7 +1610,8 @@ class FlowEditor {
         stepElement.style.position = 'absolute';
         stepElement.style.left = '0';
         stepElement.style.top = '0';
-        stepElement.style.transform = `translate3d(${position.x}px, ${position.y}px, 0)`;
+        // 🔥 V2.0 LAYOUTS: Usar setElementPosition para garantir snap-to-grid
+        this.setElementPosition(stepElement, position.x, position.y, false); // Já aplicamos snap acima
         stepElement.style.willChange = 'transform';
         
         // INNER wrapper (ensures nodes positioned relative to inner)
@@ -1855,12 +1860,16 @@ class FlowEditor {
             return;
         }
         
-        // 🔥 V7 PROFISSIONAL: Atualizar posição usando transform (compatível com draggable)
-        const position = step.position || { x: 100, y: 100 };
+        // 🔥 V2.0 LAYOUTS: Atualizar posição com snap-to-grid
+        const rawPosition = step.position || { x: 100, y: 100 };
+        const snappedPosition = this.snapToGrid(rawPosition.x || 100, rawPosition.y || 100, false);
+        const position = { x: snappedPosition.x, y: snappedPosition.y };
+        
         element.style.position = 'absolute';
         element.style.left = '0';
         element.style.top = '0';
-        element.style.transform = `translate3d(${position.x}px, ${position.y}px, 0)`;
+        // 🔥 V2.0 LAYOUTS: Usar setElementPosition para garantir snap-to-grid
+        this.setElementPosition(element, position.x, position.y, false); // Já aplicamos snap acima
         this.stepTransforms.set(stepId, { x: position.x, y: position.y });
         
         // 🔥 V5.0: Corrigir endpoints antes de remover (remove duplicados primeiro)
@@ -3083,6 +3092,7 @@ class FlowEditor {
         // O jsPlumb calcula posições relativas ao containment especificado
         const draggableOptions = {
             containment: this.contentContainer || this.canvas,
+            grid: [this.gridSize || 20, this.gridSize || 20], // 🔥 V2.0 LAYOUTS: Grid snap nativo do jsPlumb
             drag: (params) => {
                 // Revalidar endpoints durante drag
                 if (this.instance) {
@@ -3238,15 +3248,60 @@ class FlowEditor {
     }
     
     /**
-     * 🔥 FASE 1: Snap to Grid Profissional
-     * Calcula posição com snap ao grid de 20px
+     * 🔥 V2.0 LAYOUTS: Snap to Grid Profissional
+     * Calcula posição com snap ao grid, considerando zoom
      */
-    snapToGrid(x, y) {
+    snapToGrid(x, y, considerZoom = false) {
         const gridSize = this.gridSize || 20;
+        // Se considerar zoom, ajustar grid size pelo zoom level
+        const effectiveGridSize = considerZoom ? gridSize / this.zoomLevel : gridSize;
         return {
-            x: Math.round(x / gridSize) * gridSize,
-            y: Math.round(y / gridSize) * gridSize
+            x: Math.round(x / effectiveGridSize) * effectiveGridSize,
+            y: Math.round(y / effectiveGridSize) * effectiveGridSize
         };
+    }
+    
+    /**
+     * 🔥 V2.0 LAYOUTS: Extrai posição real do elemento (considerando zoom/pan)
+     */
+    getElementRealPosition(element) {
+        if (!element) return { x: 0, y: 0 };
+        
+        // Tentar extrair de transform translate3d
+        const transform = element.style.transform || '';
+        const match = transform.match(/translate3d\(([^,]+)px,\s*([^,]+)px/);
+        if (match) {
+            return {
+                x: parseFloat(match[1]) || 0,
+                y: parseFloat(match[2]) || 0
+            };
+        }
+        
+        // Fallback para left/top
+        const x = parseFloat(element.style.left) || 0;
+        const y = parseFloat(element.style.top) || 0;
+        return { x, y };
+    }
+    
+    /**
+     * 🔥 V2.0 LAYOUTS: Aplica posição ao elemento com snap-to-grid
+     */
+    setElementPosition(element, x, y, snapToGrid = true) {
+        if (!element) return;
+        
+        // Aplicar snap-to-grid se solicitado
+        if (snapToGrid) {
+            const snapped = this.snapToGrid(x, y, false); // Não considerar zoom no snap (grid sempre 20px)
+            x = snapped.x;
+            y = snapped.y;
+        }
+        
+        // Aplicar posição usando transform (melhor performance)
+        element.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+        
+        // Também atualizar left/top para compatibilidade
+        element.style.left = `${x}px`;
+        element.style.top = `${y}px`;
     }
     
     /**
@@ -3288,11 +3343,17 @@ class FlowEditor {
             element.classList.add('dragging');
             element.classList.add('jtk-surface-element-dragging');
             
-            // 🔥 FASE 1: Snap to grid durante drag
+            // 🔥 V2.0 LAYOUTS: Snap to grid durante drag (considerando posição do jsPlumb)
             if (params.pos && params.pos.length >= 2) {
-                const snapped = this.snapToGrid(params.pos[0], params.pos[1]);
-                // Atualizar posição com snap
-                element.style.transform = `translate3d(${snapped.x}px, ${snapped.y}px, 0)`;
+                // jsPlumb fornece posição relativa ao containment
+                const snapped = this.snapToGrid(params.pos[0], params.pos[1], false);
+                // Aplicar posição com snap
+                this.setElementPosition(element, snapped.x, snapped.y, false); // Já aplicamos snap acima
+            } else {
+                // Fallback: extrair posição atual e aplicar snap
+                const currentPos = this.getElementRealPosition(element);
+                const snapped = this.snapToGrid(currentPos.x, currentPos.y, false);
+                this.setElementPosition(element, snapped.x, snapped.y, false);
             }
             
             // Cancelar frame anterior
@@ -3333,26 +3394,27 @@ class FlowEditor {
                 element.classList.remove('jtk-most-recently-dragged');
             }, 1000);
             
-            // Extrair posição do transform translate3d
-            const transform = element.style.transform || '';
-            const match = transform.match(/translate3d\(([^,]+)px,\s*([^,]+)px/);
+            // 🔥 V2.0 LAYOUTS: Extrair posição real do elemento
             let x = 0, y = 0;
-            if (match) {
-                x = parseFloat(match[1]) || 0;
-                y = parseFloat(match[2]) || 0;
+            
+            // Prioridade 1: Posição do jsPlumb (params.pos)
+            if (params.pos && params.pos.length >= 2) {
+                x = params.pos[0];
+                y = params.pos[1];
             } else {
-                // Fallback para left/top se transform não existir
-                x = parseFloat(element.style.left) || 0;
-                y = parseFloat(element.style.top) || 0;
+                // Prioridade 2: Extrair de transform ou left/top
+                const currentPos = this.getElementRealPosition(element);
+                x = currentPos.x;
+                y = currentPos.y;
             }
             
-            // 🔥 FASE 1: Snap to grid profissional
-            const snapped = this.snapToGrid(x, y);
+            // 🔥 V2.0 LAYOUTS: Snap to grid profissional (sempre aplicar no final)
+            const snapped = this.snapToGrid(x, y, false);
             x = snapped.x;
             y = snapped.y;
             
-            // Atualizar posição usando translate3d
-            element.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+            // 🔥 V2.0 LAYOUTS: Aplicar posição final com snap
+            this.setElementPosition(element, x, y, false); // Já aplicamos snap acima
             this.stepTransforms.set(stepId, { x, y });
             
             // Atualizar no Alpine
@@ -3417,42 +3479,73 @@ class FlowEditor {
             steps.forEach(step => {
                 if (!step || !step.id) return;
                 const stepId = String(step.id);
+                const stepType = step.type || 'message';
+                const isCondition = stepType === 'condition';
                 const stepConfig = step.config || {};
                 const customButtons = stepConfig.custom_buttons || [];
                 const hasButtons = customButtons.length > 0;
                 const connections = step.connections || {};
                 
-                if (hasButtons) {
+                // 🔥 V2.0 CONNECTORS: Condition nodes têm dois outputs (true/false)
+                if (isCondition) {
+                    // Conexão TRUE
+                    if (stepConfig.true_step_id) {
+                        const targetId = String(stepConfig.true_step_id);
+                        const connId = `condition-true-${stepId}-${targetId}`;
+                        desiredConnections.set(connId, {
+                            sourceUuid: `endpoint-true-${stepId}`,
+                            targetUuid: `endpoint-left-${targetId}`,
+                            type: 'condition-true',
+                            stepId,
+                            targetId
+                        });
+                    }
+                    
+                    // Conexão FALSE
+                    if (stepConfig.false_step_id) {
+                        const targetId = String(stepConfig.false_step_id);
+                        const connId = `condition-false-${stepId}-${targetId}`;
+                        desiredConnections.set(connId, {
+                            sourceUuid: `endpoint-false-${stepId}`,
+                            targetUuid: `endpoint-left-${targetId}`,
+                            type: 'condition-false',
+                            stepId,
+                            targetId
+                        });
+                    }
+                } else if (hasButtons) {
+                    // Steps com botões
                     customButtons.forEach((btn, idx) => {
                         if (btn.target_step) {
                             const targetId = String(btn.target_step);
-                        const connId = `button-${stepId}-${idx}-${targetId}`;
-                        desiredConnections.set(connId, {
-                            sourceUuid: `endpoint-button-${stepId}-${idx}`,
-                            targetUuid: `endpoint-left-${targetId}`,
-                            type: 'button',
-                            stepId,
-                            buttonIndex: idx,
-                            targetId
-                        });
-                    }
-                });
-            } else {
-                ['next','pending','retry'].forEach(type => {
-                    if (connections[type]) {
-                        const targetId = String(connections[type]);
-                        const connId = `${stepId}-${targetId}-${type}`;
-                        desiredConnections.set(connId, {
-                            sourceUuid: `endpoint-right-${stepId}`,
-                            targetUuid: `endpoint-left-${targetId}`,
-                            type: type,
-                            stepId,
-                            targetId
-                        });
-                    }
-                });
-            }
-        });
+                            const connId = `button-${stepId}-${idx}-${targetId}`;
+                            desiredConnections.set(connId, {
+                                sourceUuid: `endpoint-button-${stepId}-${idx}`,
+                                targetUuid: `endpoint-left-${targetId}`,
+                                type: 'button',
+                                stepId,
+                                buttonIndex: idx,
+                                targetId
+                            });
+                        }
+                    });
+                } else {
+                    // Steps sem botões (output global)
+                    ['next','pending','retry'].forEach(type => {
+                        if (connections[type]) {
+                            const targetId = String(connections[type]);
+                            const connId = `${stepId}-${targetId}-${type}`;
+                            desiredConnections.set(connId, {
+                                sourceUuid: `endpoint-right-${stepId}`,
+                                targetUuid: `endpoint-left-${targetId}`,
+                                type: type,
+                                stepId,
+                                targetId
+                            });
+                        }
+                    });
+                }
+            });
         
         // 🔥 V5.0: Obter conexões existentes
         const existingConnections = new Map();
@@ -3498,9 +3591,52 @@ class FlowEditor {
                     const srcEp = this.instance.getEndpoint(desired.sourceUuid);
                     const tgtEp = this.instance.getEndpoint(desired.targetUuid);
                                 if (srcEp && tgtEp) {
+                                    // 🔥 V2.0 CONNECTORS: Criar conexão com estilos e overlays apropriados
                                     const conn = this.instance.connect({ 
                                         source: srcEp,
-                                        target: tgtEp
+                                        target: tgtEp,
+                                        paintStyle: { 
+                                            stroke: '#FFFFFF', 
+                                            strokeWidth: 2.5,
+                                            strokeOpacity: 0.9
+                                        },
+                                        hoverPaintStyle: { 
+                                            stroke: '#FFB800', 
+                                            strokeWidth: 3.5,
+                                            strokeOpacity: 1
+                                        },
+                                        connector: ['Bezier', {
+                                            curviness: 120,
+                                            stub: [20, 20],
+                                            gap: 8,
+                                            scale: 0.5,
+                                            cssClass: 'flow-connector-v2',
+                                            hoverClass: 'flow-connector-v2-hover'
+                                        }],
+                                        overlays: [
+                                            {
+                                                type: 'Arrow',
+                                                options: {
+                                                    width: 12,
+                                                    length: 15,
+                                                    location: 0.98,
+                                                    direction: 1,
+                                                    foldback: 0.623,
+                                                    cssClass: 'flow-arrow-overlay-v2',
+                                                    paintStyle: {
+                                                        stroke: '#FFFFFF',
+                                                        strokeWidth: 2,
+                                                        fill: '#FFFFFF'
+                                                    }
+                                                }
+                                            }
+                                        ],
+                                        data: {
+                                            sourceStepId: desired.stepId,
+                                            targetStepId: desired.targetId,
+                                            connectionType: desired.type,
+                                            buttonIndex: desired.buttonIndex
+                                        }
                                     });
                                     if (conn) {
                                         this.connections.set(connId, conn);
@@ -3527,9 +3663,52 @@ class FlowEditor {
                             const srcEp = this.instance.getEndpoint(desired.sourceUuid);
                             const tgtEp = this.instance.getEndpoint(desired.targetUuid);
                                 if (srcEp && tgtEp) {
+                                    // 🔥 V2.0 CONNECTORS: Criar conexão com estilos e overlays apropriados
                                     const conn = this.instance.connect({ 
                                         source: srcEp,
-                                        target: tgtEp
+                                        target: tgtEp,
+                                        paintStyle: { 
+                                            stroke: '#FFFFFF', 
+                                            strokeWidth: 2.5,
+                                            strokeOpacity: 0.9
+                                        },
+                                        hoverPaintStyle: { 
+                                            stroke: '#FFB800', 
+                                            strokeWidth: 3.5,
+                                            strokeOpacity: 1
+                                        },
+                                        connector: ['Bezier', {
+                                            curviness: 120,
+                                            stub: [20, 20],
+                                            gap: 8,
+                                            scale: 0.5,
+                                            cssClass: 'flow-connector-v2',
+                                            hoverClass: 'flow-connector-v2-hover'
+                                        }],
+                                        overlays: [
+                                            {
+                                                type: 'Arrow',
+                                                options: {
+                                                    width: 12,
+                                                    length: 15,
+                                                    location: 0.98,
+                                                    direction: 1,
+                                                    foldback: 0.623,
+                                                    cssClass: 'flow-arrow-overlay-v2',
+                                                    paintStyle: {
+                                                        stroke: '#FFFFFF',
+                                                        strokeWidth: 2,
+                                                        fill: '#FFFFFF'
+                                                    }
+                                                }
+                                            }
+                                        ],
+                                        data: {
+                                            sourceStepId: desired.stepId,
+                                            targetStepId: desired.targetId,
+                                            connectionType: desired.type,
+                                            buttonIndex: desired.buttonIndex
+                                        }
                                     });
                                     if (conn) {
                                         this.connections.set(connId, conn);
@@ -3577,33 +3756,59 @@ class FlowEditor {
         }
         
         try {
+            // 🔥 V2.0 CONNECTORS: Garantir que endpoints existem antes de conectar
+            const sourceEndpoint = this.instance.getEndpoint(`endpoint-right-${sourceId}`);
+            const targetEndpoint = this.instance.getEndpoint(`endpoint-left-${targetId}`);
+            
+            if (!sourceEndpoint) {
+                console.warn(`⚠️ Source endpoint não encontrado: endpoint-right-${sourceId}`);
+                return null;
+            }
+            
+            if (!targetEndpoint) {
+                console.warn(`⚠️ Target endpoint não encontrado: endpoint-left-${targetId}`);
+                return null;
+            }
+            
             const connection = this.instance.connect({
-                source: `endpoint-right-${sourceId}`,
-                target: `endpoint-left-${targetId}`,
+                source: sourceEndpoint,
+                target: targetEndpoint,
+                // 🔥 V2.0 CONNECTORS: Estilos melhorados
                 paintStyle: { 
                     stroke: '#FFFFFF', 
                     strokeWidth: 2.5,
-                    strokeOpacity: 0.9
+                    strokeOpacity: 0.9,
+                    outlineColor: 'transparent',
+                    outlineWidth: 0
                 },
                 hoverPaintStyle: { 
-                    stroke: '#FFFFFF', 
+                    stroke: '#FFB800',              // Amarelo no hover para melhor feedback
                     strokeWidth: 3.5,
-                    strokeOpacity: 1
+                    strokeOpacity: 1,
+                    outlineColor: 'rgba(255, 184, 0, 0.3)',
+                    outlineWidth: 2
                 },
+                // 🔥 V2.0 CONNECTORS: Connector específico para esta conexão (herda defaults mas pode sobrescrever)
+                connector: ['Bezier', {
+                    curviness: 120,
+                    stub: [20, 20],
+                    gap: 8,
+                    scale: 0.5,
+                    cssClass: 'flow-connector-v2',
+                    hoverClass: 'flow-connector-v2-hover'
+                }],
                 // 🔥 V7 PROFISSIONAL: Overlays conforme documentação oficial
-                // Arrow overlay já vem dos ConnectionOverlays defaults
-                // Adicionar Label overlay apenas se houver label
                 overlays: [
-                    // Arrow overlay no final (já vem dos defaults, mas podemos sobrescrever)
+                    // Arrow overlay no final
                     {
                         type: 'Arrow',
                         options: {
                             width: 12,
                             length: 15,
-                            location: 1,
+                            location: 0.98,          // 98% para não sobrepor o endpoint
                             direction: 1,
                             foldback: 0.623,
-                            cssClass: 'flow-arrow-overlay',
+                            cssClass: 'flow-arrow-overlay-v2',
                             paintStyle: {
                                 stroke: '#FFFFFF',
                                 strokeWidth: 2,
@@ -3615,10 +3820,10 @@ class FlowEditor {
                     ...(this.getConnectionLabel(connectionType) ? [{
                         type: 'Label',
                         options: {
-                        label: this.getConnectionLabel(connectionType),
-                        location: 0.5,
-                            cssClass: 'flow-label-overlay',
-                            useHTMLElement: true  // Usar elemento HTML para melhor controle CSS
+                            label: this.getConnectionLabel(connectionType),
+                            location: 0.5,
+                            cssClass: 'flow-label-overlay-v2',
+                            useHTMLElement: true
                         }
                     }] : [])
                 ],
@@ -3671,34 +3876,75 @@ class FlowEditor {
         }
         
         try {
+            // 🔥 V2.0 CONNECTORS: Garantir que endpoints existem antes de conectar
+            const sourceEndpoint = this.instance.getEndpoint(`endpoint-button-${sourceId}-${buttonIndex}`);
+            const targetEndpoint = this.instance.getEndpoint(`endpoint-left-${targetId}`);
+            
+            if (!sourceEndpoint) {
+                console.warn(`⚠️ Source button endpoint não encontrado: endpoint-button-${sourceId}-${buttonIndex}`);
+                return null;
+            }
+            
+            if (!targetEndpoint) {
+                console.warn(`⚠️ Target endpoint não encontrado: endpoint-left-${targetId}`);
+                return null;
+            }
+            
             const connection = this.instance.connect({
-                source: `endpoint-button-${sourceId}-${buttonIndex}`,
-                target: `endpoint-left-${targetId}`,
+                source: sourceEndpoint,
+                target: targetEndpoint,
+                // 🔥 V2.0 CONNECTORS: Estilos melhorados para conexões de botão
                 paintStyle: { 
                     stroke: '#FFFFFF', 
                     strokeWidth: 2.5,
-                    strokeOpacity: 0.9
+                    strokeOpacity: 0.9,
+                    outlineColor: 'transparent',
+                    outlineWidth: 0
                 },
                 hoverPaintStyle: { 
-                    stroke: '#FFFFFF', 
+                    stroke: '#FFB800',              // Amarelo no hover
                     strokeWidth: 3.5,
-                    strokeOpacity: 1
+                    strokeOpacity: 1,
+                    outlineColor: 'rgba(255, 184, 0, 0.3)',
+                    outlineWidth: 2
                 },
+                // 🔥 V2.0 CONNECTORS: Connector específico para botões
+                connector: ['Bezier', {
+                    curviness: 120,
+                    stub: [20, 20],
+                    gap: 8,
+                    scale: 0.5,
+                    cssClass: 'flow-connector-v2 flow-connector-button',
+                    hoverClass: 'flow-connector-v2-hover'
+                }],
                 overlays: [
-                    ['Label', {
-                        label: 'Botão',
-                        location: 0.5,
-                        cssClass: 'connection-label-white',
-                        labelStyle: {
-                            color: '#FFFFFF',
-                            backgroundColor: '#0D0F15',
-                            border: '1px solid #242836',
-                            padding: '4px 8px',
-                            borderRadius: '6px',
-                            fontSize: '10px',
-                            fontWeight: '600'
+                    // Arrow overlay
+                    {
+                        type: 'Arrow',
+                        options: {
+                            width: 12,
+                            length: 15,
+                            location: 0.98,
+                            direction: 1,
+                            foldback: 0.623,
+                            cssClass: 'flow-arrow-overlay-v2',
+                            paintStyle: {
+                                stroke: '#FFFFFF',
+                                strokeWidth: 2,
+                                fill: '#FFFFFF'
+                            }
                         }
-                    }]
+                    },
+                    // Label overlay para botão
+                    {
+                        type: 'Label',
+                        options: {
+                            label: 'Botão',
+                            location: 0.5,
+                            cssClass: 'flow-label-overlay-v2 flow-label-button',
+                            useHTMLElement: true
+                        }
+                    }
                 ],
                 data: {
                     sourceStepId: sourceId,

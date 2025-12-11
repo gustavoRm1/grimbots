@@ -73,6 +73,58 @@
     fill: none;
 }
 
+/* 🔥 V2.0 CONNECTORS: Estilos melhorados para conectores */
+.flow-connector-v2 {
+    stroke: #FFFFFF;
+    stroke-width: 2.5;
+    fill: none;
+    transition: stroke-width 0.2s ease, stroke-opacity 0.2s ease;
+}
+
+.flow-connector-v2-hover {
+    stroke: #FFB800;
+    stroke-width: 3.5;
+    stroke-opacity: 1;
+}
+
+.flow-arrow-overlay-v2 {
+    fill: #FFFFFF;
+    stroke: #FFFFFF;
+    stroke-width: 2;
+}
+
+.flow-label-overlay-v2 {
+    background: rgba(13, 15, 21, 0.95);
+    border: 1px solid rgba(36, 40, 54, 0.8);
+    color: #FFFFFF;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    pointer-events: none;
+}
+
+.flow-label-button {
+    background: rgba(255, 184, 0, 0.15);
+    border-color: rgba(255, 184, 0, 0.5);
+}
+
+/* 🔥 V2.0 CONNECTORS: Melhorar visibilidade dos conectores */
+.jtk-connector {
+    z-index: 1000 !important;
+    pointer-events: stroke !important;
+}
+
+.jtk-connector:hover {
+    stroke-width: 3.5 !important;
+    stroke: #FFB800 !important;
+}
+
+.jtk-connector.jtk-hover {
+    stroke-width: 3.5 !important;
+    stroke: #FFB800 !important;
+}
+
 /* Container interno que recebe o transform */
 .flow-canvas-content {
     position: absolute;
