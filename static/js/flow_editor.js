@@ -83,10 +83,54 @@ class FlowEditor {
         this.setupCanvas();
         
         // CRÍTICO: Setup jsPlumb DEPOIS, usando contentContainer como Container
-        this.setupJsPlumb();
+        // Aguardar um pouco para garantir que contentContainer está no DOM
+        setTimeout(() => {
+            this.setupJsPlumb();
+            
+            // 🔥 V8 ULTRA: Verificar se instance foi criado
+            if (!this.instance) {
+                console.error('❌ Instance não foi criado após setupJsPlumb! Tentando novamente...');
+                setTimeout(() => {
+                    this.setupJsPlumb();
+                    if (this.instance) {
+                        console.log('✅ Instance criado após retry');
+                        this.preventEndpointDuplication();
+                    } else {
+                        console.error('❌ Instance ainda não foi criado após retry');
+                    }
+                }, 500);
+            } else {
+                console.log('✅ Instance criado com sucesso na inicialização');
+                // 🔥 V5.0: Ativar sistema de proteção contra duplicação
+                this.preventEndpointDuplication();
+            }
+        }, 100);
         
-        // 🔥 V5.0: Ativar sistema de proteção contra duplicação
-        this.preventEndpointDuplication();
+        // 🔥 V8 ULTRA: Aguardar instance estar pronto antes de continuar
+        setTimeout(() => {
+            if (!this.instance) {
+                console.warn('⚠️ Instance ainda não está pronto, aguardando...');
+                setTimeout(() => {
+                    if (this.instance) {
+                        this.continueInit();
+                    } else {
+                        console.error('❌ Instance não foi criado após múltiplas tentativas');
+                    }
+                }, 500);
+            } else {
+                this.continueInit();
+            }
+        }, 200);
+    }
+    
+    /**
+     * Continua inicialização após instance estar pronto
+     */
+    continueInit() {
+        if (!this.instance) {
+            console.error('❌ continueInit: instance não existe!');
+            return;
+        }
         
         this.enableZoom();
         this.enablePan();
@@ -103,7 +147,7 @@ class FlowEditor {
             console.log('🔵 Renderizando steps...');
             this.renderAllSteps();
             console.log('✅ Steps renderizados');
-        }, 100);
+        }, 200);
     }
     
     /**
@@ -564,16 +608,17 @@ class FlowEditor {
      * Renderiza todos os steps
      */
     renderAllSteps() {
-        if (!this.alpine || !this.alpine.config || !this.alpine.config.flow_steps) {
-            return;
-        }
-    renderAllSteps() {
         console.log('🔵 renderAllSteps chamado', {
             hasInstance: !!this.instance,
             hasAlpine: !!this.alpine,
             hasConfig: !!this.alpine?.config,
             flowStepsCount: this.alpine?.config?.flow_steps?.length || 0
         });
+        
+        if (!this.alpine || !this.alpine.config || !this.alpine.config.flow_steps) {
+            console.warn('⚠️ renderAllSteps: Alpine ou config não disponível');
+            return;
+        }
         
         // 🔥 V8 ULTRA: Verificar se instance existe
         if (!this.instance) {
@@ -584,6 +629,16 @@ class FlowEditor {
                     this.setupJsPlumb();
                 } catch(e) {
                     console.error('❌ Erro ao tentar inicializar jsPlumb:', e);
+                }
+            } else {
+                // Se não tem contentContainer, criar canvas primeiro
+                this.setupCanvas();
+                if (this.contentContainer) {
+                    try {
+                        this.setupJsPlumb();
+                    } catch(e) {
+                        console.error('❌ Erro ao tentar inicializar jsPlumb após criar canvas:', e);
+                    }
                 }
             }
             
@@ -604,7 +659,7 @@ class FlowEditor {
             }
         }
         
-        const steps = this.alpine?.config?.flow_steps || [];
+        const steps = this.alpine.config.flow_steps || [];
         if (!Array.isArray(steps)) {
             console.warn('⚠️ renderAllSteps: flow_steps não é array');
             return;
@@ -638,7 +693,16 @@ class FlowEditor {
         // Reconectar após renderização
         setTimeout(() => {
             this.reconnectAll();
-        }, 100);
+            // 🔥 CRÍTICO: Forçar repaint final após tudo estar renderizado
+            if (this.instance) {
+                try {
+                    this.instance.repaintEverything();
+                    console.log('✅ Repaint final executado após renderAllSteps');
+                } catch(e) {
+                    console.error('❌ Erro ao fazer repaint final:', e);
+                }
+            }
+        }, 200);
     }
     
     /**
@@ -794,17 +858,46 @@ class FlowEditor {
                     // Configurar draggable inline
                     const draggableOptions = {
                         containment: container || this.contentContainer || this.canvas,
-                        drag: (params) => this.onStepDrag(params),
-                        stop: (params) => this.onStepDragStop(params),
+                        drag: (params) => {
+                            console.log('🔵 Drag em progresso para step:', stepId);
+                            this.onStepDrag(params);
+                        },
+                        stop: (params) => {
+                            console.log('🔵 Drag parado para step:', stepId);
+                            this.onStepDragStop(params);
+                        },
                         cursor: 'move',
-                        start: (params) => console.log('🔵 Drag iniciado para step:', stepId)
+                        start: (params) => {
+                            console.log('🔵 Drag iniciado para step:', stepId, params);
+                        }
                     };
                     if (dragHandle) {
                         draggableOptions.handle = dragHandle;
+                        console.log('✅ Usando drag handle para step:', stepId);
                     } else {
                         draggableOptions.filter = '.flow-step-footer, .flow-step-btn-action, .jtk-endpoint';
+                        console.log('✅ Usando card inteiro para drag (sem handle) para step:', stepId);
                     }
-                    this.instance.draggable(stepElement, draggableOptions);
+                    
+                    try {
+                        this.instance.draggable(stepElement, draggableOptions);
+                        console.log('✅ Draggable configurado com sucesso para step:', stepId, {
+                            hasHandle: !!dragHandle,
+                            container: container?.className || container?.id || 'sem-container',
+                            elementInDOM: !!stepElement.parentElement
+                        });
+                    } catch (draggableError) {
+                        console.error('❌ Erro ao chamar instance.draggable:', draggableError);
+                        // Tentar novamente após um delay
+                        setTimeout(() => {
+                            try {
+                                this.instance.draggable(stepElement, draggableOptions);
+                                console.log('✅ Draggable configurado após retry para step:', stepId);
+                            } catch (retryError) {
+                                console.error('❌ Erro ao configurar draggable após retry:', retryError);
+                            }
+                        }, 200);
+                    }
                 } catch (error) {
                     console.error('❌ Erro ao configurar draggable:', error, {
                         stepId: stepId,
@@ -832,6 +925,11 @@ class FlowEditor {
                     // 🔥 V8 ULTRA: Aguardar um pouco mais e forçar repaint
                     setTimeout(() => {
                         try { 
+                            if (!this.instance) {
+                                console.error('❌ Instance não existe ao revalidar step:', stepId);
+                                return;
+                            }
+                            
                             this.instance.revalidate(stepElement); 
                             this.instance.repaintEverything(); 
                             console.log('✅ Step renderizado e endpoints criados:', stepId);
@@ -840,17 +938,37 @@ class FlowEditor {
                             const endpoints = this.instance.getEndpoints(stepElement);
                             console.log(`🔍 Verificação: ${endpoints.length} endpoints encontrados para step ${stepId}`);
                             endpoints.forEach((ep, idx) => {
-                                console.log(`  Endpoint ${idx}:`, {
-                                    uuid: ep.getUuid(),
-                                    hasCanvas: !!ep.canvas,
-                                    canvasVisible: ep.canvas ? window.getComputedStyle(ep.canvas).display !== 'none' : false,
-                                    canvasZIndex: ep.canvas ? window.getComputedStyle(ep.canvas).zIndex : 'N/A'
-                                });
+                                try {
+                                    const uuid = ep.getUuid();
+                                    const canvas = ep.canvas;
+                                    const computedStyle = canvas ? window.getComputedStyle(canvas) : null;
+                                    console.log(`  Endpoint ${idx}:`, {
+                                        uuid: uuid,
+                                        hasCanvas: !!canvas,
+                                        canvasVisible: computedStyle ? computedStyle.display !== 'none' : false,
+                                        canvasZIndex: computedStyle ? computedStyle.zIndex : 'N/A',
+                                        canvasPosition: canvas ? canvas.getBoundingClientRect() : null
+                                    });
+                                    
+                                    // 🔥 CRÍTICO: Garantir que canvas está visível
+                                    if (canvas) {
+                                        canvas.style.display = 'block';
+                                        canvas.style.visibility = 'visible';
+                                        canvas.style.opacity = '1';
+                                        canvas.style.pointerEvents = 'auto';
+                                        canvas.style.zIndex = '10000';
+                                    }
+                                } catch(e) {
+                                    console.error(`❌ Erro ao verificar endpoint ${idx}:`, e);
+                                }
                             });
+                            
+                            // 🔥 CRÍTICO: Forçar repaint novamente após configurar estilos
+                            this.instance.repaintEverything();
                         } catch(e) {
                             console.error('❌ Erro ao revalidar step:', e);
                         }
-                    }, 100);
+                    }, 150);
                 }, 100);
             });
         });
@@ -1594,6 +1712,10 @@ class FlowEditor {
             
             allEndpoints.forEach((endpoint, idx) => {
                 if (endpoint && endpoint.canvas) {
+                    // 🔥 CRÍTICO: Garantir que canvas está visível e interativo
+                    endpoint.canvas.style.display = 'block';
+                    endpoint.canvas.style.visibility = 'visible';
+                    endpoint.canvas.style.opacity = '1';
                     endpoint.canvas.style.pointerEvents = 'auto';
                     endpoint.canvas.style.zIndex = '10000';
                     endpoint.canvas.style.cursor = 'crosshair';
@@ -1603,12 +1725,16 @@ class FlowEditor {
                     if (svgParent) {
                         svgParent.style.zIndex = '10000';
                         svgParent.style.pointerEvents = 'none'; // SVG não intercepta, apenas os endpoints
+                        svgParent.style.display = 'block';
+                        svgParent.style.visibility = 'visible';
                     }
                     
                     console.log(`✅ Endpoint ${idx} configurado:`, {
                         uuid: endpoint.getUuid(),
                         canvas: endpoint.canvas,
-                        position: endpoint.canvas.getBoundingClientRect()
+                        position: endpoint.canvas.getBoundingClientRect(),
+                        computedDisplay: window.getComputedStyle(endpoint.canvas).display,
+                        computedZIndex: window.getComputedStyle(endpoint.canvas).zIndex
                     });
                 } else {
                     console.warn(`⚠️ Endpoint ${idx} não tem canvas:`, endpoint);
@@ -1617,14 +1743,17 @@ class FlowEditor {
             
             console.log(`✅ ${allEndpoints.length} endpoints configurados para step:`, stepId);
             
-            // 🔥 CRÍTICO: Forçar repaint para garantir que endpoints apareçam
+            // 🔥 CRÍTICO: Forçar repaint múltiplas vezes para garantir que endpoints apareçam
             requestAnimationFrame(() => {
-                try {
-                    this.instance.repaintEverything();
-                    console.log(`✅ Repaint executado para step ${stepId}`);
-                } catch(e) {
-                    console.error('❌ Erro ao fazer repaint:', e);
-                }
+                requestAnimationFrame(() => {
+                    try {
+                        this.instance.revalidate(element);
+                        this.instance.repaintEverything();
+                        console.log(`✅ Repaint executado para step ${stepId}`);
+                    } catch(e) {
+                        console.error('❌ Erro ao fazer repaint:', e);
+                    }
+                });
             });
         } catch(e) {
             console.error('❌ Erro ao configurar endpoints:', e);
