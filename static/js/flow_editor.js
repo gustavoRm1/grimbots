@@ -1177,6 +1177,15 @@ class FlowEditor {
         if (!this.canvas) return;
         
         const startPan = (e) => {
+            // 🔥 V2.0 LAYOUTS FIX: NUNCA processar pan se for sobre step ou drag handle
+            const isOverStep = e.target.closest('.flow-step-block');
+            const isOverDragHandle = e.target.closest('.flow-drag-handle');
+            
+            // Se estiver sobre step ou drag handle, deixar o drag do jsPlumb funcionar
+            if (isOverStep || isOverDragHandle) {
+                return;
+            }
+            
             // CRÍTICO: NUNCA processar pan se for clique em botão de ação
             const isOverActionButton = e.target.closest('.flow-step-btn-action[data-action]');
             if (isOverActionButton) {
@@ -1184,7 +1193,6 @@ class FlowEditor {
                 return;
             }
             
-            const isOverStep = e.target.closest('.flow-step-block');
             const isOverButton = e.target.closest('button');
             const isOverEndpoint = e.target.closest('.jtk-endpoint');
             
@@ -3156,16 +3164,39 @@ class FlowEditor {
             }
         };
         
-        // 🔥 V7 PROFISSIONAL: Se dragHandle existe, usar apenas ele
+        // 🔥 V2.0 LAYOUTS FIX: Configurar draggable de forma mais robusta
+        // Problema: drag handle pode estar bloqueando ou pan pode estar interferindo
+        // Solução: Usar apenas handle OU filter, não ambos (evita conflitos)
         if (dragHandle) {
+            // 🔥 CRÍTICO: Garantir que drag handle está acessível e configurado
+            dragHandle.style.pointerEvents = 'auto';
+            dragHandle.style.cursor = 'move';
+            dragHandle.style.zIndex = '10';
+            dragHandle.style.position = 'absolute';
+            dragHandle.style.top = '0';
+            dragHandle.style.left = '0';
+            dragHandle.style.right = '0';
+            dragHandle.style.height = '40px';
+            dragHandle.style.background = 'transparent';
+            // Remover qualquer atributo que possa bloquear
+            dragHandle.removeAttribute('data-jtk-not-draggable');
+            
+            // Usar APENAS handle (não usar filter junto com handle - pode causar conflito)
             draggableOptions.handle = dragHandle;
+            // NÃO usar filter quando há handle - deixa o jsPlumb gerenciar
             console.log('✅ [V7] Usando drag handle para step:', stepId, {
                 handle: dragHandle,
-                handleRect: dragHandle.getBoundingClientRect()
+                handleRect: dragHandle.getBoundingClientRect(),
+                handleStyle: {
+                    pointerEvents: dragHandle.style.pointerEvents,
+                    cursor: dragHandle.style.cursor,
+                    zIndex: dragHandle.style.zIndex,
+                    position: dragHandle.style.position
+                }
             });
         } else {
             // Sem handle: permitir drag pelo card inteiro, mas excluir elementos interativos
-            draggableOptions.filter = '.flow-step-footer, .flow-step-btn-action, .jtk-endpoint, .flow-step-button-endpoint-container';
+            draggableOptions.filter = ':not(.flow-step-footer):not(.flow-step-btn-action):not(.jtk-endpoint):not(.flow-step-button-endpoint-container)';
             console.log('⚠️ [V7] Drag handle não encontrado, usando card inteiro para step:', stepId);
             // 🔥 CRÍTICO: Garantir que o card inteiro pode ser arrastado
             stepElement.removeAttribute('data-jtk-not-draggable');
@@ -3190,7 +3221,17 @@ class FlowEditor {
             // Remover qualquer atributo que possa bloquear drag
             stepElement.removeAttribute('data-jtk-not-draggable');
             stepElement.style.pointerEvents = 'auto';
-            stepElement.style.cursor = dragHandle ? 'default' : 'move';
+            // 🔥 V2.0 LAYOUTS FIX: Cursor move quando arrastável (mesmo com handle)
+            stepElement.style.cursor = 'move';
+            
+            // 🔥 CRÍTICO: Garantir que drag handle também está configurado
+            if (dragHandle) {
+                dragHandle.style.pointerEvents = 'auto';
+                dragHandle.style.cursor = 'move';
+                dragHandle.style.zIndex = '10';
+                // Remover qualquer atributo que possa bloquear
+                dragHandle.removeAttribute('data-jtk-not-draggable');
+            }
             
             // Configurar draggable
             this.instance.draggable(stepElement, draggableOptions);
