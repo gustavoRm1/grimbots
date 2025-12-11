@@ -585,7 +585,7 @@
 
 /* === 🔥 V5.0 - ManyChat-Level Endpoints === */
 
-/* Force cards absolute (positions controlled by JS) */
+/* ✅ V2.0 FRONTEND: Cards consolidados - uma única definição */
 .flow-step-block,
 .flow-card {
     position: absolute !important;
@@ -594,50 +594,28 @@
     background: #0F0F14;
     border: 1px solid #242836;
     border-radius: 12px;
-    overflow: visible !important; /* allow endpoints to be visible outside */
+    cursor: move;
+    overflow: visible !important;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+    transition: border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+                box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     will-change: transform;
+    user-select: none;
+    touch-action: none;
+    animation: stepFadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ✅ V2.0 FRONTEND: Sem transições durante drag */
+.flow-step-block.dragging,
+.flow-step-block.jtk-surface-element-dragging {
+    transition: none !important;
+    cursor: grabbing !important;
 }
 
 /* Ensure inner elements can use absolute positioning relative to card */
 .flow-step-block > * { position: relative; }
 
-/* 🔥 V5.0 - Endpoints ManyChat-Level: 14x14, totalmente fora do card (±6px), z-index máximo */
-.jtk-endpoint {
-    z-index: 9999 !important;
-    pointer-events: auto !important;
-    cursor: crosshair !important;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    display: block !important;
-}
-
-.jtk-endpoint circle {
-    r: 7 !important; /* 14x14 total */
-    fill: #10B981 !important; /* Verde quando ativo */
-    stroke: #FFFFFF !important;
-    stroke-width: 2 !important;
-}
-
-.jtk-endpoint:hover circle {
-    fill: #FFB800 !important; /* Amarelo no hover */
-    transform: scale(1.2);
-    filter: drop-shadow(0 0 8px rgba(255, 184, 0, 0.8));
-}
-
-.jtk-endpoint.jtk-endpoint-connected circle {
-    fill: #10B981 !important; /* Verde quando conectado */
-}
-
-.jtk-endpoint.jtk-endpoint-disconnected circle {
-    fill: #6B7280 !important; /* Cinza quando desconectado */
-}
-
-/* Garantir que endpoints não sejam bloqueados */
-.jtk-endpoint * {
-    pointer-events: auto !important;
-    z-index: 10000 !important;
-}
-
-/* 🔥 V8 ULTRA: Garantir que endpoints sejam sempre visíveis */
+/* ✅ V2.0 FRONTEND: Endpoints consolidados - uma única definição completa */
 .jtk-endpoint {
     z-index: 10000 !important;
     pointer-events: auto !important;
@@ -645,6 +623,36 @@
     display: block !important;
     visibility: visible !important;
     opacity: 1 !important;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.jtk-endpoint circle {
+    r: 7 !important;
+    fill: #10B981 !important;
+    stroke: #FFFFFF !important;
+    stroke-width: 2 !important;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3)) !important;
+    transition: all 0.2s ease !important;
+}
+
+.jtk-endpoint:hover circle {
+    fill: #FFB800 !important;
+    transform: scale(1.15) !important;
+    filter: drop-shadow(0 4px 8px rgba(255, 184, 0, 0.6)) !important;
+}
+
+.jtk-endpoint.jtk-endpoint-connected circle {
+    fill: #10B981 !important;
+}
+
+.jtk-endpoint.jtk-endpoint-disconnected circle {
+    fill: #6B7280 !important;
+}
+
+/* Garantir que endpoints não sejam bloqueados */
+.jtk-endpoint * {
+    pointer-events: auto !important;
+    z-index: 10001 !important;
 }
 
 /* Garantir que SVG dos endpoints também tenha z-index alto */
@@ -772,23 +780,7 @@ svg .jtk-endpoint circle {
         0 12px 32px rgba(255, 184, 0, 0.4) !important;
 }
 
-/* 🔥 V2.0: Transições Suaves para Todas as Interações */
-.flow-step-block {
-    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
-}
-
-.flow-step-block:not(.dragging):not(.jtk-surface-element-dragging) {
-    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
-}
-
-/* 🔥 V2.0: Cursor Feedback */
-.flow-step-block {
-    cursor: move;
-}
-
-.flow-step-block.jtk-surface-selected-element {
-    cursor: move;
-}
+/* ✅ V2.0 FRONTEND: Transições suaves (consolidado acima, removido duplicação) */
 
 .flow-step-block.dragging,
 .flow-step-block.jtk-surface-element-dragging {

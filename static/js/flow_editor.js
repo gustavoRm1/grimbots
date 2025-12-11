@@ -569,6 +569,9 @@ class FlowEditor {
     /**
      * 🔥 V7: Configura SVG overlay com retry robusto
      */
+    /**
+     * 🔥 V2.0 FRONTEND: Configura SVG overlay com visibilidade garantida
+     */
     configureSVGOverlayWithRetry(maxAttempts = 10) {
         return new Promise((resolve, reject) => {
             let attempt = 0;
@@ -577,24 +580,36 @@ class FlowEditor {
                 attempt++;
                 
                 try {
-                    // 🔥 V7 CRÍTICO: Buscar SVG overlay APENAS no container do jsPlumb (this.canvas)
+                    // ✅ CORREÇÃO: Buscar SVG overlay APENAS no canvas (não contentContainer)
                     const container = this.canvas;
                     const svgOverlay = container.querySelector('svg.jtk-overlay') || 
                                      container.querySelector('svg');
                     
                     if (svgOverlay) {
-                        svgOverlay.style.position = 'absolute';
-                        svgOverlay.style.left = '0';
-                        svgOverlay.style.top = '0';
-                        svgOverlay.style.width = '100%';
-                        svgOverlay.style.height = '100%';
-                        svgOverlay.style.zIndex = '10000';
-                        svgOverlay.style.pointerEvents = 'none';
-                        svgOverlay.style.display = 'block';
-                        svgOverlay.style.visibility = 'visible';
-                        svgOverlay.style.opacity = '1';
+                        // ✅ CORREÇÃO: Forçar visibilidade com !important via style
+                        svgOverlay.style.cssText = `
+                            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            z-index: 10000 !important;
+            pointer-events: none !important;
+            display: block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+        `;
                         
-                        console.log('✅ [V7] SVG overlay configurado');
+                        // ✅ CORREÇÃO: Garantir que endpoints dentro do SVG têm pointer-events
+                        const endpoints = svgOverlay.querySelectorAll('.jtk-endpoint');
+                        endpoints.forEach(ep => {
+                            if (ep && ep.style) {
+                                ep.style.pointerEvents = 'auto';
+                                ep.style.zIndex = '10001';
+                            }
+                        });
+                        
+                        console.log('✅ [V2.0 FRONTEND] SVG overlay configurado com visibilidade garantida');
                         resolve();
                     } else if (attempt < maxAttempts) {
                         setTimeout(tryConfigure, 100 * attempt);
@@ -731,13 +746,22 @@ class FlowEditor {
                             // 🔥 FASE 1: Usar throttledRepaint ao invés de repaintEverything direto
                             this.throttledRepaint();
                             
-                            // Garantir que SVG overlay está visível (buscar no canvas)
+                            // ✅ V2.0 FRONTEND: Garantir que SVG overlay está visível no canvas
                             const svgOverlay = this.canvas.querySelector('svg.jtk-overlay') || 
                                              this.canvas.querySelector('svg');
                             if (svgOverlay) {
-                                svgOverlay.style.display = 'block';
-                                svgOverlay.style.visibility = 'visible';
-                                svgOverlay.style.opacity = '1';
+                                svgOverlay.style.cssText = `
+                                    position: absolute !important;
+                                    left: 0 !important;
+                                    top: 0 !important;
+                                    width: 100% !important;
+                                    height: 100% !important;
+                                    z-index: 10000 !important;
+                                    pointer-events: none !important;
+                                    display: block !important;
+                                    visibility: visible !important;
+                                    opacity: 1 !important;
+                                `;
                             }
                         } catch(e) {
                             console.error('❌ [V7] Erro ao revalidar após transform:', e);
@@ -755,7 +779,7 @@ class FlowEditor {
     }
     
     /**
-     * Atualiza transform do contentContainer (zoom + pan)
+     * ✅ V2.0 FRONTEND: Atualiza transform do contentContainer (zoom + pan) e revalida corretamente
      */
     updateCanvasTransform() {
         if (!this.contentContainer) return;
@@ -763,22 +787,52 @@ class FlowEditor {
         const transform = `translate(${this.pan.x}px, ${this.pan.y}px) scale(${this.zoomLevel})`;
         this.contentContainer.style.transform = transform;
         
-        // CRÍTICO: Revalidar e repintar jsPlumb após transform
-        // Revalidar recalcula as posições dos endpoints considerando o transform
+        // ✅ V2.0 FRONTEND: Revalidar e repintar jsPlumb após transform (com throttling)
         if (this.repaintTimeout) {
             clearTimeout(this.repaintTimeout);
         }
         this.repaintTimeout = setTimeout(() => {
             if (this.instance) {
-                // CRÍTICO: Revalidar todos os elementos E seus nodes (PATCH V4.0)
+                // ✅ Revalidar todos os elementos
                 this.steps.forEach((el, id) => {
-                    this.instance.revalidate(el);
-                    // Endpoints agora são gerenciados 100% pelo jsPlumb, não há mais nodes HTML
-                    const inputs = [];
-                    inputs.forEach(n => this.instance.revalidate(n));
+                    try {
+                        this.instance.revalidate(el);
+                        // ✅ Garantir que endpoints estão visíveis após revalidate
+                        const endpoints = this.instance.getEndpoints(el);
+                        endpoints.forEach(ep => {
+                            if (ep && ep.canvas) {
+                                ep.canvas.style.display = 'block';
+                                ep.canvas.style.visibility = 'visible';
+                                ep.canvas.style.opacity = '1';
+                                ep.canvas.style.pointerEvents = 'auto';
+                                ep.canvas.style.zIndex = '10000';
+                            }
+                        });
+                    } catch(e) {
+                        // Ignorar erros individuais
+                    }
                 });
-                            // 🔥 FASE 1: Usar throttledRepaint ao invés de repaintEverything direto
-                            this.throttledRepaint();
+                
+                // ✅ Garantir que SVG overlay está visível no canvas
+                const svgOverlay = this.canvas.querySelector('svg.jtk-overlay') || 
+                                 this.canvas.querySelector('svg');
+                if (svgOverlay) {
+                    svgOverlay.style.cssText = `
+                        position: absolute !important;
+                        left: 0 !important;
+                        top: 0 !important;
+                        width: 100% !important;
+                        height: 100% !important;
+                        z-index: 10000 !important;
+                        pointer-events: none !important;
+                        display: block !important;
+                        visibility: visible !important;
+                        opacity: 1 !important;
+                    `;
+                }
+                
+                // ✅ Repintar com throttling
+                this.throttledRepaint();
             }
         }, 16); // ~60fps
     }
@@ -2107,17 +2161,26 @@ class FlowEditor {
                     }
                 });
                 
-                // Garantir que SVG overlay está visível
-                const svgOverlay = this.contentContainer.querySelector('svg.jtk-overlay') || 
-                                 this.contentContainer.querySelector('svg');
+                // ✅ V2.0 FRONTEND: SVG overlay SEMPRE no canvas (não contentContainer)
+                const svgOverlay = this.canvas.querySelector('svg.jtk-overlay') || 
+                                 this.canvas.querySelector('svg');
                 if (svgOverlay) {
                     const svgStyle = window.getComputedStyle(svgOverlay);
-                    if (svgStyle.display === 'none' || svgStyle.visibility === 'hidden') {
-                        svgOverlay.style.display = 'block';
-                        svgOverlay.style.visibility = 'visible';
-                        svgOverlay.style.opacity = '1';
+                    if (svgStyle.display === 'none' || svgStyle.visibility === 'hidden' || svgStyle.opacity === '0') {
+                        svgOverlay.style.cssText = `
+                            position: absolute !important;
+                            left: 0 !important;
+                            top: 0 !important;
+                            width: 100% !important;
+                            height: 100% !important;
+                            z-index: 10000 !important;
+                            pointer-events: none !important;
+                            display: block !important;
+                            visibility: visible !important;
+                            opacity: 1 !important;
+                        `;
                         needsRepaint = true;
-                        console.log('✅ SVG overlay forçado a ficar visível');
+                        console.log('✅ SVG overlay forçado a ficar visível no canvas');
                     }
                 }
                 
@@ -2477,21 +2540,23 @@ class FlowEditor {
                             // 🔥 FASE 1: Usar throttledRepaint ao invés de repaintEverything direto
                             this.throttledRepaint();
                         
-                        // 🔥 CRÍTICO: Garantir que SVG overlay está visível após criar endpoints
-                        const svgOverlay = this.contentContainer.querySelector('svg.jtk-overlay') || 
-                                         this.contentContainer.querySelector('svg');
+                        // ✅ V2.0 FRONTEND: SVG overlay SEMPRE no canvas (não contentContainer)
+                        const svgOverlay = this.canvas.querySelector('svg.jtk-overlay') || 
+                                         this.canvas.querySelector('svg');
                         if (svgOverlay) {
-                            svgOverlay.style.position = 'absolute';
-                            svgOverlay.style.left = '0';
-                            svgOverlay.style.top = '0';
-                            svgOverlay.style.width = '100%';
-                            svgOverlay.style.height = '100%';
-                            svgOverlay.style.zIndex = '10000';
-                            svgOverlay.style.pointerEvents = 'none';
-                            svgOverlay.style.display = 'block';
-                            svgOverlay.style.visibility = 'visible';
-                            svgOverlay.style.opacity = '1';
-                            console.log(`✅ SVG overlay configurado após criar endpoints para step ${stepId}`);
+                            svgOverlay.style.cssText = `
+                                position: absolute !important;
+                                left: 0 !important;
+                                top: 0 !important;
+                                width: 100% !important;
+                                height: 100% !important;
+                                z-index: 10000 !important;
+                                pointer-events: none !important;
+                                display: block !important;
+                                visibility: visible !important;
+                                opacity: 1 !important;
+                            `;
+                            console.log(`✅ SVG overlay configurado no canvas após criar endpoints para step ${stepId}`);
                         }
                         
                         // 🔥 CRÍTICO: Garantir que todos os endpoints estão visíveis
@@ -2642,15 +2707,24 @@ class FlowEditor {
             cursor: 'move',
             start: (params) => {
                 console.log('🔵 [V7] Drag iniciado para step:', stepId, params);
-                // Garantir que SVG overlay está visível
+                // ✅ V2.0 FRONTEND: Garantir que SVG overlay está visível no canvas
                 if (this.instance) {
                     try {
                         const svgOverlay = this.canvas.querySelector('svg.jtk-overlay') || 
                                          this.canvas.querySelector('svg');
                         if (svgOverlay) {
-                            svgOverlay.style.display = 'block';
-                            svgOverlay.style.visibility = 'visible';
-                            svgOverlay.style.opacity = '1';
+                            svgOverlay.style.cssText = `
+                                position: absolute !important;
+                                left: 0 !important;
+                                top: 0 !important;
+                                width: 100% !important;
+                                height: 100% !important;
+                                z-index: 10000 !important;
+                                pointer-events: none !important;
+                                display: block !important;
+                                visibility: visible !important;
+                                opacity: 1 !important;
+                            `;
                         }
                     } catch(e) {
                         // Ignorar erros
@@ -2768,15 +2842,19 @@ class FlowEditor {
      * 🔥 FASE 1: Repaint Throttling (60fps)
      * Throttle repaintEverything para evitar repaints excessivos
      */
+    /**
+     * 🔥 V2.0 FRONTEND: Repaint throttling correto - cancela frame anterior
+     */
     throttledRepaint() {
+        // ✅ CORREÇÃO: Cancelar frame anterior se existir
         if (this.repaintFrameId) {
-            return; // Já agendado
+            cancelAnimationFrame(this.repaintFrameId);
         }
         
+        // ✅ Agendar novo frame
         this.repaintFrameId = requestAnimationFrame(() => {
             if (this.instance) {
                 try {
-                    // 🔥 V2.0: Chamar repaintEverything (não chamar a si mesmo!)
                     this.instance.repaintEverything();
                 } catch(e) {
                     console.warn('⚠️ Erro ao repintar:', e);
