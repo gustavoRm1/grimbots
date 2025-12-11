@@ -3146,18 +3146,43 @@ function botConfigApp() {
                     }
                 }
                 
-                // Limpar canvas
-                canvas.innerHTML = '';
+                // 🔥 CRÍTICO: NÃO limpar o contentContainer! Apenas remover steps
+                const contentContainer = canvas.querySelector('.flow-canvas-content');
+                if (contentContainer) {
+                    // Remover apenas os steps, manter o contentContainer
+                    Array.from(contentContainer.children).forEach(child => {
+                        if (child.classList && child.classList.contains('flow-step-block')) {
+                            child.remove();
+                        }
+                    });
+                    console.log('✅ ContentContainer preservado, apenas steps removidos');
+                } else {
+                    // Se não existe, criar (mas não limpar tudo)
+                    const newContent = document.createElement('div');
+                    newContent.className = 'flow-canvas-content';
+                    newContent.style.cssText = 'position:absolute; left:0; top:0; width:100%; height:100%; transform-origin:0 0;';
+                    canvas.appendChild(newContent);
+                    console.log('✅ ContentContainer criado');
+                }
                 
                 // Expor Alpine context
                 window.alpineFlowEditor = this;
                 
                 try {
-                    // Criar instância do FlowEditor (jsPlumb)
+                    // 🔥 V8 ULTRA: Criar instância e aguardar inicialização completa (ERRO 2)
                     window.flowEditor = new window.FlowEditor('flow-visual-canvas', this);
-                    console.log('✅ Editor jsPlumb inicializado');
+                    
+                    // Aguardar inicialização completa antes de usar
+                    window.flowEditor.init().then(() => {
+                        console.log('✅ Editor jsPlumb inicializado completamente (V8)');
+                    }).catch(error => {
+                        console.error('❌ Erro ao inicializar editor jsPlumb:', error);
+                        console.error('Stack:', error.stack);
+                        // Tentar novamente após 1 segundo
+                        setTimeout(() => this.initVisualFlowEditor(), 1000);
+                    });
                 } catch (error) {
-                    console.error('❌ Erro ao inicializar editor jsPlumb:', error);
+                    console.error('❌ Erro ao criar instância do FlowEditor:', error);
                     console.error('Stack:', error.stack);
                     // Tentar novamente após 1 segundo
                     setTimeout(() => this.initVisualFlowEditor(), 1000);
@@ -3389,35 +3414,57 @@ function botConfigApp() {
             this.config.flow_steps.push(newStep);
             console.log('✅ Step adicionado ao Alpine:', stepId, 'Total:', this.config.flow_steps.length);
             
-            // 🔥 V8 ULTRA: Garantir que o editor está inicializado e renderizar
-            this.$nextTick(() => {
-                console.log('🔵 $nextTick executado após adicionar step');
-                
-                // Função para tentar renderizar
-                const tryRender = () => {
-                    console.log('🔵 Tentando renderizar steps...', {
-                        hasFlowEditor: !!window.flowEditor,
-                        hasRenderAllSteps: !!(window.flowEditor && typeof window.flowEditor.renderAllSteps === 'function'),
-                        flowStepsCount: this.config.flow_steps?.length || 0
-                    });
+            // 🔥 V8 ULTRA: Garantir que o editor está inicializado e renderizar (ERRO 8)
+            // Debounce para prevenir múltiplas chamadas
+            if (this._renderDebounceTimeout) {
+                clearTimeout(this._renderDebounceTimeout);
+            }
+            
+            this._renderDebounceTimeout = setTimeout(() => {
+                this.$nextTick(async () => {
+                    console.log('🔵 $nextTick executado após adicionar step (V8 debounced)');
                     
-                    if (window.flowEditor && typeof window.flowEditor.renderAllSteps === 'function') {
-                        try {
-                            window.flowEditor.renderAllSteps();
-                            console.log('✅ Steps re-renderizados (jsPlumb)');
-                            return true;
-                        } catch(e) {
-                            console.error('❌ Erro ao chamar renderAllSteps:', e);
-                            return false;
+                    // Função para tentar renderizar
+                    const tryRender = async () => {
+                        console.log('🔵 Tentando renderizar steps...', {
+                            hasFlowEditor: !!window.flowEditor,
+                            hasRenderAllSteps: !!(window.flowEditor && typeof window.flowEditor.renderAllSteps === 'function'),
+                            flowStepsCount: this.config.flow_steps?.length || 0
+                        });
+                        
+                        // 🔥 V8 ULTRA: Verificar se editor está inicializado antes de usar (ERRO 2)
+                        if (window.flowEditor) {
+                            // Aguardar inicialização se necessário
+                            if (!window.flowEditor.isInitialized()) {
+                                console.log('⏳ Editor não inicializado, aguardando...');
+                                try {
+                                    await window.flowEditor.waitForInitialization(5000);
+                                } catch(e) {
+                                    console.error('❌ Timeout aguardando inicialização:', e);
+                                    return false;
+                                }
+                            }
+                            
+                            if (typeof window.flowEditor.renderAllSteps === 'function') {
+                                try {
+                                    window.flowEditor.renderAllSteps();
+                                    console.log('✅ Steps re-renderizados (jsPlumb V8)');
+                                    return true;
+                                } catch(e) {
+                                    console.error('❌ Erro ao chamar renderAllSteps:', e);
+                                    return false;
+                                }
+                            }
                         }
-                    }
-                    return false;
-                };
+                        return false;
+                    };
                 
                 // Tentar renderizar imediatamente
-                if (tryRender()) {
-                    return;
-                }
+                tryRender().then(success => {
+                    if (success) {
+                        return;
+                    }
+                });
                 
                 // Se não funcionou, tentar inicializar o editor
                 console.log('🆕 Editor não inicializado. Inicializando agora...');
@@ -3433,8 +3480,9 @@ function botConfigApp() {
                             clearInterval(checkInterval);
                             console.log('✅ FlowEditor e jsPlumb carregados, inicializando editor...');
                             this.initVisualFlowEditor();
-                            setTimeout(() => {
-                                if (!tryRender()) {
+                            setTimeout(async () => {
+                                const success = await tryRender();
+                                if (!success) {
                                     console.warn('⚠️ Tentando renderizar novamente após 1s...');
                                     setTimeout(() => tryRender(), 1000);
                                 }
@@ -3449,18 +3497,20 @@ function botConfigApp() {
                     console.log('✅ FlowEditor disponível, inicializando...');
                     this.initVisualFlowEditor();
                     // Aguardar um pouco e tentar renderizar
-                    setTimeout(() => {
-                        if (!tryRender()) {
+                    setTimeout(async () => {
+                        const success = await tryRender();
+                        if (!success) {
                             console.warn('⚠️ Editor inicializado mas renderAllSteps ainda não está disponível. Tentando novamente...');
-                            setTimeout(() => {
-                                if (!tryRender()) {
+                            setTimeout(async () => {
+                                const success2 = await tryRender();
+                                if (!success2) {
                                     console.error('❌ Falha ao renderizar após múltiplas tentativas');
                                 }
                             }, 1000);
                         }
                     }, 500);
                 }
-            });
+                }, 300); // 🔥 V8 ULTRA: Debounce de 300ms para prevenir múltiplas chamadas (ERRO 8)
         },
         
         removeFlowStep(stepId) {

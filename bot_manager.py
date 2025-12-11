@@ -17,6 +17,7 @@ from datetime import datetime, timedelta
 from redis_manager import get_redis_connection
 import hashlib
 import hmac
+from flow_engine_router_v8 import get_message_router
 
 logger = logging.getLogger(__name__)
 
@@ -1240,49 +1241,50 @@ class BotManager:
                         logger.error(f"❌ Erro ao salvar mensagem recebida: {e}", exc_info=True)
                         # Não interromper o fluxo se falhar ao salvar
                 
-                # Comando /start (com ou sem parâmetros deep linking)
-                # Exemplos: "/start", "/start acesso", "/start promo123"
-                if text.startswith('/start'):
-                    # ============================================================================
-                    # ✅ QI 10000: ANTI-DUPLICAÇÃO ADICIONAL PARA /START
-                    # ============================================================================
-                    # Lock adicional por chat_id para /start (além do lock de mensagem)
-                    start_lock_acquired = False
-                    try:
-                        import redis
-                        redis_conn_start = get_redis_connection()
-                        start_lock_key = f"lock:start_process:{bot_id}:{chat_id}"
-                        
-                        # Tentar adquirir lock (expira em 10 segundos - tempo suficiente para processar /start)
-                        start_lock_acquired = redis_conn_start.set(start_lock_key, "1", ex=10, nx=True)
-                        if not start_lock_acquired:
-                            logger.warning(f"⛔ /start já está sendo processado para chat_id={chat_id}, ignorando duplicado")
-                            return  # Sair sem processar
-                    except Exception as e:
-                        logger.warning(f"⚠️ Erro ao verificar lock de /start: {e} - continuando")
-                        # Fail-open: se Redis falhar, continuar
+                # 🔥 V8 ULTRA: Usar MessageRouter V8 como único ponto de entrada
+                # Garante atomicidade e previne race conditions
+                try:
+                    router = get_message_router(self)
                     
                     # Extrair parâmetro do deep link (se houver)
                     start_param = None
-                    if len(text) > 6 and text[6] == ' ':  # "/start " tem 7 caracteres
-                        start_param = text[7:].strip()  # Tudo após "/start "
+                    message_type = "text"
                     
-                    if start_param:
-                        logger.info(f"⭐ COMANDO /START com parâmetro: '{start_param}' - Enviando mensagem de boas-vindas...")
-                    else:
-                        logger.info(f"⭐ COMANDO /START - Enviando mensagem de boas-vindas...")
+                    if text.startswith('/start'):
+                        message_type = "start"
+                        if len(text) > 6 and text[6] == ' ':  # "/start " tem 7 caracteres
+                            start_param = text[7:].strip()  # Tudo após "/start "
                     
-                    # ✅ CORREÇÃO CRÍTICA: Passar telegram_user_id para _handle_start_command
-                    # A função irá buscar/criar bot_user dentro do seu próprio app_context
-                    # Isso evita race conditions entre diferentes contextos de sessão
-                    self._handle_start_command(bot_id, token, config, chat_id, message, start_param)
-                
-                # ✅ SOLUÇÃO HÍBRIDA: Mensagens de texto podem reiniciar o funil
-                # Mas APENAS se não houver conversa ativa (proteção contra spam)
-                # NOTA: /start SEMPRE reinicia (regra absoluta acima)
-                elif text and text.strip():  # Mensagem de texto não vazia
-                    logger.info(f"💬 MENSAGEM DE TEXTO: '{text}' - Verificando se deve reiniciar funil...")
-                    self._handle_text_message(bot_id, token, config, chat_id, message)
+                    # Processar via MessageRouter V8
+                    result = router.process_message(
+                        bot_id=bot_id,
+                        token=token,
+                        config=config,
+                        chat_id=chat_id,
+                        telegram_user_id=telegram_user_id,
+                        message=message,
+                        message_type=message_type,
+                        callback_data=None
+                    )
+                    
+                    if not result.get('processed', False):
+                        logger.warning(f"⚠️ Mensagem não processada pelo router: {result.get('reason', 'unknown')}")
+                        # Fallback: processar via método tradicional se router falhar
+                        if message_type == "start":
+                            self._handle_start_command(bot_id, token, config, chat_id, message, start_param)
+                        else:
+                            self._handle_text_message(bot_id, token, config, chat_id, message)
+                    
+                except Exception as router_error:
+                    logger.error(f"❌ Erro no MessageRouter V8: {router_error}", exc_info=True)
+                    # Fallback: processar via método tradicional se router falhar
+                    if text.startswith('/start'):
+                        start_param = None
+                        if len(text) > 6 and text[6] == ' ':
+                            start_param = text[7:].strip()
+                        self._handle_start_command(bot_id, token, config, chat_id, message, start_param)
+                    elif text and text.strip():
+                        self._handle_text_message(bot_id, token, config, chat_id, message)
                 
                 # ✅ SISTEMA DE ASSINATURAS - Processar new_chat_member e left_chat_member
                 if 'new_chat_members' in message:
@@ -1385,11 +1387,47 @@ class BotManager:
                         except Exception as cancel_error:
                             logger.error(f"❌ Erro ao cancelar subscriptions quando usuário saiu: {cancel_error}")
             
-            # Processar callback (botões)
+            # 🔥 V8 ULTRA: Processar callback via MessageRouter V8
             elif 'callback_query' in update:
                 callback = update['callback_query']
-                logger.info(f"🔘 BOTÃO CLICADO: {callback.get('data')}")
-                self._handle_callback_query(bot_id, token, config, callback)
+                callback_data = callback.get('data', '')
+                logger.info(f"🔘 BOTÃO CLICADO: {callback_data}")
+                
+                try:
+                    router = get_message_router(self)
+                    
+                    # Obter chat_id e telegram_user_id do callback
+                    message_from_callback = callback.get('message', {})
+                    chat_id = message_from_callback.get('chat', {}).get('id')
+                    user = callback.get('from', {})
+                    telegram_user_id = str(user.get('id', ''))
+                    
+                    if not chat_id:
+                        logger.warning("⚠️ Callback sem chat_id, usando método tradicional")
+                        self._handle_callback_query(bot_id, token, config, callback)
+                        return
+                    
+                    # Processar via MessageRouter V8
+                    result = router.process_message(
+                        bot_id=bot_id,
+                        token=token,
+                        config=config,
+                        chat_id=chat_id,
+                        telegram_user_id=telegram_user_id,
+                        message=callback,
+                        message_type="callback",
+                        callback_data=callback_data
+                    )
+                    
+                    if not result.get('processed', False):
+                        logger.warning(f"⚠️ Callback não processado pelo router: {result.get('reason', 'unknown')}")
+                        # Fallback: processar via método tradicional
+                        self._handle_callback_query(bot_id, token, config, callback)
+                    
+                except Exception as router_error:
+                    logger.error(f"❌ Erro no MessageRouter V8 para callback: {router_error}", exc_info=True)
+                    # Fallback: processar via método tradicional
+                    self._handle_callback_query(bot_id, token, config, callback)
                 
         except Exception as e:
             logger.error(f"❌ Erro ao processar update do bot {bot_id}: {e}")

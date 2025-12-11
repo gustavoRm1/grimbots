@@ -391,12 +391,16 @@ class FlowEditor {
             'access': [] // Fim do fluxo
         };
         
-        this.init();
+        // 🔥 V8 ULTRA: NÃO chamar init() diretamente no constructor
+        // init() será chamado explicitamente após instância ser criada
+        // Isso previne race conditions (ERRO 2)
+        this._initPromise = null;
+        this._isInitialized = false;
     }
     
     /**
-     * Inicialização principal - V7 PROFISSIONAL
-     * 🔥 REFATORADO: async/await para eliminar race conditions
+     * 🔥 V8 ULTRA: Inicialização explícita (deve ser chamada após criar instância)
+     * Previne race conditions (ERRO 2)
      */
     async init() {
         if (!this.canvas) {
@@ -434,9 +438,40 @@ class FlowEditor {
             
             // Continuar inicialização
             this.continueInit();
+            
+            // 🔥 V8 ULTRA: Marcar como inicializado
+            this._isInitialized = true;
+            console.log('✅ [V8] FlowEditor inicializado completamente');
         } catch (error) {
             console.error('❌ Erro na inicialização:', error);
+            this._isInitialized = false;
         }
+    }
+    
+    /**
+     * 🔥 V8 ULTRA: Verifica se editor está inicializado
+     * Previne uso antes de inicialização completa (ERRO 2)
+     */
+    isInitialized() {
+        return this._isInitialized === true && this.instance !== null && this.contentContainer !== null;
+    }
+    
+    /**
+     * 🔥 V8 ULTRA: Aguarda inicialização completa
+     * Previne race conditions (ERRO 2)
+     */
+    async waitForInitialization(timeout = 5000) {
+        const startTime = Date.now();
+        
+        while (!this.isInitialized() && (Date.now() - startTime) < timeout) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
+        
+        if (!this.isInitialized()) {
+            throw new Error('Timeout aguardando inicialização do FlowEditor');
+        }
+        
+        return true;
     }
     
     /**
@@ -642,15 +677,14 @@ class FlowEditor {
                     return;
                 }
                 
-                // 🔥 V2.0 LAYOUTS FIX: Container DEVE ser contentContainer (onde elementos estão)
+                // 🔥 V8 ULTRA: Container DEVE ser contentContainer (ERRO 9)
                 // CRÍTICO: jsPlumb precisa encontrar os elementos dentro de contentContainer
-                // Se usar canvas, jsPlumb não encontra elementos dentro de contentContainer
-                const container = this.contentContainer || this.canvas;
-                
-                if (!container) {
-                    reject(new Error('Container não encontrado'));
+                // NÃO usar fallback para canvas - garantir que contentContainer existe
+                if (!this.contentContainer) {
+                    reject(new Error('contentContainer não existe - não é possível inicializar jsPlumb (ERRO 9)'));
                     return;
                 }
+                const container = this.contentContainer;
                 
                 console.log('🔵 [V7] Inicializando jsPlumb com contentContainer como container:', {
                     containerId: container.id,
@@ -956,7 +990,7 @@ class FlowEditor {
             console.log('🔵 Criando contentContainer...');
             content = document.createElement('div');
             content.className = 'flow-canvas-content';
-            content.style.cssText = 'position:absolute; left:0; top:0; width:100%; height:100%; transform-origin:0 0; will-change:transform;';
+            content.style.cssText = 'position:absolute; left:0; top:0; width:100%; height:100%; transform-origin:0 0; will-change:transform; pointer-events:auto; overflow:visible;';
             // Move any existing flow-step-block children into content
             Array.from(this.canvas.children).forEach(child => {
                 if (child.classList && child.classList.contains('flow-step-block')) {
@@ -964,8 +998,12 @@ class FlowEditor {
                 }
             });
             this.canvas.appendChild(content);
+            console.log('✅ ContentContainer criado e adicionado ao canvas');
         } else {
             console.log('✅ contentContainer encontrado no HTML, reutilizando');
+            // Garantir que está configurado corretamente
+            content.style.pointerEvents = 'auto';
+            content.style.overflow = 'visible';
         }
         
         // CRÍTICO: Garantir que contentContainer tem os estilos corretos
@@ -1486,7 +1524,23 @@ class FlowEditor {
     /**
      * Renderiza todos os steps
      */
+    /**
+     * 🔥 V8 ULTRA: Renderiza todos os steps com proteção contra race conditions
+     * Previne ERRO 2 (race condition) e ERRO 8 (múltiplas chamadas)
+     */
     renderAllSteps() {
+        // 🔥 V8 ULTRA: Verificar se está inicializado (ERRO 2)
+        if (!this.isInitialized()) {
+            console.warn('⚠️ renderAllSteps: Editor não está inicializado, aguardando...');
+            // Aguardar inicialização e tentar novamente
+            this.waitForInitialization(5000).then(() => {
+                this.renderAllSteps();
+            }).catch(e => {
+                console.error('❌ Timeout aguardando inicialização:', e);
+            });
+            return;
+        }
+        
         console.log('🔵 renderAllSteps chamado', {
             hasInstance: !!this.instance,
             hasAlpine: !!this.alpine,
@@ -1686,19 +1740,32 @@ class FlowEditor {
         // 🔥 V8 ULTRA: Append inner to step and to contentContainer
         stepElement.appendChild(inner);
         
-        // CRÍTICO: Garantir que contentContainer existe
+        // 🔥 V8 ULTRA: Garantir que contentContainer existe (ERRO 1, ERRO 9)
         if (!this.contentContainer) {
             console.error('❌ renderStep: contentContainer não existe! Tentando criar...');
             this.setupCanvas();
+            
+            // Se ainda não existe após setupCanvas, erro crítico
+            if (!this.contentContainer) {
+                console.error('❌ renderStep: Não foi possível criar contentContainer!');
+                return;
+            }
         }
         
-        const container = this.contentContainer || this.canvas;
+        // 🔥 V8 ULTRA: NÃO usar fallback para canvas (ERRO 9)
+        // contentContainer DEVE existir, senão não é possível renderizar
+        const container = this.contentContainer;
         if (!container) {
-            console.error('❌ renderStep: Nenhum container disponível!');
+            console.error('❌ renderStep: contentContainer não disponível!');
             return;
         }
         
-        container.appendChild(stepElement);
+        // 🔥 V8 ULTRA: Verificar se elemento já está no DOM antes de adicionar (ERRO 15)
+        if (!container.contains(stepElement)) {
+            container.appendChild(stepElement);
+        } else {
+            console.warn('⚠️ Step já está no DOM, pulando appendChild:', stepId);
+        }
         console.log('✅ Step adicionado ao container:', {
             stepId: stepId,
             container: container.className || container.id,
@@ -2508,9 +2575,16 @@ class FlowEditor {
                     }
                 });
                 
-                // ✅ V2.0 FRONTEND: SVG overlay SEMPRE no canvas (não contentContainer)
-                const svgOverlay = this.canvas.querySelector('svg.jtk-overlay') || 
-                                 this.canvas.querySelector('svg');
+                // 🔥 V8 ULTRA: Buscar SVG overlay em ambos os lugares (ERRO 14)
+                // jsPlumb pode criar no canvas OU no contentContainer
+                let svgOverlay = this.canvas.querySelector('svg.jtk-overlay') || 
+                               this.canvas.querySelector('svg');
+                
+                // Se não encontrou no canvas, buscar no contentContainer
+                if (!svgOverlay && this.contentContainer) {
+                    svgOverlay = this.contentContainer.querySelector('svg.jtk-overlay') ||
+                                this.contentContainer.querySelector('svg');
+                }
                 if (svgOverlay) {
                     const svgStyle = window.getComputedStyle(svgOverlay);
                     if (svgStyle.display === 'none' || svgStyle.visibility === 'hidden' || svgStyle.opacity === '0') {
@@ -3090,8 +3164,19 @@ class FlowEditor {
             return;
         }
         
-        // Garantir container correto
-        const container = this.instance.getContainer ? this.instance.getContainer() : this.contentContainer;
+        // 🔥 V8 ULTRA: Garantir container correto (ERRO 3)
+        // Container DEVE ser contentContainer (não canvas)
+        if (!this.contentContainer) {
+            console.error('❌ [V8] setupDraggableForStep: contentContainer não existe!');
+            setTimeout(() => {
+                if (this.contentContainer && stepElement && stepElement.parentElement) {
+                    this.setupDraggableForStep(stepElement, stepId, innerWrapper);
+                }
+            }, 100);
+            return;
+        }
+        
+        const container = this.contentContainer; // 🔥 V8: Sempre usar contentContainer
         if (container && !container.contains(stepElement)) {
             container.appendChild(stepElement);
         }
@@ -3123,9 +3208,21 @@ class FlowEditor {
                     this.instance.revalidate(stepElement);
                     this.throttledRepaint();
                 }
-                // Salvar posição com snap
-                const pos = params.pos || [0, 0];
-                const snapped = this.snapToGrid(pos[0], pos[1], false);
+                // 🔥 V8 ULTRA: Validar posição antes de aplicar snap (ERRO 13)
+                // Se params.pos não existe, obter posição real do elemento
+                let x, y;
+                if (params.pos && params.pos.length >= 2) {
+                    x = params.pos[0];
+                    y = params.pos[1];
+                } else {
+                    // Obter posição real do elemento
+                    const currentPos = this.getElementRealPosition(stepElement);
+                    x = currentPos.x;
+                    y = currentPos.y;
+                }
+                
+                // Aplicar snap
+                const snapped = this.snapToGrid(x, y, false);
                 this.setElementPosition(stepElement, snapped.x, snapped.y, false);
                 this.updateStepPosition(stepId, { x: snapped.x, y: snapped.y });
             },
@@ -3471,7 +3568,7 @@ class FlowEditor {
             }
         });
         
-        // 🔥 V7 PROFISSIONAL: Criar conexões que faltam com retry automático
+        // 🔥 V8 ULTRA: Criar conexões que faltam com validação robusta (ERRO 7)
         requestAnimationFrame(() => {
             const pendingConnections = [];
             
@@ -3482,9 +3579,21 @@ class FlowEditor {
                 }
                 
                 try {
+                    // 🔥 V8 ULTRA: Validar que endpoints existem ANTES de conectar (ERRO 7)
                     const srcEp = this.instance.getEndpoint(desired.sourceUuid);
                     const tgtEp = this.instance.getEndpoint(desired.targetUuid);
-                                if (srcEp && tgtEp) {
+                    
+                    if (!srcEp) {
+                        console.warn(`⚠️ [V8] Endpoint source não encontrado: ${desired.sourceUuid}`);
+                        return; // Não criar conexão se endpoint não existe
+                    }
+                    
+                    if (!tgtEp) {
+                        console.warn(`⚠️ [V8] Endpoint target não encontrado: ${desired.targetUuid}`);
+                        return; // Não criar conexão se endpoint não existe
+                    }
+                    
+                    if (srcEp && tgtEp) {
                                     // 🔥 V2.0 CONNECTORS: Criar conexão com estilos e overlays apropriados
                                     const conn = this.instance.connect({ 
                                         source: srcEp,
