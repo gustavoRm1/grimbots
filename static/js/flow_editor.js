@@ -98,10 +98,12 @@ class FlowEditor {
             this.enableActionButtonsDelegation(); // Event delegation como fallback
         }, 100);
         
-        // Renderizar steps após setup
+        // 🔥 V8 ULTRA: Renderizar steps após setup com delay maior para garantir que tudo está pronto
         setTimeout(() => {
+            console.log('🔵 Renderizando steps...');
             this.renderAllSteps();
-        }, 50);
+            console.log('✅ Steps renderizados');
+        }, 100);
     }
     
     /**
@@ -227,12 +229,48 @@ class FlowEditor {
      */
     setupJsPlumb() {
         try {
+            // 🔥 V8 ULTRA: Garantir que contentContainer existe antes de inicializar jsPlumb
+            if (!this.contentContainer) {
+                console.error('❌ setupJsPlumb: contentContainer não existe! Tentando criar...');
+                this.setupCanvas();
+            }
+            
+            if (!this.contentContainer) {
+                console.error('❌ setupJsPlumb: contentContainer ainda não existe após setupCanvas!');
+                return;
+            }
+            
             // CRÍTICO: Container deve ser o contentContainer (onde os elementos estão)
             // Não usar this.canvas porque os elementos estão dentro de contentContainer
-            const container = this.contentContainer || this.canvas;
+            const container = this.contentContainer;
+            
+            console.log('🔵 Inicializando jsPlumb com container:', {
+                container: container,
+                containerId: container.id || 'sem-id',
+                containerClass: container.className,
+                hasChildren: container.children.length
+            });
+            
+            // 🔥 V8 ULTRA: Verificar se container está no DOM antes de inicializar jsPlumb
+            if (!container.parentElement) {
+                console.error('❌ setupJsPlumb: container não está no DOM!', container);
+                return;
+            }
             
             this.instance = jsPlumb.getInstance({
                 Container: container
+            });
+            
+            // 🔥 V8 ULTRA: Verificar se instance foi criado corretamente
+            if (!this.instance) {
+                console.error('❌ setupJsPlumb: jsPlumb.getInstance retornou null!');
+                return;
+            }
+            
+            console.log('✅ jsPlumb instance criado:', {
+                container: container.className || container.id,
+                containerInDOM: !!container.parentElement,
+                hasGetContainer: typeof this.instance.getContainer === 'function'
             });
             
             // Defaults: conexões brancas suaves estilo ManyChat
@@ -281,9 +319,22 @@ class FlowEditor {
                 }
             });
             
-            console.log('✅ jsPlumb inicializado');
+            // 🔥 V8 ULTRA: Habilitar conexões arrastáveis explicitamente
+            try {
+                this.instance.setSuspendDrawing(false);
+                this.instance.setContainer(container);
+            } catch(e) {
+                console.warn('⚠️ Erro ao configurar container:', e);
+            }
+            
+            console.log('✅ jsPlumb inicializado:', {
+                container: container.className || container.id,
+                hasInstance: !!this.instance,
+                containerChildren: container.children.length
+            });
         } catch (error) {
             console.error('❌ Erro ao inicializar jsPlumb:', error);
+            console.error('Stack:', error.stack);
         }
     }
     
@@ -292,12 +343,16 @@ class FlowEditor {
      * PATCH V4.0 - ManyChat Perfect
      */
     setupCanvas() {
-        if (!this.canvas) return;
+        if (!this.canvas) {
+            console.error('❌ setupCanvas: canvas não encontrado');
+            return;
+        }
         
-        // Ensure we use the #flow-visual-canvas element
-        // If flow-canvas-content already exists, reuse it
+        // 🔥 V8 ULTRA: Garantir que contentContainer existe e está correto
+        // Se flow-canvas-content já existe no HTML, reutilizar
         let content = this.canvas.querySelector('.flow-canvas-content');
         if (!content) {
+            console.log('🔵 Criando contentContainer...');
             content = document.createElement('div');
             content.className = 'flow-canvas-content';
             content.style.cssText = 'position:absolute; left:0; top:0; width:100%; height:100%; transform-origin:0 0; will-change:transform;';
@@ -308,8 +363,26 @@ class FlowEditor {
                 }
             });
             this.canvas.appendChild(content);
+        } else {
+            console.log('✅ contentContainer encontrado no HTML, reutilizando');
         }
+        
+        // CRÍTICO: Garantir que contentContainer tem os estilos corretos
+        content.style.position = 'absolute';
+        content.style.left = '0';
+        content.style.top = '0';
+        content.style.width = '100%';
+        content.style.height = '100%';
+        content.style.transformOrigin = '0 0';
+        content.style.willChange = 'transform';
+        content.style.pointerEvents = 'auto';
+        
         this.contentContainer = content;
+        console.log('✅ contentContainer configurado:', {
+            exists: !!this.contentContainer,
+            parent: this.contentContainer?.parentElement?.id,
+            children: this.contentContainer?.children?.length || 0
+        });
         
         // Ensure canvas base styles (grid)
         this.canvas.style.position = 'relative';
@@ -601,10 +674,27 @@ class FlowEditor {
             ${!hasButtons ? '<div class="flow-step-node-output-global" style="position: absolute; right: -8px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; z-index: 60; pointer-events: none;"></div>' : ''}
         `;
         
-        // Append inner to step and to contentContainer
+        // 🔥 V8 ULTRA: Append inner to step and to contentContainer
         stepElement.appendChild(inner);
+        
+        // CRÍTICO: Garantir que contentContainer existe
+        if (!this.contentContainer) {
+            console.error('❌ renderStep: contentContainer não existe! Tentando criar...');
+            this.setupCanvas();
+        }
+        
         const container = this.contentContainer || this.canvas;
+        if (!container) {
+            console.error('❌ renderStep: Nenhum container disponível!');
+            return;
+        }
+        
         container.appendChild(stepElement);
+        console.log('✅ Step adicionado ao container:', {
+            stepId: stepId,
+            container: container.className || container.id,
+            containerChildren: container.children.length
+        });
         
         // CRÍTICO: Desabilitar draggable explicitamente no footer e botões ANTES de tornar o step draggable
         const footer = inner.querySelector('.flow-step-footer');
@@ -621,17 +711,51 @@ class FlowEditor {
             });
         }
         
-        // 🔥 V5.0: Make draggable apenas pelo handle (não pelo card inteiro)
+        // 🔥 V8 ULTRA: Make draggable apenas pelo handle (não pelo card inteiro)
         const dragHandle = inner.querySelector('.flow-drag-handle');
-        this.instance.draggable(stepElement, {
-            containment: container,
-            handle: dragHandle || undefined, // Se não encontrar handle, usar card inteiro (fallback)
-            drag: (params) => this.onStepDrag(params),
-            stop: (params) => this.onStepDragStop(params),
-            cursor: 'move',
-            start: (params) => {
-                // Ensure endpoints don't steal start events
-                // no-op
+        
+        if (!this.instance) {
+            console.error('❌ renderStep: jsPlumb instance não existe!');
+            return;
+        }
+        
+        // 🔥 V8 ULTRA: Aguardar DOM estar pronto antes de configurar draggable
+        requestAnimationFrame(() => {
+            try {
+                // CRÍTICO: Garantir que draggable está configurado corretamente
+                const draggableOptions = {
+                    containment: container,
+                    drag: (params) => this.onStepDrag(params),
+                    stop: (params) => this.onStepDragStop(params),
+                    cursor: 'move',
+                    start: (params) => {
+                        // Ensure endpoints don't steal start events
+                        // no-op
+                    }
+                };
+                
+                // Se dragHandle existe, usar apenas ele; senão, permitir drag pelo card inteiro
+                if (dragHandle) {
+                    draggableOptions.handle = dragHandle;
+                    console.log('✅ Drag configurado com handle para step:', stepId);
+                } else {
+                    console.warn('⚠️ Drag handle não encontrado, usando card inteiro para step:', stepId);
+                    // Sem handle: permitir drag pelo card inteiro, mas excluir footer e botões
+                    draggableOptions.filter = '.flow-step-footer, .flow-step-btn-action, .jtk-endpoint';
+                }
+                
+                this.instance.draggable(stepElement, draggableOptions);
+                console.log('✅ Draggable configurado para step:', stepId, {
+                    hasHandle: !!dragHandle,
+                    container: container.className || container.id
+                });
+            } catch (error) {
+                console.error('❌ Erro ao configurar draggable:', error, {
+                    stepId: stepId,
+                    hasInstance: !!this.instance,
+                    hasElement: !!stepElement,
+                    hasContainer: !!container
+                });
             }
         });
         
@@ -641,11 +765,19 @@ class FlowEditor {
         // 🔥 V5.0: Reset flag de endpoints antes de criar
         stepElement.dataset.endpointsInited = 'false';
         
-        // Add endpoints after DOM layout calculated
+        // 🔥 V8 ULTRA: Add endpoints after DOM layout calculated com delay maior
         requestAnimationFrame(() => {
             requestAnimationFrame(() => {
-                this.addEndpoints(stepElement, stepId, step);
-                try { this.instance.revalidate(stepElement); this.instance.repaintEverything(); } catch(e) {}
+                setTimeout(() => {
+                    this.addEndpoints(stepElement, stepId, step);
+                    try { 
+                        this.instance.revalidate(stepElement); 
+                        this.instance.repaintEverything(); 
+                        console.log('✅ Step renderizado e endpoints criados:', stepId);
+                    } catch(e) {
+                        console.error('❌ Erro ao revalidar step:', e);
+                    }
+                }, 50);
             });
         });
     }
@@ -1166,14 +1298,38 @@ class FlowEditor {
      * CRÍTICO: Garante que nodes HTML existam antes de criar endpoints
      */
     addEndpoints(element, stepId, step) {
-        if (!this.instance || !element) return;
+        if (!this.instance) {
+            console.error('❌ addEndpoints: jsPlumb instance não existe');
+            return;
+        }
+        
+        if (!element) {
+            console.error('❌ addEndpoints: element não existe');
+            return;
+        }
+        
+        // 🔥 V8 ULTRA: Verificar se element está no DOM antes de criar endpoints
+        if (!element.parentElement) {
+            console.error('❌ addEndpoints: element não está no DOM!', stepId);
+            return;
+        }
+        
+        console.log('🔵 addEndpoints chamado para step:', stepId, {
+            element: element,
+            parent: element.parentElement?.className || 'sem-parent',
+            hasInstance: !!this.instance,
+            endpointsInited: element.dataset.endpointsInited
+        });
         
         // CRÍTICO: Verificar flag dataset para evitar múltiplas criações
         if (element.dataset.endpointsInited === 'true') {
             // Endpoints já foram inicializados, apenas revalidar
+            console.log('ℹ️ Endpoints já inicializados para step:', stepId, '- apenas revalidando');
             try {
                 this.instance.revalidate(element);
-            } catch(e) {}
+            } catch(e) {
+                console.error('❌ Erro ao revalidar:', e);
+            }
             return;
         }
         
@@ -1298,10 +1454,28 @@ class FlowEditor {
         // Marcar como inicializado APENAS após criar todos os endpoints
         element.dataset.endpointsInited = 'true';
         
+        // 🔥 V8 ULTRA: Garantir que todos os endpoints têm pointer-events: auto
+        try {
+            const allEndpoints = this.instance.getEndpoints(element);
+            allEndpoints.forEach(endpoint => {
+                if (endpoint && endpoint.canvas) {
+                    endpoint.canvas.style.pointerEvents = 'auto';
+                    endpoint.canvas.style.zIndex = '9999';
+                    endpoint.canvas.style.cursor = 'crosshair';
+                }
+            });
+            console.log(`✅ ${allEndpoints.length} endpoints configurados para step:`, stepId);
+        } catch(e) {
+            console.error('❌ Erro ao configurar endpoints:', e);
+        }
+        
         // Revalidar após criar endpoints
         try {
             this.instance.revalidate(element);
-        } catch(e) {}
+            this.instance.repaintEverything();
+        } catch(e) {
+            console.error('❌ Erro ao revalidar:', e);
+        }
     }
     
     /**
