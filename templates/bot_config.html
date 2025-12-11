@@ -668,7 +668,7 @@ svg .jtk-endpoint circle {
     opacity: 1 !important;
 }
 
-/* 🔥 MELHORIA VISUAL: Endpoints mais visíveis e atraentes */
+/* 🔥 V7 PROFISSIONAL: Endpoints mais visíveis e atraentes - ManyChat Level */
 .jtk-endpoint circle {
     filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3)) !important;
     transition: all 0.2s ease !important;
@@ -679,15 +679,53 @@ svg .jtk-endpoint circle {
     transform: scale(1.15) !important;
 }
 
-/* Garantir que SVG overlay está acima de tudo */
+/* 🔥 V7 PROFISSIONAL: Garantir que SVG overlay está acima de tudo */
 #flow-visual-canvas svg {
     z-index: 10001 !important;
     pointer-events: none !important;
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
 }
 
 #flow-visual-canvas svg .jtk-endpoint {
     pointer-events: auto !important;
     z-index: 10002 !important;
+}
+
+/* 🔥 V7 PROFISSIONAL: Endpoints de entrada (input) - verde */
+.jtk-endpoint[data-endpoint-type="input"] circle,
+svg circle[data-endpoint-type="input"] {
+    fill: #10B981 !important;
+    stroke: #FFFFFF !important;
+    stroke-width: 2 !important;
+    r: 7 !important;
+}
+
+/* 🔥 V7 PROFISSIONAL: Endpoints de saída (output) - branco */
+.jtk-endpoint[data-endpoint-type="output"] circle,
+.jtk-endpoint[data-endpoint-type="global"] circle,
+svg circle[data-endpoint-type="output"],
+svg circle[data-endpoint-type="global"] {
+    fill: #FFFFFF !important;
+    stroke: #0D0F15 !important;
+    stroke-width: 2 !important;
+    r: 7 !important;
+}
+
+/* 🔥 V7 PROFISSIONAL: Endpoints de botão - branco menor */
+.jtk-endpoint[data-endpoint-type="button"] circle,
+svg circle[data-endpoint-type="button"] {
+    fill: #FFFFFF !important;
+    stroke: #0D0F15 !important;
+    stroke-width: 2 !important;
+    r: 6 !important;
+}
+
+/* 🔥 V7 PROFISSIONAL: Canvas não deve ter transform */
+#flow-visual-canvas {
+    transform: none !important;
+    background-position: 0 0 !important;
 }
 
 /* Provide a visible pin outside the card for custom fallback */

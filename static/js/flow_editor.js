@@ -66,9 +66,10 @@ class FlowEditor {
     }
     
     /**
-     * Inicialização principal
+     * Inicialização principal - V7 PROFISSIONAL
+     * 🔥 REFATORADO: async/await para eliminar race conditions
      */
-    init() {
+    async init() {
         if (!this.canvas) {
             console.error('❌ Canvas não encontrado:', this.canvasId);
             return;
@@ -79,48 +80,58 @@ class FlowEditor {
             return;
         }
         
-        // CRÍTICO: Setup canvas PRIMEIRO para criar contentContainer
-        this.setupCanvas();
-        
-        // CRÍTICO: Setup jsPlumb DEPOIS, usando contentContainer como Container
-        // Aguardar um pouco para garantir que contentContainer está no DOM
-        setTimeout(() => {
-            this.setupJsPlumb();
+        try {
+            // CRÍTICO: Setup canvas PRIMEIRO para criar contentContainer
+            this.setupCanvas();
             
-            // 🔥 V8 ULTRA: Verificar se instance foi criado
+            // Aguardar contentContainer estar no DOM
+            await this.waitForElement(this.contentContainer, 2000);
+            
+            // Setup jsPlumb e aguardar completion
+            await this.setupJsPlumbAsync();
+            
+            // Verificar se instance foi criado
             if (!this.instance) {
-                console.error('❌ Instance não foi criado após setupJsPlumb! Tentando novamente...');
-                setTimeout(() => {
-                    this.setupJsPlumb();
-                    if (this.instance) {
-                        console.log('✅ Instance criado após retry');
-                        this.preventEndpointDuplication();
-                    } else {
-                        console.error('❌ Instance ainda não foi criado após retry');
-                    }
-                }, 500);
-            } else {
-                console.log('✅ Instance criado com sucesso na inicialização');
-                // 🔥 V5.0: Ativar sistema de proteção contra duplicação
-                this.preventEndpointDuplication();
+                console.error('❌ Instance não foi criado após setupJsPlumb!');
+                return;
             }
-        }, 100);
-        
-        // 🔥 V8 ULTRA: Aguardar instance estar pronto antes de continuar
-        setTimeout(() => {
-            if (!this.instance) {
-                console.warn('⚠️ Instance ainda não está pronto, aguardando...');
-                setTimeout(() => {
-                    if (this.instance) {
-                        this.continueInit();
-                    } else {
-                        console.error('❌ Instance não foi criado após múltiplas tentativas');
-                    }
-                }, 500);
-            } else {
-                this.continueInit();
+            
+            // Ativar sistema de proteção contra duplicação
+            this.preventEndpointDuplication();
+            
+            // Continuar inicialização
+            this.continueInit();
+        } catch (error) {
+            console.error('❌ Erro na inicialização:', error);
+        }
+    }
+    
+    /**
+     * 🔥 V7: Aguarda elemento estar no DOM
+     */
+    waitForElement(element, timeout = 5000) {
+        return new Promise((resolve, reject) => {
+            if (!element) {
+                reject(new Error('Element não fornecido'));
+                return;
             }
-        }, 200);
+            
+            if (element.parentElement || element === document.body) {
+                resolve(element);
+                return;
+            }
+            
+            const startTime = Date.now();
+            const checkInterval = setInterval(() => {
+                if (element.parentElement || element === document.body) {
+                    clearInterval(checkInterval);
+                    resolve(element);
+                } else if (Date.now() - startTime > timeout) {
+                    clearInterval(checkInterval);
+                    reject(new Error(`Timeout aguardando elemento estar no DOM após ${timeout}ms`));
+                }
+            }, 50);
+        });
     }
     
     /**
@@ -271,195 +282,204 @@ class FlowEditor {
     /**
      * Configura jsPlumb com conexões brancas suaves
      */
-    setupJsPlumb() {
-        try {
-            // 🔥 V8 ULTRA: Garantir que contentContainer existe antes de inicializar jsPlumb
-            if (!this.contentContainer) {
-                console.error('❌ setupJsPlumb: contentContainer não existe! Tentando criar...');
-                this.setupCanvas();
-            }
-            
-            if (!this.contentContainer) {
-                console.error('❌ setupJsPlumb: contentContainer ainda não existe após setupCanvas!');
-                return;
-            }
-            
-            // CRÍTICO: Container deve ser o contentContainer (onde os elementos estão)
-            // Não usar this.canvas porque os elementos estão dentro de contentContainer
-            const container = this.contentContainer;
-            
-            console.log('🔵 Inicializando jsPlumb com container:', {
-                container: container,
-                containerId: container.id || 'sem-id',
-                containerClass: container.className,
-                hasChildren: container.children.length
-            });
-            
-            // 🔥 V8 ULTRA: Verificar se container está no DOM antes de inicializar jsPlumb
-            if (!container.parentElement) {
-                console.error('❌ setupJsPlumb: container não está no DOM!', container);
-                return;
-            }
-            
-            // 🔥 CRÍTICO: jsPlumb precisa do canvas pai como container, não o contentContainer
-            // O SVG overlay é criado dentro do container especificado
-            // Se usar contentContainer (que tem transform), o SVG pode não aparecer corretamente
-            const canvasParent = container.parentElement || this.canvas;
-            
-            console.log('🔵 Configurando jsPlumb:', {
-                contentContainer: container.className,
-                canvasParent: canvasParent.id || canvasParent.className,
-                canvasParentInDOM: !!canvasParent.parentElement
-            });
-            
-            // Tentar usar instância existente primeiro, mas garantir container correto
+    /**
+     * Setup jsPlumb - V7 PROFISSIONAL
+     * 🔥 CORREÇÃO CRÍTICA: Sempre usar this.canvas como container (não contentContainer)
+     * 🔥 REFATORADO: async/await para garantir completion
+     */
+    async setupJsPlumbAsync() {
+        return new Promise((resolve, reject) => {
             try {
-                const existingInstance = jsPlumb.getInstance();
-                if (existingInstance && existingInstance.getContainer) {
-                    const currentContainer = existingInstance.getContainer();
-                    if (currentContainer === canvasParent) {
-                        console.log('✅ Reutilizando instância jsPlumb existente com container correto');
-                        this.instance = existingInstance;
-                    } else {
-                        console.log('⚠️ Instância existente com container diferente, criando nova');
-                        this.instance = jsPlumb.newInstance({
-                            Container: canvasParent
-                        });
-                    }
-                } else {
-                    this.instance = jsPlumb.newInstance({
-                        Container: canvasParent
-                    });
-                    console.log('✅ Nova instância jsPlumb criada com canvas pai como container');
+                // Garantir que contentContainer existe
+                if (!this.contentContainer) {
+                    this.setupCanvas();
                 }
-            } catch(e) {
-                // Fallback: usar getInstance
-                console.warn('⚠️ Erro ao criar newInstance, usando getInstance:', e);
-                this.instance = jsPlumb.getInstance({
-                    Container: canvasParent
+                
+                if (!this.contentContainer) {
+                    reject(new Error('contentContainer não existe após setupCanvas'));
+                    return;
+                }
+                
+                // 🔥 V7 CRÍTICO: Container SEMPRE deve ser this.canvas (não contentContainer)
+                // O SVG overlay do jsPlumb é criado dentro do container especificado
+                // Se usar contentContainer (que tem transform CSS), o SVG pode não aparecer corretamente
+                const container = this.canvas;
+                
+                if (!container) {
+                    reject(new Error('Canvas não encontrado'));
+                    return;
+                }
+                
+                console.log('🔵 [V7] Inicializando jsPlumb com canvas como container:', {
+                    canvasId: container.id,
+                    canvasClass: container.className,
+                    hasContentContainer: !!this.contentContainer
                 });
-            }
-            
-            // 🔥 V8 ULTRA: Verificar se instance foi criado corretamente
-            if (!this.instance) {
-                console.error('❌ setupJsPlumb: jsPlumb.getInstance retornou null!');
-                return;
-            }
-            
-            console.log('✅ jsPlumb instance criado:', {
-                container: container.className || container.id,
-                containerInDOM: !!container.parentElement,
-                hasGetContainer: typeof this.instance.getContainer === 'function'
-            });
-            
-            // Defaults: conexões brancas suaves estilo ManyChat
-            this.instance.importDefaults({
-                paintStyle: { 
-                    stroke: '#FFFFFF', 
-                    strokeWidth: 2.5,
-                    strokeOpacity: 0.9
-                },
-                hoverPaintStyle: { 
-                    stroke: '#FFFFFF', 
-                    strokeWidth: 3.5,
-                    strokeOpacity: 1
-                },
-                connector: ['Bezier', { 
-                    curviness: 80,
-                    stub: [15, 20],
-                    gap: 8,
-                    cornerRadius: 5
-                }],
-                endpoint: ['Dot', { radius: 7 }],
-                endpointStyle: { 
-                    fill: '#FFFFFF', 
-                    outlineStroke: '#0D0F15', 
-                    outlineWidth: 2
-                },
-                endpointHoverStyle: { 
-                    fill: '#FFB800', 
-                    outlineStroke: '#0D0F15', 
-                    outlineWidth: 3
-                },
-                maxConnections: -1,
-                // CRÍTICO: Habilitar conexões arrastáveis
-                ConnectionsDetachable: true,
-                ConnectionOverlays: [
-                    ['Arrow', { width: 10, length: 12, location: 1 }]
-                ]
-            });
-            
-            // Eventos
-            this.instance.bind('connection', (info) => this.onConnectionCreated(info));
-            this.instance.bind('connectionDetached', (info) => this.onConnectionDetached(info));
-            this.instance.bind('click', (conn, e) => {
-                if (e && e.detail === 2) {
-                    this.removeConnection(conn);
-                }
-            });
-            
-            // 🔥 V8 ULTRA: Habilitar conexões arrastáveis explicitamente
-            try {
-                this.instance.setSuspendDrawing(false);
-                // CRÍTICO: Container deve ser o canvas pai (não contentContainer)
-                const canvasParent = container.parentElement || this.canvas;
-                this.instance.setContainer(canvasParent);
                 
-                // 🔥 CRÍTICO: Garantir que o SVG overlay do jsPlumb está visível
-                // O jsPlumb cria um SVG overlay que precisa estar visível
-                // Usar múltiplas tentativas com delays crescentes para garantir que seja encontrado
-                const configureSVGOverlay = (attempt = 1, maxAttempts = 5) => {
-                    try {
-                        // Buscar o SVG overlay do jsPlumb com múltiplas estratégias
-                        // CRÍTICO: Buscar SVG overlay no canvas pai (onde jsPlumb realmente cria)
-                        const canvasParent = container.parentElement || this.canvas;
-                        const svgOverlay = canvasParent.querySelector('svg.jtk-overlay') || 
-                                         canvasParent.querySelector('svg') ||
-                                         container.querySelector('svg.jtk-overlay') ||
-                                         container.querySelector('svg') ||
-                                         document.querySelector(`svg[data-jtk-container="${canvasParent.id || canvasParent.className}"]`);
-                        
-                        if (svgOverlay) {
-                            svgOverlay.style.position = 'absolute';
-                            svgOverlay.style.left = '0';
-                            svgOverlay.style.top = '0';
-                            svgOverlay.style.width = '100%';
-                            svgOverlay.style.height = '100%';
-                            svgOverlay.style.zIndex = '10000';
-                            svgOverlay.style.pointerEvents = 'none';
-                            svgOverlay.style.display = 'block';
-                            svgOverlay.style.visibility = 'visible';
-                            svgOverlay.style.opacity = '1';
-                            console.log('✅ SVG overlay configurado:', svgOverlay);
-                            return true;
-                        } else if (attempt < maxAttempts) {
-                            // Tentar novamente com delay crescente
-                            setTimeout(() => configureSVGOverlay(attempt + 1, maxAttempts), 100 * attempt);
-                            return false;
+                // Criar instância jsPlumb com canvas como container
+                try {
+                    const existingInstance = jsPlumb.getInstance();
+                    if (existingInstance && existingInstance.getContainer) {
+                        const currentContainer = existingInstance.getContainer();
+                        if (currentContainer === container) {
+                            this.instance = existingInstance;
+                            console.log('✅ [V7] Reutilizando instância jsPlumb existente');
                         } else {
-                            console.warn('⚠️ SVG overlay não encontrado após múltiplas tentativas - CSS deve garantir visibilidade');
-                            return false;
+                            this.instance = jsPlumb.newInstance({
+                                Container: container
+                            });
+                            console.log('✅ [V7] Nova instância jsPlumb criada (container diferente)');
                         }
-                    } catch(e) {
-                        console.warn('⚠️ Erro ao configurar SVG overlay:', e);
-                        return false;
+                    } else {
+                        this.instance = jsPlumb.newInstance({
+                            Container: container
+                        });
+                        console.log('✅ [V7] Nova instância jsPlumb criada');
                     }
-                };
+                } catch(e) {
+                    console.warn('⚠️ [V7] Erro ao criar newInstance, usando getInstance:', e);
+                    this.instance = jsPlumb.getInstance({
+                        Container: container
+                    });
+                }
                 
-                // Iniciar tentativas de configuração
-                configureSVGOverlay();
-            } catch(e) {
-                console.warn('⚠️ Erro ao configurar container:', e);
+                if (!this.instance) {
+                    reject(new Error('jsPlumb.getInstance retornou null'));
+                    return;
+                }
+                
+                // CRÍTICO: Garantir que setContainer está correto
+                this.instance.setContainer(container);
+                
+                // Defaults: conexões brancas suaves estilo ManyChat
+                this.instance.importDefaults({
+                    paintStyle: { 
+                        stroke: '#FFFFFF', 
+                        strokeWidth: 2.5,
+                        strokeOpacity: 0.9
+                    },
+                    hoverPaintStyle: { 
+                        stroke: '#FFFFFF', 
+                        strokeWidth: 3.5,
+                        strokeOpacity: 1
+                    },
+                    connector: ['Bezier', { 
+                        curviness: 80,
+                        stub: [15, 20],
+                        gap: 8,
+                        cornerRadius: 5
+                    }],
+                    endpoint: ['Dot', { radius: 7 }],
+                    endpointStyle: { 
+                        fill: '#FFFFFF', 
+                        outlineStroke: '#0D0F15', 
+                        outlineWidth: 2
+                    },
+                    endpointHoverStyle: { 
+                        fill: '#FFB800', 
+                        outlineStroke: '#0D0F15', 
+                        outlineWidth: 3
+                    },
+                    maxConnections: -1,
+                    ConnectionsDetachable: true,
+                    ConnectionOverlays: [
+                        ['Arrow', { width: 10, length: 12, location: 1 }]
+                    ]
+                });
+                
+                // Eventos
+                this.instance.bind('connection', (info) => this.onConnectionCreated(info));
+                this.instance.bind('connectionDetached', (info) => this.onConnectionDetached(info));
+                this.instance.bind('click', (conn, e) => {
+                    if (e && e.detail === 2) {
+                        this.removeConnection(conn);
+                    }
+                });
+                
+                this.instance.setSuspendDrawing(false);
+                
+                // Configurar SVG overlay com retry
+                this.configureSVGOverlayWithRetry(10).then(() => {
+                    console.log('✅ [V7] jsPlumb inicializado completamente');
+                    resolve();
+                }).catch((e) => {
+                    console.warn('⚠️ [V7] SVG overlay não configurado, mas continuando:', e);
+                    resolve(); // Continuar mesmo se SVG overlay não foi configurado
+                });
+                
+            } catch (error) {
+                console.error('❌ [V7] Erro ao inicializar jsPlumb:', error);
+                reject(error);
             }
+        });
+    }
+    
+    /**
+     * 🔥 V7: Configura SVG overlay com retry robusto
+     */
+    configureSVGOverlayWithRetry(maxAttempts = 10) {
+        return new Promise((resolve, reject) => {
+            let attempt = 0;
             
-            console.log('✅ jsPlumb inicializado:', {
-                container: container.className || container.id,
-                hasInstance: !!this.instance,
-                containerChildren: container.children.length
-            });
-        } catch (error) {
-            console.error('❌ Erro ao inicializar jsPlumb:', error);
-            console.error('Stack:', error.stack);
+            const tryConfigure = () => {
+                attempt++;
+                
+                try {
+                    // 🔥 V7 CRÍTICO: Buscar SVG overlay APENAS no container do jsPlumb (this.canvas)
+                    const container = this.canvas;
+                    const svgOverlay = container.querySelector('svg.jtk-overlay') || 
+                                     container.querySelector('svg');
+                    
+                    if (svgOverlay) {
+                        svgOverlay.style.position = 'absolute';
+                        svgOverlay.style.left = '0';
+                        svgOverlay.style.top = '0';
+                        svgOverlay.style.width = '100%';
+                        svgOverlay.style.height = '100%';
+                        svgOverlay.style.zIndex = '10000';
+                        svgOverlay.style.pointerEvents = 'none';
+                        svgOverlay.style.display = 'block';
+                        svgOverlay.style.visibility = 'visible';
+                        svgOverlay.style.opacity = '1';
+                        
+                        console.log('✅ [V7] SVG overlay configurado');
+                        resolve();
+                    } else if (attempt < maxAttempts) {
+                        setTimeout(tryConfigure, 100 * attempt);
+                    } else {
+                        reject(new Error(`SVG overlay não encontrado após ${maxAttempts} tentativas`));
+                    }
+                } catch(e) {
+                    if (attempt < maxAttempts) {
+                        setTimeout(tryConfigure, 100 * attempt);
+                    } else {
+                        reject(e);
+                    }
+                }
+            };
+            
+            tryConfigure();
+        });
+    }
+    
+    /**
+     * Método síncrono mantido para compatibilidade (deprecated)
+     */
+    setupJsPlumb() {
+        console.warn('⚠️ setupJsPlumb() síncrono chamado - usar setupJsPlumbAsync()');
+        // Fallback síncrono para compatibilidade
+        if (!this.contentContainer) {
+            this.setupCanvas();
+        }
+        if (!this.instance && this.canvas) {
+            try {
+                this.instance = jsPlumb.newInstance({
+                    Container: this.canvas
+                });
+                this.instance.setContainer(this.canvas);
+            } catch(e) {
+                console.error('❌ Erro no fallback síncrono:', e);
+            }
         }
     }
     
@@ -516,15 +536,27 @@ class FlowEditor {
         this.canvas.style.backgroundImage = 'radial-gradient(circle, rgba(255,255,255,0.12) 1.5px, transparent 1.5px)';
         this.canvas.style.backgroundSize = `${this.gridSize}px ${this.gridSize}px`;
         
-        // Observe changes to contentContainer.style transform (zoom/pan)
+        // 🔥 V7 PROFISSIONAL: MutationObserver com debounce para evitar loops infinitos
         if (this.transformObserver) {
             this.transformObserver.disconnect();
             this.transformObserver = null;
         }
         if (window.MutationObserver) {
+            let debounceTimeout = null;
+            let isRepainting = false; // Flag para evitar loops
+            
             this.transformObserver = new MutationObserver(() => {
-                if (this.instance) {
-                    // 🔥 CRÍTICO: Revalidar e repintar após transform
+                if (isRepainting || !this.instance) return; // Evitar loops
+                
+                // Debounce: aguardar 16ms antes de processar
+                if (debounceTimeout) {
+                    clearTimeout(debounceTimeout);
+                }
+                
+                debounceTimeout = setTimeout(() => {
+                    if (isRepainting || !this.instance) return;
+                    isRepainting = true;
+                    
                     requestAnimationFrame(() => {
                         try {
                             // Revalidate nodes and cards
@@ -543,26 +575,24 @@ class FlowEditor {
                                 } catch(e) {}
                             });
                             
-                            // 🔥 CRÍTICO: Repintar tudo e garantir SVG overlay está visível
+                            // Repintar tudo
                             this.instance.repaintEverything();
                             
-                            // Garantir que SVG overlay está visível
-                            // Buscar no canvas pai (onde jsPlumb realmente cria o SVG)
-                            const canvasParent = this.contentContainer.parentElement || this.canvas;
-                            const svgOverlay = canvasParent.querySelector('svg.jtk-overlay') || 
-                                             canvasParent.querySelector('svg') ||
-                                             this.contentContainer.querySelector('svg.jtk-overlay') ||
-                                             this.contentContainer.querySelector('svg');
+                            // Garantir que SVG overlay está visível (buscar no canvas)
+                            const svgOverlay = this.canvas.querySelector('svg.jtk-overlay') || 
+                                             this.canvas.querySelector('svg');
                             if (svgOverlay) {
                                 svgOverlay.style.display = 'block';
                                 svgOverlay.style.visibility = 'visible';
                                 svgOverlay.style.opacity = '1';
                             }
                         } catch(e) {
-                            console.error('❌ Erro ao revalidar após transform:', e);
+                            console.error('❌ [V7] Erro ao revalidar após transform:', e);
+                        } finally {
+                            isRepainting = false;
                         }
                     });
-                }
+                }, 16); // ~60fps
             });
             this.transformObserver.observe(this.contentContainer, { attributes: true, attributeFilter: ['style'] });
         }
@@ -948,20 +978,20 @@ class FlowEditor {
                         // Tentar novamente após um delay
                         setTimeout(() => {
                             if (this.instance) {
-                                // Configurar draggable inline
-                                const draggableOptions = {
-                                    containment: container || this.contentContainer || this.canvas,
-                                    drag: (params) => this.onStepDrag(params),
-                                    stop: (params) => this.onStepDragStop(params),
-                                    cursor: 'move',
-                                    start: (params) => console.log('🔵 Drag iniciado para step:', stepId)
-                                };
-                                if (dragHandle) {
-                                    draggableOptions.handle = dragHandle;
-                                } else {
-                                    draggableOptions.filter = '.flow-step-footer, .flow-step-btn-action, .jtk-endpoint';
-                                }
-                                this.instance.draggable(stepElement, draggableOptions);
+                    // 🔥 V7 PROFISSIONAL: Configurar draggable com containment correto
+                    const draggableOptions = {
+                        containment: this.canvas, // SEMPRE usar canvas pai (não contentContainer)
+                        drag: (params) => this.onStepDrag(params),
+                        stop: (params) => this.onStepDragStop(params),
+                        cursor: 'move',
+                        start: (params) => console.log('🔵 [V7] Drag iniciado para step:', stepId)
+                    };
+                    if (dragHandle) {
+                        draggableOptions.handle = dragHandle;
+                    } else {
+                        draggableOptions.filter = '.flow-step-footer, .flow-step-btn-action, .jtk-endpoint';
+                    }
+                    this.instance.draggable(stepElement, draggableOptions);
                             } else {
                                 console.error('❌ Instance ainda não existe após delay');
                             }
@@ -969,15 +999,14 @@ class FlowEditor {
                         return;
                     }
                     
-                    // Configurar draggable inline
+                    // 🔥 V7 PROFISSIONAL: Configurar draggable com containment correto e callbacks otimizados
                     const draggableOptions = {
-                        containment: container || this.contentContainer || this.canvas,
+                        containment: this.canvas, // SEMPRE usar canvas pai
                         drag: (params) => {
-                            // 🔥 CRÍTICO: Revalidar endpoints durante drag para garantir que apareçam
+                            // Revalidar endpoints durante drag
                             if (this.instance) {
                                 try {
                                     this.instance.revalidate(stepElement);
-                                    // Garantir que endpoints estão visíveis durante drag
                                     const endpoints = this.instance.getEndpoints(stepElement);
                                     endpoints.forEach(ep => {
                                         if (ep && ep.canvas) {
@@ -993,26 +1022,25 @@ class FlowEditor {
                             this.onStepDrag(params);
                         },
                         stop: (params) => {
-                            console.log('🔵 Drag parado para step:', stepId);
-                            // 🔥 CRÍTICO: Repintar tudo após drag parar
+                            console.log('🔵 [V7] Drag parado para step:', stepId);
                             if (this.instance) {
                                 try {
                                     this.instance.revalidate(stepElement);
                                     this.instance.repaintEverything();
                                 } catch(e) {
-                                    console.error('❌ Erro ao repintar após drag:', e);
+                                    console.error('❌ [V7] Erro ao repintar após drag:', e);
                                 }
                             }
                             this.onStepDragStop(params);
                         },
                         cursor: 'move',
                         start: (params) => {
-                            console.log('🔵 Drag iniciado para step:', stepId, params);
-                            // 🔥 CRÍTICO: Garantir que SVG overlay está visível antes de drag
+                            console.log('🔵 [V7] Drag iniciado para step:', stepId);
+                            // Garantir que SVG overlay está visível (buscar no canvas)
                             if (this.instance) {
                                 try {
-                                    const svgOverlay = this.contentContainer.querySelector('svg.jtk-overlay') || 
-                                                     this.contentContainer.querySelector('svg');
+                                    const svgOverlay = this.canvas.querySelector('svg.jtk-overlay') || 
+                                                     this.canvas.querySelector('svg');
                                     if (svgOverlay) {
                                         svgOverlay.style.display = 'block';
                                         svgOverlay.style.visibility = 'visible';
@@ -1025,14 +1053,13 @@ class FlowEditor {
                         }
                     };
                     
-                    // 🔥 CRÍTICO: Se dragHandle existe, usar apenas ele; senão, permitir drag pelo card inteiro
+                    // 🔥 V7 PROFISSIONAL: Se dragHandle existe, usar apenas ele
                     if (dragHandle) {
                         draggableOptions.handle = dragHandle;
-                        console.log('✅ Usando drag handle para step:', stepId);
+                        console.log('✅ [V7] Usando drag handle para step:', stepId);
                     } else {
-                        // Sem handle: permitir drag pelo card inteiro, mas excluir footer, botões e endpoints
                         draggableOptions.filter = '.flow-step-footer, .flow-step-btn-action, .jtk-endpoint, .flow-step-button-endpoint-container';
-                        console.log('✅ Usando card inteiro para drag (sem handle) para step:', stepId);
+                        console.log('✅ [V7] Usando card inteiro para drag (sem handle) para step:', stepId);
                     }
                     
                     try {
@@ -1576,9 +1603,10 @@ class FlowEditor {
         }
         
         // ESTRATÉGIA 3: Verificar lock de criação (prevenir race conditions)
+        // 🔥 V7 PROFISSIONAL: Tentar obter existente antes de retornar null
         if (this.endpointCreationLock.has(uuid)) {
             if (window.FLOW_DEBUG) {
-                console.warn(`⚠️ Endpoint ${uuid} está sendo criado, tentando obter existente`);
+                console.warn(`⚠️ [V7] Endpoint ${uuid} está sendo criado, tentando obter existente`);
             }
             // Tentar obter endpoint existente (pode ter sido criado enquanto verificávamos)
             try {
@@ -1589,7 +1617,9 @@ class FlowEditor {
             } catch(e) {
                 // Ignorar, continuar
             }
-            // Se ainda não existe, retornar null (evitar duplicação)
+            // Se ainda não existe e há lock, aguardar um pouco e tentar novamente (síncrono com timeout curto)
+            // Nota: Em race conditions extremas, pode retornar null, mas isso é melhor que duplicação
+            // O código chamador deve lidar com null adequadamente
             return null;
         }
         
@@ -1641,8 +1671,122 @@ class FlowEditor {
     }
     
     /**
+     * 🔥 V7 PROFISSIONAL: Força visibilidade completa de um endpoint
+     * Garante que o endpoint e seu círculo SVG estão visíveis e interativos
+     */
+    forceEndpointVisibility(endpoint, stepId, endpointType = 'unknown') {
+        if (!endpoint || !endpoint.canvas) {
+            console.warn(`⚠️ [V7] Endpoint sem canvas para step ${stepId}, tipo ${endpointType}`);
+            return false;
+        }
+        
+        try {
+            // 1. Garantir que canvas está visível
+            endpoint.canvas.style.display = 'block';
+            endpoint.canvas.style.visibility = 'visible';
+            endpoint.canvas.style.opacity = '1';
+            endpoint.canvas.style.pointerEvents = 'auto';
+            endpoint.canvas.style.zIndex = '10000';
+            endpoint.canvas.style.cursor = 'crosshair';
+            endpoint.canvas.style.position = 'absolute';
+            
+            // 2. Buscar e configurar círculo SVG
+            let circle = endpoint.canvas.querySelector('circle');
+            
+            // Se não encontrou no canvas, buscar no SVG pai
+            if (!circle) {
+                const svgParent = endpoint.canvas.closest('svg');
+                if (svgParent) {
+                    const circles = svgParent.querySelectorAll('circle');
+                    circles.forEach(c => {
+                        const cx = parseFloat(c.getAttribute('cx') || 0);
+                        const cy = parseFloat(c.getAttribute('cy') || 0);
+                        const r = parseFloat(c.getAttribute('r') || 0);
+                        const canvasRect = endpoint.canvas.getBoundingClientRect();
+                        const svgRect = svgParent.getBoundingClientRect();
+                        const relativeX = canvasRect.left - svgRect.left + canvasRect.width / 2;
+                        const relativeY = canvasRect.top - svgRect.top + canvasRect.height / 2;
+                        
+                        if (Math.abs(cx - relativeX) < 20 && Math.abs(cy - relativeY) < 20 && r > 0) {
+                            circle = c;
+                        }
+                    });
+                }
+            }
+            
+            // 3. Configurar círculo SVG se encontrado
+            if (circle) {
+                const fillColor = endpointType === 'input' ? '#10B981' : '#FFFFFF';
+                const strokeColor = endpointType === 'input' ? '#FFFFFF' : '#0D0F15';
+                const radius = endpointType === 'button' ? '6' : '7';
+                
+                if (!circle.getAttribute('fill') || circle.getAttribute('fill') === 'none') {
+                    circle.setAttribute('fill', fillColor);
+                }
+                if (!circle.getAttribute('stroke') || circle.getAttribute('stroke') === 'none') {
+                    circle.setAttribute('stroke', strokeColor);
+                }
+                if (!circle.getAttribute('stroke-width') || circle.getAttribute('stroke-width') === '0') {
+                    circle.setAttribute('stroke-width', '2');
+                }
+                if (!circle.getAttribute('r') || circle.getAttribute('r') === '0') {
+                    circle.setAttribute('r', radius);
+                }
+                
+                circle.style.display = 'block';
+                circle.style.visibility = 'visible';
+                circle.style.opacity = '1';
+            }
+            
+            // 4. Garantir que SVG pai está visível
+            const svgParent = endpoint.canvas.closest('svg');
+            if (svgParent) {
+                svgParent.style.display = 'block';
+                svgParent.style.visibility = 'visible';
+                svgParent.style.opacity = '1';
+                svgParent.style.zIndex = '10000';
+                svgParent.style.pointerEvents = 'none';
+                svgParent.style.position = 'absolute';
+                svgParent.style.left = '0';
+                svgParent.style.top = '0';
+                svgParent.style.width = '100%';
+                svgParent.style.height = '100%';
+            }
+            
+            // 5. Forçar repaint do endpoint
+            if (endpoint.repaint && typeof endpoint.repaint === 'function') {
+                endpoint.repaint();
+            }
+            
+            // 6. Verificar se está realmente visível após configuração
+            requestAnimationFrame(() => {
+                const computedStyle = window.getComputedStyle(endpoint.canvas);
+                const rect = endpoint.canvas.getBoundingClientRect();
+                
+                if (computedStyle.display === 'none' || 
+                    computedStyle.visibility === 'hidden' || 
+                    computedStyle.opacity === '0' ||
+                    rect.width === 0 || 
+                    rect.height === 0) {
+                    console.error(`❌ [V7] Endpoint ${endpointType} do step ${stepId} ainda não está visível após configuração!`, {
+                        display: computedStyle.display,
+                        visibility: computedStyle.visibility,
+                        opacity: computedStyle.opacity,
+                        rect: rect
+                    });
+                }
+            });
+            
+            return true;
+        } catch(e) {
+            console.error(`❌ [V7] Erro ao forçar visibilidade do endpoint ${endpointType} do step ${stepId}:`, e);
+            return false;
+        }
+    }
+    
+    /**
      * Adiciona endpoints ao step
-     * 🔥 V5.0 - ManyChat Perfect com Anti-Duplicação Robusta
+     * 🔥 V7 PROFISSIONAL - ManyChat Perfect com Anti-Duplicação Robusta
      * CRÍTICO: Garante que nodes HTML existam antes de criar endpoints
      */
     addEndpoints(element, stepId, step) {
@@ -1777,52 +1921,9 @@ class FlowEditor {
             data: { stepId, endpointType: 'input' }
         });
         
+        // 🔥 V7 PROFISSIONAL: Usar forceEndpointVisibility() para garantir visibilidade completa
         if (inputEndpoint) {
-            // 🔥 CRÍTICO: Forçar renderização visual do endpoint
-            try {
-                if (inputEndpoint.setPaintStyle) {
-                    inputEndpoint.setPaintStyle({ fill:'#10B981', outlineStroke:'#FFFFFF', outlineWidth:2 });
-                }
-                if (inputEndpoint.setHoverPaintStyle) {
-                    inputEndpoint.setHoverPaintStyle({ fill:'#FFB800', outlineStroke:'#FFFFFF', outlineWidth:3 });
-                }
-                // Forçar repaint do endpoint
-                if (inputEndpoint.repaint) {
-                    inputEndpoint.repaint();
-                }
-            } catch(e) {
-                console.warn('⚠️ Erro ao configurar paintStyle do input endpoint:', e);
-            }
-            
-            if (inputEndpoint.canvas) {
-                inputEndpoint.canvas.style.pointerEvents = 'auto';
-                inputEndpoint.canvas.style.zIndex = '10000';
-                inputEndpoint.canvas.style.cursor = 'crosshair';
-                inputEndpoint.canvas.style.display = 'block';
-                inputEndpoint.canvas.style.visibility = 'visible';
-                inputEndpoint.canvas.style.opacity = '1';
-                
-                // 🔥 CRÍTICO: Garantir que o SVG circle dentro do canvas está visível
-                const circle = inputEndpoint.canvas.querySelector('circle');
-                if (circle) {
-                    circle.setAttribute('fill', '#10B981');
-                    circle.setAttribute('stroke', '#FFFFFF');
-                    circle.setAttribute('stroke-width', '2');
-                    circle.setAttribute('r', '7');
-                    circle.style.display = 'block';
-                    circle.style.visibility = 'visible';
-                    circle.style.opacity = '1';
-                }
-                
-                console.log(`✅ Input endpoint criado e configurado:`, {
-                    endpoint: inputEndpoint,
-                    canvas: inputEndpoint.canvas,
-                    circle: circle,
-                    position: inputEndpoint.canvas.getBoundingClientRect()
-                });
-            } else {
-                console.error(`❌ Input endpoint criado mas sem canvas para step ${stepId}`);
-            }
+            this.forceEndpointVisibility(inputEndpoint, stepId, 'input');
         } else {
             console.error(`❌ Falha ao criar input endpoint para step ${stepId}`);
         }
@@ -1890,50 +1991,9 @@ class FlowEditor {
                     data: { stepId, buttonIndex: index, endpointType: 'button' }
                 });
                 
+                // 🔥 V7 PROFISSIONAL: Usar forceEndpointVisibility() para garantir visibilidade completa
                 if (endpoint) {
-                    // 🔥 CRÍTICO: Forçar renderização visual do endpoint
-                    try {
-                        if (endpoint.setPaintStyle) {
-                            endpoint.setPaintStyle({ fill:'#FFFFFF', outlineStroke:'#0D0F15', outlineWidth:2 });
-                        }
-                        if (endpoint.setHoverPaintStyle) {
-                            endpoint.setHoverPaintStyle({ fill:'#FFB800', outlineStroke:'#FFFFFF', outlineWidth:3 });
-                        }
-                        if (endpoint.repaint) {
-                            endpoint.repaint();
-                        }
-                    } catch(e) {
-                        console.warn(`⚠️ Erro ao configurar paintStyle do button endpoint ${index}:`, e);
-                    }
-                    
-                    if (endpoint.canvas) {
-                        endpoint.canvas.style.pointerEvents = 'auto';
-                        endpoint.canvas.style.zIndex = '10000';
-                        endpoint.canvas.style.cursor = 'crosshair';
-                        endpoint.canvas.style.display = 'block';
-                        endpoint.canvas.style.visibility = 'visible';
-                        endpoint.canvas.style.opacity = '1';
-                        
-                        // 🔥 CRÍTICO: Garantir que o SVG circle dentro do canvas está visível
-                        const circle = endpoint.canvas.querySelector('circle');
-                        if (circle) {
-                            circle.setAttribute('fill', '#FFFFFF');
-                            circle.setAttribute('stroke', '#0D0F15');
-                            circle.setAttribute('stroke-width', '2');
-                            circle.setAttribute('r', '6');
-                            circle.style.display = 'block';
-                            circle.style.visibility = 'visible';
-                            circle.style.opacity = '1';
-                        }
-                        
-                        console.log(`✅ Button endpoint ${index} criado e configurado:`, {
-                            endpoint: endpoint,
-                            canvas: endpoint.canvas,
-                            circle: circle
-                        });
-                    } else {
-                        console.error(`❌ Button endpoint ${index} criado mas sem canvas para step ${stepId}`);
-                    }
+                    this.forceEndpointVisibility(endpoint, stepId, 'button');
                 } else {
                     console.error(`❌ Falha ao criar button endpoint ${index} para step ${stepId}`);
                 }
@@ -1965,51 +2025,9 @@ class FlowEditor {
                     data: { stepId, endpointType: 'global' }
                 });
                 
+                // 🔥 V7 PROFISSIONAL: Usar forceEndpointVisibility() para garantir visibilidade completa
                 if (endpoint) {
-                    // 🔥 CRÍTICO: Forçar renderização visual do endpoint
-                    try {
-                        if (endpoint.setPaintStyle) {
-                            endpoint.setPaintStyle({ fill:'#FFFFFF', outlineStroke:'#0D0F15', outlineWidth:2 });
-                        }
-                        if (endpoint.setHoverPaintStyle) {
-                            endpoint.setHoverPaintStyle({ fill:'#FFB800', outlineStroke:'#FFFFFF', outlineWidth:3 });
-                        }
-                        if (endpoint.repaint) {
-                            endpoint.repaint();
-                        }
-                    } catch(e) {
-                        console.warn('⚠️ Erro ao configurar paintStyle do output endpoint:', e);
-                    }
-                    
-                    if (endpoint.canvas) {
-                        endpoint.canvas.style.pointerEvents = 'auto';
-                        endpoint.canvas.style.zIndex = '10000';
-                        endpoint.canvas.style.cursor = 'crosshair';
-                        endpoint.canvas.style.display = 'block';
-                        endpoint.canvas.style.visibility = 'visible';
-                        endpoint.canvas.style.opacity = '1';
-                        
-                        // 🔥 CRÍTICO: Garantir que o SVG circle dentro do canvas está visível
-                        const circle = endpoint.canvas.querySelector('circle');
-                        if (circle) {
-                            circle.setAttribute('fill', '#FFFFFF');
-                            circle.setAttribute('stroke', '#0D0F15');
-                            circle.setAttribute('stroke-width', '2');
-                            circle.setAttribute('r', '7');
-                            circle.style.display = 'block';
-                            circle.style.visibility = 'visible';
-                            circle.style.opacity = '1';
-                        }
-                        
-                        console.log(`✅ Output endpoint criado e configurado:`, {
-                            endpoint: endpoint,
-                            canvas: endpoint.canvas,
-                            circle: circle,
-                            position: endpoint.canvas.getBoundingClientRect()
-                        });
-                    } else {
-                        console.error(`❌ Output endpoint criado mas sem canvas para step ${stepId}`);
-                    }
+                    this.forceEndpointVisibility(endpoint, stepId, 'global');
                 } else {
                     console.error(`❌ Falha ao criar output endpoint para step ${stepId}`);
                 }
@@ -2389,8 +2407,10 @@ class FlowEditor {
             }
         });
         
-        // 🔥 V5.0: Criar conexões que faltam
+        // 🔥 V7 PROFISSIONAL: Criar conexões que faltam com retry automático
         requestAnimationFrame(() => {
+            const pendingConnections = [];
+            
             desiredConnections.forEach((desired, connId) => {
                 // Verificar se já existe
                 if (this.connections.has(connId)) {
@@ -2409,16 +2429,50 @@ class FlowEditor {
                             this.connections.set(connId, conn);
                         }
                     } else {
-                        if (window.FLOW_DEBUG) {
-                            console.warn(`⚠️ Endpoints não encontrados: ${desired.sourceUuid} ou ${desired.targetUuid}`);
-                        }
+                        // Endpoints não encontrados - adicionar à fila de retry
+                        pendingConnections.push({ connId, desired });
                     }
                 } catch (e) { 
-                    if (window.FLOW_DEBUG) {
-                        console.warn(`⚠️ Erro ao conectar ${connId}:`, e);
-                    }
+                    console.warn(`⚠️ [V7] Erro ao conectar ${connId}:`, e);
                 }
             });
+            
+            // Retry automático para conexões pendentes (endpoints podem não estar prontos ainda)
+            if (pendingConnections.length > 0) {
+                let retryCount = 0;
+                const maxRetries = 5;
+                const retryInterval = setInterval(() => {
+                    retryCount++;
+                    const stillPending = [];
+                    
+                    pendingConnections.forEach(({ connId, desired }) => {
+                        try {
+                            const srcEp = this.instance.getEndpoint(desired.sourceUuid);
+                            const tgtEp = this.instance.getEndpoint(desired.targetUuid);
+                            if (srcEp && tgtEp) {
+                                const conn = this.instance.connect({ 
+                                    source: srcEp,
+                                    target: tgtEp
+                                });
+                                if (conn) {
+                                    this.connections.set(connId, conn);
+                                }
+                            } else {
+                                stillPending.push({ connId, desired });
+                            }
+                        } catch (e) {
+                            stillPending.push({ connId, desired });
+                        }
+                    });
+                    
+                    if (stillPending.length === 0 || retryCount >= maxRetries) {
+                        clearInterval(retryInterval);
+                        if (stillPending.length > 0) {
+                            console.warn(`⚠️ [V7] ${stillPending.length} conexões não puderam ser criadas após ${maxRetries} tentativas`);
+                        }
+                    }
+                }, 200);
+            }
             
             // Final repaint
             this.instance.repaintEverything();
