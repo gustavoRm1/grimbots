@@ -116,6 +116,32 @@
     z-index: 60;
 }
 
+/* 🔥 V5.0: Output global node (quando não há botões) */
+.flow-step-node-output-global {
+    right: -8px;
+    top: 50%;
+    transform: translateY(-50%);
+    position: absolute;
+    z-index: 60;
+    pointer-events: none;
+}
+
+/* 🔥 V5.0: Drag handle no header */
+.flow-drag-handle {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 40px;
+    cursor: move;
+    z-index: 1;
+    background: transparent;
+}
+
+.flow-drag-handle:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
 /* Button endpoint container sits inside button item - right aligned */
 .flow-step-button-endpoint-container {
     position: relative;
