@@ -208,11 +208,16 @@
     }
 }
 
+/* 🔥 V2.0: Selection Visual - Combinado com jtk-surface-selected-element */
 .flow-step-block.flow-step-selected {
-    border-color: #FFFFFF;
+    border-color: #FFB800 !important;
     box-shadow: 
-        0 0 0 2px rgba(255, 255, 255, 0.3),
-        0 8px 24px rgba(0, 0, 0, 0.5);
+        0 0 0 2px rgba(255, 184, 0, 0.4) !important,
+        0 0 0 4px rgba(255, 184, 0, 0.2) !important,
+        0 8px 24px rgba(255, 184, 0, 0.3) !important;
+    transform: scale(1.02);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 500 !important;
 }
 
 .flow-step-header {
@@ -724,6 +729,72 @@ svg .jtk-endpoint circle {
     filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.8)) !important;
 }
 
+/* 🔥 V2.0: Connectors e Overlays Profissionais */
+.flow-connector {
+    stroke: #FFFFFF;
+    stroke-width: 2.5;
+    stroke-opacity: 0.9;
+    transition: all 0.2s ease;
+}
+
+.flow-connector-hover,
+.flow-connector:hover {
+    stroke: #FFB800;
+    stroke-width: 3.5;
+    stroke-opacity: 1;
+    filter: drop-shadow(0 0 4px rgba(255, 184, 0, 0.5));
+}
+
+.flow-arrow-overlay {
+    fill: #FFFFFF !important;
+    stroke: #FFFFFF !important;
+    stroke-width: 2 !important;
+}
+
+.flow-label-overlay {
+    background: #0D0F15 !important;
+    border: 1px solid #242836 !important;
+    color: #FFFFFF !important;
+    padding: 4px 8px !important;
+    border-radius: 6px !important;
+    font-size: 10px !important;
+    font-weight: 600 !important;
+    font-family: 'Inter', sans-serif !important;
+    pointer-events: none !important;
+}
+
+/* 🔥 V2.0: Visual Feedback para Múltipla Seleção */
+.flow-step-block.jtk-surface-selected-element:hover {
+    transform: scale(1.03);
+    box-shadow: 
+        0 0 0 2px rgba(255, 184, 0, 0.5) !important,
+        0 0 0 4px rgba(255, 184, 0, 0.3) !important,
+        0 12px 32px rgba(255, 184, 0, 0.4) !important;
+}
+
+/* 🔥 V2.0: Transições Suaves para Todas as Interações */
+.flow-step-block {
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.flow-step-block:not(.dragging):not(.jtk-surface-element-dragging) {
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+/* 🔥 V2.0: Cursor Feedback */
+.flow-step-block {
+    cursor: move;
+}
+
+.flow-step-block.jtk-surface-selected-element {
+    cursor: move;
+}
+
+.flow-step-block.dragging,
+.flow-step-block.jtk-surface-element-dragging {
+    cursor: grabbing !important;
+}
+
 /* 🔥 V7 PROFISSIONAL: Garantir que SVG overlay está acima de tudo */
 #flow-visual-canvas svg {
     z-index: 10001 !important;
@@ -783,8 +854,12 @@ svg circle[data-endpoint-type="button"] {
     cursor: grabbing !important;
 }
 
+/* 🔥 V2.0: Most Recently Dragged - Visual Feedback */
 .jtk-most-recently-dragged {
-    transition: opacity 0.3s ease;
+    transition: all 0.3s ease;
+    box-shadow: 
+        0 0 0 1px rgba(59, 130, 246, 0.3),
+        0 4px 16px rgba(59, 130, 246, 0.2) !important;
 }
 
 /* Edges */
@@ -812,9 +887,51 @@ svg circle[data-endpoint-type="button"] {
     position: relative;
 }
 
+/* 🔥 V2.0: Selection System - Visual Feedback */
 .jtk-surface-selected-element {
     border-color: #FFB800 !important;
-    box-shadow: 0 0 0 2px rgba(255, 184, 0, 0.3) !important;
+    box-shadow: 
+        0 0 0 2px rgba(255, 184, 0, 0.4) !important,
+        0 0 0 4px rgba(255, 184, 0, 0.2) !important,
+        0 8px 24px rgba(255, 184, 0, 0.3) !important;
+    transform: scale(1.02);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 500 !important;
+}
+
+/* 🔥 V2.0: Combinar com flow-step-selected */
+.flow-step-block.jtk-surface-selected-element,
+.flow-step-block.flow-step-selected {
+    border-color: #FFB800 !important;
+    box-shadow: 
+        0 0 0 2px rgba(255, 184, 0, 0.4) !important,
+        0 0 0 4px rgba(255, 184, 0, 0.2) !important,
+        0 8px 24px rgba(255, 184, 0, 0.3) !important;
+    transform: scale(1.02);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 500 !important;
+}
+
+/* 🔥 V2.0: Lasso Selection Visual */
+.flow-lasso-selection {
+    position: absolute;
+    border: 2px dashed #3B82F6;
+    background: rgba(59, 130, 246, 0.1);
+    pointer-events: none;
+    z-index: 10000;
+    border-radius: 4px;
+    animation: lassoPulse 1s ease-in-out infinite;
+}
+
+@keyframes lassoPulse {
+    0%, 100% {
+        border-color: #3B82F6;
+        background: rgba(59, 130, 246, 0.1);
+    }
+    50% {
+        border-color: #60A5FA;
+        background: rgba(59, 130, 246, 0.15);
+    }
 }
 
 .jtk-surface-selected-connection {

@@ -1,5 +1,5 @@
 /**
- * Flow Editor V4.0 - Rebuild Completo ManyChat-Level
+ * Flow Editor V2.0 - Rebuild Completo ManyChat-Level
  * Sistema profissional de edição visual de fluxos
  * 
  * ✅ CORREÇÕES IMPLEMENTADAS:
@@ -12,10 +12,71 @@
  * - Canvas responsivo sem estouro
  * - Performance otimizada com rAF
  * 
+ * 🔥 V2.0: NOVAS FUNCIONALIDADES
+ * - Events System completo
+ * - Selection System (única, múltipla, lasso)
+ * - Keyboard Shortcuts
+ * - Undo/Redo System
+ * - Perimeter/Continuous Anchors
+ * 
  * Dependências:
  * - jsPlumb 2.15.6 (CDN)
  * - Alpine.js 3.x (CDN)
  */
+
+/**
+ * 🔥 V2.0: HistoryManager Class
+ * Gerencia histórico de ações para Undo/Redo
+ * CRÍTICO: Definida ANTES de FlowEditor para evitar erro de referência
+ */
+class HistoryManager {
+    constructor() {
+        this.history = [];
+        this.currentIndex = -1;
+        this.maxHistory = 50;
+    }
+    
+    push(action) {
+        // Remover ações futuras se estamos no meio do histórico
+        if (this.currentIndex < this.history.length - 1) {
+            this.history = this.history.slice(0, this.currentIndex + 1);
+        }
+        
+        // Adicionar nova ação
+        this.history.push(action);
+        this.currentIndex++;
+        
+        // Limitar histórico
+        if (this.history.length > this.maxHistory) {
+            this.history.shift();
+            this.currentIndex--;
+        }
+    }
+    
+    undo() {
+        if (this.canUndo()) {
+            this.currentIndex--;
+            return this.history[this.currentIndex + 1];
+        }
+        return null;
+    }
+    
+    redo() {
+        if (this.canRedo()) {
+            this.currentIndex++;
+            return this.history[this.currentIndex];
+        }
+        return null;
+    }
+    
+    canUndo() {
+        return this.currentIndex >= 0;
+    }
+    
+    canRedo() {
+        return this.currentIndex < this.history.length - 1;
+    }
+}
 
 class FlowEditor {
     constructor(canvasId, alpineContext) {
@@ -27,6 +88,21 @@ class FlowEditor {
         this.connections = new Map();
         this.selectedStep = null;
         this.contentContainer = null;
+        
+        // 🔥 V2.0: Selection System
+        this.selectedSteps = new Set(); // IDs dos steps selecionados
+        this.selectionMode = 'mixed'; // 'mixed', 'single', 'multiple'
+        this.isLassoSelecting = false;
+        this.lassoStartPoint = null;
+        this.lassoElement = null;
+        this.clipboard = []; // Para copy/paste
+        
+        // 🔥 V2.0: Events System
+        this.eventListeners = new Map(); // eventName -> Set of callbacks
+        this.customEvents = ['node:added', 'node:removed', 'node:updated', 'edge:moved', 'canvas:click'];
+        
+        // 🔥 V2.0: Undo/Redo System
+        this.historyManager = new HistoryManager();
         
         // Zoom e Pan
         this.zoomLevel = 1;
@@ -82,9 +158,9 @@ class FlowEditor {
         }
         
         try {
-            // CRÍTICO: Setup canvas PRIMEIRO para criar contentContainer
-            this.setupCanvas();
-            
+        // CRÍTICO: Setup canvas PRIMEIRO para criar contentContainer
+        this.setupCanvas();
+        
             // Aguardar contentContainer estar no DOM
             await this.waitForElement(this.contentContainer, 2000);
             
@@ -98,7 +174,7 @@ class FlowEditor {
             }
             
             // Ativar sistema de proteção contra duplicação
-            this.preventEndpointDuplication();
+        this.preventEndpointDuplication();
             
             // Continuar inicialização
             this.continueInit();
@@ -147,6 +223,7 @@ class FlowEditor {
         this.enableZoom();
         this.enablePan();
         this.enableSelection();
+        this.enableKeyboardShortcuts(); // 🔥 V2.0: Keyboard Shortcuts
         
         // CRÍTICO: Configurar event delegation DEPOIS do contentContainer existir
         // Aguardar um pouco para garantir que o container está pronto
@@ -298,7 +375,7 @@ class FlowEditor {
      */
     async setupJsPlumbAsync() {
         return new Promise((resolve, reject) => {
-            try {
+        try {
                 // Garantir que contentContainer existe
                 if (!this.contentContainer) {
                     this.setupCanvas();
@@ -347,9 +424,9 @@ class FlowEditor {
                     }
                 } catch(e) {
                     console.warn('⚠️ [V7] Erro ao criar newInstance, usando getInstance:', e);
-                    this.instance = jsPlumb.getInstance({
-                        Container: container
-                    });
+            this.instance = jsPlumb.getInstance({
+                Container: container
+            });
                 }
                 
                 if (!this.instance) {
@@ -359,27 +436,27 @@ class FlowEditor {
                 
                 // CRÍTICO: Garantir que setContainer está correto
                 this.instance.setContainer(container);
-                
+            
                 // 🔥 V7 PROFISSIONAL: Defaults com Vertex Avoidance conforme documentação oficial
                 // Grid de 20px (múltiplo de 10px conforme recomendação A*)
-                this.instance.importDefaults({
-                    paintStyle: { 
-                        stroke: '#FFFFFF', 
-                        strokeWidth: 2.5,
-                        strokeOpacity: 0.9
-                    },
-                    hoverPaintStyle: { 
-                        stroke: '#FFFFFF', 
-                        strokeWidth: 3.5,
-                        strokeOpacity: 1
-                    },
+            this.instance.importDefaults({
+                paintStyle: { 
+                    stroke: '#FFFFFF', 
+                    strokeWidth: 2.5,
+                    strokeOpacity: 0.9
+                },
+                hoverPaintStyle: { 
+                    stroke: '#FFFFFF', 
+                    strokeWidth: 3.5,
+                    strokeOpacity: 1
+                },
                     // 🔥 V7 PROFISSIONAL: Vertex Avoidance - Conexões evitam passar por cima de elementos
                     // NOTA: Para melhor vertex avoidance, recomenda-se usar Orthogonal ou Straight com constrain
                     // Bezier funciona mas não tem routing inteligente como Orthogonal
                     edgesAvoidVertices: true,        // Ativar vertex avoidance (A* algorithm)
                     // 🔥 V7 PROFISSIONAL: Bezier Connector conforme documentação oficial jsPlumb 2.15.6
                     // Opções válidas: curviness, stub, gap, scale, showLoopback, legacyPaint, cssClass, hoverClass
-                    connector: ['Bezier', { 
+                connector: ['Bezier', { 
                         curviness: 150,              // Curvatura padrão (documentação: default 150)
                         stub: 15,                   // Stub único em pixels (15px) - distância antes da curva começar
                         gap: 10,                    // Gap entre endpoint e conexão (10px)
@@ -395,21 +472,21 @@ class FlowEditor {
                         cssClass: 'flow-endpoint-default',
                         hoverClass: 'flow-endpoint-default-hover'
                     }],
-                    endpointStyle: { 
-                        fill: '#FFFFFF', 
-                        outlineStroke: '#0D0F15', 
-                        outlineWidth: 2
-                    },
-                    endpointHoverStyle: { 
-                        fill: '#FFB800', 
-                        outlineStroke: '#0D0F15', 
-                        outlineWidth: 3
-                    },
-                    maxConnections: -1,
-                    ConnectionsDetachable: true,
+                endpointStyle: { 
+                    fill: '#FFFFFF', 
+                    outlineStroke: '#0D0F15', 
+                    outlineWidth: 2
+                },
+                endpointHoverStyle: { 
+                    fill: '#FFB800', 
+                    outlineStroke: '#0D0F15', 
+                    outlineWidth: 3
+                },
+                maxConnections: -1,
+                ConnectionsDetachable: true,
                     // 🔥 V7 PROFISSIONAL: Connection Overlays conforme documentação oficial
                     // Arrow overlay no final da conexão (location: 1 = 100% do caminho)
-                    ConnectionOverlays: [
+                ConnectionOverlays: [
                         {
                             type: 'Arrow',
                             options: {
@@ -427,18 +504,50 @@ class FlowEditor {
                                 }
                             }
                         }
-                    ]
-                });
-                
-                // Eventos
-                this.instance.bind('connection', (info) => this.onConnectionCreated(info));
-                this.instance.bind('connectionDetached', (info) => this.onConnectionDetached(info));
-                this.instance.bind('click', (conn, e) => {
-                    if (e && e.detail === 2) {
-                        this.removeConnection(conn);
-                    }
-                });
-                
+                ]
+            });
+            
+            // 🔥 V2.0: Events System Completo
+            // Eventos jsPlumb Community Edition
+            this.instance.bind('connection', (info) => this.onConnectionCreated(info));
+            this.instance.bind('connectionDetached', (info) => this.onConnectionDetached(info));
+            this.instance.bind('click', (conn, e) => {
+                if (e && e.detail === 2) {
+                    this.removeConnection(conn);
+                }
+            });
+            
+            // 🔥 V2.0: Endpoint Events
+            this.instance.bind('endpointClick', (endpoint, e) => {
+                this.emit('endpoint:click', { endpoint, event: e });
+            });
+            
+            this.instance.bind('endpointDblClick', (endpoint, e) => {
+                this.emit('endpoint:dblclick', { endpoint, event: e });
+            });
+            
+            // 🔥 V2.0: Drag Events
+            this.instance.bind('dragStart', (params) => {
+                this.emit('drag:start', params);
+                this.onStepDrag(params);
+            });
+            
+            this.instance.bind('drag', (params) => {
+                this.emit('drag:move', params);
+            });
+            
+            this.instance.bind('dragStop', (params) => {
+                this.emit('drag:stop', params);
+                this.onStepDragStop(params);
+            });
+            
+            // 🔥 V2.0: Canvas Click (implementar manualmente)
+            this.canvas.addEventListener('click', (e) => {
+                if (!e.target.closest('.flow-step-block') && !e.target.closest('.jtk-endpoint')) {
+                    this.emit('canvas:click', { event: e });
+                }
+            }, true);
+            
                 this.instance.setSuspendDrawing(false);
                 
                 // Configurar SVG overlay com retry
@@ -450,7 +559,7 @@ class FlowEditor {
                     resolve(); // Continuar mesmo se SVG overlay não foi configurado
                 });
                 
-            } catch (error) {
+        } catch (error) {
                 console.error('❌ [V7] Erro ao inicializar jsPlumb:', error);
                 reject(error);
             }
@@ -602,8 +711,8 @@ class FlowEditor {
                     
                     requestAnimationFrame(() => {
                         try {
-                            // Revalidate nodes and cards
-                            this.steps.forEach(el => {
+                    // Revalidate nodes and cards
+                    this.steps.forEach(el => {
                                 try { 
                                     this.instance.revalidate(el);
                                     // Garantir que endpoints estão visíveis após revalidate
@@ -616,7 +725,7 @@ class FlowEditor {
                                         }
                                     });
                                 } catch(e) {}
-                            });
+                    });
                             
                             // Repintar tudo
                             // 🔥 FASE 1: Usar throttledRepaint ao invés de repaintEverything direto
@@ -787,10 +896,226 @@ class FlowEditor {
     }
     
     /**
-     * Habilita seleção de steps
+     * 🔥 V2.0: Selection System Completo
+     * Implementa seleção única, múltipla, lasso e operações em lote
      */
     enableSelection() {
-        // Implementação básica - pode ser expandida
+        if (!this.contentContainer) return;
+        
+        // 1. Seleção única (clique no card)
+        this.contentContainer.addEventListener('click', (e) => {
+            // Ignorar se clicou em endpoint, botão de ação ou drag handle
+            if (e.target.closest('.jtk-endpoint') || 
+                e.target.closest('.flow-step-btn-action') || 
+                e.target.closest('.flow-drag-handle')) {
+                return;
+            }
+            
+            const stepElement = e.target.closest('.flow-step-block');
+            if (stepElement) {
+                const stepId = stepElement.dataset.stepId;
+                if (stepId) {
+                    if (e.ctrlKey || e.metaKey) {
+                        // Ctrl+Click: adicionar/remover da seleção
+                        this.toggleSelection(stepId);
+                    } else {
+                        // Clique simples: seleção única
+                        this.setSelection(stepId);
+                    }
+                }
+            } else {
+                // Clique no canvas: deselecionar
+                if (!e.target.closest('.flow-step-block')) {
+                    this.clearSelection();
+                }
+            }
+        });
+        
+        // 2. Lasso Selection (Shift+Drag)
+        let lassoStart = null;
+        let lassoRect = null;
+        
+        this.contentContainer.addEventListener('mousedown', (e) => {
+            if (e.shiftKey && !e.target.closest('.flow-step-block')) {
+                lassoStart = { x: e.clientX, y: e.clientY };
+                this.isLassoSelecting = true;
+                
+                // Criar elemento de lasso
+                if (!this.lassoElement) {
+                    this.lassoElement = document.createElement('div');
+                    this.lassoElement.className = 'flow-lasso-selection';
+                    this.lassoElement.style.cssText = `
+                        position: absolute;
+                        border: 2px dashed #3B82F6;
+                        background: rgba(59, 130, 246, 0.1);
+                        pointer-events: none;
+                        z-index: 10000;
+                        display: none;
+                    `;
+                    this.canvas.appendChild(this.lassoElement);
+                }
+                
+                e.preventDefault();
+            }
+        });
+        
+        document.addEventListener('mousemove', (e) => {
+            if (this.isLassoSelecting && lassoStart) {
+                const canvasRect = this.canvas.getBoundingClientRect();
+                const startX = lassoStart.x - canvasRect.left;
+                const startY = lassoStart.y - canvasRect.top;
+                const currentX = e.clientX - canvasRect.left;
+                const currentY = e.clientY - canvasRect.top;
+                
+                const left = Math.min(startX, currentX);
+                const top = Math.min(startY, currentY);
+                const width = Math.abs(currentX - startX);
+                const height = Math.abs(currentY - startY);
+                
+                if (this.lassoElement) {
+                    this.lassoElement.style.display = 'block';
+                    this.lassoElement.style.left = `${left}px`;
+                    this.lassoElement.style.top = `${top}px`;
+                    this.lassoElement.style.width = `${width}px`;
+                    this.lassoElement.style.height = `${height}px`;
+                }
+                
+                lassoRect = { left, top, width, height };
+                this.selectStepsInLasso(lassoRect);
+            }
+        });
+        
+        document.addEventListener('mouseup', (e) => {
+            if (this.isLassoSelecting) {
+                this.isLassoSelecting = false;
+                if (this.lassoElement) {
+                    this.lassoElement.style.display = 'none';
+                }
+                lassoStart = null;
+                lassoRect = null;
+            }
+        });
+        
+        // 3. Keyboard shortcuts (ESC para deselecionar)
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && this.selectedSteps.size > 0) {
+                this.clearSelection();
+            }
+        });
+    }
+    
+    /**
+     * 🔥 V2.0: Define seleção única
+     */
+    setSelection(stepId) {
+        this.clearSelection();
+        if (stepId) {
+            this.selectedSteps.add(stepId);
+            this.updateSelectionVisual();
+            this.emit('selection:changed', { selected: Array.from(this.selectedSteps) });
+        }
+    }
+    
+    /**
+     * 🔥 V2.0: Adiciona à seleção
+     */
+    addToSelection(stepId) {
+        if (this.selectionMode === 'single') {
+            this.setSelection(stepId);
+        } else {
+            this.selectedSteps.add(stepId);
+            this.updateSelectionVisual();
+            this.emit('selection:changed', { selected: Array.from(this.selectedSteps) });
+        }
+    }
+    
+    /**
+     * 🔥 V2.0: Remove da seleção
+     */
+    removeFromSelection(stepId) {
+        this.selectedSteps.delete(stepId);
+        this.updateSelectionVisual();
+        this.emit('selection:changed', { selected: Array.from(this.selectedSteps) });
+    }
+    
+    /**
+     * 🔥 V2.0: Alterna seleção
+     */
+    toggleSelection(stepId) {
+        if (this.selectedSteps.has(stepId)) {
+            this.removeFromSelection(stepId);
+        } else {
+            this.addToSelection(stepId);
+        }
+    }
+    
+    /**
+     * 🔥 V2.0: Limpa seleção
+     */
+    clearSelection() {
+        this.selectedSteps.clear();
+        this.updateSelectionVisual();
+        this.emit('selection:changed', { selected: [] });
+    }
+    
+    /**
+     * 🔥 V2.0: Obtém seleção atual
+     */
+    getSelection() {
+        return Array.from(this.selectedSteps);
+    }
+    
+    /**
+     * 🔥 V2.0: Atualiza visual da seleção (CSS classes)
+     */
+    updateSelectionVisual() {
+        this.steps.forEach((element, stepId) => {
+            if (this.selectedSteps.has(stepId)) {
+                element.classList.add('jtk-surface-selected-element');
+                element.classList.add('flow-step-selected');
+            } else {
+                element.classList.remove('jtk-surface-selected-element');
+                element.classList.remove('flow-step-selected');
+            }
+        });
+    }
+    
+    /**
+     * 🔥 V2.0: Seleciona steps dentro da área do lasso
+     */
+    selectStepsInLasso(rect) {
+        if (!rect || !this.contentContainer) return;
+        
+        const canvasRect = this.canvas.getBoundingClientRect();
+        const contentRect = this.contentContainer.getBoundingClientRect();
+        const zoom = this.zoomLevel;
+        
+        // Converter coordenadas do lasso para coordenadas do contentContainer (considerando zoom/pan)
+        const lassoLeft = (rect.left - (contentRect.left - canvasRect.left)) / zoom;
+        const lassoTop = (rect.top - (contentRect.top - canvasRect.top)) / zoom;
+        const lassoWidth = rect.width / zoom;
+        const lassoHeight = rect.height / zoom;
+        
+        this.steps.forEach((element, stepId) => {
+            // Obter posição do elemento no contentContainer (já considerando transform)
+            const elementRect = element.getBoundingClientRect();
+            const elementX = (elementRect.left - contentRect.left) / zoom;
+            const elementY = (elementRect.top - contentRect.top) / zoom;
+            const elementWidth = elementRect.width / zoom;
+            const elementHeight = elementRect.height / zoom;
+            
+            // Verificar se elemento está dentro do lasso
+            const isInside = elementX < lassoLeft + lassoWidth &&
+                           elementX + elementWidth > lassoLeft &&
+                           elementY < lassoTop + lassoHeight &&
+                           elementY + elementHeight > lassoTop;
+            
+            if (isInside) {
+                this.selectedSteps.add(stepId);
+            }
+        });
+        
+        this.updateSelectionVisual();
     }
     
     /**
@@ -873,6 +1198,8 @@ class FlowEditor {
                 this.updateStep(step);
             } else {
                 this.renderStep(step);
+                // 🔥 V2.0: Emitir evento node:added
+                this.emit('node:added', { stepId, step });
             }
         });
         
@@ -1040,7 +1367,7 @@ class FlowEditor {
                 // Adicionar endpoints após configurar draggable
                 setTimeout(() => {
                     console.log(`🔵 Adicionando endpoints para step ${stepId} após renderização`);
-                    this.addEndpoints(stepElement, stepId, step);
+                this.addEndpoints(stepElement, stepId, step);
                     
                     // 🔥 V8 ULTRA: Aguardar um pouco mais e forçar repaint
                     setTimeout(() => {
@@ -1182,21 +1509,26 @@ class FlowEditor {
         // 🔥 V5.0: Reset flag de endpoints para permitir recriação
         element.dataset.endpointsInited = 'false';
         
+        // CRÍTICO: Definir customButtons e hasButtons ANTES de usar
+        const stepConfig = step.config || {};
+        const customButtons = stepConfig.custom_buttons || [];
+        const hasButtons = customButtons.length > 0;
+        
         // Remover endpoints antigos apenas se necessário (não sempre)
         // Verificar se estrutura mudou (botões adicionados/removidos)
         const oldHasButtons = (step.config?.custom_buttons || []).length > 0;
-        const newHasButtons = customButtons.length > 0;
+        const newHasButtons = hasButtons;
         
         if (oldHasButtons !== newHasButtons) {
             // Estrutura mudou, corrigir endpoints primeiro (remove órfãos)
             this.fixEndpoints(element);
             // Depois remover todos e recriar
             try {
-                this.instance.removeAllEndpoints(element);
+        this.instance.removeAllEndpoints(element);
             } catch(e) {
                 console.warn('⚠️ Erro ao remover endpoints:', e);
             }
-            this.endpointRegistry.delete(stepId);
+        this.endpointRegistry.delete(stepId);
             // Reset flag para permitir recriação
             element.dataset.endpointsInited = 'false';
         }
@@ -1224,10 +1556,8 @@ class FlowEditor {
         
         // Re-renderizar conteúdo
         const stepType = step.type || 'message';
-        const stepConfig = step.config || {};
         const isStartStep = this.alpine?.config?.flow_start_step_id === stepId;
-        const customButtons = stepConfig.custom_buttons || [];
-        const hasButtons = customButtons.length > 0;
+        // customButtons e hasButtons já definidos acima
         
         const mediaUrl = stepConfig.media_url || '';
         const mediaType = stepConfig.media_type || 'video';
@@ -1241,14 +1571,14 @@ class FlowEditor {
             const headerContent = headerEl.querySelector('.flow-step-header-content');
             if (headerContent) {
                 headerContent.innerHTML = `
-                    <div class="flow-step-icon-center">
-                        <i class="fas ${this.stepIcons[stepType] || 'fa-circle'}" style="color: #FFFFFF;"></i>
-                    </div>
-                    <div class="flow-step-title-center">
-                        ${this.getStepTypeLabel(stepType)}
-                    </div>
-                    ${isStartStep ? '<div class="flow-step-start-badge">⭐</div>' : ''}
-                `;
+                <div class="flow-step-icon-center">
+                    <i class="fas ${this.stepIcons[stepType] || 'fa-circle'}" style="color: #FFFFFF;"></i>
+                </div>
+                <div class="flow-step-title-center">
+                    ${this.getStepTypeLabel(stepType)}
+                </div>
+                ${isStartStep ? '<div class="flow-step-start-badge">⭐</div>' : ''}
+            `;
             }
             // 🔥 V5.0: Garantir que drag handle existe
             if (!headerEl.querySelector('.flow-drag-handle')) {
@@ -1326,6 +1656,9 @@ class FlowEditor {
         } else {
             element.classList.remove('flow-step-initial');
         }
+        
+        // 🔥 V2.0: Emitir evento node:updated
+        this.emit('node:updated', { stepId, step });
     }
     
     /**
@@ -1854,18 +2187,18 @@ class FlowEditor {
                     const outputNode = innerWrapper.querySelector('.flow-step-node-output-global');
                     if (outputNode) {
                         outputNode.remove();
-                    }
+            }
                 }
                 
                 // 🔥 CRÍTICO: Obter dimensões reais do elemento para calcular anchors corretamente
                 const elementRect = element.getBoundingClientRect();
                 const innerRect = innerWrapper.getBoundingClientRect();
-                
-                // 1) INPUT endpoint (left outside) - SEMPRE FIXO
-                const inputUuid = `endpoint-left-${stepId}`;
+        
+        // 1) INPUT endpoint (left outside) - SEMPRE FIXO
+        const inputUuid = `endpoint-left-${stepId}`;
                 console.log(`🔵 Criando input endpoint para step ${stepId}`, {
                     inputNode: inputNode,
-                    uuid: inputUuid,
+                uuid: inputUuid,
                     inputRect: inputNode.getBoundingClientRect(),
                     elementRect: elementRect,
                     innerRect: innerRect
@@ -1876,9 +2209,9 @@ class FlowEditor {
                 // x=0 (left), y=0.5 (center vertical), ox=-1 (leftward), oy=0, offsetX=-8px, offsetY=0
                 const inputEndpoint = this.ensureEndpoint(this.instance, inputNode, inputUuid, {
                     anchor: [0, 0.5, -1, 0, -8, 0], // left outside, center vertical, -8px offset (conforme doc oficial)
-                    isSource: false,
-                    isTarget: true,
-                    maxConnections: -1,
+                isSource: false,
+                isTarget: true,
+                maxConnections: -1,
                     // 🔥 V7 PROFISSIONAL: Dot Endpoint conforme documentação oficial
                     // Opções: radius, cssClass, hoverClass
                     endpoint: ['Dot', { 
@@ -1886,10 +2219,10 @@ class FlowEditor {
                         cssClass: 'flow-endpoint-input',
                         hoverClass: 'flow-endpoint-input-hover'
                     }],
-                    paintStyle: { fill:'#10B981', outlineStroke:'#FFFFFF', outlineWidth:2 },
-                    hoverPaintStyle: { fill:'#FFB800', outlineStroke:'#FFFFFF', outlineWidth:3 },
-                    data: { stepId, endpointType: 'input' }
-                });
+                paintStyle: { fill:'#10B981', outlineStroke:'#FFFFFF', outlineWidth:2 },
+                hoverPaintStyle: { fill:'#FFB800', outlineStroke:'#FFFFFF', outlineWidth:3 },
+                data: { stepId, endpointType: 'input' }
+            });
                 
                 // 🔥 CRÍTICO: Revalidar imediatamente após criar endpoint para recalcular posição
                 if (inputEndpoint) {
@@ -1900,21 +2233,21 @@ class FlowEditor {
                     this.forceEndpointVisibility(inputEndpoint, stepId, 'input');
                 } else {
                     console.error(`❌ Falha ao criar input endpoint para step ${stepId}`);
-                }
-                
-                // 2) OUTPUT endpoints
-                if (hasButtons) {
-                    // Remover output global se existir
-                    const globalUuid = `endpoint-right-${stepId}`;
+        }
+        
+        // 2) OUTPUT endpoints
+        if (hasButtons) {
+            // Remover output global se existir
+            const globalUuid = `endpoint-right-${stepId}`;
                     try {
                         const existingGlobal = this.instance.getEndpoint(globalUuid);
-                        if (existingGlobal) {
+            if (existingGlobal) {
                             this.instance.deleteEndpoint(existingGlobal);
-                        }
+            }
                     } catch(e) {}
-                    
-                    // Criar um endpoint por botão - ANCHOR FIXO baseado no índice
-                    customButtons.forEach((btn, index) => {
+            
+            // Criar um endpoint por botão - ANCHOR FIXO baseado no índice
+            customButtons.forEach((btn, index) => {
                 const uuid = `endpoint-button-${stepId}-${index}`;
                 let buttonContainer = element.querySelector(`[data-endpoint-button="${index}"]`);
                 
@@ -1943,7 +2276,7 @@ class FlowEditor {
                         const buttonTarget = buttonContainer;
                         
                         // Anchor fixo: calcular Y baseado no índice do botão
-                        const buttonCount = customButtons.length;
+                    const buttonCount = customButtons.length;
                         const buttonSpacing = 1 / (buttonCount + 1);
                         const anchorY = Math.max(0.2, Math.min(0.8, 0.3 + (index * buttonSpacing)));
                         
@@ -1954,28 +2287,29 @@ class FlowEditor {
                             buttonContainer: buttonContainer.getBoundingClientRect()
                         });
                         
-                        // 🔥 FASE 1: Dynamic Anchor para botões (evita sobreposição)
-                        // Múltiplas posições possíveis: right, top, bottom
-                        // JsPlumb escolhe automaticamente a melhor posição
+                        // 🔥 V2.0: Anchor dinâmico para botões (melhor vertex avoidance)
+                        // Usar múltiplas posições possíveis para melhor routing
+                        // jsPlumb Community Edition não suporta Perimeter, então usamos múltiplos anchors estáticos
+                        const anchorConfig = [
+                            [1, anchorY, 1, 0, 8, 0],      // Right (preferido)
+                            [0.5, 0, 0, -1, 0, -8],        // Top (fallback)
+                            [0.5, 1, 0, 1, 0, 8]           // Bottom (fallback)
+                        ];
                         const endpoint = this.ensureEndpoint(this.instance, buttonTarget, uuid, {
-                            anchor: [
-                                [1, anchorY, 1, 0, 8, 0, "right"],  // Right (preferido)
-                                [0.5, 0, 0, -1, 0, -8, "top"],      // Top (fallback)
-                                [0.5, 1, 0, 1, 0, 8, "bottom"]      // Bottom (fallback)
-                            ],
-                            isSource: true,
-                            isTarget: false,
-                            maxConnections: 1,
+                            anchor: anchorConfig,
+                        isSource: true,
+                        isTarget: false,
+                        maxConnections: 1,
                             // 🔥 V7 PROFISSIONAL: Dot Endpoint para botões conforme documentação oficial
                             endpoint: ['Dot', { 
                                 radius: 6,
                                 cssClass: 'flow-endpoint-button',
                                 hoverClass: 'flow-endpoint-button-hover'
                             }],
-                            paintStyle: { fill:'#FFFFFF', outlineStroke:'#0D0F15', outlineWidth:2 },
-                            hoverPaintStyle: { fill:'#FFB800', outlineStroke:'#FFFFFF', outlineWidth:3 },
-                            data: { stepId, buttonIndex: index, endpointType: 'button' }
-                        });
+                        paintStyle: { fill:'#FFFFFF', outlineStroke:'#0D0F15', outlineWidth:2 },
+                        hoverPaintStyle: { fill:'#FFB800', outlineStroke:'#FFFFFF', outlineWidth:3 },
+                        data: { stepId, buttonIndex: index, endpointType: 'button' }
+                    });
                         
                         // 🔥 CRÍTICO: Revalidar imediatamente após criar endpoint
                         if (endpoint) {
@@ -1984,13 +2318,13 @@ class FlowEditor {
                             this.forceEndpointVisibility(endpoint, stepId, 'button');
                         } else {
                             console.error(`❌ Falha ao criar button endpoint ${index} para step ${stepId}`);
-                        }
-                    });
-                } else {
-                    // Sem botões: criar output global único - SEMPRE FIXO
-                    const outUuid = `endpoint-right-${stepId}`;
+                }
+            });
+        } else {
+            // Sem botões: criar output global único - SEMPRE FIXO
+            const outUuid = `endpoint-right-${stepId}`;
                     const outputNode = innerWrapper.querySelector('.flow-step-node-output-global');
-                    
+            
                     if (!outputNode) {
                         console.error(`❌ Output node não encontrado para step ${stepId} sem botões!`);
                         console.error(`❌ innerWrapper:`, innerWrapper);
@@ -1998,32 +2332,33 @@ class FlowEditor {
                     } else {
                         console.log(`✅ Criando output global endpoint para step ${stepId}`, {
                             outputNode: outputNode,
-                            uuid: outUuid,
+                    uuid: outUuid,
                             position: outputNode.getBoundingClientRect()
                         });
                         
-                        // 🔥 FASE 1: Dynamic Anchor para output global (evita sobreposição)
-                        // Múltiplas posições possíveis: right, top, bottom
-                        // JsPlumb escolhe automaticamente a melhor posição baseado na orientação
+                        // 🔥 V2.0: Anchor dinâmico para output global (melhor vertex avoidance)
+                        // Usar múltiplas posições possíveis para melhor routing
+                        // jsPlumb Community Edition não suporta Continuous, então usamos múltiplos anchors estáticos
+                        const anchorConfig = [
+                            [1, 0.5, 1, 0, 8, 0],          // Right (preferido)
+                            [0.5, 0, 0, -1, 0, -8],        // Top (fallback)
+                            [0.5, 1, 0, 1, 0, 8]           // Bottom (fallback)
+                        ];
                         const endpoint = this.ensureEndpoint(this.instance, outputNode, outUuid, {
-                            anchor: [
-                                [1, 0.5, 1, 0, 8, 0, "right"],      // Right (preferido)
-                                [0.5, 0, 0, -1, 0, -8, "top"],      // Top (fallback)
-                                [0.5, 1, 0, 1, 0, 8, "bottom"]      // Bottom (fallback)
-                            ],
-                            isSource: true,
-                            isTarget: false,
-                            maxConnections: -1,
+                            anchor: anchorConfig,
+                    isSource: true,
+                    isTarget: false,
+                    maxConnections: -1,
                             // 🔥 V7 PROFISSIONAL: Dot Endpoint para output global conforme documentação oficial
                             endpoint: ['Dot', { 
                                 radius: 7,
                                 cssClass: 'flow-endpoint-output',
                                 hoverClass: 'flow-endpoint-output-hover'
                             }],
-                            paintStyle: { fill:'#FFFFFF', outlineStroke:'#0D0F15', outlineWidth:2 },
-                            hoverPaintStyle: { fill:'#FFB800', outlineStroke:'#FFFFFF', outlineWidth:3 },
-                            data: { stepId, endpointType: 'global' }
-                        });
+                    paintStyle: { fill:'#FFFFFF', outlineStroke:'#0D0F15', outlineWidth:2 },
+                    hoverPaintStyle: { fill:'#FFB800', outlineStroke:'#FFFFFF', outlineWidth:3 },
+                    data: { stepId, endpointType: 'global' }
+                });
                         
                         // 🔥 CRÍTICO: Revalidar imediatamente após criar endpoint
                         if (endpoint) {
@@ -2221,8 +2556,8 @@ class FlowEditor {
             // 🔥 V8 ULTRA: Revalidar e repintar com delay para garantir renderização
             requestAnimationFrame(() => {
                 requestAnimationFrame(() => {
-                    try {
-                        this.instance.revalidate(element);
+        try {
+            this.instance.revalidate(element);
                             // 🔥 FASE 1: Usar throttledRepaint ao invés de repaintEverything direto
                             this.throttledRepaint();
                         console.log(`✅ Revalidação e repaint executados para step ${stepId}`);
@@ -2440,8 +2775,12 @@ class FlowEditor {
         
         this.repaintFrameId = requestAnimationFrame(() => {
             if (this.instance) {
-                            // 🔥 FASE 1: Usar throttledRepaint ao invés de repaintEverything direto
-                            this.throttledRepaint();
+                try {
+                    // 🔥 V2.0: Chamar repaintEverything (não chamar a si mesmo!)
+                    this.instance.repaintEverything();
+                } catch(e) {
+                    console.warn('⚠️ Erro ao repintar:', e);
+                }
             }
             this.repaintFrameId = null;
         });
@@ -2586,18 +2925,18 @@ class FlowEditor {
         // 🔥 V5.0: Reconcile - calcular conexões desejadas
         const desiredConnections = new Map(); // connId -> { sourceUuid, targetUuid, type }
         
-        steps.forEach(step => {
-            if (!step || !step.id) return;
-            const stepId = String(step.id);
-            const stepConfig = step.config || {};
-            const customButtons = stepConfig.custom_buttons || [];
-            const hasButtons = customButtons.length > 0;
-            const connections = step.connections || {};
-            
-            if (hasButtons) {
-                customButtons.forEach((btn, idx) => {
-                    if (btn.target_step) {
-                        const targetId = String(btn.target_step);
+            steps.forEach(step => {
+                if (!step || !step.id) return;
+                const stepId = String(step.id);
+                const stepConfig = step.config || {};
+                const customButtons = stepConfig.custom_buttons || [];
+                const hasButtons = customButtons.length > 0;
+                const connections = step.connections || {};
+                
+                if (hasButtons) {
+                    customButtons.forEach((btn, idx) => {
+                        if (btn.target_step) {
+                            const targetId = String(btn.target_step);
                         const connId = `button-${stepId}-${idx}-${targetId}`;
                         desiredConnections.set(connId, {
                             sourceUuid: `endpoint-button-${stepId}-${idx}`,
@@ -2629,7 +2968,7 @@ class FlowEditor {
         // 🔥 V5.0: Obter conexões existentes
         const existingConnections = new Map();
         this.connections.forEach((conn, connId) => {
-            try {
+                            try {
                 const source = conn.getSource();
                 const target = conn.getTarget();
                 if (source && target) {
@@ -2669,22 +3008,22 @@ class FlowEditor {
                 try {
                     const srcEp = this.instance.getEndpoint(desired.sourceUuid);
                     const tgtEp = this.instance.getEndpoint(desired.targetUuid);
-                    if (srcEp && tgtEp) {
-                        const conn = this.instance.connect({ 
-                            source: srcEp,
-                            target: tgtEp
-                        });
-                        if (conn) {
-                            this.connections.set(connId, conn);
-                        }
-                    } else {
+                                if (srcEp && tgtEp) {
+                                    const conn = this.instance.connect({ 
+                                        source: srcEp,
+                                        target: tgtEp
+                                    });
+                                    if (conn) {
+                                        this.connections.set(connId, conn);
+                                    }
+                                } else {
                         // Endpoints não encontrados - adicionar à fila de retry
                         pendingConnections.push({ connId, desired });
-                    }
-                } catch (e) { 
+                                }
+                            } catch (e) { 
                     console.warn(`⚠️ [V7] Erro ao conectar ${connId}:`, e);
-                }
-            });
+                        }
+                    });
             
             // Retry automático para conexões pendentes (endpoints podem não estar prontos ainda)
             if (pendingConnections.length > 0) {
@@ -2695,21 +3034,21 @@ class FlowEditor {
                     const stillPending = [];
                     
                     pendingConnections.forEach(({ connId, desired }) => {
-                        try {
+                            try {
                             const srcEp = this.instance.getEndpoint(desired.sourceUuid);
                             const tgtEp = this.instance.getEndpoint(desired.targetUuid);
-                            if (srcEp && tgtEp) {
-                                const conn = this.instance.connect({ 
-                                    source: srcEp,
-                                    target: tgtEp
-                                });
-                                if (conn) {
-                                    this.connections.set(connId, conn);
-                                }
-                            } else {
+                                if (srcEp && tgtEp) {
+                                    const conn = this.instance.connect({ 
+                                        source: srcEp,
+                                        target: tgtEp
+                                    });
+                                    if (conn) {
+                                        this.connections.set(connId, conn);
+                                    }
+                                } else {
                                 stillPending.push({ connId, desired });
-                            }
-                        } catch (e) {
+                                }
+                            } catch (e) {
                             stillPending.push({ connId, desired });
                         }
                     });
@@ -2718,7 +3057,7 @@ class FlowEditor {
                         clearInterval(retryInterval);
                         if (stillPending.length > 0) {
                             console.warn(`⚠️ [V7] ${stillPending.length} conexões não puderam ser criadas após ${maxRetries} tentativas`);
-                        }
+                }
                     }
                 }, 200);
             }
@@ -2787,8 +3126,8 @@ class FlowEditor {
                     ...(this.getConnectionLabel(connectionType) ? [{
                         type: 'Label',
                         options: {
-                            label: this.getConnectionLabel(connectionType),
-                            location: 0.5,
+                        label: this.getConnectionLabel(connectionType),
+                        location: 0.5,
                             cssClass: 'flow-label-overlay',
                             useHTMLElement: true  // Usar elemento HTML para melhor controle CSS
                         }
@@ -3039,7 +3378,13 @@ class FlowEditor {
             return;
         }
         
+        const step = this.alpine?.config?.flow_steps?.find(s => String(s.id) === String(stepId));
         this.removeStepElement(String(stepId));
+        
+        // 🔥 V2.0: Emitir evento node:removed
+        if (step) {
+            this.emit('node:removed', { stepId, step });
+        }
         
         // Remover do Alpine
         if (this.alpine && this.alpine.config && this.alpine.config.flow_steps) {
@@ -3081,28 +3426,28 @@ class FlowEditor {
             () => this.alpine && typeof this.alpine.openStepModal === 'function' ? this.alpine.openStepModal(stepId) : null,
             () => window.alpineFlowEditor && typeof window.alpineFlowEditor.openStepModal === 'function' ? window.alpineFlowEditor.openStepModal(stepId) : null,
             () => {
-                try {
-                    if (typeof Alpine !== 'undefined' && Alpine.$data) {
-                        const alpineElement = document.querySelector('[x-data*="botConfigApp"]');
-                        if (alpineElement) {
-                            const alpineApp = Alpine.$data(alpineElement);
-                            if (alpineApp && typeof alpineApp.openStepModal === 'function') {
-                                alpineApp.openStepModal(stepId);
+        try {
+            if (typeof Alpine !== 'undefined' && Alpine.$data) {
+                const alpineElement = document.querySelector('[x-data*="botConfigApp"]');
+                if (alpineElement) {
+                    const alpineApp = Alpine.$data(alpineElement);
+                    if (alpineApp && typeof alpineApp.openStepModal === 'function') {
+                        alpineApp.openStepModal(stepId);
                                 return true;
-                            }
-                        }
                     }
-                } catch (e) {
+                }
+            }
+        } catch (e) {
                     if (window.FLOW_DEBUG) {
-                        console.warn('⚠️ Erro ao buscar contexto Alpine via DOM:', e);
-                    }
+            console.warn('⚠️ Erro ao buscar contexto Alpine via DOM:', e);
+        }
                 }
                 return null;
             }
         ];
         
         for (const strategy of strategies) {
-            try {
+        try {
                 const result = strategy();
                 if (result === true || result === undefined) {
                     return; // Sucesso
@@ -3110,9 +3455,9 @@ class FlowEditor {
             } catch (e) {
                 if (window.FLOW_DEBUG) {
                     console.warn('⚠️ Erro em estratégia de abertura de modal:', e);
+                        }
+                    }
                 }
-            }
-        }
         
         console.error('❌ Não foi possível abrir modal de edição para step:', stepId);
     }
@@ -3147,7 +3492,7 @@ class FlowEditor {
             } catch(e) {
                 console.warn('⚠️ Erro ao remover endpoints:', e);
             }
-            this.endpointRegistry.delete(String(stepId));
+        this.endpointRegistry.delete(String(stepId));
             // Reset flag para permitir recriação
             element.dataset.endpointsInited = 'false';
         }
@@ -3646,6 +3991,300 @@ class FlowEditor {
     }
     
     /**
+     * 🔥 V2.0: Keyboard Shortcuts System
+     */
+    enableKeyboardShortcuts() {
+        document.addEventListener('keydown', (e) => {
+            // Ignorar se estiver digitando em input/textarea
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+                return;
+            }
+            
+            // Delete / Backspace - Remover selecionados
+            if ((e.key === 'Delete' || e.key === 'Backspace') && this.selectedSteps.size > 0) {
+                e.preventDefault();
+                this.deleteSelected();
+                return;
+            }
+            
+            // Ctrl+C / Cmd+C - Copiar
+            if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
+                e.preventDefault();
+                this.copySelected();
+                return;
+            }
+            
+            // Ctrl+V / Cmd+V - Colar
+            if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
+                e.preventDefault();
+                this.pasteSelected();
+                return;
+            }
+            
+            // Ctrl+Z / Cmd+Z - Undo
+            if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+                e.preventDefault();
+                this.undo();
+                return;
+            }
+            
+            // Ctrl+Y / Ctrl+Shift+Z / Cmd+Shift+Z - Redo
+            if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+                e.preventDefault();
+                this.redo();
+                return;
+            }
+            
+            // Ctrl+A / Cmd+A - Selecionar todos
+            if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
+                e.preventDefault();
+                this.selectAll();
+                return;
+            }
+        });
+    }
+    
+    /**
+     * 🔥 V2.0: Deleta steps selecionados
+     */
+    deleteSelected() {
+        const selected = Array.from(this.selectedSteps);
+        if (selected.length === 0) return;
+        
+        // Confirmar deleção
+        const count = selected.length;
+        if (!confirm(`Tem certeza que deseja remover ${count} step(s)?`)) {
+            return;
+        }
+        
+        // Registrar no histórico ANTES de deletar
+        this.historyManager.push({
+            type: 'delete',
+            steps: selected.map(id => {
+                const step = this.alpine?.config?.flow_steps?.find(s => String(s.id) === id);
+                return step ? JSON.parse(JSON.stringify(step)) : null;
+            }).filter(Boolean)
+        });
+        
+        // Deletar sem confirmação adicional (já confirmamos acima)
+        selected.forEach(stepId => {
+            const step = this.alpine?.config?.flow_steps?.find(s => String(s.id) === stepId);
+            this.removeStepElement(String(stepId));
+            
+            // 🔥 V2.0: Emitir evento node:removed
+            if (step) {
+                this.emit('node:removed', { stepId, step });
+            }
+            
+            // Remover do Alpine
+            if (this.alpine && this.alpine.config && this.alpine.config.flow_steps) {
+                const steps = this.alpine.config.flow_steps;
+                const index = steps.findIndex(s => String(s.id) === String(stepId));
+                if (index !== -1) {
+                    steps.splice(index, 1);
+                }
+                if (this.alpine.config.flow_start_step_id === String(stepId)) {
+                    this.alpine.config.flow_start_step_id = null;
+                }
+            }
+        });
+        
+        this.adjustCanvasSize();
+        this.clearSelection();
+    }
+    
+    /**
+     * 🔥 V2.0: Copia steps selecionados
+     */
+    copySelected() {
+        const selected = Array.from(this.selectedSteps);
+        if (selected.length === 0) return;
+        
+        this.clipboard = selected.map(id => {
+            const step = this.alpine?.config?.flow_steps?.find(s => String(s.id) === id);
+            return step ? JSON.parse(JSON.stringify(step)) : null;
+        }).filter(Boolean);
+        
+        console.log('✅ Copiados', this.clipboard.length, 'steps');
+    }
+    
+    /**
+     * 🔥 V2.0: Cola steps copiados
+     */
+    pasteSelected() {
+        if (this.clipboard.length === 0) return;
+        
+        const newSteps = this.clipboard.map((step, index) => {
+            const newStep = JSON.parse(JSON.stringify(step));
+            // 🔥 V2.0: Garantir ID único usando timestamp + índice + random
+            newStep.id = `step_${Date.now()}_${index}_${Math.random().toString(36).substr(2, 9)}`;
+            newStep.position = {
+                x: (step.position?.x || 0) + 50,
+                y: (step.position?.y || 0) + 50
+            };
+            // Limpar conexões do step copiado (não copiar conexões)
+            if (newStep.connections) {
+                newStep.connections = {};
+            }
+            // Limpar target_step dos botões
+            if (newStep.config && newStep.config.custom_buttons) {
+                newStep.config.custom_buttons.forEach(btn => {
+                    btn.target_step = null;
+                });
+            }
+            return newStep;
+        });
+        
+        // Registrar no histórico
+        this.historyManager.push({
+            type: 'add',
+            steps: newSteps
+        });
+        
+        // Adicionar ao Alpine
+        if (this.alpine && this.alpine.config) {
+            if (!this.alpine.config.flow_steps) {
+                this.alpine.config.flow_steps = [];
+            }
+            newSteps.forEach(step => {
+                this.alpine.config.flow_steps.push(step);
+            });
+        }
+        
+        // Renderizar novos steps
+        setTimeout(() => {
+            this.renderAllSteps();
+        }, 100);
+    }
+    
+    /**
+     * 🔥 V2.0: Seleciona todos os steps
+     */
+    selectAll() {
+        this.steps.forEach((element, stepId) => {
+            this.selectedSteps.add(stepId);
+        });
+        this.updateSelectionVisual();
+    }
+    
+    /**
+     * 🔥 V2.0: Undo
+     */
+    undo() {
+        const action = this.historyManager.undo();
+        if (action) {
+            this.applyHistoryAction(action, true);
+        }
+    }
+    
+    /**
+     * 🔥 V2.0: Redo
+     */
+    redo() {
+        const action = this.historyManager.redo();
+        if (action) {
+            this.applyHistoryAction(action, false);
+        }
+    }
+    
+    /**
+     * 🔥 V2.0: Aplica ação do histórico
+     */
+    applyHistoryAction(action, isUndo) {
+        if (action.type === 'delete') {
+            if (isUndo) {
+                // Restaurar steps
+                if (this.alpine && this.alpine.config) {
+                    if (!this.alpine.config.flow_steps) {
+                        this.alpine.config.flow_steps = [];
+                    }
+                    action.steps.forEach(step => {
+                        this.alpine.config.flow_steps.push(step);
+                    });
+                }
+                setTimeout(() => this.renderAllSteps(), 100);
+            } else {
+                // Deletar novamente (sem confirmação)
+                action.steps.forEach(step => {
+                    this.removeStepElement(String(step.id));
+                    // Remover do Alpine
+                    if (this.alpine && this.alpine.config && this.alpine.config.flow_steps) {
+                        const steps = this.alpine.config.flow_steps;
+                        const index = steps.findIndex(s => String(s.id) === String(step.id));
+                        if (index !== -1) {
+                            steps.splice(index, 1);
+                        }
+                        if (this.alpine.config.flow_start_step_id === String(step.id)) {
+                            this.alpine.config.flow_start_step_id = null;
+                        }
+                    }
+                });
+                this.adjustCanvasSize();
+            }
+        } else if (action.type === 'add') {
+            if (isUndo) {
+                // Remover steps (sem confirmação)
+                action.steps.forEach(step => {
+                    this.removeStepElement(String(step.id));
+                    // Remover do Alpine
+                    if (this.alpine && this.alpine.config && this.alpine.config.flow_steps) {
+                        const steps = this.alpine.config.flow_steps;
+                        const index = steps.findIndex(s => String(s.id) === String(step.id));
+                        if (index !== -1) {
+                            steps.splice(index, 1);
+                        }
+                        if (this.alpine.config.flow_start_step_id === String(step.id)) {
+                            this.alpine.config.flow_start_step_id = null;
+                        }
+                    }
+                });
+                this.adjustCanvasSize();
+            } else {
+                // Adicionar novamente
+                if (this.alpine && this.alpine.config) {
+                    if (!this.alpine.config.flow_steps) {
+                        this.alpine.config.flow_steps = [];
+                    }
+                    action.steps.forEach(step => {
+                        this.alpine.config.flow_steps.push(step);
+                    });
+                }
+                setTimeout(() => this.renderAllSteps(), 100);
+            }
+        }
+    }
+    
+    /**
+     * 🔥 V2.0: Events System (emit, on, off)
+     */
+    emit(eventName, data) {
+        const listeners = this.eventListeners.get(eventName);
+        if (listeners) {
+            listeners.forEach(callback => {
+                try {
+                    callback(data);
+                } catch (e) {
+                    console.error(`❌ Erro em listener de ${eventName}:`, e);
+                }
+            });
+        }
+    }
+    
+    on(eventName, callback) {
+        if (!this.eventListeners.has(eventName)) {
+            this.eventListeners.set(eventName, new Set());
+        }
+        this.eventListeners.get(eventName).add(callback);
+    }
+    
+    off(eventName, callback) {
+        const listeners = this.eventListeners.get(eventName);
+        if (listeners) {
+            listeners.delete(callback);
+        }
+    }
+    
+    /**
      * Utilitários
      */
     getStepTypeLabel(type) {
@@ -3842,6 +4481,7 @@ class FlowEditor {
 
 // Exportar para uso global
 window.FlowEditor = FlowEditor;
+window.HistoryManager = HistoryManager;
 
 // CRÍTICO: Expor métodos diretamente no window para uso em onclick inline
 // Criar objeto global antes de qualquer coisa

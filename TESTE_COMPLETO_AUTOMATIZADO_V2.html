@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste Completo V2.0 - Flow Editor</title>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #0D0F15;
+            color: #FFFFFF;
+            padding: 20px;
+        }
+        .test-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: #13151C;
+            border-radius: 12px;
+            padding: 24px;
+            border: 1px solid #242836;
+        }
+        .test-section {
+            margin-bottom: 24px;
+            padding: 16px;
+            background: #0F0F14;
+            border-radius: 8px;
+            border: 1px solid #242836;
+        }
+        .test-title {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 12px;
+            color: #FFB800;
+        }
+        .test-item {
+            padding: 8px 12px;
+            margin: 8px 0;
+            background: #1A1C24;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .test-status {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        .test-status.pending {
+            background: #6B7280;
+        }
+        .test-status.passing {
+            background: #10B981;
+        }
+        .test-status.failing {
+            background: #EF4444;
+        }
+        .test-name {
+            flex: 1;
+        }
+        .test-result {
+            font-size: 12px;
+            color: #9CA3AF;
+        }
+        .summary {
+            padding: 16px;
+            background: #0F0F14;
+            border-radius: 8px;
+            border: 1px solid #242836;
+            margin-top: 24px;
+        }
+        .summary-title {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+        .summary-stats {
+            display: flex;
+            gap: 24px;
+            margin-top: 12px;
+        }
+        .stat {
+            flex: 1;
+            padding: 12px;
+            background: #1A1C24;
+            border-radius: 6px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #9CA3AF;
+        }
+        button {
+            background: #E02727;
+            color: #FFFFFF;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            margin-top: 16px;
+        }
+        button:hover {
+            background: #ff3f3f;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>🧪 Teste Completo V2.0 - Flow Editor</h1>
+        <p>Este teste verifica todas as funcionalidades do Flow Editor V2.0</p>
+        
+        <div id="test-results"></div>
+        
+        <div class="summary" id="summary">
+            <div class="summary-title">Resumo dos Testes</div>
+            <div class="summary-stats">
+                <div class="stat">
+                    <div class="stat-value" id="total-tests">0</div>
+                    <div class="stat-label">Total de Testes</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="passed-tests">0</div>
+                    <div class="stat-label">Passou</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="failed-tests">0</div>
+                    <div class="stat-label">Falhou</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="success-rate">0%</div>
+                    <div class="stat-label">Taxa de Sucesso</div>
+                </div>
+            </div>
+        </div>
+        
+        <button onclick="runAllTests()">▶️ Executar Todos os Testes</button>
+    </div>
+
+    <script>
+        // Mock do ambiente necessário
+        if (typeof jsPlumb === 'undefined') {
+            console.warn('⚠️ jsPlumb não está disponível - alguns testes podem falhar');
+        }
+        
+        if (typeof Alpine === 'undefined') {
+            console.warn('⚠️ Alpine.js não está disponível - alguns testes podem falhar');
+        }
+
+        const testResults = [];
+        
+        function createTestItem(name, testFn) {
+            return {
+                name,
+                testFn,
+                status: 'pending',
+                result: null,
+                error: null
+            };
+        }
+        
+        function runTest(test) {
+            try {
+                const result = test.testFn();
+                if (result === true || (result && result.passed)) {
+                    test.status = 'passing';
+                    test.result = result.message || 'OK';
+                } else {
+                    test.status = 'failing';
+                    test.result = result.message || 'Falhou';
+                    test.error = result.error || null;
+                }
+            } catch (error) {
+                test.status = 'failing';
+                test.result = 'Erro: ' + error.message;
+                test.error = error;
+            }
+            return test;
+        }
+        
+        function renderTests() {
+            const container = document.getElementById('test-results');
+            container.innerHTML = '';
+            
+            const sections = {};
+            
+            testResults.forEach(test => {
+                const section = test.section || 'Geral';
+                if (!sections[section]) {
+                    sections[section] = [];
+                }
+                sections[section].push(test);
+            });
+            
+            Object.keys(sections).forEach(sectionName => {
+                const sectionDiv = document.createElement('div');
+                sectionDiv.className = 'test-section';
+                
+                const title = document.createElement('div');
+                title.className = 'test-title';
+                title.textContent = sectionName;
+                sectionDiv.appendChild(title);
+                
+                sections[sectionName].forEach(test => {
+                    const item = document.createElement('div');
+                    item.className = 'test-item';
+                    
+                    const status = document.createElement('div');
+                    status.className = `test-status ${test.status}`;
+                    item.appendChild(status);
+                    
+                    const name = document.createElement('div');
+                    name.className = 'test-name';
+                    name.textContent = test.name;
+                    item.appendChild(name);
+                    
+                    const result = document.createElement('div');
+                    result.className = 'test-result';
+                    result.textContent = test.result || 'Pendente';
+                    item.appendChild(result);
+                    
+                    sectionDiv.appendChild(item);
+                });
+                
+                container.appendChild(sectionDiv);
+            });
+            
+            updateSummary();
+        }
+        
+        function updateSummary() {
+            const total = testResults.length;
+            const passed = testResults.filter(t => t.status === 'passing').length;
+            const failed = testResults.filter(t => t.status === 'failing').length;
+            const successRate = total > 0 ? Math.round((passed / total) * 100) : 0;
+            
+            document.getElementById('total-tests').textContent = total;
+            document.getElementById('passed-tests').textContent = passed;
+            document.getElementById('failed-tests').textContent = failed;
+            document.getElementById('success-rate').textContent = successRate + '%';
+        }
+        
+        // ============================================
+        // TESTES
+        // ============================================
+        
+        function defineTests() {
+            // 1. Verificação de Classes
+            testResults.push(createTestItem('HistoryManager class existe', () => {
+                return typeof HistoryManager !== 'undefined';
+            }));
+            testResults[testResults.length - 1].section = 'Classes e Estrutura';
+            
+            testResults.push(createTestItem('FlowEditor class existe', () => {
+                return typeof FlowEditor !== 'undefined';
+            }));
+            testResults[testResults.length - 1].section = 'Classes e Estrutura';
+            
+            // 2. HistoryManager
+            testResults.push(createTestItem('HistoryManager pode ser instanciado', () => {
+                try {
+                    const hm = new HistoryManager();
+                    return hm !== null && typeof hm.push === 'function';
+                } catch (e) {
+                    return false;
+                }
+            }));
+            testResults[testResults.length - 1].section = 'HistoryManager';
+            
+            testResults.push(createTestItem('HistoryManager.push() funciona', () => {
+                try {
+                    const hm = new HistoryManager();
+                    hm.push({ type: 'test' });
+                    return hm.history.length === 1;
+                } catch (e) {
+                    return false;
+                }
+            }));
+            testResults[testResults.length - 1].section = 'HistoryManager';
+            
+            testResults.push(createTestItem('HistoryManager.undo() funciona', () => {
+                try {
+                    const hm = new HistoryManager();
+                    hm.push({ type: 'test' });
+                    const action = hm.undo();
+                    return action !== null && action.type === 'test';
+                } catch (e) {
+                    return false;
+                }
+            }));
+            testResults[testResults.length - 1].section = 'HistoryManager';
+            
+            testResults.push(createTestItem('HistoryManager.redo() funciona', () => {
+                try {
+                    const hm = new HistoryManager();
+                    hm.push({ type: 'test' });
+                    hm.undo();
+                    const action = hm.redo();
+                    return action !== null && action.type === 'test';
+                } catch (e) {
+                    return false;
+                }
+            }));
+            testResults[testResults.length - 1].section = 'HistoryManager';
+            
+            // 3. FlowEditor - Estrutura
+            testResults.push(createTestItem('FlowEditor pode ser instanciado', () => {
+                try {
+                    // Criar canvas mock
+                    const canvas = document.createElement('div');
+                    canvas.id = 'test-canvas';
+                    document.body.appendChild(canvas);
+                    
+                    const editor = new FlowEditor('test-canvas', {});
+                    const result = editor !== null && typeof editor.init === 'function';
+                    
+                    document.body.removeChild(canvas);
+                    return result;
+                } catch (e) {
+                    return false;
+                }
+            }));
+            testResults[testResults.length - 1].section = 'FlowEditor - Estrutura';
+            
+            testResults.push(createTestItem('FlowEditor tem historyManager', () => {
+                try {
+                    const canvas = document.createElement('div');
+                    canvas.id = 'test-canvas-2';
+                    document.body.appendChild(canvas);
+                    
+                    const editor = new FlowEditor('test-canvas-2', {});
+                    const result = editor.historyManager !== null && editor.historyManager instanceof HistoryManager;
+                    
+                    document.body.removeChild(canvas);
+                    return result;
+                } catch (e) {
+                    return false;
+                }
+            }));
+            testResults[testResults.length - 1].section = 'FlowEditor - Estrutura';
+            
+            testResults.push(createTestItem('FlowEditor tem selectedSteps Set', () => {
+                try {
+                    const canvas = document.createElement('div');
+                    canvas.id = 'test-canvas-3';
+                    document.body.appendChild(canvas);
+                    
+                    const editor = new FlowEditor('test-canvas-3', {});
+                    const result = editor.selectedSteps instanceof Set;
+                    
+                    document.body.removeChild(canvas);
+                    return result;
+                } catch (e) {
+                    return false;
+                }
+            }));
+            testResults[testResults.length - 1].section = 'FlowEditor - Estrutura';
+            
+            testResults.push(createTestItem('FlowEditor tem eventListeners Map', () => {
+                try {
+                    const canvas = document.createElement('div');
+                    canvas.id = 'test-canvas-4';
+                    document.body.appendChild(canvas);
+                    
+                    const editor = new FlowEditor('test-canvas-4', {});
+                    const result = editor.eventListeners instanceof Map;
+                    
+                    document.body.removeChild(canvas);
+                    return result;
+                } catch (e) {
+                    return false;
+                }
+            }));
+            testResults[testResults.length - 1].section = 'FlowEditor - Estrutura';
+            
+            // 4. Selection System
+            testResults.push(createTestItem('setSelection() existe', () => {
+                try {
+                    const canvas = document.createElement('div');
+                    canvas.id = 'test-canvas-5';
+                    document.body.appendChild(canvas);
+                    
+                    const editor = new FlowEditor('test-canvas-5', {});
+                    const result = typeof editor.setSelection === 'function';
+                    
+                    document.body.removeChild(canvas);
+                    return result;
+                } catch (e) {
+                    return false;
+                }
+            }));
+            testResults[testResults.length - 1].section = 'Selection System';
+            
+            testResults.push(createTestItem('clearSelection() existe', () => {
+                try {
+                    const canvas = document.createElement('div');
+                    canvas.id = 'test-canvas-6';
+                    document.body.appendChild(canvas);
+                    
+                    const editor = new FlowEditor('test-canvas-6', {});
+                    const result = typeof editor.clearSelection === 'function';
+                    
+                    document.body.removeChild(canvas);
+                    return result;
+                } catch (e) {
+                    return false;
+                }
+            }));
+            testResults[testResults.length - 1].section = 'Selection System';
+            
+            testResults.push(createTestItem('addToSelection() existe', () => {
+                try {
+                    const canvas = document.createElement('div');
+                    canvas.id = 'test-canvas-7';
+                    document.body.appendChild(canvas);
+                    
+                    const editor = new FlowEditor('test-canvas-7', {});
+                    const result = typeof editor.addToSelection === 'function';
+                    
+                    document.body.removeChild(canvas);
+                    return result;
+                } catch (e) {
+                    return false;
+                }
+            }));
+            testResults[testResults.length - 1].section = 'Selection System';
+            
+            // 5. Events System
+            testResults.push(createTestItem('emit() existe', () => {
+                try {
+                    const canvas = document.createElement('div');
+                    canvas.id = 'test-canvas-8';
+                    document.body.appendChild(canvas);
+                    
+                    const editor = new FlowEditor('test-canvas-8', {});
+                    const result = typeof editor.emit === 'function';
+                    
+                    document.body.removeChild(canvas);
+                    return result;
+                } catch (e) {
+                    return false;
+                }
+            }));
+            testResults[testResults.length - 1].section = 'Events System';
+            
+            testResults.push(createTestItem('on() existe', () => {
+                try {
+                    const canvas = document.createElement('div');
+                    canvas.id = 'test-canvas-9';
+                    document.body.appendChild(canvas);
+                    
+                    const editor = new FlowEditor('test-canvas-9', {});
+                    const result = typeof editor.on === 'function';
+                    
+                    document.body.removeChild(canvas);
+                    return result;
+                } catch (e) {
+                    return false;
+                }
+            }));
+            testResults[testResults.length - 1].section = 'Events System';
+            
+            testResults.push(createTestItem('off() existe', () => {
+                try {
+                    const canvas = document.createElement('div');
+                    canvas.id = 'test-canvas-10';
+                    document.body.appendChild(canvas);
+                    
+                    const editor = new FlowEditor('test-canvas-10', {});
+                    const result = typeof editor.off === 'function';
+                    
+                    document.body.removeChild(canvas);
+                    return result;
+                } catch (e) {
+                    return false;
+                }
+            }));
+            testResults[testResults.length - 1].section = 'Events System';
+            
+            // 6. Keyboard Shortcuts
+            testResults.push(createTestItem('enableKeyboardShortcuts() existe', () => {
+                try {
+                    const canvas = document.createElement('div');
+                    canvas.id = 'test-canvas-11';
+                    document.body.appendChild(canvas);
+                    
+                    const editor = new FlowEditor('test-canvas-11', {});
+                    const result = typeof editor.enableKeyboardShortcuts === 'function';
+                    
+                    document.body.removeChild(canvas);
+                    return result;
+                } catch (e) {
+                    return false;
+                }
+            }));
+            testResults[testResults.length - 1].section = 'Keyboard Shortcuts';
+            
+            testResults.push(createTestItem('deleteSelected() existe', () => {
+                try {
+                    const canvas = document.createElement('div');
+                    canvas.id = 'test-canvas-12';
+                    document.body.appendChild(canvas);
+                    
+                    const editor = new FlowEditor('test-canvas-12', {});
+                    const result = typeof editor.deleteSelected === 'function';
+                    
+                    document.body.removeChild(canvas);
+                    return result;
+                } catch (e) {
+                    return false;
+                }
+            }));
+            testResults[testResults.length - 1].section = 'Keyboard Shortcuts';
+            
+            testResults.push(createTestItem('copySelected() existe', () => {
+                try {
+                    const canvas = document.createElement('div');
+                    canvas.id = 'test-canvas-13';
+                    document.body.appendChild(canvas);
+                    
+                    const editor = new FlowEditor('test-canvas-13', {});
+                    const result = typeof editor.copySelected === 'function';
+                    
+                    document.body.removeChild(canvas);
+                    return result;
+                } catch (e) {
+                    return false;
+                }
+            }));
+            testResults[testResults.length - 1].section = 'Keyboard Shortcuts';
+            
+            testResults.push(createTestItem('pasteSelected() existe', () => {
+                try {
+                    const canvas = document.createElement('div');
+                    canvas.id = 'test-canvas-14';
+                    document.body.appendChild(canvas);
+                    
+                    const editor = new FlowEditor('test-canvas-14', {});
+                    const result = typeof editor.pasteSelected === 'function';
+                    
+                    document.body.removeChild(canvas);
+                    return result;
+                } catch (e) {
+                    return false;
+                }
+            }));
+            testResults[testResults.length - 1].section = 'Keyboard Shortcuts';
+            
+            // 7. Undo/Redo
+            testResults.push(createTestItem('undo() existe', () => {
+                try {
+                    const canvas = document.createElement('div');
+                    canvas.id = 'test-canvas-15';
+                    document.body.appendChild(canvas);
+                    
+                    const editor = new FlowEditor('test-canvas-15', {});
+                    const result = typeof editor.undo === 'function';
+                    
+                    document.body.removeChild(canvas);
+                    return result;
+                } catch (e) {
+                    return false;
+                }
+            }));
+            testResults[testResults.length - 1].section = 'Undo/Redo';
+            
+            testResults.push(createTestItem('redo() existe', () => {
+                try {
+                    const canvas = document.createElement('div');
+                    canvas.id = 'test-canvas-16';
+                    document.body.appendChild(canvas);
+                    
+                    const editor = new FlowEditor('test-canvas-16', {});
+                    const result = typeof editor.redo === 'function';
+                    
+                    document.body.removeChild(canvas);
+                    return result;
+                } catch (e) {
+                    return false;
+                }
+            }));
+            testResults[testResults.length - 1].section = 'Undo/Redo';
+            
+            // 8. Window Exports
+            testResults.push(createTestItem('window.FlowEditor existe', () => {
+                return typeof window.FlowEditor !== 'undefined';
+            }));
+            testResults[testResults.length - 1].section = 'Window Exports';
+            
+            testResults.push(createTestItem('window.HistoryManager existe', () => {
+                return typeof window.HistoryManager !== 'undefined';
+            }));
+            testResults[testResults.length - 1].section = 'Window Exports';
+            
+            testResults.push(createTestItem('window.flowEditorActions existe', () => {
+                return typeof window.flowEditorActions !== 'undefined';
+            }));
+            testResults[testResults.length - 1].section = 'Window Exports';
+        }
+        
+        function runAllTests() {
+            testResults.length = 0;
+            defineTests();
+            
+            testResults.forEach((test, index) => {
+                setTimeout(() => {
+                    runTest(test);
+                    renderTests();
+                }, index * 50);
+            });
+        }
+        
+        // Inicializar
+        defineTests();
+        renderTests();
+    </script>
+</body>
+</html>
+
