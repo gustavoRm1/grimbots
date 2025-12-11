@@ -3110,12 +3110,8 @@ class BotManager:
                         logger.error(f"❌ Nenhum step encontrado no fluxo")
                         raise ValueError("Nenhum step disponível")
             
-            # ✅ NOVO: Validar ciclos antes de executar
-            is_valid_cycles, cycles_error = self._validate_flow_no_cycles(flow_steps, start_step_id)
-            if not is_valid_cycles:
-                logger.error(f"❌ Fluxo tem ciclos: {cycles_error}")
-                # Ainda assim executar, mas visited_steps vai detectar e parar
-                logger.warning(f"⚠️ Executando mesmo com ciclos detectados - visited_steps vai prevenir loops")
+            # ✅ V8 ULTRA: Proteção contra loops já existe em _execute_flow_recursive via visited_steps
+            # Não precisa validar ciclos aqui - visited_steps vai detectar e parar loops automaticamente
             
             # Executar recursivamente a partir do step inicial
             logger.info(f"🚀 Iniciando fluxo a partir do step inicial: {start_step_id} (tipo: {type(start_step_id)}, order={start_step.get('order', 0)})")
