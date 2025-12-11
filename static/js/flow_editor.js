@@ -301,9 +301,44 @@ class FlowEditor {
                 return;
             }
             
-            this.instance = jsPlumb.getInstance({
-                Container: container
+            // 🔥 CRÍTICO: jsPlumb precisa do canvas pai como container, não o contentContainer
+            // O SVG overlay é criado dentro do container especificado
+            // Se usar contentContainer (que tem transform), o SVG pode não aparecer corretamente
+            const canvasParent = container.parentElement || this.canvas;
+            
+            console.log('🔵 Configurando jsPlumb:', {
+                contentContainer: container.className,
+                canvasParent: canvasParent.id || canvasParent.className,
+                canvasParentInDOM: !!canvasParent.parentElement
             });
+            
+            // Tentar usar instância existente primeiro, mas garantir container correto
+            try {
+                const existingInstance = jsPlumb.getInstance();
+                if (existingInstance && existingInstance.getContainer) {
+                    const currentContainer = existingInstance.getContainer();
+                    if (currentContainer === canvasParent) {
+                        console.log('✅ Reutilizando instância jsPlumb existente com container correto');
+                        this.instance = existingInstance;
+                    } else {
+                        console.log('⚠️ Instância existente com container diferente, criando nova');
+                        this.instance = jsPlumb.newInstance({
+                            Container: canvasParent
+                        });
+                    }
+                } else {
+                    this.instance = jsPlumb.newInstance({
+                        Container: canvasParent
+                    });
+                    console.log('✅ Nova instância jsPlumb criada com canvas pai como container');
+                }
+            } catch(e) {
+                // Fallback: usar getInstance
+                console.warn('⚠️ Erro ao criar newInstance, usando getInstance:', e);
+                this.instance = jsPlumb.getInstance({
+                    Container: canvasParent
+                });
+            }
             
             // 🔥 V8 ULTRA: Verificar se instance foi criado corretamente
             if (!this.instance) {
@@ -366,7 +401,9 @@ class FlowEditor {
             // 🔥 V8 ULTRA: Habilitar conexões arrastáveis explicitamente
             try {
                 this.instance.setSuspendDrawing(false);
-                this.instance.setContainer(container);
+                // CRÍTICO: Container deve ser o canvas pai (não contentContainer)
+                const canvasParent = container.parentElement || this.canvas;
+                this.instance.setContainer(canvasParent);
                 
                 // 🔥 CRÍTICO: Garantir que o SVG overlay do jsPlumb está visível
                 // O jsPlumb cria um SVG overlay que precisa estar visível
@@ -374,11 +411,13 @@ class FlowEditor {
                 const configureSVGOverlay = (attempt = 1, maxAttempts = 5) => {
                     try {
                         // Buscar o SVG overlay do jsPlumb com múltiplas estratégias
-                        const svgOverlay = container.querySelector('svg.jtk-overlay') || 
+                        // CRÍTICO: Buscar SVG overlay no canvas pai (onde jsPlumb realmente cria)
+                        const canvasParent = container.parentElement || this.canvas;
+                        const svgOverlay = canvasParent.querySelector('svg.jtk-overlay') || 
+                                         canvasParent.querySelector('svg') ||
+                                         container.querySelector('svg.jtk-overlay') ||
                                          container.querySelector('svg') ||
-                                         container.parentElement?.querySelector('svg.jtk-overlay') ||
-                                         container.parentElement?.querySelector('svg') ||
-                                         document.querySelector(`svg[data-jtk-container="${container.id || container.className}"]`);
+                                         document.querySelector(`svg[data-jtk-container="${canvasParent.id || canvasParent.className}"]`);
                         
                         if (svgOverlay) {
                             svgOverlay.style.position = 'absolute';
@@ -508,7 +547,11 @@ class FlowEditor {
                             this.instance.repaintEverything();
                             
                             // Garantir que SVG overlay está visível
-                            const svgOverlay = this.contentContainer.querySelector('svg.jtk-overlay') || 
+                            // Buscar no canvas pai (onde jsPlumb realmente cria o SVG)
+                            const canvasParent = this.contentContainer.parentElement || this.canvas;
+                            const svgOverlay = canvasParent.querySelector('svg.jtk-overlay') || 
+                                             canvasParent.querySelector('svg') ||
+                                             this.contentContainer.querySelector('svg.jtk-overlay') ||
                                              this.contentContainer.querySelector('svg');
                             if (svgOverlay) {
                                 svgOverlay.style.display = 'block';

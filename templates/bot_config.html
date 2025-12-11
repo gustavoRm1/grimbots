@@ -668,6 +668,28 @@ svg .jtk-endpoint circle {
     opacity: 1 !important;
 }
 
+/* 🔥 MELHORIA VISUAL: Endpoints mais visíveis e atraentes */
+.jtk-endpoint circle {
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3)) !important;
+    transition: all 0.2s ease !important;
+}
+
+.jtk-endpoint:hover circle {
+    filter: drop-shadow(0 4px 8px rgba(255, 184, 0, 0.6)) !important;
+    transform: scale(1.15) !important;
+}
+
+/* Garantir que SVG overlay está acima de tudo */
+#flow-visual-canvas svg {
+    z-index: 10001 !important;
+    pointer-events: none !important;
+}
+
+#flow-visual-canvas svg .jtk-endpoint {
+    pointer-events: auto !important;
+    z-index: 10002 !important;
+}
+
 /* Provide a visible pin outside the card for custom fallback */
 .flow-step-pin {
     width: 14px;
