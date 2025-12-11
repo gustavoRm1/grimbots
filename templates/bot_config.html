@@ -639,13 +639,33 @@
 }
 
 /* Garantir que SVG dos endpoints também tenha z-index alto */
-.jtk-overlay svg {
+.jtk-overlay svg,
+svg.jtk-overlay,
+svg[class*="jtk"] {
     z-index: 10000 !important;
     pointer-events: none !important; /* SVG não intercepta, apenas os endpoints */
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
 }
 
-.jtk-overlay svg .jtk-endpoint {
+.jtk-overlay svg .jtk-endpoint,
+svg.jtk-overlay .jtk-endpoint,
+svg[class*="jtk"] .jtk-endpoint {
     pointer-events: auto !important;
+}
+
+/* 🔥 CRÍTICO: Garantir que elementos SVG do jsPlumb sejam sempre visíveis */
+svg circle,
+svg .jtk-endpoint circle {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
 }
 
 /* Provide a visible pin outside the card for custom fallback */

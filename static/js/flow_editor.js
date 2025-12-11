@@ -367,6 +367,48 @@ class FlowEditor {
             try {
                 this.instance.setSuspendDrawing(false);
                 this.instance.setContainer(container);
+                
+                // 🔥 CRÍTICO: Garantir que o SVG overlay do jsPlumb está visível
+                // O jsPlumb cria um SVG overlay que precisa estar visível
+                // Usar múltiplas tentativas com delays crescentes para garantir que seja encontrado
+                const configureSVGOverlay = (attempt = 1, maxAttempts = 5) => {
+                    try {
+                        // Buscar o SVG overlay do jsPlumb com múltiplas estratégias
+                        const svgOverlay = container.querySelector('svg.jtk-overlay') || 
+                                         container.querySelector('svg') ||
+                                         container.parentElement?.querySelector('svg.jtk-overlay') ||
+                                         container.parentElement?.querySelector('svg') ||
+                                         document.querySelector(`svg[data-jtk-container="${container.id || container.className}"]`);
+                        
+                        if (svgOverlay) {
+                            svgOverlay.style.position = 'absolute';
+                            svgOverlay.style.left = '0';
+                            svgOverlay.style.top = '0';
+                            svgOverlay.style.width = '100%';
+                            svgOverlay.style.height = '100%';
+                            svgOverlay.style.zIndex = '10000';
+                            svgOverlay.style.pointerEvents = 'none';
+                            svgOverlay.style.display = 'block';
+                            svgOverlay.style.visibility = 'visible';
+                            svgOverlay.style.opacity = '1';
+                            console.log('✅ SVG overlay configurado:', svgOverlay);
+                            return true;
+                        } else if (attempt < maxAttempts) {
+                            // Tentar novamente com delay crescente
+                            setTimeout(() => configureSVGOverlay(attempt + 1, maxAttempts), 100 * attempt);
+                            return false;
+                        } else {
+                            console.warn('⚠️ SVG overlay não encontrado após múltiplas tentativas - CSS deve garantir visibilidade');
+                            return false;
+                        }
+                    } catch(e) {
+                        console.warn('⚠️ Erro ao configurar SVG overlay:', e);
+                        return false;
+                    }
+                };
+                
+                // Iniciar tentativas de configuração
+                configureSVGOverlay();
             } catch(e) {
                 console.warn('⚠️ Erro ao configurar container:', e);
             }
@@ -443,11 +485,40 @@ class FlowEditor {
         if (window.MutationObserver) {
             this.transformObserver = new MutationObserver(() => {
                 if (this.instance) {
-                    // Revalidate nodes and cards
-                    this.steps.forEach(el => {
-                        try { this.instance.revalidate(el); } catch(e) {}
+                    // 🔥 CRÍTICO: Revalidar e repintar após transform
+                    requestAnimationFrame(() => {
+                        try {
+                            // Revalidate nodes and cards
+                            this.steps.forEach(el => {
+                                try { 
+                                    this.instance.revalidate(el);
+                                    // Garantir que endpoints estão visíveis após revalidate
+                                    const endpoints = this.instance.getEndpoints(el);
+                                    endpoints.forEach(ep => {
+                                        if (ep && ep.canvas) {
+                                            ep.canvas.style.display = 'block';
+                                            ep.canvas.style.visibility = 'visible';
+                                            ep.canvas.style.opacity = '1';
+                                        }
+                                    });
+                                } catch(e) {}
+                            });
+                            
+                            // 🔥 CRÍTICO: Repintar tudo e garantir SVG overlay está visível
+                            this.instance.repaintEverything();
+                            
+                            // Garantir que SVG overlay está visível
+                            const svgOverlay = this.contentContainer.querySelector('svg.jtk-overlay') || 
+                                             this.contentContainer.querySelector('svg');
+                            if (svgOverlay) {
+                                svgOverlay.style.display = 'block';
+                                svgOverlay.style.visibility = 'visible';
+                                svgOverlay.style.opacity = '1';
+                            }
+                        } catch(e) {
+                            console.error('❌ Erro ao revalidar após transform:', e);
+                        }
                     });
-                    try { this.instance.repaintEverything(); } catch(e) {}
                 }
             });
             this.transformObserver.observe(this.contentContainer, { attributes: true, attributeFilter: ['style'] });
@@ -859,23 +930,65 @@ class FlowEditor {
                     const draggableOptions = {
                         containment: container || this.contentContainer || this.canvas,
                         drag: (params) => {
-                            console.log('🔵 Drag em progresso para step:', stepId);
+                            // 🔥 CRÍTICO: Revalidar endpoints durante drag para garantir que apareçam
+                            if (this.instance) {
+                                try {
+                                    this.instance.revalidate(stepElement);
+                                    // Garantir que endpoints estão visíveis durante drag
+                                    const endpoints = this.instance.getEndpoints(stepElement);
+                                    endpoints.forEach(ep => {
+                                        if (ep && ep.canvas) {
+                                            ep.canvas.style.display = 'block';
+                                            ep.canvas.style.visibility = 'visible';
+                                            ep.canvas.style.opacity = '1';
+                                        }
+                                    });
+                                } catch(e) {
+                                    // Ignorar erros durante drag
+                                }
+                            }
                             this.onStepDrag(params);
                         },
                         stop: (params) => {
                             console.log('🔵 Drag parado para step:', stepId);
+                            // 🔥 CRÍTICO: Repintar tudo após drag parar
+                            if (this.instance) {
+                                try {
+                                    this.instance.revalidate(stepElement);
+                                    this.instance.repaintEverything();
+                                } catch(e) {
+                                    console.error('❌ Erro ao repintar após drag:', e);
+                                }
+                            }
                             this.onStepDragStop(params);
                         },
                         cursor: 'move',
                         start: (params) => {
                             console.log('🔵 Drag iniciado para step:', stepId, params);
+                            // 🔥 CRÍTICO: Garantir que SVG overlay está visível antes de drag
+                            if (this.instance) {
+                                try {
+                                    const svgOverlay = this.contentContainer.querySelector('svg.jtk-overlay') || 
+                                                     this.contentContainer.querySelector('svg');
+                                    if (svgOverlay) {
+                                        svgOverlay.style.display = 'block';
+                                        svgOverlay.style.visibility = 'visible';
+                                        svgOverlay.style.opacity = '1';
+                                    }
+                                } catch(e) {
+                                    // Ignorar erros
+                                }
+                            }
                         }
                     };
+                    
+                    // 🔥 CRÍTICO: Se dragHandle existe, usar apenas ele; senão, permitir drag pelo card inteiro
                     if (dragHandle) {
                         draggableOptions.handle = dragHandle;
                         console.log('✅ Usando drag handle para step:', stepId);
                     } else {
-                        draggableOptions.filter = '.flow-step-footer, .flow-step-btn-action, .jtk-endpoint';
+                        // Sem handle: permitir drag pelo card inteiro, mas excluir footer, botões e endpoints
+                        draggableOptions.filter = '.flow-step-footer, .flow-step-btn-action, .jtk-endpoint, .flow-step-button-endpoint-container';
                         console.log('✅ Usando card inteiro para drag (sem handle) para step:', stepId);
                     }
                     
@@ -1514,11 +1627,49 @@ class FlowEditor {
         });
         
         // CRÍTICO: Verificar flag dataset para evitar múltiplas criações
+        // 🔥 V8 ULTRA: Se endpoints já foram inicializados, verificar se estão visíveis
         if (element.dataset.endpointsInited === 'true') {
-            // Endpoints já foram inicializados, apenas revalidar
-            console.log('ℹ️ Endpoints já inicializados para step:', stepId, '- apenas revalidando');
+            console.log('ℹ️ Endpoints já inicializados para step:', stepId, '- verificando visibilidade');
             try {
+                // Revalidar primeiro
                 this.instance.revalidate(element);
+                
+                // 🔥 CRÍTICO: Verificar se endpoints estão visíveis e forçar visibilidade se necessário
+                const endpoints = this.instance.getEndpoints(element);
+                let needsRepaint = false;
+                
+                endpoints.forEach((ep, idx) => {
+                    if (ep && ep.canvas) {
+                        const computedStyle = window.getComputedStyle(ep.canvas);
+                        if (computedStyle.display === 'none' || computedStyle.visibility === 'hidden' || computedStyle.opacity === '0') {
+                            ep.canvas.style.display = 'block';
+                            ep.canvas.style.visibility = 'visible';
+                            ep.canvas.style.opacity = '1';
+                            ep.canvas.style.pointerEvents = 'auto';
+                            ep.canvas.style.zIndex = '10000';
+                            needsRepaint = true;
+                            console.log(`✅ Endpoint ${idx} forçado a ficar visível`);
+                        }
+                    }
+                });
+                
+                // Garantir que SVG overlay está visível
+                const svgOverlay = this.contentContainer.querySelector('svg.jtk-overlay') || 
+                                 this.contentContainer.querySelector('svg');
+                if (svgOverlay) {
+                    const svgStyle = window.getComputedStyle(svgOverlay);
+                    if (svgStyle.display === 'none' || svgStyle.visibility === 'hidden') {
+                        svgOverlay.style.display = 'block';
+                        svgOverlay.style.visibility = 'visible';
+                        svgOverlay.style.opacity = '1';
+                        needsRepaint = true;
+                        console.log('✅ SVG overlay forçado a ficar visível');
+                    }
+                }
+                
+                if (needsRepaint) {
+                    this.instance.repaintEverything();
+                }
             } catch(e) {
                 console.error('❌ Erro ao revalidar:', e);
             }
@@ -1727,6 +1878,12 @@ class FlowEditor {
                         svgParent.style.pointerEvents = 'none'; // SVG não intercepta, apenas os endpoints
                         svgParent.style.display = 'block';
                         svgParent.style.visibility = 'visible';
+                        svgParent.style.opacity = '1';
+                        svgParent.style.position = 'absolute';
+                        svgParent.style.left = '0';
+                        svgParent.style.top = '0';
+                        svgParent.style.width = '100%';
+                        svgParent.style.height = '100%';
                     }
                     
                     console.log(`✅ Endpoint ${idx} configurado:`, {
@@ -1748,6 +1905,38 @@ class FlowEditor {
                 requestAnimationFrame(() => {
                     try {
                         this.instance.revalidate(element);
+                        this.instance.repaintEverything();
+                        
+                        // 🔥 CRÍTICO: Garantir que SVG overlay está visível após criar endpoints
+                        const svgOverlay = this.contentContainer.querySelector('svg.jtk-overlay') || 
+                                         this.contentContainer.querySelector('svg');
+                        if (svgOverlay) {
+                            svgOverlay.style.position = 'absolute';
+                            svgOverlay.style.left = '0';
+                            svgOverlay.style.top = '0';
+                            svgOverlay.style.width = '100%';
+                            svgOverlay.style.height = '100%';
+                            svgOverlay.style.zIndex = '10000';
+                            svgOverlay.style.pointerEvents = 'none';
+                            svgOverlay.style.display = 'block';
+                            svgOverlay.style.visibility = 'visible';
+                            svgOverlay.style.opacity = '1';
+                            console.log(`✅ SVG overlay configurado após criar endpoints para step ${stepId}`);
+                        }
+                        
+                        // 🔥 CRÍTICO: Garantir que todos os endpoints estão visíveis
+                        const allEndpoints = this.instance.getEndpoints(element);
+                        allEndpoints.forEach((ep, idx) => {
+                            if (ep && ep.canvas) {
+                                ep.canvas.style.display = 'block';
+                                ep.canvas.style.visibility = 'visible';
+                                ep.canvas.style.opacity = '1';
+                                ep.canvas.style.pointerEvents = 'auto';
+                                ep.canvas.style.zIndex = '10000';
+                            }
+                        });
+                        
+                        // Repintar novamente após configurar estilos
                         this.instance.repaintEverything();
                         console.log(`✅ Repaint executado para step ${stepId}`);
                     } catch(e) {
