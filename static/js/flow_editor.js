@@ -353,7 +353,20 @@ class FlowEditor {
             content: 'fa-file-alt',
             audio: 'fa-headphones',
             video: 'fa-video',
-            buttons: 'fa-mouse-pointer'
+            buttons: 'fa-mouse-pointer',
+            condition: 'fa-code-branch' // 🔥 V9.0 CHATBOT BUILDER: Novo tipo
+        };
+        
+        // 🔥 V9.0 CHATBOT BUILDER: Regras de validação de conexões
+        this.connectionRules = {
+            'message': ['content', 'payment', 'access', 'buttons', 'condition'],
+            'content': ['message', 'payment', 'access', 'buttons', 'condition'],
+            'payment': ['access', 'message', 'condition'],
+            'condition': ['message', 'payment', 'access', 'buttons', 'content'],
+            'buttons': ['message', 'payment', 'access', 'condition'],
+            'audio': ['message', 'content', 'buttons'],
+            'video': ['message', 'content', 'buttons'],
+            'access': [] // Fim do fluxo
         };
         
         this.init();
@@ -728,6 +741,11 @@ class FlowEditor {
                 ]
             });
             
+            // 🔥 V9.0 CHATBOT BUILDER: Validação de conexões antes de criar
+            this.instance.bind('beforeConnect', (info) => {
+                return this.validateConnectionBeforeConnect(info);
+            });
+            
             // 🔥 V2.0: Events System Completo
             // Eventos jsPlumb Community Edition
             this.instance.bind('connection', (info) => this.onConnectionCreated(info));
@@ -1039,7 +1057,7 @@ class FlowEditor {
                 // ✅ Revalidar todos os elementos
                 this.steps.forEach((el, id) => {
                     try {
-                        this.instance.revalidate(el);
+                    this.instance.revalidate(el);
                         // ✅ Garantir que endpoints estão visíveis após revalidate
                         const endpoints = this.instance.getEndpoints(el);
                         endpoints.forEach(ep => {
@@ -1569,6 +1587,13 @@ class FlowEditor {
         const previewText = this.getStepPreview(step) ? `<div class="flow-step-preview">${this.escapeHtml(this.getStepPreview(step))}</div>` : '';
         const buttonsHtml = hasButtons ? this.getButtonPreviewHtml(customButtons) : '';
         
+        // 🔥 V9.0 CHATBOT BUILDER: Condition node tem dois outputs (true/false)
+        const isCondition = stepType === 'condition';
+        const conditionOutputs = isCondition ? `
+            <div class="flow-step-node-output-true" style="position: absolute; right: -8px; top: 30%; transform: translateY(-50%); width: 16px; height: 16px; z-index: 60; pointer-events: none;"></div>
+            <div class="flow-step-node-output-false" style="position: absolute; right: -8px; top: 70%; transform: translateY(-50%); width: 16px; height: 16px; z-index: 60; pointer-events: none;"></div>
+        ` : '';
+        
         inner.innerHTML = `
             <div class="flow-step-header">
                 <div class="flow-step-header-content">
@@ -1583,6 +1608,7 @@ class FlowEditor {
                 ${mediaHtml}
                 ${previewText}
                 ${buttonsHtml}
+                ${isCondition ? '<div style="padding: 8px; font-size: 11px; color: #9CA3AF; text-align: center;">Verdadeiro / Falso</div>' : ''}
             </div>
             <div class="flow-step-footer" data-jtk-not-draggable="true" style="pointer-events: auto; z-index: 10000;">
                 <button class="flow-step-btn-action" data-action="edit" data-step-id="${stepId}" data-jtk-not-draggable="true" title="Editar" style="pointer-events: auto; cursor: pointer; z-index: 10001; position: relative;" onclick="console.log('🔵 [ONCLICK INLINE] editStep:', '${stepId}'); event.stopImmediatePropagation(); event.stopPropagation(); event.preventDefault(); if(window.flowEditor && window.flowEditor.handleActionClick) { window.flowEditor.handleActionClick('edit', '${stepId}'); } else if(window.flowEditorActions && window.flowEditorActions.editStep) { window.flowEditorActions.editStep('${stepId}'); } return false;"><i class="fas fa-edit"></i></button>
@@ -1591,8 +1617,11 @@ class FlowEditor {
             </div>
             <!-- 🔥 V5.0: Nodes HTML separados para endpoints -->
             <div class="flow-step-node-input" style="position: absolute; left: -8px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; z-index: 60; pointer-events: none;"></div>
-            ${!hasButtons ? '<div class="flow-step-node-output-global" style="position: absolute; right: -8px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; z-index: 60; pointer-events: none;"></div>' : ''}
+            ${isCondition ? conditionOutputs : (!hasButtons ? '<div class="flow-step-node-output-global" style="position: absolute; right: -8px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; z-index: 60; pointer-events: none;"></div>' : '')}
         `;
+        
+        // 🔥 V9.0 CHATBOT BUILDER: Adicionar data-step-type para CSS
+        stepElement.setAttribute('data-step-type', stepType);
         
         // 🔥 V8 ULTRA: Append inner to step and to contentContainer
         stepElement.appendChild(inner);
@@ -1977,8 +2006,15 @@ class FlowEditor {
             const step = this.alpine?.config?.flow_steps?.find(s => String(s.id) === stepId);
             if (step) {
                 expectedUuids.add(`endpoint-left-${stepId}`);
+                const stepType = step.type || 'message';
+                const isCondition = stepType === 'condition';
                 const hasButtons = (step.config?.custom_buttons || []).length > 0;
-                if (hasButtons) {
+                
+                // 🔥 V9.0 CHATBOT BUILDER: Condition nodes têm dois outputs
+                if (isCondition) {
+                    expectedUuids.add(`endpoint-true-${stepId}`);
+                    expectedUuids.add(`endpoint-false-${stepId}`);
+                } else if (hasButtons) {
                     (step.config.custom_buttons || []).forEach((btn, idx) => {
                         expectedUuids.add(`endpoint-button-${stepId}-${idx}`);
                     });
@@ -2448,6 +2484,7 @@ class FlowEditor {
         const stepConfig = step.config || {};
         const customButtons = stepConfig.custom_buttons || [];
         const hasButtons = customButtons.length > 0;
+        const isCondition = step.type === 'condition';
         
         // Ensure element position absolute
         element.style.position = 'absolute';
@@ -2476,8 +2513,27 @@ class FlowEditor {
                     return;
                 }
                 
-                // Garantir output node existe (se não há botões)
-                if (!hasButtons) {
+                // 🔥 V9.0 CHATBOT BUILDER: Condition nodes têm dois outputs (true/false)
+                if (isCondition) {
+                    // Garantir nodes de output true/false existem
+                    let outputTrueNode = innerWrapper.querySelector('.flow-step-node-output-true');
+                    let outputFalseNode = innerWrapper.querySelector('.flow-step-node-output-false');
+                    
+                    if (!outputTrueNode) {
+                        outputTrueNode = document.createElement('div');
+                        outputTrueNode.className = 'flow-step-node-output-true';
+                        outputTrueNode.style.cssText = 'position: absolute; right: -8px; top: 30%; transform: translateY(-50%); width: 16px; height: 16px; z-index: 60; pointer-events: none;';
+                        innerWrapper.appendChild(outputTrueNode);
+                    }
+                    
+                    if (!outputFalseNode) {
+                        outputFalseNode = document.createElement('div');
+                        outputFalseNode.className = 'flow-step-node-output-false';
+                        outputFalseNode.style.cssText = 'position: absolute; right: -8px; top: 70%; transform: translateY(-50%); width: 16px; height: 16px; z-index: 60; pointer-events: none;';
+                        innerWrapper.appendChild(outputFalseNode);
+                    }
+                } else if (!hasButtons) {
+                    // Garantir output node existe (se não há botões e não é condition)
                     let outputNode = innerWrapper.querySelector('.flow-step-node-output-global');
                     if (!outputNode) {
                         outputNode = document.createElement('div');
@@ -2547,7 +2603,69 @@ class FlowEditor {
         }
         
         // 2) OUTPUT endpoints
-        if (hasButtons) {
+        // 🔥 V9.0 CHATBOT BUILDER: Condition nodes têm dois outputs (true/false)
+        if (isCondition) {
+            // Remover outputs globais se existirem
+            const globalUuid = `endpoint-right-${stepId}`;
+            try {
+                const existingGlobal = this.instance.getEndpoint(globalUuid);
+                if (existingGlobal) {
+                    this.instance.deleteEndpoint(existingGlobal);
+                }
+            } catch(e) {}
+            
+            // Criar endpoint TRUE (topo)
+            const outputTrueNode = innerWrapper.querySelector('.flow-step-node-output-true');
+            if (outputTrueNode) {
+                const trueUuid = `endpoint-true-${stepId}`;
+                const trueEndpoint = this.ensureEndpoint(this.instance, outputTrueNode, trueUuid, {
+                    anchor: [1, 0.3, 1, 0, 8, 0], // right, 30% from top
+                    isSource: true,
+                    isTarget: false,
+                    maxConnections: 1,
+                    endpoint: ['Dot', { 
+                        radius: 6,
+                        cssClass: 'flow-endpoint-condition-true',
+                        hoverClass: 'flow-endpoint-condition-true-hover'
+                    }],
+                    paintStyle: { fill:'#10B981', outlineStroke:'#FFFFFF', outlineWidth:2 },
+                    hoverPaintStyle: { fill:'#FFB800', outlineStroke:'#FFFFFF', outlineWidth:3 },
+                    data: { stepId, endpointType: 'condition-true' }
+                });
+                
+                if (trueEndpoint) {
+                    this.instance.revalidate(outputTrueNode);
+                    this.instance.revalidate(element);
+                    this.forceEndpointVisibility(trueEndpoint, stepId, 'condition-true');
+                }
+            }
+            
+            // Criar endpoint FALSE (baixo)
+            const outputFalseNode = innerWrapper.querySelector('.flow-step-node-output-false');
+            if (outputFalseNode) {
+                const falseUuid = `endpoint-false-${stepId}`;
+                const falseEndpoint = this.ensureEndpoint(this.instance, outputFalseNode, falseUuid, {
+                    anchor: [1, 0.7, 1, 0, 8, 0], // right, 70% from top
+                    isSource: true,
+                    isTarget: false,
+                    maxConnections: 1,
+                    endpoint: ['Dot', { 
+                        radius: 6,
+                        cssClass: 'flow-endpoint-condition-false',
+                        hoverClass: 'flow-endpoint-condition-false-hover'
+                    }],
+                    paintStyle: { fill:'#EF4444', outlineStroke:'#FFFFFF', outlineWidth:2 },
+                    hoverPaintStyle: { fill:'#FFB800', outlineStroke:'#FFFFFF', outlineWidth:3 },
+                    data: { stepId, endpointType: 'condition-false' }
+                });
+                
+                if (falseEndpoint) {
+                    this.instance.revalidate(outputFalseNode);
+                    this.instance.revalidate(element);
+                    this.forceEndpointVisibility(falseEndpoint, stepId, 'condition-false');
+                }
+            }
+        } else if (hasButtons) {
             // Remover output global se existir
             const globalUuid = `endpoint-right-${stepId}`;
                     try {
@@ -2864,13 +2982,13 @@ class FlowEditor {
             console.error('❌ Erro ao configurar endpoints:', e);
         }
         
-                // Revalidar após criar endpoints
+        // Revalidar após criar endpoints
                 try {
                     // 🔥 V9.0 FINAL: Revalidar e repintar com delay para garantir renderização
                     requestAnimationFrame(() => {
                         requestAnimationFrame(() => {
-                            try {
-                                this.instance.revalidate(element);
+        try {
+            this.instance.revalidate(element);
                                 // 🔥 FASE 1: Usar throttledRepaint ao invés de repaintEverything direto
                                 this.throttledRepaint();
                                 console.log(`✅ Revalidação e repaint executados para step ${stepId}`);
@@ -3607,6 +3725,14 @@ class FlowEditor {
         } else if (sUuid.startsWith('endpoint-right-')) {
             sourceStep = sUuid.replace('endpoint-right-','');
             connType = 'next';
+        } else if (sUuid.startsWith('endpoint-true-')) {
+            // 🔥 V9.0 CHATBOT BUILDER: Condition true output
+            sourceStep = sUuid.replace('endpoint-true-','');
+            connType = 'condition-true';
+        } else if (sUuid.startsWith('endpoint-false-')) {
+            // 🔥 V9.0 CHATBOT BUILDER: Condition false output
+            sourceStep = sUuid.replace('endpoint-false-','');
+            connType = 'condition-false';
         } else {
             // may be some other format; fallback to dataset
             const data = info.source.getParameters && info.source.getParameters() || {};
@@ -3626,6 +3752,12 @@ class FlowEditor {
                 const step = this.alpine?.config?.flow_steps?.find(s => String(s.id) === String(sourceStep));
                 if (connType === 'button' && step?.config?.custom_buttons?.[buttonIndex]) {
                     step.config.custom_buttons[buttonIndex].target_step = targetStep;
+                } else if (connType === 'condition-true' && step?.config) {
+                    // 🔥 V9.0 CHATBOT BUILDER: Salvar conexão true
+                    step.config.true_step_id = targetStep;
+                } else if (connType === 'condition-false' && step?.config) {
+                    // 🔥 V9.0 CHATBOT BUILDER: Salvar conexão false
+                    step.config.false_step_id = targetStep;
                 } else if (step) {
                     if (!step.connections) step.connections = {};
                     step.connections[connType] = targetStep;
@@ -4632,9 +4764,78 @@ class FlowEditor {
             video: 'Vídeo',
             buttons: 'Botões',
             payment: 'Pagamento',
-            access: 'Acesso'
+            access: 'Acesso',
+            condition: 'Condição' // 🔥 V9.0 CHATBOT BUILDER: Novo tipo
         };
         return labels[type] || type;
+    }
+    
+    /**
+     * 🔥 V9.0 CHATBOT BUILDER: Valida se conexão é permitida
+     */
+    validateConnection(sourceStepType, targetStepType) {
+        const allowed = this.connectionRules[sourceStepType] || [];
+        return allowed.includes(targetStepType);
+    }
+    
+    /**
+     * 🔥 V9.0 CHATBOT BUILDER: Valida conexão antes de criar (interceptor)
+     */
+    validateConnectionBeforeConnect(info) {
+        if (!info || !info.sourceEndpoint || !info.targetEndpoint) {
+            return true; // Permitir se não temos informações suficientes
+        }
+        
+        try {
+            // Obter tipos dos steps
+            const sourceElement = info.sourceEndpoint.getElement ? info.sourceEndpoint.getElement() : null;
+            const targetElement = info.targetEndpoint.getElement ? info.targetEndpoint.getElement() : null;
+            
+            if (!sourceElement || !targetElement) {
+                return true; // Permitir se não encontramos elementos
+            }
+            
+            // Buscar step IDs
+            const sourceStepId = sourceElement.dataset?.stepId || sourceElement.closest('[data-step-id]')?.dataset?.stepId;
+            const targetStepId = targetElement.dataset?.stepId || targetElement.closest('[data-step-id]')?.dataset?.stepId;
+            
+            if (!sourceStepId || !targetStepId) {
+                return true; // Permitir se não encontramos step IDs
+            }
+            
+            // Buscar steps no Alpine
+            const sourceStep = this.alpine?.config?.flow_steps?.find(s => String(s.id) === String(sourceStepId));
+            const targetStep = this.alpine?.config?.flow_steps?.find(s => String(s.id) === String(targetStepId));
+            
+            if (!sourceStep || !targetStep) {
+                return true; // Permitir se não encontramos steps
+            }
+            
+            const sourceType = sourceStep.type || 'message';
+            const targetType = targetStep.type || 'message';
+            
+            // Validar conexão
+            const isValid = this.validateConnection(sourceType, targetType);
+            
+            if (!isValid) {
+                console.warn(`⚠️ Conexão bloqueada: ${sourceType} → ${targetType} não é permitida`);
+                // Mostrar feedback visual (endpoint vermelho)
+                if (info.targetEndpoint && info.targetEndpoint.canvas) {
+                    info.targetEndpoint.canvas.style.border = '2px solid #EF4444';
+                    setTimeout(() => {
+                        if (info.targetEndpoint && info.targetEndpoint.canvas) {
+                            info.targetEndpoint.canvas.style.border = '';
+                        }
+                    }, 1000);
+                }
+                return false; // Bloquear conexão
+            }
+            
+            return true; // Permitir conexão
+        } catch(e) {
+            console.error('❌ Erro ao validar conexão:', e);
+            return true; // Permitir em caso de erro (fail-open)
+        }
     }
     
     getStepPreview(step) {
