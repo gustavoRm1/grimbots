@@ -165,8 +165,9 @@
     -webkit-user-select: none;
     -moz-user-select: none;
     -ms-user-select: none;
-    touch-action: none;
-    will-change: left, top;
+    touch-action: pan-y; /* 🔥 CRÍTICO: permitir touch para drag */
+    will-change: transform; /* 🔥 CRÍTICO: usar transform para melhor performance */
+    pointer-events: auto !important; /* 🔥 CRÍTICO: garantir que eventos funcionam */
     /* CRÍTICO: necessário para os nodes ABSOLUTOS terem referência correta */
     transform-style: preserve-3d;
     perspective: 1000px;
@@ -720,7 +721,8 @@
                 box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     will-change: transform;
     user-select: none;
-    touch-action: none;
+    touch-action: pan-y !important; /* 🔥 CRÍTICO: permitir touch para drag */
+    pointer-events: auto !important; /* 🔥 CRÍTICO: garantir que eventos funcionam */
     animation: stepFadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 

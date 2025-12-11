@@ -642,23 +642,25 @@ class FlowEditor {
                     return;
                 }
                 
-                // 🔥 V7 CRÍTICO: Container SEMPRE deve ser this.canvas (não contentContainer)
-                // O SVG overlay do jsPlumb é criado dentro do container especificado
-                // Se usar contentContainer (que tem transform CSS), o SVG pode não aparecer corretamente
-                const container = this.canvas;
+                // 🔥 V2.0 LAYOUTS FIX: Container DEVE ser contentContainer (onde elementos estão)
+                // CRÍTICO: jsPlumb precisa encontrar os elementos dentro de contentContainer
+                // Se usar canvas, jsPlumb não encontra elementos dentro de contentContainer
+                const container = this.contentContainer || this.canvas;
                 
                 if (!container) {
-                    reject(new Error('Canvas não encontrado'));
+                    reject(new Error('Container não encontrado'));
                     return;
                 }
                 
-                console.log('🔵 [V7] Inicializando jsPlumb com canvas como container:', {
-                    canvasId: container.id,
-                    canvasClass: container.className,
+                console.log('🔵 [V7] Inicializando jsPlumb com contentContainer como container:', {
+                    containerId: container.id,
+                    containerClass: container.className,
+                    isContentContainer: container === this.contentContainer,
+                    isCanvas: container === this.canvas,
                     hasContentContainer: !!this.contentContainer
                 });
                 
-                // Criar instância jsPlumb com canvas como container
+                // Criar instância jsPlumb com contentContainer como container
                 try {
                     const existingInstance = jsPlumb.getInstance();
                     if (existingInstance && existingInstance.getContainer) {
@@ -680,9 +682,9 @@ class FlowEditor {
                     }
                 } catch(e) {
                     console.warn('⚠️ [V7] Erro ao criar newInstance, usando getInstance:', e);
-            this.instance = jsPlumb.getInstance({
-                Container: container
-            });
+                    this.instance = jsPlumb.getInstance({
+                        Container: container
+                    });
                 }
                 
                 if (!this.instance) {
@@ -1218,8 +1220,9 @@ class FlowEditor {
             }
         };
         
-        // CRÍTICO: Usar capture: false para não interceptar antes dos botões
-        this.canvas.addEventListener('mousedown', startPan, false);
+        // 🔥 CRÍTICO: Usar capture: false e baixa prioridade para não interceptar drag
+        // Adicionar com { passive: true, capture: false } para não bloquear jsPlumb
+        this.canvas.addEventListener('mousedown', startPan, { passive: true, capture: false });
         
         this.canvas.addEventListener('mousemove', (e) => {
             if (this.isPanning) {
@@ -1287,7 +1290,17 @@ class FlowEditor {
         let lassoStart = null;
         let lassoRect = null;
         
+        // 🔥 CRÍTICO: Usar capture: false e verificar se NÃO é drag de step
         this.contentContainer.addEventListener('mousedown', (e) => {
+            // 🔥 V2.0 LAYOUTS FIX: NUNCA interceptar se for sobre step ou drag handle
+            const isOverStep = e.target.closest('.flow-step-block');
+            const isOverDragHandle = e.target.closest('.flow-drag-handle');
+            
+            // Se estiver sobre step ou drag handle, deixar jsPlumb gerenciar
+            if (isOverStep || isOverDragHandle) {
+                return; // NÃO processar lasso, deixar drag funcionar
+            }
+            
             if (e.shiftKey && !e.target.closest('.flow-step-block')) {
                 lassoStart = { x: e.clientX, y: e.clientY };
                 this.isLassoSelecting = true;
@@ -1309,7 +1322,7 @@ class FlowEditor {
                 
                 e.preventDefault();
             }
-        });
+        }, false); // 🔥 CRÍTICO: capture: false para não interceptar antes do jsPlumb
         
         document.addEventListener('mousemove', (e) => {
             if (this.isLassoSelecting && lassoStart) {
@@ -3224,8 +3237,12 @@ class FlowEditor {
             // Remover qualquer atributo que possa bloquear drag
             stepElement.removeAttribute('data-jtk-not-draggable');
             stepElement.style.pointerEvents = 'auto';
-            // 🔥 V2.0 LAYOUTS FIX: Cursor move quando arrastável (mesmo com handle)
             stepElement.style.cursor = 'move';
+            stepElement.style.userSelect = 'none';
+            stepElement.style.webkitUserSelect = 'none';
+            stepElement.style.touchAction = 'pan-y'; // Permitir touch para drag
+            // 🔥 CRÍTICO: Garantir que não há CSS bloqueando
+            stepElement.style.position = 'absolute'; // Garantir position absolute
             
             // 🔥 CRÍTICO: Garantir que drag handle também está configurado
             if (dragHandle) {
@@ -3236,15 +3253,41 @@ class FlowEditor {
                 dragHandle.removeAttribute('data-jtk-not-draggable');
             }
             
+            // 🔥 CRÍTICO: Forçar draggable mesmo se já estiver configurado
+            // Remover completamente antes de reconfigurar
+            try {
+                if (this.instance.setDraggable) {
+                    this.instance.setDraggable(stepElement, false);
+                }
+            } catch(e) {
+                // Ignorar
+            }
+            
             // Configurar draggable
-            this.instance.draggable(stepElement, draggableOptions);
+            try {
+                this.instance.draggable(stepElement, draggableOptions);
+            } catch(dragError) {
+                console.error('❌ [V7] Erro ao configurar draggable:', dragError);
+                // Tentar método alternativo
+                if (this.instance.setDraggable) {
+                    this.instance.setDraggable(stepElement, true);
+                }
+            }
             
             // 🔥 CRÍTICO: Verificar se draggable foi configurado corretamente
             const isDraggable = this.instance.isDraggable ? this.instance.isDraggable(stepElement) : true;
+            
+            // 🔥 CRÍTICO: Se não está draggable, tentar método alternativo
+            if (!isDraggable && this.instance.setDraggable) {
+                console.warn('⚠️ [V7] Draggable não configurado, tentando setDraggable(true)...');
+                this.instance.setDraggable(stepElement, true);
+            }
+            
             console.log('✅ [V7] Draggable configurado para step:', stepId, {
                 hasHandle: !!dragHandle,
                 elementInDOM: !!stepElement.parentElement,
                 elementParent: stepElement.parentElement?.id || stepElement.parentElement?.className,
+                elementInContentContainer: this.contentContainer?.contains(stepElement),
                 elementPosition: stepElement.style.transform,
                 elementLeft: stepElement.style.left,
                 elementTop: stepElement.style.top,
@@ -3252,14 +3295,17 @@ class FlowEditor {
                 elementStyle: {
                     position: stepElement.style.position,
                     pointerEvents: stepElement.style.pointerEvents,
-                    cursor: stepElement.style.cursor
+                    cursor: stepElement.style.cursor,
+                    userSelect: stepElement.style.userSelect,
+                    touchAction: stepElement.style.touchAction
                 },
                 draggableOptions: {
                     hasHandle: !!draggableOptions.handle,
                     hasFilter: !!draggableOptions.filter,
                     hasContainment: !!draggableOptions.containment,
                     hasGrid: !!draggableOptions.grid
-                }
+                },
+                instanceContainer: this.instance.getContainer ? (this.instance.getContainer()?.id || this.instance.getContainer()?.className) : 'unknown'
             });
             
             if (!isDraggable && this.instance.isDraggable) {
