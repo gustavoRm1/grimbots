@@ -2921,14 +2921,27 @@ function botConfigApp() {
             this.config.flow_steps.push(newStep);
             console.log('✅ Step adicionado ao Alpine:', stepId, 'Total:', this.config.flow_steps.length);
             
-            // Garantir que o editor está inicializado e renderizar
+            // 🔥 V8 ULTRA: Garantir que o editor está inicializado e renderizar
             this.$nextTick(() => {
+                console.log('🔵 $nextTick executado após adicionar step');
+                
                 // Função para tentar renderizar
                 const tryRender = () => {
+                    console.log('🔵 Tentando renderizar steps...', {
+                        hasFlowEditor: !!window.flowEditor,
+                        hasRenderAllSteps: !!(window.flowEditor && typeof window.flowEditor.renderAllSteps === 'function'),
+                        flowStepsCount: this.config.flow_steps?.length || 0
+                    });
+                    
                     if (window.flowEditor && typeof window.flowEditor.renderAllSteps === 'function') {
-                        window.flowEditor.renderAllSteps();
-                        console.log('✅ Steps re-renderizados (jsPlumb)');
-                        return true;
+                        try {
+                            window.flowEditor.renderAllSteps();
+                            console.log('✅ Steps re-renderizados (jsPlumb)');
+                            return true;
+                        } catch(e) {
+                            console.error('❌ Erro ao chamar renderAllSteps:', e);
+                            return false;
+                        }
                     }
                     return false;
                 };
@@ -2950,8 +2963,14 @@ function botConfigApp() {
                         attempts++;
                         if (typeof window.FlowEditor !== 'undefined' && typeof jsPlumb !== 'undefined') {
                             clearInterval(checkInterval);
+                            console.log('✅ FlowEditor e jsPlumb carregados, inicializando editor...');
                             this.initVisualFlowEditor();
-                            setTimeout(() => tryRender(), 500);
+                            setTimeout(() => {
+                                if (!tryRender()) {
+                                    console.warn('⚠️ Tentando renderizar novamente após 1s...');
+                                    setTimeout(() => tryRender(), 1000);
+                                }
+                            }, 500);
                         } else if (attempts > 20) {
                             clearInterval(checkInterval);
                             console.error('❌ FlowEditor ou jsPlumb não carregou após 4 segundos');
@@ -2959,12 +2978,17 @@ function botConfigApp() {
                     }, 200);
                 } else {
                     // FlowEditor está disponível, inicializar
+                    console.log('✅ FlowEditor disponível, inicializando...');
                     this.initVisualFlowEditor();
                     // Aguardar um pouco e tentar renderizar
                     setTimeout(() => {
                         if (!tryRender()) {
                             console.warn('⚠️ Editor inicializado mas renderAllSteps ainda não está disponível. Tentando novamente...');
-                            setTimeout(() => tryRender(), 500);
+                            setTimeout(() => {
+                                if (!tryRender()) {
+                                    console.error('❌ Falha ao renderizar após múltiplas tentativas');
+                                }
+                            }, 1000);
                         }
                     }, 500);
                 }
