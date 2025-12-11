@@ -345,6 +345,28 @@ class FlowEditor {
         this.minZoom = 0.2;
         this.maxZoom = 4.0;
         
+        // 🔥 V2.0 BACKGROUND: Configurações do grid SVG
+        this.backgroundConfig = {
+            type: 'grid', // 'grid' (linhas) ou 'dots' (pontos)
+            gridSize: 20,
+            showTickMarks: true,
+            tickMarksPerCell: 2,
+            showBorder: false,
+            minWidth: 1500,
+            minHeight: 1500,
+            maxWidth: null,
+            maxHeight: null,
+            autoShrink: true,
+            dotRadius: 2,
+            tickDotRadius: 1,
+            visible: true,
+            color: 'rgba(255, 255, 255, 0.12)',
+            tickColor: 'rgba(255, 255, 255, 0.06)',
+            borderColor: 'rgba(255, 255, 255, 0.2)'
+        };
+        this.backgroundSVG = null;
+        this.backgroundBounds = { minX: -750, minY: -750, maxX: 750, maxY: 750 };
+        
         // Cores e ícones
         this.stepIcons = {
             message: 'fa-comment',
@@ -914,12 +936,16 @@ class FlowEditor {
     /**
      * Configura canvas com grid e container interno
      * PATCH V4.0 - ManyChat Perfect
+     * 🔥 V2.0 BACKGROUND: Adiciona grid SVG dinâmico
      */
     setupCanvas() {
         if (!this.canvas) {
             console.error('❌ setupCanvas: canvas não encontrado');
             return;
         }
+        
+        // 🔥 V2.0 BACKGROUND: Criar/atualizar background SVG
+        this.setupBackgroundSVG();
         
         // 🔥 V8 ULTRA: Garantir que contentContainer existe e está correto
         // Se flow-canvas-content já existe no HTML, reutilizar
@@ -957,12 +983,12 @@ class FlowEditor {
             children: this.contentContainer?.children?.length || 0
         });
         
-        // Ensure canvas base styles (grid)
+        // Ensure canvas base styles
         this.canvas.style.position = 'relative';
         this.canvas.style.overflow = 'hidden';
         this.canvas.style.background = '#0D0F15';
-        this.canvas.style.backgroundImage = 'radial-gradient(circle, rgba(255,255,255,0.12) 1.5px, transparent 1.5px)';
-        this.canvas.style.backgroundSize = `${this.gridSize}px ${this.gridSize}px`;
+        // 🔥 V2.0 BACKGROUND: Grid agora é SVG, não background-image
+        this.canvas.style.backgroundImage = 'none';
         
         // 🔥 V7 PROFISSIONAL: MutationObserver com debounce para evitar loops infinitos
         if (this.transformObserver) {
@@ -1047,6 +1073,9 @@ class FlowEditor {
         
         const transform = `translate(${this.pan.x}px, ${this.pan.y}px) scale(${this.zoomLevel})`;
         this.contentContainer.style.transform = transform;
+        
+        // 🔥 V2.0 BACKGROUND: Atualizar bounds do background após transform
+        this.updateBackgroundBounds();
         
         // ✅ V2.0 FRONTEND: Revalidar e repintar jsPlumb após transform (com throttling)
         if (this.repaintTimeout) {
@@ -1520,6 +1549,11 @@ class FlowEditor {
         
         // Ajustar tamanho do canvas
         this.adjustCanvasSize();
+        
+        // 🔥 V2.0 BACKGROUND: Atualizar bounds após renderizar steps
+        setTimeout(() => {
+            this.updateBackgroundBounds();
+        }, 50);
         
         // Reconectar após renderização
         setTimeout(() => {

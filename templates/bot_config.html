@@ -23,11 +23,8 @@
 
 #flow-visual-canvas {
     background: #0D0F15 !important;
-    background-image: 
-        radial-gradient(circle, rgba(255, 255, 255, 0.25) 1.5px, transparent 1.5px) !important;
-    background-size: 20px 20px !important;
-    background-repeat: repeat !important;
-    background-position: 0 0 !important;
+    /* 🔥 V2.0 BACKGROUND: Grid agora é SVG, não background-image */
+    background-image: none !important;
     font-family: 'Inter', sans-serif;
     user-select: none;
     -webkit-user-select: none;
@@ -42,6 +39,38 @@
     /* Canvas pode ser maior que container (virtual canvas) */
     min-width: 1200px;
     min-height: 800px;
+}
+
+/* 🔥 V2.0 BACKGROUND: Estilos para grid SVG */
+.flow-background-svg {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 0;
+    overflow: visible;
+}
+
+.jtk-background-grid {
+    pointer-events: none;
+}
+
+.jtk-background-grid-major {
+    stroke: rgba(255, 255, 255, 0.12);
+    fill: rgba(255, 255, 255, 0.12);
+}
+
+.jtk-background-grid-minor {
+    stroke: rgba(255, 255, 255, 0.06);
+    fill: rgba(255, 255, 255, 0.06);
+}
+
+.jtk-background-border {
+    stroke: rgba(255, 255, 255, 0.2);
+    stroke-width: 2;
+    fill: none;
 }
 
 /* Container interno que recebe o transform */
@@ -230,37 +259,6 @@
     pointer-events: none;
 }
 
-/* 🔥 V9.0 CHATBOT BUILDER: Palette Styles */
-.flow-palette {
-    scrollbar-width: thin;
-    scrollbar-color: #242836 #1A1D29;
-}
-
-.flow-palette::-webkit-scrollbar {
-    width: 6px;
-}
-
-.flow-palette::-webkit-scrollbar-track {
-    background: #1A1D29;
-}
-
-.flow-palette::-webkit-scrollbar-thumb {
-    background: #242836;
-    border-radius: 3px;
-}
-
-.flow-palette::-webkit-scrollbar-thumb:hover {
-    background: #2D3142;
-}
-
-.flow-palette-item {
-    user-select: none;
-    -webkit-user-select: none;
-}
-
-.flow-palette-item:active {
-    cursor: grabbing !important;
-}
 
 @keyframes initialPulse {
     0%, 100% {
@@ -2302,37 +2300,6 @@ body {
                     </button>
                 </div>
             </div>
-            
-            <!-- 🔥 V9.0 CHATBOT BUILDER: Palette Sidebar -->
-            <div x-show="config.flow_enabled" class="flow-palette-container" style="display: flex; gap: 16px; margin-top: 16px;">
-                <!-- Palette Sidebar -->
-                <div class="flow-palette" style="width: 250px; background: #1A1D29; border: 1px solid #242836; border-radius: 8px; padding: 16px; height: 600px; overflow-y: auto;">
-                    <div class="flow-palette-header" style="margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #242836;">
-                        <h3 style="color: #FFFFFF; font-size: 16px; font-weight: 600; margin: 0;">Componentes</h3>
-                        <p style="color: #9CA3AF; font-size: 12px; margin: 4px 0 0 0;">Arraste para o canvas</p>
-                    </div>
-                    <div class="flow-palette-items" style="display: flex; flex-direction: column; gap: 8px;">
-                        <template x-for="(item, index) in flowPaletteItems" :key="index">
-                            <div 
-                                class="flow-palette-item" 
-                                draggable="true"
-                                :data-step-type="item.type"
-                                @dragstart="handlePaletteDrag($event, item.type)"
-                                style="display: flex; align-items: center; gap: 12px; padding: 12px; background: #242836; border-radius: 8px; cursor: grab; transition: all 0.2s; border: 1px solid transparent;"
-                                @mouseenter="$el.style.background = '#2D3142'; $el.style.borderColor = '#3B82F6'; $el.style.transform = 'translateX(4px)';"
-                                @mouseleave="$el.style.background = '#242836'; $el.style.borderColor = 'transparent'; $el.style.transform = 'translateX(0)';"
-                                @dragstart="$el.style.opacity = '0.5';"
-                                @dragend="$el.style.opacity = '1';"
-                            >
-                                <i :class="item.icon" :style="'color: ' + item.color + '; font-size: 18px;'"></i>
-                                <div style="flex: 1;">
-                                    <div style="color: #FFFFFF; font-size: 14px; font-weight: 500;" x-text="item.label"></div>
-                                    <div style="color: #9CA3AF; font-size: 11px;" x-text="item.description"></div>
-                                </div>
-                            </div>
-                        </template>
-                    </div>
-                </div>
 
             <!-- Conteúdo do Flow (só aparece quando habilitado) -->
             <div x-show="config.flow_enabled" class="mt-4">
@@ -2354,12 +2321,10 @@ body {
             </div>
 
             <!-- Canvas do Flow Editor (dentro de x-show="activeTab === 'flow'") -->
-            <div x-show="config.flow_enabled" class="flow-canvas-container" style="flex: 1; height:600px; position:relative; border:1px solid #242836; border-radius:8px; overflow:hidden;">
+            <div x-show="config.flow_enabled" class="flow-canvas-container" style="width:100%; height:600px; position:relative; border:1px solid #242836; border-radius:8px; overflow:hidden; margin-top:16px;">
                 <!-- Canvas (background + grid) -->
                 <div id="flow-visual-canvas" 
                      style="position:absolute; left:0; top:0; width:100%; height:100%; background:#0D0F15; background-image: radial-gradient(circle, rgba(255,255,255,0.12) 1.5px, transparent 1.5px); background-size: 20px 20px; transform-origin:0 0;"
-                     @dragover.prevent="handleCanvasDragOver($event)"
-                     @drop="handleCanvasDrop($event)"
                      x-init="
                         if (config.flow_enabled && activeTab === 'flow') {
                             setTimeout(() => {
@@ -2589,18 +2554,6 @@ function botConfigApp() {
         editingStepIndex: -1,
         detectedMediaType: null,
         detectedStepMediaType: null,
-        
-        // 🔥 V9.0 CHATBOT BUILDER: Palette Items
-        flowPaletteItems: [
-            { type: 'message', icon: 'fas fa-comment', label: 'Mensagem', description: 'Enviar texto', color: '#3B82F6' },
-            { type: 'content', icon: 'fas fa-file-alt', label: 'Conteúdo', description: 'Mídia + texto', color: '#10B981' },
-            { type: 'payment', icon: 'fas fa-credit-card', label: 'Pagamento', description: 'Gerar PIX', color: '#F59E0B' },
-            { type: 'access', icon: 'fas fa-key', label: 'Acesso', description: 'Liberar acesso', color: '#8B5CF6' },
-            { type: 'audio', icon: 'fas fa-headphones', label: 'Áudio', description: 'Enviar áudio', color: '#EC4899' },
-            { type: 'video', icon: 'fas fa-video', label: 'Vídeo', description: 'Enviar vídeo', color: '#EF4444' },
-            { type: 'buttons', icon: 'fas fa-mouse-pointer', label: 'Botões', description: 'Botões interativos', color: '#14B8A6' },
-            { type: 'condition', icon: 'fas fa-code-branch', label: 'Condição', description: 'Decisão/if-else', color: '#F97316' }
-        ],
 
         detectMediaType() {
             const url = this.config.welcome_media_url || '';
@@ -3349,149 +3302,6 @@ function botConfigApp() {
             });
             
             this.closeStepModal();
-        },
-        
-        // 🔥 V9.0 CHATBOT BUILDER: Handle drag do palette
-        handlePaletteDrag(event, stepType) {
-            event.dataTransfer.setData('application/step-type', stepType);
-            event.dataTransfer.effectAllowed = 'copy';
-            console.log('🔵 Drag iniciado do palette:', stepType);
-        },
-        
-        // 🔥 V9.0 CHATBOT BUILDER: Handle drag over no canvas
-        handleCanvasDragOver(event) {
-            event.preventDefault();
-            event.dataTransfer.dropEffect = 'copy';
-        },
-        
-        // 🔥 V9.0 CHATBOT BUILDER: Handle drop no canvas
-        handleCanvasDrop(event) {
-            event.preventDefault();
-            const stepType = event.dataTransfer.getData('application/step-type');
-            if (!stepType) {
-                console.warn('⚠️ Nenhum step-type no drop');
-                return;
-            }
-            
-            console.log('🔵 Drop no canvas:', stepType);
-            
-            // Obter posição do drop relativa ao canvas (considerando zoom e pan)
-            const canvas = document.getElementById('flow-visual-canvas');
-            if (!canvas) {
-                console.error('❌ Canvas não encontrado');
-                return;
-            }
-            
-            const rect = canvas.getBoundingClientRect();
-            const clientX = event.clientX - rect.left;
-            const clientY = event.clientY - rect.top;
-            
-            // Se flowEditor existe, usar zoom e pan dele
-            let x = clientX;
-            let y = clientY;
-            
-            if (window.flowEditor) {
-                // Converter coordenadas do viewport para coordenadas do mundo
-                x = (clientX - window.flowEditor.pan.x) / window.flowEditor.zoomLevel;
-                y = (clientY - window.flowEditor.pan.y) / window.flowEditor.zoomLevel;
-            }
-            
-            // Criar step na posição do drop
-            this.addFlowStepFromPalette(stepType, x, y);
-        },
-        
-        // 🔥 V9.0 CHATBOT BUILDER: Adicionar step do palette
-        addFlowStepFromPalette(stepType, x, y) {
-            if (!this.config.flow_steps) {
-                this.config.flow_steps = [];
-            }
-            
-            if (!this.config.flow_enabled) {
-                this.config.flow_enabled = true;
-            }
-            
-            const stepId = `step_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-            
-            // Obter config padrão baseado no tipo
-            const defaultConfig = this.getDefaultConfigForType(stepType);
-            
-            const newStep = {
-                id: stepId,
-                type: stepType,
-                order: this.config.flow_steps.length,
-                config: defaultConfig,
-                connections: {},
-                conditions: [],
-                delay_seconds: 0,
-                position: {
-                    x: Math.max(0, x - 150), // Ajustar para centro do card (width ~300px)
-                    y: Math.max(0, y - 90)  // Ajustar para centro do card (height ~180px)
-                }
-            };
-            
-            this.config.flow_steps.push(newStep);
-            console.log('✅ Step adicionado do palette:', stepId, 'Tipo:', stepType, 'Posição:', newStep.position);
-            
-            // Renderizar após adicionar
-            this.$nextTick(() => {
-                if (window.flowEditor) {
-                    setTimeout(() => {
-                        window.flowEditor.renderAllSteps();
-                    }, 100);
-                }
-            });
-        },
-        
-        // 🔥 V9.0 CHATBOT BUILDER: Obter config padrão por tipo
-        getDefaultConfigForType(stepType) {
-            const defaults = {
-                message: {
-                    message: '',
-                    media_url: '',
-                    audio_url: '',
-                    media_type: 'video',
-                    custom_buttons: []
-                },
-                content: {
-                    message: '',
-                    media_url: '',
-                    media_type: 'video',
-                    custom_buttons: []
-                },
-                payment: {
-                    amount: 0,
-                    description: '',
-                    product_name: ''
-                },
-                access: {
-                    message: 'Acesso liberado!',
-                    link: this.config.access_link || ''
-                },
-                audio: {
-                    message: '',
-                    audio_url: ''
-                },
-                video: {
-                    message: '',
-                    media_url: '',
-                    media_type: 'video'
-                },
-                buttons: {
-                    message: '',
-                    custom_buttons: [
-                        { text: 'Botão 1', target_step: null },
-                        { text: 'Botão 2', target_step: null }
-                    ]
-                },
-                condition: {
-                    condition_type: 'text_validation',
-                    condition_value: '',
-                    true_step_id: null,
-                    false_step_id: null
-                }
-            };
-            
-            return defaults[stepType] || defaults.message;
         },
         
         addFlowStep() {
