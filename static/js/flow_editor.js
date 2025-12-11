@@ -3095,12 +3095,15 @@ class FlowEditor {
         // Buscar drag handle
         const dragHandle = innerWrapper?.querySelector('.flow-drag-handle');
         
-        // 🔥 V7 PROFISSIONAL: Configurar draggable com containment CORRETO
-        // CRÍTICO: Containment deve ser contentContainer (onde elementos estão)
-        // O jsPlumb calcula posições relativas ao containment especificado
+        // 🔥 V2.0 LAYOUTS FIX: Configurar draggable SEM containment fixo
+        // PROBLEMA: contentContainer tem transform (zoom/pan) que confunde jsPlumb
+        // SOLUÇÃO: Não usar containment OU usar 'parent' para jsPlumb calcular automaticamente
+        // O jsPlumb Community Edition funciona melhor sem containment quando há transform CSS
+        
         const draggableOptions = {
-            containment: this.contentContainer || this.canvas,
-            grid: [this.gridSize || 20, this.gridSize || 20], // 🔥 V2.0 LAYOUTS: Grid snap nativo do jsPlumb
+            // 🔥 CRÍTICO: Remover containment - deixa jsPlumb calcular automaticamente
+            // containment causa problemas quando há transform CSS no parent
+            // grid: [this.gridSize || 20, this.gridSize || 20], // Grid pode causar problemas também
             drag: (params) => {
                 // Revalidar endpoints durante drag
                 if (this.instance) {
@@ -3240,14 +3243,22 @@ class FlowEditor {
             const isDraggable = this.instance.isDraggable ? this.instance.isDraggable(stepElement) : true;
             console.log('✅ [V7] Draggable configurado para step:', stepId, {
                 hasHandle: !!dragHandle,
-                containment: draggableOptions.containment?.className || draggableOptions.containment?.id,
                 elementInDOM: !!stepElement.parentElement,
+                elementParent: stepElement.parentElement?.id || stepElement.parentElement?.className,
                 elementPosition: stepElement.style.transform,
+                elementLeft: stepElement.style.left,
+                elementTop: stepElement.style.top,
                 isDraggable: isDraggable,
                 elementStyle: {
                     position: stepElement.style.position,
                     pointerEvents: stepElement.style.pointerEvents,
                     cursor: stepElement.style.cursor
+                },
+                draggableOptions: {
+                    hasHandle: !!draggableOptions.handle,
+                    hasFilter: !!draggableOptions.filter,
+                    hasContainment: !!draggableOptions.containment,
+                    hasGrid: !!draggableOptions.grid
                 }
             });
             
@@ -3384,18 +3395,9 @@ class FlowEditor {
             element.classList.add('dragging');
             element.classList.add('jtk-surface-element-dragging');
             
-            // 🔥 V2.0 LAYOUTS: Snap to grid durante drag (considerando posição do jsPlumb)
-            if (params.pos && params.pos.length >= 2) {
-                // jsPlumb fornece posição relativa ao containment
-                const snapped = this.snapToGrid(params.pos[0], params.pos[1], false);
-                // Aplicar posição com snap
-                this.setElementPosition(element, snapped.x, snapped.y, false); // Já aplicamos snap acima
-            } else {
-                // Fallback: extrair posição atual e aplicar snap
-                const currentPos = this.getElementRealPosition(element);
-                const snapped = this.snapToGrid(currentPos.x, currentPos.y, false);
-                this.setElementPosition(element, snapped.x, snapped.y, false);
-            }
+            // 🔥 V2.0 LAYOUTS FIX: NÃO aplicar snap durante drag
+            // Deixar jsPlumb gerenciar a posição durante drag
+            // Snap será aplicado apenas no stop para evitar conflitos
             
             // Cancelar frame anterior
             if (this.dragFrameId) {
@@ -3455,7 +3457,10 @@ class FlowEditor {
             y = snapped.y;
             
             // 🔥 V2.0 LAYOUTS: Aplicar posição final com snap
-            this.setElementPosition(element, x, y, false); // Já aplicamos snap acima
+            // CRÍTICO: Usar left/top E transform para compatibilidade total
+            element.style.left = `${x}px`;
+            element.style.top = `${y}px`;
+            element.style.transform = `translate3d(${x}px, ${y}px, 0)`;
             this.stepTransforms.set(stepId, { x, y });
             
             // Atualizar no Alpine
