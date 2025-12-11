@@ -127,15 +127,16 @@
 
 /* Container interno que recebe o transform */
 .flow-canvas-content {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    transform-origin: top left;
-    will-change: transform;
-    pointer-events: auto;
-    z-index: 1;
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    transform-origin: top left !important;
+    will-change: transform !important;
+    pointer-events: auto !important; /* 🔥 CRÍTICO: permitir eventos no container */
+    z-index: 1 !important;
+    overflow: visible !important; /* 🔥 CRÍTICO: permitir elementos fora do container */
 }
 
 #flow-visual-canvas.panning {
@@ -150,24 +151,25 @@
 
 .flow-step-block,
 .flow-card {
-    position: absolute; /* CRÍTICO: absolute para posicionamento no canvas */
+    position: absolute !important; /* 🔥 CRÍTICO: absolute para posicionamento no canvas */
     width: 300px;
     min-height: 180px;
     background: #0F0F14;
     border: 1px solid #242836;
     border-radius: 12px;
-    cursor: move;
-    transition: none; /* Removido transition para evitar conflito com drag */
-    overflow: visible; /* CRÍTICO: visible para nodes ficarem visíveis fora do card */
+    cursor: move !important; /* 🔥 CRÍTICO: cursor move para indicar arrastável */
+    transition: none !important; /* Removido transition para evitar conflito com drag */
+    overflow: visible !important; /* CRÍTICO: visible para nodes ficarem visíveis fora do card */
     animation: stepFadeIn 0.3s ease-out;
     box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3), 0 0 0 0 rgba(255, 255, 255, 0);
-    user-select: none;
-    -webkit-user-select: none;
-    -moz-user-select: none;
-    -ms-user-select: none;
-    touch-action: pan-y; /* 🔥 CRÍTICO: permitir touch para drag */
-    will-change: transform; /* 🔥 CRÍTICO: usar transform para melhor performance */
+    user-select: none !important;
+    -webkit-user-select: none !important;
+    -moz-user-select: none !important;
+    -ms-user-select: none !important;
+    touch-action: pan-y !important; /* 🔥 CRÍTICO: permitir touch para drag */
+    will-change: transform !important; /* 🔥 CRÍTICO: usar transform para melhor performance */
     pointer-events: auto !important; /* 🔥 CRÍTICO: garantir que eventos funcionam */
+    z-index: 10 !important; /* 🔥 CRÍTICO: garantir z-index correto */
     /* CRÍTICO: necessário para os nodes ABSOLUTOS terem referência correta */
     transform-style: preserve-3d;
     perspective: 1000px;
@@ -706,25 +708,7 @@
 /* === 🔥 V5.0 - ManyChat-Level Endpoints === */
 
 /* ✅ V2.0 FRONTEND: Cards consolidados - uma única definição */
-.flow-step-block,
-.flow-card {
-    position: absolute !important;
-    width: 300px;
-    min-height: 180px;
-    background: #0F0F14;
-    border: 1px solid #242836;
-    border-radius: 12px;
-    cursor: move;
-    overflow: visible !important;
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
-    transition: border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
-                box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    will-change: transform;
-    user-select: none;
-    touch-action: pan-y !important; /* 🔥 CRÍTICO: permitir touch para drag */
-    pointer-events: auto !important; /* 🔥 CRÍTICO: garantir que eventos funcionam */
-    animation: stepFadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
+/* 🔥 REMOVIDO: CSS duplicado - usar apenas a primeira definição acima */
 
 /* ✅ V2.0 FRONTEND: Sem transições durante drag */
 .flow-step-block.dragging,

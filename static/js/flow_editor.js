@@ -3226,61 +3226,111 @@ class FlowEditor {
                 return;
             }
             
+            // 🔥 CRÍTICO: Verificar se elemento está no container correto do jsPlumb
+            const instanceContainer = this.instance.getContainer ? this.instance.getContainer() : null;
+            if (instanceContainer && !instanceContainer.contains(stepElement)) {
+                console.error('❌ [V7] Elemento não está no container do jsPlumb!', {
+                    stepId,
+                    elementParent: stepElement.parentElement?.id || stepElement.parentElement?.className,
+                    instanceContainer: instanceContainer.id || instanceContainer.className
+                });
+                // Tentar mover elemento para container correto
+                if (instanceContainer && stepElement.parentElement !== instanceContainer) {
+                    instanceContainer.appendChild(stepElement);
+                    console.log('✅ [V7] Elemento movido para container do jsPlumb');
+                }
+            }
+            
             // Remover draggable anterior se existir
-            try {
-                this.instance.setDraggable(stepElement, false);
-            } catch(e) {
-                // Ignorar erro se não estava draggable
-            }
-            
-            // 🔥 CRÍTICO: Garantir que elemento pode ser arrastado
-            // Remover qualquer atributo que possa bloquear drag
-            stepElement.removeAttribute('data-jtk-not-draggable');
-            stepElement.style.pointerEvents = 'auto';
-            stepElement.style.cursor = 'move';
-            stepElement.style.userSelect = 'none';
-            stepElement.style.webkitUserSelect = 'none';
-            stepElement.style.touchAction = 'pan-y'; // Permitir touch para drag
-            // 🔥 CRÍTICO: Garantir que não há CSS bloqueando
-            stepElement.style.position = 'absolute'; // Garantir position absolute
-            
-            // 🔥 CRÍTICO: Garantir que drag handle também está configurado
-            if (dragHandle) {
-                dragHandle.style.pointerEvents = 'auto';
-                dragHandle.style.cursor = 'move';
-                dragHandle.style.zIndex = '10';
-                // Remover qualquer atributo que possa bloquear
-                dragHandle.removeAttribute('data-jtk-not-draggable');
-            }
-            
-            // 🔥 CRÍTICO: Forçar draggable mesmo se já estiver configurado
-            // Remover completamente antes de reconfigurar
             try {
                 if (this.instance.setDraggable) {
                     this.instance.setDraggable(stepElement, false);
                 }
             } catch(e) {
-                // Ignorar
+                // Ignorar erro se não estava draggable
             }
             
-            // Configurar draggable
+            // 🔥 CRÍTICO: Garantir que elemento pode ser arrastado - FORÇAR TODOS OS ESTILOS COM !important
+            stepElement.removeAttribute('data-jtk-not-draggable');
+            // Usar setProperty para forçar !important
+            stepElement.style.setProperty('pointer-events', 'auto', 'important');
+            stepElement.style.setProperty('cursor', 'move', 'important');
+            stepElement.style.setProperty('user-select', 'none', 'important');
+            stepElement.style.setProperty('-webkit-user-select', 'none', 'important');
+            stepElement.style.setProperty('touch-action', 'pan-y', 'important');
+            stepElement.style.setProperty('position', 'absolute', 'important');
+            stepElement.style.setProperty('z-index', '10', 'important');
+            
+            // 🔥 CRÍTICO: Garantir que drag handle também está configurado
+            if (dragHandle) {
+                dragHandle.style.setProperty('pointer-events', 'auto', 'important');
+                dragHandle.style.setProperty('cursor', 'move', 'important');
+                dragHandle.style.setProperty('z-index', '10', 'important');
+                dragHandle.style.setProperty('position', 'absolute', 'important');
+                dragHandle.style.setProperty('top', '0', 'important');
+                dragHandle.style.setProperty('left', '0', 'important');
+                dragHandle.style.setProperty('right', '0', 'important');
+                dragHandle.style.setProperty('height', '40px', 'important');
+                dragHandle.style.setProperty('background', 'transparent', 'important');
+                dragHandle.removeAttribute('data-jtk-not-draggable');
+            }
+            
+            // 🔥 CRÍTICO: Garantir que contentContainer permite eventos
+            if (this.contentContainer) {
+                this.contentContainer.style.pointerEvents = 'auto';
+                this.contentContainer.style.overflow = 'visible';
+            }
+            
+            // 🔥 CRÍTICO: Configurar draggable com método mais direto
+            // Primeiro tentar draggable() com opções
             try {
                 this.instance.draggable(stepElement, draggableOptions);
+                console.log('✅ [V7] draggable() chamado com sucesso');
             } catch(dragError) {
-                console.error('❌ [V7] Erro ao configurar draggable:', dragError);
-                // Tentar método alternativo
+                console.error('❌ [V7] Erro ao chamar draggable():', dragError);
+                // Fallback 1: setDraggable(true)
                 if (this.instance.setDraggable) {
-                    this.instance.setDraggable(stepElement, true);
+                    try {
+                        this.instance.setDraggable(stepElement, true);
+                        console.log('✅ [V7] setDraggable(true) usado como fallback');
+                    } catch(setError) {
+                        console.error('❌ [V7] Erro ao chamar setDraggable(true):', setError);
+                    }
                 }
             }
             
-            // 🔥 CRÍTICO: Verificar se draggable foi configurado corretamente
-            const isDraggable = this.instance.isDraggable ? this.instance.isDraggable(stepElement) : true;
+            // 🔥 CRÍTICO: Verificar se draggable foi configurado
+            let isDraggable = false;
+            if (this.instance.isDraggable) {
+                try {
+                    isDraggable = this.instance.isDraggable(stepElement);
+                } catch(e) {
+                    console.warn('⚠️ [V7] Erro ao verificar isDraggable:', e);
+                    isDraggable = true; // Assumir que está draggable se não conseguir verificar
+                }
+            } else {
+                isDraggable = true; // Se não tem método isDraggable, assumir que está OK
+            }
             
-            // 🔥 CRÍTICO: Se não está draggable, tentar método alternativo
-            if (!isDraggable && this.instance.setDraggable) {
-                console.warn('⚠️ [V7] Draggable não configurado, tentando setDraggable(true)...');
-                this.instance.setDraggable(stepElement, true);
+            // 🔥 CRÍTICO: Se ainda não está draggable, tentar métodos alternativos
+            if (!isDraggable) {
+                console.warn('⚠️ [V7] Elemento não está draggable, tentando métodos alternativos...');
+                
+                // Tentar novamente com setDraggable
+                if (this.instance.setDraggable) {
+                    this.instance.setDraggable(stepElement, true);
+                }
+                
+                // Aguardar um pouco e tentar novamente
+                setTimeout(() => {
+                    try {
+                        this.instance.draggable(stepElement, draggableOptions);
+                        const retryIsDraggable = this.instance.isDraggable ? this.instance.isDraggable(stepElement) : true;
+                        console.log('✅ [V7] Retry draggable após timeout:', retryIsDraggable);
+                    } catch(e) {
+                        console.error('❌ [V7] Erro no retry após timeout:', e);
+                    }
+                }, 200);
             }
             
             console.log('✅ [V7] Draggable configurado para step:', stepId, {
@@ -3288,39 +3338,43 @@ class FlowEditor {
                 elementInDOM: !!stepElement.parentElement,
                 elementParent: stepElement.parentElement?.id || stepElement.parentElement?.className,
                 elementInContentContainer: this.contentContainer?.contains(stepElement),
+                elementInInstanceContainer: instanceContainer?.contains(stepElement),
+                instanceContainer: instanceContainer?.id || instanceContainer?.className,
                 elementPosition: stepElement.style.transform,
                 elementLeft: stepElement.style.left,
                 elementTop: stepElement.style.top,
                 isDraggable: isDraggable,
-                elementStyle: {
-                    position: stepElement.style.position,
-                    pointerEvents: stepElement.style.pointerEvents,
-                    cursor: stepElement.style.cursor,
-                    userSelect: stepElement.style.userSelect,
-                    touchAction: stepElement.style.touchAction
-                },
+                elementComputedStyle: (() => {
+                    const cs = window.getComputedStyle(stepElement);
+                    // 🔥 CRÍTICO: Se computed style mostra que está bloqueado, forçar novamente
+                    if (cs.pointerEvents === 'none' || cs.cursor === 'default' || cs.cursor === 'not-allowed') {
+                        console.warn('⚠️ [V7] Computed style mostra que elemento está bloqueado! Forçando novamente...', {
+                            pointerEvents: cs.pointerEvents,
+                            cursor: cs.cursor
+                        });
+                        // Forçar novamente com !important
+                        stepElement.style.setProperty('pointer-events', 'auto', 'important');
+                        stepElement.style.setProperty('cursor', 'move', 'important');
+                    }
+                    return {
+                        position: cs.position,
+                        pointerEvents: cs.pointerEvents,
+                        cursor: cs.cursor,
+                        userSelect: cs.userSelect,
+                        touchAction: cs.touchAction,
+                        zIndex: cs.zIndex,
+                        display: cs.display,
+                        visibility: cs.visibility,
+                        opacity: cs.opacity
+                    };
+                })(),
                 draggableOptions: {
                     hasHandle: !!draggableOptions.handle,
                     hasFilter: !!draggableOptions.filter,
                     hasContainment: !!draggableOptions.containment,
                     hasGrid: !!draggableOptions.grid
-                },
-                instanceContainer: this.instance.getContainer ? (this.instance.getContainer()?.id || this.instance.getContainer()?.className) : 'unknown'
+                }
             });
-            
-            if (!isDraggable && this.instance.isDraggable) {
-                console.error('❌ [V7] Draggable NÃO foi configurado corretamente! Tentando novamente...');
-                // Tentar novamente
-                setTimeout(() => {
-                    try {
-                        this.instance.draggable(stepElement, draggableOptions);
-                        const retryIsDraggable = this.instance.isDraggable(stepElement);
-                        console.log('✅ [V7] Retry draggable:', retryIsDraggable);
-                    } catch(e) {
-                        console.error('❌ [V7] Erro no retry:', e);
-                    }
-                }, 100);
-            }
         } catch (draggableError) {
             console.error('❌ [V7] Erro ao chamar instance.draggable:', draggableError, {
                 stepId: stepId,
