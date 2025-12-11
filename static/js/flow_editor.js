@@ -39,6 +39,7 @@ class FlowEditor {
         // Performance
         this.dragFrameId = null;
         this.repaintTimeout = null;
+        this.repaintFrameId = null; // 🔥 FASE 1: Repaint throttling
         this.stepTransforms = new Map();
         
         // Endpoint management - V5.0 Anti-duplication system
@@ -359,7 +360,8 @@ class FlowEditor {
                 // CRÍTICO: Garantir que setContainer está correto
                 this.instance.setContainer(container);
                 
-                // Defaults: conexões brancas suaves estilo ManyChat
+                // 🔥 V7 PROFISSIONAL: Defaults com Vertex Avoidance conforme documentação oficial
+                // Grid de 20px (múltiplo de 10px conforme recomendação A*)
                 this.instance.importDefaults({
                     paintStyle: { 
                         stroke: '#FFFFFF', 
@@ -371,13 +373,28 @@ class FlowEditor {
                         strokeWidth: 3.5,
                         strokeOpacity: 1
                     },
+                    // 🔥 V7 PROFISSIONAL: Vertex Avoidance - Conexões evitam passar por cima de elementos
+                    // NOTA: Para melhor vertex avoidance, recomenda-se usar Orthogonal ou Straight com constrain
+                    // Bezier funciona mas não tem routing inteligente como Orthogonal
+                    edgesAvoidVertices: true,        // Ativar vertex avoidance (A* algorithm)
+                    // 🔥 V7 PROFISSIONAL: Bezier Connector conforme documentação oficial jsPlumb 2.15.6
+                    // Opções válidas: curviness, stub, gap, scale, showLoopback, legacyPaint, cssClass, hoverClass
                     connector: ['Bezier', { 
-                        curviness: 80,
-                        stub: [15, 20],
-                        gap: 8,
-                        cornerRadius: 5
+                        curviness: 150,              // Curvatura padrão (documentação: default 150)
+                        stub: 15,                   // Stub único em pixels (15px) - distância antes da curva começar
+                        gap: 10,                    // Gap entre endpoint e conexão (10px)
+                        scale: 0.45,                // Posição do control point (0.45 = 45% da distância source-target)
+                        showLoopback: true,          // Mostrar conexões loopback (mesmo elemento)
+                        legacyPaint: false,          // Usar estratégia moderna de pintura (padrão: false)
+                        cssClass: 'flow-connector',  // Classe CSS para customização
+                        hoverClass: 'flow-connector-hover' // Classe CSS aplicada no hover
                     }],
-                    endpoint: ['Dot', { radius: 7 }],
+                    // 🔥 V7 PROFISSIONAL: Dot Endpoint padrão conforme documentação oficial
+                    endpoint: ['Dot', { 
+                        radius: 7,
+                        cssClass: 'flow-endpoint-default',
+                        hoverClass: 'flow-endpoint-default-hover'
+                    }],
                     endpointStyle: { 
                         fill: '#FFFFFF', 
                         outlineStroke: '#0D0F15', 
@@ -390,8 +407,26 @@ class FlowEditor {
                     },
                     maxConnections: -1,
                     ConnectionsDetachable: true,
+                    // 🔥 V7 PROFISSIONAL: Connection Overlays conforme documentação oficial
+                    // Arrow overlay no final da conexão (location: 1 = 100% do caminho)
                     ConnectionOverlays: [
-                        ['Arrow', { width: 10, length: 12, location: 1 }]
+                        {
+                            type: 'Arrow',
+                            options: {
+                                width: 12,              // Largura da base da seta (default: 20)
+                                length: 15,             // Comprimento da seta (default: 20)
+                                location: 1,            // No final da conexão (1 = 100%)
+                                direction: 1,           // Direção: 1 = forward (padrão), -1 = backward
+                                foldback: 0.623,        // Ponto de dobra (default: 0.623)
+                                cssClass: 'flow-arrow-overlay',
+                                paintStyle: {
+                                    stroke: '#FFFFFF',
+                                    strokeWidth: 2,
+                                    fill: '#FFFFFF',
+                                    fillStyle: 'solid'
+                                }
+                            }
+                        }
                     ]
                 });
                 
@@ -584,7 +619,8 @@ class FlowEditor {
                             });
                             
                             // Repintar tudo
-                            this.instance.repaintEverything();
+                            // 🔥 FASE 1: Usar throttledRepaint ao invés de repaintEverything direto
+                            this.throttledRepaint();
                             
                             // Garantir que SVG overlay está visível (buscar no canvas)
                             const svgOverlay = this.canvas.querySelector('svg.jtk-overlay') || 
@@ -632,7 +668,8 @@ class FlowEditor {
                     const inputs = [];
                     inputs.forEach(n => this.instance.revalidate(n));
                 });
-                this.instance.repaintEverything();
+                            // 🔥 FASE 1: Usar throttledRepaint ao invés de repaintEverything direto
+                            this.throttledRepaint();
             }
         }, 16); // ~60fps
     }
@@ -848,7 +885,8 @@ class FlowEditor {
             // 🔥 CRÍTICO: Forçar repaint final após tudo estar renderizado
             if (this.instance) {
                 try {
-                    this.instance.repaintEverything();
+                            // 🔥 FASE 1: Usar throttledRepaint ao invés de repaintEverything direto
+                            this.throttledRepaint();
                     console.log('✅ Repaint final executado após renderAllSteps');
                 } catch(e) {
                     console.error('❌ Erro ao fazer repaint final:', e);
@@ -885,7 +923,8 @@ class FlowEditor {
         // Create element
         const stepElement = document.createElement('div');
         stepElement.id = `step-${stepId}`;
-        stepElement.className = 'flow-step-block flow-card';
+        // 🔥 FASE 1: Adicionar classes oficiais jsPlumb
+        stepElement.className = 'flow-step-block flow-card jtk-node';
         stepElement.dataset.stepId = stepId;
         // Important: position absolute for canvas placement, relative children
         stepElement.style.position = 'absolute';
@@ -1012,7 +1051,8 @@ class FlowEditor {
                             }
                             
                             this.instance.revalidate(stepElement); 
-                            this.instance.repaintEverything(); 
+                            // 🔥 FASE 1: Usar throttledRepaint ao invés de repaintEverything direto
+                            this.throttledRepaint(); 
                             console.log('✅ Step renderizado e endpoints criados:', stepId);
                             
                             // Verificar se endpoints foram criados
@@ -1045,7 +1085,8 @@ class FlowEditor {
                             });
                             
                             // 🔥 CRÍTICO: Forçar repaint novamente após configurar estilos
-                            this.instance.repaintEverything();
+                            // 🔥 FASE 1: Usar throttledRepaint ao invés de repaintEverything direto
+                            this.throttledRepaint();
                         } catch(e) {
                             console.error('❌ Erro ao revalidar step:', e);
                         }
@@ -1273,7 +1314,8 @@ class FlowEditor {
                 // Revalidar e repintar após adicionar endpoints
                 if (this.instance) {
                     this.instance.revalidate(element);
-                    this.instance.repaintEverything();
+                            // 🔥 FASE 1: Usar throttledRepaint ao invés de repaintEverything direto
+                            this.throttledRepaint();
                 }
             });
         });
@@ -1747,7 +1789,8 @@ class FlowEditor {
                 }
                 
                 if (needsRepaint) {
-                    this.instance.repaintEverything();
+                            // 🔥 FASE 1: Usar throttledRepaint ao invés de repaintEverything direto
+                            this.throttledRepaint();
                 }
             } catch(e) {
                 console.error('❌ Erro ao revalidar:', e);
@@ -1828,13 +1871,21 @@ class FlowEditor {
                     innerRect: innerRect
                 });
                 
-                // 🔥 V7 PROFISSIONAL: Usar anchor simples e revalidar imediatamente após criar
+                // 🔥 FASE 1: Anchor estático com offset (mantido para input)
+                // Sintaxe: [x, y, ox, oy, offsetX, offsetY]
+                // x=0 (left), y=0.5 (center vertical), ox=-1 (leftward), oy=0, offsetX=-8px, offsetY=0
                 const inputEndpoint = this.ensureEndpoint(this.instance, inputNode, inputUuid, {
-                    anchor: [0, 0.5, -1, 0], // left outside, center vertical (sem offset manual, deixar jsPlumb calcular)
+                    anchor: [0, 0.5, -1, 0, -8, 0], // left outside, center vertical, -8px offset (conforme doc oficial)
                     isSource: false,
                     isTarget: true,
                     maxConnections: -1,
-                    endpoint: ['Dot', { radius: 7 }],
+                    // 🔥 V7 PROFISSIONAL: Dot Endpoint conforme documentação oficial
+                    // Opções: radius, cssClass, hoverClass
+                    endpoint: ['Dot', { 
+                        radius: 7,
+                        cssClass: 'flow-endpoint-input',
+                        hoverClass: 'flow-endpoint-input-hover'
+                    }],
                     paintStyle: { fill:'#10B981', outlineStroke:'#FFFFFF', outlineWidth:2 },
                     hoverPaintStyle: { fill:'#FFB800', outlineStroke:'#FFFFFF', outlineWidth:3 },
                     data: { stepId, endpointType: 'input' }
@@ -1903,13 +1954,24 @@ class FlowEditor {
                             buttonContainer: buttonContainer.getBoundingClientRect()
                         });
                         
-                        // 🔥 V7 PROFISSIONAL: Usar anchor simples e revalidar imediatamente
+                        // 🔥 FASE 1: Dynamic Anchor para botões (evita sobreposição)
+                        // Múltiplas posições possíveis: right, top, bottom
+                        // JsPlumb escolhe automaticamente a melhor posição
                         const endpoint = this.ensureEndpoint(this.instance, buttonTarget, uuid, {
-                            anchor: [1, anchorY, 1, 0], // right outside, Y calculado (sem offset manual)
+                            anchor: [
+                                [1, anchorY, 1, 0, 8, 0, "right"],  // Right (preferido)
+                                [0.5, 0, 0, -1, 0, -8, "top"],      // Top (fallback)
+                                [0.5, 1, 0, 1, 0, 8, "bottom"]      // Bottom (fallback)
+                            ],
                             isSource: true,
                             isTarget: false,
                             maxConnections: 1,
-                            endpoint: ['Dot', { radius: 6 }],
+                            // 🔥 V7 PROFISSIONAL: Dot Endpoint para botões conforme documentação oficial
+                            endpoint: ['Dot', { 
+                                radius: 6,
+                                cssClass: 'flow-endpoint-button',
+                                hoverClass: 'flow-endpoint-button-hover'
+                            }],
                             paintStyle: { fill:'#FFFFFF', outlineStroke:'#0D0F15', outlineWidth:2 },
                             hoverPaintStyle: { fill:'#FFB800', outlineStroke:'#FFFFFF', outlineWidth:3 },
                             data: { stepId, buttonIndex: index, endpointType: 'button' }
@@ -1940,13 +2002,24 @@ class FlowEditor {
                             position: outputNode.getBoundingClientRect()
                         });
                         
-                        // 🔥 V7 PROFISSIONAL: Usar anchor simples e revalidar imediatamente
+                        // 🔥 FASE 1: Dynamic Anchor para output global (evita sobreposição)
+                        // Múltiplas posições possíveis: right, top, bottom
+                        // JsPlumb escolhe automaticamente a melhor posição baseado na orientação
                         const endpoint = this.ensureEndpoint(this.instance, outputNode, outUuid, {
-                            anchor: [1, 0.5, 1, 0], // right outside, center vertical (sem offset manual)
+                            anchor: [
+                                [1, 0.5, 1, 0, 8, 0, "right"],      // Right (preferido)
+                                [0.5, 0, 0, -1, 0, -8, "top"],      // Top (fallback)
+                                [0.5, 1, 0, 1, 0, 8, "bottom"]      // Bottom (fallback)
+                            ],
                             isSource: true,
                             isTarget: false,
                             maxConnections: -1,
-                            endpoint: ['Dot', { radius: 7 }],
+                            // 🔥 V7 PROFISSIONAL: Dot Endpoint para output global conforme documentação oficial
+                            endpoint: ['Dot', { 
+                                radius: 7,
+                                cssClass: 'flow-endpoint-output',
+                                hoverClass: 'flow-endpoint-output-hover'
+                            }],
                             paintStyle: { fill:'#FFFFFF', outlineStroke:'#0D0F15', outlineWidth:2 },
                             hoverPaintStyle: { fill:'#FFB800', outlineStroke:'#FFFFFF', outlineWidth:3 },
                             data: { stepId, endpointType: 'global' }
@@ -1963,12 +2036,13 @@ class FlowEditor {
                     }
                 }
                 
-                // 🔥 CRÍTICO: Revalidar e repintar após criar todos os endpoints
+                // 🔥 CRÍTICO: Revalidar e repintar após criar todos os endpoints (com throttling)
                 requestAnimationFrame(() => {
                     requestAnimationFrame(() => {
                         try {
                             this.instance.revalidate(element);
-                            this.instance.repaintEverything();
+                            // 🔥 FASE 1: Usar throttledRepaint ao invés de repaintEverything direto
+                            this.throttledRepaint();
                             console.log(`✅ Endpoints criados e revalidados para step ${stepId}`);
                         } catch(e) {
                             console.error('❌ Erro ao revalidar após criar endpoints:', e);
@@ -2065,7 +2139,8 @@ class FlowEditor {
                 requestAnimationFrame(() => {
                     try {
                         this.instance.revalidate(element);
-                        this.instance.repaintEverything();
+                            // 🔥 FASE 1: Usar throttledRepaint ao invés de repaintEverything direto
+                            this.throttledRepaint();
                         
                         // 🔥 CRÍTICO: Garantir que SVG overlay está visível após criar endpoints
                         const svgOverlay = this.contentContainer.querySelector('svg.jtk-overlay') || 
@@ -2129,7 +2204,8 @@ class FlowEditor {
                         });
                         
                         // Repintar novamente após configurar estilos
-                        this.instance.repaintEverything();
+                            // 🔥 FASE 1: Usar throttledRepaint ao invés de repaintEverything direto
+                            this.throttledRepaint();
                         console.log(`✅ Repaint executado para step ${stepId}`);
                     } catch(e) {
                         console.error('❌ Erro ao fazer repaint:', e);
@@ -2147,7 +2223,8 @@ class FlowEditor {
                 requestAnimationFrame(() => {
                     try {
                         this.instance.revalidate(element);
-                        this.instance.repaintEverything();
+                            // 🔥 FASE 1: Usar throttledRepaint ao invés de repaintEverything direto
+                            this.throttledRepaint();
                         console.log(`✅ Revalidação e repaint executados para step ${stepId}`);
                     } catch(e) {
                         console.error('❌ Erro ao revalidar após criar endpoints:', e);
@@ -2219,7 +2296,8 @@ class FlowEditor {
                 if (this.instance) {
                     try {
                         this.instance.revalidate(stepElement);
-                        this.instance.repaintEverything();
+                            // 🔥 FASE 1: Usar throttledRepaint ao invés de repaintEverything direto
+                            this.throttledRepaint();
                     } catch(e) {
                         console.error('❌ [V7] Erro ao repintar após drag:', e);
                     }
@@ -2340,31 +2418,69 @@ class FlowEditor {
     }
     
     /**
+     * 🔥 FASE 1: Snap to Grid Profissional
+     * Calcula posição com snap ao grid de 20px
+     */
+    snapToGrid(x, y) {
+        const gridSize = this.gridSize || 20;
+        return {
+            x: Math.round(x / gridSize) * gridSize,
+            y: Math.round(y / gridSize) * gridSize
+        };
+    }
+    
+    /**
+     * 🔥 FASE 1: Repaint Throttling (60fps)
+     * Throttle repaintEverything para evitar repaints excessivos
+     */
+    throttledRepaint() {
+        if (this.repaintFrameId) {
+            return; // Já agendado
+        }
+        
+        this.repaintFrameId = requestAnimationFrame(() => {
+            if (this.instance) {
+                            // 🔥 FASE 1: Usar throttledRepaint ao invés de repaintEverything direto
+                            this.throttledRepaint();
+            }
+            this.repaintFrameId = null;
+        });
+    }
+    
+    /**
      * Callback quando step é arrastado (otimizado)
+     * 🔥 FASE 1: Adicionado snap to grid durante drag
      */
     onStepDrag(params) {
         const element = params.el;
         const stepId = element.dataset.stepId;
         
         if (stepId) {
+            // 🔥 FASE 1: Adicionar classe oficial jsPlumb
             element.classList.add('dragging');
+            element.classList.add('jtk-surface-element-dragging');
+            
+            // 🔥 FASE 1: Snap to grid durante drag
+            if (params.pos && params.pos.length >= 2) {
+                const snapped = this.snapToGrid(params.pos[0], params.pos[1]);
+                // Atualizar posição com snap
+                element.style.transform = `translate3d(${snapped.x}px, ${snapped.y}px, 0)`;
+            }
             
             // Cancelar frame anterior
             if (this.dragFrameId) {
                 cancelAnimationFrame(this.dragFrameId);
             }
             
-            // CRÍTICO: Revalidar e repintar durante drag
-            // Nota: revalidate já está sendo chamado no callback drag do jsPlumb
-            // Este é um fallback adicional
+            // CRÍTICO: Revalidar e repintar durante drag (com throttling)
             this.dragFrameId = requestAnimationFrame(() => {
                 if (this.instance) {
                     // 🔥 V5.0: Corrigir endpoints durante drag (remove duplicados que podem aparecer)
                     this.fixEndpoints(element);
                     // Revalidar o elemento arrastado
                     this.instance.revalidate(element);
-                    // Repintar todas as conexões
-                    this.instance.repaintEverything();
+                    // 🔥 FASE 1: Usar throttledRepaint ao invés de repaintEverything direto
+                    this.throttledRepaint();
                 }
                 this.dragFrameId = null;
             });
@@ -2373,13 +2489,21 @@ class FlowEditor {
     
     /**
      * Callback quando drag para
+     * 🔥 FASE 1: Adicionado snap to grid final e classes oficiais
      */
     onStepDragStop(params) {
         const element = params.el;
         const stepId = element.dataset.stepId;
         
         if (stepId) {
+            // 🔥 FASE 1: Remover classes oficiais jsPlumb
             element.classList.remove('dragging');
+            element.classList.remove('jtk-surface-element-dragging');
+            // 🔥 FASE 1: Adicionar classe "most recently dragged"
+            element.classList.add('jtk-most-recently-dragged');
+            setTimeout(() => {
+                element.classList.remove('jtk-most-recently-dragged');
+            }, 1000);
             
             // Extrair posição do transform translate3d
             const transform = element.style.transform || '';
@@ -2394,9 +2518,10 @@ class FlowEditor {
                 y = parseFloat(element.style.top) || 0;
             }
             
-            // Snap to grid opcional
-            x = Math.round(x / this.gridSize) * this.gridSize;
-            y = Math.round(y / this.gridSize) * this.gridSize;
+            // 🔥 FASE 1: Snap to grid profissional
+            const snapped = this.snapToGrid(x, y);
+            x = snapped.x;
+            y = snapped.y;
             
             // Atualizar posição usando translate3d
             element.style.transform = `translate3d(${x}px, ${y}px, 0)`;
@@ -2408,12 +2533,12 @@ class FlowEditor {
             // 🔥 V5.0: Corrigir endpoints após drag (remove duplicados)
             this.fixEndpoints(element);
             
-            // CRÍTICO: Revalidar e repintar após drag parar
+            // CRÍTICO: Revalidar e repintar após drag parar (com throttling)
             if (this.instance) {
                 // Revalidar o elemento para recalcular endpoints na nova posição
                 this.instance.revalidate(element);
-                // Repintar todas as conexões
-                this.instance.repaintEverything();
+                // 🔥 FASE 1: Usar throttledRepaint ao invés de repaintEverything direto
+                this.throttledRepaint();
             }
             
             // Ajustar canvas
@@ -2599,7 +2724,8 @@ class FlowEditor {
             }
             
             // Final repaint
-            this.instance.repaintEverything();
+            // 🔥 FASE 1: Usar throttledRepaint ao invés de repaintEverything direto
+            this.throttledRepaint();
         });
     }
     
@@ -2636,21 +2762,37 @@ class FlowEditor {
                     strokeWidth: 3.5,
                     strokeOpacity: 1
                 },
+                // 🔥 V7 PROFISSIONAL: Overlays conforme documentação oficial
+                // Arrow overlay já vem dos ConnectionOverlays defaults
+                // Adicionar Label overlay apenas se houver label
                 overlays: [
-                    ['Label', {
-                        label: this.getConnectionLabel(connectionType),
-                        location: 0.5,
-                        cssClass: 'connection-label-white',
-                        labelStyle: {
-                            color: '#FFFFFF',
-                            backgroundColor: '#0D0F15',
-                            border: '1px solid #242836',
-                            padding: '4px 8px',
-                            borderRadius: '6px',
-                            fontSize: '10px',
-                            fontWeight: '600'
+                    // Arrow overlay no final (já vem dos defaults, mas podemos sobrescrever)
+                    {
+                        type: 'Arrow',
+                        options: {
+                            width: 12,
+                            length: 15,
+                            location: 1,
+                            direction: 1,
+                            foldback: 0.623,
+                            cssClass: 'flow-arrow-overlay',
+                            paintStyle: {
+                                stroke: '#FFFFFF',
+                                strokeWidth: 2,
+                                fill: '#FFFFFF'
+                            }
                         }
-                    }]
+                    },
+                    // Label overlay no meio (se houver label)
+                    ...(this.getConnectionLabel(connectionType) ? [{
+                        type: 'Label',
+                        options: {
+                            label: this.getConnectionLabel(connectionType),
+                            location: 0.5,
+                            cssClass: 'flow-label-overlay',
+                            useHTMLElement: true  // Usar elemento HTML para melhor controle CSS
+                        }
+                    }] : [])
                 ],
                 data: {
                     sourceStepId: sourceId,
@@ -2661,6 +2803,10 @@ class FlowEditor {
             
             if (connection) {
                 this.connections.set(connId, connection);
+                
+                // 🔥 FASE 1: Adicionar classe oficial jsPlumb quando conectado
+                if (sourceElement) sourceElement.classList.add('jtk-connected');
+                if (targetElement) targetElement.classList.add('jtk-connected');
                 
                 // Atualizar Alpine
                 const step = this.alpine?.config?.flow_steps?.find(s => String(s.id) === sourceId);
@@ -2737,6 +2883,10 @@ class FlowEditor {
             if (connection) {
                 this.connections.set(connId, connection);
                 
+                // 🔥 FASE 1: Adicionar classe oficial jsPlumb quando conectado
+                if (sourceElement) sourceElement.classList.add('jtk-connected');
+                if (targetElement) targetElement.classList.add('jtk-connected');
+                
                 // Atualizar Alpine
                 const step = this.alpine?.config?.flow_steps?.find(s => String(s.id) === sourceId);
                 if (step && step.config && step.config.custom_buttons && step.config.custom_buttons[buttonIndex]) {
@@ -2754,12 +2904,23 @@ class FlowEditor {
     /**
      * Callback quando conexão é criada
      * PATCH V4.0 - ManyChat Perfect
+     * 🔥 FASE 1: Adicionar classes oficiais jsPlumb
      */
     onConnectionCreated(info) {
         if (!info || !info.sourceEndpoint || !info.targetEndpoint) return;
         const sUuid = info.sourceEndpoint.getUuid ? info.sourceEndpoint.getUuid() : null;
         const tUuid = info.targetEndpoint.getUuid ? info.targetEndpoint.getUuid() : null;
         if (!sUuid || !tUuid) return;
+        
+        // 🔥 FASE 1: Adicionar classe oficial jsPlumb quando conectado
+        try {
+            const sourceElement = info.sourceEndpoint.getElement ? info.sourceEndpoint.getElement() : null;
+            const targetElement = info.targetEndpoint.getElement ? info.targetEndpoint.getElement() : null;
+            if (sourceElement) sourceElement.classList.add('jtk-connected');
+            if (targetElement) targetElement.classList.add('jtk-connected');
+        } catch(e) {
+            // Ignorar erro se elementos não disponíveis
+        }
         
         let sourceStep = null, buttonIndex = null, connType = 'next';
         const matchBtn = sUuid.match(/^endpoint-button-([^_]+)-(\d+)$/) || sUuid.match(/^endpoint-button-([^/]+)-(\d+)$/);
@@ -3147,26 +3308,45 @@ class FlowEditor {
     /**
      * Organiza steps verticalmente
      */
+    /**
+     * 🔥 V7 PROFISSIONAL: Organização hierárquica vertical (estilo Hierarchy Layout)
+     * Baseado em BFS para organizar em camadas respeitando conexões
+     */
     organizeVertical() {
         if (!this.alpine || !this.alpine.config || !this.alpine.config.flow_steps) return;
         
         const steps = this.alpine.config.flow_steps;
         if (steps.length === 0) return;
         
-        let currentY = 100;
-        steps.forEach((step) => {
-            const currentX = step.position?.x || 100;
-            step.position = { x: currentX, y: currentY };
-            currentY += 200;
-            
-            const element = this.steps.get(String(step.id));
+        // 1. Identificar raiz (start step ou step sem conexões de entrada)
+        const rootStep = steps.find(s => 
+            String(s.id) === String(this.alpine.config.flow_start_step_id) ||
+            !this.hasIncomingConnections(s.id, steps)
+        ) || steps[0];
+        
+        // 2. Organizar em camadas usando BFS (Breadth-First Search)
+        const layers = this.organizeInLayers(rootStep, steps);
+        
+        // 3. Calcular posições hierárquicas
+        const positions = this.calculateHierarchyPositions(layers, 'vertical');
+        
+        // 4. Aplicar posições
+        this.instance.setSuspendDrawing(true);
+        positions.forEach(({ stepId, position }) => {
+            this.updateStepPosition(stepId, position);
+            const element = this.steps.get(String(stepId));
             if (element) {
-                element.style.transform = `translate3d(${currentX}px, ${currentY}px, 0)`;
-                this.stepTransforms.set(String(step.id), { x: currentX, y: currentY });
+                element.style.transform = `translate3d(${position.x}px, ${position.y}px, 0)`;
+                this.stepTransforms.set(String(stepId), position);
+                this.instance.revalidate(element);
             }
         });
+        this.instance.setSuspendDrawing(false);
         
+        // 5. Repintar e reconectar
         setTimeout(() => {
+                            // 🔥 FASE 1: Usar throttledRepaint ao invés de repaintEverything direto
+                            this.throttledRepaint();
             this.reconnectAll();
             this.adjustCanvasSize();
         }, 50);
@@ -3175,43 +3355,294 @@ class FlowEditor {
     /**
      * Organiza steps horizontalmente
      */
+    /**
+     * 🔥 V7 PROFISSIONAL: Organização hierárquica horizontal (estilo Hierarchy Layout)
+     * Baseado em BFS para organizar em camadas respeitando conexões
+     */
     organizeHorizontal() {
         if (!this.alpine || !this.alpine.config || !this.alpine.config.flow_steps) return;
         
         const steps = this.alpine.config.flow_steps;
         if (steps.length === 0) return;
         
-        let currentX = 100;
-        steps.forEach((step) => {
-            const currentY = step.position?.y || 100;
-            step.position = { x: currentX, y: currentY };
-            currentX += 320;
-            
-            const element = this.steps.get(String(step.id));
+        // 1. Identificar raiz (start step ou step sem conexões de entrada)
+        const rootStep = steps.find(s => 
+            String(s.id) === String(this.alpine.config.flow_start_step_id) ||
+            !this.hasIncomingConnections(s.id, steps)
+        ) || steps[0];
+        
+        // 2. Organizar em camadas usando BFS (Breadth-First Search)
+        const layers = this.organizeInLayers(rootStep, steps);
+        
+        // 3. Calcular posições hierárquicas (horizontal)
+        const positions = this.calculateHierarchyPositions(layers, 'horizontal');
+        
+        // 4. Aplicar posições
+        this.instance.setSuspendDrawing(true);
+        positions.forEach(({ stepId, position }) => {
+            this.updateStepPosition(stepId, position);
+            const element = this.steps.get(String(stepId));
             if (element) {
-                element.style.transform = `translate3d(${currentX}px, ${currentY}px, 0)`;
-                this.stepTransforms.set(String(step.id), { x: currentX, y: currentY });
+                element.style.transform = `translate3d(${position.x}px, ${position.y}px, 0)`;
+                this.stepTransforms.set(String(stepId), position);
+                this.instance.revalidate(element);
             }
         });
+        this.instance.setSuspendDrawing(false);
         
+        // 5. Repintar e reconectar
         setTimeout(() => {
+                            // 🔥 FASE 1: Usar throttledRepaint ao invés de repaintEverything direto
+                            this.throttledRepaint();
             this.reconnectAll();
             this.adjustCanvasSize();
         }, 50);
     }
     
     /**
-     * Organiza fluxo completo
+     * 🔥 V7 PROFISSIONAL: Organiza fluxo completo hierarquicamente
      */
     organizeFlowComplete() {
+        this.organizeVertical(); // Usa organização vertical por padrão
+    }
+    
+    /**
+     * 🔥 V7 PROFISSIONAL: Organiza por grupos (mesmo comportamento que vertical)
+     */
+    organizeByGroups() {
         this.organizeVertical();
     }
     
     /**
-     * Organiza por grupos
+     * 🔥 V7 PROFISSIONAL: Grid Layout manual (alternativa ao GridLayout do Toolkit)
+     * Organiza elementos em grid retangular
+     * 
+     * @param {Object} options - Opções do grid layout
+     * @param {number} options.columns - Número fixo de colunas (-1 = automático)
+     * @param {number} options.rows - Número fixo de linhas (-1 = automático)
+     * @param {string} options.orientation - 'row-first' ou 'column-first' (padrão: 'row-first')
+     * @param {Object} options.padding - Padding { x: 30, y: 30 }
+     * @param {string} options.horizontalAlignment - 'start', 'center', 'end' (padrão: 'center')
+     * @param {string} options.verticalAlignment - 'start', 'center', 'end' (padrão: 'center')
      */
-    organizeByGroups() {
-        this.organizeVertical();
+    organizeGrid(options = {}) {
+        if (!this.alpine || !this.alpine.config || !this.alpine.config.flow_steps) return;
+        
+        const steps = this.alpine.config.flow_steps;
+        if (steps.length === 0) return;
+        
+        const {
+            columns = -1,
+            rows = -1,
+            orientation = 'row-first',
+            padding = { x: 30, y: 30 },
+            horizontalAlignment = 'center',
+            verticalAlignment = 'center'
+        } = options;
+        
+        // Calcular dimensões do grid
+        const totalSteps = steps.length;
+        let gridColumns = columns;
+        let gridRows = rows;
+        
+        if (columns === -1 && rows === -1) {
+            // Grid quadrado aproximado
+            gridColumns = Math.ceil(Math.sqrt(totalSteps));
+            gridRows = Math.ceil(totalSteps / gridColumns);
+        } else if (columns !== -1) {
+            gridColumns = columns;
+            gridRows = Math.ceil(totalSteps / gridColumns);
+        } else if (rows !== -1) {
+            gridRows = rows;
+            gridColumns = Math.ceil(totalSteps / gridRows);
+        }
+        
+        // Calcular tamanho do step + espaçamento
+        const stepWidth = 320;  // Largura do step
+        const stepHeight = 200; // Altura aproximada do step
+        const cellWidth = stepWidth + padding.x;
+        const cellHeight = stepHeight + padding.y;
+        
+        // Calcular posições
+        const positions = [];
+        const startX = 100;
+        const startY = 100;
+        
+        steps.forEach((step, index) => {
+            let row, col;
+            
+            if (orientation === 'row-first') {
+                row = Math.floor(index / gridColumns);
+                col = index % gridColumns;
+            } else {
+                col = Math.floor(index / gridRows);
+                row = index % gridRows;
+            }
+            
+            // Calcular posição base
+            let x = startX + (col * cellWidth);
+            let y = startY + (row * cellHeight);
+            
+            // Aplicar alinhamento horizontal
+            if (horizontalAlignment === 'center') {
+                // Já está centralizado
+            } else if (horizontalAlignment === 'start') {
+                x = startX + (col * cellWidth);
+            } else if (horizontalAlignment === 'end') {
+                x = startX + (col * cellWidth) + (cellWidth - stepWidth);
+            }
+            
+            // Aplicar alinhamento vertical
+            if (verticalAlignment === 'center') {
+                y = startY + (row * cellHeight) + ((cellHeight - stepHeight) / 2);
+            } else if (verticalAlignment === 'start') {
+                y = startY + (row * cellHeight);
+            } else if (verticalAlignment === 'end') {
+                y = startY + (row * cellHeight) + (cellHeight - stepHeight);
+            }
+            
+            positions.push({
+                stepId: step.id,
+                position: { x, y }
+            });
+        });
+        
+        // Aplicar posições
+        this.instance.setSuspendDrawing(true);
+        positions.forEach(({ stepId, position }) => {
+            this.updateStepPosition(stepId, position);
+            const element = this.steps.get(String(stepId));
+            if (element) {
+                element.style.transform = `translate3d(${position.x}px, ${position.y}px, 0)`;
+                this.stepTransforms.set(String(stepId), position);
+                this.instance.revalidate(element);
+            }
+        });
+        this.instance.setSuspendDrawing(false);
+        
+        // Repintar e reconectar
+        setTimeout(() => {
+                            // 🔥 FASE 1: Usar throttledRepaint ao invés de repaintEverything direto
+                            this.throttledRepaint();
+            this.reconnectAll();
+            this.adjustCanvasSize();
+        }, 50);
+    }
+    
+    /**
+     * 🔥 V7 PROFISSIONAL: Column Layout (Grid com 1 coluna)
+     * Especialização do Grid Layout
+     */
+    organizeColumn() {
+        this.organizeGrid({ columns: 1 });
+    }
+    
+    /**
+     * 🔥 V7 PROFISSIONAL: Row Layout (Grid com 1 linha)
+     * Especialização do Grid Layout
+     */
+    organizeRow() {
+        this.organizeGrid({ rows: 1 });
+    }
+    
+    /**
+     * 🔥 V7 PROFISSIONAL: Organiza steps em camadas usando BFS (Breadth-First Search)
+     * Baseado no algoritmo Sugiyama modificado (usado pelo Hierarchy Layout)
+     */
+    organizeInLayers(rootStep, allSteps) {
+        const layers = [];
+        const visited = new Set();
+        const queue = [{ step: rootStep, layer: 0 }];
+        
+        while (queue.length > 0) {
+            const { step, layer } = queue.shift();
+            
+            if (visited.has(String(step.id))) continue;
+            visited.add(String(step.id));
+            
+            if (!layers[layer]) layers[layer] = [];
+            layers[layer].push(step);
+            
+            // Encontrar steps conectados (filhos) - respeitando direção das conexões
+            const children = this.getConnectedSteps(step.id, allSteps);
+            children.forEach(child => {
+                if (!visited.has(String(child.id))) {
+                    queue.push({ step: child, layer: layer + 1 });
+                }
+            });
+        }
+        
+        // Adicionar steps não conectados como raízes adicionais
+        allSteps.forEach(step => {
+            if (!visited.has(String(step.id))) {
+                if (!layers[0]) layers[0] = [];
+                layers[0].push(step);
+            }
+        });
+        
+        return layers;
+    }
+    
+    /**
+     * 🔥 V7 PROFISSIONAL: Calcula posições hierárquicas baseado em camadas
+     * Conforme documentação Hierarchy Layout (axis, alignment, placementStrategy)
+     */
+    calculateHierarchyPositions(layers, axis = 'vertical') {
+        const positions = [];
+        const layerSpacing = axis === 'vertical' ? 250 : 320;  // Espaçamento entre camadas
+        const stepSpacing = axis === 'vertical' ? 320 : 250;   // Espaçamento entre steps na mesma camada
+        const startX = 100;
+        const startY = 100;
+        
+        layers.forEach((layer, layerIndex) => {
+            const layerSize = layer.length;
+            const layerStart = axis === 'vertical' 
+                ? startX - ((layerSize * stepSpacing) / 2) + (stepSpacing / 2)
+                : startX + (layerIndex * layerSpacing);
+            
+            layer.forEach((step, stepIndex) => {
+                const position = axis === 'vertical'
+                    ? {
+                        x: layerStart + (stepIndex * stepSpacing),
+                        y: startY + (layerIndex * layerSpacing)
+                    }
+                    : {
+                        x: layerStart,
+                        y: startY - ((layerSize * stepSpacing) / 2) + (stepIndex * stepSpacing) + (stepSpacing / 2)
+                    };
+                
+                positions.push({
+                    stepId: step.id,
+                    position: position
+                });
+            });
+        });
+        
+        return positions;
+    }
+    
+    /**
+     * 🔥 V7 PROFISSIONAL: Verifica se step tem conexões de entrada
+     */
+    hasIncomingConnections(stepId, allSteps) {
+        return allSteps.some(step => {
+            if (!step.connections) return false;
+            return Object.values(step.connections).some(targetId => 
+                String(targetId) === String(stepId)
+            );
+        });
+    }
+    
+    /**
+     * 🔥 V7 PROFISSIONAL: Obtém steps conectados (filhos) de um step
+     */
+    getConnectedSteps(stepId, allSteps) {
+        const step = allSteps.find(s => String(s.id) === String(stepId));
+        if (!step || !step.connections) return [];
+        
+        return Object.values(step.connections)
+            .map(targetId => allSteps.find(s => String(s.id) === String(targetId)))
+            .filter(Boolean);
     }
     
     /**
