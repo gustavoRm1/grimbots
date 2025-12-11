@@ -25,6 +25,217 @@
  */
 
 /**
+ * 🔥 V9.0 FINAL: Engines de Controle Profissional
+ * FlowRenderQueue, FlowAsyncLock, FlowConsistencyEngine, FlowSelfHealer
+ */
+
+/**
+ * FlowRenderQueue - Fila de renderização com throttling
+ */
+class FlowRenderQueue {
+    constructor() {
+        this.queue = [];
+        this.processing = false;
+        this.frameId = null;
+    }
+    
+    enqueue(task) {
+        this.queue.push(task);
+        this.process();
+    }
+    
+    process() {
+        if (this.processing || this.queue.length === 0) return;
+        
+        this.processing = true;
+        this.frameId = requestAnimationFrame(() => {
+            const task = this.queue.shift();
+            if (task) {
+                try {
+                    task();
+                } catch(e) {
+                    console.error('❌ Erro em FlowRenderQueue:', e);
+                }
+            }
+            this.processing = false;
+            if (this.queue.length > 0) {
+                this.process();
+            }
+        });
+    }
+    
+    clear() {
+        if (this.frameId) {
+            cancelAnimationFrame(this.frameId);
+            this.frameId = null;
+        }
+        this.queue = [];
+        this.processing = false;
+    }
+}
+
+/**
+ * FlowAsyncLock - Lock assíncrono para prevenir race conditions
+ */
+class FlowAsyncLock {
+    constructor() {
+        this.locks = new Map(); // key -> Promise
+    }
+    
+    async acquire(key) {
+        while (this.locks.has(key)) {
+            await this.locks.get(key);
+        }
+        let release;
+        const promise = new Promise(resolve => {
+            release = resolve;
+        });
+        this.locks.set(key, promise);
+        return release;
+    }
+    
+    release(key, release) {
+        if (this.locks.has(key)) {
+            this.locks.delete(key);
+            release();
+        }
+    }
+}
+
+/**
+ * FlowConsistencyEngine - Garante consistência do estado
+ */
+class FlowConsistencyEngine {
+    constructor(flowEditor) {
+        this.editor = flowEditor;
+        this.checkInterval = null;
+    }
+    
+    start() {
+        if (this.checkInterval) return;
+        this.checkInterval = setInterval(() => {
+            this.checkConsistency();
+        }, 1000);
+    }
+    
+    stop() {
+        if (this.checkInterval) {
+            clearInterval(this.checkInterval);
+            this.checkInterval = null;
+        }
+    }
+    
+    checkConsistency() {
+        if (!this.editor.instance || !this.editor.alpine) return;
+        
+        const steps = this.editor.alpine.config?.flow_steps || [];
+        steps.forEach(step => {
+            const stepId = String(step.id);
+            const element = this.editor.steps.get(stepId);
+            if (!element) return;
+            
+            // Verificar se endpoints estão corretos
+            const expectedEndpoints = this.calculateExpectedEndpoints(step);
+            const actualEndpoints = this.editor.instance.getEndpoints(element) || [];
+            
+            // Verificar duplicação
+            const uuidCounts = new Map();
+            actualEndpoints.forEach(ep => {
+                try {
+                    const uuid = ep.getUuid();
+                    uuidCounts.set(uuid, (uuidCounts.get(uuid) || 0) + 1);
+                } catch(e) {}
+            });
+            
+            uuidCounts.forEach((count, uuid) => {
+                if (count > 1) {
+                    console.warn(`⚠️ [Consistency] Endpoint ${uuid} duplicado (${count}x) no step ${stepId}`);
+                }
+            });
+        });
+    }
+    
+    calculateExpectedEndpoints(step) {
+        const stepId = String(step.id);
+        const expected = [`endpoint-left-${stepId}`];
+        const hasButtons = (step.config?.custom_buttons || []).length > 0;
+        
+        if (hasButtons) {
+            (step.config.custom_buttons || []).forEach((btn, idx) => {
+                expected.push(`endpoint-button-${stepId}-${idx}`);
+            });
+        } else {
+            expected.push(`endpoint-right-${stepId}`);
+        }
+        
+        return expected;
+    }
+}
+
+/**
+ * FlowSelfHealer - Motor de autocorreção V8
+ */
+class FlowSelfHealer {
+    constructor(flowEditor) {
+        this.editor = flowEditor;
+        this.healInterval = null;
+        this.lastHealTime = 0;
+    }
+    
+    start() {
+        if (this.healInterval) return;
+        this.healInterval = setInterval(() => {
+            this.heal();
+        }, 500);
+    }
+    
+    stop() {
+        if (this.healInterval) {
+            clearInterval(this.healInterval);
+            this.healInterval = null;
+        }
+    }
+    
+    heal() {
+        if (!this.editor.instance || !this.editor.alpine) return;
+        const now = Date.now();
+        if (now - this.lastHealTime < 500) return; // Throttle
+        this.lastHealTime = now;
+        
+        const steps = this.editor.alpine.config?.flow_steps || [];
+        steps.forEach(step => {
+            const stepId = String(step.id);
+            const element = this.editor.steps.get(stepId);
+            if (!element || !element.parentElement) return;
+            
+            // Verificar e corrigir endpoints invisíveis
+            const endpoints = this.editor.instance.getEndpoints(element) || [];
+            let needsRepaint = false;
+            
+            endpoints.forEach(ep => {
+                if (!ep || !ep.canvas) return;
+                
+                const computedStyle = window.getComputedStyle(ep.canvas);
+                if (computedStyle.display === 'none' || 
+                    computedStyle.visibility === 'hidden' || 
+                    computedStyle.opacity === '0') {
+                    ep.canvas.style.display = 'block';
+                    ep.canvas.style.visibility = 'visible';
+                    ep.canvas.style.opacity = '1';
+                    ep.canvas.style.pointerEvents = 'auto';
+                    ep.canvas.style.zIndex = '10000';
+                    needsRepaint = true;
+                }
+            });
+            
+            if (needsRepaint) {
+                this.editor.throttledRepaint();
+            }
+        });
+    }
+}
+
+/**
  * 🔥 V2.0: HistoryManager Class
  * Gerencia histórico de ações para Undo/Redo
  * CRÍTICO: Definida ANTES de FlowEditor para evitar erro de referência
@@ -123,6 +334,12 @@ class FlowEditor {
         this.endpointEventListeners = new WeakMap(); // endpoint -> Set of listeners
         this.endpointCreationLock = new Set(); // UUIDs being created (prevent race conditions)
         
+        // 🔥 V9.0 FINAL: Engines de Controle
+        this.renderQueue = new FlowRenderQueue();
+        this.asyncLock = new FlowAsyncLock();
+        this.consistencyEngine = new FlowConsistencyEngine(this);
+        this.selfHealer = new FlowSelfHealer(this);
+        
         // Configurações
         this.gridSize = 20;
         this.minZoom = 0.2;
@@ -175,6 +392,10 @@ class FlowEditor {
             
             // Ativar sistema de proteção contra duplicação
         this.preventEndpointDuplication();
+            
+            // 🔥 V9.0 FINAL: Iniciar engines de controle
+            this.consistencyEngine.start();
+            this.selfHealer.start();
             
             // Continuar inicialização
             this.continueInit();
@@ -567,10 +788,7 @@ class FlowEditor {
     }
     
     /**
-     * 🔥 V7: Configura SVG overlay com retry robusto
-     */
-    /**
-     * 🔥 V2.0 FRONTEND: Configura SVG overlay com visibilidade garantida
+     * 🔥 V9.0 FINAL: Configura SVG overlay com retry robusto e garantia de visibilidade
      */
     configureSVGOverlayWithRetry(maxAttempts = 10) {
         return new Promise((resolve, reject) => {
@@ -580,36 +798,61 @@ class FlowEditor {
                 attempt++;
                 
                 try {
-                    // ✅ CORREÇÃO: Buscar SVG overlay APENAS no canvas (não contentContainer)
+                    // ✅ CRÍTICO: Buscar SVG overlay APENAS no canvas (não contentContainer)
                     const container = this.canvas;
                     const svgOverlay = container.querySelector('svg.jtk-overlay') || 
                                      container.querySelector('svg');
                     
                     if (svgOverlay) {
-                        // ✅ CORREÇÃO: Forçar visibilidade com !important via style
+                        // ✅ V9.0 FINAL: Forçar visibilidade com !important via style inline
                         svgOverlay.style.cssText = `
                             position: absolute !important;
-            left: 0 !important;
-            top: 0 !important;
-            width: 100% !important;
-            height: 100% !important;
-            z-index: 10000 !important;
-            pointer-events: none !important;
-            display: block !important;
-            visibility: visible !important;
-            opacity: 1 !important;
-        `;
+                            left: 0 !important;
+                            top: 0 !important;
+                            width: 100% !important;
+                            height: 100% !important;
+                            z-index: 10000 !important;
+                            pointer-events: none !important;
+                            display: block !important;
+                            visibility: visible !important;
+                            opacity: 1 !important;
+                        `;
                         
-                        // ✅ CORREÇÃO: Garantir que endpoints dentro do SVG têm pointer-events
+                        // ✅ V9.0 FINAL: Garantir que endpoints dentro do SVG têm pointer-events
                         const endpoints = svgOverlay.querySelectorAll('.jtk-endpoint');
                         endpoints.forEach(ep => {
                             if (ep && ep.style) {
                                 ep.style.pointerEvents = 'auto';
                                 ep.style.zIndex = '10001';
+                                ep.style.display = 'block';
+                                ep.style.visibility = 'visible';
+                                ep.style.opacity = '1';
                             }
                         });
                         
-                        console.log('✅ [V2.0 FRONTEND] SVG overlay configurado com visibilidade garantida');
+                        // ✅ V9.0 FINAL: Garantir que círculos SVG dentro dos endpoints estão visíveis
+                        const circles = svgOverlay.querySelectorAll('circle');
+                        circles.forEach(circle => {
+                            if (circle) {
+                                circle.style.display = 'block';
+                                circle.style.visibility = 'visible';
+                                circle.style.opacity = '1';
+                                if (!circle.getAttribute('fill') || circle.getAttribute('fill') === 'none') {
+                                    circle.setAttribute('fill', '#FFFFFF');
+                                }
+                                if (!circle.getAttribute('stroke') || circle.getAttribute('stroke') === 'none') {
+                                    circle.setAttribute('stroke', '#0D0F15');
+                                }
+                                if (!circle.getAttribute('stroke-width')) {
+                                    circle.setAttribute('stroke-width', '2');
+                                }
+                                if (!circle.getAttribute('r') || circle.getAttribute('r') === '0') {
+                                    circle.setAttribute('r', '7');
+                                }
+                            }
+                        });
+                        
+                        console.log('✅ [V9.0 FINAL] SVG overlay configurado com visibilidade garantida');
                         resolve();
                     } else if (attempt < maxAttempts) {
                         setTimeout(tryConfigure, 100 * attempt);
@@ -2121,22 +2364,26 @@ class FlowEditor {
             return;
         }
         
-        // 🔥 V8 ULTRA: Verificar se element está no DOM antes de criar endpoints
+        // 🔥 V9.0 FINAL: Verificar se element está no DOM antes de criar endpoints
         if (!element.parentElement) {
             console.error('❌ addEndpoints: element não está no DOM!', stepId);
             return;
         }
         
-        console.log('🔵 addEndpoints chamado para step:', stepId, {
-            element: element,
-            parent: element.parentElement?.className || 'sem-parent',
-            hasInstance: !!this.instance,
-            endpointsInited: element.dataset.endpointsInited
-        });
-        
-        // CRÍTICO: Verificar flag dataset para evitar múltiplas criações
-        // 🔥 V8 ULTRA: Se endpoints já foram inicializados, verificar se estão visíveis
-        if (element.dataset.endpointsInited === 'true') {
+        // 🔥 V9.0 FINAL: Usar async lock para prevenir race conditions
+        const lockKey = `addEndpoints-${stepId}`;
+        this.asyncLock.acquire(lockKey).then(release => {
+            try {
+                console.log('🔵 addEndpoints chamado para step:', stepId, {
+                    element: element,
+                    parent: element.parentElement?.className || 'sem-parent',
+                    hasInstance: !!this.instance,
+                    endpointsInited: element.dataset.endpointsInited
+                });
+                
+                // CRÍTICO: Verificar flag dataset para evitar múltiplas criações
+                // 🔥 V9.0 FINAL: Se endpoints já foram inicializados, verificar se estão visíveis
+                if (element.dataset.endpointsInited === 'true') {
             console.log('ℹ️ Endpoints já inicializados para step:', stepId, '- verificando visibilidade');
             try {
                 // Revalidar primeiro
@@ -2191,6 +2438,7 @@ class FlowEditor {
             } catch(e) {
                 console.error('❌ Erro ao revalidar:', e);
             }
+            release(); // 🔥 V9.0 FINAL: Liberar lock antes de retornar
             return;
         }
         
@@ -2616,24 +2864,35 @@ class FlowEditor {
             console.error('❌ Erro ao configurar endpoints:', e);
         }
         
-        // Revalidar após criar endpoints
-        try {
-            // 🔥 V8 ULTRA: Revalidar e repintar com delay para garantir renderização
-            requestAnimationFrame(() => {
-                requestAnimationFrame(() => {
-        try {
-            this.instance.revalidate(element);
-                            // 🔥 FASE 1: Usar throttledRepaint ao invés de repaintEverything direto
-                            this.throttledRepaint();
-                        console.log(`✅ Revalidação e repaint executados para step ${stepId}`);
-                    } catch(e) {
-                        console.error('❌ Erro ao revalidar após criar endpoints:', e);
-                    }
-                });
-            });
-        } catch(e) {
-            console.error('❌ Erro ao agendar revalidação:', e);
-        }
+                // Revalidar após criar endpoints
+                try {
+                    // 🔥 V9.0 FINAL: Revalidar e repintar com delay para garantir renderização
+                    requestAnimationFrame(() => {
+                        requestAnimationFrame(() => {
+                            try {
+                                this.instance.revalidate(element);
+                                // 🔥 FASE 1: Usar throttledRepaint ao invés de repaintEverything direto
+                                this.throttledRepaint();
+                                console.log(`✅ Revalidação e repaint executados para step ${stepId}`);
+                            } catch(e) {
+                                console.error('❌ Erro ao revalidar após criar endpoints:', e);
+                            } finally {
+                                // 🔥 V9.0 FINAL: Liberar lock após todas as operações
+                                release();
+                            }
+                        });
+                    });
+                } catch(e) {
+                    console.error('❌ Erro ao agendar revalidação:', e);
+                    release(); // Liberar lock mesmo em caso de erro
+                }
+            } catch(e) {
+                console.error('❌ Erro em addEndpoints:', e);
+                release(); // Liberar lock em caso de erro
+            }
+        }).catch(e => {
+            console.error('❌ Erro ao adquirir lock em addEndpoints:', e);
+        });
     }
     
     /**
@@ -4523,6 +4782,7 @@ class FlowEditor {
     
     /**
      * Destruir instância
+     * 🔥 V9.0 FINAL: Limpar engines de controle
      */
     destroy() {
         if (this.dragFrameId) {
@@ -4536,6 +4796,17 @@ class FlowEditor {
         }
         if (this.repaintTimeout) {
             clearTimeout(this.repaintTimeout);
+        }
+        
+        // 🔥 V9.0 FINAL: Parar engines de controle
+        if (this.consistencyEngine) {
+            this.consistencyEngine.stop();
+        }
+        if (this.selfHealer) {
+            this.selfHealer.stop();
+        }
+        if (this.renderQueue) {
+            this.renderQueue.clear();
         }
         
         // Desconectar observer
