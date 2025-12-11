@@ -176,7 +176,15 @@ class FlowEditor {
         console.log('✅ Event delegation configurado no container:', container);
         
         // CRÍTICO: Interceptar ANTES do jsPlumb usando capture phase
+        // 🔥 V7 PROFISSIONAL: NÃO bloquear eventos no drag handle
         const handleButtonClick = (e) => {
+            // 🔥 CRÍTICO: Se é o drag handle, deixar evento passar para jsPlumb
+            const isDragHandle = e.target.closest('.flow-drag-handle');
+            if (isDragHandle) {
+                // Não interceptar - deixar jsPlumb gerenciar o drag
+                return;
+            }
+            
             // Verificar se é um botão ou está dentro do footer
             const button = e.target.closest('.flow-step-btn-action[data-action]');
             const isInFooter = e.target.closest('.flow-step-footer');
@@ -191,11 +199,11 @@ class FlowEditor {
                         const stepId = parentButton.getAttribute('data-step-id');
                         if (action && stepId) {
                             console.log('🔵 [Delegation CAPTURE] Ícone dentro de botão clicado:', { action, stepId, target: e.target });
-                            e.stopImmediatePropagation(); // CRÍTICO: Primeiro, antes de tudo
+                            e.stopImmediatePropagation();
                             e.stopPropagation();
                             e.preventDefault();
                             
-                            // Desabilitar draggable temporariamente
+                            // Desabilitar draggable temporariamente apenas para este elemento
                             const stepElement = parentButton.closest('.flow-step-block');
                             if (stepElement && this.instance) {
                                 try {
@@ -226,11 +234,11 @@ class FlowEditor {
                 }
                 
                 console.log('🔵 [Delegation CAPTURE] Botão clicado:', { action, stepId, target: e.target });
-                e.stopImmediatePropagation(); // CRÍTICO: Primeiro, antes de tudo
+                e.stopImmediatePropagation();
                 e.stopPropagation();
                 e.preventDefault();
                 
-                // Desabilitar draggable temporariamente
+                // Desabilitar draggable temporariamente apenas para este elemento
                 const stepElement = button.closest('.flow-step-block');
                 if (stepElement && this.instance) {
                     try {
@@ -905,8 +913,8 @@ class FlowEditor {
                     <div class="flow-step-title-center">${this.getStepTypeLabel(stepType)}</div>
                     ${isStartStep?'<div class="flow-step-start-badge">⭐</div>':''}
                 </div>
-                <!-- 🔥 V5.0: Drag handle no header -->
-                <div class="flow-drag-handle" style="position: absolute; top: 0; left: 0; right: 0; height: 40px; cursor: move; z-index: 1;"></div>
+                <!-- 🔥 V7 PROFISSIONAL: Drag handle no header - SEMPRE presente e interativo -->
+                <div class="flow-drag-handle" style="position: absolute; top: 0; left: 0; right: 0; height: 40px; cursor: move; z-index: 1; pointer-events: auto; background: transparent;"></div>
             </div>
             <div class="flow-step-body">
                 ${mediaHtml}
@@ -960,147 +968,37 @@ class FlowEditor {
             });
         }
         
-        // 🔥 V8 ULTRA: Make draggable apenas pelo handle (não pelo card inteiro)
-        const dragHandle = inner.querySelector('.flow-drag-handle');
-        
-        if (!this.instance) {
-            console.error('❌ renderStep: jsPlumb instance não existe!');
-            return;
-        }
-        
-        // 🔥 V8 ULTRA: Aguardar DOM estar pronto antes de configurar draggable
-        requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-                try {
-                    // 🔥 CRÍTICO: Verificar se instance existe antes de configurar draggable
-                    if (!this.instance) {
-                        console.error('❌ Instance não existe ao configurar draggable para step:', stepId);
-                        // Tentar novamente após um delay
-                        setTimeout(() => {
-                            if (this.instance) {
-                    // 🔥 V7 PROFISSIONAL: Configurar draggable com containment correto
-                    const draggableOptions = {
-                        containment: this.canvas, // SEMPRE usar canvas pai (não contentContainer)
-                        drag: (params) => this.onStepDrag(params),
-                        stop: (params) => this.onStepDragStop(params),
-                        cursor: 'move',
-                        start: (params) => console.log('🔵 [V7] Drag iniciado para step:', stepId)
-                    };
-                    if (dragHandle) {
-                        draggableOptions.handle = dragHandle;
-                    } else {
-                        draggableOptions.filter = '.flow-step-footer, .flow-step-btn-action, .jtk-endpoint';
-                    }
-                    this.instance.draggable(stepElement, draggableOptions);
-                            } else {
-                                console.error('❌ Instance ainda não existe após delay');
-                            }
-                        }, 500);
-                        return;
-                    }
-                    
-                    // 🔥 V7 PROFISSIONAL: Configurar draggable com containment correto e callbacks otimizados
-                    const draggableOptions = {
-                        containment: this.canvas, // SEMPRE usar canvas pai
-                        drag: (params) => {
-                            // Revalidar endpoints durante drag
-                            if (this.instance) {
-                                try {
-                                    this.instance.revalidate(stepElement);
-                                    const endpoints = this.instance.getEndpoints(stepElement);
-                                    endpoints.forEach(ep => {
-                                        if (ep && ep.canvas) {
-                                            ep.canvas.style.display = 'block';
-                                            ep.canvas.style.visibility = 'visible';
-                                            ep.canvas.style.opacity = '1';
-                                        }
-                                    });
-                                } catch(e) {
-                                    // Ignorar erros durante drag
-                                }
-                            }
-                            this.onStepDrag(params);
-                        },
-                        stop: (params) => {
-                            console.log('🔵 [V7] Drag parado para step:', stepId);
-                            if (this.instance) {
-                                try {
-                                    this.instance.revalidate(stepElement);
-                                    this.instance.repaintEverything();
-                                } catch(e) {
-                                    console.error('❌ [V7] Erro ao repintar após drag:', e);
-                                }
-                            }
-                            this.onStepDragStop(params);
-                        },
-                        cursor: 'move',
-                        start: (params) => {
-                            console.log('🔵 [V7] Drag iniciado para step:', stepId);
-                            // Garantir que SVG overlay está visível (buscar no canvas)
-                            if (this.instance) {
-                                try {
-                                    const svgOverlay = this.canvas.querySelector('svg.jtk-overlay') || 
-                                                     this.canvas.querySelector('svg');
-                                    if (svgOverlay) {
-                                        svgOverlay.style.display = 'block';
-                                        svgOverlay.style.visibility = 'visible';
-                                        svgOverlay.style.opacity = '1';
-                                    }
-                                } catch(e) {
-                                    // Ignorar erros
-                                }
-                            }
-                        }
-                    };
-                    
-                    // 🔥 V7 PROFISSIONAL: Se dragHandle existe, usar apenas ele
-                    if (dragHandle) {
-                        draggableOptions.handle = dragHandle;
-                        console.log('✅ [V7] Usando drag handle para step:', stepId);
-                    } else {
-                        draggableOptions.filter = '.flow-step-footer, .flow-step-btn-action, .jtk-endpoint, .flow-step-button-endpoint-container';
-                        console.log('✅ [V7] Usando card inteiro para drag (sem handle) para step:', stepId);
-                    }
-                    
-                    try {
-                        this.instance.draggable(stepElement, draggableOptions);
-                        console.log('✅ Draggable configurado com sucesso para step:', stepId, {
-                            hasHandle: !!dragHandle,
-                            container: container?.className || container?.id || 'sem-container',
-                            elementInDOM: !!stepElement.parentElement
-                        });
-                    } catch (draggableError) {
-                        console.error('❌ Erro ao chamar instance.draggable:', draggableError);
-                        // Tentar novamente após um delay
-                        setTimeout(() => {
-                            try {
-                                this.instance.draggable(stepElement, draggableOptions);
-                                console.log('✅ Draggable configurado após retry para step:', stepId);
-                            } catch (retryError) {
-                                console.error('❌ Erro ao configurar draggable após retry:', retryError);
-                            }
-                        }, 200);
-                    }
-                } catch (error) {
-                    console.error('❌ Erro ao configurar draggable:', error, {
-                        stepId: stepId,
-                        hasInstance: !!this.instance,
-                        hasElement: !!stepElement,
-                        hasContainer: !!container
-                    });
-                }
-            });
-        });
-        
         // Save
         this.steps.set(stepId, stepElement);
         
         // 🔥 V5.0: Reset flag de endpoints antes de criar
         stepElement.dataset.endpointsInited = 'false';
         
-        // 🔥 V8 ULTRA: Add endpoints after DOM layout calculated com delay maior
+        // 🔥 V7 PROFISSIONAL: Configurar draggable APÓS elemento estar no DOM e instance pronto
+        // Aguardar DOM estar pronto
         requestAnimationFrame(() => {
             requestAnimationFrame(() => {
+                // Verificar se instance está pronto
+                if (!this.instance) {
+                    console.warn('⚠️ [V7] Instance não está pronto, aguardando...');
+                    setTimeout(() => {
+                        if (this.instance && stepElement.parentElement) {
+                            this.setupDraggableForStep(stepElement, stepId, inner);
+                        }
+                    }, 300);
+                } else if (stepElement.parentElement) {
+                    // Instance pronto e elemento no DOM - configurar draggable
+                    this.setupDraggableForStep(stepElement, stepId, inner);
+                } else {
+                    console.warn('⚠️ [V7] Elemento não está no DOM, aguardando...');
+                    setTimeout(() => {
+                        if (stepElement.parentElement && this.instance) {
+                            this.setupDraggableForStep(stepElement, stepId, inner);
+                        }
+                    }, 300);
+                }
+                
+                // Adicionar endpoints após configurar draggable
                 setTimeout(() => {
                     console.log(`🔵 Adicionando endpoints para step ${stepId} após renderização`);
                     this.addEndpoints(stepElement, stepId, step);
@@ -1229,10 +1127,12 @@ class FlowEditor {
             return;
         }
         
-        // Atualizar posição - usar left/top ao invés de transform
+        // 🔥 V7 PROFISSIONAL: Atualizar posição usando transform (compatível com draggable)
         const position = step.position || { x: 100, y: 100 };
-        element.style.left = `${position.x}px`;
-        element.style.top = `${position.y}px`;
+        element.style.position = 'absolute';
+        element.style.left = '0';
+        element.style.top = '0';
+        element.style.transform = `translate3d(${position.x}px, ${position.y}px, 0)`;
         this.stepTransforms.set(stepId, { x: position.x, y: position.y });
         
         // 🔥 V5.0: Corrigir endpoints antes de remover (remove duplicados primeiro)
@@ -1260,9 +1160,14 @@ class FlowEditor {
             element.dataset.endpointsInited = 'false';
         }
         
-        // CRÍTICO: Garantir que o card tenha position absolute e sem transform
+        // 🔥 V7 PROFISSIONAL: Garantir que o card tenha position absolute e transform correto
         element.style.position = 'absolute';
-        element.style.transform = 'none';
+        element.style.left = '0';
+        element.style.top = '0';
+        // Manter transform se já existe, senão aplicar posição
+        if (!element.style.transform || element.style.transform === 'none') {
+            element.style.transform = `translate3d(${position.x}px, ${position.y}px, 0)`;
+        }
         
         // CRÍTICO: Buscar ou criar wrapper interno para referência correta dos nodes
         let innerWrapper = element.querySelector('.flow-step-block-inner');
@@ -1359,22 +1264,9 @@ class FlowEditor {
                 // Reanexar listeners dos botões de ação
                 this.attachActionButtons(element, stepId);
                 
-                // Atualizar drag handle
-                const dragHandle = innerWrapper.querySelector('.flow-drag-handle');
-                if (dragHandle && this.instance) {
-                    // Reconfigurar draggable com handle
-                    try {
-                        this.instance.setDraggable(element, false);
-                        this.instance.draggable(element, {
-                            containment: this.contentContainer || this.canvas,
-                            handle: dragHandle,
-                            drag: (params) => this.onStepDrag(params),
-                            stop: (params) => this.onStepDragStop(params),
-                            cursor: 'move'
-                        });
-                    } catch(e) {
-                        console.warn('⚠️ Erro ao reconfigurar draggable:', e);
-                    }
+                // 🔥 V7 PROFISSIONAL: Reconfigurar draggable usando função dedicada
+                if (this.instance && element.parentElement) {
+                    this.setupDraggableForStep(element, stepId, innerWrapper);
                 }
                 
                 this.addEndpoints(element, stepId, step);
@@ -2212,6 +2104,186 @@ class FlowEditor {
             });
         } catch(e) {
             console.error('❌ Erro ao agendar revalidação:', e);
+        }
+    }
+    
+    /**
+     * 🔥 V7 PROFISSIONAL: Configura draggable para um step de forma robusta
+     */
+    setupDraggableForStep(stepElement, stepId, innerWrapper) {
+        if (!this.instance) {
+            console.error('❌ [V7] setupDraggableForStep: instance não existe');
+            // Tentar novamente após um delay
+            setTimeout(() => {
+                if (this.instance) {
+                    this.setupDraggableForStep(stepElement, stepId, innerWrapper);
+                }
+            }, 500);
+            return;
+        }
+        
+        if (!stepElement.parentElement) {
+            console.error('❌ [V7] setupDraggableForStep: elemento não está no DOM');
+            // Aguardar estar no DOM
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    if (stepElement.parentElement) {
+                        this.setupDraggableForStep(stepElement, stepId, innerWrapper);
+                    }
+                });
+            });
+            return;
+        }
+        
+        // Buscar drag handle
+        const dragHandle = innerWrapper?.querySelector('.flow-drag-handle');
+        
+        // 🔥 V7 PROFISSIONAL: Configurar draggable com containment CORRETO
+        // CRÍTICO: Containment deve ser contentContainer (onde elementos estão)
+        // O jsPlumb calcula posições relativas ao containment especificado
+        const draggableOptions = {
+            containment: this.contentContainer || this.canvas,
+            drag: (params) => {
+                // Revalidar endpoints durante drag
+                if (this.instance) {
+                    try {
+                        this.instance.revalidate(stepElement);
+                        const endpoints = this.instance.getEndpoints(stepElement);
+                        endpoints.forEach(ep => {
+                            if (ep && ep.canvas) {
+                                ep.canvas.style.display = 'block';
+                                ep.canvas.style.visibility = 'visible';
+                                ep.canvas.style.opacity = '1';
+                            }
+                        });
+                    } catch(e) {
+                        // Ignorar erros durante drag
+                    }
+                }
+                this.onStepDrag(params);
+            },
+            stop: (params) => {
+                console.log('🔵 [V7] Drag parado para step:', stepId);
+                if (this.instance) {
+                    try {
+                        this.instance.revalidate(stepElement);
+                        this.instance.repaintEverything();
+                    } catch(e) {
+                        console.error('❌ [V7] Erro ao repintar após drag:', e);
+                    }
+                }
+                this.onStepDragStop(params);
+            },
+            cursor: 'move',
+            start: (params) => {
+                console.log('🔵 [V7] Drag iniciado para step:', stepId, params);
+                // Garantir que SVG overlay está visível
+                if (this.instance) {
+                    try {
+                        const svgOverlay = this.canvas.querySelector('svg.jtk-overlay') || 
+                                         this.canvas.querySelector('svg');
+                        if (svgOverlay) {
+                            svgOverlay.style.display = 'block';
+                            svgOverlay.style.visibility = 'visible';
+                            svgOverlay.style.opacity = '1';
+                        }
+                    } catch(e) {
+                        // Ignorar erros
+                    }
+                }
+                // 🔥 CRÍTICO: NÃO retornar false ou prevenir default aqui
+                // Isso pode bloquear o drag
+            }
+        };
+        
+        // 🔥 V7 PROFISSIONAL: Se dragHandle existe, usar apenas ele
+        if (dragHandle) {
+            draggableOptions.handle = dragHandle;
+            console.log('✅ [V7] Usando drag handle para step:', stepId, {
+                handle: dragHandle,
+                handleRect: dragHandle.getBoundingClientRect()
+            });
+        } else {
+            // Sem handle: permitir drag pelo card inteiro, mas excluir elementos interativos
+            draggableOptions.filter = '.flow-step-footer, .flow-step-btn-action, .jtk-endpoint, .flow-step-button-endpoint-container';
+            console.log('⚠️ [V7] Drag handle não encontrado, usando card inteiro para step:', stepId);
+            // 🔥 CRÍTICO: Garantir que o card inteiro pode ser arrastado
+            stepElement.removeAttribute('data-jtk-not-draggable');
+            stepElement.style.pointerEvents = 'auto';
+        }
+        
+        try {
+            // CRÍTICO: Garantir que elemento está no DOM antes de configurar draggable
+            if (!stepElement.parentElement) {
+                console.error('❌ [V7] Elemento não está no DOM antes de configurar draggable');
+                return;
+            }
+            
+            // Remover draggable anterior se existir
+            try {
+                this.instance.setDraggable(stepElement, false);
+            } catch(e) {
+                // Ignorar erro se não estava draggable
+            }
+            
+            // 🔥 CRÍTICO: Garantir que elemento pode ser arrastado
+            // Remover qualquer atributo que possa bloquear drag
+            stepElement.removeAttribute('data-jtk-not-draggable');
+            stepElement.style.pointerEvents = 'auto';
+            stepElement.style.cursor = dragHandle ? 'default' : 'move';
+            
+            // Configurar draggable
+            this.instance.draggable(stepElement, draggableOptions);
+            
+            // 🔥 CRÍTICO: Verificar se draggable foi configurado corretamente
+            const isDraggable = this.instance.isDraggable ? this.instance.isDraggable(stepElement) : true;
+            console.log('✅ [V7] Draggable configurado para step:', stepId, {
+                hasHandle: !!dragHandle,
+                containment: draggableOptions.containment?.className || draggableOptions.containment?.id,
+                elementInDOM: !!stepElement.parentElement,
+                elementPosition: stepElement.style.transform,
+                isDraggable: isDraggable,
+                elementStyle: {
+                    position: stepElement.style.position,
+                    pointerEvents: stepElement.style.pointerEvents,
+                    cursor: stepElement.style.cursor
+                }
+            });
+            
+            if (!isDraggable && this.instance.isDraggable) {
+                console.error('❌ [V7] Draggable NÃO foi configurado corretamente! Tentando novamente...');
+                // Tentar novamente
+                setTimeout(() => {
+                    try {
+                        this.instance.draggable(stepElement, draggableOptions);
+                        const retryIsDraggable = this.instance.isDraggable(stepElement);
+                        console.log('✅ [V7] Retry draggable:', retryIsDraggable);
+                    } catch(e) {
+                        console.error('❌ [V7] Erro no retry:', e);
+                    }
+                }, 100);
+            }
+        } catch (draggableError) {
+            console.error('❌ [V7] Erro ao chamar instance.draggable:', draggableError, {
+                stepId: stepId,
+                hasInstance: !!this.instance,
+                hasElement: !!stepElement,
+                elementInDOM: !!stepElement.parentElement,
+                error: draggableError.message
+            });
+            // Tentar novamente após um delay
+            setTimeout(() => {
+                try {
+                    if (this.instance && stepElement.parentElement) {
+                        this.instance.draggable(stepElement, draggableOptions);
+                        console.log('✅ [V7] Draggable configurado após retry para step:', stepId);
+                    } else {
+                        console.error('❌ [V7] Instance ou elemento não disponível para retry');
+                    }
+                } catch (retryError) {
+                    console.error('❌ [V7] Erro ao configurar draggable após retry:', retryError);
+                }
+            }, 200);
         }
     }
     
