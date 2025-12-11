@@ -2705,29 +2705,66 @@ class BotManager:
                 # ✅ Processar botões (customizados + cadastrados)
                 buttons = self._build_step_buttons(step, config)
                 
-                logger.info(f"📤 Enviando step 'content' com mensagem: {step_config.get('message', '')[:50]}...")
+                message_text = step_config.get('message', '')
+                media_url = step_config.get('media_url')
+                media_type = step_config.get('media_type', 'video')
+                
+                logger.info(f"📤 Enviando step 'content': mensagem_len={len(message_text) if message_text else 0}, media_url={bool(media_url)}, media_type={media_type}, buttons={len(buttons)}")
+                
+                # 🔥 V8 ULTRA: Verificar se step tem conteúdo antes de enviar
+                if not message_text and not media_url:
+                    logger.error(f"❌ Step 'content' não tem mensagem nem mídia configurada! step_id={step.get('id')}")
+                    # Enviar mensagem de aviso ao usuário
+                    self.send_telegram_message(
+                        token=token,
+                        chat_id=str(chat_id),
+                        message="⚠️ Esta etapa não tem conteúdo configurado. Entre em contato com o suporte."
+                    )
+                    return  # Não continuar se não tem conteúdo
+                
                 result = self.send_funnel_step_sequential(
                     token=token,
                     chat_id=str(chat_id),
-                    text=step_config.get('message', ''),
-                    media_url=step_config.get('media_url'),
-                    media_type=step_config.get('media_type', 'video'),
+                    text=message_text or '',  # Garantir string vazia se None
+                    media_url=media_url,
+                    media_type=media_type,
                     buttons=buttons,
                     delay_between=delay
                 )
-                logger.info(f"✅ Step 'content' enviado: resultado={result}")
+                
+                if result:
+                    logger.info(f"✅ Step 'content' enviado com sucesso: resultado={result}")
+                else:
+                    logger.error(f"❌ Falha ao enviar step 'content': resultado={result}")
             elif step_type == 'message':
                 # ✅ Processar botões (customizados + cadastrados)
                 buttons = self._build_step_buttons(step, config)
                 
-                logger.info(f"📤 Enviando step 'message' com mensagem: {step_config.get('message', '')[:50]}...")
+                message_text = step_config.get('message', '')
+                if not message_text or not message_text.strip():
+                    logger.error(f"❌ Step 'message' não tem mensagem configurada! step_id={step.get('id')}")
+                    # Enviar mensagem de aviso ao usuário
+                    self.send_telegram_message(
+                        token=token,
+                        chat_id=str(chat_id),
+                        message="⚠️ Esta etapa não tem mensagem configurada. Entre em contato com o suporte."
+                    )
+                    return  # Não continuar se não tem mensagem
+                
+                logger.info(f"📤 Enviando step 'message' com mensagem: {message_text[:50]}...")
+                logger.info(f"📤 Botões: {len(buttons)} botões configurados")
+                
                 result = self.send_telegram_message(
                     token=token,
                     chat_id=str(chat_id),
-                    message=step_config.get('message', ''),
-                    buttons=buttons
+                    message=message_text,
+                    buttons=buttons if buttons else None
                 )
-                logger.info(f"✅ Step 'message' enviado: resultado={result}")
+                
+                if result:
+                    logger.info(f"✅ Step 'message' enviado com sucesso: resultado={result}")
+                else:
+                    logger.error(f"❌ Falha ao enviar step 'message': resultado={result}")
             elif step_type == 'audio':
                 # ✅ Processar botões (customizados + cadastrados)
                 buttons = self._build_step_buttons(step, config)
@@ -3083,6 +3120,9 @@ class BotManager:
             # Executar recursivamente a partir do step inicial
             logger.info(f"🚀 Iniciando fluxo a partir do step inicial: {start_step_id} (tipo: {type(start_step_id)}, order={start_step.get('order', 0)})")
             logger.info(f"🚀 Step inicial completo: {start_step}")
+            logger.info(f"🚀 Step inicial tipo: {start_step.get('type')}")
+            logger.info(f"🚀 Step inicial config: {start_step.get('config', {})}")
+            logger.info(f"🚀 Step inicial mensagem: {start_step.get('config', {}).get('message', '')[:100] if start_step.get('config', {}).get('message') else 'VAZIA'}")
             logger.info(f"🚀 Chamando _execute_flow_recursive com step_id={start_step_id}")
             
             self._execute_flow_recursive(
@@ -3094,8 +3134,30 @@ class BotManager:
             
             logger.info(f"✅ _execute_flow_recursive concluído para step {start_step_id}")
             
+        except ValueError as e:
+            # Erro de validação (fluxo vazio, step não encontrado, etc)
+            logger.error(f"❌ Erro de validação ao executar fluxo: {e}", exc_info=True)
+            # 🔥 V8 ULTRA: Enviar mensagem de erro ao usuário em vez de apenas fazer raise
+            try:
+                self.send_telegram_message(
+                    token=token,
+                    chat_id=str(chat_id),
+                    message="⚠️ Erro na configuração do fluxo. Entre em contato com o suporte."
+                )
+            except Exception as e2:
+                logger.error(f"❌ Erro ao enviar mensagem de erro: {e2}")
+            raise  # Re-raise para caller decidir fallback
         except Exception as e:
             logger.error(f"❌ Erro ao executar fluxo: {e}", exc_info=True)
+            # 🔥 V8 ULTRA: Enviar mensagem de erro ao usuário em vez de apenas fazer raise
+            try:
+                self.send_telegram_message(
+                    token=token,
+                    chat_id=str(chat_id),
+                    message="⚠️ Erro ao processar fluxo. Tente novamente ou entre em contato com o suporte."
+                )
+            except Exception as e2:
+                logger.error(f"❌ Erro ao enviar mensagem de erro: {e2}")
             raise  # Re-raise para caller decidir fallback
     
     def _execute_flow_recursive(self, bot_id: int, token: str, config: Dict[str, Any],
@@ -3204,6 +3266,11 @@ class BotManager:
             logger.info(f"🎯 Executando step {step_id} (tipo: {step_type}, ordem: {step.get('order', 0)})")
             logger.info(f"🎯 Config do step: {step_config}")
             logger.info(f"🎯 Connections: {connections}")
+            logger.info(f"🎯 Mensagem do step: {step_config.get('message', '')[:100] if step_config.get('message') else 'VAZIA'}")
+            logger.info(f"🎯 Media URL: {step_config.get('media_url', 'NÃO CONFIGURADA')}")
+            logger.info(f"🎯 Custom buttons: {len(step_config.get('custom_buttons', []))} botões")
+            logger.info(f"🎯 Media URL: {step_config.get('media_url', 'NÃO CONFIGURADA')}")
+            logger.info(f"🎯 Custom buttons: {len(step_config.get('custom_buttons', []))} botões")
             
             # ✅ Payment para aqui (aguarda callback verify_)
             if step_type == 'payment':
@@ -3362,7 +3429,39 @@ class BotManager:
             
             # ✅ Executar step normalmente (content, message, audio, video, buttons)
             else:
-                self._execute_step(step, token, chat_id, delay, config=config)
+                logger.info(f"🎬 Executando step tipo '{step_type}' (id={step_id})")
+                logger.info(f"🎬 Config do step: {step_config}")
+                logger.info(f"🎬 Mensagem do step: {step_config.get('message', '')[:100] if step_config.get('message') else 'VAZIA'}")
+                
+                # 🔥 V8 ULTRA: Verificar se step tem mensagem antes de executar
+                if step_type == 'message' and not step_config.get('message'):
+                    logger.warning(f"⚠️ Step {step_id} tipo 'message' não tem mensagem configurada!")
+                    # Enviar mensagem de aviso ao usuário
+                    try:
+                        self.send_telegram_message(
+                            token=token,
+                            chat_id=str(chat_id),
+                            message="⚠️ Esta etapa não tem mensagem configurada. Entre em contato com o suporte."
+                        )
+                    except Exception as e:
+                        logger.error(f"❌ Erro ao enviar mensagem de aviso: {e}")
+                
+                # 🔥 V8 ULTRA: Executar step com tratamento de erro robusto
+                try:
+                    self._execute_step(step, token, chat_id, delay, config=config)
+                    logger.info(f"✅ Step {step_id} executado com sucesso")
+                except Exception as e:
+                    logger.error(f"❌ Erro ao executar step {step_id}: {e}", exc_info=True)
+                    # Enviar mensagem de erro ao usuário
+                    try:
+                        self.send_telegram_message(
+                            token=token,
+                            chat_id=str(chat_id),
+                            message="⚠️ Erro ao processar esta etapa. Tente novamente ou entre em contato com o suporte."
+                        )
+                    except Exception as e2:
+                        logger.error(f"❌ Erro ao enviar mensagem de erro: {e2}")
+                    # Continuar para próximo step mesmo com erro (não quebrar fluxo completo)
                 
                 # ✅ NOVO: Priorizar condições sobre conexões diretas
                 # Se step tem condições, aguardar input do usuário (não continuar automaticamente)
@@ -3378,7 +3477,10 @@ class BotManager:
                 
                 # Fallback: usar conexões diretas (comportamento antigo)
                 next_step_id = connections.get('next')
+                logger.info(f"🔍 Verificando conexões: next_step_id={next_step_id}, connections={connections}")
+                
                 if next_step_id:
+                    logger.info(f"➡️ Continuando para próximo step: {next_step_id}")
                     self._execute_flow_recursive(
                         bot_id, token, config, chat_id, telegram_user_id, next_step_id,
                         recursion_depth=recursion_depth + 1,
@@ -3387,7 +3489,7 @@ class BotManager:
                     )
                 else:
                     # Sem próximo step - fim do fluxo
-                    logger.info(f"✅ Fluxo finalizado - sem próximo step")
+                    logger.info(f"✅ Fluxo finalizado - sem próximo step (step {step_id} não tem conexão 'next')")
         
         except Exception as e:
             logger.error(f"❌ Erro ao executar step {step_id}: {e}", exc_info=True)
@@ -3723,6 +3825,10 @@ class BotManager:
                 
                 try:
                     logger.info(f"🚀 Chamando _execute_flow...")
+                    logger.info(f"🚀 Config flow_enabled: {config.get('flow_enabled')}")
+                    logger.info(f"🚀 Config flow_steps count: {len(config.get('flow_steps', [])) if isinstance(config.get('flow_steps'), list) else 'N/A'}")
+                    logger.info(f"🚀 Config flow_start_step_id: {config.get('flow_start_step_id')}")
+                    
                     self._execute_flow(bot_id, token, config, chat_id, telegram_user_id)
                     logger.info(f"✅ _execute_flow concluído sem exceções")
                     
