@@ -1765,74 +1765,105 @@ class FlowEditor {
         // Ensure element position absolute
         element.style.position = 'absolute';
         
-        // CRÍTICO: Garantir que nodes HTML existam antes de criar endpoints
-        const innerWrapper = element.querySelector('.flow-step-block-inner') || element;
-        
-        // Garantir input node existe
-        let inputNode = innerWrapper.querySelector('.flow-step-node-input');
-        if (!inputNode) {
-            inputNode = document.createElement('div');
-            inputNode.className = 'flow-step-node-input';
-            inputNode.style.cssText = 'position: absolute; left: -8px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; z-index: 60; pointer-events: none;';
-            innerWrapper.appendChild(inputNode);
-        }
-        
-        // Garantir output node existe (se não há botões)
-        if (!hasButtons) {
-            let outputNode = innerWrapper.querySelector('.flow-step-node-output-global');
-            if (!outputNode) {
-                outputNode = document.createElement('div');
-                outputNode.className = 'flow-step-node-output-global';
-                outputNode.style.cssText = 'position: absolute; right: -8px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; z-index: 60; pointer-events: none;';
-                innerWrapper.appendChild(outputNode);
-            }
-        } else {
-            // Remover output node se botões existem
-            const outputNode = innerWrapper.querySelector('.flow-step-node-output-global');
-            if (outputNode) {
-                outputNode.remove();
-            }
-        }
-        
-        // 1) INPUT endpoint (left outside) - SEMPRE FIXO
-        const inputUuid = `endpoint-left-${stepId}`;
-        console.log(`🔵 Criando input endpoint para step ${stepId}`, {
-            inputNode: inputNode,
-            uuid: inputUuid,
-            position: inputNode.getBoundingClientRect()
-        });
-        
-        const inputEndpoint = this.ensureEndpoint(this.instance, inputNode, inputUuid, {
-            anchor: [0, 0.5, -1, 0, -8, 0], // left outside, center vertical, -8px offset
-            isSource: false,
-            isTarget: true,
-            maxConnections: -1,
-            endpoint: ['Dot', { radius: 7 }],
-            paintStyle: { fill:'#10B981', outlineStroke:'#FFFFFF', outlineWidth:2 },
-            hoverPaintStyle: { fill:'#FFB800', outlineStroke:'#FFFFFF', outlineWidth:3 },
-            data: { stepId, endpointType: 'input' }
-        });
-        
-        // 🔥 V7 PROFISSIONAL: Usar forceEndpointVisibility() para garantir visibilidade completa
-        if (inputEndpoint) {
-            this.forceEndpointVisibility(inputEndpoint, stepId, 'input');
-        } else {
-            console.error(`❌ Falha ao criar input endpoint para step ${stepId}`);
-        }
-        
-        // 2) OUTPUT endpoints
-        if (hasButtons) {
-            // Remover output global se existir
-            const globalUuid = `endpoint-right-${stepId}`;
-            try {
-                const existingGlobal = this.instance.getEndpoint(globalUuid);
-                if (existingGlobal) {
-                    this.instance.deleteEndpoint(existingGlobal);
+        // 🔥 V7 PROFISSIONAL: Garantir que layout está completamente calculado antes de criar endpoints
+        // CRÍTICO: Aguardar múltiplos frames para garantir que layout está pronto
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                // CRÍTICO: Garantir que nodes HTML existam antes de criar endpoints
+                const innerWrapper = element.querySelector('.flow-step-block-inner') || element;
+                
+                // Garantir input node existe e tem dimensões corretas
+                let inputNode = innerWrapper.querySelector('.flow-step-node-input');
+                if (!inputNode) {
+                    inputNode = document.createElement('div');
+                    inputNode.className = 'flow-step-node-input';
+                    inputNode.style.cssText = 'position: absolute; left: -8px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; z-index: 60; pointer-events: none;';
+                    innerWrapper.appendChild(inputNode);
                 }
-            } catch(e) {}
-            
-            // Criar um endpoint por botão - ANCHOR FIXO baseado no índice
-            customButtons.forEach((btn, index) => {
+                
+                // 🔥 CRÍTICO: Garantir que inputNode tem dimensões antes de criar endpoint
+                const inputRect = inputNode.getBoundingClientRect();
+                if (inputRect.width === 0 || inputRect.height === 0) {
+                    console.warn('⚠️ Input node não tem dimensões, aguardando...');
+                    setTimeout(() => this.addEndpoints(element, stepId, step), 100);
+                    return;
+                }
+                
+                // Garantir output node existe (se não há botões)
+                if (!hasButtons) {
+                    let outputNode = innerWrapper.querySelector('.flow-step-node-output-global');
+                    if (!outputNode) {
+                        outputNode = document.createElement('div');
+                        outputNode.className = 'flow-step-node-output-global';
+                        outputNode.style.cssText = 'position: absolute; right: -8px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; z-index: 60; pointer-events: none;';
+                        innerWrapper.appendChild(outputNode);
+                    }
+                    
+                    // 🔥 CRÍTICO: Garantir que outputNode tem dimensões antes de criar endpoint
+                    const outputRect = outputNode.getBoundingClientRect();
+                    if (outputRect.width === 0 || outputRect.height === 0) {
+                        console.warn('⚠️ Output node não tem dimensões, aguardando...');
+                        setTimeout(() => this.addEndpoints(element, stepId, step), 100);
+                        return;
+                    }
+                } else {
+                    // Remover output node se botões existem
+                    const outputNode = innerWrapper.querySelector('.flow-step-node-output-global');
+                    if (outputNode) {
+                        outputNode.remove();
+                    }
+                }
+                
+                // 🔥 CRÍTICO: Obter dimensões reais do elemento para calcular anchors corretamente
+                const elementRect = element.getBoundingClientRect();
+                const innerRect = innerWrapper.getBoundingClientRect();
+                
+                // 1) INPUT endpoint (left outside) - SEMPRE FIXO
+                const inputUuid = `endpoint-left-${stepId}`;
+                console.log(`🔵 Criando input endpoint para step ${stepId}`, {
+                    inputNode: inputNode,
+                    uuid: inputUuid,
+                    inputRect: inputNode.getBoundingClientRect(),
+                    elementRect: elementRect,
+                    innerRect: innerRect
+                });
+                
+                // 🔥 V7 PROFISSIONAL: Usar anchor simples e revalidar imediatamente após criar
+                const inputEndpoint = this.ensureEndpoint(this.instance, inputNode, inputUuid, {
+                    anchor: [0, 0.5, -1, 0], // left outside, center vertical (sem offset manual, deixar jsPlumb calcular)
+                    isSource: false,
+                    isTarget: true,
+                    maxConnections: -1,
+                    endpoint: ['Dot', { radius: 7 }],
+                    paintStyle: { fill:'#10B981', outlineStroke:'#FFFFFF', outlineWidth:2 },
+                    hoverPaintStyle: { fill:'#FFB800', outlineStroke:'#FFFFFF', outlineWidth:3 },
+                    data: { stepId, endpointType: 'input' }
+                });
+                
+                // 🔥 CRÍTICO: Revalidar imediatamente após criar endpoint para recalcular posição
+                if (inputEndpoint) {
+                    // Revalidar o elemento para recalcular posição do endpoint
+                    this.instance.revalidate(inputNode);
+                    this.instance.revalidate(element);
+                    // Usar forceEndpointVisibility para garantir visibilidade
+                    this.forceEndpointVisibility(inputEndpoint, stepId, 'input');
+                } else {
+                    console.error(`❌ Falha ao criar input endpoint para step ${stepId}`);
+                }
+                
+                // 2) OUTPUT endpoints
+                if (hasButtons) {
+                    // Remover output global se existir
+                    const globalUuid = `endpoint-right-${stepId}`;
+                    try {
+                        const existingGlobal = this.instance.getEndpoint(globalUuid);
+                        if (existingGlobal) {
+                            this.instance.deleteEndpoint(existingGlobal);
+                        }
+                    } catch(e) {}
+                    
+                    // Criar um endpoint por botão - ANCHOR FIXO baseado no índice
+                    customButtons.forEach((btn, index) => {
                 const uuid = `endpoint-button-${stepId}-${index}`;
                 let buttonContainer = element.querySelector(`[data-endpoint-button="${index}"]`);
                 
@@ -1858,76 +1889,97 @@ class FlowEditor {
                     return; // Pular este botão
                 }
                 
-                const buttonTarget = buttonContainer;
-                
-                // Anchor fixo: calcular Y baseado no índice do botão
-                const buttonCount = customButtons.length;
-                const buttonSpacing = 1 / (buttonCount + 1);
-                const anchorY = Math.max(0.2, Math.min(0.8, 0.3 + (index * buttonSpacing)));
-                
-                console.log(`🔵 Criando endpoint para botão ${index} do step ${stepId}`, {
-                    uuid: uuid,
-                    buttonTarget: buttonTarget,
-                    anchorY: anchorY,
-                    buttonContainer: buttonContainer.getBoundingClientRect()
-                });
-                
-                const endpoint = this.ensureEndpoint(this.instance, buttonTarget, uuid, {
-                    anchor: [1, anchorY, 1, 0, 8, 0], // right outside, Y calculado, +8px offset
-                    isSource: true,
-                    isTarget: false,
-                    maxConnections: 1,
-                    endpoint: ['Dot', { radius: 6 }],
-                    paintStyle: { fill:'#FFFFFF', outlineStroke:'#0D0F15', outlineWidth:2 },
-                    hoverPaintStyle: { fill:'#FFB800', outlineStroke:'#FFFFFF', outlineWidth:3 },
-                    data: { stepId, buttonIndex: index, endpointType: 'button' }
-                });
-                
-                // 🔥 V7 PROFISSIONAL: Usar forceEndpointVisibility() para garantir visibilidade completa
-                if (endpoint) {
-                    this.forceEndpointVisibility(endpoint, stepId, 'button');
+                        const buttonTarget = buttonContainer;
+                        
+                        // Anchor fixo: calcular Y baseado no índice do botão
+                        const buttonCount = customButtons.length;
+                        const buttonSpacing = 1 / (buttonCount + 1);
+                        const anchorY = Math.max(0.2, Math.min(0.8, 0.3 + (index * buttonSpacing)));
+                        
+                        console.log(`🔵 Criando endpoint para botão ${index} do step ${stepId}`, {
+                            uuid: uuid,
+                            buttonTarget: buttonTarget,
+                            anchorY: anchorY,
+                            buttonContainer: buttonContainer.getBoundingClientRect()
+                        });
+                        
+                        // 🔥 V7 PROFISSIONAL: Usar anchor simples e revalidar imediatamente
+                        const endpoint = this.ensureEndpoint(this.instance, buttonTarget, uuid, {
+                            anchor: [1, anchorY, 1, 0], // right outside, Y calculado (sem offset manual)
+                            isSource: true,
+                            isTarget: false,
+                            maxConnections: 1,
+                            endpoint: ['Dot', { radius: 6 }],
+                            paintStyle: { fill:'#FFFFFF', outlineStroke:'#0D0F15', outlineWidth:2 },
+                            hoverPaintStyle: { fill:'#FFB800', outlineStroke:'#FFFFFF', outlineWidth:3 },
+                            data: { stepId, buttonIndex: index, endpointType: 'button' }
+                        });
+                        
+                        // 🔥 CRÍTICO: Revalidar imediatamente após criar endpoint
+                        if (endpoint) {
+                            this.instance.revalidate(buttonTarget);
+                            this.instance.revalidate(element);
+                            this.forceEndpointVisibility(endpoint, stepId, 'button');
+                        } else {
+                            console.error(`❌ Falha ao criar button endpoint ${index} para step ${stepId}`);
+                        }
+                    });
                 } else {
-                    console.error(`❌ Falha ao criar button endpoint ${index} para step ${stepId}`);
+                    // Sem botões: criar output global único - SEMPRE FIXO
+                    const outUuid = `endpoint-right-${stepId}`;
+                    const outputNode = innerWrapper.querySelector('.flow-step-node-output-global');
+                    
+                    if (!outputNode) {
+                        console.error(`❌ Output node não encontrado para step ${stepId} sem botões!`);
+                        console.error(`❌ innerWrapper:`, innerWrapper);
+                        console.error(`❌ innerWrapper HTML:`, innerWrapper.innerHTML.substring(0, 500));
+                    } else {
+                        console.log(`✅ Criando output global endpoint para step ${stepId}`, {
+                            outputNode: outputNode,
+                            uuid: outUuid,
+                            position: outputNode.getBoundingClientRect()
+                        });
+                        
+                        // 🔥 V7 PROFISSIONAL: Usar anchor simples e revalidar imediatamente
+                        const endpoint = this.ensureEndpoint(this.instance, outputNode, outUuid, {
+                            anchor: [1, 0.5, 1, 0], // right outside, center vertical (sem offset manual)
+                            isSource: true,
+                            isTarget: false,
+                            maxConnections: -1,
+                            endpoint: ['Dot', { radius: 7 }],
+                            paintStyle: { fill:'#FFFFFF', outlineStroke:'#0D0F15', outlineWidth:2 },
+                            hoverPaintStyle: { fill:'#FFB800', outlineStroke:'#FFFFFF', outlineWidth:3 },
+                            data: { stepId, endpointType: 'global' }
+                        });
+                        
+                        // 🔥 CRÍTICO: Revalidar imediatamente após criar endpoint
+                        if (endpoint) {
+                            this.instance.revalidate(outputNode);
+                            this.instance.revalidate(element);
+                            this.forceEndpointVisibility(endpoint, stepId, 'global');
+                        } else {
+                            console.error(`❌ Falha ao criar output endpoint para step ${stepId}`);
+                        }
+                    }
                 }
+                
+                // 🔥 CRÍTICO: Revalidar e repintar após criar todos os endpoints
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                        try {
+                            this.instance.revalidate(element);
+                            this.instance.repaintEverything();
+                            console.log(`✅ Endpoints criados e revalidados para step ${stepId}`);
+                        } catch(e) {
+                            console.error('❌ Erro ao revalidar após criar endpoints:', e);
+                        }
+                    });
+                });
+                
+                    // Marcar como inicializado APENAS após criar todos os endpoints
+                    element.dataset.endpointsInited = 'true';
+                });
             });
-        } else {
-            // Sem botões: criar output global único - SEMPRE FIXO
-            const outUuid = `endpoint-right-${stepId}`;
-            const outputNode = innerWrapper.querySelector('.flow-step-node-output-global');
-            
-            if (!outputNode) {
-                console.error(`❌ Output node não encontrado para step ${stepId} sem botões!`);
-                console.error(`❌ innerWrapper:`, innerWrapper);
-                console.error(`❌ innerWrapper HTML:`, innerWrapper.innerHTML.substring(0, 500));
-            } else {
-                console.log(`✅ Criando output global endpoint para step ${stepId}`, {
-                    outputNode: outputNode,
-                    uuid: outUuid,
-                    position: outputNode.getBoundingClientRect()
-                });
-                
-                const endpoint = this.ensureEndpoint(this.instance, outputNode, outUuid, {
-                    anchor: [1, 0.5, 1, 0, 8, 0], // right outside, center vertical, +8px offset
-                    isSource: true,
-                    isTarget: false,
-                    maxConnections: -1,
-                    endpoint: ['Dot', { radius: 7 }],
-                    paintStyle: { fill:'#FFFFFF', outlineStroke:'#0D0F15', outlineWidth:2 },
-                    hoverPaintStyle: { fill:'#FFB800', outlineStroke:'#FFFFFF', outlineWidth:3 },
-                    data: { stepId, endpointType: 'global' }
-                });
-                
-                // 🔥 V7 PROFISSIONAL: Usar forceEndpointVisibility() para garantir visibilidade completa
-                if (endpoint) {
-                    this.forceEndpointVisibility(endpoint, stepId, 'global');
-                } else {
-                    console.error(`❌ Falha ao criar output endpoint para step ${stepId}`);
-                }
-            }
-        }
-        
-        // Marcar como inicializado APENAS após criar todos os endpoints
-        element.dataset.endpointsInited = 'true';
         
         // 🔥 V8 ULTRA: Garantir que todos os endpoints têm pointer-events: auto e z-index alto
         try {
