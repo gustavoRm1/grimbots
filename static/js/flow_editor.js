@@ -1734,11 +1734,52 @@ class FlowEditor {
             data: { stepId, endpointType: 'input' }
         });
         
-        if (inputEndpoint && inputEndpoint.canvas) {
-            inputEndpoint.canvas.style.pointerEvents = 'auto';
-            inputEndpoint.canvas.style.zIndex = '10000';
-            inputEndpoint.canvas.style.cursor = 'crosshair';
-            console.log(`✅ Input endpoint criado e configurado:`, inputEndpoint);
+        if (inputEndpoint) {
+            // 🔥 CRÍTICO: Forçar renderização visual do endpoint
+            try {
+                if (inputEndpoint.setPaintStyle) {
+                    inputEndpoint.setPaintStyle({ fill:'#10B981', outlineStroke:'#FFFFFF', outlineWidth:2 });
+                }
+                if (inputEndpoint.setHoverPaintStyle) {
+                    inputEndpoint.setHoverPaintStyle({ fill:'#FFB800', outlineStroke:'#FFFFFF', outlineWidth:3 });
+                }
+                // Forçar repaint do endpoint
+                if (inputEndpoint.repaint) {
+                    inputEndpoint.repaint();
+                }
+            } catch(e) {
+                console.warn('⚠️ Erro ao configurar paintStyle do input endpoint:', e);
+            }
+            
+            if (inputEndpoint.canvas) {
+                inputEndpoint.canvas.style.pointerEvents = 'auto';
+                inputEndpoint.canvas.style.zIndex = '10000';
+                inputEndpoint.canvas.style.cursor = 'crosshair';
+                inputEndpoint.canvas.style.display = 'block';
+                inputEndpoint.canvas.style.visibility = 'visible';
+                inputEndpoint.canvas.style.opacity = '1';
+                
+                // 🔥 CRÍTICO: Garantir que o SVG circle dentro do canvas está visível
+                const circle = inputEndpoint.canvas.querySelector('circle');
+                if (circle) {
+                    circle.setAttribute('fill', '#10B981');
+                    circle.setAttribute('stroke', '#FFFFFF');
+                    circle.setAttribute('stroke-width', '2');
+                    circle.setAttribute('r', '7');
+                    circle.style.display = 'block';
+                    circle.style.visibility = 'visible';
+                    circle.style.opacity = '1';
+                }
+                
+                console.log(`✅ Input endpoint criado e configurado:`, {
+                    endpoint: inputEndpoint,
+                    canvas: inputEndpoint.canvas,
+                    circle: circle,
+                    position: inputEndpoint.canvas.getBoundingClientRect()
+                });
+            } else {
+                console.error(`❌ Input endpoint criado mas sem canvas para step ${stepId}`);
+            }
         } else {
             console.error(`❌ Falha ao criar input endpoint para step ${stepId}`);
         }
@@ -1806,11 +1847,50 @@ class FlowEditor {
                     data: { stepId, buttonIndex: index, endpointType: 'button' }
                 });
                 
-                if (endpoint && endpoint.canvas) {
-                    endpoint.canvas.style.pointerEvents = 'auto';
-                    endpoint.canvas.style.zIndex = '10000';
-                    endpoint.canvas.style.cursor = 'crosshair';
-                    console.log(`✅ Button endpoint ${index} criado e configurado:`, endpoint);
+                if (endpoint) {
+                    // 🔥 CRÍTICO: Forçar renderização visual do endpoint
+                    try {
+                        if (endpoint.setPaintStyle) {
+                            endpoint.setPaintStyle({ fill:'#FFFFFF', outlineStroke:'#0D0F15', outlineWidth:2 });
+                        }
+                        if (endpoint.setHoverPaintStyle) {
+                            endpoint.setHoverPaintStyle({ fill:'#FFB800', outlineStroke:'#FFFFFF', outlineWidth:3 });
+                        }
+                        if (endpoint.repaint) {
+                            endpoint.repaint();
+                        }
+                    } catch(e) {
+                        console.warn(`⚠️ Erro ao configurar paintStyle do button endpoint ${index}:`, e);
+                    }
+                    
+                    if (endpoint.canvas) {
+                        endpoint.canvas.style.pointerEvents = 'auto';
+                        endpoint.canvas.style.zIndex = '10000';
+                        endpoint.canvas.style.cursor = 'crosshair';
+                        endpoint.canvas.style.display = 'block';
+                        endpoint.canvas.style.visibility = 'visible';
+                        endpoint.canvas.style.opacity = '1';
+                        
+                        // 🔥 CRÍTICO: Garantir que o SVG circle dentro do canvas está visível
+                        const circle = endpoint.canvas.querySelector('circle');
+                        if (circle) {
+                            circle.setAttribute('fill', '#FFFFFF');
+                            circle.setAttribute('stroke', '#0D0F15');
+                            circle.setAttribute('stroke-width', '2');
+                            circle.setAttribute('r', '6');
+                            circle.style.display = 'block';
+                            circle.style.visibility = 'visible';
+                            circle.style.opacity = '1';
+                        }
+                        
+                        console.log(`✅ Button endpoint ${index} criado e configurado:`, {
+                            endpoint: endpoint,
+                            canvas: endpoint.canvas,
+                            circle: circle
+                        });
+                    } else {
+                        console.error(`❌ Button endpoint ${index} criado mas sem canvas para step ${stepId}`);
+                    }
                 } else {
                     console.error(`❌ Falha ao criar button endpoint ${index} para step ${stepId}`);
                 }
@@ -1842,11 +1922,51 @@ class FlowEditor {
                     data: { stepId, endpointType: 'global' }
                 });
                 
-                if (endpoint && endpoint.canvas) {
-                    endpoint.canvas.style.pointerEvents = 'auto';
-                    endpoint.canvas.style.zIndex = '10000';
-                    endpoint.canvas.style.cursor = 'crosshair';
-                    console.log(`✅ Output endpoint criado e configurado:`, endpoint);
+                if (endpoint) {
+                    // 🔥 CRÍTICO: Forçar renderização visual do endpoint
+                    try {
+                        if (endpoint.setPaintStyle) {
+                            endpoint.setPaintStyle({ fill:'#FFFFFF', outlineStroke:'#0D0F15', outlineWidth:2 });
+                        }
+                        if (endpoint.setHoverPaintStyle) {
+                            endpoint.setHoverPaintStyle({ fill:'#FFB800', outlineStroke:'#FFFFFF', outlineWidth:3 });
+                        }
+                        if (endpoint.repaint) {
+                            endpoint.repaint();
+                        }
+                    } catch(e) {
+                        console.warn('⚠️ Erro ao configurar paintStyle do output endpoint:', e);
+                    }
+                    
+                    if (endpoint.canvas) {
+                        endpoint.canvas.style.pointerEvents = 'auto';
+                        endpoint.canvas.style.zIndex = '10000';
+                        endpoint.canvas.style.cursor = 'crosshair';
+                        endpoint.canvas.style.display = 'block';
+                        endpoint.canvas.style.visibility = 'visible';
+                        endpoint.canvas.style.opacity = '1';
+                        
+                        // 🔥 CRÍTICO: Garantir que o SVG circle dentro do canvas está visível
+                        const circle = endpoint.canvas.querySelector('circle');
+                        if (circle) {
+                            circle.setAttribute('fill', '#FFFFFF');
+                            circle.setAttribute('stroke', '#0D0F15');
+                            circle.setAttribute('stroke-width', '2');
+                            circle.setAttribute('r', '7');
+                            circle.style.display = 'block';
+                            circle.style.visibility = 'visible';
+                            circle.style.opacity = '1';
+                        }
+                        
+                        console.log(`✅ Output endpoint criado e configurado:`, {
+                            endpoint: endpoint,
+                            canvas: endpoint.canvas,
+                            circle: circle,
+                            position: endpoint.canvas.getBoundingClientRect()
+                        });
+                    } else {
+                        console.error(`❌ Output endpoint criado mas sem canvas para step ${stepId}`);
+                    }
                 } else {
                     console.error(`❌ Falha ao criar output endpoint para step ${stepId}`);
                 }
@@ -1871,6 +1991,29 @@ class FlowEditor {
                     endpoint.canvas.style.zIndex = '10000';
                     endpoint.canvas.style.cursor = 'crosshair';
                     
+                    // 🔥 CRÍTICO: Garantir que o SVG circle dentro do canvas está visível
+                    const circle = endpoint.canvas.querySelector('circle');
+                    if (circle) {
+                        circle.style.display = 'block';
+                        circle.style.visibility = 'visible';
+                        circle.style.opacity = '1';
+                        // Garantir atributos SVG se não existirem
+                        if (!circle.getAttribute('fill') || circle.getAttribute('fill') === 'none') {
+                            const fillColor = endpoint.paintStyle?.fill || (endpoint.data?.endpointType === 'input' ? '#10B981' : '#FFFFFF');
+                            circle.setAttribute('fill', fillColor);
+                        }
+                        if (!circle.getAttribute('stroke') || circle.getAttribute('stroke') === 'none') {
+                            const strokeColor = endpoint.paintStyle?.outlineStroke || (endpoint.data?.endpointType === 'input' ? '#FFFFFF' : '#0D0F15');
+                            circle.setAttribute('stroke', strokeColor);
+                        }
+                        if (!circle.getAttribute('stroke-width')) {
+                            circle.setAttribute('stroke-width', endpoint.paintStyle?.outlineWidth || '2');
+                        }
+                        if (!circle.getAttribute('r') || circle.getAttribute('r') === '0') {
+                            circle.setAttribute('r', endpoint.data?.endpointType === 'button' ? '6' : '7');
+                        }
+                    }
+                    
                     // Garantir que o SVG parent também tenha z-index alto
                     const svgParent = endpoint.canvas.closest('svg');
                     if (svgParent) {
@@ -1886,9 +2029,21 @@ class FlowEditor {
                         svgParent.style.height = '100%';
                     }
                     
+                    // Forçar repaint do endpoint
+                    try {
+                        if (endpoint.repaint) {
+                            endpoint.repaint();
+                        }
+                    } catch(e) {
+                        // Ignorar erros
+                    }
+                    
                     console.log(`✅ Endpoint ${idx} configurado:`, {
                         uuid: endpoint.getUuid(),
                         canvas: endpoint.canvas,
+                        circle: circle,
+                        circleFill: circle?.getAttribute('fill'),
+                        circleR: circle?.getAttribute('r'),
                         position: endpoint.canvas.getBoundingClientRect(),
                         computedDisplay: window.getComputedStyle(endpoint.canvas).display,
                         computedZIndex: window.getComputedStyle(endpoint.canvas).zIndex
@@ -1933,6 +2088,38 @@ class FlowEditor {
                                 ep.canvas.style.opacity = '1';
                                 ep.canvas.style.pointerEvents = 'auto';
                                 ep.canvas.style.zIndex = '10000';
+                                
+                                // 🔥 CRÍTICO: Garantir que o SVG circle dentro do canvas está visível
+                                const circle = ep.canvas.querySelector('circle');
+                                if (circle) {
+                                    circle.style.display = 'block';
+                                    circle.style.visibility = 'visible';
+                                    circle.style.opacity = '1';
+                                    // Garantir atributos SVG se não existirem
+                                    if (!circle.getAttribute('fill') || circle.getAttribute('fill') === 'none') {
+                                        const fillColor = ep.paintStyle?.fill || (ep.data?.endpointType === 'input' ? '#10B981' : '#FFFFFF');
+                                        circle.setAttribute('fill', fillColor);
+                                    }
+                                    if (!circle.getAttribute('stroke') || circle.getAttribute('stroke') === 'none') {
+                                        const strokeColor = ep.paintStyle?.outlineStroke || (ep.data?.endpointType === 'input' ? '#FFFFFF' : '#0D0F15');
+                                        circle.setAttribute('stroke', strokeColor);
+                                    }
+                                    if (!circle.getAttribute('stroke-width')) {
+                                        circle.setAttribute('stroke-width', ep.paintStyle?.outlineWidth || '2');
+                                    }
+                                    if (!circle.getAttribute('r') || circle.getAttribute('r') === '0') {
+                                        circle.setAttribute('r', ep.data?.endpointType === 'button' ? '6' : '7');
+                                    }
+                                }
+                                
+                                // Forçar repaint do endpoint
+                                try {
+                                    if (ep.repaint) {
+                                        ep.repaint();
+                                    }
+                                } catch(e) {
+                                    // Ignorar erros
+                                }
                             }
                         });
                         
