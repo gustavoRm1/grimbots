@@ -769,15 +769,32 @@ class FlowEditor {
         requestAnimationFrame(() => {
             requestAnimationFrame(() => {
                 setTimeout(() => {
+                    console.log(`🔵 Adicionando endpoints para step ${stepId} após renderização`);
                     this.addEndpoints(stepElement, stepId, step);
-                    try { 
-                        this.instance.revalidate(stepElement); 
-                        this.instance.repaintEverything(); 
-                        console.log('✅ Step renderizado e endpoints criados:', stepId);
-                    } catch(e) {
-                        console.error('❌ Erro ao revalidar step:', e);
-                    }
-                }, 50);
+                    
+                    // 🔥 V8 ULTRA: Aguardar um pouco mais e forçar repaint
+                    setTimeout(() => {
+                        try { 
+                            this.instance.revalidate(stepElement); 
+                            this.instance.repaintEverything(); 
+                            console.log('✅ Step renderizado e endpoints criados:', stepId);
+                            
+                            // Verificar se endpoints foram criados
+                            const endpoints = this.instance.getEndpoints(stepElement);
+                            console.log(`🔍 Verificação: ${endpoints.length} endpoints encontrados para step ${stepId}`);
+                            endpoints.forEach((ep, idx) => {
+                                console.log(`  Endpoint ${idx}:`, {
+                                    uuid: ep.getUuid(),
+                                    hasCanvas: !!ep.canvas,
+                                    canvasVisible: ep.canvas ? window.getComputedStyle(ep.canvas).display !== 'none' : false,
+                                    canvasZIndex: ep.canvas ? window.getComputedStyle(ep.canvas).zIndex : 'N/A'
+                                });
+                            });
+                        } catch(e) {
+                            console.error('❌ Erro ao revalidar step:', e);
+                        }
+                    }, 100);
+                }, 100);
             });
         });
     }
@@ -1374,7 +1391,13 @@ class FlowEditor {
         
         // 1) INPUT endpoint (left outside) - SEMPRE FIXO
         const inputUuid = `endpoint-left-${stepId}`;
-        this.ensureEndpoint(this.instance, inputNode, inputUuid, {
+        console.log(`🔵 Criando input endpoint para step ${stepId}`, {
+            inputNode: inputNode,
+            uuid: inputUuid,
+            position: inputNode.getBoundingClientRect()
+        });
+        
+        const inputEndpoint = this.ensureEndpoint(this.instance, inputNode, inputUuid, {
             anchor: [0, 0.5, -1, 0, -8, 0], // left outside, center vertical, -8px offset
             isSource: false,
             isTarget: true,
@@ -1384,6 +1407,15 @@ class FlowEditor {
             hoverPaintStyle: { fill:'#FFB800', outlineStroke:'#FFFFFF', outlineWidth:3 },
             data: { stepId, endpointType: 'input' }
         });
+        
+        if (inputEndpoint && inputEndpoint.canvas) {
+            inputEndpoint.canvas.style.pointerEvents = 'auto';
+            inputEndpoint.canvas.style.zIndex = '10000';
+            inputEndpoint.canvas.style.cursor = 'crosshair';
+            console.log(`✅ Input endpoint criado e configurado:`, inputEndpoint);
+        } else {
+            console.error(`❌ Falha ao criar input endpoint para step ${stepId}`);
+        }
         
         // 2) OUTPUT endpoints
         if (hasButtons) {
@@ -1409,19 +1441,35 @@ class FlowEditor {
                         buttonContainer = document.createElement('div');
                         buttonContainer.className = 'flow-step-button-endpoint-container';
                         buttonContainer.setAttribute('data-endpoint-button', String(index));
-                        buttonContainer.style.cssText = 'width:20px; height:20px; position:relative;';
+                        buttonContainer.style.cssText = 'width:20px; height:20px; position:relative; z-index: 10001; pointer-events: auto;';
                         buttonItem.appendChild(buttonContainer);
+                        console.log(`✅ Criado button container para botão ${index} do step ${stepId}`);
+                    } else {
+                        console.error(`❌ Button item não encontrado para índice ${index} do step ${stepId}`);
+                        console.error(`❌ Element HTML:`, element.innerHTML.substring(0, 1000));
                     }
                 }
                 
-                const buttonTarget = buttonContainer || element;
+                if (!buttonContainer) {
+                    console.error(`❌ Não foi possível criar ou encontrar button container para botão ${index} do step ${stepId}`);
+                    return; // Pular este botão
+                }
+                
+                const buttonTarget = buttonContainer;
                 
                 // Anchor fixo: calcular Y baseado no índice do botão
                 const buttonCount = customButtons.length;
                 const buttonSpacing = 1 / (buttonCount + 1);
                 const anchorY = Math.max(0.2, Math.min(0.8, 0.3 + (index * buttonSpacing)));
                 
-                this.ensureEndpoint(this.instance, buttonTarget, uuid, {
+                console.log(`🔵 Criando endpoint para botão ${index} do step ${stepId}`, {
+                    uuid: uuid,
+                    buttonTarget: buttonTarget,
+                    anchorY: anchorY,
+                    buttonContainer: buttonContainer.getBoundingClientRect()
+                });
+                
+                const endpoint = this.ensureEndpoint(this.instance, buttonTarget, uuid, {
                     anchor: [1, anchorY, 1, 0, 8, 0], // right outside, Y calculado, +8px offset
                     isSource: true,
                     isTarget: false,
@@ -1431,14 +1479,33 @@ class FlowEditor {
                     hoverPaintStyle: { fill:'#FFB800', outlineStroke:'#FFFFFF', outlineWidth:3 },
                     data: { stepId, buttonIndex: index, endpointType: 'button' }
                 });
+                
+                if (endpoint && endpoint.canvas) {
+                    endpoint.canvas.style.pointerEvents = 'auto';
+                    endpoint.canvas.style.zIndex = '10000';
+                    endpoint.canvas.style.cursor = 'crosshair';
+                    console.log(`✅ Button endpoint ${index} criado e configurado:`, endpoint);
+                } else {
+                    console.error(`❌ Falha ao criar button endpoint ${index} para step ${stepId}`);
+                }
             });
         } else {
             // Sem botões: criar output global único - SEMPRE FIXO
             const outUuid = `endpoint-right-${stepId}`;
             const outputNode = innerWrapper.querySelector('.flow-step-node-output-global');
             
-            if (outputNode) {
-                this.ensureEndpoint(this.instance, outputNode, outUuid, {
+            if (!outputNode) {
+                console.error(`❌ Output node não encontrado para step ${stepId} sem botões!`);
+                console.error(`❌ innerWrapper:`, innerWrapper);
+                console.error(`❌ innerWrapper HTML:`, innerWrapper.innerHTML.substring(0, 500));
+            } else {
+                console.log(`✅ Criando output global endpoint para step ${stepId}`, {
+                    outputNode: outputNode,
+                    uuid: outUuid,
+                    position: outputNode.getBoundingClientRect()
+                });
+                
+                const endpoint = this.ensureEndpoint(this.instance, outputNode, outUuid, {
                     anchor: [1, 0.5, 1, 0, 8, 0], // right outside, center vertical, +8px offset
                     isSource: true,
                     isTarget: false,
@@ -1448,33 +1515,80 @@ class FlowEditor {
                     hoverPaintStyle: { fill:'#FFB800', outlineStroke:'#FFFFFF', outlineWidth:3 },
                     data: { stepId, endpointType: 'global' }
                 });
+                
+                if (endpoint && endpoint.canvas) {
+                    endpoint.canvas.style.pointerEvents = 'auto';
+                    endpoint.canvas.style.zIndex = '10000';
+                    endpoint.canvas.style.cursor = 'crosshair';
+                    console.log(`✅ Output endpoint criado e configurado:`, endpoint);
+                } else {
+                    console.error(`❌ Falha ao criar output endpoint para step ${stepId}`);
+                }
             }
         }
         
         // Marcar como inicializado APENAS após criar todos os endpoints
         element.dataset.endpointsInited = 'true';
         
-        // 🔥 V8 ULTRA: Garantir que todos os endpoints têm pointer-events: auto
+        // 🔥 V8 ULTRA: Garantir que todos os endpoints têm pointer-events: auto e z-index alto
         try {
             const allEndpoints = this.instance.getEndpoints(element);
-            allEndpoints.forEach(endpoint => {
+            console.log(`🔵 Configurando ${allEndpoints.length} endpoints para step ${stepId}`);
+            
+            allEndpoints.forEach((endpoint, idx) => {
                 if (endpoint && endpoint.canvas) {
                     endpoint.canvas.style.pointerEvents = 'auto';
-                    endpoint.canvas.style.zIndex = '9999';
+                    endpoint.canvas.style.zIndex = '10000';
                     endpoint.canvas.style.cursor = 'crosshair';
+                    
+                    // Garantir que o SVG parent também tenha z-index alto
+                    const svgParent = endpoint.canvas.closest('svg');
+                    if (svgParent) {
+                        svgParent.style.zIndex = '10000';
+                        svgParent.style.pointerEvents = 'none'; // SVG não intercepta, apenas os endpoints
+                    }
+                    
+                    console.log(`✅ Endpoint ${idx} configurado:`, {
+                        uuid: endpoint.getUuid(),
+                        canvas: endpoint.canvas,
+                        position: endpoint.canvas.getBoundingClientRect()
+                    });
+                } else {
+                    console.warn(`⚠️ Endpoint ${idx} não tem canvas:`, endpoint);
                 }
             });
+            
             console.log(`✅ ${allEndpoints.length} endpoints configurados para step:`, stepId);
+            
+            // 🔥 CRÍTICO: Forçar repaint para garantir que endpoints apareçam
+            requestAnimationFrame(() => {
+                try {
+                    this.instance.repaintEverything();
+                    console.log(`✅ Repaint executado para step ${stepId}`);
+                } catch(e) {
+                    console.error('❌ Erro ao fazer repaint:', e);
+                }
+            });
         } catch(e) {
             console.error('❌ Erro ao configurar endpoints:', e);
         }
         
         // Revalidar após criar endpoints
         try {
-            this.instance.revalidate(element);
-            this.instance.repaintEverything();
+            // 🔥 V8 ULTRA: Revalidar e repintar com delay para garantir renderização
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    try {
+                        this.instance.revalidate(element);
+                        this.instance.repaintEverything();
+                        console.log(`✅ Revalidação e repaint executados para step ${stepId}`);
+                    } catch(e) {
+                        console.error('❌ Erro ao revalidar após criar endpoints:', e);
+                    }
+                });
+            });
         } catch(e) {
-            console.error('❌ Erro ao revalidar:', e);
+            console.error('❌ Erro ao agendar revalidação:', e);
         }
     }
     
@@ -2597,4 +2711,5 @@ window.flowEditorActions.setStartStep = function(stepId) {
 };
 
 console.log('✅ window.flowEditorActions inicializado');
+
 

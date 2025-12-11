@@ -625,7 +625,27 @@
 /* Garantir que endpoints não sejam bloqueados */
 .jtk-endpoint * {
     pointer-events: auto !important;
-    z-index: 9999 !important;
+    z-index: 10000 !important;
+}
+
+/* 🔥 V8 ULTRA: Garantir que endpoints sejam sempre visíveis */
+.jtk-endpoint {
+    z-index: 10000 !important;
+    pointer-events: auto !important;
+    cursor: crosshair !important;
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+/* Garantir que SVG dos endpoints também tenha z-index alto */
+.jtk-overlay svg {
+    z-index: 10000 !important;
+    pointer-events: none !important; /* SVG não intercepta, apenas os endpoints */
+}
+
+.jtk-overlay svg .jtk-endpoint {
+    pointer-events: auto !important;
 }
 
 /* Provide a visible pin outside the card for custom fallback */
