@@ -100,6 +100,11 @@
     box-shadow: 0 8px 24px rgba(0,0,0,0.5);
 }
 
+.flow-node.flow-node-start {
+    border-color: #10b981;
+    border-width: 2px;
+}
+
 .node-header {
     background: #202024;
     padding: 14px;
@@ -3308,21 +3313,64 @@ console.log('✅ botConfigApp temporário definido (será substituído pela vers
                             <label class="block mb-2">Título</label>
                             <input class="input" x-model="modal.node.label">
 
-                            <template x-if="modal.node.type === 'button'">
-                                <div class="mt-4 space-y-2">
-                                    <template x-for="(btn, i) in modal.node.buttons">
-                                        <div class="node-button-row">
-                                            <input class="input" x-model="btn.label">
-                                            <button class="btn-danger" @click="removeButton(i)">✖</button>
-                                        </div>
-                                    </template>
-                                    <button class="btn-secondary" @click="addButton()">+ Botão</button>
-                                </div>
-                            </template>
-
-                            <div class="mt-6 flex justify-end">
-                                <button class="btn-primary" @click="applyEdit()">Salvar</button>
+                        <template x-if="modal.node.type === 'button'">
+                            <div class="mt-4 space-y-2">
+                                <template x-for="(btn, i) in modal.node.buttons">
+                                    <div class="node-button-row">
+                                        <input class="input" x-model="btn.label" placeholder="Texto do botão">
+                                        <input class="input" x-model="btn.target_step" placeholder="ID do step destino">
+                                        <button class="btn-danger" @click="removeButton(i)">✖</button>
+                                    </div>
+                                </template>
+                                <button class="btn-secondary" @click="addButton()">+ Botão</button>
                             </div>
+                        </template>
+
+                        <template x-if="modal.node.type === 'payment'">
+                            <div class="mt-4 space-y-2">
+                                <label class="block mb-2">Preço (R$)</label>
+                                <input class="input" type="number" x-model.number="modal.node.config.price" step="0.01" min="0">
+                                <label class="block mb-2">Nome do Produto</label>
+                                <input class="input" x-model="modal.node.config.product_name">
+                                <p class="text-xs text-gray-400 mt-2">
+                                    💡 Configure conexões: "next" (se pago) e "pending" (se não pago) arrastando do node.
+                                </p>
+                            </div>
+                        </template>
+
+                        <template x-if="modal.node.type === 'message'">
+                            <div class="mt-4 space-y-2">
+                                <label class="block mb-2">Mensagem</label>
+                                <textarea class="input" x-model="modal.node.config.message" rows="4"></textarea>
+                                <label class="block mb-2">URL da Mídia (opcional)</label>
+                                <input class="input" x-model="modal.node.config.media_url" placeholder="https://...">
+                            </div>
+                        </template>
+
+                        <template x-if="modal.node.type === 'access'">
+                            <div class="mt-4 space-y-2">
+                                <label class="block mb-2">Link de Acesso</label>
+                                <input class="input" x-model="modal.node.config.link" placeholder="https://...">
+                                <label class="block mb-2">Mensagem</label>
+                                <textarea class="input" x-model="modal.node.config.message" rows="2"></textarea>
+                            </div>
+                        </template>
+
+                        <div class="mt-4">
+                            <label class="block mb-2">Atraso (segundos)</label>
+                            <input class="input" type="number" x-model.number="modal.node.delay_seconds" min="0">
+                        </div>
+
+                        <div class="mt-4">
+                            <button class="btn-secondary w-full mb-2" @click="setAsStartStep()" x-show="modal.node.id !== startStepId">
+                                ⭐ Definir como Step Inicial
+                            </button>
+                        </div>
+
+                        <div class="mt-6 flex justify-end gap-2">
+                            <button class="btn-secondary" @click="closeModal()">Cancelar</button>
+                            <button class="btn-primary" @click="applyEdit()">Salvar</button>
+                        </div>
                         </div>
                     </div>
                 </template>
@@ -4652,7 +4700,7 @@ window.botConfigApp = botConfigApp;
 window.botConfigAppComplete = true; // Marcar como completo
 console.log('✅ botConfigApp definido e disponível globalmente (versão completa)');
 
-// 🔥 FLOW BUILDER V2.0 - Engine Completa (Anti-Duplicação, UX Total)
+// 🔥 FLOW BUILDER V∞ - Engine Completa (100% Compatível com Backend)
 function FlowBuilderV2() {
     return {
         nodes: [],
@@ -4661,6 +4709,7 @@ function FlowBuilderV2() {
         panX: 0,
         panY: 0,
         zoomLevel: 1,
+        startStepId: null, // Step inicial do fluxo
 
         // ------------------------------
         // INIT
@@ -4674,17 +4723,23 @@ function FlowBuilderV2() {
                         : window.botConfigApp.config.flow_steps;
                     
                     if (Array.isArray(flowSteps)) {
-                        // Converter steps para nodes
-                        this.nodes = flowSteps.map(step => ({
+                        // Converter steps do backend para nodes do front-end
+                        this.nodes = flowSteps.map((step, index) => ({
                             id: step.id || 'node-' + crypto.randomUUID(),
                             type: step.type || 'message',
-                            x: step.position?.x || 300,
-                            y: step.position?.y || 180,
+                            x: step.position?.x || 300 + (index * 50),
+                            y: step.position?.y || 180 + (index * 50),
                             label: step.title || step.type.toUpperCase(),
                             buttons: step.type === 'button' ? (step.config?.custom_buttons || [{ label: 'Opção 1' }]) : [],
                             config: step.config || {},
-                            connections: step.connections || {}
+                            connections: step.connections || {},
+                            conditions: step.conditions || [],
+                            delay_seconds: step.delay_seconds || 0,
+                            order: step.order || (index + 1)
                         }));
+                        
+                        // Carregar step inicial
+                        this.startStepId = window.botConfigApp.config.flow_start_step_id || this.nodes[0]?.id || null;
                     }
                 } catch (e) {
                     console.error('❌ Erro ao carregar steps:', e);
@@ -4702,9 +4757,19 @@ function FlowBuilderV2() {
                         HoverPaintStyle: { stroke: "#3b82f6", strokeWidth: 3 }
                     });
 
+                    // Event listeners para conexões
+                    this.js.bind('connection', (info) => {
+                        this.onConnectionCreated(info);
+                    });
+
+                    this.js.bind('connectionDetached', (info) => {
+                        this.onConnectionDetached(info);
+                    });
+
                     // Renderizar nodes existentes
                     this.$nextTick(() => {
                         this.nodes.forEach(node => this.renderNode(node));
+                        this.restoreConnections();
                     });
                 });
             } else {
@@ -4721,15 +4786,24 @@ function FlowBuilderV2() {
             const node = {
                 id,
                 type,
-                x: 300,
-                y: 180,
+                x: 300 + (this.nodes.length * 50),
+                y: 180 + (this.nodes.length * 50),
                 label: type.toUpperCase(),
                 buttons: type === "button" ? [{ label: "Opção 1" }] : [],
                 config: {},
-                connections: {}
+                connections: {},
+                conditions: [],
+                delay_seconds: 0,
+                order: this.nodes.length + 1
             };
 
             this.nodes.push(node);
+            
+            // Se é o primeiro node, definir como step inicial
+            if (this.nodes.length === 1) {
+                this.startStepId = node.id;
+            }
+            
             this.renderNode(node);
         },
 
@@ -4749,11 +4823,17 @@ function FlowBuilderV2() {
             div.id = node.id;
             div.style.left = node.x + "px";
             div.style.top = node.y + "px";
+            
+            // Marcar step inicial visualmente
+            if (node.id === this.startStepId) {
+                div.classList.add('flow-node-start');
+            }
 
             div.innerHTML = `
                 <div class="node-header">
                     <span>${node.label}</span>
                     <button onclick="window.__editNode('${node.id}')">⚙</button>
+                    ${node.id === this.startStepId ? '<span style="color:#10b981;font-size:10px;">START</span>' : ''}
                 </div>
                 <div class="endpoint endpoint-in" id="${node.id}-in"></div>
                 <div class="node-content">${this.renderContent(node)}</div>
@@ -4768,11 +4848,12 @@ function FlowBuilderV2() {
 
         renderContent(node) {
             if (node.type === 'message') {
-                return '<div style="font-size:12px;opacity:0.8">Mensagem de texto</div>';
+                const msg = node.config?.message || '';
+                return `<div style="font-size:12px;opacity:0.8">${msg.substring(0, 30) || 'Mensagem de texto'}${msg.length > 30 ? '...' : ''}</div>`;
             }
             if (node.type === 'button') {
                 return node.buttons.map((btn, i) => 
-                    `<div class="node-button" id="${node.id}-btn-${i}">${btn.label}</div>`
+                    `<div class="node-button" id="${node.id}-btn-${i}">${btn.label || btn.text || 'Botão'}</div>`
                 ).join('');
             }
             if (node.type === 'condition') {
@@ -4782,10 +4863,15 @@ function FlowBuilderV2() {
                 `;
             }
             if (node.type === 'payment') {
-                return '<div style="font-size:12px">Cobrança / Oferta</div>';
+                const price = node.config?.price || node.config?.amount || 0;
+                return `<div style="font-size:12px">Cobrança - R$ ${price.toFixed(2)}</div>`;
             }
             if (node.type === 'delay') {
-                return '<div style="font-size:12px">Aguardar</div>';
+                const delay = node.delay_seconds || 0;
+                return `<div style="font-size:12px">Aguardar ${delay}s</div>`;
+            }
+            if (node.type === 'access') {
+                return '<div style="font-size:12px">Link de Acesso</div>';
             }
             if (node.type === 'end') {
                 return '<div style="text-align:center;font-size:11px;opacity:0.8">FIM</div>';
@@ -4810,7 +4896,7 @@ function FlowBuilderV2() {
                 uuid: node.id + "-in",
                 anchor: "Left",
                 isTarget: true,
-                maxConnections: 20
+                maxConnections: -1
             });
 
             // Output (exceto para 'end')
@@ -4819,9 +4905,99 @@ function FlowBuilderV2() {
                     uuid: node.id + "-out",
                     anchor: "Right",
                     isSource: true,
-                    maxConnections: 20
+                    maxConnections: -1
                 });
             }
+        },
+
+        // ------------------------------
+        // CONNECTION HANDLERS
+        // ------------------------------
+        onConnectionCreated(info) {
+            const sourceId = info.sourceId || info.source.id;
+            const targetId = info.targetId || info.target.id;
+            
+            // Extrair IDs dos nodes (remover sufixos -in, -out)
+            const sourceNodeId = sourceId.replace(/-in$|-out$|-btn-\d+$/, '');
+            const targetNodeId = targetId.replace(/-in$|-out$|-btn-\d+$/, '');
+            
+            const sourceNode = this.nodes.find(n => n.id === sourceNodeId);
+            if (!sourceNode) return;
+            
+            // 🔥 CRÍTICO: Mapear conexão jsPlumb para formato backend
+            if (!sourceNode.connections) {
+                sourceNode.connections = {};
+            }
+            
+            // Se é payment step, pode ter conexão 'pending'
+            if (sourceNode.type === 'payment' && !sourceNode.connections.next) {
+                sourceNode.connections.next = targetNodeId;
+            } else if (sourceNode.type === 'payment' && sourceNode.connections.next && !sourceNode.connections.pending) {
+                sourceNode.connections.pending = targetNodeId;
+            } else {
+                // Conexão normal (next)
+                sourceNode.connections.next = targetNodeId;
+            }
+            
+            console.log(`✅ Conexão criada: ${sourceNodeId} → ${targetNodeId}`, sourceNode.connections);
+        },
+
+        onConnectionDetached(info) {
+            const sourceId = info.sourceId || info.source.id;
+            const sourceNodeId = sourceId.replace(/-in$|-out$|-btn-\d+$/, '');
+            
+            const sourceNode = this.nodes.find(n => n.id === sourceNodeId);
+            if (sourceNode && sourceNode.connections) {
+                // Remover conexão
+                if (sourceNode.connections.next) {
+                    delete sourceNode.connections.next;
+                }
+                if (sourceNode.connections.pending) {
+                    delete sourceNode.connections.pending;
+                }
+            }
+        },
+
+        restoreConnections() {
+            if (!this.js) return;
+            
+            this.nodes.forEach(node => {
+                if (!node.connections) return;
+                
+                // Restaurar conexão 'next'
+                if (node.connections.next) {
+                    const targetNode = document.getElementById(node.connections.next);
+                    if (targetNode) {
+                        try {
+                            this.js.connect({
+                                source: node.id,
+                                target: node.connections.next,
+                                anchors: ["Right", "Left"]
+                            });
+                        } catch (e) {
+                            console.warn(`⚠️ Erro ao restaurar conexão: ${e}`);
+                        }
+                    }
+                }
+                
+                // Restaurar conexão 'pending' (apenas para payment)
+                if (node.type === 'payment' && node.connections.pending) {
+                    const targetNode = document.getElementById(node.connections.pending);
+                    if (targetNode) {
+                        try {
+                            this.js.connect({
+                                source: node.id,
+                                target: node.connections.pending,
+                                anchors: ["Right", "Left"]
+                            });
+                        } catch (e) {
+                            console.warn(`⚠️ Erro ao restaurar conexão pending: ${e}`);
+                        }
+                    }
+                }
+            });
+            
+            this.js.repaintEverything();
         },
 
         // ------------------------------
@@ -4837,6 +5013,8 @@ function FlowBuilderV2() {
                         n.x = params.pos[0];
                         n.y = params.pos[1];
                     }
+                    // Redesenhar conexões após mover
+                    this.js.repaintEverything();
                 }
             });
         },
@@ -4873,7 +5051,7 @@ function FlowBuilderV2() {
                 this.modal.node.buttons = [];
             }
             if (this.modal.node) {
-                this.modal.node.buttons.push({ label: "Novo botão" });
+                this.modal.node.buttons.push({ label: "Novo botão", text: "Novo botão" });
             }
         },
 
@@ -4883,49 +5061,153 @@ function FlowBuilderV2() {
             }
         },
 
+        setAsStartStep() {
+            if (this.modal.node) {
+                this.startStepId = this.modal.node.id;
+                this.closeModal();
+                // Re-renderizar todos os nodes para atualizar visual
+                this.nodes.forEach(n => this.renderNode(n));
+            }
+        },
+
         // ------------------------------
         // SAVE / IMPORT / EXPORT
         // ------------------------------
         saveFlow() {
-            // Converter nodes para steps do formato backend
-            const steps = this.nodes.map(node => ({
-                id: node.id,
-                type: node.type,
-                position: { x: node.x, y: node.y },
-                title: node.label,
-                config: node.config || {},
-                connections: node.connections || {},
-                order: this.nodes.indexOf(node) + 1,
-                delay_seconds: 0
-            }));
+            // 🔥 CRÍTICO: Converter nodes para formato EXATO do backend
+            const steps = this.nodes.map((node, index) => {
+                const step = {
+                    id: node.id,
+                    type: node.type,
+                    order: node.order || (index + 1),
+                    position: { x: node.x, y: node.y },
+                    title: node.label || node.type.toUpperCase(),
+                    config: node.config || {},
+                    connections: node.connections || {},
+                    conditions: node.conditions || [],
+                    delay_seconds: node.delay_seconds || 0
+                };
+                
+                // 🔥 CRÍTICO: Garantir que custom_buttons tem formato correto
+                if (node.type === 'button' && node.buttons) {
+                    step.config.custom_buttons = node.buttons.map(btn => ({
+                        text: btn.label || btn.text || '',
+                        target_step: btn.target_step || ''
+                    }));
+                }
+                
+                return step;
+            });
+
+            // 🔥 VALIDAÇÃO: Verificar estrutura antes de salvar
+            const validation = this.validateFlow(steps);
+            if (!validation.valid) {
+                alert(`❌ Erro de validação:\n${validation.errors.join('\n')}`);
+                return;
+            }
 
             // Salvar via botConfigApp
             if (window.botConfigApp) {
                 window.botConfigApp.config.flow_steps = JSON.stringify(steps);
+                window.botConfigApp.config.flow_start_step_id = this.startStepId;
                 window.botConfigApp.saveConfig();
+                console.log('✅ Fluxo salvo via botConfigApp:', {
+                    steps_count: steps.length,
+                    start_step_id: this.startStepId,
+                    steps: steps
+                });
             } else {
                 // Fallback: chamada direta ao backend
-                fetch("/api/bots/" + (window.botId || '') + "/config", {
-                    method: "POST",
+                const botId = window.botConfigApp?.bot_id || window.botId || '';
+                fetch(`/api/bots/${botId}/config`, {
+                    method: "PUT",
                     headers: { 
                         "Content-Type": "application/json",
                         "X-CSRFToken": document.querySelector('[name=csrf_token]')?.value || ''
                     },
-                    body: JSON.stringify({ flow_steps: JSON.stringify(steps) })
+                    body: JSON.stringify({ 
+                        flow_steps: steps,
+                        flow_start_step_id: this.startStepId,
+                        flow_enabled: true
+                    })
                 }).then(r => r.json()).then(data => {
                     console.log('✅ Fluxo salvo:', data);
+                    alert('✅ Fluxo salvo com sucesso!');
                 }).catch(e => {
                     console.error('❌ Erro ao salvar fluxo:', e);
+                    alert('❌ Erro ao salvar fluxo. Verifique o console.');
                 });
             }
         },
 
+        validateFlow(steps) {
+            const errors = [];
+            const stepIds = new Set();
+            
+            steps.forEach((step, index) => {
+                // Validar campos obrigatórios
+                if (!step.id || !step.type) {
+                    errors.push(`Step ${index}: deve ter 'id' e 'type'`);
+                }
+                
+                // Validar IDs únicos
+                if (stepIds.has(step.id)) {
+                    errors.push(`Step ${index}: ID duplicado '${step.id}'`);
+                }
+                stepIds.add(step.id);
+                
+                // Validar payment steps têm conexões
+                if (step.type === 'payment') {
+                    const conn = step.connections || {};
+                    if (!conn.next && !conn.pending) {
+                        errors.push(`Step ${step.id} (payment): deve ter conexão 'next' ou 'pending'`);
+                    }
+                }
+                
+                // Validar connections apontam para steps existentes
+                if (step.connections) {
+                    ['next', 'pending', 'retry'].forEach(connType => {
+                        const targetId = step.connections[connType];
+                        if (targetId && !stepIds.has(targetId)) {
+                            // Aviso, não erro (step pode ser criado depois)
+                            console.warn(`⚠️ Step ${step.id}: conexão '${connType}' aponta para step inexistente: ${targetId}`);
+                        }
+                    });
+                }
+            });
+            
+            return {
+                valid: errors.length === 0,
+                errors: errors
+            };
+        },
+
         exportFlow() {
-            const data = "data:application/json," + encodeURIComponent(JSON.stringify(this.nodes));
+            const steps = this.nodes.map((node, index) => ({
+                id: node.id,
+                type: node.type,
+                order: node.order || (index + 1),
+                position: { x: node.x, y: node.y },
+                title: node.label,
+                config: node.config || {},
+                connections: node.connections || {},
+                conditions: node.conditions || [],
+                delay_seconds: node.delay_seconds || 0
+            }));
+            
+            const data = {
+                flow_enabled: true,
+                flow_start_step_id: this.startStepId,
+                flow_steps: steps
+            };
+            
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
-            a.href = data;
+            a.href = url;
             a.download = "flow.json";
             a.click();
+            URL.revokeObjectURL(url);
         },
 
         importFlow(e) {
@@ -4935,15 +5217,38 @@ function FlowBuilderV2() {
             const reader = new FileReader();
             reader.onload = ev => {
                 try {
-                    this.nodes = JSON.parse(ev.target.result);
-                    this.$nextTick(() => {
-                        if (this.js) {
-                            this.js.deleteEveryEndpoint();
-                            this.nodes.forEach(n => this.renderNode(n));
-                        }
-                    });
+                    const data = JSON.parse(ev.target.result);
+                    
+                    if (data.flow_steps && Array.isArray(data.flow_steps)) {
+                        // Converter steps para nodes
+                        this.nodes = data.flow_steps.map(step => ({
+                            id: step.id,
+                            type: step.type,
+                            x: step.position?.x || 300,
+                            y: step.position?.y || 180,
+                            label: step.title || step.type.toUpperCase(),
+                            buttons: step.type === 'button' ? (step.config?.custom_buttons || []) : [],
+                            config: step.config || {},
+                            connections: step.connections || {},
+                            conditions: step.conditions || [],
+                            delay_seconds: step.delay_seconds || 0,
+                            order: step.order || 1
+                        }));
+                        
+                        this.startStepId = data.flow_start_step_id || this.nodes[0]?.id || null;
+                        
+                        this.$nextTick(() => {
+                            if (this.js) {
+                                this.js.deleteEveryEndpoint();
+                                this.js.deleteEveryConnection();
+                                this.nodes.forEach(n => this.renderNode(n));
+                                this.restoreConnections();
+                            }
+                        });
+                    }
                 } catch (e) {
                     console.error('❌ Erro ao importar fluxo:', e);
+                    alert('❌ Erro ao importar fluxo. Verifique o formato do arquivo.');
                 }
             };
             reader.readAsText(file);
@@ -4984,6 +5289,9 @@ function FlowBuilderV2() {
             const canvas = document.getElementById("flow-canvas");
             if (canvas) {
                 canvas.style.transform = `translate(${this.panX}px,${this.panY}px) scale(${this.zoomLevel})`;
+            }
+            if (this.js) {
+                this.js.repaintEverything();
             }
         }
     };
