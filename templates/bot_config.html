@@ -3362,18 +3362,21 @@ console.log('✅ botConfigApp temporário definido (será substituído pela vers
                         </div>
 
                         <div class="mt-4">
-                            <button class="btn-secondary w-full mb-2" @click="setAsStartStep()" x-show="modal.node.id !== startStepId">
+                            <button class="btn-secondary w-full mb-2" @click="setAsStartStep()" x-show="modal.node && modal.node.id !== startStepId" type="button">
                                 ⭐ Definir como Step Inicial
                             </button>
                         </div>
 
-                        <div class="mt-6 flex justify-end gap-2">
-                            <button class="btn-secondary" @click="closeModal()">Cancelar</button>
-                            <button class="btn-primary" @click="applyEdit()">Salvar</button>
-                        </div>
+                        <div class="mt-6 flex justify-between gap-2">
+                            <button class="btn-danger" @click="deleteNode()" type="button">🗑️ Deletar</button>
+                            <div class="flex gap-2">
+                                <button class="btn-secondary" @click="closeModal()" type="button">Cancelar</button>
+                                <button class="btn-primary" @click="applyEdit()" type="button">Salvar</button>
+                            </div>
                         </div>
                     </div>
-                </template>
+                </div>
+            </template>
             </div>
         </div>
 
@@ -4766,11 +4769,13 @@ function FlowBuilderV2() {
                         this.onConnectionDetached(info);
                     });
 
-                    // Renderizar nodes existentes
-                    this.$nextTick(() => {
+                    // Renderizar nodes existentes (usar setTimeout para garantir que DOM está pronto)
+                    setTimeout(() => {
                         this.nodes.forEach(node => this.renderNode(node));
-                        this.restoreConnections();
-                    });
+                        setTimeout(() => {
+                            this.restoreConnections();
+                        }, 100);
+                    }, 100);
                 });
             } else {
                 console.error('❌ jsPlumb não está disponível');
@@ -4781,69 +4786,96 @@ function FlowBuilderV2() {
         // ADD NODE
         // ------------------------------
         addNode(type) {
-            const id = "node-" + crypto.randomUUID();
+            try {
+                const id = "node-" + Date.now() + "-" + Math.random().toString(36).substr(2, 9);
 
-            const node = {
-                id,
-                type,
-                x: 300 + (this.nodes.length * 50),
-                y: 180 + (this.nodes.length * 50),
-                label: type.toUpperCase(),
-                buttons: type === "button" ? [{ label: "Opção 1" }] : [],
-                config: {},
-                connections: {},
-                conditions: [],
-                delay_seconds: 0,
-                order: this.nodes.length + 1
-            };
+                const node = {
+                    id,
+                    type,
+                    x: 300 + (this.nodes.length * 50),
+                    y: 180 + (this.nodes.length * 50),
+                    label: type.toUpperCase(),
+                    buttons: type === "button" ? [{ label: "Opção 1", text: "Opção 1", target_step: "" }] : [],
+                    config: type === "payment" ? { price: 0, product_name: "" } : {},
+                    connections: {},
+                    conditions: [],
+                    delay_seconds: 0,
+                    order: this.nodes.length + 1
+                };
 
-            this.nodes.push(node);
-            
-            // Se é o primeiro node, definir como step inicial
-            if (this.nodes.length === 1) {
-                this.startStepId = node.id;
+                this.nodes.push(node);
+                
+                // Se é o primeiro node, definir como step inicial
+                if (this.nodes.length === 1) {
+                    this.startStepId = node.id;
+                }
+                
+                // Renderizar node após um pequeno delay para garantir que DOM está pronto
+                setTimeout(() => {
+                    this.renderNode(node);
+                }, 50);
+                
+                console.log('✅ Node adicionado:', node);
+            } catch (e) {
+                console.error('❌ Erro ao adicionar node:', e);
+                alert('Erro ao adicionar node. Verifique o console.');
             }
-            
-            this.renderNode(node);
         },
 
         // ------------------------------
         // RENDER NODE
         // ------------------------------
         renderNode(node) {
-            const canvas = document.getElementById("flow-canvas");
-            if (!canvas) return;
+            try {
+                const canvas = document.getElementById("flow-canvas");
+                if (!canvas) {
+                    console.warn('⚠️ Canvas não encontrado');
+                    return;
+                }
 
-            // Remove se já existe (evita duplicações)
-            const old = document.getElementById(node.id);
-            if (old) old.remove();
+                // Remove se já existe (evita duplicações)
+                const old = document.getElementById(node.id);
+                if (old) old.remove();
 
-            const div = document.createElement("div");
-            div.className = "flow-node";
-            div.id = node.id;
-            div.style.left = node.x + "px";
-            div.style.top = node.y + "px";
-            
-            // Marcar step inicial visualmente
-            if (node.id === this.startStepId) {
-                div.classList.add('flow-node-start');
+                const div = document.createElement("div");
+                div.className = "flow-node";
+                div.id = node.id;
+                div.style.left = node.x + "px";
+                div.style.top = node.y + "px";
+                div.style.position = "absolute";
+                
+                // Marcar step inicial visualmente
+                if (node.id === this.startStepId) {
+                    div.classList.add('flow-node-start');
+                }
+
+                div.innerHTML = `
+                    <div class="node-header">
+                        <span>${this.escapeHtml(node.label)}</span>
+                        <button onclick="window.__editNode('${node.id}')" style="background:transparent;border:none;cursor:pointer;color:#ccc;padding:4px 8px;">⚙</button>
+                        ${node.id === this.startStepId ? '<span style="color:#10b981;font-size:10px;margin-left:8px;">START</span>' : ''}
+                    </div>
+                    <div class="endpoint endpoint-in" id="${node.id}-in"></div>
+                    <div class="node-content">${this.renderContent(node)}</div>
+                    ${node.type !== 'end' ? `<div class="endpoint endpoint-out" id="${node.id}-out"></div>` : ''}
+                `;
+
+                canvas.appendChild(div);
+
+                // Montar endpoints e habilitar drag após um pequeno delay
+                setTimeout(() => {
+                    this.mountEndpoints(node);
+                    this.enableDrag(node);
+                }, 50);
+            } catch (e) {
+                console.error('❌ Erro ao renderizar node:', e, node);
             }
+        },
 
-            div.innerHTML = `
-                <div class="node-header">
-                    <span>${node.label}</span>
-                    <button onclick="window.__editNode('${node.id}')">⚙</button>
-                    ${node.id === this.startStepId ? '<span style="color:#10b981;font-size:10px;">START</span>' : ''}
-                </div>
-                <div class="endpoint endpoint-in" id="${node.id}-in"></div>
-                <div class="node-content">${this.renderContent(node)}</div>
-                ${node.type !== 'end' ? `<div class="endpoint endpoint-out" id="${node.id}-out"></div>` : ''}
-            `;
-
-            canvas.appendChild(div);
-
-            this.mountEndpoints(node);
-            this.enableDrag(node);
+        escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
         },
 
         renderContent(node) {
@@ -5023,10 +5055,29 @@ function FlowBuilderV2() {
         // MODAL
         // ------------------------------
         openEdit(id) {
-            const node = this.nodes.find(n => n.id === id);
-            if (node) {
-                this.modal.node = JSON.parse(JSON.stringify(node));
-                this.modal.open = true;
+            try {
+                const node = this.nodes.find(n => n.id === id);
+                if (node) {
+                    // Criar cópia profunda do node
+                    this.modal.node = JSON.parse(JSON.stringify(node));
+                    
+                    // Garantir que config existe
+                    if (!this.modal.node.config) {
+                        this.modal.node.config = {};
+                    }
+                    
+                    // Garantir que buttons existe para tipo button
+                    if (this.modal.node.type === 'button' && !this.modal.node.buttons) {
+                        this.modal.node.buttons = [];
+                    }
+                    
+                    this.modal.open = true;
+                    console.log('✅ Modal aberto para edição:', this.modal.node);
+                } else {
+                    console.warn('⚠️ Node não encontrado:', id);
+                }
+            } catch (e) {
+                console.error('❌ Erro ao abrir modal:', e);
             }
         },
 
@@ -5036,13 +5087,36 @@ function FlowBuilderV2() {
         },
 
         applyEdit() {
-            const n = this.nodes.find(x => x.id === this.modal.node.id);
-            if (n) {
-                Object.assign(n, this.modal.node);
-                this.closeModal();
+            try {
+                if (!this.modal.node || !this.modal.node.id) {
+                    alert('❌ Erro: Node inválido');
+                    return;
+                }
                 
-                // Re-renderizar node
-                this.renderNode(n);
+                const n = this.nodes.find(x => x.id === this.modal.node.id);
+                if (n) {
+                    // Atualizar node com dados do modal
+                    Object.assign(n, {
+                        label: this.modal.node.label,
+                        config: this.modal.node.config || {},
+                        buttons: this.modal.node.buttons || [],
+                        delay_seconds: this.modal.node.delay_seconds || 0
+                    });
+                    
+                    this.closeModal();
+                    
+                    // Re-renderizar node após um pequeno delay
+                    setTimeout(() => {
+                        this.renderNode(n);
+                    }, 50);
+                    
+                    console.log('✅ Node atualizado:', n);
+                } else {
+                    alert('❌ Node não encontrado');
+                }
+            } catch (e) {
+                console.error('❌ Erro ao aplicar edição:', e);
+                alert('❌ Erro ao salvar edição. Verifique o console.');
             }
         },
 
@@ -5066,7 +5140,69 @@ function FlowBuilderV2() {
                 this.startStepId = this.modal.node.id;
                 this.closeModal();
                 // Re-renderizar todos os nodes para atualizar visual
-                this.nodes.forEach(n => this.renderNode(n));
+                setTimeout(() => {
+                    this.nodes.forEach(n => this.renderNode(n));
+                }, 50);
+            }
+        },
+
+        deleteNode() {
+            if (!this.modal.node || !confirm(`Tem certeza que deseja deletar o node "${this.modal.node.label}"?`)) {
+                return;
+            }
+            
+            try {
+                const nodeId = this.modal.node.id;
+                
+                // Remover conexões do jsPlumb
+                if (this.js) {
+                    this.js.deleteEveryConnection(nodeId);
+                    this.js.deleteEndpoints(nodeId);
+                }
+                
+                // Remover node do array
+                this.nodes = this.nodes.filter(n => n.id !== nodeId);
+                
+                // Remover do DOM
+                const nodeEl = document.getElementById(nodeId);
+                if (nodeEl) {
+                    nodeEl.remove();
+                }
+                
+                // Se era o step inicial, definir outro
+                if (this.startStepId === nodeId) {
+                    this.startStepId = this.nodes[0]?.id || null;
+                }
+                
+                // Remover conexões que apontam para este node
+                this.nodes.forEach(node => {
+                    if (node.connections) {
+                        if (node.connections.next === nodeId) {
+                            delete node.connections.next;
+                        }
+                        if (node.connections.pending === nodeId) {
+                            delete node.connections.pending;
+                        }
+                        if (node.connections.retry === nodeId) {
+                            delete node.connections.retry;
+                        }
+                    }
+                });
+                
+                this.closeModal();
+                
+                // Re-renderizar todos os nodes
+                setTimeout(() => {
+                    this.nodes.forEach(n => this.renderNode(n));
+                    if (this.js) {
+                        this.js.repaintEverything();
+                    }
+                }, 50);
+                
+                console.log('✅ Node deletado:', nodeId);
+            } catch (e) {
+                console.error('❌ Erro ao deletar node:', e);
+                alert('❌ Erro ao deletar node. Verifique o console.');
             }
         },
 
@@ -5074,69 +5210,95 @@ function FlowBuilderV2() {
         // SAVE / IMPORT / EXPORT
         // ------------------------------
         saveFlow() {
-            // 🔥 CRÍTICO: Converter nodes para formato EXATO do backend
-            const steps = this.nodes.map((node, index) => {
-                const step = {
-                    id: node.id,
-                    type: node.type,
-                    order: node.order || (index + 1),
-                    position: { x: node.x, y: node.y },
-                    title: node.label || node.type.toUpperCase(),
-                    config: node.config || {},
-                    connections: node.connections || {},
-                    conditions: node.conditions || [],
-                    delay_seconds: node.delay_seconds || 0
-                };
-                
-                // 🔥 CRÍTICO: Garantir que custom_buttons tem formato correto
-                if (node.type === 'button' && node.buttons) {
-                    step.config.custom_buttons = node.buttons.map(btn => ({
-                        text: btn.label || btn.text || '',
-                        target_step: btn.target_step || ''
-                    }));
+            try {
+                if (this.nodes.length === 0) {
+                    alert('⚠️ Adicione pelo menos um node antes de salvar!');
+                    return;
                 }
-                
-                return step;
-            });
 
-            // 🔥 VALIDAÇÃO: Verificar estrutura antes de salvar
-            const validation = this.validateFlow(steps);
-            if (!validation.valid) {
-                alert(`❌ Erro de validação:\n${validation.errors.join('\n')}`);
-                return;
-            }
-
-            // Salvar via botConfigApp
-            if (window.botConfigApp) {
-                window.botConfigApp.config.flow_steps = JSON.stringify(steps);
-                window.botConfigApp.config.flow_start_step_id = this.startStepId;
-                window.botConfigApp.saveConfig();
-                console.log('✅ Fluxo salvo via botConfigApp:', {
-                    steps_count: steps.length,
-                    start_step_id: this.startStepId,
-                    steps: steps
+                // 🔥 CRÍTICO: Converter nodes para formato EXATO do backend
+                const steps = this.nodes.map((node, index) => {
+                    const step = {
+                        id: node.id,
+                        type: node.type,
+                        order: node.order || (index + 1),
+                        position: { x: node.x, y: node.y },
+                        title: node.label || node.type.toUpperCase(),
+                        config: node.config || {},
+                        connections: node.connections || {},
+                        conditions: node.conditions || [],
+                        delay_seconds: node.delay_seconds || 0
+                    };
+                    
+                    // 🔥 CRÍTICO: Garantir que custom_buttons tem formato correto
+                    if (node.type === 'button' && node.buttons) {
+                        step.config.custom_buttons = node.buttons.map(btn => ({
+                            text: btn.label || btn.text || '',
+                            target_step: btn.target_step || ''
+                        }));
+                    }
+                    
+                    return step;
                 });
-            } else {
-                // Fallback: chamada direta ao backend
-                const botId = window.botConfigApp?.bot_id || window.botId || '';
-                fetch(`/api/bots/${botId}/config`, {
-                    method: "PUT",
-                    headers: { 
-                        "Content-Type": "application/json",
-                        "X-CSRFToken": document.querySelector('[name=csrf_token]')?.value || ''
-                    },
-                    body: JSON.stringify({ 
-                        flow_steps: steps,
-                        flow_start_step_id: this.startStepId,
-                        flow_enabled: true
-                    })
-                }).then(r => r.json()).then(data => {
-                    console.log('✅ Fluxo salvo:', data);
+
+                // 🔥 VALIDAÇÃO: Verificar estrutura antes de salvar
+                const validation = this.validateFlow(steps);
+                if (!validation.valid) {
+                    alert(`❌ Erro de validação:\n${validation.errors.join('\n')}`);
+                    return;
+                }
+
+                // Salvar via botConfigApp
+                if (window.botConfigApp && typeof window.botConfigApp.saveConfig === 'function') {
+                    // Atualizar config
+                    window.botConfigApp.config.flow_steps = JSON.stringify(steps);
+                    window.botConfigApp.config.flow_start_step_id = this.startStepId;
+                    window.botConfigApp.config.flow_enabled = true;
+                    
+                    // Salvar
+                    window.botConfigApp.saveConfig();
+                    
+                    console.log('✅ Fluxo salvo via botConfigApp:', {
+                        steps_count: steps.length,
+                        start_step_id: this.startStepId,
+                        steps: steps
+                    });
+                    
                     alert('✅ Fluxo salvo com sucesso!');
-                }).catch(e => {
-                    console.error('❌ Erro ao salvar fluxo:', e);
-                    alert('❌ Erro ao salvar fluxo. Verifique o console.');
-                });
+                } else {
+                    // Fallback: chamada direta ao backend
+                    const botId = window.botConfigApp?.bot_id || window.botId || document.querySelector('[data-bot-id]')?.dataset.botId || '';
+                    
+                    if (!botId) {
+                        alert('❌ ID do bot não encontrado. Tente recarregar a página.');
+                        return;
+                    }
+                    
+                    fetch(`/api/bots/${botId}/config`, {
+                        method: "PUT",
+                        headers: { 
+                            "Content-Type": "application/json",
+                            "X-CSRFToken": document.querySelector('[name=csrf_token]')?.value || ''
+                        },
+                        body: JSON.stringify({ 
+                            flow_steps: steps,
+                            flow_start_step_id: this.startStepId,
+                            flow_enabled: true
+                        })
+                    }).then(r => {
+                        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                        return r.json();
+                    }).then(data => {
+                        console.log('✅ Fluxo salvo:', data);
+                        alert('✅ Fluxo salvo com sucesso!');
+                    }).catch(e => {
+                        console.error('❌ Erro ao salvar fluxo:', e);
+                        alert('❌ Erro ao salvar fluxo. Verifique o console.');
+                    });
+                }
+            } catch (e) {
+                console.error('❌ Erro ao salvar fluxo:', e);
+                alert('❌ Erro ao salvar fluxo. Verifique o console.');
             }
         },
 
@@ -5183,75 +5345,135 @@ function FlowBuilderV2() {
         },
 
         exportFlow() {
-            const steps = this.nodes.map((node, index) => ({
-                id: node.id,
-                type: node.type,
-                order: node.order || (index + 1),
-                position: { x: node.x, y: node.y },
-                title: node.label,
-                config: node.config || {},
-                connections: node.connections || {},
-                conditions: node.conditions || [],
-                delay_seconds: node.delay_seconds || 0
-            }));
+            try {
+                if (this.nodes.length === 0) {
+                    alert('⚠️ Não há nodes para exportar!');
+                    return;
+                }
+                
+                const steps = this.nodes.map((node, index) => ({
+                    id: node.id,
+                    type: node.type,
+                    order: node.order || (index + 1),
+                    position: { x: node.x, y: node.y },
+                    title: node.label,
+                    config: node.config || {},
+                    connections: node.connections || {},
+                    conditions: node.conditions || [],
+                    delay_seconds: node.delay_seconds || 0
+                }));
+                
+                const data = {
+                    flow_enabled: true,
+                    flow_start_step_id: this.startStepId,
+                    flow_steps: steps
+                };
+                
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `flow_${Date.now()}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                console.log('✅ Fluxo exportado:', data);
+                alert('✅ Fluxo exportado com sucesso!');
+            } catch (e) {
+                console.error('❌ Erro ao exportar fluxo:', e);
+                alert('❌ Erro ao exportar fluxo. Verifique o console.');
+            }
+        },
+
+        clearFlow() {
+            if (!confirm('⚠️ Tem certeza que deseja limpar todo o fluxo? Esta ação não pode ser desfeita!')) {
+                return;
+            }
             
-            const data = {
-                flow_enabled: true,
-                flow_start_step_id: this.startStepId,
-                flow_steps: steps
-            };
-            
-            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = "flow.json";
-            a.click();
-            URL.revokeObjectURL(url);
+            try {
+                // Limpar jsPlumb
+                if (this.js) {
+                    this.js.deleteEveryConnection();
+                    this.js.deleteEveryEndpoint();
+                }
+                
+                // Limpar nodes
+                this.nodes.forEach(node => {
+                    const nodeEl = document.getElementById(node.id);
+                    if (nodeEl) {
+                        nodeEl.remove();
+                    }
+                });
+                
+                this.nodes = [];
+                this.startStepId = null;
+                
+                console.log('✅ Fluxo limpo');
+                alert('✅ Fluxo limpo com sucesso!');
+            } catch (e) {
+                console.error('❌ Erro ao limpar fluxo:', e);
+                alert('❌ Erro ao limpar fluxo. Verifique o console.');
+            }
         },
 
         importFlow(e) {
-            const file = e.target.files[0];
-            if (!file) return;
-            
-            const reader = new FileReader();
-            reader.onload = ev => {
-                try {
-                    const data = JSON.parse(ev.target.result);
-                    
-                    if (data.flow_steps && Array.isArray(data.flow_steps)) {
-                        // Converter steps para nodes
-                        this.nodes = data.flow_steps.map(step => ({
-                            id: step.id,
-                            type: step.type,
-                            x: step.position?.x || 300,
-                            y: step.position?.y || 180,
-                            label: step.title || step.type.toUpperCase(),
-                            buttons: step.type === 'button' ? (step.config?.custom_buttons || []) : [],
-                            config: step.config || {},
-                            connections: step.connections || {},
-                            conditions: step.conditions || [],
-                            delay_seconds: step.delay_seconds || 0,
-                            order: step.order || 1
-                        }));
+            try {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                const reader = new FileReader();
+                reader.onload = ev => {
+                    try {
+                        const data = JSON.parse(ev.target.result);
                         
-                        this.startStepId = data.flow_start_step_id || this.nodes[0]?.id || null;
-                        
-                        this.$nextTick(() => {
+                        if (data.flow_steps && Array.isArray(data.flow_steps)) {
+                            // Limpar nodes existentes
                             if (this.js) {
                                 this.js.deleteEveryEndpoint();
                                 this.js.deleteEveryConnection();
-                                this.nodes.forEach(n => this.renderNode(n));
-                                this.restoreConnections();
                             }
-                        });
+                            
+                            // Converter steps para nodes
+                            this.nodes = data.flow_steps.map(step => ({
+                                id: step.id,
+                                type: step.type,
+                                x: step.position?.x || 300,
+                                y: step.position?.y || 180,
+                                label: step.title || step.type.toUpperCase(),
+                                buttons: step.type === 'button' ? (step.config?.custom_buttons || []) : [],
+                                config: step.config || {},
+                                connections: step.connections || {},
+                                conditions: step.conditions || [],
+                                delay_seconds: step.delay_seconds || 0,
+                                order: step.order || 1
+                            }));
+                            
+                            this.startStepId = data.flow_start_step_id || this.nodes[0]?.id || null;
+                            
+                            // Renderizar nodes após um delay
+                            setTimeout(() => {
+                                this.nodes.forEach(n => this.renderNode(n));
+                                setTimeout(() => {
+                                    this.restoreConnections();
+                                }, 200);
+                            }, 100);
+                            
+                            alert('✅ Fluxo importado com sucesso!');
+                        } else {
+                            alert('❌ Formato de arquivo inválido. O arquivo deve conter flow_steps.');
+                        }
+                    } catch (e) {
+                        console.error('❌ Erro ao importar fluxo:', e);
+                        alert('❌ Erro ao importar fluxo. Verifique o formato do arquivo.');
                     }
-                } catch (e) {
-                    console.error('❌ Erro ao importar fluxo:', e);
-                    alert('❌ Erro ao importar fluxo. Verifique o formato do arquivo.');
-                }
-            };
-            reader.readAsText(file);
+                };
+                reader.readAsText(file);
+            } catch (e) {
+                console.error('❌ Erro ao processar arquivo:', e);
+                alert('❌ Erro ao processar arquivo.');
+            }
         },
 
         // ------------------------------
@@ -5299,9 +5521,15 @@ function FlowBuilderV2() {
 
 // Permite edição externa
 window.__editNode = function(id) {
-    const root = document.querySelector("#flow-builder");
-    if (root && root.__x) {
-        root.__x.$data.openEdit(id);
+    try {
+        const root = document.querySelector("#flow-builder");
+        if (root && root.__x && root.__x.$data) {
+            root.__x.$data.openEdit(id);
+        } else {
+            console.warn('⚠️ FlowBuilderV2 não encontrado ou não inicializado');
+        }
+    } catch (e) {
+        console.error('❌ Erro ao abrir edição:', e);
     }
 };
 </script>
