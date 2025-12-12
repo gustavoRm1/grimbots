@@ -1575,6 +1575,8 @@ window.botConfigApp = function() {
         subscriptionGuideExpanded: false,
         subscriptionGuideTab: 'telegram',
         editingStepIndex: -1,
+        _saveMessage: null,
+        _saveMessageTimeout: null,
         async init() {
             // Carregar configuração imediatamente, mesmo na versão temporária
             await this.loadConfig();
@@ -2568,9 +2570,23 @@ console.log('✅ botConfigApp temporário definido (será substituído pela vers
     </div>
 
     <!-- Save Button -->
-    <div class="mt-6 flex justify-end">
+    <div class="mt-6 flex flex-col items-end gap-2">
+        <!-- Mensagem de feedback -->
+        <div x-show="_saveMessage" 
+             x-transition:enter="transition ease-out duration-300"
+             x-transition:enter-start="opacity-0 transform translate-y-2"
+             x-transition:enter-end="opacity-100 transform translate-y-0"
+             x-transition:leave="transition ease-in duration-200"
+             x-transition:leave-start="opacity-100"
+             x-transition:leave-end="opacity-0"
+             :class="_saveMessage?.type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'"
+             class="px-4 py-2 rounded-lg text-sm font-semibold shadow-lg"
+             x-text="_saveMessage?.text">
+        </div>
+        
         <button @click="saveConfig()" class="btn btn-primary" :disabled="loading">
-            <i class="fas fa-save"></i> Salvar Configuração
+            <i class="fas fa-save" :class="loading ? 'fa-spin' : ''"></i> 
+            <span x-text="loading ? 'Salvando...' : 'Salvar Configuração'"></span>
         </button>
     </div>
 
@@ -2744,6 +2760,8 @@ if (typeof botConfigApp !== 'undefined' && !window.botConfigAppComplete) {
         editingStepIndex: -1,
         detectedMediaType: null,
         detectedStepMediaType: null,
+        _saveMessage: null,
+        _saveMessageTimeout: null,
 
         detectMediaType() {
             const url = this.config.welcome_media_url || '';
@@ -2949,6 +2967,8 @@ if (typeof botConfigApp !== 'undefined' && !window.botConfigAppComplete) {
 
         // Debounce para saveConfig (600ms) - evita múltiplas chamadas e não bloqueia UI
         _saveConfigDebounce: null,
+        _saveMessage: null,
+        _saveMessageTimeout: null,
         
         async saveConfig() {
             // Cancelar debounce anterior
@@ -2959,7 +2979,20 @@ if (typeof botConfigApp !== 'undefined' && !window.botConfigAppComplete) {
             // Debounce de 600ms (conforme recomendação)
             this._saveConfigDebounce = setTimeout(async () => {
                 this.loading = true;
+                this._saveMessage = null;
+                
+                // Limpar mensagem anterior
+                if (this._saveMessageTimeout) {
+                    clearTimeout(this._saveMessageTimeout);
+                }
+                
                 try {
+                    console.log('💾 Salvando configuração...', {
+                        bot_id: this.bot_id,
+                        has_buttons: !!this.config.main_buttons,
+                        buttons_count: this.config.main_buttons?.length || 0
+                    });
+                    
                     const response = await fetch(`/api/bots/${this.bot_id}/config`, {
                         method: 'PUT',
                         headers: {
@@ -2968,21 +3001,44 @@ if (typeof botConfigApp !== 'undefined' && !window.botConfigAppComplete) {
                         body: JSON.stringify(this.config)
                     });
                     
+                    console.log('📡 Resposta recebida:', response.status, response.statusText);
+                    
                     if (!response.ok) {
-                        const errorData = await response.json();
+                        let errorData;
+                        try {
+                            errorData = await response.json();
+                        } catch (e) {
+                            errorData = { error: `HTTP ${response.status}: ${response.statusText}` };
+                        }
                         throw new Error(errorData.error || `HTTP ${response.status}`);
                     }
                     
                     const data = await response.json();
+                    console.log('✅ Dados salvos:', data);
+                    
                     if (data && typeof data === 'object' && !data.error) {
+                        // Atualizar config com dados retornados
                         Object.assign(this.config, data);
-                        // Não mostrar alert durante debounce (só no final, se necessário)
+                        
+                        // ✅ MELHORIA: Mostrar feedback de sucesso
+                        this._saveMessage = { type: 'success', text: '✅ Configuração salva com sucesso!' };
+                        console.log('✅ Configuração salva com sucesso!');
+                        
+                        // Limpar mensagem após 3 segundos
+                        this._saveMessageTimeout = setTimeout(() => {
+                            this._saveMessage = null;
+                        }, 3000);
                     } else {
-                        alert(data.error || 'Erro ao salvar configuração');
+                        const errorMsg = data.error || 'Erro ao salvar configuração';
+                        this._saveMessage = { type: 'error', text: `❌ ${errorMsg}` };
+                        console.error('❌ Erro ao salvar:', errorMsg);
+                        alert(errorMsg);
                     }
                 } catch (error) {
-                    console.error('Erro ao salvar configuração:', error);
-                    alert(error.message || 'Erro ao salvar configuração');
+                    console.error('❌ Erro ao salvar configuração:', error);
+                    const errorMsg = error.message || 'Erro ao salvar configuração';
+                    this._saveMessage = { type: 'error', text: `❌ ${errorMsg}` };
+                    alert(errorMsg);
                 } finally {
                     this.loading = false;
                     this._saveConfigDebounce = null;
