@@ -1541,20 +1541,98 @@ body {
 <!-- ✅ CRÍTICO: Definir botConfigApp ANTES do Alpine inicializar -->
 <script>
 // ✅ Garantir que botConfigApp está disponível globalmente ANTES do Alpine inicializar
-if (typeof botConfigApp === 'undefined') {
-    // Função será definida no extra_scripts, mas precisamos garantir que está disponível
-    // Usar uma função temporária que será substituída
-    window.botConfigApp = function() {
-        console.warn('⚠️ botConfigApp ainda não foi completamente carregado. Aguardando...');
-        return {
-            bot_id: {{ bot.id }},
-            loading: true,
-            activeTab: 'welcome',
-            config: {},
-            init: function() { console.warn('⚠️ botConfigApp ainda não foi completamente carregado'); }
-        };
+// Função temporária com todas as propriedades necessárias para evitar erros do Alpine
+window.botConfigApp = function() {
+    return {
+        bot_id: {{ bot.id }},
+        loading: true,
+        activeTab: 'welcome',
+        config: {
+            id: null,
+            welcome_message: '',
+            welcome_media_url: '',
+            welcome_media_type: 'video',
+            welcome_audio_enabled: false,
+            welcome_audio_url: '',
+            main_buttons: [],
+            redirect_buttons: [],
+            downsells_enabled: false,
+            downsells: [],
+            upsells_enabled: false,
+            upsells: [],
+            access_link: '',
+            success_message: '',
+            pending_message: '',
+            flow_enabled: false,
+            flow_steps: [],
+            flow_start_step_id: null
+        },
+        new_bot_token: '',
+        showStepModal: false,
+        editingStep: null,
+        detectedMediaType: null,
+        detectedStepMediaType: null,
+        subscriptionGuideExpanded: false,
+        subscriptionGuideTab: 'telegram',
+        editingStepIndex: -1,
+        async init() {
+            console.warn('⚠️ botConfigApp ainda não foi completamente carregado. Aguardando...');
+            // Aguardar até que a versão completa seja carregada
+            let attempts = 0;
+            const checkInterval = setInterval(() => {
+                attempts++;
+                if (window.botConfigAppComplete) {
+                    clearInterval(checkInterval);
+                    // Recarregar a página para usar a versão completa
+                    location.reload();
+                } else if (attempts > 50) {
+                    clearInterval(checkInterval);
+                    console.error('❌ botConfigApp completo não foi carregado após 10 segundos');
+                }
+            }, 200);
+        },
+        getWelcomeMessageLength() {
+            return 0;
+        },
+        isValidBotToken() {
+            return false;
+        },
+        detectMediaType() {},
+        detectStepMediaType() {},
+        changeBotToken() {},
+        saveConfig() {},
+        addButton() {},
+        removeButton() {},
+        addOrderBump() {},
+        removeOrderBump() {},
+        validateProductField() {},
+        addDownsell() {},
+        removeDownsell() {},
+        addUpsell() {},
+        removeUpsell() {},
+        addRedirectButton() {},
+        removeRedirectButton() {},
+        onFlowToggle() {},
+        addFlowStep() {},
+        removeFlowStep() {},
+        addCondition() {},
+        removeCondition() {},
+        addCustomButton() {},
+        removeCustomButton() {},
+        getStepTypeLabel() { return ''; },
+        getStepTypeIcon() { return ''; },
+        getConditionTypeLabel() { return ''; },
+        getAvailableStepsForConnection() { return []; },
+        validateWelcomeMessage() {},
+        openStepModal() {},
+        closeStepModal() {},
+        saveStep() {},
+        watchFlowSteps() {},
+        loadConfig() {},
+        initVisualFlowEditor() {}
     };
-}
+};
+console.log('✅ botConfigApp temporário definido (será substituído pela versão completa no extra_scripts)');
 </script>
 {% endblock %}
 
@@ -2564,10 +2642,16 @@ if (typeof botConfigApp === 'undefined') {
 {% endblock %}
 
 {% block extra_scripts %}
-<!-- ✅ CRÍTICO: Definir botConfigApp ANTES de qualquer outro script -->
+<!-- ✅ CRÍTICO: A função botConfigApp completa já foi definida no extra_head -->
+<!-- Apenas garantir que está disponível globalmente -->
 <script>
-// ✅ Garantir que botConfigApp está disponível ANTES do Alpine inicializar
-function botConfigApp() {
+if (typeof botConfigApp !== 'undefined' && !window.botConfigAppComplete) {
+    window.botConfigApp = botConfigApp;
+    window.botConfigAppComplete = true;
+    console.log('✅ botConfigApp completo disponível globalmente');
+} else {
+    // Se não foi definida no extra_head, definir aqui (fallback)
+    function botConfigApp() {
     return {
         bot_id: {{ bot.id }},
         loading: false,
@@ -3657,9 +3741,10 @@ function botConfigApp() {
     };
 }
 
-// ✅ Garantir que botConfigApp está disponível globalmente ANTES do Alpine inicializar
+// ✅ CRÍTICO: Substituir função temporária pela versão completa
 window.botConfigApp = botConfigApp;
-console.log('✅ botConfigApp definido e disponível globalmente');
+window.botConfigAppComplete = true; // Marcar como completo
+console.log('✅ botConfigApp definido e disponível globalmente (versão completa)');
 </script>
 
 <!-- Flow Editor JS (jsPlumb) -->
