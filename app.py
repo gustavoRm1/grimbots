@@ -3781,6 +3781,7 @@ def general_remarketing():
         # Preparar todas as campanhas primeiro
         for bot in bots:
             # ✅ V2.0: Contar usuários elegíveis usando nova segmentação
+            # ✅ MELHORIA: A contagem já exclui automaticamente usuários na blacklist deste bot específico
             eligible_count = bot_manager.count_eligible_leads(
                 bot_id=bot.id,
                 target_audience='non_buyers' if exclude_buyers else 'all',  # Mantido para compatibilidade
@@ -3788,6 +3789,14 @@ def general_remarketing():
                 exclude_buyers=exclude_buyers,  # Mantido para compatibilidade
                 audience_segment=audience_segment  # ✅ V2.0: Nova segmentação avançada
             )
+            
+            # ✅ MELHORIA: Log informativo sobre blacklist
+            from models import RemarketingBlacklist
+            blacklist_count = RemarketingBlacklist.query.filter_by(bot_id=bot.id).count()
+            if blacklist_count > 0:
+                logger.info(f"📊 Bot {bot.name} (ID: {bot.id}): {eligible_count} leads elegíveis | {blacklist_count} usuários na blacklist (excluídos)")
+            else:
+                logger.info(f"📊 Bot {bot.name} (ID: {bot.id}): {eligible_count} leads elegíveis | 0 usuários na blacklist")
             
             if eligible_count > 0:
                 # ✅ V2.0: Converter audience_segment para target_audience (compatibilidade)

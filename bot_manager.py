@@ -10013,13 +10013,14 @@ Seu pagamento ainda não foi confirmado.
             if days_since_last_contact > 0:
                 query = query.filter(BotUser.last_interaction <= contact_limit)
             
-            # Filtro: excluir blacklist
+            # ✅ MELHORIA: Filtro: excluir blacklist (usuários que bloquearam este bot específico)
             blacklist_ids = db.session.query(RemarketingBlacklist.telegram_user_id).filter_by(
                 bot_id=bot_id
             ).all()
-            blacklist_ids = [b[0] for b in blacklist_ids]
+            blacklist_ids = [b[0] for b in blacklist_ids if b[0]]
             if blacklist_ids:
                 query = query.filter(~BotUser.telegram_user_id.in_(blacklist_ids))
+                logger.debug(f"🚫 Blacklist para bot {bot_id}: {len(blacklist_ids)} usuários excluídos")
             
             # ✅ V2.0: NOVA SEGMENTAÇÃO AVANÇADA
             if audience_segment:
@@ -10180,13 +10181,14 @@ Seu pagamento ainda não foi confirmado.
                     if campaign.days_since_last_contact > 0:
                         query = query.filter(BotUser.last_interaction <= contact_limit)
                     
-                    # Excluir blacklist
+                    # ✅ MELHORIA: Excluir blacklist (usuários que bloquearam este bot específico)
                     blacklist_ids = db.session.query(RemarketingBlacklist.telegram_user_id).filter_by(
                         bot_id=campaign.bot_id
                     ).all()
-                    blacklist_ids = [b[0] for b in blacklist_ids]
+                    blacklist_ids = [b[0] for b in blacklist_ids if b[0]]
                     if blacklist_ids:
                         query = query.filter(~BotUser.telegram_user_id.in_(blacklist_ids))
+                        logger.info(f"🚫 Blacklist para bot {campaign.bot_id}: {len(blacklist_ids)} usuários excluídos da campanha")
                     
                     # ✅ V2.0: NOVA SEGMENTAÇÃO AVANÇADA
                     # Verificar se é segmentação nova (valores mapeados do app.py) ou legado
@@ -10400,6 +10402,18 @@ Seu pagamento ainda não foi confirmado.
                                     batch_failed += len(batch) - (batch_sent + batch_failed + batch_blocked)
                                     break  # Sair do loop de leads
                                 
+                                # ✅ MELHORIA: Verificar se usuário está na blacklist ANTES de tentar enviar
+                                # Isso evita tentativas desnecessárias e melhora performance
+                                is_blocked = db.session.query(RemarketingBlacklist).filter_by(
+                                    bot_id=campaign.bot_id,
+                                    telegram_user_id=lead.telegram_user_id
+                                ).first()
+                                
+                                if is_blocked:
+                                    batch_blocked += 1
+                                    logger.debug(f"🚫 Usuário {lead.telegram_user_id} está na blacklist do bot {campaign.bot_id} - pulando envio")
+                                    continue  # Pular este lead e ir para o próximo
+                                
                                 # Personalizar mensagem
                                 message = campaign.message.replace('{nome}', lead.first_name or 'Cliente')
                                 message = message.replace('{primeiro_nome}', (lead.first_name or 'Cliente').split()[0])
@@ -10499,16 +10513,33 @@ Seu pagamento ainda não foi confirmado.
                                 if "bot was blocked" in error_msg or "forbidden: bot was blocked" in error_msg:
                                     batch_blocked += 1
                                     consecutive_401_errors = 0  # Reset (não é erro de token)
-                                    # Adicionar na blacklist
+                                    # ✅ MELHORIA: Adicionar na blacklist IMEDIATAMENTE para evitar tentativas futuras
                                     try:
-                                        blacklist = RemarketingBlacklist(
+                                        # Verificar se já está na blacklist (evitar duplicatas)
+                                        existing = db.session.query(RemarketingBlacklist).filter_by(
                                             bot_id=campaign.bot_id,
-                                            telegram_user_id=lead.telegram_user_id,
-                                            reason='bot_blocked'
-                                        )
-                                        db.session.add(blacklist)
+                                            telegram_user_id=lead.telegram_user_id
+                                        ).first()
+                                        
+                                        if not existing:
+                                            blacklist = RemarketingBlacklist(
+                                                bot_id=campaign.bot_id,
+                                                telegram_user_id=lead.telegram_user_id,
+                                                reason='bot_blocked'
+                                            )
+                                            db.session.add(blacklist)
+                                            # ✅ CRÍTICO: Commit imediato para garantir que blacklist seja salva
+                                            try:
+                                                db.session.commit()
+                                                logger.info(f"🚫 Usuário {lead.telegram_user_id} adicionado à blacklist do bot {campaign.bot_id} (bloqueado)")
+                                            except Exception as commit_error:
+                                                logger.error(f"❌ Erro ao commitar blacklist: {commit_error}")
+                                                db.session.rollback()
+                                        else:
+                                            logger.debug(f"ℹ️ Usuário {lead.telegram_user_id} já está na blacklist do bot {campaign.bot_id}")
                                     except Exception as blacklist_error:
                                         logger.warning(f"⚠️ Erro ao adicionar blacklist: {blacklist_error}")
+                                        db.session.rollback()
                                 elif "rate limit" in error_msg or "too many requests" in error_msg or "error_code\":429" in error_msg:
                                     # ✅ Rate limiting do Telegram - aguardar e tentar novamente
                                     batch_failed += 1
