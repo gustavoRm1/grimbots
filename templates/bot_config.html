@@ -1576,20 +1576,8 @@ window.botConfigApp = function() {
         subscriptionGuideTab: 'telegram',
         editingStepIndex: -1,
         async init() {
-            console.warn('⚠️ botConfigApp ainda não foi completamente carregado. Aguardando...');
-            // Aguardar até que a versão completa seja carregada
-            let attempts = 0;
-            const checkInterval = setInterval(() => {
-                attempts++;
-                if (window.botConfigAppComplete) {
-                    clearInterval(checkInterval);
-                    // Recarregar a página para usar a versão completa
-                    location.reload();
-                } else if (attempts > 50) {
-                    clearInterval(checkInterval);
-                    console.error('❌ botConfigApp completo não foi carregado após 10 segundos');
-                }
-            }, 200);
+            // Carregar configuração imediatamente, mesmo na versão temporária
+            await this.loadConfig();
         },
         getWelcomeMessageLength() {
             return 0;
@@ -1628,7 +1616,78 @@ window.botConfigApp = function() {
         closeStepModal() {},
         saveStep() {},
         watchFlowSteps() {},
-        loadConfig() {},
+        async loadConfig() {
+            this.loading = true;
+            try {
+                const response = await fetch(`/api/bots/${this.bot_id}/config`);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                const data = await response.json();
+                console.log('📦 Dados carregados da API (versão temporária):', data);
+                
+                if (data && typeof data === 'object') {
+                    this.config.id = data.id || null;
+                    this.config.welcome_message = data.welcome_message || '';
+                    this.config.welcome_media_url = data.welcome_media_url || '';
+                    this.config.welcome_media_type = data.welcome_media_type || 'video';
+                    this.config.welcome_audio_enabled = data.welcome_audio_enabled || false;
+                    this.config.welcome_audio_url = data.welcome_audio_url || '';
+                    
+                    const defaultSubscription = {
+                        enabled: false,
+                        duration_type: 'days',
+                        duration_value: null,
+                        vip_chat_id: '',
+                        vip_group_link: '',
+                        validation_status: null
+                    };
+                    
+                    this.config.main_buttons = (data.main_buttons || []).map(btn => ({
+                        ...btn,
+                        subscription: btn.subscription && typeof btn.subscription === 'object' 
+                            ? { ...defaultSubscription, ...btn.subscription }
+                            : defaultSubscription
+                    }));
+                    
+                    this.config.redirect_buttons = data.redirect_buttons || [];
+                    this.config.downsells_enabled = data.downsells_enabled || false;
+                    this.config.downsells = (data.downsells || []).map(btn => ({
+                        ...btn,
+                        subscription: btn.subscription && typeof btn.subscription === 'object' 
+                            ? { ...defaultSubscription, ...btn.subscription }
+                            : defaultSubscription
+                    }));
+                    
+                    this.config.upsells_enabled = data.upsells_enabled || false;
+                    this.config.upsells = (data.upsells || []).map(btn => ({
+                        ...btn,
+                        subscription: btn.subscription && typeof btn.subscription === 'object' 
+                            ? { ...defaultSubscription, ...btn.subscription }
+                            : defaultSubscription
+                    }));
+                    
+                    this.config.access_link = data.access_link || '';
+                    this.config.success_message = data.success_message || '';
+                    this.config.pending_message = data.pending_message || '';
+                    this.config.flow_enabled = data.flow_enabled || false;
+                    this.config.flow_steps = data.flow_steps || [];
+                    this.config.flow_start_step_id = data.flow_start_step_id || null;
+                    this.config.has_meta_pixel = data.has_meta_pixel || false;
+                    
+                    console.log('✅ Configuração carregada (versão temporária):', {
+                        buttons: this.config.main_buttons?.length || 0,
+                        downsells: this.config.downsells?.length || 0,
+                        upsells: this.config.upsells?.length || 0
+                    });
+                }
+            } catch (error) {
+                console.error('❌ Erro ao carregar configuração:', error);
+                alert('Erro ao carregar configuração. Recarregue a página.');
+            } finally {
+                this.loading = false;
+            }
+        },
         initVisualFlowEditor() {}
     };
 };
