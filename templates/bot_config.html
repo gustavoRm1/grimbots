@@ -1590,7 +1590,54 @@ window.botConfigApp = function() {
         detectMediaType() {},
         detectStepMediaType() {},
         changeBotToken() {},
-        saveConfig() {},
+        async saveConfig() {
+            console.log('🔍 saveConfig chamado (versão temporária)');
+            console.log('🔍 Verificando versão completa...', {
+                botConfigAppComplete: window.botConfigAppComplete,
+                hasBotConfigApp: typeof window.botConfigApp === 'function'
+            });
+            
+            // Se a versão completa estiver disponível, tentar usar
+            if (window.botConfigAppComplete) {
+                console.log('✅ Versão completa disponível, mas usando versão temporária. Implementando salvamento direto...');
+                
+                // Implementar salvamento direto mesmo na versão temporária
+                this.loading = true;
+                try {
+                    console.log('💾 Salvando configuração (versão temporária)...', {
+                        bot_id: this.bot_id,
+                        has_buttons: !!this.config.main_buttons
+                    });
+                    
+                    const response = await fetch(`/api/bots/${this.bot_id}/config`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(this.config)
+                    });
+                    
+                    console.log('📡 Resposta recebida:', response.status);
+                    
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.error || `HTTP ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    console.log('✅ Configuração salva com sucesso!', data);
+                    alert('✅ Configuração salva com sucesso!');
+                } catch (error) {
+                    console.error('❌ Erro ao salvar:', error);
+                    alert('❌ Erro ao salvar: ' + error.message);
+                } finally {
+                    this.loading = false;
+                }
+            } else {
+                console.warn('⚠️ Versão completa não disponível ainda');
+                alert('Aguarde o carregamento completo da página e tente novamente.');
+            }
+        },
         addButton() {},
         removeButton() {},
         addOrderBump() {},
@@ -2584,7 +2631,7 @@ console.log('✅ botConfigApp temporário definido (será substituído pela vers
              x-text="_saveMessage?.text">
         </div>
         
-        <button @click="saveConfig()" class="btn btn-primary" :disabled="loading">
+        <button @click="console.log('🔍 Botão clicado!'); saveConfig(); console.log('✅ saveConfig chamado');" class="btn btn-primary" :disabled="loading">
             <i class="fas fa-save" :class="loading ? 'fa-spin' : ''"></i> 
             <span x-text="loading ? 'Salvando...' : 'Salvar Configuração'"></span>
         </button>
