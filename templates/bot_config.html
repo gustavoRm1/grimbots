@@ -2197,20 +2197,65 @@ window.botConfigApp = function() {
         },
 
         async changeBotToken() {
+            // 🔥 FORÇAR EXECUÇÃO - Remover disabled temporariamente para debug
             console.log('🔧 changeBotToken chamado (versão temporária)', { 
                 bot_id: this.bot_id, 
                 token_preview: this.new_bot_token ? this.new_bot_token.substring(0, 10) + '...' : 'vazio',
-                token_length: this.new_bot_token ? this.new_bot_token.length : 0
+                token_length: this.new_bot_token ? this.new_bot_token.length : 0,
+                token_value: this.new_bot_token,
+                is_valid: this.isValidBotToken ? this.isValidBotToken(this.new_bot_token) : 'função não encontrada',
+                loading: this.loading,
+                context: this
             });
             
+            // Forçar execução mesmo se desabilitado (para debug)
             if (!this.new_bot_token || !this.new_bot_token.trim()) {
                 alert('Por favor, digite o novo token do bot');
+                console.error('❌ Token vazio');
                 return;
             }
             
-            if (!this.isValidBotToken(this.new_bot_token)) {
-                alert('Token inválido. O token deve ter entre 30 e 45 caracteres e conter ":"');
-                return;
+            // 🔥 VALIDAÇÃO: Verificar se função existe e validar token
+            if (typeof this.isValidBotToken !== 'function') {
+                console.error('❌ isValidBotToken não é uma função!', typeof this.isValidBotToken);
+                // Validação manual se função não existe
+                const manualCheck = this.new_bot_token && 
+                                   this.new_bot_token.length >= 30 && 
+                                   this.new_bot_token.length <= 45 && 
+                                   this.new_bot_token.includes(':');
+                if (!manualCheck) {
+                    alert('Token inválido. O token deve ter entre 30 e 45 caracteres e conter ":".\n\nToken atual: ' + (this.new_bot_token ? this.new_bot_token.length : 0) + ' caracteres');
+                    return;
+                }
+            } else {
+                const isValid = this.isValidBotToken(this.new_bot_token);
+                console.log('🔍 Validação do token:', { 
+                    token: this.new_bot_token.substring(0, 10) + '...',
+                    length: this.new_bot_token.length,
+                    has_colon: this.new_bot_token.includes(':'),
+                    is_valid: isValid,
+                    validation_result: {
+                        has_token: !!this.new_bot_token,
+                        length_ok: this.new_bot_token.length >= 30 && this.new_bot_token.length <= 45,
+                        has_colon: this.new_bot_token.includes(':')
+                    }
+                });
+                
+                if (!isValid) {
+                    const errorMsg = `Token inválido!\n\n` +
+                        `Token atual: ${this.new_bot_token.length} caracteres\n` +
+                        `Requisitos:\n` +
+                        `- Entre 30 e 45 caracteres (atual: ${this.new_bot_token.length})\n` +
+                        `- Deve conter ":" (${this.new_bot_token.includes(':') ? '✓' : '✗'})\n\n` +
+                        `Token: ${this.new_bot_token.substring(0, 20)}...`;
+                    alert(errorMsg);
+                    console.error('❌ Token inválido:', {
+                        length: this.new_bot_token.length,
+                        has_colon: this.new_bot_token.includes(':'),
+                        token: this.new_bot_token
+                    });
+                    return;
+                }
             }
             
             // Garantir que bot_id está definido
@@ -3484,11 +3529,31 @@ console.log('✅ botConfigApp temporário definido (será substituído pela vers
 
             <div class="form-group">
                 <label class="form-label">Novo Token do Bot</label>
-                <input type="text" x-model="new_bot_token" class="form-input" placeholder="123456789:ABCdef..." />
-                <button @click.stop="changeBotToken()" class="btn btn-primary mt-2" :disabled="!isValidBotToken(new_bot_token) || loading" type="button">
+                <input type="text" 
+                       x-model="new_bot_token" 
+                       class="form-input" 
+                       placeholder="123456789:ABCdef..." 
+                       @input="console.log('🔍 Token digitado:', new_bot_token, '| Comprimento:', new_bot_token ? new_bot_token.length : 0, '| Válido:', isValidBotToken(new_bot_token))" />
+                <div class="mt-1 text-xs text-gray-500" x-show="new_bot_token">
+                    <span x-text="'Token: ' + (new_bot_token ? new_bot_token.length + ' caracteres' : 'vazio')"></span>
+                    <span x-show="isValidBotToken(new_bot_token)" class="text-green-400 ml-2">✓ Válido</span>
+                    <span x-show="new_bot_token && !isValidBotToken(new_bot_token)" class="text-red-400 ml-2">✗ Inválido</span>
+                </div>
+                <!-- 🔥 BOTÃO SEM DISABLED - Sempre clicável para debug -->
+                <button @click.stop.prevent="console.log('🔘 Botão clicado!'); changeBotToken()" 
+                        class="btn btn-primary mt-2" 
+                        :class="{'opacity-50 cursor-not-allowed': loading}"
+                        type="button"
+                        style="cursor: pointer;">
                     <i class="fas fa-save"></i> <span x-show="!loading">Atualizar Token</span><span x-show="loading">Salvando...</span>
                 </button>
                 <div x-show="loading" class="mt-2 text-sm text-gray-400">Atualizando token...</div>
+                <div x-show="new_bot_token && !isValidBotToken(new_bot_token)" class="mt-2 text-xs text-red-400">
+                    ⚠️ Token deve ter entre 30 e 45 caracteres e conter ":"
+                </div>
+                <div x-show="new_bot_token && isValidBotToken(new_bot_token)" class="mt-2 text-xs text-green-400">
+                    ✓ Token válido - Clique em "Atualizar Token" para salvar
+                </div>
             </div>
         </div>
     </div>
@@ -4104,17 +4169,55 @@ if (typeof botConfigApp !== 'undefined' && !window.botConfigAppComplete) {
             console.log('🔧 changeBotToken chamado (versão completa)', { 
                 bot_id: this.bot_id, 
                 token_preview: this.new_bot_token ? this.new_bot_token.substring(0, 10) + '...' : 'vazio',
-                token_length: this.new_bot_token ? this.new_bot_token.length : 0
+                token_length: this.new_bot_token ? this.new_bot_token.length : 0,
+                token_value: this.new_bot_token,
+                is_valid: this.isValidBotToken(this.new_bot_token),
+                loading: this.loading
             });
             
+            // Forçar execução mesmo se desabilitado (para debug)
             if (!this.new_bot_token || !this.new_bot_token.trim()) {
                 alert('Por favor, digite o novo token do bot');
+                console.error('❌ Token vazio');
                 return;
             }
             
-            if (!this.isValidBotToken(this.new_bot_token)) {
-                alert('Token inválido. O token deve ter entre 30 e 45 caracteres e conter ":"');
-                return;
+            // 🔥 VALIDAÇÃO: Verificar se função existe e validar token
+            if (typeof this.isValidBotToken !== 'function') {
+                console.error('❌ isValidBotToken não é uma função!', typeof this.isValidBotToken);
+                // Validação manual se função não existe
+                const manualCheck = this.new_bot_token && 
+                                   this.new_bot_token.length >= 30 && 
+                                   this.new_bot_token.length <= 45 && 
+                                   this.new_bot_token.includes(':');
+                if (!manualCheck) {
+                    alert('Token inválido. O token deve ter entre 30 e 45 caracteres e conter ":".\n\nToken atual: ' + this.new_bot_token.length + ' caracteres');
+                    return;
+                }
+            } else {
+                const isValid = this.isValidBotToken(this.new_bot_token);
+                console.log('🔍 Validação do token:', { 
+                    token: this.new_bot_token.substring(0, 10) + '...',
+                    length: this.new_bot_token.length,
+                    has_colon: this.new_bot_token.includes(':'),
+                    is_valid: isValid
+                });
+                
+                if (!isValid) {
+                    const errorMsg = `Token inválido!\n\n` +
+                        `Token atual: ${this.new_bot_token.length} caracteres\n` +
+                        `Requisitos:\n` +
+                        `- Entre 30 e 45 caracteres (atual: ${this.new_bot_token.length})\n` +
+                        `- Deve conter ":" (${this.new_bot_token.includes(':') ? '✓' : '✗'})\n\n` +
+                        `Token: ${this.new_bot_token.substring(0, 20)}...`;
+                    alert(errorMsg);
+                    console.error('❌ Token inválido:', {
+                        length: this.new_bot_token.length,
+                        has_colon: this.new_bot_token.includes(':'),
+                        token: this.new_bot_token
+                    });
+                    return;
+                }
             }
             
             // Garantir que bot_id está definido
