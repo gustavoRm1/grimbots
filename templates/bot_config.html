@@ -2172,7 +2172,9 @@ window.botConfigApp = function() {
             return 0;
         },
         isValidBotToken(token) {
-            return token && token.length >= 30 && token.length <= 45 && token.includes(':');
+            // Tokens do BotFather podem ter entre 30-50 caracteres
+            // Formato: número:letras (ex: 123456789:ABCdefGHIjklMNOpqrsTUVwxyz)
+            return token && token.length >= 30 && token.length <= 50 && token.includes(':');
         },
         detectMediaType() {},
         detectStepMediaType() {},
@@ -2221,10 +2223,10 @@ window.botConfigApp = function() {
                 // Validação manual se função não existe
                 const manualCheck = this.new_bot_token && 
                                    this.new_bot_token.length >= 30 && 
-                                   this.new_bot_token.length <= 45 && 
+                                   this.new_bot_token.length <= 50 && 
                                    this.new_bot_token.includes(':');
                 if (!manualCheck) {
-                    alert('Token inválido. O token deve ter entre 30 e 45 caracteres e conter ":".\n\nToken atual: ' + (this.new_bot_token ? this.new_bot_token.length : 0) + ' caracteres');
+                    alert('Token inválido. O token deve ter entre 30 e 50 caracteres e conter ":".\n\nToken atual: ' + (this.new_bot_token ? this.new_bot_token.length : 0) + ' caracteres');
                     return;
                 }
             } else {
@@ -2236,7 +2238,7 @@ window.botConfigApp = function() {
                     is_valid: isValid,
                     validation_result: {
                         has_token: !!this.new_bot_token,
-                        length_ok: this.new_bot_token.length >= 30 && this.new_bot_token.length <= 45,
+                        length_ok: this.new_bot_token.length >= 30 && this.new_bot_token.length <= 50,
                         has_colon: this.new_bot_token.includes(':')
                     }
                 });
@@ -2245,7 +2247,7 @@ window.botConfigApp = function() {
                     const errorMsg = `Token inválido!\n\n` +
                         `Token atual: ${this.new_bot_token.length} caracteres\n` +
                         `Requisitos:\n` +
-                        `- Entre 30 e 45 caracteres (atual: ${this.new_bot_token.length})\n` +
+                        `- Entre 30 e 50 caracteres (atual: ${this.new_bot_token.length})\n` +
                         `- Deve conter ":" (${this.new_bot_token.includes(':') ? '✓' : '✗'})\n\n` +
                         `Token: ${this.new_bot_token.substring(0, 20)}...`;
                     alert(errorMsg);
@@ -3549,7 +3551,7 @@ console.log('✅ botConfigApp temporário definido (será substituído pela vers
                 </button>
                 <div x-show="loading" class="mt-2 text-sm text-gray-400">Atualizando token...</div>
                 <div x-show="new_bot_token && !isValidBotToken(new_bot_token)" class="mt-2 text-xs text-red-400">
-                    ⚠️ Token deve ter entre 30 e 45 caracteres e conter ":"
+                    ⚠️ Token deve ter entre 30 e 50 caracteres e conter ":"
                 </div>
                 <div x-show="new_bot_token && isValidBotToken(new_bot_token)" class="mt-2 text-xs text-green-400">
                     ✓ Token válido - Clique em "Atualizar Token" para salvar
@@ -4188,10 +4190,10 @@ if (typeof botConfigApp !== 'undefined' && !window.botConfigAppComplete) {
                 // Validação manual se função não existe
                 const manualCheck = this.new_bot_token && 
                                    this.new_bot_token.length >= 30 && 
-                                   this.new_bot_token.length <= 45 && 
+                                   this.new_bot_token.length <= 50 && 
                                    this.new_bot_token.includes(':');
                 if (!manualCheck) {
-                    alert('Token inválido. O token deve ter entre 30 e 45 caracteres e conter ":".\n\nToken atual: ' + this.new_bot_token.length + ' caracteres');
+                    alert('Token inválido. O token deve ter entre 30 e 50 caracteres e conter ":".\n\nToken atual: ' + this.new_bot_token.length + ' caracteres');
                     return;
                 }
             } else {
@@ -4207,7 +4209,7 @@ if (typeof botConfigApp !== 'undefined' && !window.botConfigAppComplete) {
                     const errorMsg = `Token inválido!\n\n` +
                         `Token atual: ${this.new_bot_token.length} caracteres\n` +
                         `Requisitos:\n` +
-                        `- Entre 30 e 45 caracteres (atual: ${this.new_bot_token.length})\n` +
+                        `- Entre 30 e 50 caracteres (atual: ${this.new_bot_token.length})\n` +
                         `- Deve conter ":" (${this.new_bot_token.includes(':') ? '✓' : '✗'})\n\n` +
                         `Token: ${this.new_bot_token.substring(0, 20)}...`;
                     alert(errorMsg);
@@ -4285,7 +4287,9 @@ if (typeof botConfigApp !== 'undefined' && !window.botConfigAppComplete) {
         },
 
         isValidBotToken(token) {
-            return token && token.length >= 30 && token.length <= 45 && token.includes(':');
+            // Tokens do BotFather podem ter entre 30-50 caracteres
+            // Formato: número:letras (ex: 123456789:ABCdefGHIjklMNOpqrsTUVwxyz)
+            return token && token.length >= 30 && token.length <= 50 && token.includes(':');
         },
 
         stripSurrogateChars(value) {
