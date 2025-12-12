@@ -238,7 +238,9 @@ class Bot(db.Model):
     
     # Relacionamentos
     config = db.relationship('BotConfig', backref='bot', uselist=False, cascade='all, delete-orphan')
-    payments = db.relationship('Payment', backref='bot', lazy='dynamic', cascade='all, delete-orphan')
+    # ✅ CRÍTICO: NÃO usar cascade em payments para preservar faturamento quando bot é deletado
+    # O faturamento deve ser mantido para ranking, contabilidade e estatísticas do usuário
+    payments = db.relationship('Payment', backref='bot', lazy='dynamic')  # Sem cascade - preserva faturamento
     bot_users = db.relationship('BotUser', backref='bot', lazy='dynamic', cascade='all, delete-orphan')
     pool_associations = db.relationship('PoolBot', backref='associated_bot', lazy='dynamic', cascade='all, delete-orphan')  # ✅ DELETE CASCADE
     

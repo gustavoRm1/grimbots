@@ -2284,13 +2284,24 @@ def update_bot_token(bot_id):
         old_username = bot.username
         old_bot_id = bot.bot_id
         
-        # ✅ ATUALIZAR BOT (mantém todas as configurações)
+        # ✅ ATUALIZAR BOT (mantém todas as configurações E FATURAMENTO)
+        # ✅ CRÍTICO: Preservar faturamento (total_sales e total_revenue)
+        preserved_sales = bot.total_sales
+        preserved_revenue = bot.total_revenue
+        
         bot.token = new_token
         bot.username = bot_info.get('username')
         bot.name = bot_info.get('first_name', bot.name)  # Atualiza nome também
         bot.bot_id = str(bot_info.get('id'))
         bot.is_running = False  # ✅ Garantir que está offline
         bot.last_error = None  # Limpar erros antigos
+        
+        # ✅ PRESERVAR FATURAMENTO (NÃO resetar total_sales e total_revenue)
+        # O faturamento deve ser mantido para:
+        # - Ranking (calcula baseado em Payment.amount + bot.total_revenue)
+        # - Estatísticas do usuário (User.total_revenue)
+        # - Contabilidade completa
+        logger.info(f"💰 PRESERVANDO faturamento do bot {bot_id}: {preserved_sales} vendas, R$ {preserved_revenue:.2f} faturamento")
         
         # ✅ ARQUIVAR USUÁRIOS DO TOKEN ANTIGO
         from models import BotUser
@@ -2303,9 +2314,9 @@ def update_bot_token(bot_id):
             })
             logger.info(f"📦 {archived_count} usuários do token antigo arquivados")
         
-        # ✅ RESETAR CONTADOR DE USUÁRIOS
+        # ✅ RESETAR APENAS CONTADOR DE USUÁRIOS (faturamento permanece)
         bot.total_users = 0
-        logger.info(f"🔄 Contador total_users resetado para 0")
+        logger.info(f"🔄 Contador total_users resetado para 0 (faturamento preservado)")
         
         db.session.commit()
         
@@ -2336,7 +2347,16 @@ def update_bot_token(bot_id):
 @login_required
 @csrf.exempt
 def delete_bot(bot_id):
-    """Deleta um bot"""
+    """
+    Deleta um bot (V2 - PRESERVA FATURAMENTO)
+    
+    ✅ CRÍTICO: NÃO deleta pagamentos e comissões para preservar:
+    - Faturamento histórico do usuário
+    - Ranking e estatísticas
+    - Contabilidade completa
+    
+    Apenas marca o bot como deletado e remove dados operacionais.
+    """
     bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
     
     # Parar bot se estiver rodando
@@ -2346,14 +2366,17 @@ def delete_bot(bot_id):
     bot_name = bot.name
     bot_identifier = f"{bot_name} (ID {bot.id})"
     
+    # ✅ PRESERVAR FATURAMENTO: Armazenar valores antes de deletar
+    preserved_sales = bot.total_sales
+    preserved_revenue = bot.total_revenue
+    
     try:
+        # ✅ OPERAÇÕES DE LIMPEZA (apenas dados operacionais)
         cleanup_operations = [
             ("mensagens", delete(BotMessage).where(BotMessage.bot_id == bot.id)),
             ("usuários do bot", delete(BotUser).where(BotUser.bot_id == bot.id)),
             ("campanhas de remarketing", delete(RemarketingCampaign).where(RemarketingCampaign.bot_id == bot.id)),
             ("blacklist de remarketing", delete(RemarketingBlacklist).where(RemarketingBlacklist.bot_id == bot.id)),
-            ("comissões", delete(Commission).where(Commission.bot_id == bot.id)),
-            ("pagamentos", delete(Payment).where(Payment.bot_id == bot.id)),
             ("configuração", delete(BotConfig).where(BotConfig.bot_id == bot.id)),
             ("associações em pools", delete(PoolBot).where(PoolBot.bot_id == bot.id)),
         ]
@@ -2364,6 +2387,24 @@ def delete_bot(bot_id):
             if deleted_rows:
                 logger.info(f"🧹 Removidos {deleted_rows} registros de {label} do bot {bot_identifier}")
         
+        # ✅ CRÍTICO: NÃO DELETAR PAGAMENTOS E COMISSÕES
+        # Estes dados são necessários para:
+        # - Ranking (calcula baseado em Payment.amount)
+        # - Faturamento do usuário (User.total_revenue)
+        # - Contabilidade completa
+        # - Histórico de vendas
+        
+        payments_count = Payment.query.filter_by(bot_id=bot.id).count()
+        commissions_count = Commission.query.filter_by(bot_id=bot.id).count()
+        
+        logger.info(f"💰 PRESERVANDO faturamento do bot {bot_identifier}:")
+        logger.info(f"   - {preserved_sales} vendas preservadas")
+        logger.info(f"   - R$ {preserved_revenue:.2f} faturamento preservado")
+        logger.info(f"   - {payments_count} pagamentos preservados")
+        logger.info(f"   - {commissions_count} comissões preservadas")
+        logger.info(f"   ✅ Faturamento continuará aparecendo no ranking e estatísticas do usuário")
+        
+        # ✅ DELETAR APENAS O BOT (pagamentos e comissões permanecem no banco)
         db.session.delete(bot)
         db.session.commit()
     
@@ -2372,8 +2413,16 @@ def delete_bot(bot_id):
         logger.error(f"Erro ao deletar bot {bot_identifier}: {e}", exc_info=True)
         return jsonify({'error': 'Erro interno ao deletar bot'}), 500
     
-    logger.info(f"Bot deletado: {bot_name} por {current_user.email}")
-    return jsonify({'message': 'Bot deletado com sucesso'})
+    logger.info(f"✅ Bot deletado: {bot_name} por {current_user.email} | Faturamento preservado: R$ {preserved_revenue:.2f}")
+    return jsonify({
+        'message': 'Bot deletado com sucesso',
+        'preserved': {
+            'sales': preserved_sales,
+            'revenue': preserved_revenue,
+            'payments': payments_count,
+            'commissions': commissions_count
+        }
+    })
 @app.route('/api/bots/<int:bot_id>/duplicate', methods=['POST'])
 @login_required
 @csrf.exempt
