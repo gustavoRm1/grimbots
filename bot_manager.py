@@ -1266,6 +1266,9 @@ class BotManager:
                         message_type=message_type,
                         callback_data=None
                     )
+                except Exception as router_error:
+                    logger.error(f"❌ Erro no MessageRouter V8: {router_error}", exc_info=True)
+                    # Não interromper o fluxo, apenas logar o erro
                 
                 # ✅ SISTEMA DE ASSINATURAS - Processar new_chat_member e left_chat_member
                 if 'new_chat_members' in message:
