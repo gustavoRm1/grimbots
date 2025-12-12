@@ -3273,116 +3273,93 @@ console.log('✅ botConfigApp temporário definido (será substituído pela vers
                 </div>
             </div>
 
-            <!-- 🔥 FLOW BUILDER V2.0 - Editor Visual Premium -->
+            <!-- 🔥 FLOW BUILDER FINAL - Editor Visual Premium -->
             <div x-show="config.flow_enabled" 
                  id="flow-builder"
-                 x-data="FlowBuilderV2()" 
-                 x-init="init()">
+                 x-data="FlowBuilderFinal()" 
+                 x-init="init()"
+                 style="display: flex; height: calc(100vh - 200px); overflow: hidden; background: #0f1720;">
                 
-                <!-- Sidebar -->
-                <div class="flow-sidebar">
-                    <h2>Componentes</h2>
-
-                    <button class="flow-btn" @click.stop="addNode('message')" type="button">💬 Mensagem</button>
-                    <button class="flow-btn" @click.stop="addNode('button')" type="button">🔘 Botões</button>
-                    <button class="flow-btn" @click.stop="addNode('condition')" type="button">🔀 Condição</button>
-                    <button class="flow-btn" @click.stop="addNode('payment')" type="button">💳 Pagamento</button>
-                    <button class="flow-btn" @click.stop="addNode('delay')" type="button">⏱ Delay</button>
-                    <button class="flow-btn" @click.stop="addNode('end')" type="button">🏁 Final</button>
-
-                    <hr style="border-color:#333;margin:18px 0">
-
-                    <button class="flow-btn" @click.stop="saveFlow()" type="button">💾 Salvar</button>
-                    <button class="flow-btn" @click.stop="exportFlow()" type="button">⬆ Exportar</button>
-                    <button class="flow-btn" @click.stop="$refs.importer.click()" type="button">⬇ Importar</button>
-                    <input type="file" x-ref="importer" class="hidden" @change="importFlow($event)" accept=".json">
+                <!-- SIDEBAR -->
+                <aside class="flow-sidebar-final" style="width: 320px; background: linear-gradient(180deg, #071027 0, #091226 100%); padding: 20px; border-right: 1px solid rgba(255,255,255,0.03); overflow-y: auto;">
+                    <h2 style="margin: 0 0 12px; font-size: 18px; color: #e6eef8;">Flow Builder — Módulo B</h2>
+                    
+                    <div class="panel" style="padding: 12px; background: #0b1220; border-radius: 10px; margin-bottom: 12px;">
+                        <div class="small" style="font-size: 13px; color: #94a3b8;">Ações Rápidas</div>
+                        <div style="margin-top: 8px; display: flex; flex-direction: column; gap: 8px;">
+                            <button class="btn" @click="addNode('message')" type="button" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 8px; background: #0ea5a2; color: #011; cursor: pointer; border: none; font-weight: 700;">📩 Mensagem</button>
+                            <button class="btn" @click="addNode('button')" type="button" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 8px; background: #0ea5a2; color: #011; cursor: pointer; border: none; font-weight: 700;">🔘 Botão</button>
+                            <button class="btn" @click="addNode('payment')" type="button" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 8px; background: #0ea5a2; color: #011; cursor: pointer; border: none; font-weight: 700;">💳 Pagamento</button>
+                            <button class="btn" @click="addNode('condition')" type="button" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 8px; background: #0ea5a2; color: #011; cursor: pointer; border: none; font-weight: 700;">🔀 Condição</button>
+                            <button class="btn ghost" @click="zoomToFit()" type="button" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 8px; background: transparent; border: 1px solid rgba(255,255,255,0.04); color: #dbeafe; cursor: pointer; font-weight: 600;">🔎 Ajustar</button>
                 </div>
+            </div>
 
-                <!-- Canvas -->
-                <div id="flow-canvas"
-                     @wheel.prevent="zoom($event)"
-                     @mousedown="startPan($event)"
-                     style="position: relative; width: 100%; height: 100%; overflow: hidden; background: #0d0d0f; min-height: 500px;">
-                    <!-- Mensagem inicial se não houver nodes -->
-                    <div x-show="nodes.length === 0" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #666; text-align: center; z-index: 1;">
-                        <p style="font-size: 18px; margin-bottom: 10px; color: #999;">🎨 Flow Builder V∞</p>
-                        <p style="font-size: 14px; color: #666;">Clique nos botões da sidebar para adicionar componentes ao fluxo</p>
+                    <div class="panel" style="padding: 12px; background: #0b1220; border-radius: 10px; margin-bottom: 12px;">
+                        <div class="small" style="font-size: 13px; color: #94a3b8;">Flow</div>
+                        <div style="margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap;">
+                            <button class="btn" @click="saveFlow()" type="button" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 8px; background: #0ea5a2; color: #011; cursor: pointer; border: none; font-weight: 700;">💾 Salvar</button>
+                            <button class="btn" @click="exportFlow()" type="button" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 8px; background: #0ea5a2; color: #011; cursor: pointer; border: none; font-weight: 700;">⬆ Exportar</button>
+                            <button class="btn ghost" @click="$refs.importFile.click()" type="button" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 8px; background: transparent; border: 1px solid rgba(255,255,255,0.04); color: #dbeafe; cursor: pointer; font-weight: 600;">⬇ Importar</button>
+                            <input type="file" x-ref="importFile" style="display: none;" @change="importFlow($event)" accept=".json">
+                </div>
+                        <div class="small-muted" style="font-size: 12px; color: #94a3b8; margin-top: 8px;">Status: <strong x-text="status" style="color: #10b981;"></strong></div>
+                        <button class="btn ghost" @click="clearFlow()" type="button" style="margin-top: 8px; width: 100%; display: inline-flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 8px; background: transparent; border: 1px solid rgba(255,255,255,0.04); color: #ff7b7b; cursor: pointer; font-weight: 600;">🗑️ Limpar Tudo</button>
+            </div>
+
+                    <div class="panel" style="padding: 12px; background: #0b1220; border-radius: 10px; margin-bottom: 12px;">
+                        <div class="small" style="font-size: 13px; color: #94a3b8;">Atalhos</div>
+                        <div class="small-muted" style="font-size: 12px; color: #94a3b8; margin-top: 6px;">
+                            Drag: clique e arraste • Pan: Alt + drag • Zoom: Ctrl + scroll
+                        </div>
                     </div>
-                </div>
+                </aside>
 
-                <!-- Modal -->
-                <template x-if="modal.open">
-                    <div class="modal" @click.self="closeModal()">
-                        <div class="modal-content">
-                            <h2 class="text-xl font-bold mb-4">Editar Node</h2>
+                <!-- CANVAS -->
+                <section class="canvas-wrap" style="flex: 1; position: relative; display: flex; flex-direction: column;">
+                    <div class="toolbar" style="display: flex; gap: 8px; padding: 12px; background: linear-gradient(90deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); align-items: center; border-bottom: 1px solid rgba(255,255,255,0.02);">
+                        <div style="flex: 1;">
+                            <button class="btn ghost" @click="zoomIn()" type="button" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 8px; background: transparent; border: 1px solid rgba(255,255,255,0.04); color: #dbeafe; cursor: pointer; font-weight: 600;">＋</button>
+                            <button class="btn ghost" @click="zoomOut()" type="button" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 8px; background: transparent; border: 1px solid rgba(255,255,255,0.04); color: #dbeafe; cursor: pointer; font-weight: 600;">－</button>
+                            <button class="btn ghost" @click="zoomReset()" type="button" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 8px; background: transparent; border: 1px solid rgba(255,255,255,0.04); color: #dbeafe; cursor: pointer; font-weight: 600;">Reset</button>
+                        </div>
+                        <div class="small-muted" style="font-size: 12px; color: #94a3b8;">Nodes: <strong x-text="nodes.length" style="color: #10b981;"></strong></div>
+                    </div>
 
-                            <label class="block mb-2">Título</label>
-                            <input class="input" x-model="modal.node.label">
+                    <div class="canvas" @mousedown="canvasMouseDown($event)" style="flex: 1; position: relative; background: linear-gradient(180deg, #071229 0, #051226 100%); overflow: hidden;">
+                        <!-- background grid -->
+                        <div class="grid" :style="gridStyle" style="position: absolute; inset: 0; background-image: linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px); background-size: 20px 20px; transform-origin: 0 0;"></div>
 
-                        <template x-if="modal.node.type === 'button'">
-                            <div class="mt-4 space-y-2">
-                                <template x-for="(btn, i) in modal.node.buttons">
-                                    <div class="node-button-row">
-                                        <input class="input" x-model="btn.label" placeholder="Texto do botão">
-                                        <input class="input" x-model="btn.target_step" placeholder="ID do step destino">
-                                        <button class="btn-danger" @click="removeButton(i)">✖</button>
+                        <!-- content is the transform container for pan/zoom -->
+                        <div class="content" x-ref="content" :style="contentStyle" style="position: absolute; left: 0; top: 0; transform-origin: 0 0;">
+                            <!-- nodes -->
+                            <template x-for="(n, idx) in nodes" :key="n.id">
+                                <div class="node" :id="n.id" :class="{'selected': selected.has(n.id)}"
+                                     :style="`left:${n.x}px;top:${n.y}px;`"
+                                     @mousedown.stop="selectNode(n.id, $event)"
+                                     style="width: 260px; background: linear-gradient(180deg, #0b2030, #081726); border: 1px solid rgba(255,255,255,0.04); border-radius: 10px; padding: 10px; color: #dbeafe; box-shadow: 0 6px 18px rgba(2,6,23,0.6); position: absolute; cursor: grab;">
+                                    <div class="node-header" style="display: flex; justify-content: space-between; align-items: center; font-weight: 700; font-size: 13px;">
+                                        <div x-text="n.title"></div>
+                                        <div style="display: flex; gap: 6px;">
+                                            <button @click.stop="openEdit(n)" title="Editar" style="background: transparent; border: none; color: #9ccfd8; cursor: pointer; padding: 4px;">✏️</button>
+                                            <button @click.stop="deleteNode(n.id)" title="Remover" style="background: transparent; border: none; color: #ff7b7b; cursor: pointer; padding: 4px;">🗑</button>
+                                        </div>
                                     </div>
-                                </template>
-                                <button class="btn-secondary" @click="addButton()">+ Botão</button>
-                            </div>
-                        </template>
-
-                        <template x-if="modal.node.type === 'payment'">
-                            <div class="mt-4 space-y-2">
-                                <label class="block mb-2">Preço (R$)</label>
-                                <input class="input" type="number" x-model.number="modal.node.config.price" step="0.01" min="0">
-                                <label class="block mb-2">Nome do Produto</label>
-                                <input class="input" x-model="modal.node.config.product_name">
-                                <p class="text-xs text-gray-400 mt-2">
-                                    💡 Configure conexões: "next" (se pago) e "pending" (se não pago) arrastando do node.
-                                </p>
-                            </div>
-                        </template>
-
-                        <template x-if="modal.node.type === 'message'">
-                            <div class="mt-4 space-y-2">
-                                <label class="block mb-2">Mensagem</label>
-                                <textarea class="input" x-model="modal.node.config.message" rows="4"></textarea>
-                                <label class="block mb-2">URL da Mídia (opcional)</label>
-                                <input class="input" x-model="modal.node.config.media_url" placeholder="https://...">
-                            </div>
-                        </template>
-
-                        <template x-if="modal.node.type === 'access'">
-                            <div class="mt-4 space-y-2">
-                                <label class="block mb-2">Link de Acesso</label>
-                                <input class="input" x-model="modal.node.config.link" placeholder="https://...">
-                                <label class="block mb-2">Mensagem</label>
-                                <textarea class="input" x-model="modal.node.config.message" rows="2"></textarea>
-                            </div>
-                        </template>
-
-                        <div class="mt-4">
-                            <label class="block mb-2">Atraso (segundos)</label>
-                            <input class="input" type="number" x-model.number="modal.node.delay_seconds" min="0">
-                        </div>
-
-                        <div class="mt-4">
-                            <button class="btn-secondary w-full mb-2" @click="setAsStartStep()" x-show="modal.node && modal.node.id !== startStepId" type="button">
-                                ⭐ Definir como Step Inicial
-                            </button>
-                        </div>
-
-                        <div class="mt-6 flex justify-between gap-2">
-                            <button class="btn-danger" @click="deleteNode()" type="button">🗑️ Deletar</button>
-                            <div class="flex gap-2">
-                                <button class="btn-secondary" @click="closeModal()" type="button">Cancelar</button>
-                                <button class="btn-primary" @click="applyEdit()" type="button">Salvar</button>
-                            </div>
+                                    <div class="node-body" style="margin-top: 8px; font-size: 13px; color: #bcd2ea;">
+                                        <div x-text="nodePreview(n)"></div>
+                                        <div class="btns" style="display: flex; gap: 8px; margin-top: 8px;">
+                                            <button @click.stop="addButtonToNode(n)" class="small-btn" style="font-size: 12px; padding: 6px 8px; border-radius: 6px; border: none; cursor: pointer; background: rgba(255,255,255,0.1); color: #dbeafe;">+ Botão</button>
+                                            <button @click.stop="makeEndpoint(n)" class="small-btn" style="font-size: 12px; padding: 6px 8px; border-radius: 6px; border: none; cursor: pointer; background: rgba(255,255,255,0.1); color: #dbeafe;">↔ Conectar</button>
+                                        </div>
+                                    </div>
+                                    <!-- endpoints -->
+                                    <div class="endpoint ep-in" :id="n.id + '-in'" style="width: 14px; height: 14px; border-radius: 50%; position: absolute; border: 2px solid rgba(0,0,0,0.5); z-index: 50; pointer-events: auto; left: -10px; top: 50%; transform: translateY(-50%); background: #10b981;"></div>
+                                    <div class="endpoint ep-out" :id="n.id + '-out'" style="width: 14px; height: 14px; border-radius: 50%; position: absolute; border: 2px solid rgba(0,0,0,0.5); z-index: 50; pointer-events: auto; right: -10px; top: 50%; transform: translateY(-50%); background: #fff;"></div>
+                                </div>
+                            </template>
                         </div>
                     </div>
-                </div>
-            </template>
+                </section>
             </div>
         </div>
 
@@ -4709,22 +4686,22 @@ window.botConfigApp = botConfigApp;
 window.botConfigAppComplete = true; // Marcar como completo
 console.log('✅ botConfigApp definido e disponível globalmente (versão completa)');
 
-// 🔥 FLOW BUILDER V∞ - Engine Completa (100% Compatível com Backend)
-function FlowBuilderV2() {
+// 🔥 FLOW BUILDER FINAL - Engine Completa (100% Compatível com Backend)
+function FlowBuilderFinal() {
     return {
         nodes: [],
-        js: null,
-        modal: { open: false, node: null },
-        panX: 0,
-        panY: 0,
-        zoomLevel: 1,
-        startStepId: null, // Step inicial do fluxo
+        selected: new Set(),
+        jsplumb: null,
+        pan: {x: 0, y: 0},
+        zoom: 1,
+        status: 'pronto',
+        startStepId: null,
 
         // ------------------------------
         // INIT
         // ------------------------------
         init() {
-            console.log('🚀 FlowBuilderV2.init() chamado');
+            console.log('🚀 FlowBuilderFinal.init() chamado');
             
             // Carregar nodes do config se existirem
             if (window.botConfigApp && window.botConfigApp.config && window.botConfigApp.config.flow_steps) {
@@ -4739,11 +4716,11 @@ function FlowBuilderV2() {
                         this.nodes = flowSteps.map((step, index) => ({
                             id: step.id || 'node-' + crypto.randomUUID(),
                             type: step.type || 'message',
-                            x: step.position?.x || 300 + (index * 50),
-                            y: step.position?.y || 180 + (index * 50),
-                            label: step.title || step.type.toUpperCase(),
-                            buttons: step.type === 'button' ? (step.config?.custom_buttons || [{ label: 'Opção 1' }]) : [],
+                            title: step.title || step.type.toUpperCase(),
+                            x: step.position?.x || 100 + (index * 200),
+                            y: step.position?.y || 100 + (index * 150),
                             config: step.config || {},
+                            buttons: step.type === 'button' ? (step.config?.custom_buttons || []) : [],
                             connections: step.connections || {},
                             conditions: step.conditions || [],
                             delay_seconds: step.delay_seconds || 0,
@@ -4752,103 +4729,122 @@ function FlowBuilderV2() {
                         
                         // Carregar step inicial
                         this.startStepId = window.botConfigApp.config.flow_start_step_id || this.nodes[0]?.id || null;
+                        console.log('✅ Steps carregados:', this.nodes.length);
                     }
                 } catch (e) {
                     console.error('❌ Erro ao carregar steps:', e);
+                    this.status = 'erro ao carregar';
                 }
             }
 
             // Inicializar jsPlumb
-            if (typeof jsPlumb !== 'undefined') {
-                console.log('🔧 Inicializando jsPlumb...');
-                jsPlumb.ready(() => {
-                    console.log('✅ jsPlumb pronto');
-                    this.js = jsPlumb.getInstance({
-                        Container: "flow-canvas",
-                        Connector: ["Bezier", { curviness: 55 }],
-                        EndpointStyle: { fill: "#10b981", radius: 6 },
-                        PaintStyle: { stroke: "#10b981", strokeWidth: 2 },
-                        HoverPaintStyle: { stroke: "#3b82f6", strokeWidth: 3 }
-                    });
-                    console.log('✅ Instância jsPlumb criada');
-
-                    // Event listeners para conexões
-                    this.js.bind('connection', (info) => {
-                        this.onConnectionCreated(info);
-                    });
-
-                    this.js.bind('connectionDetached', (info) => {
-                        this.onConnectionDetached(info);
-                    });
-
-                    // Renderizar nodes existentes (usar setTimeout para garantir que DOM está pronto)
-                    setTimeout(() => {
-                        this.nodes.forEach(node => this.renderNode(node));
-                        setTimeout(() => {
-                            this.restoreConnections();
-                        }, 100);
-                    }, 100);
-                });
-            } else {
-                console.error('❌ jsPlumb não está disponível');
+            if (typeof jsPlumb === 'undefined') {
+                console.error('❌ jsPlumb não carregado');
+                this.status = 'erro: jsPlumb';
+                return;
             }
+            
+            jsPlumb.ready(() => {
+                console.log('✅ jsPlumb pronto');
+                const content = this.$refs.content;
+                if (!content) {
+                    console.error('❌ Content ref não encontrado');
+                    this.status = 'erro: content ref';
+                    return;
+                }
+                
+                this.jsplumb = jsPlumb.getInstance({
+                    Container: content,
+                    Connector: ['Bezier', {curviness: 50}],
+                    Endpoint: ['Dot', {radius: 6}],
+                    PaintStyle: { stroke: '#10b981', strokeWidth: 3 },
+                    HoverPaintStyle: { stroke: '#3b82f6', strokeWidth: 4 },
+                    Anchors: ['Right', 'Left'],
+                    MaxConnections: -1
+                });
+                console.log('✅ Instância jsPlumb criada');
+
+                // bind events
+                this.jsplumb.bind('connection', info => {
+                    console.log('✅ Conexão criada:', info);
+                    this.onConnection(info);
+                });
+                
+                this.jsplumb.bind('connectionDetached', info => {
+                    console.log('❌ Conexão removida:', info);
+                    this.onConnectionDetached(info);
+                });
+
+                // Renderizar nodes existentes
+                setTimeout(() => {
+                    this.nodes.forEach(node => this.mountNode(node));
+                    setTimeout(() => {
+                        this.restoreConnections();
+                    }, 100);
+                }, 100);
+                
+                this.status = 'pronto';
+            });
+        },
+
+        // ------------------------------
+        // STYLES REACTIVE
+        // ------------------------------
+        get contentStyle() { 
+            return `transform: translate(${this.pan.x}px, ${this.pan.y}px) scale(${this.zoom}); transform-origin: 0 0;`; 
+        },
+        
+        get gridStyle() { 
+            return `transform: translate(${this.pan.x}px, ${this.pan.y}px) scale(${this.zoom}); transform-origin: 0 0; opacity: 0.6`; 
         },
 
         // ------------------------------
         // ADD NODE
         // ------------------------------
-        addNode(type) {
+        addNode(type, opts = {}) {
             try {
                 console.log('🔘 Botão clicado: addNode', type);
                 
-                // Validar tipo
-                const validTypes = ['message', 'button', 'condition', 'payment', 'delay', 'end', 'access'];
-                if (!validTypes.includes(type)) {
-                    console.error('❌ Tipo inválido:', type);
-                    alert('Tipo de node inválido!');
-                    return;
-                }
+                const id = opts.id || 'node-' + crypto.randomUUID();
                 
-                const id = "node-" + Date.now() + "-" + Math.random().toString(36).substr(2, 9);
-
                 // Configuração inicial baseada no tipo
-                let initialConfig = {};
-                let initialLabel = type.charAt(0).toUpperCase() + type.slice(1);
+                let initialConfig = opts.config || {};
+                let initialTitle = opts.title || type.toUpperCase();
                 
-                if (type === "payment") {
+                if (type === "payment" && !opts.config) {
                     initialConfig = { price: 0, product_name: "", amount: 0 };
-                    initialLabel = "Pagamento PIX";
-                } else if (type === "message") {
+                    initialTitle = "Pagamento PIX";
+                } else if (type === "message" && !opts.config) {
                     initialConfig = { message: "" };
-                    initialLabel = "Mensagem";
-                } else if (type === "button") {
+                    initialTitle = "Mensagem";
+                } else if (type === "button" && !opts.config) {
                     initialConfig = { custom_buttons: [] };
-                    initialLabel = "Botões";
-                } else if (type === "condition") {
+                    initialTitle = "Botões";
+                } else if (type === "condition" && !opts.config) {
                     initialConfig = { conditions: [] };
-                    initialLabel = "Condição";
-                } else if (type === "delay") {
+                    initialTitle = "Condição";
+                } else if (type === "delay" && !opts.config) {
                     initialConfig = {};
-                    initialLabel = "Delay";
-                } else if (type === "end") {
+                    initialTitle = "Delay";
+                } else if (type === "end" && !opts.config) {
                     initialConfig = {};
-                    initialLabel = "Fim";
-                } else if (type === "access") {
+                    initialTitle = "Fim";
+                } else if (type === "access" && !opts.config) {
                     initialConfig = { link: "", message: "Acesso liberado!" };
-                    initialLabel = "Link de Acesso";
+                    initialTitle = "Link de Acesso";
                 }
 
                 const node = {
                     id,
-                    type,
-                    x: 300 + (this.nodes.length * 50),
-                    y: 180 + (this.nodes.length * 50),
-                    label: initialLabel,
-                    buttons: type === "button" ? [{ label: "Opção 1", text: "Opção 1", target_step: "" }] : [],
+                    type: type || 'message',
+                    title: initialTitle,
+                    x: opts.x || (100 + Math.random() * 200),
+                    y: opts.y || (100 + Math.random() * 150),
                     config: initialConfig,
-                    connections: {},
-                    conditions: [],
-                    delay_seconds: 0,
+                    buttons: opts.buttons || (type === "button" ? [{ id: 'btn-' + crypto.randomUUID(), label: 'Opção' }] : []),
+                    connections: opts.connections || {},
+                    conditions: opts.conditions || [],
+                    delay_seconds: opts.delay_seconds || 0,
                     order: this.nodes.length + 1
                 };
 
@@ -4860,13 +4856,22 @@ function FlowBuilderV2() {
                     console.log('⭐ Primeiro node definido como step inicial:', node.id);
                 }
                 
-                // Renderizar node após um pequeno delay para garantir que DOM está pronto
-                setTimeout(() => {
-                    this.renderNode(node);
-                    console.log('✅ Node renderizado:', node.id);
-                }, 100);
+                // Renderizar node após um pequeno delay
+                this.$nextTick(() => {
+                    if (this.jsplumb) {
+                        this.mountNode(node);
+                    } else {
+                        // Se jsPlumb ainda não está pronto, aguardar
+                        setTimeout(() => {
+                            if (this.jsplumb) {
+                                this.mountNode(node);
+                            }
+                        }, 200);
+                    }
+                });
                 
                 console.log('✅ Node adicionado com sucesso:', { id: node.id, type: node.type, total: this.nodes.length });
+                this.status = `${this.nodes.length} nodes`;
             } catch (e) {
                 console.error('❌ Erro ao adicionar node:', e);
                 alert('Erro ao adicionar node: ' + e.message);
@@ -4874,188 +4879,185 @@ function FlowBuilderV2() {
         },
 
         // ------------------------------
-        // RENDER NODE
+        // MOUNT NODE (jsPlumb integration)
         // ------------------------------
-        renderNode(node) {
-            try {
-                const canvas = document.getElementById("flow-canvas");
-                if (!canvas) {
-                    console.warn('⚠️ Canvas não encontrado');
-                    return;
+        mountNode(node) {
+            setTimeout(() => {
+                const el = document.getElementById(node.id);
+                if (!el) { 
+                    console.warn('mountNode: el missing', node.id); 
+                    return; 
                 }
 
-                // Remove se já existe (evita duplicações)
-                const old = document.getElementById(node.id);
-                if (old) old.remove();
-
-                const div = document.createElement("div");
-                div.className = "flow-node";
-                div.id = node.id;
-                div.style.left = node.x + "px";
-                div.style.top = node.y + "px";
-                div.style.position = "absolute";
-                
-                // Marcar step inicial visualmente
-                if (node.id === this.startStepId) {
-                    div.classList.add('flow-node-start');
+                // remove existing endpoints to avoid duplicates
+                try { 
+                    this.jsplumb.deleteEndpoints(el); 
+                } catch(e) {
+                    console.warn('Erro ao deletar endpoints:', e);
                 }
 
-                div.innerHTML = `
-                    <div class="node-header">
-                        <span>${this.escapeHtml(node.label)}</span>
-                        <button onclick="window.__editNode('${node.id}')" style="background:transparent;border:none;cursor:pointer;color:#ccc;padding:4px 8px;">⚙</button>
-                        ${node.id === this.startStepId ? '<span style="color:#10b981;font-size:10px;margin-left:8px;">START</span>' : ''}
-                    </div>
-                    <div class="endpoint endpoint-in" id="${node.id}-in"></div>
-                    <div class="node-content">${this.renderContent(node)}</div>
-                    ${node.type !== 'end' ? `<div class="endpoint endpoint-out" id="${node.id}-out"></div>` : ''}
-                `;
-
-                canvas.appendChild(div);
-
-                // Montar endpoints e habilitar drag após um pequeno delay
-                setTimeout(() => {
-                    this.mountEndpoints(node);
-                    this.enableDrag(node);
-                }, 50);
-            } catch (e) {
-                console.error('❌ Erro ao renderizar node:', e, node);
-            }
-        },
-
-        escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        },
-
-        renderContent(node) {
-            if (node.type === 'message') {
-                const msg = node.config?.message || '';
-                return `<div style="font-size:12px;opacity:0.8">${msg.substring(0, 30) || 'Mensagem de texto'}${msg.length > 30 ? '...' : ''}</div>`;
-            }
-            if (node.type === 'button') {
-                return node.buttons.map((btn, i) => 
-                    `<div class="node-button" id="${node.id}-btn-${i}">${btn.label || btn.text || 'Botão'}</div>`
-                ).join('');
-            }
-            if (node.type === 'condition') {
-                return `
-                    <div class="cond-branch">Verdadeiro</div>
-                    <div class="cond-branch">Falso</div>
-                `;
-            }
-            if (node.type === 'payment') {
-                const price = node.config?.price || node.config?.amount || 0;
-                return `<div style="font-size:12px">Cobrança - R$ ${price.toFixed(2)}</div>`;
-            }
-            if (node.type === 'delay') {
-                const delay = node.delay_seconds || 0;
-                return `<div style="font-size:12px">Aguardar ${delay}s</div>`;
-            }
-            if (node.type === 'access') {
-                return '<div style="font-size:12px">Link de Acesso</div>';
-            }
-            if (node.type === 'end') {
-                return '<div style="text-align:center;font-size:11px;opacity:0.8">FIM</div>';
-            }
-            return '';
-        },
-
-        // ------------------------------
-        // ENDPOINTS (ANTI-DUPLICAÇÃO)
-        // ------------------------------
-        mountEndpoints(node) {
-            if (!this.js) return;
-            
-            // 🔥 CRÍTICO: Remover endpoints antigos ANTES de criar novos
-            this.js.deleteEndpoints(node.id);
-            
-            const el = document.getElementById(node.id);
-            if (!el) return;
-
-            // Input
-            this.js.addEndpoint(node.id, {
-                uuid: node.id + "-in",
-                anchor: "Left",
-                isTarget: true,
-                maxConnections: -1
-            });
-
-            // Output (exceto para 'end')
-            if (node.type !== 'end') {
-                this.js.addEndpoint(node.id, {
-                    uuid: node.id + "-out",
-                    anchor: "Right",
-                    isSource: true,
+                // make source using the .ep-out as filter
+                this.jsplumb.makeSource(el, {
+                    filter: '.ep-out, .btns button',
+                    anchor: 'Right',
+                    endpoint: ['Dot', {radius: 6}],
+                    connector: ['Bezier', {curviness: 50}],
                     maxConnections: -1
                 });
+
+                // make target for left
+                this.jsplumb.makeTarget(el, {
+                    filter: '.ep-in',
+                    anchor: 'Left',
+                    endpoint: ['Dot', {radius: 6}],
+                    dropOptions: {hoverClass: 'node-drop'}
+                });
+
+                // draggable
+                this.jsplumb.draggable(el, {
+                    containment: this.$refs.content,
+                    grid: [20, 20],
+                    drag: (params) => {
+                        // live update position (for smoothness)
+                    },
+                    stop: (params) => {
+                        const rect = el.getBoundingClientRect();
+                        const canvasRect = this.$el.querySelector('.canvas').getBoundingClientRect();
+                        // compute coordinates relative to content transform
+                        const x = parseFloat(el.style.left);
+                        const y = parseFloat(el.style.top);
+                        node.x = x;
+                        node.y = y;
+                    }
+                });
+            }, 50);
+        },
+
+        makeEndpoint(node) {
+            // convenience - ensure endpoints exist/mounted
+            this.mountNode(node);
+        },
+
+        addButtonToNode(node) {
+            node.buttons = node.buttons || [];
+            node.buttons.push({id: 'btn-' + crypto.randomUUID(), label: 'Opção'});
+            this.$nextTick(() => this.mountNode(node));
+        },
+
+        selectNode(id, ev) {
+            if (!ev.shiftKey) this.selected.clear();
+            this.selected.add(id);
+        },
+
+        deleteNode(id) {
+            if (!confirm('Tem certeza que deseja deletar este node?')) return;
+            
+            // remove jsPlumb endpoints & element
+            const el = document.getElementById(id);
+            if (el) {
+                try { 
+                    this.jsplumb.remove(el); 
+                } catch(e) {
+                    console.warn('Erro ao remover node:', e);
+                }
             }
+            this.nodes = this.nodes.filter(n => n.id !== id);
+            this.selected.delete(id);
+            
+            // Se era o step inicial, definir outro
+            if (this.startStepId === id) {
+                this.startStepId = this.nodes[0]?.id || null;
+            }
+            
+            this.status = `${this.nodes.length} nodes`;
+        },
+
+        openEdit(node) {
+            // modal simples com prompt para evitar UI pesada
+            const newTitle = prompt("Título do node:", node.title);
+            if (newTitle !== null) node.title = newTitle;
+            
+            if (node.type === 'message') {
+                const content = prompt("Conteúdo da mensagem:", node.config?.message || '');
+                if (content !== null) node.config = {...node.config, message: content};
+            } else if (node.type === 'payment') {
+                const price = prompt("Preço (R$):", node.config?.price || '0');
+                if (price !== null) node.config = {...node.config, price: parseFloat(price) || 0};
+                const product = prompt("Nome do produto:", node.config?.product_name || '');
+                if (product !== null) node.config = {...node.config, product_name: product};
+            }
+        },
+
+        nodePreview(n) {
+            if (n.type === 'message') return n.config?.message ? n.config.message.slice(0, 80) : 'Mensagem...';
+            if (n.type === 'payment') return 'Pagamento R$' + (n.config?.price || '0.00');
+            if (n.type === 'button') return 'Botões: ' + (n.buttons?.length || 0);
+            return n.type;
         },
 
         // ------------------------------
         // CONNECTION HANDLERS
         // ------------------------------
-        onConnectionCreated(info) {
-            const sourceId = info.sourceId || info.source.id;
-            const targetId = info.targetId || info.target.id;
+        onConnection(info) {
+            const sId = info.source.id || info.sourceId;
+            const tId = info.target.id || info.targetId;
             
             // Extrair IDs dos nodes (remover sufixos -in, -out)
-            const sourceNodeId = sourceId.replace(/-in$|-out$|-btn-\d+$/, '');
-            const targetNodeId = targetId.replace(/-in$|-out$|-btn-\d+$/, '');
+            const sourceNodeId = String(sId).replace(/-in$|-out$|-btn-\d+$/, '');
+            const targetNodeId = String(tId).replace(/-in$|-out$|-btn-\d+$/, '');
             
-            const sourceNode = this.nodes.find(n => n.id === sourceNodeId);
-            if (!sourceNode) return;
+            // persist connection into nodes data (formato backend)
+            const sNode = this.nodes.find(n => n.id === sourceNodeId);
+            if (!sNode) return;
             
-            // 🔥 CRÍTICO: Mapear conexão jsPlumb para formato backend
-            if (!sourceNode.connections) {
-                sourceNode.connections = {};
+            // Converter connections array para objeto (formato backend)
+            if (!sNode.connections || !sNode.connections.next) {
+                sNode.connections = sNode.connections || {};
+                // Se é payment step, pode ter conexão 'pending'
+                if (sNode.type === 'payment' && !sNode.connections.next) {
+                    sNode.connections.next = targetNodeId;
+                } else if (sNode.type === 'payment' && sNode.connections.next && !sNode.connections.pending) {
+                    sNode.connections.pending = targetNodeId;
+                } else {
+                    // Conexão normal (next)
+                    sNode.connections.next = targetNodeId;
+                }
             }
             
-            // Se é payment step, pode ter conexão 'pending'
-            if (sourceNode.type === 'payment' && !sourceNode.connections.next) {
-                sourceNode.connections.next = targetNodeId;
-            } else if (sourceNode.type === 'payment' && sourceNode.connections.next && !sourceNode.connections.pending) {
-                sourceNode.connections.pending = targetNodeId;
-            } else {
-                // Conexão normal (next)
-                sourceNode.connections.next = targetNodeId;
-            }
-            
-            console.log(`✅ Conexão criada: ${sourceNodeId} → ${targetNodeId}`, sourceNode.connections);
+            console.log(`✅ Conexão criada: ${sourceNodeId} → ${targetNodeId}`, sNode.connections);
         },
-
+        
         onConnectionDetached(info) {
-            const sourceId = info.sourceId || info.source.id;
-            const sourceNodeId = sourceId.replace(/-in$|-out$|-btn-\d+$/, '');
+            const sId = info.source.id || info.sourceId;
+            const sourceNodeId = String(sId).replace(/-in$|-out$|-btn-\d+$/, '');
             
-            const sourceNode = this.nodes.find(n => n.id === sourceNodeId);
-            if (sourceNode && sourceNode.connections) {
-                // Remover conexão
-                if (sourceNode.connections.next) {
-                    delete sourceNode.connections.next;
-                }
-                if (sourceNode.connections.pending) {
-                    delete sourceNode.connections.pending;
-                }
+            const sNode = this.nodes.find(n => n.id === sourceNodeId);
+            if (!sNode || !sNode.connections) return;
+            
+            // Remover conexão do formato backend
+            if (sNode.connections.next) {
+                delete sNode.connections.next;
+            }
+            if (sNode.connections.pending) {
+                delete sNode.connections.pending;
             }
         },
 
         restoreConnections() {
-            if (!this.js) return;
+            if (!this.jsplumb) return;
             
             this.nodes.forEach(node => {
                 if (!node.connections) return;
                 
                 // Restaurar conexão 'next'
                 if (node.connections.next) {
-                    const targetNode = document.getElementById(node.connections.next);
-                    if (targetNode) {
+                    const targetEl = document.getElementById(node.connections.next);
+                    if (targetEl) {
                         try {
-                            this.js.connect({
+                            this.jsplumb.connect({
                                 source: node.id,
                                 target: node.connections.next,
-                                anchors: ["Right", "Left"]
+                                anchors: ['Right', 'Left']
                             });
                         } catch (e) {
                             console.warn(`⚠️ Erro ao restaurar conexão: ${e}`);
@@ -5065,13 +5067,13 @@ function FlowBuilderV2() {
                 
                 // Restaurar conexão 'pending' (apenas para payment)
                 if (node.type === 'payment' && node.connections.pending) {
-                    const targetNode = document.getElementById(node.connections.pending);
-                    if (targetNode) {
+                    const targetEl = document.getElementById(node.connections.pending);
+                    if (targetEl) {
                         try {
-                            this.js.connect({
+                            this.jsplumb.connect({
                                 source: node.id,
                                 target: node.connections.pending,
-                                anchors: ["Right", "Left"]
+                                anchors: ['Right', 'Left']
                             });
                         } catch (e) {
                             console.warn(`⚠️ Erro ao restaurar conexão pending: ${e}`);
@@ -5080,182 +5082,9 @@ function FlowBuilderV2() {
                 }
             });
             
-            this.js.repaintEverything();
+            this.jsplumb.repaintEverything();
         },
 
-        // ------------------------------
-        // DRAG
-        // ------------------------------
-        enableDrag(node) {
-            if (!this.js) return;
-            
-            this.js.draggable(node.id, {
-                stop: (params) => {
-                    const n = this.nodes.find(x => x.id === node.id);
-                    if (n) {
-                        n.x = params.pos[0];
-                        n.y = params.pos[1];
-                    }
-                    // Redesenhar conexões após mover
-                    this.js.repaintEverything();
-                }
-            });
-        },
-
-        // ------------------------------
-        // MODAL
-        // ------------------------------
-        openEdit(id) {
-            try {
-                const node = this.nodes.find(n => n.id === id);
-                if (node) {
-                    // Criar cópia profunda do node
-                    this.modal.node = JSON.parse(JSON.stringify(node));
-                    
-                    // Garantir que config existe
-                    if (!this.modal.node.config) {
-                        this.modal.node.config = {};
-                    }
-                    
-                    // Garantir que buttons existe para tipo button
-                    if (this.modal.node.type === 'button' && !this.modal.node.buttons) {
-                        this.modal.node.buttons = [];
-                    }
-                    
-                    this.modal.open = true;
-                    console.log('✅ Modal aberto para edição:', this.modal.node);
-                } else {
-                    console.warn('⚠️ Node não encontrado:', id);
-                }
-            } catch (e) {
-                console.error('❌ Erro ao abrir modal:', e);
-            }
-        },
-
-        closeModal() {
-            this.modal.open = false;
-            this.modal.node = null;
-        },
-
-        applyEdit() {
-            try {
-                if (!this.modal.node || !this.modal.node.id) {
-                    alert('❌ Erro: Node inválido');
-                    return;
-                }
-                
-                const n = this.nodes.find(x => x.id === this.modal.node.id);
-                if (n) {
-                    // Atualizar node com dados do modal
-                    Object.assign(n, {
-                        label: this.modal.node.label,
-                        config: this.modal.node.config || {},
-                        buttons: this.modal.node.buttons || [],
-                        delay_seconds: this.modal.node.delay_seconds || 0
-                    });
-                    
-                    this.closeModal();
-                    
-                    // Re-renderizar node após um pequeno delay
-                    setTimeout(() => {
-                        this.renderNode(n);
-                    }, 50);
-                    
-                    console.log('✅ Node atualizado:', n);
-                } else {
-                    alert('❌ Node não encontrado');
-                }
-            } catch (e) {
-                console.error('❌ Erro ao aplicar edição:', e);
-                alert('❌ Erro ao salvar edição. Verifique o console.');
-            }
-        },
-
-        addButton() {
-            if (this.modal.node && !this.modal.node.buttons) {
-                this.modal.node.buttons = [];
-            }
-            if (this.modal.node) {
-                this.modal.node.buttons.push({ label: "Novo botão", text: "Novo botão" });
-            }
-        },
-
-        removeButton(index) {
-            if (this.modal.node && this.modal.node.buttons) {
-                this.modal.node.buttons.splice(index, 1);
-            }
-        },
-
-        setAsStartStep() {
-            if (this.modal.node) {
-                this.startStepId = this.modal.node.id;
-                this.closeModal();
-                // Re-renderizar todos os nodes para atualizar visual
-                setTimeout(() => {
-                    this.nodes.forEach(n => this.renderNode(n));
-                }, 50);
-            }
-        },
-
-        deleteNode() {
-            if (!this.modal.node || !confirm(`Tem certeza que deseja deletar o node "${this.modal.node.label}"?`)) {
-                return;
-            }
-            
-            try {
-                const nodeId = this.modal.node.id;
-                
-                // Remover conexões do jsPlumb
-                if (this.js) {
-                    this.js.deleteEveryConnection(nodeId);
-                    this.js.deleteEndpoints(nodeId);
-                }
-                
-                // Remover node do array
-                this.nodes = this.nodes.filter(n => n.id !== nodeId);
-                
-                // Remover do DOM
-                const nodeEl = document.getElementById(nodeId);
-                if (nodeEl) {
-                    nodeEl.remove();
-                }
-                
-                // Se era o step inicial, definir outro
-                if (this.startStepId === nodeId) {
-                    this.startStepId = this.nodes[0]?.id || null;
-                }
-                
-                // Remover conexões que apontam para este node
-                this.nodes.forEach(node => {
-                    if (node.connections) {
-                        if (node.connections.next === nodeId) {
-                            delete node.connections.next;
-                        }
-                        if (node.connections.pending === nodeId) {
-                            delete node.connections.pending;
-                        }
-                        if (node.connections.retry === nodeId) {
-                            delete node.connections.retry;
-                        }
-                    }
-                });
-                
-                this.closeModal();
-                
-                // Re-renderizar todos os nodes
-                setTimeout(() => {
-                    this.nodes.forEach(n => this.renderNode(n));
-                    if (this.js) {
-                        this.js.repaintEverything();
-                    }
-                }, 50);
-                
-                console.log('✅ Node deletado:', nodeId);
-            } catch (e) {
-                console.error('❌ Erro ao deletar node:', e);
-                alert('❌ Erro ao deletar node. Verifique o console.');
-            }
-        },
 
         // ------------------------------
         // SAVE / IMPORT / EXPORT
@@ -5273,14 +5102,31 @@ function FlowBuilderV2() {
 
                 // 🔥 CRÍTICO: Converter nodes para formato EXATO do backend
                 const steps = this.nodes.map((node, index) => {
+                    // Converter connections array para objeto (formato backend)
+                    let connectionsObj = {};
+                    if (node.connections && typeof node.connections === 'object') {
+                        connectionsObj = node.connections;
+                    } else if (Array.isArray(node.connections)) {
+                        // Converter array para objeto
+                        node.connections.forEach(conn => {
+                            if (conn.target) {
+                                if (!connectionsObj.next) {
+                                    connectionsObj.next = conn.target;
+                                } else if (node.type === 'payment' && !connectionsObj.pending) {
+                                    connectionsObj.pending = conn.target;
+                                }
+                            }
+                        });
+                    }
+                    
                     const step = {
                         id: node.id,
                         type: node.type,
                         order: node.order || (index + 1),
                         position: { x: node.x, y: node.y },
-                        title: node.label || node.type.toUpperCase(),
+                        title: node.title || node.type.toUpperCase(),
                         config: node.config || {},
-                        connections: node.connections || {},
+                        connections: connectionsObj,
                         conditions: node.conditions || [],
                         delay_seconds: node.delay_seconds || 0
                     };
@@ -5410,17 +5256,35 @@ function FlowBuilderV2() {
                 
                 console.log('📊 Nodes para exportar:', this.nodes.length);
                 
-                const steps = this.nodes.map((node, index) => ({
-                    id: node.id,
-                    type: node.type,
-                    order: node.order || (index + 1),
-                    position: { x: node.x, y: node.y },
-                    title: node.label,
-                    config: node.config || {},
-                    connections: node.connections || {},
-                    conditions: node.conditions || [],
-                    delay_seconds: node.delay_seconds || 0
-                }));
+                const steps = this.nodes.map((node, index) => {
+                    // Converter connections para formato backend
+                    let connectionsObj = {};
+                    if (node.connections && typeof node.connections === 'object') {
+                        connectionsObj = node.connections;
+                    } else if (Array.isArray(node.connections)) {
+                        node.connections.forEach(conn => {
+                            if (conn.target) {
+                                if (!connectionsObj.next) {
+                                    connectionsObj.next = conn.target;
+                                } else if (node.type === 'payment' && !connectionsObj.pending) {
+                                    connectionsObj.pending = conn.target;
+                                }
+                            }
+                        });
+                    }
+                    
+                    return {
+                        id: node.id,
+                        type: node.type,
+                        order: node.order || (index + 1),
+                        position: { x: node.x, y: node.y },
+                        title: node.title || node.type.toUpperCase(),
+                        config: node.config || {},
+                        connections: connectionsObj,
+                        conditions: node.conditions || [],
+                        delay_seconds: node.delay_seconds || 0
+                    };
+                });
                 
                 const data = {
                     flow_enabled: true,
@@ -5453,9 +5317,9 @@ function FlowBuilderV2() {
             
             try {
                 // Limpar jsPlumb
-                if (this.js) {
-                    this.js.deleteEveryConnection();
-                    this.js.deleteEveryEndpoint();
+                if (this.jsplumb) {
+                    this.jsplumb.deleteEveryConnection();
+                    this.jsplumb.deleteEveryEndpoint();
                 }
                 
                 // Limpar nodes
@@ -5468,6 +5332,7 @@ function FlowBuilderV2() {
                 
                 this.nodes = [];
                 this.startStepId = null;
+                this.status = 'pronto';
                 
                 console.log('✅ Fluxo limpo');
                 alert('✅ Fluxo limpo com sucesso!');
@@ -5496,18 +5361,21 @@ function FlowBuilderV2() {
                         
                         if (data.flow_steps && Array.isArray(data.flow_steps)) {
                             // Limpar nodes existentes
-                            if (this.js) {
-                                this.js.deleteEveryEndpoint();
-                                this.js.deleteEveryConnection();
+                            if (this.jsplumb) {
+                                try {
+                                    this.jsplumb.reset();
+                                } catch(e) {
+                                    console.warn('Erro ao reset jsPlumb:', e);
+                                }
                             }
                             
                             // Converter steps para nodes
                             this.nodes = data.flow_steps.map(step => ({
                                 id: step.id,
                                 type: step.type,
+                                title: step.title || step.type.toUpperCase(),
                                 x: step.position?.x || 300,
                                 y: step.position?.y || 180,
-                                label: step.title || step.type.toUpperCase(),
                                 buttons: step.type === 'button' ? (step.config?.custom_buttons || []) : [],
                                 config: step.config || {},
                                 connections: step.connections || {},
@@ -5519,12 +5387,18 @@ function FlowBuilderV2() {
                             this.startStepId = data.flow_start_step_id || this.nodes[0]?.id || null;
                             
                             // Renderizar nodes após um delay
-                            setTimeout(() => {
-                                this.nodes.forEach(n => this.renderNode(n));
+                            this.$nextTick(() => {
+                                // destroy existing endpoints and re-mount
+                                try { 
+                                    this.jsplumb.reset(); 
+                                } catch(e) {
+                                    console.warn('Erro ao reset jsPlumb:', e);
+                                }
+                                this.nodes.forEach(n => this.mountNode(n));
                                 setTimeout(() => {
                                     this.restoreConnections();
                                 }, 200);
-                            }, 100);
+                            });
                             
                             alert('✅ Fluxo importado com sucesso!');
                         } else {
@@ -5543,44 +5417,60 @@ function FlowBuilderV2() {
         },
 
         // ------------------------------
-        // PAN & ZOOM
+        // ZOOM/PAN HELPERS
         // ------------------------------
-        startPan(e) {
-            if (e.target.closest(".flow-node")) return;
-
-            const startX = e.clientX;
-            const startY = e.clientY;
-            const initX = this.panX;
-            const initY = this.panY;
-
-            const move = ev => {
-                this.panX = initX + (ev.clientX - startX);
-                this.panY = initY + (ev.clientY - startY);
-                const canvas = document.getElementById("flow-canvas");
-                if (canvas) {
-                    canvas.style.transform = `translate(${this.panX}px,${this.panY}px) scale(${this.zoomLevel})`;
-                }
-            };
-
-            const stop = () => {
-                window.removeEventListener("mousemove", move);
-                window.removeEventListener("mouseup", stop);
-            };
-
-            window.addEventListener("mousemove", move);
-            window.addEventListener("mouseup", stop);
+        zoomIn() { 
+            this.zoom = Math.min(3, this.zoom * 1.15); 
+            if (this.jsplumb) this.jsplumb.repaintEverything();
+        },
+        
+        zoomOut() { 
+            this.zoom = Math.max(0.3, this.zoom / 1.15); 
+            if (this.jsplumb) this.jsplumb.repaintEverything();
+        },
+        
+        zoomReset() { 
+            this.zoom = 1; 
+            this.pan = {x: 0, y: 0}; 
+            if (this.jsplumb) this.jsplumb.repaintEverything();
+        },
+        
+        zoomToFit() {
+            if (!this.nodes.length) return;
+            // naive bounding box center & scale
+            let minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9;
+            this.nodes.forEach(n => {
+                minX = Math.min(minX, n.x); 
+                minY = Math.min(minY, n.y);
+                maxX = Math.max(maxX, n.x + 260); 
+                maxY = Math.max(maxY, n.y + 120);
+            });
+            const canvas = this.$el.querySelector('.canvas');
+            if (!canvas) return;
+            const width = maxX - minX, height = maxY - minY;
+            const scale = Math.min((canvas.clientWidth - 80) / width, (canvas.clientHeight - 80) / height);
+            this.zoom = Math.max(0.4, Math.min(2.5, scale));
+            this.pan.x = -minX * this.zoom + (canvas.clientWidth - width * this.zoom) / 2;
+            this.pan.y = -minY * this.zoom + (canvas.clientHeight - height * this.zoom) / 2;
+            if (this.jsplumb) this.jsplumb.repaintEverything();
         },
 
-        zoom(e) {
-            this.zoomLevel += e.deltaY > 0 ? -0.05 : 0.05;
-            this.zoomLevel = Math.max(0.3, Math.min(1.5, this.zoomLevel));
-            const canvas = document.getElementById("flow-canvas");
-            if (canvas) {
-                canvas.style.transform = `translate(${this.panX}px,${this.panY}px) scale(${this.zoomLevel})`;
-            }
-            if (this.js) {
-                this.js.repaintEverything();
-            }
+        // mouse for pan (Alt + drag)
+        canvasMouseDown(e) {
+            if (!(e.altKey || e.button === 1)) return;
+            e.preventDefault();
+            const start = {x: e.clientX - this.pan.x, y: e.clientY - this.pan.y};
+            const move = (ev) => { 
+                this.pan.x = ev.clientX - start.x; 
+                this.pan.y = ev.clientY - start.y; 
+                if (this.jsplumb) this.jsplumb.repaintEverything();
+            };
+            const up = () => { 
+                window.removeEventListener('mousemove', move); 
+                window.removeEventListener('mouseup', up); 
+            };
+            window.addEventListener('mousemove', move); 
+            window.addEventListener('mouseup', up);
         }
     };
 }
@@ -5590,9 +5480,12 @@ window.__editNode = function(id) {
     try {
         const root = document.querySelector("#flow-builder");
         if (root && root.__x && root.__x.$data) {
-            root.__x.$data.openEdit(id);
+            const node = root.__x.$data.nodes.find(n => n.id === id);
+            if (node) {
+                root.__x.$data.openEdit(node);
+            }
         } else {
-            console.warn('⚠️ FlowBuilderV2 não encontrado ou não inicializado');
+            console.warn('⚠️ FlowBuilderFinal não encontrado ou não inicializado');
         }
     } catch (e) {
         console.error('❌ Erro ao abrir edição:', e);
