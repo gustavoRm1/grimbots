@@ -1537,6 +1537,25 @@ body {
         }
     };
 </script>
+
+<!-- ✅ CRÍTICO: Definir botConfigApp ANTES do Alpine inicializar -->
+<script>
+// ✅ Garantir que botConfigApp está disponível globalmente ANTES do Alpine inicializar
+if (typeof botConfigApp === 'undefined') {
+    // Função será definida no extra_scripts, mas precisamos garantir que está disponível
+    // Usar uma função temporária que será substituída
+    window.botConfigApp = function() {
+        console.warn('⚠️ botConfigApp ainda não foi completamente carregado. Aguardando...');
+        return {
+            bot_id: {{ bot.id }},
+            loading: true,
+            activeTab: 'welcome',
+            config: {},
+            init: function() { console.warn('⚠️ botConfigApp ainda não foi completamente carregado'); }
+        };
+    };
+}
+</script>
 {% endblock %}
 
 {% block content %}
@@ -2545,19 +2564,9 @@ body {
 {% endblock %}
 
 {% block extra_scripts %}
-<!-- Flow Editor JS (jsPlumb) -->
-<!-- jsPlumb 2.15.6 -->
-<script src="https://cdn.jsdelivr.net/npm/jsplumb@2.15.6/dist/js/jsplumb.min.js"></script>
-<!-- Flow Editor (jsPlumb) -->
-<script src="{{ url_for('static', filename='js/flow_editor.js') }}?v=4.0.0"></script>
+<!-- ✅ CRÍTICO: Definir botConfigApp ANTES de qualquer outro script -->
 <script>
-// Debug: Verificar se FlowEditor foi carregado
-setTimeout(function() {
-    console.log('🔍 Verificando jsPlumb:', typeof jsPlumb);
-    console.log('🔍 Verificando FlowEditor:', typeof window.FlowEditor);
-}, 1000);
-</script>
-<script>
+// ✅ Garantir que botConfigApp está disponível ANTES do Alpine inicializar
 function botConfigApp() {
     return {
         bot_id: {{ bot.id }},
@@ -3647,5 +3656,22 @@ function botConfigApp() {
         }
     };
 }
+
+// ✅ Garantir que botConfigApp está disponível globalmente ANTES do Alpine inicializar
+window.botConfigApp = botConfigApp;
+console.log('✅ botConfigApp definido e disponível globalmente');
+</script>
+
+<!-- Flow Editor JS (jsPlumb) -->
+<!-- jsPlumb 2.15.6 -->
+<script src="https://cdn.jsdelivr.net/npm/jsplumb@2.15.6/dist/js/jsplumb.min.js"></script>
+<!-- Flow Editor (jsPlumb) -->
+<script src="{{ url_for('static', filename='js/flow_editor.js') }}?v=4.0.0"></script>
+<script>
+// Debug: Verificar se FlowEditor foi carregado
+setTimeout(function() {
+    console.log('🔍 Verificando jsPlumb:', typeof jsPlumb);
+    console.log('🔍 Verificando FlowEditor:', typeof window.FlowEditor);
+}, 1000);
 </script>
 {% endblock %}
