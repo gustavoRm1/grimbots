@@ -3283,25 +3283,31 @@ console.log('✅ botConfigApp temporário definido (será substituído pela vers
                 <div class="flow-sidebar">
                     <h2>Componentes</h2>
 
-                    <button class="flow-btn" @click="addNode('message')">💬 Mensagem</button>
-                    <button class="flow-btn" @click="addNode('button')">🔘 Botões</button>
-                    <button class="flow-btn" @click="addNode('condition')">🔀 Condição</button>
-                    <button class="flow-btn" @click="addNode('payment')">💳 Pagamento</button>
-                    <button class="flow-btn" @click="addNode('delay')">⏱ Delay</button>
-                    <button class="flow-btn" @click="addNode('end')">🏁 Final</button>
+                    <button class="flow-btn" @click.stop="addNode('message')" type="button">💬 Mensagem</button>
+                    <button class="flow-btn" @click.stop="addNode('button')" type="button">🔘 Botões</button>
+                    <button class="flow-btn" @click.stop="addNode('condition')" type="button">🔀 Condição</button>
+                    <button class="flow-btn" @click.stop="addNode('payment')" type="button">💳 Pagamento</button>
+                    <button class="flow-btn" @click.stop="addNode('delay')" type="button">⏱ Delay</button>
+                    <button class="flow-btn" @click.stop="addNode('end')" type="button">🏁 Final</button>
 
                     <hr style="border-color:#333;margin:18px 0">
 
-                    <button class="flow-btn" @click="saveFlow()">💾 Salvar</button>
-                    <button class="flow-btn" @click="exportFlow()">⬆ Exportar</button>
-                    <button class="flow-btn" @click="$refs.importer.click()">⬇ Importar</button>
-                    <input type="file" x-ref="importer" class="hidden" @change="importFlow($event)">
+                    <button class="flow-btn" @click.stop="saveFlow()" type="button">💾 Salvar</button>
+                    <button class="flow-btn" @click.stop="exportFlow()" type="button">⬆ Exportar</button>
+                    <button class="flow-btn" @click.stop="$refs.importer.click()" type="button">⬇ Importar</button>
+                    <input type="file" x-ref="importer" class="hidden" @change="importFlow($event)" accept=".json">
                 </div>
 
                 <!-- Canvas -->
                 <div id="flow-canvas"
                      @wheel.prevent="zoom($event)"
-                     @mousedown="startPan($event)">
+                     @mousedown="startPan($event)"
+                     style="position: relative; width: 100%; height: 100%; overflow: hidden; background: #0d0d0f; min-height: 500px;">
+                    <!-- Mensagem inicial se não houver nodes -->
+                    <div x-show="nodes.length === 0" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #666; text-align: center; z-index: 1;">
+                        <p style="font-size: 18px; margin-bottom: 10px; color: #999;">🎨 Flow Builder V∞</p>
+                        <p style="font-size: 14px; color: #666;">Clique nos botões da sidebar para adicionar componentes ao fluxo</p>
+                    </div>
                 </div>
 
                 <!-- Modal -->
@@ -4718,8 +4724,11 @@ function FlowBuilderV2() {
         // INIT
         // ------------------------------
         init() {
+            console.log('🚀 FlowBuilderV2.init() chamado');
+            
             // Carregar nodes do config se existirem
             if (window.botConfigApp && window.botConfigApp.config && window.botConfigApp.config.flow_steps) {
+                console.log('📦 Carregando steps existentes do config...');
                 try {
                     const flowSteps = typeof window.botConfigApp.config.flow_steps === 'string' 
                         ? JSON.parse(window.botConfigApp.config.flow_steps)
@@ -4751,7 +4760,9 @@ function FlowBuilderV2() {
 
             // Inicializar jsPlumb
             if (typeof jsPlumb !== 'undefined') {
+                console.log('🔧 Inicializando jsPlumb...');
                 jsPlumb.ready(() => {
+                    console.log('✅ jsPlumb pronto');
                     this.js = jsPlumb.getInstance({
                         Container: "flow-canvas",
                         Connector: ["Bezier", { curviness: 55 }],
@@ -4759,6 +4770,7 @@ function FlowBuilderV2() {
                         PaintStyle: { stroke: "#10b981", strokeWidth: 2 },
                         HoverPaintStyle: { stroke: "#3b82f6", strokeWidth: 3 }
                     });
+                    console.log('✅ Instância jsPlumb criada');
 
                     // Event listeners para conexões
                     this.js.bind('connection', (info) => {
@@ -4787,16 +4799,53 @@ function FlowBuilderV2() {
         // ------------------------------
         addNode(type) {
             try {
+                console.log('🔘 Botão clicado: addNode', type);
+                
+                // Validar tipo
+                const validTypes = ['message', 'button', 'condition', 'payment', 'delay', 'end', 'access'];
+                if (!validTypes.includes(type)) {
+                    console.error('❌ Tipo inválido:', type);
+                    alert('Tipo de node inválido!');
+                    return;
+                }
+                
                 const id = "node-" + Date.now() + "-" + Math.random().toString(36).substr(2, 9);
+
+                // Configuração inicial baseada no tipo
+                let initialConfig = {};
+                let initialLabel = type.charAt(0).toUpperCase() + type.slice(1);
+                
+                if (type === "payment") {
+                    initialConfig = { price: 0, product_name: "", amount: 0 };
+                    initialLabel = "Pagamento PIX";
+                } else if (type === "message") {
+                    initialConfig = { message: "" };
+                    initialLabel = "Mensagem";
+                } else if (type === "button") {
+                    initialConfig = { custom_buttons: [] };
+                    initialLabel = "Botões";
+                } else if (type === "condition") {
+                    initialConfig = { conditions: [] };
+                    initialLabel = "Condição";
+                } else if (type === "delay") {
+                    initialConfig = {};
+                    initialLabel = "Delay";
+                } else if (type === "end") {
+                    initialConfig = {};
+                    initialLabel = "Fim";
+                } else if (type === "access") {
+                    initialConfig = { link: "", message: "Acesso liberado!" };
+                    initialLabel = "Link de Acesso";
+                }
 
                 const node = {
                     id,
                     type,
                     x: 300 + (this.nodes.length * 50),
                     y: 180 + (this.nodes.length * 50),
-                    label: type.toUpperCase(),
+                    label: initialLabel,
                     buttons: type === "button" ? [{ label: "Opção 1", text: "Opção 1", target_step: "" }] : [],
-                    config: type === "payment" ? { price: 0, product_name: "" } : {},
+                    config: initialConfig,
                     connections: {},
                     conditions: [],
                     delay_seconds: 0,
@@ -4808,17 +4857,19 @@ function FlowBuilderV2() {
                 // Se é o primeiro node, definir como step inicial
                 if (this.nodes.length === 1) {
                     this.startStepId = node.id;
+                    console.log('⭐ Primeiro node definido como step inicial:', node.id);
                 }
                 
                 // Renderizar node após um pequeno delay para garantir que DOM está pronto
                 setTimeout(() => {
                     this.renderNode(node);
-                }, 50);
+                    console.log('✅ Node renderizado:', node.id);
+                }, 100);
                 
-                console.log('✅ Node adicionado:', node);
+                console.log('✅ Node adicionado com sucesso:', { id: node.id, type: node.type, total: this.nodes.length });
             } catch (e) {
                 console.error('❌ Erro ao adicionar node:', e);
-                alert('Erro ao adicionar node. Verifique o console.');
+                alert('Erro ao adicionar node: ' + e.message);
             }
         },
 
@@ -5211,10 +5262,14 @@ function FlowBuilderV2() {
         // ------------------------------
         saveFlow() {
             try {
+                console.log('💾 Botão Salvar clicado');
+                
                 if (this.nodes.length === 0) {
                     alert('⚠️ Adicione pelo menos um node antes de salvar!');
                     return;
                 }
+                
+                console.log('📊 Nodes para salvar:', this.nodes.length);
 
                 // 🔥 CRÍTICO: Converter nodes para formato EXATO do backend
                 const steps = this.nodes.map((node, index) => {
@@ -5346,10 +5401,14 @@ function FlowBuilderV2() {
 
         exportFlow() {
             try {
+                console.log('⬆ Botão Exportar clicado');
+                
                 if (this.nodes.length === 0) {
                     alert('⚠️ Não há nodes para exportar!');
                     return;
                 }
+                
+                console.log('📊 Nodes para exportar:', this.nodes.length);
                 
                 const steps = this.nodes.map((node, index) => ({
                     id: node.id,
@@ -5420,8 +5479,15 @@ function FlowBuilderV2() {
 
         importFlow(e) {
             try {
+                console.log('⬇ Botão Importar - arquivo selecionado');
+                
                 const file = e.target.files[0];
-                if (!file) return;
+                if (!file) {
+                    console.warn('⚠️ Nenhum arquivo selecionado');
+                    return;
+                }
+                
+                console.log('📁 Arquivo selecionado:', file.name, file.size, 'bytes');
                 
                 const reader = new FileReader();
                 reader.onload = ev => {
