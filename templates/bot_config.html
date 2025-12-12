@@ -1592,50 +1592,45 @@ window.botConfigApp = function() {
         changeBotToken() {},
         async saveConfig() {
             console.log('🔍 saveConfig chamado (versão temporária)');
-            console.log('🔍 Verificando versão completa...', {
-                botConfigAppComplete: window.botConfigAppComplete,
-                hasBotConfigApp: typeof window.botConfigApp === 'function'
-            });
             
-            // Se a versão completa estiver disponível, tentar usar
-            if (window.botConfigAppComplete) {
-                console.log('✅ Versão completa disponível, mas usando versão temporária. Implementando salvamento direto...');
+            // Implementar salvamento direto (sempre funciona, não depende da versão completa)
+            this.loading = true;
+            try {
+                console.log('💾 Salvando configuração...', {
+                    bot_id: this.bot_id,
+                    has_buttons: !!this.config.main_buttons,
+                    buttons_count: this.config.main_buttons?.length || 0
+                });
                 
-                // Implementar salvamento direto mesmo na versão temporária
-                this.loading = true;
-                try {
-                    console.log('💾 Salvando configuração (versão temporária)...', {
-                        bot_id: this.bot_id,
-                        has_buttons: !!this.config.main_buttons
-                    });
-                    
-                    const response = await fetch(`/api/bots/${this.bot_id}/config`, {
-                        method: 'PUT',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify(this.config)
-                    });
-                    
-                    console.log('📡 Resposta recebida:', response.status);
-                    
-                    if (!response.ok) {
-                        const errorData = await response.json();
-                        throw new Error(errorData.error || `HTTP ${response.status}`);
+                const response = await fetch(`/api/bots/${this.bot_id}/config`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(this.config)
+                });
+                
+                console.log('📡 Resposta recebida:', response.status, response.statusText);
+                
+                if (!response.ok) {
+                    let errorData;
+                    try {
+                        errorData = await response.json();
+                    } catch (e) {
+                        errorData = { error: `HTTP ${response.status}: ${response.statusText}` };
                     }
-                    
-                    const data = await response.json();
-                    console.log('✅ Configuração salva com sucesso!', data);
-                    alert('✅ Configuração salva com sucesso!');
-                } catch (error) {
-                    console.error('❌ Erro ao salvar:', error);
-                    alert('❌ Erro ao salvar: ' + error.message);
-                } finally {
-                    this.loading = false;
+                    throw new Error(errorData.error || `HTTP ${response.status}`);
                 }
-            } else {
-                console.warn('⚠️ Versão completa não disponível ainda');
-                alert('Aguarde o carregamento completo da página e tente novamente.');
+                
+                const data = await response.json();
+                console.log('✅ Dados salvos:', data);
+                console.log('✅ Configuração salva com sucesso!');
+                alert('✅ Configuração salva com sucesso!');
+            } catch (error) {
+                console.error('❌ Erro ao salvar configuração:', error);
+                alert('❌ Erro ao salvar: ' + (error.message || 'Erro desconhecido'));
+            } finally {
+                this.loading = false;
             }
         },
         addButton() {},
@@ -2659,13 +2654,13 @@ console.log('✅ botConfigApp temporário definido (será substituído pela vers
 
                 <div class="form-group" x-show="editingStep && editingStep.type !== 'payment'">
                     <label class="form-label">Mensagem</label>
-                    <textarea x-model="editingStep?.config?.message" x-show="editingStep && editingStep.config" class="form-textarea" placeholder="Digite a mensagem do step..."></textarea>
+                    <textarea x-model="editingStep.config.message" x-show="editingStep && editingStep.config" class="form-textarea" placeholder="Digite a mensagem do step..."></textarea>
                 </div>
 
                 <div class="form-group" x-show="editingStep && editingStep.type !== 'payment'">
                     <label class="form-label">URL da Mídia</label>
                     <div class="relative">
-                        <input type="text" x-model="editingStep?.config?.media_url" @input="detectStepMediaType()" x-show="editingStep && editingStep.config" class="form-input pr-20" placeholder="https://..." />
+                        <input type="text" x-model="editingStep.config.media_url" @input="detectStepMediaType()" x-show="editingStep && editingStep.config" class="form-input pr-20" placeholder="https://..." />
                         <div x-show="editingStep && editingStep.config && editingStep.config.media_url" class="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center gap-2">
                             <span x-show="editingStep && editingStep.config && (detectedStepMediaType || editingStep.config.media_type) === 'video'" class="text-xs font-semibold px-2 py-1 rounded" style="background: rgba(59, 130, 246, 0.2); color: #93C5FD; border: 1px solid rgba(59, 130, 246, 0.4);">
                                 <i class="fas fa-video mr-1"></i>Vídeo
@@ -2675,7 +2670,7 @@ console.log('✅ botConfigApp temporário definido (será substituído pela vers
                             </span>
                         </div>
                     </div>
-                    <input type="hidden" x-model="editingStep?.config?.media_type" x-show="editingStep && editingStep.config" />
+                    <input type="hidden" x-model="editingStep.config.media_type" x-show="editingStep && editingStep.config" />
                     <p class="text-xs text-gray-500 mt-1">
                         <i class="fas fa-magic mr-1"></i> O tipo (foto/vídeo) é detectado automaticamente pela URL ou extensão do arquivo
                     </p>
@@ -2683,7 +2678,7 @@ console.log('✅ botConfigApp temporário definido (será substituído pela vers
 
                 <div class="form-group" x-show="editingStep && editingStep.type !== 'payment'">
                     <label class="form-label">URL do Áudio</label>
-                    <input type="text" x-model="editingStep?.config?.audio_url" x-show="editingStep && editingStep.config" class="form-input" placeholder="https://..." />
+                    <input type="text" x-model="editingStep.config.audio_url" x-show="editingStep && editingStep.config" class="form-input" placeholder="https://..." />
                     <p class="text-xs text-gray-500 mt-1">
                         <i class="fas fa-info-circle"></i> Áudio complementar (opcional) - será enviado após a mídia principal
                     </p>
@@ -2691,32 +2686,32 @@ console.log('✅ botConfigApp temporário definido (será substituído pela vers
 
                 <div class="form-group" x-show="editingStep && editingStep.type === 'payment'">
                     <label class="form-label">Preço (R$)</label>
-                    <input type="number" x-model.number="editingStep?.config?.price" x-show="editingStep && editingStep.config" class="form-input" step="0.01" min="0" />
+                    <input type="number" x-model.number="editingStep.config.price" x-show="editingStep && editingStep.config" class="form-input" step="0.01" min="0" />
                 </div>
 
                 <div class="form-group" x-show="editingStep && editingStep.type === 'payment'">
                     <label class="form-label">Nome do Produto</label>
-                    <input type="text" x-model="editingStep?.config?.product_name" x-show="editingStep && editingStep.config" class="form-input" />
+                    <input type="text" x-model="editingStep.config.product_name" x-show="editingStep && editingStep.config" class="form-input" />
                 </div>
 
                 <div class="form-group" x-show="editingStep && editingStep.type === 'payment'">
                     <label class="form-label">Nome do Botão</label>
-                    <input type="text" x-model="editingStep?.config?.button_text" x-show="editingStep && editingStep.config" class="form-input" placeholder="Ex: Comprar Agora" />
+                    <input type="text" x-model="editingStep.config.button_text" x-show="editingStep && editingStep.config" class="form-input" placeholder="Ex: Comprar Agora" />
                 </div>
 
                 <div class="form-group" x-show="editingStep && editingStep.type === 'access'">
                     <label class="form-label">Link de Acesso</label>
-                    <input type="text" x-model="editingStep?.config?.access_link" x-show="editingStep && editingStep.config" class="form-input" placeholder="https://..." />
+                    <input type="text" x-model="editingStep.config.access_link" x-show="editingStep && editingStep.config" class="form-input" placeholder="https://..." />
                 </div>
 
                 <div class="form-group" x-show="editingStep && editingStep.type !== 'payment'">
                     <label class="form-label">Delay (segundos)</label>
-                    <input type="number" x-model.number="editingStep?.delay_seconds" x-show="editingStep" class="form-input" min="0" />
+                    <input type="number" x-model.number="editingStep.delay_seconds" x-show="editingStep" class="form-input" min="0" />
                 </div>
 
                 <div class="form-group" x-show="editingStep && editingStep.type !== 'payment'">
                     <label class="form-label">Título do Step (Opcional)</label>
-                    <input type="text" x-model="editingStep?.title" x-show="editingStep" class="form-input" placeholder="Deixe vazio para usar tipo padrão" />
+                    <input type="text" x-model="editingStep.title" x-show="editingStep" class="form-input" placeholder="Deixe vazio para usar tipo padrão" />
                 </div>
 
 
