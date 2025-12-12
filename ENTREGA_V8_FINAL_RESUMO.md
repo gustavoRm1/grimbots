@@ -159,5 +159,21 @@
 
 ---
 
+---
+
+## 🔧 CORREÇÃO DE BUG: Import Circular
+
+**Problema:** Import circular entre `bot_manager.py` e `flow_engine_router_v8.py`
+
+**Solução Aplicada:**
+- ✅ Removido import de `checkActiveFlow` no topo do arquivo
+- ✅ Implementação local de `checkActiveFlow` adicionada em `_check_flow_active_local()`
+- ✅ Método `check_flow_active_atomic()` agora usa apenas implementação local
+- ✅ Zero dependências circulares
+
+**Status:** ✅ Resolvido
+
+---
+
 **FIM DO RESUMO**
 

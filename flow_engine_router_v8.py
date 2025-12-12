@@ -22,7 +22,6 @@ import json
 import time
 from typing import Dict, Any, Optional
 from redis_manager import get_redis_connection
-from bot_manager import checkActiveFlow
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +113,7 @@ class MessageRouterV8:
         """
         🔥 CRÍTICO: Verificação atômica se flow está ativo
         
-        Usa função checkActiveFlow existente (já implementada e testada).
+        Implementação local idêntica a checkActiveFlow (evita circular import).
         
         Args:
             bot_id: ID do bot
@@ -124,9 +123,75 @@ class MessageRouterV8:
             True se flow está ativo, False caso contrário
         """
         try:
-            return checkActiveFlow(config)
+            return self._check_flow_active_local(config)
         except Exception as e:
             logger.error(f"❌ Erro ao verificar flow ativo: {e}")
+            return False
+    
+    def _check_flow_active_local(self, config: Dict[str, Any]) -> bool:
+        """
+        Implementação local de checkActiveFlow (fallback)
+        
+        Args:
+            config: Dicionário de configuração do bot
+            
+        Returns:
+            True se flow está ativo E tem steps válidos
+            False caso contrário
+        """
+        try:
+            import json
+            
+            # Parsear flow_enabled (pode vir como string "True"/"False" ou boolean)
+            flow_enabled_raw = config.get('flow_enabled', False)
+            
+            if isinstance(flow_enabled_raw, str):
+                flow_enabled = flow_enabled_raw.lower().strip() in ('true', '1', 'yes', 'on', 'enabled')
+            elif isinstance(flow_enabled_raw, bool):
+                flow_enabled = flow_enabled_raw
+            elif isinstance(flow_enabled_raw, (int, float)):
+                flow_enabled = bool(flow_enabled_raw)
+            else:
+                flow_enabled = False  # Default seguro: desabilitado
+            
+            # Se flow não está habilitado, retornar False imediatamente
+            if not flow_enabled:
+                return False
+            
+            # Parsear flow_steps (pode vir como string JSON ou list)
+            flow_steps_raw = config.get('flow_steps', [])
+            flow_steps = []
+            
+            if flow_steps_raw:
+                if isinstance(flow_steps_raw, str):
+                    try:
+                        # Tentar parsear como JSON
+                        parsed = json.loads(flow_steps_raw)
+                        if isinstance(parsed, list):
+                            flow_steps = parsed
+                        else:
+                            logger.warning(f"⚠️ flow_steps JSON não é lista: {type(parsed)}")
+                            flow_steps = []
+                    except (json.JSONDecodeError, TypeError) as e:
+                        logger.warning(f"⚠️ Erro ao parsear flow_steps JSON: {e}")
+                        flow_steps = []
+                elif isinstance(flow_steps_raw, list):
+                    flow_steps = flow_steps_raw
+                else:
+                    logger.warning(f"⚠️ flow_steps tem tipo inesperado: {type(flow_steps_raw)}")
+                    flow_steps = []
+            
+            # Retornar True apenas se flow está ativo E tem steps válidos
+            is_active = flow_enabled is True and flow_steps and isinstance(flow_steps, list) and len(flow_steps) > 0
+            
+            if is_active:
+                logger.info(f"✅ Flow Editor ATIVO: {len(flow_steps)} steps configurados")
+            else:
+                logger.info(f"📝 Flow Editor INATIVO: flow_enabled={flow_enabled}, steps_count={len(flow_steps)}")
+            
+            return is_active
+        except Exception as e:
+            logger.error(f"❌ Erro na verificação local de flow ativo: {e}")
             return False
     
     def process_message(
