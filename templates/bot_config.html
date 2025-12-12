@@ -9,7 +9,462 @@
    ============================================ */
 
 /* ============================================
-   CSS DO FLOW EDITOR V3.0
+   🔥 FLOW BUILDER - CSS PROFISSIONAL
+   Manychat/Typebot-like
+   ============================================ */
+
+/* === BASE === */
+.btn-node {
+    @apply w-full text-left bg-gray-800 hover:bg-gray-700 p-3 rounded-lg mb-2 text-gray-100 transition-colors;
+}
+
+.btn-secondary {
+    @apply bg-gray-700 hover:bg-gray-600 text-sm px-3 py-2 rounded-md text-gray-100 transition-colors;
+}
+
+.btn-primary {
+    @apply bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-md text-white transition-colors;
+}
+
+.btn-danger {
+    @apply bg-red-600 hover:bg-red-500 px-2 rounded-md text-white transition-colors;
+}
+
+.input {
+    @apply bg-gray-800 border border-gray-700 px-3 py-2 rounded-md w-full text-gray-100;
+}
+
+.input:focus {
+    @apply outline-none border-blue-500;
+}
+
+/* === FLOW CANVAS === */
+.flow-node {
+    position: absolute;
+    width: 240px;
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.44);
+    z-index: 10;
+    cursor: move;
+}
+
+.node-header {
+    background: #2a2a2a;
+    padding: 10px;
+    border-bottom: 1px solid #333;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-radius: 10px 10px 0 0;
+}
+
+.node-header span {
+    font-size: 13px;
+    font-weight: 600;
+    color: #fff;
+    text-transform: uppercase;
+}
+
+.node-edit-btn {
+    background: none;
+    border: none;
+    color: #8b8f9a;
+    cursor: pointer;
+    opacity: .7;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.node-edit-btn:hover {
+    background: #333;
+    opacity: 1;
+}
+
+.node-content {
+    padding: 12px;
+    color: #fff;
+}
+
+.cond-branch {
+    position: relative;
+    padding: 8px;
+    background: #2a2a2a;
+    border-radius: 6px;
+    margin-bottom: 4px;
+    padding-right: 30px;
+}
+
+.button-output {
+    position: relative;
+    padding: 8px;
+    background: #2a2a2a;
+    border-radius: 6px;
+    margin-bottom: 4px;
+    padding-right: 30px;
+}
+
+/* === ENDPOINTS === */
+.endpoint {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    position: absolute;
+    border: 2px solid #1a1a1a;
+    cursor: crosshair;
+    z-index: 20;
+    transition: transform 0.2s;
+}
+
+.endpoint:hover {
+    transform: scale(1.2);
+}
+
+.input-endpoint {
+    left: -7px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: #3b82f6;
+}
+
+.output-endpoint {
+    right: -7px;
+    width: 14px;
+    height: 14px;
+    background: #10b981;
+    border-radius: 50%;
+    position: absolute;
+}
+
+.output-endpoint.global {
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.button-output .endpoint,
+.cond-branch .endpoint {
+    right: -7px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+/* Modal */
+.modal {
+    @apply fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50;
+}
+
+.modal-content {
+    @apply bg-gray-900 p-6 rounded-lg w-[400px] max-w-[90vw] max-h-[90vh] overflow-y-auto;
+    color: #fff;
+}
+
+/* ============================================
+   CSS DO FLOW EDITOR V3.0 (COMPATIBILIDADE)
+   ============================================ */
+
+.flow-wrapper {
+    display: flex;
+    height: calc(100vh - 300px);
+    min-height: 600px;
+    background: #0f1117;
+    color: #fff;
+    font-family: Inter, sans-serif;
+    position: relative;
+}
+
+/* SIDEBAR */
+.flow-sidebar {
+    width: 240px;
+    background: #161920;
+    border-right: 1px solid #262a33;
+    padding: 20px;
+    overflow-y: auto;
+}
+
+.flow-sidebar .sidebar-title {
+    font-size: 14px;
+    margin-bottom: 8px;
+    opacity: .7;
+    text-transform: uppercase;
+    color: #8b8f9a;
+}
+
+.block-item {
+    padding: 12px;
+    margin-bottom: 8px;
+    background: #1f232d;
+    border: 1px solid #2a2f3b;
+    border-radius: 6px;
+    cursor: grab;
+    transition: .2s;
+    color: #fff;
+    font-size: 14px;
+}
+
+.block-item:hover {
+    background: #292e3b;
+    border-color: #3a3f50;
+}
+
+.block-item:active {
+    cursor: grabbing;
+}
+
+/* TOPBAR */
+.flow-topbar {
+    position: fixed;
+    top: 0;
+    left: 240px;
+    right: 0;
+    height: 60px;
+    background: #161920;
+    border-bottom: 1px solid #262a33;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    z-index: 10;
+}
+
+.flow-topbar .left {
+    display: flex;
+    align-items: center;
+}
+
+.flow-topbar .right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.flow-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: #fff;
+    margin: 0;
+}
+
+/* CANVAS */
+.flow-canvas {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    margin-left: 240px;
+    margin-top: 60px;
+}
+
+.flow-grid {
+    position: absolute;
+    width: 400%;
+    height: 400%;
+    background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><rect width="40" height="40" fill="none" stroke="%23262a33" stroke-width="1" /></svg>');
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* STEPS */
+.flow-step {
+    position: absolute;
+    width: 240px;
+    background: #1c1f27;
+    border: 1px solid #303544;
+    border-radius: 10px;
+    padding: 0;
+    cursor: grab;
+    user-select: none;
+    z-index: 10;
+    transition: box-shadow 0.2s;
+}
+
+.flow-step:hover {
+    box-shadow: 0 4px 12px rgba(76, 146, 255, 0.3);
+}
+
+.flow-step.flow-step-selected {
+    border-color: #4c92ff;
+    box-shadow: 0 0 0 2px rgba(76, 146, 255, 0.3);
+}
+
+.flow-step-header {
+    padding: 12px;
+    border-bottom: 1px solid #2b303d;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #1f232d;
+    border-radius: 10px 10px 0 0;
+}
+
+.flow-step-header span {
+    font-size: 13px;
+    font-weight: 600;
+    color: #fff;
+    text-transform: uppercase;
+}
+
+.delete-btn {
+    background: transparent;
+    border: none;
+    color: #8b8f9a;
+    cursor: pointer;
+    font-size: 16px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: .2s;
+}
+
+.delete-btn:hover {
+    background: #2b303d;
+    color: #ff4444;
+}
+
+.flow-step-body {
+    padding: 12px;
+}
+
+.flow-step-body .preview {
+    font-size: 12px;
+    color: #8b8f9a;
+    margin: 0;
+    line-height: 1.4;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+}
+
+.endpoint {
+    width: 14px;
+    height: 14px;
+    background: #4c92ff;
+    border-radius: 50%;
+    position: absolute;
+    border: 2px solid #1c1f27;
+    cursor: crosshair;
+    z-index: 20;
+}
+
+.endpoint-in {
+    top: 50%;
+    left: -7px;
+    transform: translateY(-50%);
+}
+
+.endpoint-out {
+    top: 50%;
+    right: -7px;
+    transform: translateY(-50%);
+}
+
+.endpoint:hover {
+    background: #6ba3ff;
+    transform: translateY(-50%) scale(1.2);
+}
+
+/* MODAL */
+.flow-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, .6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.flow-modal {
+    width: 420px;
+    max-width: 90vw;
+    max-height: 90vh;
+    overflow-y: auto;
+    background: #161920;
+    padding: 20px;
+    border-radius: 12px;
+    border: 1px solid #2f3441;
+}
+
+.flow-modal .modal-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: #fff;
+    margin: 0 0 20px 0;
+}
+
+.flow-modal label {
+    display: block;
+    font-size: 13px;
+    color: #8b8f9a;
+    margin-bottom: 4px;
+    margin-top: 12px;
+}
+
+.flow-modal .input,
+.flow-modal .textarea {
+    width: 100%;
+    background: #1c1f27;
+    border: 1px solid #2b303d;
+    color: white;
+    padding: 10px;
+    border-radius: 6px;
+    margin-top: 4px;
+    margin-bottom: 12px;
+    font-size: 14px;
+    font-family: inherit;
+}
+
+.flow-modal .input:focus,
+.flow-modal .textarea:focus {
+    outline: none;
+    border-color: #4c92ff;
+}
+
+.flow-modal .textarea {
+    min-height: 100px;
+    resize: vertical;
+}
+
+.modal-buttons {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+    justify-content: flex-end;
+}
+
+.flow-modal .btn {
+    padding: 10px 16px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: .2s;
+}
+
+.flow-modal .btn.primary {
+    background: #4c92ff;
+    color: #fff;
+}
+
+.flow-modal .btn.primary:hover {
+    background: #3a7de8;
+}
+
+.flow-modal .btn.ghost {
+    background: transparent;
+    border: 1px solid #3a3f50;
+    color: #8b8f9a;
+}
+
+.flow-modal .btn.ghost:hover {
+    background: #1f232d;
+    color: #fff;
+}
+
+/* ============================================
+   CSS DO FLOW EDITOR V3.0 (COMPATIBILIDADE)
    ============================================ */
 
 /* Container do editor - confina o grid e controla overflow */
@@ -2686,43 +3141,147 @@ console.log('✅ botConfigApp temporário definido (será substituído pela vers
                 </div>
             </div>
 
-            <!-- Conteúdo do Flow (só aparece quando habilitado) -->
-            <div x-show="config.flow_enabled" class="mt-4">
-                <!-- Controles do Canvas -->
-                <div class="flex items-center gap-2 mb-3 flex-wrap">
-                    <button @click="window.flowEditor?.zoomIn()" class="btn btn-secondary text-sm" title="Zoom In">
-                        <i class="fas fa-search-plus"></i>
-                    </button>
-                    <button @click="window.flowEditor?.zoomOut()" class="btn btn-secondary text-sm" title="Zoom Out">
-                        <i class="fas fa-search-minus"></i>
-                    </button>
-                    <button @click="window.flowEditor?.zoomReset()" class="btn btn-secondary text-sm" title="Reset Zoom">
-                        <i class="fas fa-expand-arrows-alt"></i>
-                    </button>
-                    <button @click="window.flowEditor?.zoomToFit()" class="btn btn-secondary text-sm" title="Ajustar à Tela">
-                        <i class="fas fa-compress"></i>
-                    </button>
-                </div>
-            </div>
+            <!-- 🔥 FLOW BUILDER - Editor Visual Profissional -->
+            <div x-show="config.flow_enabled" 
+                 x-data="FlowBuilder()" 
+                 x-init="init()" 
+                 class="w-full h-full flex overflow-hidden bg-gray-950 text-gray-100"
+                 style="height: calc(100vh - 300px); min-height: 600px;">
+                
+                <!-- ===== SIDEBAR COLOCAR NODES ===== -->
+                <aside class="w-64 bg-gray-900 border-r border-gray-700 p-4 space-y-6 overflow-y-auto">
+                    <h2 class="text-xl font-bold mb-3">Componentes</h2>
 
-            <!-- Canvas do Flow Editor (dentro de x-show="activeTab === 'flow'") -->
-            <div x-show="config.flow_enabled" class="flow-canvas-container" style="width:100%; height:600px; position:relative; border:1px solid #242836; border-radius:8px; overflow:hidden; margin-top:16px;">
-                <!-- Canvas (background + grid) -->
-                <div id="flow-visual-canvas" 
-                     style="position:absolute; left:0; top:0; width:100%; height:100%; background:#0D0F15; background-image: radial-gradient(circle, rgba(255,255,255,0.12) 1.5px, transparent 1.5px); background-size: 20px 20px; transform-origin:0 0;"
-                     x-init="
-                        if (config.flow_enabled && activeTab === 'flow') {
-                            setTimeout(() => {
-                                if (typeof FlowEditor !== 'undefined' && typeof jsPlumb !== 'undefined') {
-                                    initVisualFlowEditor();
-                                } else if (window.flowEditor) {
-                                    window.flowEditor.renderAllSteps();
-                                }
-                            }, 400);
-                        }
-                     ">
-                    <!-- Content container: all flow-step-block elements must be children of this -->
-                    <div class="flow-canvas-content" style="position:absolute; left:0; top:0; width:100%; height:100%; transform-origin:0 0;"></div>
+                    <button @click="addNode('message')" class="btn-node">📩 Mensagem</button>
+                    <button @click="addNode('button')" class="btn-node">🔘 Botão</button>
+                    <button @click="addNode('condition')" class="btn-node">🔀 Condição</button>
+                    <button @click="addNode('payment')" class="btn-node">💳 Pagamento</button>
+                    <button @click="addNode('delay')" class="btn-node">⏱ Delay</button>
+                    <button @click="addNode('end')" class="btn-node">🏁 Final</button>
+
+                    <hr class="border-gray-700">
+
+                    <div>
+                        <h2 class="text-lg font-bold mb-3">Fluxo</h2>
+                        <button class="btn-secondary w-full mb-2" @click="saveFlow()">💾 Salvar fluxo</button>
+                        <button class="btn-secondary w-full mb-2" @click="exportFlow()">⬆ Exportar</button>
+                        <input type="file" class="hidden" id="importFlowInput" @change="importFlow($event)" x-ref="importFlowInput">
+                        <button class="btn-secondary w-full" @click="$refs.importFlowInput.click()">⬇ Importar</button>
+                    </div>
+                </aside>
+
+                <!-- ====== CANVAS DO FLUXO ====== -->
+                <main class="flex-1 relative overflow-hidden select-none">
+                    <!-- Área de zoom/pan -->
+                    <div 
+                        id="flow-canvas"
+                        class="absolute inset-0 bg-gray-950"
+                        style="background-image: url('data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"40\" height=\"40\"><rect width=\"40\" height=\"40\" fill=\"none\" stroke=\"%23333\" stroke-width=\"1\" /></svg>');"
+                        @mousedown="startPan($event)"
+                        @wheel.prevent="zoom($event)"
+                    >
+                        <!-- Nodes -->
+                        <template x-for="node in nodes" :key="node.id">
+                            <div 
+                                class="flow-node"
+                                :id="node.id"
+                                :style="`top:${node.y}px;left:${node.x}px;`"
+                                @mousedown.stop="startDrag(node, $event)"
+                            >
+                                <!-- HEADER -->
+                                <div class="node-header">
+                                    <span x-text="node.label"></span>
+                                    <button class="node-edit-btn" @click.stop="openEdit(node)">⚙</button>
+                                </div>
+
+                                <!-- INPUT ENDPOINT -->
+                                <div class="endpoint input-endpoint" :id="node.id + '-in'"></div>
+
+                                <!-- CONTENT -->
+                                <div class="node-content">
+                                    <template x-if="node.type === 'message'">
+                                        <div class="text-sm opacity-80">Mensagem de texto</div>
+                                    </template>
+
+                                    <template x-if="node.type === 'button'">
+                                        <div class="space-y-2">
+                                            <template x-for="(btn, i) in node.buttons">
+                                                <div class="button-output" :id="node.id + '-btn-' + i">
+                                                    <span x-text="btn.label"></span>
+                                                    <div class="endpoint output-endpoint"></div>
+                                                </div>
+                                            </template>
+                                        </div>
+                                    </template>
+
+                                    <template x-if="node.type === 'condition'">
+                                        <div class="space-y-2">
+                                            <div class="cond-branch">
+                                                Verdadeiro
+                                                <div class="endpoint output-endpoint"></div>
+                                            </div>
+                                            <div class="cond-branch">
+                                                Falso
+                                                <div class="endpoint output-endpoint"></div>
+                                            </div>
+                                        </div>
+                                    </template>
+
+                                    <template x-if="node.type === 'payment'">
+                                        <div class="text-sm">Cobrança / Oferta</div>
+                                        <div class="endpoint output-endpoint"></div>
+                                    </template>
+
+                                    <template x-if="node.type === 'delay'">
+                                        <div class="text-sm">Aguardar</div>
+                                        <div class="endpoint output-endpoint"></div>
+                                    </template>
+
+                                    <template x-if="node.type === 'end'">
+                                        <div class="text-center text-xs opacity-80">FIM</div>
+                                    </template>
+                                </div>
+
+                                <!-- OUTPUT GLOBAL (somente se não houver botões) -->
+                                <template x-if="node.type !== 'button' && !node.outputsExclusive">
+                                    <div class="endpoint output-endpoint global" :id="node.id + '-out'"></div>
+                                </template>
+                            </div>
+                        </template>
+                    </div>
+                </main>
+
+                <!-- ======= MODAL EDITAR STEP ======= -->
+                <div 
+                    class="modal"
+                    x-show="modal.open"
+                    @click.self="modal.open=false"
+                >
+                    <div class="modal-content">
+                        <h2 class="text-xl font-bold mb-4">Editar Step</h2>
+
+                        <label class="block mb-3">
+                            <span class="text-sm">Título do Step</span>
+                            <input class="input" x-model="modal.node.label">
+                        </label>
+
+                        <template x-if="modal.node.type === 'button'">
+                            <div class="space-y-4">
+                                <template x-for="(btn, i) in modal.node.buttons">
+                                    <div class="flex gap-2">
+                                        <input class="input flex-1" x-model="btn.label">
+                                        <button class="btn-danger" @click="removeButton(modal.node, i)">✖</button>
+                                    </div>
+                                </template>
+
+                                <button class="btn-secondary w-full" @click="addButton(modal.node)">➕ Adicionar Botão</button>
+                            </div>
+                        </template>
+
+                        <div class="mt-6 flex justify-end">
+                            <button class="btn-primary" @click="saveEdit()">Salvar</button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -4049,6 +4608,258 @@ if (typeof botConfigApp !== 'undefined' && !window.botConfigAppComplete) {
 window.botConfigApp = botConfigApp;
 window.botConfigAppComplete = true; // Marcar como completo
 console.log('✅ botConfigApp definido e disponível globalmente (versão completa)');
+
+// 🔥 FLOW BUILDER - Alpine.js Master Component
+function FlowBuilder() {
+    return {
+        nodes: [],
+        modal: { open: false, node: null },
+        jsplumb: null,
+        panX: 0,
+        panY: 0,
+        zoomLevel: 1,
+
+        init() {
+            // Carregar nodes do config se existirem
+            if (window.botConfigApp && window.botConfigApp.config && window.botConfigApp.config.flow_steps) {
+                try {
+                    const flowSteps = typeof window.botConfigApp.config.flow_steps === 'string' 
+                        ? JSON.parse(window.botConfigApp.config.flow_steps)
+                        : window.botConfigApp.config.flow_steps;
+                    
+                    if (Array.isArray(flowSteps)) {
+                        // Converter steps para nodes
+                        this.nodes = flowSteps.map(step => ({
+                            id: step.id || 'node-' + crypto.randomUUID(),
+                            type: step.type || 'message',
+                            x: step.position?.x || 200,
+                            y: step.position?.y || 200,
+                            label: step.title || step.type.toUpperCase(),
+                            buttons: step.type === 'button' ? (step.config?.custom_buttons || [{ label: 'Opção 1' }]) : [],
+                            config: step.config || {},
+                            connections: step.connections || {}
+                        }));
+                    }
+                } catch (e) {
+                    console.error('❌ Erro ao carregar steps:', e);
+                }
+            }
+
+            // Inicializar jsPlumb
+            if (typeof jsPlumb !== 'undefined') {
+                jsPlumb.ready(() => {
+                    this.jsplumb = jsPlumb.getInstance({
+                        Connector: ["Bezier", { curviness: 50 }],
+                        Anchors: ["Right", "Left"],
+                        Endpoint: "Dot",
+                        EndpointStyle: { fill: "#10b981", radius: 6 },
+                        PaintStyle: { stroke: "#10b981", strokeWidth: 2 },
+                        HoverPaintStyle: { stroke: "#3b82f6", strokeWidth: 3 },
+                        Container: document.getElementById('flow-canvas')
+                    });
+
+                    // Montar endpoints dos nodes existentes
+                    this.$nextTick(() => {
+                        this.nodes.forEach(node => this.mountEndpoints(node));
+                    });
+                });
+            } else {
+                console.error('❌ jsPlumb não está disponível');
+            }
+        },
+
+        // ==== NODES ====
+        addNode(type) {
+            const id = "node-" + crypto.randomUUID();
+
+            const node = {
+                id,
+                type,
+                x: 200 + Math.random() * 100,
+                y: 200 + Math.random() * 100,
+                label: type.toUpperCase(),
+                buttons: type === "button" ? [{ label: "Opção 1" }] : [],
+                config: {},
+                connections: {}
+            };
+
+            this.nodes.push(node);
+
+            this.$nextTick(() => this.mountEndpoints(node));
+        },
+
+        mountEndpoints(node) {
+            const el = document.getElementById(node.id);
+            if (!el || !this.jsplumb) return;
+
+            // Input
+            this.jsplumb.addEndpoint(node.id, {
+                anchor: "Left",
+                endpoint: "Dot",
+                isTarget: true,
+                maxConnections: -1
+            }, { uuid: node.id + "-in" });
+
+            // Output
+            if (node.type === "button") {
+                node.buttons.forEach((btn, i) => {
+                    const btnEl = document.getElementById(`${node.id}-btn-${i}`);
+                    if (btnEl) {
+                        this.jsplumb.addEndpoint(btnEl, {
+                            anchor: "Right",
+                            endpoint: "Dot",
+                            isSource: true
+                        }, { uuid: `${node.id}-btn-${i}` });
+                    }
+                });
+            } else if (node.type !== 'end') {
+                this.jsplumb.addEndpoint(node.id, {
+                    anchor: "Right",
+                    endpoint: "Dot",
+                    isSource: true
+                }, { uuid: node.id + "-out" });
+            }
+
+            this.jsplumb.draggable(el);
+        },
+
+        // ==== DRAG ====
+        startDrag(node, e) {
+            // jsPlumb já controla drag
+        },
+
+        // ==== MODAL ====
+        openEdit(node) {
+            this.modal.node = JSON.parse(JSON.stringify(node));
+            this.modal.open = true;
+        },
+
+        saveEdit() {
+            const n = this.nodes.find(x => x.id === this.modal.node.id);
+            if (n) {
+                Object.assign(n, this.modal.node);
+                this.modal.open = false;
+
+                // Rebuild endpoints
+                if (this.jsplumb) {
+                    this.jsplumb.deleteEveryEndpoint();
+                    this.$nextTick(() => {
+                        this.nodes.forEach(node => this.mountEndpoints(node));
+                    });
+                }
+            }
+        },
+
+        addButton(node) {
+            if (!node.buttons) node.buttons = [];
+            node.buttons.push({ label: "Novo botão" });
+        },
+
+        removeButton(node, index) {
+            if (node.buttons) {
+                node.buttons.splice(index, 1);
+            }
+        },
+
+        // ==== SAVE / IMPORT / EXPORT ====
+        saveFlow() {
+            // Converter nodes para steps do formato backend
+            const steps = this.nodes.map(node => ({
+                id: node.id,
+                type: node.type,
+                position: { x: node.x, y: node.y },
+                title: node.label,
+                config: node.config || {},
+                connections: node.connections || {},
+                order: this.nodes.indexOf(node) + 1,
+                delay_seconds: 0
+            }));
+
+            // Salvar via botConfigApp
+            if (window.botConfigApp) {
+                window.botConfigApp.config.flow_steps = JSON.stringify(steps);
+                window.botConfigApp.saveConfig();
+            } else {
+                // Fallback: chamada direta ao backend
+                fetch("/api/bots/" + (window.botId || '') + "/config", {
+                    method: "POST",
+                    headers: { 
+                        "Content-Type": "application/json",
+                        "X-CSRFToken": document.querySelector('[name=csrf_token]')?.value || ''
+                    },
+                    body: JSON.stringify({ flow_steps: JSON.stringify(steps) })
+                }).then(r => r.json()).then(data => {
+                    console.log('✅ Fluxo salvo:', data);
+                }).catch(e => {
+                    console.error('❌ Erro ao salvar fluxo:', e);
+                });
+            }
+        },
+
+        exportFlow() {
+            const data = "data:application/json," + encodeURIComponent(JSON.stringify(this.nodes));
+            const a = document.createElement("a");
+            a.href = data;
+            a.download = "flow.json";
+            a.click();
+        },
+
+        importFlow(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = ev => {
+                try {
+                    this.nodes = JSON.parse(ev.target.result);
+                    this.$nextTick(() => {
+                        if (this.jsplumb) {
+                            this.jsplumb.deleteEveryEndpoint();
+                            this.nodes.forEach(n => this.mountEndpoints(n));
+                        }
+                    });
+                } catch (e) {
+                    console.error('❌ Erro ao importar fluxo:', e);
+                }
+            };
+            reader.readAsText(file);
+        },
+
+        // ==== PAN & ZOOM ====
+        startPan(e) {
+            if (e.target.closest('.flow-node')) return; // Não pan se clicou em node
+            
+            const startX = e.clientX, startY = e.clientY;
+            const initialPanX = this.panX, initialPanY = this.panY;
+
+            const move = ev => {
+                this.panX = initialPanX + (ev.clientX - startX);
+                this.panY = initialPanY + (ev.clientY - startY);
+                const canvas = document.getElementById("flow-canvas");
+                if (canvas) {
+                    canvas.style.transform = `translate(${this.panX}px, ${this.panY}px) scale(${this.zoomLevel})`;
+                }
+            };
+
+            const stop = () => {
+                window.removeEventListener("mousemove", move);
+                window.removeEventListener("mouseup", stop);
+            };
+
+            window.addEventListener("mousemove", move);
+            window.addEventListener("mouseup", stop);
+        },
+
+        zoom(e) {
+            this.zoomLevel += e.deltaY > 0 ? -0.05 : 0.05;
+            this.zoomLevel = Math.max(0.2, Math.min(1.5, this.zoomLevel));
+            const canvas = document.getElementById("flow-canvas");
+            if (canvas) {
+                canvas.style.transform = `translate(${this.panX}px, ${this.panY}px) scale(${this.zoomLevel})`;
+            }
+        }
+    };
+}
 </script>
 
 <!-- Flow Editor JS (jsPlumb) -->

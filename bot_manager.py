@@ -1255,8 +1255,8 @@ class BotManager:
                         if len(text) > 6 and text[6] == ' ':  # "/start " tem 7 caracteres
                             start_param = text[7:].strip()  # Tudo após "/start "
                     
-                    # Processar via MessageRouter V8
-                    result = router.process_message(
+                    # ✅ V∞: MessageRouter V8 - ÚNICO PONTO DE ENTRADA (sem fallback)
+                    router.process_message(
                         bot_id=bot_id,
                         token=token,
                         config=config,
@@ -1266,25 +1266,6 @@ class BotManager:
                         message_type=message_type,
                         callback_data=None
                     )
-                    
-                    if not result.get('processed', False):
-                        logger.warning(f"⚠️ Mensagem não processada pelo router: {result.get('reason', 'unknown')}")
-                        # Fallback: processar via método tradicional se router falhar
-                        if message_type == "start":
-                            self._handle_start_command(bot_id, token, config, chat_id, message, start_param)
-                        else:
-                            self._handle_text_message(bot_id, token, config, chat_id, message)
-                    
-                except Exception as router_error:
-                    logger.error(f"❌ Erro no MessageRouter V8: {router_error}", exc_info=True)
-                    # Fallback: processar via método tradicional se router falhar
-                    if text.startswith('/start'):
-                        start_param = None
-                        if len(text) > 6 and text[6] == ' ':
-                            start_param = text[7:].strip()
-                        self._handle_start_command(bot_id, token, config, chat_id, message, start_param)
-                    elif text and text.strip():
-                        self._handle_text_message(bot_id, token, config, chat_id, message)
                 
                 # ✅ SISTEMA DE ASSINATURAS - Processar new_chat_member e left_chat_member
                 if 'new_chat_members' in message:
@@ -3524,6 +3505,15 @@ class BotManager:
                 else:
                     # Sem próximo step - fim do fluxo
                     logger.info(f"✅ Fluxo finalizado - sem próximo step (step {step_id} não tem conexão 'next')")
+                    # ✅ V∞: Limpar estado do Redis quando fluxo termina
+                    try:
+                        redis_conn = get_redis_connection()
+                        if redis_conn:
+                            current_step_key = f"flow_current_step:{bot_id}:{telegram_user_id}"
+                            redis_conn.delete(current_step_key)
+                            logger.info(f"✅ [FLOW V∞] Estado do fluxo limpo do Redis (fluxo finalizado)")
+                    except Exception as e:
+                        logger.warning(f"⚠️ [FLOW V∞] Erro ao limpar estado do Redis: {e}")
         
         except Exception as e:
             logger.error(f"❌ Erro ao executar step {step_id}: {e}", exc_info=True)
@@ -3539,6 +3529,61 @@ class BotManager:
         finally:
             # Remover step atual dos visitados (permite revisitar em branches diferentes)
             visited_steps.discard(step_id)
+            
+            # ✅ V∞: Salvar estado do flow no Redis após cada step (24h TTL)
+            try:
+                redis_conn = get_redis_connection()
+                if redis_conn:
+                    current_step_key = f"flow_current_step:{bot_id}:{telegram_user_id}"
+                    redis_conn.setex(current_step_key, 86400, step_id)  # 24h
+                    logger.debug(f"✅ [FLOW V∞] Estado salvo no Redis: {step_id} (TTL: 24h)")
+            except Exception as e:
+                logger.warning(f"⚠️ [FLOW V∞] Erro ao salvar estado no Redis: {e}")
+    
+    def continue_flow_if_active(self, bot, chat_id, telegram_user_id):
+        """
+        ✅ V∞: Se o usuário estiver no meio do flow, continuar automaticamente.
+        
+        Args:
+            bot: Objeto Bot
+            chat_id: ID do chat
+            telegram_user_id: ID do usuário no Telegram
+            
+        Returns:
+            bool: True se flow foi continuado, False caso contrário
+        """
+        try:
+            redis_conn = get_redis_connection()
+            if not redis_conn:
+                return False
+            
+            key = f"flow_current_step:{bot.id}:{telegram_user_id}"
+            step_id = redis_conn.get(key)
+            
+            if step_id:
+                step_id = step_id.decode() if isinstance(step_id, bytes) else step_id
+                logger.info(f"🔄 [FLOW V∞] Continuando fluxo ativo: step={step_id}")
+                
+                config = bot.config.to_dict() if bot.config else {}
+                
+                # Buscar snapshot do Redis
+                flow_snapshot = self._get_flow_snapshot_from_redis(bot.id, telegram_user_id)
+                
+                # Continuar fluxo
+                self._execute_flow_recursive(
+                    bot.id, bot.token, config,
+                    chat_id, telegram_user_id,
+                    step_id,
+                    recursion_depth=0,
+                    visited_steps=set(),
+                    flow_snapshot=flow_snapshot
+                )
+                return True
+            
+            return False
+        except Exception as e:
+            logger.error(f"❌ [FLOW V∞] Erro ao continuar fluxo: {e}", exc_info=True)
+            return False
     
     def _handle_missing_step(self, bot_id: int, token: str, config: Dict[str, Any],
                              chat_id: int, telegram_user_id: str):
@@ -4043,7 +4088,79 @@ class BotManager:
             callback_id = callback['id']
             url = f"https://api.telegram.org/bot{token}/answerCallbackQuery"
             
-            # ✅ NOVO: Botão contextual do fluxo (formato: flow_step_{step_id}_{action})
+            # ✅ V∞: Callback de Botão Customizado do Flow (formato: flow_{stepId}_{index})
+            if callback_data.startswith('flow_') and not callback_data.startswith('flow_step_'):
+                try:
+                    # Parse: flow_{stepId}_{index}
+                    parts = callback_data.split('_', 2)  # ['flow', '{stepId}', '{index}']
+                    if len(parts) == 3:
+                        step_id = parts[1]
+                        btn_index = int(parts[2])
+                        
+                        # Responder callback
+                        requests.post(url, json={
+                            'callback_query_id': callback_id,
+                            'text': '⏳ Processando...'
+                        }, timeout=3)
+                        
+                        telegram_user_id = str(user_info.get('id', ''))
+                        
+                        # Buscar config e steps
+                        import json
+                        flow_steps_raw = config.get('flow_steps', [])
+                        if isinstance(flow_steps_raw, str):
+                            flow_steps = json.loads(flow_steps_raw)
+                        else:
+                            flow_steps = flow_steps_raw if isinstance(flow_steps_raw, list) else []
+                        
+                        # Encontrar step
+                        step = self._find_step_by_id(flow_steps, step_id)
+                        if not step:
+                            logger.warning(f"⚠️ Step {step_id} não encontrado no fluxo")
+                            return
+                        
+                        custom_buttons = step.get('config', {}).get('custom_buttons', [])
+                        if btn_index >= len(custom_buttons):
+                            logger.warning(f"⚠️ Índice de botão inválido: {btn_index} (total: {len(custom_buttons)})")
+                            return
+                        
+                        target_step = custom_buttons[btn_index].get('target_step')
+                        if not target_step:
+                            logger.warning(f"⚠️ Botão {btn_index} não tem target_step definido")
+                            return
+                        
+                        logger.info(f"✅ [FLOW V∞] Callback customizado: step={step_id}, button={btn_index}, target={target_step}")
+                        
+                        # Limpar step atual do Redis
+                        try:
+                            redis_conn = get_redis_connection()
+                            if redis_conn:
+                                current_step_key = f"flow_current_step:{bot_id}:{telegram_user_id}"
+                                redis_conn.delete(current_step_key)
+                        except Exception as e:
+                            logger.warning(f"⚠️ Erro ao limpar step atual do Redis: {e}")
+                        
+                        # Buscar snapshot do Redis
+                        flow_snapshot = self._get_flow_snapshot_from_redis(bot_id, telegram_user_id)
+                        
+                        # Executar step destino
+                        self._execute_flow_recursive(
+                            bot_id, token, config,
+                            chat_id, telegram_user_id,
+                            target_step,
+                            recursion_depth=0,
+                            visited_steps=set(),
+                            flow_snapshot=flow_snapshot
+                        )
+                        return
+                        
+                except ValueError as e:
+                    logger.error(f"❌ [FLOW V∞] Erro ao parsear callback flow_: {e}")
+                except Exception as e:
+                    logger.error(f"❌ [FLOW V∞] Erro callback flow_: {e}", exc_info=True)
+                return
+            
+            # ✅ NOVO: Botão contextual do fluxo (formato: flow_step_{step_id}_{action}) - COMPATIBILIDADE
             if callback_data.startswith('flow_step_'):
                 # Responder callback
                 requests.post(url, json={
@@ -5863,7 +5980,7 @@ Desculpe, não foi possível processar seu pagamento.
                     logger.info(f"✅ PAGAMENTO CONFIRMADO! Liberando acesso...")
                     
                     # ============================================================================
-                    # ✅ FLUXO VISUAL: Verificar se fluxo está ativo e processar próximo step
+                    # ✅ V∞: FLOW ENGINE - INTEGRAÇÃO COMPLETA COM PAGAMENTO
                     # ============================================================================
                     flow_processed = False
                     if payment.flow_step_id:
@@ -5871,74 +5988,59 @@ Desculpe, não foi possível processar seu pagamento.
                         if bot_flow and bot_flow.config:
                             flow_config = bot_flow.config.to_dict()
                             flow_enabled = flow_config.get('flow_enabled', False)
-                            flow_steps = flow_config.get('flow_steps', [])
+                            
+                            # Parsear flow_steps se necessário
+                            import json
+                            flow_steps_raw = flow_config.get('flow_steps', [])
+                            if isinstance(flow_steps_raw, str):
+                                try:
+                                    flow_steps = json.loads(flow_steps_raw)
+                                except:
+                                    flow_steps = []
+                            else:
+                                flow_steps = flow_steps_raw if isinstance(flow_steps_raw, list) else []
                             
                             if flow_enabled and flow_steps:
                                 # Buscar step atual do fluxo
                                 current_step = self._find_step_by_id(flow_steps, payment.flow_step_id)
                                 
                                 if current_step:
-                                    # ✅ VALIDAÇÃO: Verificar se step ainda existe na config atual
-                                    flow_steps_current = flow_config.get('flow_steps', [])
-                                    
-                                    # Determinar próximo step baseado em payment.status (stateless)
                                     connections = current_step.get('connections', {})
+                                    telegram_user_id = str(user_info.get('id', ''))
                                     
+                                    # ✅ V∞: Determinar próximo step baseado em status
                                     if payment.status == 'paid':
                                         next_step_id = connections.get('next')
-                                        if next_step_id:
-                                            # ✅ VALIDAÇÃO: Verificar se next_step_id existe
-                                            if self._find_step_by_id(flow_steps_current, next_step_id):
-                                                logger.info(f"🎯 Fluxo ativo - executando próximo step: {next_step_id}")
-                                                
-                                                # Executar próximo step ASSÍNCRONO (pode ser pesado)
-                                                try:
-                                                    from tasks_async import task_queue
-                                                    if task_queue:
-                                                        task_queue.enqueue(
-                                                            self._execute_flow_step_async,
-                                                            bot_id=bot_id,
-                                                            token=token,
-                                                            config=flow_config,
-                                                            chat_id=chat_id,
-                                                            telegram_user_id=user_info.get('id'),
-                                                            step_id=next_step_id
-                                                        )
-                                                        flow_processed = True
-                                                        logger.info(f"✅ Próximo step do fluxo enfileirado: {next_step_id}")
-                                                except Exception as e:
-                                                    logger.error(f"❌ Erro ao enfileirar próximo step do fluxo: {e}", exc_info=True)
-                                            else:
-                                                logger.error(f"❌ Step {next_step_id} não existe mais - fluxo não pode continuar")
-                                    elif payment.status == 'pending':
-                                        pending_step_id = connections.get('pending')
-                                        if pending_step_id:
-                                            # ✅ VALIDAÇÃO: Verificar se pending_step_id existe
-                                            if self._find_step_by_id(flow_steps_current, pending_step_id):
-                                                logger.info(f"🎯 Payment pendente - executando step: {pending_step_id}")
-                                                
-                                                try:
-                                                    from tasks_async import task_queue
-                                                    if task_queue:
-                                                        task_queue.enqueue(
-                                                            self._execute_flow_step_async,
-                                                            bot_id=bot_id,
-                                                            token=token,
-                                                            config=flow_config,
-                                                            chat_id=chat_id,
-                                                            telegram_user_id=user_info.get('id'),
-                                                            step_id=pending_step_id
-                                                        )
-                                                        flow_processed = True
-                                                        logger.info(f"✅ Step pendente do fluxo enfileirado: {pending_step_id}")
-                                                except Exception as e:
-                                                    logger.error(f"❌ Erro ao enfileirar step pendente do fluxo: {e}", exc_info=True)
-                                            else:
-                                                logger.error(f"❌ Step {pending_step_id} não existe mais - fluxo não pode continuar")
+                                    else:
+                                        next_step_id = connections.get('pending')
+                                    
+                                    # ✅ V∞: EXECUTAR PRÓXIMO STEP DIRETAMENTE (não assíncrono)
+                                    if next_step_id:
+                                        logger.info(f"🚀 [FLOW V∞] Payment {payment.status} - executando step: {next_step_id}")
+                                        
+                                        # Buscar snapshot do Redis
+                                        flow_snapshot = self._get_flow_snapshot_from_redis(bot_id, telegram_user_id)
+                                        
+                                        try:
+                                            # Executar próximo step diretamente
+                                            self._execute_flow_recursive(
+                                                bot_id, token, flow_config,
+                                                chat_id, telegram_user_id,
+                                                next_step_id,
+                                                recursion_depth=0,
+                                                visited_steps=set(),
+                                                flow_snapshot=flow_snapshot
+                                            )
+                                            flow_processed = True
+                                            logger.info(f"✅ [FLOW V∞] Próximo step executado: {next_step_id}")
+                                            return  # ✅ SAIR - fluxo processado, não executar código tradicional
+                                        except Exception as e:
+                                            logger.error(f"❌ [FLOW V∞] Erro ao executar próximo step: {e}", exc_info=True)
+                                            # Continuar para fallback tradicional
                                 else:
-                                    logger.error(f"❌ Step {payment.flow_step_id} não encontrado mais na config atual")
+                                    logger.error(f"❌ [FLOW V∞] Step {payment.flow_step_id} não encontrado mais na config atual")
                     
-                    # Se fluxo não processou, usar comportamento padrão
+                    # ✅ FALLBACK: Se fluxo não processou, usar comportamento tradicional
                     if not flow_processed:
                         # ============================================================================
                         # ✅ NOVA ARQUITETURA: Purchase NÃO é disparado via botão verify
@@ -6107,7 +6209,7 @@ Desculpe, não foi possível processar seu pagamento.
                     logger.info(f"⏳ Pagamento ainda pendente...")
                     
                     # ============================================================================
-                    # ✅ FLUXO VISUAL: Verificar se fluxo está ativo e processar pending step
+                    # ✅ V∞: FLOW ENGINE - INTEGRAÇÃO COMPLETA COM PAGAMENTO PENDENTE
                     # ============================================================================
                     flow_processed = False
                     if payment.flow_step_id:
@@ -6115,47 +6217,54 @@ Desculpe, não foi possível processar seu pagamento.
                         if bot_flow and bot_flow.config:
                             flow_config = bot_flow.config.to_dict()
                             flow_enabled = flow_config.get('flow_enabled', False)
-                            flow_steps = flow_config.get('flow_steps', [])
+                            
+                            # Parsear flow_steps se necessário
+                            import json
+                            flow_steps_raw = flow_config.get('flow_steps', [])
+                            if isinstance(flow_steps_raw, str):
+                                try:
+                                    flow_steps = json.loads(flow_steps_raw)
+                                except:
+                                    flow_steps = []
+                            else:
+                                flow_steps = flow_steps_raw if isinstance(flow_steps_raw, list) else []
                             
                             if flow_enabled and flow_steps:
                                 # Buscar step atual do fluxo
                                 current_step = self._find_step_by_id(flow_steps, payment.flow_step_id)
                                 
                                 if current_step:
-                                    # Determinar próximo step baseado em payment.status (stateless)
                                     connections = current_step.get('connections', {})
-                                    pending_step_id = connections.get('pending')  # Se não pago
+                                    telegram_user_id = str(user_info.get('id', ''))
                                     
-                                    # ✅ VALIDAÇÃO: Verificar se step ainda existe na config atual
-                                    flow_steps_current = flow_config.get('flow_steps', [])
-                                    
+                                    # ✅ V∞: Se payment pendente, executar pending step
                                     if payment.status == 'pending':
                                         pending_step_id = connections.get('pending')
+                                        
                                         if pending_step_id:
-                                            # ✅ VALIDAÇÃO: Verificar se pending_step_id existe
-                                            if self._find_step_by_id(flow_steps_current, pending_step_id):
-                                                logger.info(f"🎯 Payment pendente - executando step: {pending_step_id}")
-                                                
-                                                try:
-                                                    from tasks_async import task_queue
-                                                    if task_queue:
-                                                        task_queue.enqueue(
-                                                            self._execute_flow_step_async,
-                                                            bot_id=bot_id,
-                                                            token=token,
-                                                            config=flow_config,
-                                                            chat_id=chat_id,
-                                                            telegram_user_id=user_info.get('id'),
-                                                            step_id=pending_step_id
-                                                        )
-                                                        flow_processed = True
-                                                        logger.info(f"✅ Step pendente do fluxo enfileirado: {pending_step_id}")
-                                                except Exception as e:
-                                                    logger.error(f"❌ Erro ao enfileirar step pendente do fluxo: {e}", exc_info=True)
-                                            else:
-                                                logger.error(f"❌ Step {pending_step_id} não existe mais - fluxo não pode continuar")
+                                            logger.info(f"🚀 [FLOW V∞] Payment pendente - executando step: {pending_step_id}")
+                                            
+                                            # Buscar snapshot do Redis
+                                            flow_snapshot = self._get_flow_snapshot_from_redis(bot_id, telegram_user_id)
+                                            
+                                            try:
+                                                # Executar pending step diretamente
+                                                self._execute_flow_recursive(
+                                                    bot_id, token, flow_config,
+                                                    chat_id, telegram_user_id,
+                                                    pending_step_id,
+                                                    recursion_depth=0,
+                                                    visited_steps=set(),
+                                                    flow_snapshot=flow_snapshot
+                                                )
+                                                flow_processed = True
+                                                logger.info(f"✅ [FLOW V∞] Pending step executado: {pending_step_id}")
+                                                return  # ✅ SAIR - fluxo processado, não executar código tradicional
+                                            except Exception as e:
+                                                logger.error(f"❌ [FLOW V∞] Erro ao executar pending step: {e}", exc_info=True)
+                                                # Continuar para fallback tradicional
                     
-                    # Se fluxo não processou, usar comportamento padrão
+                    # ✅ FALLBACK: Se fluxo não processou, usar comportamento tradicional
                     if not flow_processed:
                         bot = payment.bot
                         bot_config = self.active_bots.get(bot_id, {}).get('config', {})
