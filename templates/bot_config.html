@@ -1633,17 +1633,164 @@ window.botConfigApp = function() {
                 this.loading = false;
             }
         },
-        addButton() {},
-        removeButton() {},
-        addOrderBump() {},
-        removeOrderBump() {},
+        addButton() {
+            console.log('🔍 addButton chamado (versão temporária)');
+            if (!this.config.main_buttons) {
+                this.config.main_buttons = [];
+            }
+            this.config.main_buttons.push({
+                text: '',
+                price: null,
+                description: '',
+                order_bumps: [],
+                subscription: {
+                    enabled: false,
+                    duration_type: 'days',
+                    duration_value: null,
+                    vip_chat_id: '',
+                    vip_group_link: '',
+                    validation_status: null
+                }
+            });
+            console.log('✅ Botão adicionado. Total:', this.config.main_buttons.length);
+        },
+        removeButton(index) {
+            console.log('🔍 removeButton chamado (versão temporária)', index);
+            if (this.config.main_buttons && this.config.main_buttons[index]) {
+                this.config.main_buttons.splice(index, 1);
+                console.log('✅ Botão removido. Total:', this.config.main_buttons.length);
+            }
+        },
+        addOrderBump(buttonIndex) {
+            console.log('🔍 addOrderBump chamado (versão temporária)', buttonIndex);
+            if (!this.config.main_buttons || !this.config.main_buttons[buttonIndex]) return;
+            if (!this.config.main_buttons[buttonIndex].order_bumps) {
+                this.config.main_buttons[buttonIndex].order_bumps = [];
+            }
+            this.config.main_buttons[buttonIndex].order_bumps.push({
+                enabled: false,
+                message: '',
+                price: null,
+                description: '',
+                media_type: 'video',
+                media_url: '',
+                audio_enabled: false,
+                audio_url: '',
+                accept_text: 'Sim, eu quero!',
+                decline_text: 'Não, obrigado'
+            });
+            console.log('✅ Order bump adicionado');
+        },
+        removeOrderBump(buttonIndex, bumpIndex) {
+            console.log('🔍 removeOrderBump chamado (versão temporária)', buttonIndex, bumpIndex);
+            if (this.config.main_buttons && 
+                this.config.main_buttons[buttonIndex] && 
+                this.config.main_buttons[buttonIndex].order_bumps &&
+                this.config.main_buttons[buttonIndex].order_bumps[bumpIndex]) {
+                this.config.main_buttons[buttonIndex].order_bumps.splice(bumpIndex, 1);
+                console.log('✅ Order bump removido');
+            }
+        },
         validateProductField() {},
-        addDownsell() {},
-        removeDownsell() {},
-        addUpsell() {},
-        removeUpsell() {},
-        addRedirectButton() {},
-        removeRedirectButton() {},
+        addDownsell() {
+            console.log('🔍 addDownsell chamado (versão temporária)');
+            if (!this.config.downsells) {
+                this.config.downsells = [];
+            }
+            this.config.downsells.push({
+                delay_minutes: 5,
+                message: '',
+                price: null,
+                pricing_mode: 'fixed',
+                discount_percentage: null,
+                media_url: '',
+                media_type: 'video',
+                audio_enabled: false,
+                audio_url: '',
+                button_text: '',
+                order_bump: {
+                    enabled: false,
+                    message: '',
+                    price: null,
+                    description: '',
+                    media_url: '',
+                    media_type: 'video',
+                    audio_enabled: false,
+                    audio_url: '',
+                    accept_text: 'Sim, eu quero!',
+                    decline_text: 'Não, obrigado'
+                },
+                subscription: {
+                    enabled: false,
+                    duration_type: 'days',
+                    duration_value: null,
+                    vip_chat_id: '',
+                    vip_group_link: '',
+                    validation_status: null
+                }
+            });
+            console.log('✅ Downsell adicionado. Total:', this.config.downsells.length);
+        },
+        removeDownsell(index) {
+            console.log('🔍 removeDownsell chamado (versão temporária)', index);
+            if (this.config.downsells && this.config.downsells[index]) {
+                this.config.downsells.splice(index, 1);
+                console.log('✅ Downsell removido. Total:', this.config.downsells.length);
+            }
+        },
+        addUpsell() {
+            console.log('🔍 addUpsell chamado (versão temporária)');
+            if (!this.config.upsells) {
+                this.config.upsells = [];
+            }
+            this.config.upsells.push({
+                trigger_product: '',
+                delay_minutes: 0,
+                message: '',
+                price: null,
+                product_name: '',
+                media_url: '',
+                media_type: 'video',
+                audio_enabled: false,
+                audio_url: '',
+                button_text: '',
+                access_link: '',
+                subscription: {
+                    enabled: false,
+                    duration_type: 'days',
+                    duration_value: null,
+                    vip_chat_id: '',
+                    vip_group_link: '',
+                    validation_status: null
+                }
+            });
+            console.log('✅ Upsell adicionado. Total:', this.config.upsells.length);
+        },
+        removeUpsell(index) {
+            console.log('🔍 removeUpsell chamado (versão temporária)', index);
+            if (this.config.upsells && this.config.upsells[index]) {
+                this.config.upsells.splice(index, 1);
+                console.log('✅ Upsell removido. Total:', this.config.upsells.length);
+            }
+        },
+        addRedirectButton() {
+            console.log('🔍 addRedirectButton chamado (versão temporária)');
+            if (!this.config.redirect_buttons) {
+                this.config.redirect_buttons = [];
+            }
+            this.config.redirect_buttons.push({
+                text: '',
+                url: ''
+            });
+            console.log('✅ Botão de redirecionamento adicionado. Total:', this.config.redirect_buttons.length);
+        },
+        removeRedirectButton(index) {
+            console.log('🔍 removeRedirectButton chamado (versão temporária)', index);
+            if (this.config.redirect_buttons && this.config.redirect_buttons[index]) {
+                this.config.redirect_buttons.splice(index, 1);
+                console.log('✅ Botão de redirecionamento removido. Total:', this.config.redirect_buttons.length);
+            }
+        },
         onFlowToggle() {},
         addFlowStep() {},
         removeFlowStep() {},
