@@ -2171,12 +2171,110 @@ window.botConfigApp = function() {
         getWelcomeMessageLength() {
             return 0;
         },
-        isValidBotToken() {
-            return false;
+        isValidBotToken(token) {
+            return token && token.length >= 30 && token.length <= 45 && token.includes(':');
         },
         detectMediaType() {},
         detectStepMediaType() {},
-        changeBotToken() {},
+        getCsrfToken() {
+            // Tentar pegar de input hidden
+            const input = document.querySelector('[name=csrf_token]');
+            if (input) return input.value;
+            
+            // Tentar pegar de meta tag
+            const metaTag = document.querySelector('meta[name="csrf-token"]');
+            if (metaTag) return metaTag.getAttribute('content');
+            
+            // Tentar pegar de cookies
+            const cookies = document.cookie.split(';');
+            for (let cookie of cookies) {
+                const [name, value] = cookie.trim().split('=');
+                if (name === 'csrf_token' || name === 'csrftoken' || name === 'csrf_access_token') {
+                    return value;
+                }
+            }
+            return '';
+        },
+
+        async changeBotToken() {
+            console.log('🔧 changeBotToken chamado (versão temporária)', { 
+                bot_id: this.bot_id, 
+                token_preview: this.new_bot_token ? this.new_bot_token.substring(0, 10) + '...' : 'vazio',
+                token_length: this.new_bot_token ? this.new_bot_token.length : 0
+            });
+            
+            if (!this.new_bot_token || !this.new_bot_token.trim()) {
+                alert('Por favor, digite o novo token do bot');
+                return;
+            }
+            
+            if (!this.isValidBotToken(this.new_bot_token)) {
+                alert('Token inválido. O token deve ter entre 30 e 45 caracteres e conter ":"');
+                return;
+            }
+            
+            // Garantir que bot_id está definido
+            const botId = this.bot_id || parseInt('{{ bot.id }}', 10);
+            if (!botId || isNaN(botId)) {
+                alert('Erro: ID do bot não encontrado. Recarregue a página.');
+                console.error('❌ bot_id não definido:', { bot_id: this.bot_id, parsed: botId, context: this });
+                return;
+            }
+            
+            this.loading = true;
+            try {
+                const csrfToken = this.getCsrfToken();
+                const url = `/api/bots/${botId}/token`;
+                
+                console.log('📤 Enviando requisição para atualizar token...', {
+                    url: url,
+                    method: 'PUT',
+                    bot_id: botId,
+                    token_preview: this.new_bot_token.substring(0, 10) + '...',
+                    has_csrf: !!csrfToken
+                });
+                
+                const response = await fetch(url, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
+                    },
+                    body: JSON.stringify({
+                        token: this.new_bot_token.trim()
+                    })
+                });
+                
+                console.log('📥 Resposta recebida:', { 
+                    status: response.status, 
+                    statusText: response.statusText, 
+                    ok: response.ok
+                });
+                
+                const data = await response.json();
+                console.log('📥 Dados da resposta:', data);
+                
+                // Backend retorna status 200 com 'message' em caso de sucesso
+                // ou status 400 com 'error' em caso de erro
+                if (response.ok && data.message) {
+                    console.log('✅ Token atualizado com sucesso!', data);
+                    alert(data.message || 'Token atualizado com sucesso!');
+                    this.new_bot_token = '';
+                    setTimeout(() => {
+                        location.reload();
+                    }, 500);
+                } else {
+                    const errorMsg = data.error || 'Erro ao atualizar token';
+                    console.error('❌ Erro na resposta:', errorMsg, data);
+                    alert(errorMsg);
+                }
+            } catch (error) {
+                console.error('❌ Erro ao atualizar token:', error);
+                alert('Erro ao atualizar token: ' + (error.message || 'Erro desconhecido'));
+            } finally {
+                this.loading = false;
+            }
+        },
         async saveConfig() {
             console.log('🔍 saveConfig chamado (versão temporária)');
             
@@ -3387,9 +3485,10 @@ console.log('✅ botConfigApp temporário definido (será substituído pela vers
             <div class="form-group">
                 <label class="form-label">Novo Token do Bot</label>
                 <input type="text" x-model="new_bot_token" class="form-input" placeholder="123456789:ABCdef..." />
-                <button @click="changeBotToken()" class="btn btn-primary mt-2" :disabled="!isValidBotToken(new_bot_token) || loading" type="button">
+                <button @click.stop="changeBotToken()" class="btn btn-primary mt-2" :disabled="!isValidBotToken(new_bot_token) || loading" type="button">
                     <i class="fas fa-save"></i> <span x-show="!loading">Atualizar Token</span><span x-show="loading">Salvando...</span>
                 </button>
+                <div x-show="loading" class="mt-2 text-sm text-gray-400">Atualizando token...</div>
             </div>
         </div>
     </div>
@@ -3981,38 +4080,102 @@ if (typeof botConfigApp !== 'undefined' && !window.botConfigAppComplete) {
             return [...this.config.flow_steps].sort((a, b) => (a.order || 0) - (b.order || 0));
         },
 
+        getCsrfToken() {
+            // Tentar pegar de input hidden
+            const input = document.querySelector('[name=csrf_token]');
+            if (input) return input.value;
+            
+            // Tentar pegar de meta tag
+            const metaTag = document.querySelector('meta[name="csrf-token"]');
+            if (metaTag) return metaTag.getAttribute('content');
+            
+            // Tentar pegar de cookies
+            const cookies = document.cookie.split(';');
+            for (let cookie of cookies) {
+                const [name, value] = cookie.trim().split('=');
+                if (name === 'csrf_token' || name === 'csrftoken' || name === 'csrf_access_token') {
+                    return value;
+                }
+            }
+            return '';
+        },
+
         async changeBotToken() {
-            if (!this.new_bot_token || !this.isValidBotToken(this.new_bot_token)) {
-                alert('Token inválido');
+            console.log('🔧 changeBotToken chamado (versão completa)', { 
+                bot_id: this.bot_id, 
+                token_preview: this.new_bot_token ? this.new_bot_token.substring(0, 10) + '...' : 'vazio',
+                token_length: this.new_bot_token ? this.new_bot_token.length : 0
+            });
+            
+            if (!this.new_bot_token || !this.new_bot_token.trim()) {
+                alert('Por favor, digite o novo token do bot');
                 return;
             }
+            
+            if (!this.isValidBotToken(this.new_bot_token)) {
+                alert('Token inválido. O token deve ter entre 30 e 45 caracteres e conter ":"');
+                return;
+            }
+            
+            // Garantir que bot_id está definido
+            const botId = this.bot_id || parseInt('{{ bot.id }}', 10);
+            if (!botId || isNaN(botId)) {
+                alert('Erro: ID do bot não encontrado. Recarregue a página.');
+                console.error('❌ bot_id não definido:', { bot_id: this.bot_id, parsed: botId, context: this });
+                return;
+            }
+            
             this.loading = true;
             try {
-                const response = await fetch(`/api/bots/${this.bot_id}/token`, {
+                const csrfToken = this.getCsrfToken();
+                const url = `/api/bots/${botId}/token`;
+                
+                console.log('📤 Enviando requisição para atualizar token...', {
+                    url: url,
+                    method: 'PUT',
+                    bot_id: botId,
+                    token_preview: this.new_bot_token.substring(0, 10) + '...',
+                    has_csrf: !!csrfToken
+                });
+                
+                const response = await fetch(url, {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json',
-                        'X-CSRFToken': document.querySelector('[name=csrf_token]')?.value || ''
+                        'X-CSRFToken': csrfToken
                     },
                     body: JSON.stringify({
-                        token: this.new_bot_token
+                        token: this.new_bot_token.trim()
                     })
                 });
                 
+                console.log('📥 Resposta recebida:', { 
+                    status: response.status, 
+                    statusText: response.statusText, 
+                    ok: response.ok,
+                    headers: Object.fromEntries(response.headers.entries())
+                });
+                
                 const data = await response.json();
+                console.log('📥 Dados da resposta:', data);
                 
                 // Backend retorna status 200 com 'message' em caso de sucesso
                 // ou status 400 com 'error' em caso de erro
                 if (response.ok && data.message) {
+                    console.log('✅ Token atualizado com sucesso!', data);
                     alert(data.message || 'Token atualizado com sucesso!');
                     this.new_bot_token = '';
-                    location.reload();
+                    setTimeout(() => {
+                        location.reload();
+                    }, 500);
                 } else {
-                    alert(data.error || 'Erro ao atualizar token');
+                    const errorMsg = data.error || 'Erro ao atualizar token';
+                    console.error('❌ Erro na resposta:', errorMsg, data);
+                    alert(errorMsg);
                 }
             } catch (error) {
-                console.error('Erro ao atualizar token:', error);
-                alert('Erro ao atualizar token: ' + error.message);
+                console.error('❌ Erro ao atualizar token:', error);
+                alert('Erro ao atualizar token: ' + (error.message || 'Erro desconhecido'));
             } finally {
                 this.loading = false;
             }
