@@ -10460,6 +10460,8 @@ Seu pagamento ainda não foi confirmado.
                                 if isinstance(result, dict) and result.get('error'):
                                     # ✅ Novo formato: result contém informações do erro
                                     error_code = result.get('error_code', 0)
+                                    error_description = result.get('description', '').lower()
+                                    
                                     if error_code == 401:
                                         # ✅ Erro 401 - token inválido
                                         consecutive_401_errors += 1
@@ -10472,6 +10474,39 @@ Seu pagamento ainda não foi confirmado.
                                             remaining_leads = len(batch) - (batch_sent + batch_failed + batch_blocked)
                                             batch_failed += remaining_leads
                                             break  # Sair do loop de leads
+                                    elif error_code == 403 and ("bot was blocked" in error_description or "forbidden: bot was blocked" in error_description):
+                                        # ✅ MELHORIA: Erro 403 - bot bloqueado pelo usuário - adicionar à blacklist
+                                        batch_blocked += 1
+                                        consecutive_401_errors = 0  # Reset (não é erro de token)
+                                        logger.warning(f"🚫 Bot bloqueado pelo usuário {lead.telegram_user_id} (erro 403)")
+                                        
+                                        # ✅ CRÍTICO: Adicionar na blacklist IMEDIATAMENTE
+                                        try:
+                                            # Verificar se já está na blacklist (evitar duplicatas)
+                                            existing = db.session.query(RemarketingBlacklist).filter_by(
+                                                bot_id=campaign.bot_id,
+                                                telegram_user_id=lead.telegram_user_id
+                                            ).first()
+                                            
+                                            if not existing:
+                                                blacklist = RemarketingBlacklist(
+                                                    bot_id=campaign.bot_id,
+                                                    telegram_user_id=lead.telegram_user_id,
+                                                    reason='bot_blocked'
+                                                )
+                                                db.session.add(blacklist)
+                                                # ✅ CRÍTICO: Commit imediato para garantir que blacklist seja salva
+                                                try:
+                                                    db.session.commit()
+                                                    logger.info(f"🚫 Usuário {lead.telegram_user_id} adicionado à blacklist do bot {campaign.bot_id} (bloqueado via erro 403)")
+                                                except Exception as commit_error:
+                                                    logger.error(f"❌ Erro ao commitar blacklist: {commit_error}")
+                                                    db.session.rollback()
+                                            else:
+                                                logger.debug(f"ℹ️ Usuário {lead.telegram_user_id} já está na blacklist do bot {campaign.bot_id}")
+                                        except Exception as blacklist_error:
+                                            logger.warning(f"⚠️ Erro ao adicionar blacklist: {blacklist_error}")
+                                            db.session.rollback()
                                     else:
                                         # Outro erro - reset contador 401
                                         consecutive_401_errors = 0
