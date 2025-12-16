@@ -17,6 +17,8 @@ import logging
 import hashlib
 import time
 import json
+import re
+import unicodedata
 from typing import Dict, Any, Optional
 from datetime import datetime
 from gateway_interface import PaymentGateway
@@ -115,6 +117,20 @@ class AtomPayGateway(PaymentGateway):
             return doc_clean.ljust(11, '0')[:11]
         
         return '00000000000'
+
+    def _normalize_customer_name(self, raw_name: Optional[str], customer_user_id: str) -> str:
+        name = (raw_name or '').strip()
+
+        name = unicodedata.normalize('NFKD', name)
+        name = ''.join(ch for ch in name if not unicodedata.combining(ch))
+        name = re.sub(r"[^A-Za-z\s]", " ", name)
+        name = re.sub(r"\s+", " ", name).strip()
+
+        if len(name) < 5 or len(name.split()) < 2:
+            fallback_suffix = (customer_user_id or '')[-6:] or str(int(time.time()))[-6:]
+            name = f"Cliente Bot {fallback_suffix}"
+
+        return name[:30]
     
     def _make_request(
         self, 
@@ -279,8 +295,13 @@ class AtomPayGateway(PaymentGateway):
             unique_phone = self._validate_phone(f"11{customer_user_id[-9:]}")
             
             # ✅ NOME ÚNICO
-            unique_name = customer_data.get('name') or f"Cliente {customer_user_id[-6:]}"
-            unique_name = unique_name[:30]  # Limitar a 30 caracteres
+            raw_name = customer_data.get('name')
+            unique_name = self._normalize_customer_name(raw_name, customer_user_id)
+            if raw_name and raw_name.strip() != unique_name:
+                logger.warning(
+                    f"⚠️ [{self.get_gateway_name()}] customer.name normalizado para evitar recusa: "
+                    f"'{raw_name}' -> '{unique_name}'"
+                )
             
             # ✅ REFERENCE ÚNICO (timestamp + hash) - como Paradise
             payment_id_base = str(payment_id).replace('_', '-').replace(' ', '')[:30]
