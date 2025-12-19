@@ -2108,7 +2108,7 @@ def api_dashboard_analytics():
 @login_required
 def get_bots():
     """Lista todos os bots do usuário"""
-    bots = current_user.bots.all()
+    bots = current_user.bots.filter_by(is_active=True).all()
     bots_data = []
     for bot in bots:
         bot_dict = bot.to_dict()
@@ -2348,14 +2348,9 @@ def update_bot_token(bot_id):
 @csrf.exempt
 def delete_bot(bot_id):
     """
-    Deleta um bot (V2 - PRESERVA FATURAMENTO)
+    Deleta um bot (HARD DELETE)
     
-    ✅ CRÍTICO: NÃO deleta pagamentos e comissões para preservar:
-    - Faturamento histórico do usuário
-    - Ranking e estatísticas
-    - Contabilidade completa
-    
-    Apenas marca o bot como deletado e remove dados operacionais.
+    ✅ CRÍTICO: Remove também pagamentos/comissões/assinaturas para manter integridade referencial.
     """
     bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
     
@@ -2365,10 +2360,6 @@ def delete_bot(bot_id):
     
     bot_name = bot.name
     bot_identifier = f"{bot_name} (ID {bot.id})"
-    
-    # ✅ PRESERVAR FATURAMENTO: Armazenar valores antes de deletar
-    preserved_sales = bot.total_sales
-    preserved_revenue = bot.total_revenue
     
     try:
         # ✅ OPERAÇÕES DE LIMPEZA (apenas dados operacionais)
@@ -2387,24 +2378,26 @@ def delete_bot(bot_id):
             if deleted_rows:
                 logger.info(f"🧹 Removidos {deleted_rows} registros de {label} do bot {bot_identifier}")
         
-        # ✅ CRÍTICO: NÃO DELETAR PAGAMENTOS E COMISSÕES
-        # Estes dados são necessários para:
-        # - Ranking (calcula baseado em Payment.amount)
-        # - Faturamento do usuário (User.total_revenue)
-        # - Contabilidade completa
-        # - Histórico de vendas
-        
-        payments_count = Payment.query.filter_by(bot_id=bot.id).count()
-        commissions_count = Commission.query.filter_by(bot_id=bot.id).count()
-        
-        logger.info(f"💰 PRESERVANDO faturamento do bot {bot_identifier}:")
-        logger.info(f"   - {preserved_sales} vendas preservadas")
-        logger.info(f"   - R$ {preserved_revenue:.2f} faturamento preservado")
-        logger.info(f"   - {payments_count} pagamentos preservados")
-        logger.info(f"   - {commissions_count} comissões preservadas")
-        logger.info(f"   ✅ Faturamento continuará aparecendo no ranking e estatísticas do usuário")
-        
-        # ✅ DELETAR APENAS O BOT (pagamentos e comissões permanecem no banco)
+        # ✅ HARD DELETE: deletar dependências que referenciam bot/payments (evita bot_id NULL)
+        subscriptions_deleted = db.session.execute(
+            delete(Subscription).where(Subscription.bot_id == bot.id)
+        ).rowcount or 0
+        if subscriptions_deleted:
+            logger.info(f"🧹 Removidos {subscriptions_deleted} registros de assinaturas do bot {bot_identifier}")
+
+        commissions_deleted = db.session.execute(
+            delete(Commission).where(Commission.bot_id == bot.id)
+        ).rowcount or 0
+        if commissions_deleted:
+            logger.info(f"🧹 Removidos {commissions_deleted} registros de comissões do bot {bot_identifier}")
+
+        payments_deleted = db.session.execute(
+            delete(Payment).where(Payment.bot_id == bot.id)
+        ).rowcount or 0
+        if payments_deleted:
+            logger.info(f"🧹 Removidos {payments_deleted} registros de pagamentos do bot {bot_identifier}")
+
+        # ✅ DELETAR O BOT (agora sem FKs pendentes)
         db.session.delete(bot)
         db.session.commit()
     
@@ -2413,15 +2406,10 @@ def delete_bot(bot_id):
         logger.error(f"Erro ao deletar bot {bot_identifier}: {e}", exc_info=True)
         return jsonify({'error': 'Erro interno ao deletar bot'}), 500
     
-    logger.info(f"✅ Bot deletado: {bot_name} por {current_user.email} | Faturamento preservado: R$ {preserved_revenue:.2f}")
+    logger.info(f"✅ Bot deletado: {bot_name} por {current_user.email}")
     return jsonify({
         'message': 'Bot deletado com sucesso',
-        'preserved': {
-            'sales': preserved_sales,
-            'revenue': preserved_revenue,
-            'payments': payments_count,
-            'commissions': commissions_count
-        }
+        'deleted': True
     })
 @app.route('/api/bots/<int:bot_id>/duplicate', methods=['POST'])
 @login_required
@@ -3228,7 +3216,7 @@ def verify_bots_status():
     Chamada pelo frontend após carregar dashboard (sem bloquear carregamento inicial)
     """
     try:
-        user_bots = Bot.query.filter_by(user_id=current_user.id).all()
+        user_bots = Bot.query.filter_by(user_id=current_user.id, is_active=True).all()
         
         if not user_bots:
             return jsonify({'bots': []})
