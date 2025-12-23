@@ -9421,12 +9421,106 @@ def delivery_page(delivery_token):
         from utils.tracking_service import TrackingServiceV4
         import time
         from datetime import datetime
+        from gateway_factory import GatewayFactory
+        from models import Gateway
+        from models import get_brazil_time
         
-        # ✅ VALIDAÇÃO: Buscar payment pelo delivery_token
+        # ✅ VALIDAÇÃO: Buscar payment pelo delivery_token (NÃO filtrar status aqui)
+        # A rota deve tratar status pendente de forma controlada e nunca disparar Purchase.
         payment = Payment.query.filter_by(
-            delivery_token=delivery_token,
-            status='paid'
+            delivery_token=delivery_token
         ).first_or_404()
+
+        # ✅ DEFENSIVO: Se status != paid, consultar gateway em tempo real.
+        # Só prosseguir para Purchase/entrega se o gateway retornar explicitamente 'paid'.
+        if payment.status != 'paid':
+            try:
+                if not payment.bot or not payment.gateway_type:
+                    return render_template('delivery_error.html', error='Pagamento ainda não confirmado. Aguarde alguns instantes e tente novamente.'), 200
+
+                gateway_row = Gateway.query.filter_by(
+                    user_id=payment.bot.user_id,
+                    gateway_type=payment.gateway_type,
+                    is_active=True,
+                    is_verified=True
+                ).first()
+
+                if not gateway_row:
+                    return render_template('delivery_error.html', error='Pagamento ainda não confirmado. Aguarde alguns instantes e tente novamente.'), 200
+
+                gateway_type = (payment.gateway_type or '').strip().lower()
+                credentials = {}
+
+                if gateway_type == 'syncpay':
+                    credentials = {
+                        'client_id': gateway_row.client_id,
+                        'client_secret': gateway_row.client_secret,
+                    }
+                elif gateway_type == 'paradise':
+                    credentials = {
+                        'api_key': gateway_row.api_key,
+                        'product_hash': gateway_row.product_hash,
+                        'offer_hash': gateway_row.offer_hash,
+                        'store_id': gateway_row.store_id,
+                        'split_percentage': gateway_row.split_percentage or 2.0,
+                    }
+                elif gateway_type == 'atomopay':
+                    credentials = {
+                        'api_token': gateway_row.api_key,
+                        'product_hash': gateway_row.product_hash,
+                    }
+                elif gateway_type == 'umbrellapag':
+                    credentials = {
+                        'api_key': gateway_row.api_key,
+                        'product_hash': gateway_row.product_hash,
+                    }
+                elif gateway_type == 'wiinpay':
+                    credentials = {
+                        'api_key': gateway_row.api_key,
+                        'split_user_id': gateway_row.split_user_id,
+                    }
+                elif gateway_type == 'babylon':
+                    credentials = {
+                        'api_key': gateway_row.api_key,
+                        'company_id': gateway_row.client_id,
+                    }
+                else:
+                    # pushynpay/orionpay e demais baseados em api_key
+                    credentials = {
+                        'api_key': gateway_row.api_key,
+                    }
+
+                payment_gateway = GatewayFactory.create_gateway(
+                    gateway_type=gateway_type,
+                    credentials=credentials,
+                    use_adapter=True
+                )
+
+                if not payment_gateway:
+                    return render_template('delivery_error.html', error='Pagamento ainda não confirmado. Aguarde alguns instantes e tente novamente.'), 200
+
+                # Identificador de consulta por gateway (Paradise prioriza hash)
+                tx_identifier = payment.gateway_transaction_id
+                if gateway_type == 'paradise':
+                    tx_identifier = payment.gateway_transaction_hash or payment.gateway_transaction_id
+
+                if not tx_identifier:
+                    return render_template('delivery_error.html', error='Pagamento ainda não confirmado. Aguarde alguns instantes e tente novamente.'), 200
+
+                api_status = payment_gateway.get_payment_status(str(tx_identifier))
+                api_normalized_status = (api_status or {}).get('status')
+
+                if api_normalized_status == 'paid':
+                    payment.status = 'paid'
+                    if not payment.paid_at:
+                        payment.paid_at = get_brazil_time()
+                    db.session.commit()
+                    db.session.refresh(payment)
+                else:
+                    return render_template('delivery_error.html', error='Pagamento ainda não confirmado. Aguarde alguns instantes e tente novamente.'), 200
+            except Exception as verify_error:
+                logger.error(f"❌ [DELIVERY] Erro ao verificar status em tempo real: {verify_error}", exc_info=True)
+                return render_template('delivery_error.html', error='Pagamento ainda não confirmado. Aguarde alguns instantes e tente novamente.'), 200
         
         # ✅ Buscar pool CORRETO (o que gerou o PageView, não o primeiro)
         # Prioridade: 1) pool_id do tracking_data, 2) primeiro pool do bot
@@ -9623,6 +9717,10 @@ def mark_purchase_sent():
             return jsonify({'error': 'payment_id obrigatório'}), 400
         
         payment = Payment.query.filter_by(id=int(payment_id)).first_or_404()
+
+        # ✅ DEFENSIVO: Nunca marcar Purchase como enviado se pagamento não estiver confirmado
+        if payment.status != 'paid':
+            return jsonify({'error': 'Pagamento ainda não confirmado'}), 409
         
         # Marcar como enviado
         payment.purchase_sent_from_delivery = True

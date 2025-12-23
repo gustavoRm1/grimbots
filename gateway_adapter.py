@@ -216,20 +216,6 @@ class GatewayAdapter(PaymentGateway):
             status = 'paid'
         elif any(candidate in failed_aliases for candidate in status_candidates):
             status = 'failed'
-        else:
-            paid_substrings = ['confirm', 'aprov', 'conclu', 'receb', 'settled', 'success', 'feito']
-            failed_substrings = ['fail', 'cancel', 'expir', 'refus', 'rejeit', 'chargeback', 'revers']
-
-            if any(any(substr in candidate for substr in paid_substrings) for candidate in status_candidates):
-                status = 'paid'
-            elif any(any(substr in candidate for substr in failed_substrings) for candidate in status_candidates):
-                status = 'failed'
-            else:
-                status = 'pending'
-
-        # Indicadores complementares (ex.: presença de end_to_end_id)
-        if status != 'paid' and (result.get('end_to_end_id') or result.get('payer_name')):
-            status = 'paid'
         
         # Normalizar amount (converter centavos para reais se necessário)
         amount = result.get('amount', 0)
