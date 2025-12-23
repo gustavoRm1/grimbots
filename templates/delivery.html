@@ -28,11 +28,12 @@
         // ✅ NÃO incluir _fbp/_fbc manualmente no objeto de parâmetros (pode causar duplicação)
         // ✅ CRÍTICO: Enviar external_id TANTO no browser quanto no server para melhor matching e cobertura >= 75%
         // Segundo Meta: "ID externo: 0% (browser) vs 100% (server)" causa baixa cobertura (36%)
+        const eventId = '{{ pixel_config.event_id }}';
+
         // ✅ CORREÇÃO: Sempre enviar eventID e external_id (se disponível) para garantir deduplicação
         var purchaseParams = {
             value: {{ pixel_config.value }},
             currency: '{{ pixel_config.currency }}',
-            eventID: '{{ pixel_config.event_id }}',  // ✅ MESMO event_id do server-side (deduplicação garantida)
             content_ids: ['{{ pixel_config.content_id }}'],
             content_name: '{{ pixel_config.content_name|replace("'", "\\'") }}',
             content_type: 'product',
@@ -44,7 +45,12 @@
         purchaseParams.external_id = '{{ pixel_config.external_id }}';  // ✅ CRÍTICO: Enviar fbclid normalizado no browser para matching perfeito
         {% endif %}
         
-        fbq('track', 'Purchase', purchaseParams);
+        fbq(
+          'track',
+          'Purchase',
+          purchaseParams,
+          { eventID: eventId }
+        );
         
         console.log('[META PIXEL] Purchase disparado (client-side) com eventID: {{ pixel_config.event_id }}');
         console.log('[META PIXEL] Meta deduplicará automaticamente se server-side também enviar (mesmo eventID)');

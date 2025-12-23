@@ -9620,42 +9620,30 @@ def delivery_page(delivery_token):
         if external_id:
             from utils.meta_pixel import normalize_external_id
             external_id_normalized = normalize_external_id(external_id)
-            logger.info(f"[META DELIVERY] Delivery - external_id normalizado: {external_id[:30]}... -> {external_id_normalized[:30]}... (len={len(external_id_normalized)})")
-        
-        # ✅ CORREÇÃO CRÍTICA: Garantir que event_id seja sempre string e no formato correto
-        # Meta requer event_id como string para deduplicação
-        # Usar pageview_event_id se disponível (garante matching com PageView)
-        # Se não tiver, gerar baseado no payment.id (garante unicidade)
-        event_id_final = None
-        if pageview_event_id:
-            event_id_final = str(pageview_event_id)  # ✅ Garantir que é string
-            logger.info(f"[META DELIVERY] Delivery - event_id do PageView: {event_id_final[:50]}...")
-        else:
-            # ✅ Fallback: gerar event_id único baseado no payment
-            event_id_final = f"purchase_{payment.id}_{int(time.time())}"
-            logger.warning(f"[META DELIVERY] Delivery - pageview_event_id ausente, gerando novo: {event_id_final[:50]}...")
-        
+
+        # ✅ PATCH 2: event_id FIXO E ÚNICO (server + client)
+        # Regra: SEMPRE usar purchase_{payment.id}, persistir em payment.meta_event_id e reutilizar.
+        event_id_final = getattr(payment, 'meta_event_id', None)
+        if not event_id_final:
+            event_id_final = f"purchase_{payment.id}"
+            payment.meta_event_id = event_id_final
+            db.session.commit()
+            db.session.refresh(payment)
+
         # ✅ Renderizar página com Purchase tracking (INCLUINDO FBP E FBC!)
         pixel_config = {
             'pixel_id': pool.meta_pixel_id if has_meta_pixel else None,
             'event_id': event_id_final,  # ✅ SEMPRE string, formato correto
             'external_id': external_id_normalized,  # ✅ None se não houver (não string vazia!)
-            'fbp': fbp_value or '',  # ✅ CRÍTICO: FBP para matching perfeito
-            'fbc': fbc_value or '',  # ✅ CRÍTICO: FBC para matching perfeito (apenas se real)
+            'fbp': fbp_value,
+            'fbc': fbc_value,
             'value': float(payment.amount),
             'currency': 'BRL',
-            'content_id': str(payment.id),
-            'content_name': payment.product_name or 'Produto',
-            'redirect_url': redirect_url or '',
-            'utm_source': tracking_data.get('utm_source') or '',
-            'utm_campaign': tracking_data.get('utm_campaign') or '',
-            'campaign_code': tracking_data.get('campaign_code') or tracking_data.get('grim') or ''
+            'content_id': str(pool.id) if pool else str(payment.bot_id),
+            'content_name': payment.product_name or payment.bot.name,
         }
-        
+
         # ✅ CRÍTICO: DEDUPLICAÇÃO - Garantir que Purchase NÃO seja enviado duplicado
-        # ✅ ANTI-DUPLICAÇÃO: Usar MESMO event_id no client-side e server-side (via pageview_event_id)
-        # Meta deduplicará automaticamente se event_id for o mesmo
-        # ✅ Lock pessimista: marcar meta_purchase_sent ANTES de enviar para evitar condição de corrida
         purchase_already_sent = payment.meta_purchase_sent
         
         # ✅ CRÍTICO: Renderizar template PRIMEIRO para permitir client-side disparar Purchase
@@ -9676,10 +9664,8 @@ def delivery_page(delivery_token):
         # Meta deduplica automaticamente usando eventID/event_id
         if has_meta_pixel and not purchase_already_sent:
             try:
-                # ✅ CRÍTICO: Garantir que pixel_config['event_id'] existe antes de passar
-                # Se não tiver, gerar agora (mesmo formato do client-side)
-                # ✅ IMPORTANTE: Gerar event_id UMA VEZ e reutilizar (evitar timestamps diferentes)
-                event_id_to_pass = pixel_config.get('event_id') or f"purchase_{payment.id}_{int(time.time())}"
+                # ✅ PATCH 2: SEMPRE reutilizar event_id persistido (purchase_{payment.id})
+                event_id_to_pass = getattr(payment, 'meta_event_id', None) or pixel_config.get('event_id')
                 logger.info(f"[META DELIVERY] Delivery - Enviando Purchase via Server (Conversions API) para payment {payment.id}")
                 logger.info(f"[META DELIVERY] Delivery - event_id que será usado (mesmo do client-side): {event_id_to_pass[:50]}...")
                 # ✅ CRÍTICO: Passar event_id garantido para garantir MESMO event_id no client-side e server-side
@@ -11017,70 +11003,15 @@ def send_meta_pixel_purchase_event(payment, pageview_event_id=None):
                 event_time = candidate_time if candidate_time <= now_ts else now_ts
 
 
-        # ✅ CRÍTICO: Reutilizar pageview_event_id para deduplicação perfeita
-        # Prioridade 1: pageview_event_id passado como parâmetro (vem do delivery.html - garante mesmo event_id)
-        # Prioridade 2: tracking_data (Redis - dados do redirect)
-        # Prioridade 3: payment.pageview_event_id (banco)
-        # Prioridade 4: gerar novo (usar mesmo formato do client-side para garantir deduplicação)
-        
-        # ✅ PRIORIDADE 1: pageview_event_id passado como parâmetro (vem do delivery.html)
-        # ✅ CRÍTICO: pageview_event_id pode ser o pageview_event_id original OU o event_id gerado no delivery.html
-        # Se for gerado no delivery.html, já está no formato correto (purchase_{payment.id}_{time.time()})
-        if pageview_event_id:
-            event_id = pageview_event_id
-            logger.info(f"✅ Purchase - event_id recebido como parâmetro (mesmo do client-side): {event_id[:50]}...")
-            logger.info(f"   ✅ Deduplicação garantida (mesmo event_id no client-side e server-side)")
-        else:
-            logger.warning(f"⚠️ [META PURCHASE] Purchase - pageview_event_id NÃO foi passado como parâmetro! Verificando outras fontes...")
-        
-        # ✅ PRIORIDADE 2: tracking_data (Redis - dados do redirect)
+        # ✅ PATCH 2: event_id FIXO E ÚNICO
+        # Regra: NUNCA usar timestamp. SEMPRE usar purchase_{payment.id} e persistir em payment.meta_event_id.
+        event_id = getattr(payment, 'meta_event_id', None)
         if not event_id:
-            logger.info(f"[META PURCHASE] Purchase - Verificando pageview_event_id no tracking_data...")
-            logger.info(f"   tracking_data existe: {bool(tracking_data)}")
-            if tracking_data:
-                logger.info(f"   tracking_data tem pageview_event_id: {bool(tracking_data.get('pageview_event_id'))}")
-                if tracking_data.get('pageview_event_id'):
-                    logger.info(f"   pageview_event_id no tracking_data: {tracking_data.get('pageview_event_id')[:50]}...")
-                else:
-                    logger.warning(f"   ⚠️ tracking_data NÃO tem pageview_event_id! Campos disponíveis: {list(tracking_data.keys())}")
-            
-            event_id = tracking_data.get('pageview_event_id') if tracking_data else None
-            if event_id:
-                logger.info(f"✅ Purchase - event_id reutilizado do tracking_data (Redis): {event_id}")
-        
-        # ✅ PRIORIDADE 3: payment.pageview_event_id (banco)
-        if not event_id:
-            logger.info(f"[META PURCHASE] Purchase - Verificando pageview_event_id no Payment (fallback)...")
-            payment_pageview_event_id = getattr(payment, 'pageview_event_id', None)
-            logger.info(f"   payment tem pageview_event_id: {bool(payment_pageview_event_id)}")
-            if payment_pageview_event_id:
-                logger.info(f"   pageview_event_id no payment: {payment_pageview_event_id[:50]}...")
-            
-            if payment_pageview_event_id:
-                event_id = payment_pageview_event_id
-            logger.info(f"✅ Purchase - event_id reutilizado do Payment (fallback): {event_id}")
-        
-        # ✅ PRIORIDADE 4: Gerar novo event_id (usar MESMO formato do client-side para garantir deduplicação)
-        # ✅ CRÍTICO: Se não encontrou pageview_event_id, usar MESMO formato do client-side
-        # Client-side usa: purchase_{payment.id}_{int(time.time())}
-        # Server-side deve usar: purchase_{payment.id}_{int(time.time())} (mesmo formato!)
-        if not event_id:
-            logger.warning(f"⚠️ [CRÍTICO] Purchase - event_id NÃO encontrado! Gerando novo event_id com MESMO formato do client-side")
-            logger.warning(f"   tracking_data existe: {bool(tracking_data)}")
-            logger.warning(f"   tracking_data tem pageview_event_id: {bool(tracking_data.get('pageview_event_id') if tracking_data else False)}")
-            logger.warning(f"   payment tem pageview_event_id: {bool(getattr(payment, 'pageview_event_id', None))}")
-            # ✅ CRÍTICO: Usar payment.id (mesmo do client-side) e time.time() (mesmo do client-side)
-            # Client-side usa: purchase_{payment.id}_{int(time.time())}
-            # Server-side deve usar: purchase_{payment.id}_{int(time.time())} (MESMO formato!)
-            # ⚠️ ATENÇÃO: NÃO usar payment.payment_id (formato diferente) nem event_time (timestamp diferente)
-            # ⚠️ ATENÇÃO: NÃO usar payment.payment_id que contém "BOT43_..." (formato diferente do client-side)
-            # ✅ Usar payment.id (mesmo do client-side) e time.time() (mesmo timestamp do client-side)
-            import time
-            current_time = int(time.time())  # ✅ MESMO timestamp do client-side
-            event_id = f"purchase_{payment.id}_{current_time}"  # ✅ MESMO formato do client-side!
-            logger.warning(f"⚠️ Purchase - event_id gerado novo: {event_id} (mesmo formato do client-side: purchase_{{payment.id}}_{{time.time()}})")
-            logger.warning(f"   ✅ Garantido: mesmo formato = deduplicação funcionará mesmo sem pageview_event_id original")
-            logger.warning(f"   ⚠️ ATENÇÃO: Sem pageview_event_id original, cobertura pode ser reduzida, mas deduplicação funcionará")
+            event_id = f"purchase_{payment.id}"
+            payment.meta_event_id = event_id
+            db.session.commit()
+            db.session.refresh(payment)
+        logger.info(f"✅ Purchase - event_id fixo: {event_id}")
         
         # ✅ CRÍTICO #2: external_id IMUTÁVEL e CONSISTENTE (SEMPRE MESMO FORMATO DO PAGEVIEW/VIEWCONTENT!)
         # ✅ CORREÇÃO CIRÚRGICA: Normalizar external_id com MESMO algoritmo usado em todos os eventos
