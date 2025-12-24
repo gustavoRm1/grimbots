@@ -586,6 +586,12 @@
                                              class="w-12 h-12 object-contain"
                                              onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'48\' height=\'48\'%3E%3Crect width=\'48\' height=\'48\' fill=\'%23006699\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' text-anchor=\'middle\' dy=\'.3em\' fill=\'white\' font-size=\'10\' font-weight=\'bold\'%3EBY%3C/text%3E%3C/svg%3E';">
                                     </template>
+                                    <template x-if="gateway.gateway_type === 'bolt'">
+                                        <img src="{{ url_for('static', filename='img/bolt.png') }}" 
+                                             alt="Bolt" 
+                                             class="w-12 h-12 object-contain"
+                                             onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'48\' height=\'48\'%3E%3Crect width=\'48\' height=\'48\' fill=\'%23111\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' text-anchor=\'middle\' dy=\'.3em\' fill=\'white\' font-size=\'10\' font-weight=\'bold\'%3EBO%3C/text%3E%3C/svg%3E';">
+                                    </template>
                                 </div>
                                 <div class="flex-1 min-w-0">
                                     <h3 class="text-xs sm:text-sm font-bold text-white truncate" x-text="gateway.gateway_type.toUpperCase()"></h3>
@@ -963,6 +969,78 @@
                                             <li>Cole a URL copiada no campo <span class="text-blue-400 font-semibold">postbackUrl</span>.</li>
                                             <li>Salve. O funil passa a reagir em tempo real a cada venda.</li>
                                         </ol>
+                                    </div>
+                                </div>
+                            </template>
+
+                            <!-- Bolt -->
+                            <template x-if="gateway.gateway_type === 'bolt'">
+                                <form @submit.prevent="updateGateway(gateway.id, 'bolt')" class="space-y-3">
+                                    <div x-data="{ show: false }">
+                                        <label class="text-xs font-bold text-gray-400 block mb-1">Secret Key <span class="text-red-400">*</span></label>
+                                        <div class="relative">
+                                            <input :type="show ? 'text' : 'password'" 
+                                                   x-model="editGateway.api_key" 
+                                                   class="form-input pr-10"
+                                                   placeholder="Sua Secret Key do Bolt"
+                                                   required>
+                                            <button type="button" @click="show = !show" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">
+                                                <i class="fas" :class="show ? 'fa-eye-slash' : 'fa-eye'"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label class="text-xs font-bold text-gray-400 block mb-1">Company ID <span class="text-red-400">*</span></label>
+                                        <input type="text" 
+                                               :value="editGateway.company_id || editGateway.client_id || ''"
+                                               @input="editGateway.company_id = $event.target.value"
+                                               class="form-input"
+                                               placeholder="Seu Company ID do Bolt"
+                                               required>
+                                    </div>
+                                    <div class="info-box-warning info-box p-2">
+                                        <p class="text-xs text-gray-300">
+                                            <i class="fas fa-info-circle mr-1"></i>
+                                            Autenticação via Basic Auth (Secret Key + Company ID). Obtenha em: Integrações → Chaves de API no painel do Bolt.
+                                        </p>
+                                    </div>
+                                    <button type="submit" :disabled="loading" class="btn-action btn-action-primary w-full">
+                                        <i class="fas fa-save mr-2"></i>
+                                        <span x-text="loading ? 'Salvando...' : 'Atualizar'"></span>
+                                    </button>
+                                </form>
+
+                                <div class="mt-6 space-y-4">
+                                    <div class="bg-gray-900 rounded-lg p-4 border border-gray-800">
+                                        <div class="flex items-start gap-3 mb-4">
+                                            <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style="background: rgba(255, 184, 0, 0.12);">
+                                                <i class="fas fa-exclamation-triangle text-yellow-300"></i>
+                                            </div>
+                                            <div>
+                                                <h4 class="text-lg font-bold text-white">Webhook obrigatório • BOLT</h4>
+                                                <p class="text-xs text-gray-400 mt-1">
+                                                    Configure o postbackUrl para receber confirmações de pagamento.
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">
+                                            URL do webhook
+                                        </label>
+                                        <div class="flex flex-col sm:flex-row sm:items-center gap-2">
+                                            <input type="text"
+                                                   id="webhook-url-input-bolt-edit"
+                                                   readonly
+                                                   value="https://app.grimbots.online/webhooks/bolt"
+                                                   class="flex-1 form-input bg-black bg-opacity-40 font-mono text-sm text-yellow-300 cursor-text border border-gray-700"
+                                                   @click="$event.target.select(); document.execCommand('copy'); copyWebhookUrlSpecific('bolt', $event.target)">
+                                            <button type="button"
+                                                    @click="copyWebhookUrlSpecific('bolt', document.getElementById('webhook-url-input-bolt-edit'))"
+                                                    class="btn-action btn-action-primary sm:w-auto w-full">
+                                                <i class="fas fa-copy mr-2"></i>
+                                                Copiar
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </template>
@@ -1532,6 +1610,99 @@
                     </div>
                 </div>
 
+                <!-- Bolt -->
+                <div class="gateway-card" x-show="!getGatewayStatus('bolt')?.is_verified">
+                    <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
+                        <div class="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+                            <div class="w-10 h-10 sm:w-12 sm:h-12 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0" 
+                                 style="background: linear-gradient(135deg, rgba(255, 184, 0, 0.1), rgba(255, 184, 0, 0.05));">
+                                <img src="{{ url_for('static', filename='img/bolt.png') }}" 
+                                     alt="Bolt" 
+                                     class="w-12 h-12 object-contain"
+                                     onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'48\' height=\'48\'%3E%3Crect width=\'48\' height=\'48\' fill=\'%23111\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' text-anchor=\'middle\' dy=\'.3em\' fill=\'white\' font-size=\'10\' font-weight=\'bold\'%3EBO%3C/text%3E%3C/svg%3E';">
+                            </div>
+                            <div class="min-w-0 flex-1">
+                                <h3 class="text-xs sm:text-sm font-bold text-white truncate">Bolt</h3>
+                                <p class="text-xs text-gray-500 truncate">Gateway Completo</p>
+                            </div>
+                        </div>
+                        <span class="gateway-status-unconfigured flex-shrink-0 text-xs">
+                            <i class="fas fa-exclamation-circle"></i>
+                            Novo
+                        </span>
+                    </div>
+
+                    <form @submit.prevent="saveGateway('bolt')" class="space-y-3">
+                        <div x-data="{ show: false }">
+                            <label class="text-xs font-bold text-gray-400 block mb-1">Secret Key <span class="text-red-400">*</span></label>
+                            <div class="relative">
+                                <input :type="show ? 'text' : 'password'" 
+                                       x-model="gateways.bolt.api_key" 
+                                       class="form-input pr-10"
+                                       placeholder="Sua Secret Key do Bolt"
+                                       required>
+                                <button type="button" @click="show = !show" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">
+                                    <i class="fas" :class="show ? 'fa-eye-slash' : 'fa-eye'"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-gray-400 block mb-1">Company ID <span class="text-red-400">*</span></label>
+                            <input type="text" 
+                                   x-model="gateways.bolt.company_id" 
+                                   class="form-input"
+                                   placeholder="Seu Company ID do Bolt"
+                                   required>
+                        </div>
+                        <div class="info-box-warning info-box p-2">
+                            <p class="text-xs text-gray-300">
+                                <i class="fas fa-info-circle mr-1"></i>
+                                Autenticação via Basic Auth (Secret Key + Company ID). Obtenha em: Integrações → Chaves de API no painel do Bolt.
+                            </p>
+                        </div>
+                        <button type="submit" 
+                                :disabled="loading"
+                                class="btn-action btn-action-primary w-full">
+                            <i class="fas fa-save mr-2"></i>
+                            <span x-text="loading ? 'Salvando...' : 'Salvar'"></span>
+                        </button>
+                    </form>
+
+                    <div class="mt-6 space-y-4">
+                        <div class="bg-gray-900 rounded-lg p-4 border border-gray-800">
+                            <div class="flex items-start gap-3 mb-4">
+                                <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style="background: rgba(255, 184, 0, 0.12);">
+                                    <i class="fas fa-exclamation-triangle text-yellow-300"></i>
+                                </div>
+                                <div>
+                                    <h4 class="text-lg font-bold text-white">Webhook obrigatório • BOLT</h4>
+                                    <p class="text-xs text-gray-400 mt-1">
+                                        Configure o <span class="text-yellow-300 font-semibold">postbackUrl</span> nas transações para confirmar pagamentos.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <label class="block text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">
+                                URL do webhook
+                            </label>
+                            <div class="flex flex-col sm:flex-row sm:items-center gap-2">
+                                <input type="text"
+                                       id="webhook-url-input-bolt"
+                                       readonly
+                                       value="https://app.grimbots.online/webhooks/bolt"
+                                       class="flex-1 form-input bg-black bg-opacity-40 font-mono text-sm text-yellow-300 cursor-text border border-gray-700"
+                                       @click="$event.target.select(); document.execCommand('copy'); copyWebhookUrlSpecific('bolt')">
+                                <button type="button"
+                                        @click="copyWebhookUrlSpecific('bolt')"
+                                        class="btn-action btn-action-primary sm:w-auto w-full">
+                                    <i class="fas fa-copy mr-2"></i>
+                                    Copiar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- UmbrellaPag -->
                 <div class="gateway-card" x-show="!getGatewayStatus('umbrellapag')?.is_verified">
                     <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4 mb-3 sm:mb-4">
@@ -1930,7 +2101,8 @@ function settingsApp() {
             wiinpay: { api_key: '' }, // ✅ split_user_id removido: configuração interna da plataforma
             atomopay: { api_token: '', product_hash: '' },
             umbrellapag: { api_key: '', product_hash: '' },
-            babylon: { api_key: '', company_id: '' }
+            babylon: { api_key: '', company_id: '' },
+            bolt: { api_key: '', company_id: '' }
         },
         editGateway: {},
         gatewaysList: [],
@@ -2083,6 +2255,8 @@ function settingsApp() {
                     } else if (type === 'umbrellapag') {
                         this.gateways[type] = { api_key: '', product_hash: '' };
                     } else if (type === 'babylon') {
+                        this.gateways[type] = { api_key: '', company_id: '' };
+                    } else if (type === 'bolt') {
                         this.gateways[type] = { api_key: '', company_id: '' };
                     } else {
                         this.gateways[type] = { api_key: '' };

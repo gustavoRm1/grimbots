@@ -966,6 +966,9 @@ class Gateway(db.Model):
         elif self.gateway_type == 'babylon':
             result['api_key'] = self.api_key  # Secret Key (criptografada)
             result['company_id'] = self.client_id  # Company ID (não criptografado - armazenado em client_id)
+        elif self.gateway_type == 'bolt':
+            result['api_key'] = self.api_key  # Secret Key (criptografada)
+            result['company_id'] = self.client_id  # Company ID (armazenado em client_id)
         
         return result
 
@@ -985,6 +988,8 @@ class Payment(db.Model):
     gateway_type = db.Column(db.String(30))
     gateway_transaction_id = db.Column(db.String(100))
     gateway_transaction_hash = db.Column(db.String(100))  # ✅ Hash para consulta de status (Paradise)
+
+    payment_method = db.Column(db.String(20), nullable=True, index=True)
     
     # Valores
     amount = db.Column(db.Float, nullable=False)

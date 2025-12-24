@@ -234,6 +234,7 @@ class GatewayAdapter(PaymentGateway):
             'amount': amount_float,
             'external_reference': result.get('external_reference') or result.get('reference'),
             'producer_hash': result.get('producer_hash'),
+            'payment_method': result.get('payment_method') or result.get('paymentMethod') or result.get('method'),
             'payer_name': result.get('payer_name'),
             'payer_document': result.get('payer_document'),
             'end_to_end_id': result.get('end_to_end_id'),

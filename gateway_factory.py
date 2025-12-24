@@ -14,6 +14,7 @@ from gateway_atomopay import AtomPayGateway
 from gateway_umbrellapag import UmbrellaPagGateway
 from gateway_orionpay import OrionPayGateway
 from gateway_babylon import BabylonGateway
+from gateway_bolt import BoltGateway
 
 logger = logging.getLogger(__name__)
 
@@ -32,10 +33,11 @@ class GatewayFactory:
         'pushynpay': PushynGateway,
         'paradise': ParadisePaymentGateway,
         'wiinpay': WiinPayGateway,
-        'atomopay': AtomPayGateway,  # ✅ Átomo Pay
-        'umbrellapag': UmbrellaPagGateway,  # ✅ UmbrellaPag
-        'orionpay': OrionPayGateway,  # ✅ OrionPay
-        'babylon': BabylonGateway,  # ✅ Babylon
+        'atomopay': AtomPayGateway,  # Átomo Pay
+        'umbrellapag': UmbrellaPagGateway,  # UmbrellaPag
+        'orionpay': OrionPayGateway,  # OrionPay
+        'babylon': BabylonGateway,  # Babylon
+        'bolt': BoltGateway,  # Bolt Pagamentos
     }
     
     @classmethod
@@ -228,6 +230,24 @@ class GatewayFactory:
                     company_id=company_id,  # Company ID
                     split_percentage=split_percentage,
                     split_user_id=split_user_id if split_user_id else None
+                )
+
+            elif gateway_type == 'bolt':
+                # ✅ Bolt requer: api_key (Secret Key) + company_id (Company ID) via Basic Auth
+                api_key = credentials.get('api_key')  # Secret Key
+                company_id = credentials.get('company_id') or credentials.get('client_id')  # Company ID
+
+                if not api_key:
+                    logger.error(f"❌ [Factory] Bolt requer api_key (Secret Key)")
+                    return None
+
+                if not company_id:
+                    logger.error(f"❌ [Factory] Bolt requer company_id (Company ID)")
+                    return None
+
+                gateway = gateway_class(
+                    api_key=api_key,
+                    company_id=company_id
                 )
             
             else:

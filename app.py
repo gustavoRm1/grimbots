@@ -1083,6 +1083,84 @@ def reconcile_atomopay_payments():
     except Exception as e:
         logger.error(f"❌ Reconciliador Atomopay: erro: {e}", exc_info=True)
 
+
+# ==================== RECONCILIADOR DE PAGAMENTOS BOLT (POLLING) ====================
+def reconcile_bolt_payments():
+    """Consulta periodicamente pagamentos não pagos do Bolt (BATCH LIMITADO para evitar spam)."""
+    try:
+        with app.app_context():
+            from models import Payment, Gateway, db
+
+            # ✅ BATCH LIMITADO: apenas 5 por execução
+            pending = (
+                Payment.query
+                .filter(Payment.gateway_type == 'bolt', Payment.status != 'paid')
+                # Evita starvation: processar os mais antigos primeiro.
+                .order_by(Payment.created_at.asc())
+                .limit(5)
+                .all()
+            )
+            if not pending:
+                logger.debug("🔍 Reconciliador Bolt: Nenhum payment não-pago encontrado")
+                return
+
+            logger.info(f"🔍 Reconciliador Bolt: Consultando {len(pending)} payment(s) mais recente(s)")
+
+            from gateway_factory import GatewayFactory
+
+            gateways_by_user = {}
+
+            for p in pending:
+                try:
+                    user_id = p.bot.user_id if p.bot else None
+                    if not user_id:
+                        logger.warning(f"⚠️ Reconciliador Bolt: Payment {p.id} sem user_id (bot ausente ou sem user). Pulando.")
+                        continue
+
+                    if user_id not in gateways_by_user:
+                        gw = Gateway.query.filter_by(
+                            user_id=user_id,
+                            gateway_type='bolt',
+                            is_active=True,
+                            is_verified=True
+                        ).first()
+                        if not gw:
+                            logger.warning(f"⚠️ Reconciliador Bolt: Gateway bolt não configurado/inativo para user {user_id}. Pulando.")
+                            continue
+
+                        creds = {
+                            'api_key': gw.api_key,
+                            'company_id': gw.client_id,
+                        }
+                        g = GatewayFactory.create_gateway('bolt', creds)
+                        if not g:
+                            continue
+                        gateways_by_user[user_id] = g
+
+                    gateway = gateways_by_user[user_id]
+
+                    if not p.gateway_transaction_id:
+                        logger.warning(f"⚠️ Reconciliador Bolt: Payment {p.id} sem gateway_transaction_id. Pulando.")
+                        continue
+
+                    result = gateway.get_payment_status(str(p.gateway_transaction_id))
+                    remote_status = (result or {}).get('status')
+
+                    # 🔐 Regra blindada: promover SOMENTE se local!=paid AND remoto==paid
+                    if p.status != 'paid' and remote_status == 'paid':
+                        p.status = 'paid'
+                        if not p.paid_at:
+                            p.paid_at = get_brazil_time()
+                        db.session.commit()
+                        logger.info(f"✅ Bolt: Payment {p.id} atualizado para paid via reconciliação")
+                    else:
+                        logger.debug(f"⏳ Bolt: Payment {p.id} não promovido | local={p.status} remoto={remote_status}")
+                except Exception as e:
+                    logger.error(f"❌ Erro ao reconciliar payment Bolt {p.id} ({p.payment_id}): {e}", exc_info=True)
+                    continue
+    except Exception as e:
+        logger.error(f"❌ Reconciliador Bolt: erro: {e}", exc_info=True)
+
 # ✅ QI 200: Reconciliadores movidos para fila async (gateway_queue)
 # Agendar job que enfileira reconciliação (não executa diretamente)
 def enqueue_reconcile_paradise():
@@ -1112,6 +1190,16 @@ def enqueue_reconcile_atomopay():
     except Exception as e:
         logger.warning(f"Erro ao enfileirar reconciliação Atomopay: {e}")
 
+
+def enqueue_reconcile_bolt():
+    """Enfileira reconciliação Bolt na fila gateway"""
+    try:
+        from tasks_async import gateway_queue
+        if gateway_queue:
+            gateway_queue.enqueue(reconcile_bolt_payments)
+    except Exception as e:
+        logger.warning(f"Erro ao enfileirar reconciliação Bolt: {e}")
+
 if _scheduler_owner:
     scheduler.add_job(id='reconcile_paradise', func=enqueue_reconcile_paradise,
                       trigger='interval', seconds=300, replace_existing=True, max_instances=1)
@@ -1126,6 +1214,11 @@ if _scheduler_owner:
     scheduler.add_job(id='reconcile_atomopay', func=enqueue_reconcile_atomopay,
                       trigger='interval', seconds=60, replace_existing=True, max_instances=1)
     logger.info("✅ Job de reconciliação Atomopay agendado (60s, fila async)")
+
+if _scheduler_owner:
+    scheduler.add_job(id='reconcile_bolt', func=enqueue_reconcile_bolt,
+                      trigger='interval', seconds=60, replace_existing=True, max_instances=1)
+    logger.info("✅ Job de reconciliação Bolt agendado (60s, fila async)")
 
 # ✅ JOB PERIÓDICO: Sincronização UmbrellaPay (5 minutos)
 if _scheduler_owner:
@@ -7401,8 +7494,61 @@ def test_pool_meta_pixel_connection(pool_id):
             }), 400
             
     except Exception as e:
-        logger.error(f"Erro ao testar Meta Pixel: {e}")
-        return jsonify({'error': str(e)}), 500
+        logger.error(f"Erro ao processar webhook síncrono: {e}")
+        return jsonify({'error': 'Erro interno'}), 500
+
+
+@app.route('/webhooks/bolt', methods=['POST'])
+@limiter.limit("500 per minute")  # PROTEÇÃO: Webhooks de pagamento
+@csrf.exempt  # Webhooks externos não enviam CSRF token
+def bolt_webhook():
+    """Webhook Bolt Pagamentos (resposta rápida + processamento assíncrono)."""
+    raw_body = request.get_data(cache=True, as_text=True)
+    data = request.get_json(silent=True)
+    payload_source = 'json'
+
+    if data is None:
+        payload_source = 'raw'
+        if raw_body:
+            try:
+                parsed = json.loads(raw_body)
+                if isinstance(parsed, dict):
+                    data = parsed
+                else:
+                    data = {'_raw_payload': parsed}
+            except (ValueError, TypeError):
+                data = {'_raw_body': raw_body}
+        else:
+            data = {}
+
+    if not isinstance(data, dict):
+        data = {'_raw_payload': data}
+
+    data.setdefault('_content_type', request.content_type)
+    data.setdefault('_payload_source', payload_source)
+
+    logger.info(f" [BOLT WEBHOOK] Recebido | content-type={request.content_type} | source={payload_source}")
+
+    try:
+        from tasks_async import webhook_queue, process_webhook_async
+        if webhook_queue:
+            webhook_queue.enqueue(
+                process_webhook_async,
+                gateway_type='bolt',
+                data=data
+            )
+            return jsonify({'status': 'queued'}), 200
+    except Exception as e:
+        logger.error(f" [BOLT WEBHOOK] Erro ao enfileirar webhook: {e}")
+
+    try:
+        from tasks_async import process_webhook_async
+        process_webhook_async(gateway_type='bolt', data=data)
+        return jsonify({'status': 'processed'}), 200
+    except Exception as e:
+        logger.error(f" [BOLT WEBHOOK] Erro ao processar webhook: {e}", exc_info=True)
+        # Responder 200 mesmo em erro (Bolt pode fazer retry)
+        return jsonify({'status': 'error_logged'}), 200
 
 
 # ==================== GATEWAYS DE PAGAMENTO ====================
@@ -7427,7 +7573,7 @@ def create_gateway():
         gateway_type = data.get('gateway_type')
     
         # ✅ Validar tipo de gateway
-        if gateway_type not in ['syncpay', 'pushynpay', 'paradise', 'wiinpay', 'atomopay', 'umbrellapag', 'orionpay', 'babylon']:
+        if gateway_type not in ['syncpay', 'pushynpay', 'paradise', 'wiinpay', 'atomopay', 'umbrellapag', 'orionpay', 'babylon', 'bolt']:
             logger.error(f"❌ Tipo de gateway inválido: {gateway_type}")
             return jsonify({'error': 'Tipo de gateway inválido'}), 400
         
@@ -7568,6 +7714,27 @@ def create_gateway():
             if split_user_id_value:
                 gateway.split_user_id = split_user_id_value
                 logger.info(f"✅ [Babylon] split_user_id salvo")
+
+        elif gateway_type == 'bolt':
+            # ✅ BOLT - Requer Secret Key + Company ID (Basic Auth)
+            api_key_value = data.get('api_key')  # Secret Key
+            company_id_value = data.get('company_id') or data.get('client_id')  # Company ID
+
+            logger.info(f"📦 [Bolt] Dados recebidos:")
+            logger.info(f"   api_key (Secret Key): {'SIM' if api_key_value else 'NÃO'} ({len(api_key_value) if api_key_value else 0} chars)")
+            logger.info(f"   company_id (Company ID): {'SIM' if company_id_value else 'NÃO'}")
+
+            if api_key_value:
+                gateway.api_key = api_key_value
+                logger.info(f"✅ [Bolt] api_key (Secret Key) salvo (criptografado)")
+            else:
+                logger.warning(f"⚠️ [Bolt] api_key (Secret Key) não fornecido")
+
+            if company_id_value:
+                gateway.client_id = company_id_value
+                logger.info(f"✅ [Bolt] client_id (Company ID) salvo")
+            else:
+                logger.warning(f"⚠️ [Bolt] company_id (Company ID) não fornecido")
         
         # ✅ Split percentage (comum a todos)
         gateway.split_percentage = float(data.get('split_percentage', 2.0))  # 2% PADRÃO
@@ -7650,6 +7817,26 @@ def create_gateway():
                 logger.info(f"   company_id (Company ID): {'SIM' if credentials.get('company_id') else 'NÃO'}")
                 logger.info(f"   split_percentage: {credentials.get('split_percentage', 2.0)}%")
                 logger.info(f"   split_user_id: {'SIM' if credentials.get('split_user_id') else 'NÃO'}")
+
+            # ✅ BOLT: Verificar se tem api_key (Secret Key) + company_id (Company ID) - ambos obrigatórios
+            if gateway_type == 'bolt':
+                if not credentials.get('api_key'):
+                    logger.error(f"❌ [Bolt] api_key (Secret Key) não configurado - não será verificado")
+                    gateway.is_verified = False
+                    gateway.last_error = 'Secret Key não configurado'
+                    db.session.commit()
+                    return jsonify(gateway.to_dict())
+
+                if not credentials.get('company_id'):
+                    logger.error(f"❌ [Bolt] company_id (Company ID) não configurado - não será verificado")
+                    gateway.is_verified = False
+                    gateway.last_error = 'Company ID não configurado'
+                    db.session.commit()
+                    return jsonify(gateway.to_dict())
+
+                logger.info(f"🔍 [Bolt] Verificando credenciais...")
+                logger.info(f"   api_key (Secret Key): {'SIM' if credentials.get('api_key') else 'NÃO'} ({len(credentials.get('api_key', ''))} chars)")
+                logger.info(f"   company_id (Company ID): {'SIM' if credentials.get('company_id') else 'NÃO'}")
             
             is_valid = bot_manager.verify_gateway(gateway_type, credentials)
             
@@ -7926,6 +8113,22 @@ def update_gateway(gateway_id):
                 gateway.offer_hash = data['offer_hash']
             if data.get('product_hash'):
                 gateway.product_hash = data['product_hash']
+
+        elif gateway_type == 'babylon':
+            if data.get('api_key'):
+                gateway.api_key = data['api_key']
+            company_id_value = data.get('company_id') or data.get('client_id')
+            if company_id_value:
+                gateway.client_id = company_id_value
+            if data.get('split_user_id'):
+                gateway.split_user_id = data['split_user_id']
+
+        elif gateway_type == 'bolt':
+            if data.get('api_key'):
+                gateway.api_key = data['api_key']
+            company_id_value = data.get('company_id') or data.get('client_id')
+            if company_id_value:
+                gateway.client_id = company_id_value
         
         elif gateway_type == 'wiinpay':
             if data.get('api_key'):
@@ -7998,6 +8201,13 @@ def clear_gateway_credentials(gateway_id):
             gateway.product_hash = None
         elif gateway_type == 'orionpay':
             gateway.api_key = None
+        elif gateway_type == 'babylon':
+            gateway.api_key = None
+            gateway.client_id = None
+            gateway.split_user_id = None
+        elif gateway_type == 'bolt':
+            gateway.api_key = None
+            gateway.client_id = None
         
         # Desativar e desmarcar como verificado
         gateway.is_active = False
@@ -9480,6 +9690,11 @@ def delivery_page(delivery_token):
                         'split_user_id': gateway_row.split_user_id,
                     }
                 elif gateway_type == 'babylon':
+                    credentials = {
+                        'api_key': gateway_row.api_key,
+                        'company_id': gateway_row.client_id,
+                    }
+                elif gateway_type == 'bolt':
                     credentials = {
                         'api_key': gateway_row.api_key,
                         'company_id': gateway_row.client_id,
@@ -11795,6 +12010,8 @@ def payment_webhook(gateway_type):
             dummy_credentials = {'api_key': 'dummy'}
         elif gateway_type == 'babylon':
             dummy_credentials = {'api_key': 'dummy'}
+        elif gateway_type == 'bolt':
+            dummy_credentials = {'api_key': 'dummy', 'company_id': 'dummy'}
         
         # ✅ Criar gateway com adapter (use_adapter=True por padrão)
         gateway_instance = GatewayFactory.create_gateway(gateway_type, dummy_credentials, use_adapter=True)

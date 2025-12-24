@@ -7918,6 +7918,7 @@ Seu pagamento ainda não foi confirmado.
                         gateway_type=gateway.gateway_type,
                         gateway_transaction_id=gateway_transaction_id,  # ✅ Salvar mesmo quando recusado
                         gateway_transaction_hash=gateway_hash,  # ✅ CRÍTICO: gateway_hash (campo 'hash' da resposta) para webhook matching
+                        payment_method=str(pix_result.get('payment_method') or pix_result.get('paymentMethod') or 'PIX')[:20] if pix_result else 'PIX',
                         amount=amount,
                         customer_name=customer_name,
                         customer_username=customer_username,

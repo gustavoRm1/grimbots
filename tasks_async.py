@@ -813,7 +813,7 @@ def process_webhook_async(gateway_type: str, data: Dict[str, Any]):
     - Enviar Meta Pixel Purchase
     """
     try:
-        # ✅ CRÍTICO: Logging no início para verificar se função está sendo chamada
+        # CRÍTICO: Logging no início para verificar se função está sendo chamada
         logger.info(f"🔍 [DIAGNÓSTICO] process_webhook_async INICIADO para gateway_type={gateway_type}")
         
         from app import app, db
@@ -838,6 +838,8 @@ def process_webhook_async(gateway_type: str, data: Dict[str, Any]):
                 dummy_credentials = {'api_token': 'dummy'}
             elif gateway_type == 'umbrellapag':
                 dummy_credentials = {'api_key': 'dummy'}
+            elif gateway_type == 'bolt':
+                dummy_credentials = {'api_key': 'dummy', 'company_id': 'dummy'}
             
             gateway_instance = GatewayFactory.create_gateway(gateway_type, dummy_credentials, use_adapter=True)
             
@@ -1022,6 +1024,14 @@ def process_webhook_async(gateway_type: str, data: Dict[str, Any]):
                 if payment:
                     was_pending = payment.status == 'pending'
                     status_antigo = payment.status
+
+                    # ✅ Persistir payment_method (não altera status, não dispara tracking)
+                    try:
+                        method_from_webhook = result.get('payment_method')
+                        if method_from_webhook and not getattr(payment, 'payment_method', None):
+                            payment.payment_method = str(method_from_webhook)[:20]
+                    except Exception as method_error:
+                        logger.warning(f"⚠️ Erro ao salvar payment_method do webhook: {method_error}")
                     
                     # ✅ CRÍTICO: Validação anti-fraude - Rejeitar webhook 'paid' recebido muito rápido após criação
                     # Se payment foi criado há menos de 10 segundos e webhook vem como 'paid', é suspeito
