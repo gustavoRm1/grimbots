@@ -180,9 +180,27 @@ class BoltGateway(PaymentGateway):
         if not result:
             return None
 
+        pix_code = (result.get('pix_code') or '').strip() if result.get('pix_code') else ''
+        qr_code_url = (result.get('qr_code_url') or '').strip() if result.get('qr_code_url') else ''
+
+        # Alguns retornos do Bolt podem vir com o EMV (copia e cola) em outro campo.
+        if not pix_code:
+            raw_data = result.get('raw_data') or {}
+            pix = raw_data.get('pix') if isinstance(raw_data, dict) else None
+            if isinstance(pix, dict):
+                for key in ('qrcodeText', 'qrCodeText', 'copyPaste', 'emv'):
+                    candidate = pix.get(key)
+                    if isinstance(candidate, str) and candidate.strip():
+                        pix_code = candidate.strip()
+                        break
+
+        # Fallback adicional: quando o gateway entrega o EMV no campo qr_code_url.
+        if not pix_code and qr_code_url and len(qr_code_url) > 50:
+            pix_code = qr_code_url
+
         return {
-            'pix_code': result.get('pix_code') or '',
-            'qr_code_url': result.get('qr_code_url') or '',
+            'pix_code': pix_code or '',
+            'qr_code_url': qr_code_url or '',
             'transaction_id': result.get('transaction_id'),
             'payment_id': payment_id,
             'gateway_hash': None,
