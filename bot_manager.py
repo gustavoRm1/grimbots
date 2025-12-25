@@ -4,6 +4,7 @@ Responsável por validar tokens, iniciar/parar bots e processar webhooks
 """
 
 import requests
+from requests.adapters import HTTPAdapter
 import threading
 import time
 import logging
@@ -11,6 +12,7 @@ import json
 import subprocess
 import socket
 import urllib3.util.connection
+from urllib3.util.retry import Retry
 import re
 from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta
@@ -477,7 +479,156 @@ class BotManager:
         self.remarketing_semaphore = threading.BoundedSemaphore(15)  # Máximo 15 campanhas simultâneas
         self.remarketing_queue = []  # Fila de campanhas aguardando (transparente para usuário)
         self.active_remarketing_campaigns = set()  # IDs de campanhas ativas
+
+        # ✅ PATCH: Session reutilizável + Retry/Backoff para envios pesados (sendVideo)
+        # Regra: manter impacto ZERO em outros tipos de mensagem; Session será usada somente em send_video_safe.
+        self._telegram_session = requests.Session()
+        retry = Retry(
+            total=5,
+            connect=5,
+            read=5,
+            backoff_factor=1.5,
+            status_forcelist=(429, 500, 502, 503, 504),
+            allowed_methods=frozenset(['GET', 'POST']),
+            raise_on_status=False,
+            respect_retry_after_header=True,
+        )
+        adapter = HTTPAdapter(
+            max_retries=retry,
+            pool_connections=50,
+            pool_maxsize=50,
+        )
+        self._telegram_session.mount('https://', adapter)
+        self._telegram_session.mount('http://', adapter)
+
+        # ✅ PATCH: Rate limit POR TOKEN (thread-safe)
+        self._telegram_rate_lock = threading.Lock()
+        self._telegram_last_send_ts: Dict[str, float] = {}
+        self._telegram_min_interval_seconds = 1.2
         logger.info("BotManager inicializado")
+
+    def _rate_limit_telegram_by_token(self, token: str) -> None:
+        """Rate limit thread-safe por token. Não muda fluxo, apenas evita flood de conexões."""
+        if not token:
+            return
+
+        now = time.time()
+        sleep_for = 0.0
+        with self._telegram_rate_lock:
+            last_ts = self._telegram_last_send_ts.get(token)
+            if last_ts is not None:
+                elapsed = now - last_ts
+                if elapsed < self._telegram_min_interval_seconds:
+                    sleep_for = self._telegram_min_interval_seconds - elapsed
+            self._telegram_last_send_ts[token] = now + sleep_for
+
+        if sleep_for > 0:
+            time.sleep(sleep_for)
+
+    def _blacklist_user_deactivated(self, token: str, chat_id: str) -> None:
+        """Blacklist definitiva para 'user is deactivated' (best-effort; não quebra execução se falhar)."""
+        try:
+            from app import app, db
+            from models import RemarketingBlacklist, Bot
+
+            with app.app_context():
+                bot_id = None
+                with self._bots_lock:
+                    for bid, bot_info in self.active_bots.items():
+                        if bot_info.get('token') == token:
+                            bot_id = bid
+                            break
+
+                if not bot_id:
+                    bot = Bot.query.filter_by(token=token).first()
+                    if bot:
+                        bot_id = bot.id
+
+                if not bot_id:
+                    return
+
+                existing = db.session.query(RemarketingBlacklist).filter_by(
+                    bot_id=bot_id,
+                    telegram_user_id=str(chat_id)
+                ).first()
+                if existing:
+                    return
+
+                blacklist = RemarketingBlacklist(
+                    bot_id=bot_id,
+                    telegram_user_id=str(chat_id),
+                    reason='user_deactivated'
+                )
+                db.session.add(blacklist)
+                db.session.commit()
+                logger.info(f"🚫 Usuário {chat_id} adicionado à blacklist do bot {bot_id} (user is deactivated)")
+        except Exception as e:
+            logger.warning(f"⚠️ Falha ao adicionar blacklist (user is deactivated) para chat {chat_id}: {e}")
+
+    def send_video_safe(self, token: str, chat_id: str, *,
+                        media_url: Optional[str] = None,
+                        caption: str = '',
+                        reply_markup: Optional[dict] = None,
+                        file_path: Optional[str] = None) -> Optional[requests.Response]:
+        """Envio seguro de sendVideo (URL remota ou upload local). Usa Session + retry/backoff + rate limit."""
+        try:
+            base_url = f"https://api.telegram.org/bot{token}"
+            url = f"{base_url}/sendVideo"
+
+            self._rate_limit_telegram_by_token(token)
+
+            timeout = (5, 45)
+
+            if file_path:
+                with open(file_path, 'rb') as file:
+                    files = {'video': file}
+                    data = {
+                        'chat_id': chat_id,
+                        'caption': caption or '',
+                        'parse_mode': 'HTML'
+                    }
+                    if reply_markup:
+                        data['reply_markup'] = json.dumps(reply_markup)
+                    response = self._telegram_session.post(url, files=files, data=data, timeout=timeout)
+            else:
+                payload = {
+                    'chat_id': chat_id,
+                    'video': media_url,
+                    'parse_mode': 'HTML'
+                }
+                if caption:
+                    payload['caption'] = caption
+                if reply_markup:
+                    payload['reply_markup'] = reply_markup
+                response = self._telegram_session.post(url, json=payload, timeout=timeout)
+
+            # ✅ Validar HTTP 5xx sem quebrar fluxo (retry já ocorreu no adapter)
+            try:
+                if response is not None and response.status_code >= 500:
+                    response.raise_for_status()
+            except requests.HTTPError:
+                pass
+
+            # Tratar definitivamente user is deactivated
+            try:
+                if response is not None and response.status_code == 403:
+                    data = response.json() if response.content else {}
+                    desc = (data.get('description') or '').lower()
+                    if 'user is deactivated' in desc:
+                        self._blacklist_user_deactivated(token, chat_id)
+            except Exception:
+                pass
+
+            return response
+        except FileNotFoundError:
+            logger.error(f"❌ Arquivo não encontrado: {file_path}")
+            return None
+        except (requests.exceptions.Timeout, requests.exceptions.SSLError, requests.exceptions.ConnectionError) as e:
+            logger.error(f"❌ Erro de rede ao enviar vídeo para chat {chat_id}: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"❌ Erro inesperado em send_video_safe para chat {chat_id}: {e}", exc_info=True)
+            return None
     
     def validate_token(self, token: str) -> Dict[str, Any]:
         """
@@ -1984,7 +2135,19 @@ class BotManager:
                     if inline_keyboard and not text_sent_separately:
                         payload['reply_markup'] = {'inline_keyboard': inline_keyboard}
 
-                    response = requests.post(url, json=payload, timeout=10)
+                    if media_type == 'video':
+                        response = self.send_video_safe(
+                            token=token,
+                            chat_id=chat_id,
+                            media_url=media_url,
+                            caption=caption_text,
+                            reply_markup=payload.get('reply_markup')
+                        )
+                        if response is None:
+                            all_success = False
+                            response = type('obj', (object,), {'status_code': 0, 'json': lambda *_: {'ok': False}, 'text': 'send_video_safe failed'})()
+                    else:
+                        response = requests.post(url, json=payload, timeout=10)
                     if response.status_code == 200 and response.json().get('ok'):
                         logger.info(f"✅ Mídia enviada{' com caption' if caption_text else ' sem caption'} {'e botões' if inline_keyboard and not text_sent_separately else ''}")
                     else:
@@ -8726,19 +8889,30 @@ Seu pagamento ainda não foi confirmado.
             url = f"{base_url}/{endpoint}"
             
             # Preparar dados para multipart/form-data
-            with open(file_path, 'rb') as file:
-                files = {file_field: file}
-                data = {
-                    'chat_id': chat_id,
-                    'caption': message,
-                    'parse_mode': 'HTML'
-                }
-                
-                if reply_markup:
-                    import json
-                    data['reply_markup'] = json.dumps(reply_markup)
-                
-                response = requests.post(url, files=files, data=data, timeout=30)
+            if media_type == 'video':
+                response = self.send_video_safe(
+                    token=token,
+                    chat_id=chat_id,
+                    caption=message,
+                    reply_markup=reply_markup,
+                    file_path=file_path
+                )
+                if response is None:
+                    return False
+            else:
+                with open(file_path, 'rb') as file:
+                    files = {file_field: file}
+                    data = {
+                        'chat_id': chat_id,
+                        'caption': message,
+                        'parse_mode': 'HTML'
+                    }
+                    
+                    if reply_markup:
+                        import json
+                        data['reply_markup'] = json.dumps(reply_markup)
+                    
+                    response = requests.post(url, files=files, data=data, timeout=30)
             
             if response.status_code == 200:
                 result_data = response.json()
@@ -8942,7 +9116,15 @@ Seu pagamento ainda não foi confirmado.
                         }
                         if reply_markup:
                             payload['reply_markup'] = reply_markup
-                        response = requests.post(url, json=payload, timeout=3)
+                        response = self.send_video_safe(
+                            token=token,
+                            chat_id=chat_id,
+                            media_url=media_url,
+                            caption='',
+                            reply_markup=reply_markup
+                        )
+                        if response is None:
+                            return False
                         
                         # Enviar mensagem completa separadamente
                         if response.status_code == 200:
@@ -8970,7 +9152,15 @@ Seu pagamento ainda não foi confirmado.
                         }
                         if reply_markup:
                             payload['reply_markup'] = reply_markup
-                        response = requests.post(url, json=payload, timeout=3)
+                        response = self.send_video_safe(
+                            token=token,
+                            chat_id=chat_id,
+                            media_url=media_url,
+                            caption=caption_text,
+                            reply_markup=reply_markup
+                        )
+                        if response is None:
+                            return False
                 elif media_type == 'audio':
                     # ✅ QI 200: Se caption > 1500, enviar áudio sem caption e mensagem separada
                     if len(message) > 1500:
@@ -9099,6 +9289,11 @@ Seu pagamento ainda não foi confirmado.
                 # ✅ CRÍTICO: Log detalhado do erro
                 error_description = result_data.get('description', 'Erro desconhecido') if result_data else 'Resposta inválida'
                 error_code = result_data.get('error_code', response.status_code) if result_data else response.status_code
+
+                # ✅ DEFINITIVO: user is deactivated → blacklist e não tentar mais
+                if response.status_code == 403 and isinstance(error_description, str) and 'user is deactivated' in error_description.lower():
+                    self._blacklist_user_deactivated(token, chat_id)
+
                 logger.error(f"❌ Erro ao enviar mensagem para chat {chat_id}: status={response.status_code}, error_code={error_code}, description={error_description}")
                 logger.error(f"❌ Resposta completa: {response.text[:500]}")
                 # ✅ Retornar dict com informações do erro para permitir detecção de 401
