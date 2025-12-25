@@ -7431,14 +7431,22 @@ Seu pagamento ainda não foi confirmado.
                     utm_term = getattr(bot_user, 'utm_term', None) if bot_user else None
                     
                     redis_tracking_payload: Dict[str, Any] = {}
-                    tracking_token = None
+                    if not is_remarketing:
+                        tracking_token = None
 
                     # ✅ CORREÇÃO CRÍTICA QI 1000+: PRIORIDADE MÁXIMA para bot_user.tracking_session_id
                     # Isso garante que o token do public_redirect seja SEMPRE usado (tem todos os dados: client_ip, client_user_agent, pageview_event_id)
                     # PROBLEMA IDENTIFICADO: Verificação estava DEPOIS de tracking:last_token e tracking:chat
                     # SOLUÇÃO: Verificar bot_user.tracking_session_id PRIMEIRO (antes de tudo)
                     # ✅ CORREÇÃO CRÍTICA V15: Se token gerado detectado, tentar recuperar token UUID correto via fbclid
-                    if bot_user and bot_user.tracking_session_id:
+                    if is_remarketing:
+                        if bot_user and bot_user.tracking_session_id:
+                            tracking_token = bot_user.tracking_session_id
+                            logger.info(f"✅ [REMARKETING] Forçando tracking_token do BotUser.tracking_session_id: {tracking_token[:20]}...")
+                        else:
+                            tracking_token = None
+                            logger.error(f"❌ [REMARKETING] BotUser sem tracking_session_id - Payment será criado sem tracking_token (atribuição prejudicada)")
+                    elif bot_user and bot_user.tracking_session_id and not is_remarketing:
                         tracking_token = bot_user.tracking_session_id
                         logger.info(f"✅ Tracking token recuperado de bot_user.tracking_session_id (PRIORIDADE MÁXIMA): {tracking_token[:20]}...")
                         
@@ -7466,7 +7474,7 @@ Seu pagamento ainda não foi confirmado.
                                             logger.info(f"   Atualizando bot_user.tracking_session_id com token UUID correto")
                                             bot_user.tracking_session_id = tracking_token
                                         else:
-                                            logger.warning(f"⚠️ [GENERATE PIX] Token recuperado via fbclid também é gerado: {recovered_token_from_fbclid[:30]}...")
+                                            logger.warning(f"⚠️ [GENERATE PIX] Token recuperado via fbclid tem formato inválido: {recovered_token_from_fbclid[:30]}... (len={len(recovered_token_from_fbclid)}) - IGNORANDO")
                                 except Exception as e:
                                     logger.warning(f"⚠️ Erro ao recuperar token UUID via fbclid: {e}")
                             else:
@@ -7485,7 +7493,7 @@ Seu pagamento ainda não foi confirmado.
 
                     # ✅ FALLBACK 1: tracking:last_token (se bot_user.tracking_session_id não existir)
                     # ✅ CORREÇÃO CRÍTICA V16: Validar token ANTES de usar
-                    if not tracking_token and customer_user_id:
+                    if not is_remarketing and not tracking_token and customer_user_id:
                         try:
                             cached_token = tracking_service.redis.get(f"tracking:last_token:user:{customer_user_id}")
                             if cached_token:
@@ -7509,7 +7517,8 @@ Seu pagamento ainda não foi confirmado.
                     
                     # ✅ FALLBACK 2: tracking:chat (se bot_user.tracking_session_id não existir)
                     # ✅ CORREÇÃO CRÍTICA V16: Validar token ANTES de usar
-                    if not tracking_token and customer_user_id:
+                    # ✅ REGRA: Remarketing NÃO pode gerar/substituir tracking_token aqui
+                    if not is_remarketing and not tracking_token and customer_user_id:
                         try:
                             cached_payload = tracking_service.redis.get(f"tracking:chat:{customer_user_id}")
                             if cached_payload:

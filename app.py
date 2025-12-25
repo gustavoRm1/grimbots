@@ -19,7 +19,7 @@ import atexit
 from typing import Any
 from dotenv import load_dotenv
 from redis_manager import get_redis_connection, redis_health_check
-from sqlalchemy import text, select, delete, update
+from sqlalchemy import text, select, delete, update, inspect
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from urllib.parse import urlparse, urlencode, parse_qsl, urlunparse
@@ -180,6 +180,35 @@ app.config['PREFERRED_URL_SCHEME'] = os.environ.get('PREFERRED_URL_SCHEME', 'htt
 
 # Inicializar extensões
 db.init_app(app)
+
+def _ensure_payments_payment_method_column() -> None:
+    try:
+        with app.app_context():
+            inspector = inspect(db.engine)
+            columns = [col['name'] for col in inspector.get_columns('payments')]
+            if 'payment_method' in columns:
+                return
+
+            dialect_name = db.engine.dialect.name
+            logger.warning(f"⚠️ payments.payment_method ausente - aplicando ALTER TABLE (dialeto: {dialect_name})")
+            db.session.execute(text("ALTER TABLE payments ADD COLUMN payment_method VARCHAR(20)"))
+            try:
+                if dialect_name == 'postgresql':
+                    db.session.execute(text("CREATE INDEX IF NOT EXISTS idx_payments_payment_method ON payments(payment_method)"))
+                elif dialect_name != 'sqlite':
+                    db.session.execute(text("CREATE INDEX idx_payments_payment_method ON payments(payment_method)"))
+            except Exception as e:
+                logger.warning(f"⚠️ Não foi possível criar índice idx_payments_payment_method (não crítico): {e}")
+            db.session.commit()
+            logger.warning("✅ Startup migration aplicada: payments.payment_method")
+    except Exception as e:
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        logger.error(f"❌ Falha na startup migration payments.payment_method: {e}", exc_info=True)
+
+_ensure_payments_payment_method_column()
 
 # ============================================================================
 # CORREÇÃO #1: CORS RESTRITO (não aceitar *)
@@ -10715,7 +10744,8 @@ def send_meta_pixel_purchase_event(payment, pageview_event_id=None):
         if bot_user and bot_user.tracking_session_id:
             # ✅ VALIDAÇÃO CRÍTICA: Verificar se tracking_session_id é um token gerado (tracking_xxx)
             is_generated_token = bot_user.tracking_session_id.startswith('tracking_')
-            is_uuid_token = len(bot_user.tracking_session_id) == 32 and all(c in '0123456789abcdef' for c in bot_user.tracking_session_id.lower())
+            normalized_token = bot_user.tracking_session_id.replace('-', '').lower()
+            is_uuid_token = len(normalized_token) == 32 and all(c in '0123456789abcdef' for c in normalized_token)
             
             if is_generated_token:
                 logger.error(f"❌ [META PURCHASE] Purchase - bot_user.tracking_session_id é um TOKEN GERADO: {bot_user.tracking_session_id[:30]}...")
@@ -10758,7 +10788,8 @@ def send_meta_pixel_purchase_event(payment, pageview_event_id=None):
         if not tracking_data and payment_tracking_token:
             # ✅ VALIDAÇÃO CRÍTICA: Verificar se payment.tracking_token é um token gerado (tracking_xxx)
             is_generated_token = payment_tracking_token.startswith('tracking_')
-            is_uuid_token = len(payment_tracking_token) == 32 and all(c in '0123456789abcdef' for c in payment_tracking_token.lower())
+            normalized_token = payment_tracking_token.replace('-', '').lower()
+            is_uuid_token = len(normalized_token) == 32 and all(c in '0123456789abcdef' for c in normalized_token)
             
             if is_generated_token:
                 logger.error(f"❌ [META PURCHASE] Purchase - payment.tracking_token é um TOKEN GERADO: {payment_tracking_token[:30]}...")
@@ -10872,6 +10903,12 @@ def send_meta_pixel_purchase_event(payment, pageview_event_id=None):
         if not tracking_data.get("pageview_event_id") and getattr(payment, "pageview_event_id", None):
             tracking_data["pageview_event_id"] = payment.pageview_event_id
             logger.info(f"✅ pageview_event_id recuperado do Payment (fallback final): {payment.pageview_event_id}")
+
+        if not tracking_data.get('pageview_event_id'):
+            logger.error("❌ [META PURCHASE] pageview_event_id AUSENTE após todas as prioridades. NÃO será gerado pageview_event_id fake.")
+            logger.error(f"   payment_id={getattr(payment, 'payment_id', None)} | payment.db_id={getattr(payment, 'id', None)} | is_remarketing={bool(getattr(payment, 'is_remarketing', False))}")
+            logger.error(f"   bot_user.tracking_session_id={'✅' if (bot_user and getattr(bot_user, 'tracking_session_id', None)) else '❌'} | payment.tracking_token={'✅' if getattr(payment, 'tracking_token', None) else '❌'}")
+            logger.error(f"   tracking_token_used={'✅' if tracking_token_used else '❌'}")
 
         pageview_ts_value = tracking_data.get('pageview_ts')
         pageview_ts_int = None
