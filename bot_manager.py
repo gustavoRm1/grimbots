@@ -8195,6 +8195,128 @@ Seu pagamento ainda não foi confirmado.
                         logger.error(f"❌ [ERRO AO COMMITAR] Erro ao commitar Payment: {commit_error}", exc_info=True)
                         logger.error(f"   Payment ID: {payment.id}, payment_id: {payment.payment_id}")
                         return None
+
+                    # ✅ QI 500: PAGEVIEW ENRICHMENT NO MOMENTO DO PIX (FONTE DE VERDADE = PAYMENT)
+                    # Re-enviar o MESMO PageView (mesmo event_id) com em/ph quando houver alta confiança.
+                    # Meta fará merge por event_id (não duplica PageView).
+                    try:
+                        if pageview_event_id and pool_bot and pool_bot.pool and pool_bot.pool.meta_tracking_enabled and pool_bot.pool.meta_events_pageview:
+                            pool_for_meta = pool_bot.pool
+
+                            customer_email = getattr(payment, 'customer_email', None)
+                            customer_phone = getattr(payment, 'customer_phone', None)
+
+                            def _is_high_confidence_email(email_value: str) -> bool:
+                                if not email_value or not isinstance(email_value, str):
+                                    return False
+                                email_clean = email_value.strip().lower()
+                                if '@' not in email_clean:
+                                    return False
+                                if email_clean.endswith('@telegram.local'):
+                                    return False
+                                if email_clean.startswith('user_') and email_clean.endswith('@telegram.local'):
+                                    return False
+                                return len(email_clean) >= 6
+
+                            def _is_high_confidence_phone(phone_value: str) -> bool:
+                                if not phone_value or not isinstance(phone_value, str):
+                                    return False
+                                digits = ''.join(filter(str.isdigit, phone_value))
+                                if len(digits) < 10:
+                                    return False
+                                if digits in ('11999999999', '00000000000'):
+                                    return False
+                                return True
+
+                            should_enrich = _is_high_confidence_email(customer_email) or _is_high_confidence_phone(customer_phone)
+                            if should_enrich:
+                                enrichment_lock_key = f"meta:pageview_enriched:{pageview_event_id}"
+                                lock_ttl_seconds = 60 * 60 * 24 * 30  # 30 dias
+
+                                lock_acquired = False
+                                try:
+                                    lock_acquired = bool(tracking_service.redis.set(enrichment_lock_key, '1', nx=True, ex=lock_ttl_seconds))
+                                except Exception as lock_error:
+                                    logger.warning(f"⚠️ [META PAGEVIEW ENRICH] Falha ao criar lock Redis: {lock_error}")
+
+                                if lock_acquired:
+                                    from celery_app import send_meta_event
+                                    from utils.encryption import decrypt
+                                    from utils.meta_pixel import MetaPixelAPI
+
+                                    try:
+                                        access_token = decrypt(pool_for_meta.meta_access_token)
+                                    except Exception as decrypt_error:
+                                        logger.error(f"❌ [META PAGEVIEW ENRICH] Erro ao descriptografar access_token do pool {pool_for_meta.id}: {decrypt_error}")
+                                        access_token = None
+
+                                    if access_token:
+                                        # IP/UA/FBP/FBC: pegar do tracking_data_v4, com fallback em Payment
+                                        ip_value_for_enrich = tracking_data_v4.get('client_ip') or tracking_data_v4.get('ip') or tracking_data_v4.get('client_ip_address')
+                                        if ip_value_for_enrich and isinstance(ip_value_for_enrich, str) and '.AQYBAQIA' in ip_value_for_enrich:
+                                            ip_value_for_enrich = ip_value_for_enrich.split('.AQYBAQIA')[0]
+
+                                        ua_value_for_enrich = tracking_data_v4.get('client_user_agent') or tracking_data_v4.get('ua') or tracking_data_v4.get('client_ua')
+                                        fbp_value_for_enrich = tracking_data_v4.get('fbp') or getattr(payment, 'fbp', None)
+                                        fbc_value_for_enrich = tracking_data_v4.get('fbc') or getattr(payment, 'fbc', None)
+
+                                        fbclid_for_enrich = tracking_data_v4.get('fbclid') or getattr(payment, 'fbclid', None)
+
+                                        telegram_user_id_for_enrich = None
+                                        if bot_user and getattr(bot_user, 'telegram_user_id', None):
+                                            telegram_user_id_for_enrich = str(bot_user.telegram_user_id)
+                                        elif customer_user_id:
+                                            telegram_user_id_for_enrich = str(customer_user_id).replace('user_', '')
+
+                                        external_id_list = []
+                                        if fbclid_for_enrich and isinstance(fbclid_for_enrich, str) and fbclid_for_enrich.strip():
+                                            external_id_list.append(fbclid_for_enrich.strip())
+                                        if telegram_user_id_for_enrich and telegram_user_id_for_enrich.strip():
+                                            external_id_list.append(telegram_user_id_for_enrich.strip())
+
+                                        user_data_enriched = MetaPixelAPI._build_user_data(
+                                            customer_user_id=telegram_user_id_for_enrich,
+                                            external_id=external_id_list,
+                                            email=customer_email if _is_high_confidence_email(customer_email) else None,
+                                            phone=customer_phone if _is_high_confidence_phone(customer_phone) else None,
+                                            client_ip=ip_value_for_enrich,
+                                            client_user_agent=ua_value_for_enrich,
+                                            fbp=fbp_value_for_enrich,
+                                            fbc=fbc_value_for_enrich
+                                        )
+
+                                        event_source_url_enrich = tracking_data_v4.get('event_source_url') or tracking_data_v4.get('first_page')
+
+                                        pageview_enriched_event = {
+                                            'event_name': 'PageView',
+                                            'event_time': int(time.time()),
+                                            'event_id': pageview_event_id,
+                                            'action_source': 'website',
+                                            'event_source_url': event_source_url_enrich,
+                                            'user_data': user_data_enriched,
+                                            'custom_data': {
+                                                'source': 'pageview_enrichment',
+                                                'payment_id': getattr(payment, 'payment_id', None),
+                                                'payment_db_id': getattr(payment, 'id', None),
+                                                'gateway_type': getattr(payment, 'gateway_type', None)
+                                            }
+                                        }
+
+                                        send_meta_event.delay(
+                                            pixel_id=pool_for_meta.meta_pixel_id,
+                                            access_token=access_token,
+                                            event_data=pageview_enriched_event,
+                                            test_code=pool_for_meta.meta_test_event_code
+                                        )
+
+                                        logger.info(
+                                            f"✅ [META PAGEVIEW ENRICH] Enfileirado após PIX | event_id={pageview_event_id} | "
+                                            f"em={'✅' if user_data_enriched.get('em') else '❌'} | ph={'✅' if user_data_enriched.get('ph') else '❌'}"
+                                        )
+                                else:
+                                    logger.info(f"ℹ️ [META PAGEVIEW ENRICH] Lock já existe (não reenviar) | event_id={pageview_event_id}")
+                    except Exception as enrich_error:
+                        logger.warning(f"⚠️ [META PAGEVIEW ENRICH] Falha ao enriquecer PageView após PIX (não bloqueia PIX): {enrich_error}")
                     
                     logger.info(f"✅ Pagamento registrado | Nosso ID: {payment_id} | SyncPay ID: {pix_result.get('transaction_id')}")
                     
