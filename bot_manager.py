@@ -10499,6 +10499,7 @@ Seu pagamento ainda não foi confirmado.
                 try:
                     campaign = db.session.get(RemarketingCampaign, campaign_id)
                     if not campaign:
+                        logger.warning(f"❌ Remarketing abortado: campaign_id={campaign_id} não encontrada (db.session.get retornou None)")
                         return
                     
                     # Atualizar status
@@ -10735,9 +10736,17 @@ Seu pagamento ainda não foi confirmado.
                         batch_blocked = 0
                         consecutive_401_errors = 0  # ✅ Contador de erros 401 consecutivos
                         max_401_errors = 20  # ✅ Parar se 20 erros 401 consecutivos (token claramente inválido) - limite aumentado por segurança
+                        first_lead_logged = False
                         
                         for lead in batch:
                             try:
+                                if not first_lead_logged:
+                                    logger.warning(
+                                        f"🔎 LOOP ATIVO: entrando no envio por lead | campaign_id={campaign.id} bot_id={campaign.bot_id} "
+                                        f"batch={batch_number} batch_size={len(batch)}"
+                                    )
+                                    first_lead_logged = True
+
                                 # ✅ Diagnóstico/proteção: lead sem telegram_user_id não pode receber envio
                                 if not getattr(lead, 'telegram_user_id', None):
                                     batch_failed += 1
@@ -10802,7 +10811,11 @@ Seu pagamento ainda não foi confirmado.
                                             })
                                 
                                 # Enviar mensagem
-                                logger.debug(f"📤 Enviando remarketing para {lead.telegram_user_id} (lead: {lead.id})")
+                                logger.warning(
+                                    f"🚀 TENTATIVA_ENVIO: bot={campaign.bot_id} campaign_id={campaign.id} "
+                                    f"chat_id={lead.telegram_user_id} lead_id={getattr(lead, 'id', None)} "
+                                    f"media_type={campaign.media_type!r} batch={batch_number}"
+                                )
                                 result = self.send_telegram_message(
                                     token=bot_token,
                                     chat_id=lead.telegram_user_id,
@@ -10811,6 +10824,17 @@ Seu pagamento ainda não foi confirmado.
                                     media_type=campaign.media_type,
                                     buttons=remarketing_buttons
                                 )
+
+                                if not first_lead_logged:
+                                    # redundante por segurança (não deve acontecer)
+                                    first_lead_logged = True
+                                
+                                # Log pós-envio apenas para a primeira tentativa do batch (reduz spam)
+                                if first_lead_logged is True and batch_sent == 0 and batch_failed == 0 and batch_blocked == 0:
+                                    logger.warning(
+                                        f"🧾 RETORNO_ENVIO (1º lead do batch): bot={campaign.bot_id} campaign_id={campaign.id} "
+                                        f"chat_id={lead.telegram_user_id} result_type={type(result).__name__}"
+                                    )
                                 
                                 # ✅ CRÍTICO: Verificar se result é dict com erro (novo formato) ou bool/True (formato antigo)
                                 if isinstance(result, dict) and result.get('error'):
@@ -11140,6 +11164,7 @@ Seu pagamento ainda não foi confirmado.
             """Wrapper que controla concorrência de remarketing"""
             # Adicionar campanha à lista de ativas
             self.active_remarketing_campaigns.add(campaign_id)
+            logger.info(f"🧵 Remarketing worker iniciado: campaign_id={campaign_id} (aguardando slot do semáforo)")
             
             # ✅ LOOP INFINITO: Tentar adquirir slot até conseguir (transparente para usuário)
             # Sistema multi-usuário: todas as campanhas serão processadas, mesmo que aguardem
@@ -11153,13 +11178,13 @@ Seu pagamento ainda não foi confirmado.
                     
                     if acquired:
                         # ✅ Slot adquirido - iniciar processamento
-                        logger.debug(f"✅ Campanha {campaign_id} iniciando processamento (tentativa {retry_count + 1})")
+                        logger.info(f"✅ Slot adquirido: campaign_id={campaign_id} (tentativa {retry_count + 1})")
                         break
                     else:
                         # ✅ Slot não disponível - aguardar e tentar novamente
                         retry_count += 1
                         if retry_count % 10 == 0:  # Log a cada 10 tentativas (10 minutos)
-                            logger.debug(f"⏳ Campanha {campaign_id} aguardando slot... (tentativa {retry_count}/{max_retries})")
+                            logger.info(f"⏳ Campanha {campaign_id} aguardando slot... (tentativa {retry_count}/{max_retries})")
                         time.sleep(5)  # Aguardar 5 segundos antes de tentar novamente
                         continue
                         
@@ -11186,7 +11211,9 @@ Seu pagamento ainda não foi confirmado.
             try:
                 
                 # Executar campanha (já tem app_context interno)
+                logger.info(f"🔥 Iniciando send_campaign(): campaign_id={campaign_id}")
                 send_campaign()
+                logger.info(f"✅ send_campaign() retornou: campaign_id={campaign_id}")
                 
             except Exception as outer_error:
                 logger.error(f"❌ Erro crítico na campanha {campaign_id}: {outer_error}", exc_info=True)
@@ -11203,7 +11230,7 @@ Seu pagamento ainda não foi confirmado.
                 # Liberar semáforo e remover da lista de ativas
                 self.remarketing_semaphore.release()
                 self.active_remarketing_campaigns.discard(campaign_id)
-                logger.debug(f"✅ Slot liberado - Campanha {campaign_id} concluída")
+                logger.info(f"✅ Slot liberado - Campanha {campaign_id} concluída")
                 
                 # ✅ Se há campanhas na fila, processar próxima automaticamente
                 # (transparente para o usuário - não precisa fazer nada)
@@ -11212,6 +11239,7 @@ Seu pagamento ainda não foi confirmado.
         thread = threading.Thread(target=send_campaign_with_limit)
         thread.daemon = True
         thread.start()
+        logger.info(f"🚀 Thread disparada para remarketing: campaign_id={campaign_id} thread_name={thread.name}")
     
     # ============================================================================
     # ✅ SISTEMA DE ASSINATURAS - Ativação e Gerenciamento
