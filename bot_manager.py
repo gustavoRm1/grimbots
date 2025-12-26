@@ -10738,6 +10738,15 @@ Seu pagamento ainda não foi confirmado.
                         
                         for lead in batch:
                             try:
+                                # ✅ Diagnóstico/proteção: lead sem telegram_user_id não pode receber envio
+                                if not getattr(lead, 'telegram_user_id', None):
+                                    batch_failed += 1
+                                    logger.warning(
+                                        f"❌ FALHA: bot={campaign.bot_id} lead_id={getattr(lead, 'id', None)} "
+                                        f"motivo=missing_telegram_user_id batch={batch_number}"
+                                    )
+                                    continue
+
                                 # ✅ CRÍTICO: Se muitos erros 401 consecutivos, token está inválido - pular batch
                                 if consecutive_401_errors >= max_401_errors:
                                     logger.error(f"🛑 Token do bot {campaign.bot_id} está INVÁLIDO ({consecutive_401_errors} erros 401 consecutivos) - PARANDO envio para este bot")
@@ -10755,7 +10764,10 @@ Seu pagamento ainda não foi confirmado.
                                 
                                 if is_blocked:
                                     batch_blocked += 1
-                                    logger.debug(f"🚫 Usuário {lead.telegram_user_id} está na blacklist do bot {campaign.bot_id} - pulando envio")
+                                    logger.info(
+                                        f"🚫 BLOQUEADO: bot={campaign.bot_id} chat_id={lead.telegram_user_id} "
+                                        f"batch={batch_number}"
+                                    )
                                     continue  # Pular este lead e ir para o próximo
                                 
                                 # Personalizar mensagem
@@ -10855,7 +10867,10 @@ Seu pagamento ainda não foi confirmado.
                                         # Outro erro - reset contador 401
                                         consecutive_401_errors = 0
                                         batch_failed += 1
-                                        logger.warning(f"❌ Remarketing NÃO foi enviado para {lead.telegram_user_id} (erro {error_code}) - verificar logs acima para detalhes")
+                                        logger.warning(
+                                            f"❌ FALHA: bot={campaign.bot_id} chat_id={lead.telegram_user_id} "
+                                            f"error_code={error_code} desc={error_description[:120]} batch={batch_number}"
+                                        )
                                 elif result:
                                     # ✅ Sucesso (result é True ou dict com dados)
                                     logger.debug(f"✅ Remarketing enviado com sucesso para {lead.telegram_user_id}")
@@ -10885,7 +10900,10 @@ Seu pagamento ainda não foi confirmado.
                                             logger.warning(f"⚠️ Erro ao enviar áudio para {lead.telegram_user_id}: {audio_error}")
                                 else:
                                     # ✅ Result é False (formato antigo - compatibilidade)
-                                    logger.warning(f"❌ Remarketing NÃO foi enviado para {lead.telegram_user_id} (result=False) - verificar logs acima para detalhes")
+                                    logger.warning(
+                                        f"❌ FALHA: bot={campaign.bot_id} chat_id={lead.telegram_user_id} "
+                                        f"result=False batch={batch_number}"
+                                    )
                                     batch_failed += 1
                                     
                             except Exception as e:
