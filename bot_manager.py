@@ -9234,15 +9234,18 @@ Seu pagamento ainda não foi confirmado.
                 response = requests.post(url, json=payload, timeout=3)
             
             # ✅ CRÍTICO: Verificar resposta da API do Telegram
+            result_data = None
             try:
-                result_data = response.json()
-            except Exception as json_error:
-                logger.error(f"❌ Erro ao parsear resposta JSON do Telegram para chat {chat_id}: {json_error}")
-                logger.error(f"❌ Resposta raw: {response.text[:200]}")
-                return False
+                if getattr(response, 'content', None):
+                    result_data = response.json()
+            except Exception:
+                # ⚠️ Telegram pode retornar 200 sem JSON parseável (especialmente sendVideo por URL)
+                logger.warning(
+                    f"⚠️ Telegram retornou 200 sem JSON parseável (assumindo sucesso) | chat_id={chat_id}"
+                )
             
-            # ✅ CRÍTICO: Verificar se status_code é 200 E se result_data.get('ok') é True
-            if response.status_code == 200 and result_data.get('ok'):
+            # ✅ CRÍTICO: Verificar sucesso. Se 200, considerar sucesso mesmo sem JSON.
+            if response.status_code == 200 and (not result_data or result_data.get('ok')):
                 logger.debug(f"✅ Mensagem enviada para chat {chat_id}")
                 
                 # ✅ CHAT: Salvar mensagem enviada pelo bot no banco
@@ -9302,7 +9305,7 @@ Seu pagamento ainda não foi confirmado.
                     # Não interromper o fluxo se falhar ao salvar
                 
                 # Retornar dados completos se sucesso, senão True para compatibilidade
-                return result_data if result_data.get('result') else True
+                return result_data or True
             else:
                 # ✅ CRÍTICO: Log detalhado do erro
                 error_description = result_data.get('description', 'Erro desconhecido') if result_data else 'Resposta inválida'
@@ -10856,6 +10859,10 @@ Seu pagamento ainda não foi confirmado.
                                 elif result:
                                     # ✅ Sucesso (result é True ou dict com dados)
                                     logger.debug(f"✅ Remarketing enviado com sucesso para {lead.telegram_user_id}")
+                                    logger.info(
+                                        f"📨 ENVIADO: bot={campaign.bot_id} chat_id={lead.telegram_user_id} "
+                                        f"type={campaign.media_type} batch={batch_number}"
+                                    )
                                     batch_sent += 1
                                     consecutive_401_errors = 0  # ✅ Reset contador se sucesso
                                     
