@@ -8200,6 +8200,20 @@ Seu pagamento ainda não foi confirmado.
                     # Re-enviar o MESMO PageView (mesmo event_id) com em/ph quando houver alta confiança.
                     # Meta fará merge por event_id (não duplica PageView).
                     try:
+                        logger.info(
+                            "🔎 ENRICHMENT CHECK | PIX",
+                            extra={
+                                "payment_db_id": getattr(payment, 'id', None),
+                                "payment_id": getattr(payment, 'payment_id', None),
+                                "pageview_event_id": pageview_event_id,
+                                "tracking_token": tracking_token,
+                                "has_customer_email": bool(getattr(payment, 'customer_email', None)),
+                                "has_customer_phone": bool(getattr(payment, 'customer_phone', None)),
+                                "pool_bot": bool(pool_bot),
+                                "meta_enabled": bool(pool_bot and pool_bot.pool and pool_bot.pool.meta_tracking_enabled),
+                                "meta_pageview_enabled": bool(pool_bot and pool_bot.pool and pool_bot.pool.meta_events_pageview)
+                            }
+                        )
                         if pageview_event_id and pool_bot and pool_bot.pool and pool_bot.pool.meta_tracking_enabled and pool_bot.pool.meta_events_pageview:
                             pool_for_meta = pool_bot.pool
 
@@ -8238,6 +8252,15 @@ Seu pagamento ainda não foi confirmado.
                                     lock_acquired = bool(tracking_service.redis.set(enrichment_lock_key, '1', nx=True, ex=lock_ttl_seconds))
                                 except Exception as lock_error:
                                     logger.warning(f"⚠️ [META PAGEVIEW ENRICH] Falha ao criar lock Redis: {lock_error}")
+
+                                logger.info(
+                                    "🔎 ENRICHMENT LOCK RESULT",
+                                    extra={
+                                        "enrichment_lock_key": enrichment_lock_key,
+                                        "lock_ttl_seconds": lock_ttl_seconds,
+                                        "lock_acquired": bool(lock_acquired)
+                                    }
+                                )
 
                                 if lock_acquired:
                                     from celery_app import send_meta_event
@@ -8314,7 +8337,7 @@ Seu pagamento ainda não foi confirmado.
                                             f"em={'✅' if user_data_enriched.get('em') else '❌'} | ph={'✅' if user_data_enriched.get('ph') else '❌'}"
                                         )
                                 else:
-                                    logger.info(f"ℹ️ [META PAGEVIEW ENRICH] Lock já existe (não reenviar) | event_id={pageview_event_id}")
+                                    logger.info(f"ℹ️ [META PAGEVIEW ENRICH] Lock já existe (não reenviar) | key={enrichment_lock_key} | ttl={lock_ttl_seconds}s | event_id={pageview_event_id}")
                     except Exception as enrich_error:
                         logger.warning(f"⚠️ [META PAGEVIEW ENRICH] Falha ao enriquecer PageView após PIX (não bloqueia PIX): {enrich_error}")
                     
