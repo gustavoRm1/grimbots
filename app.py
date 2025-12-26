@@ -9915,7 +9915,7 @@ def delivery_page(delivery_token):
                 # ✅ CRÍTICO: Passar event_id garantido para garantir MESMO event_id no client-side e server-side
                 # Isso garante deduplicação automática pela Meta mesmo sem pageview_event_id original
                 # ✅ CORREÇÃO: Enfileirar server-side DEPOIS de renderizar template (client-side dispara primeiro)
-                purchase_was_sent = send_meta_pixel_purchase_event(payment, pageview_event_id=event_id_to_pass)
+                purchase_was_sent = send_meta_pixel_purchase_event(payment)
                 
                 # ✅ VALIDAÇÃO: Verificar se Purchase foi realmente enfileirado
                 if purchase_was_sent:
@@ -10600,7 +10600,7 @@ def send_meta_pixel_pageview_event(pool, request, pageview_event_id=None, tracki
         logger.error(f"💥 Erro ao enfileirar Meta PageView: {e}")
         # Não impedir o redirect se Meta falhar
         return None, {}, {}
-def send_meta_pixel_purchase_event(payment, pageview_event_id=None):
+def send_meta_pixel_purchase_event(payment):
     """
     Envia evento Purchase para Meta Pixel quando pagamento é confirmado
     
@@ -10613,7 +10613,6 @@ def send_meta_pixel_purchase_event(payment, pageview_event_id=None):
     
     Args:
         payment: Payment object
-        pageview_event_id: Optional pageview_event_id para garantir mesmo event_id no client-side e server-side
     """
     try:
         logger.info(f"🔍 DEBUG Meta Pixel Purchase - Iniciando para {payment.payment_id}")
@@ -10808,26 +10807,6 @@ def send_meta_pixel_purchase_event(payment, pageview_event_id=None):
                         logger.info(f"[META PURCHASE] Purchase - TTL restante: {ttl} segundos ({'expirando' if ttl < 3600 else 'OK'})")
                 except Exception as e:
                     logger.warning(f"[META PURCHASE] Purchase - Erro ao verificar token no Redis: {e}")
-                
-                try:
-                    tracking_data = tracking_service_v4.recover_tracking_data(payment_tracking_token) or {}
-                    if tracking_data:
-                        tracking_token_used = payment_tracking_token
-                        logger.info(f"[META PURCHASE] Purchase - tracking_data recuperado do Redis (usando payment.tracking_token): {len(tracking_data)} campos")
-                        # ✅ LOG CRÍTICO: Mostrar TODOS os campos para identificar o problema
-                        logger.info(f"[META PURCHASE] Purchase - Campos no tracking_data: {list(tracking_data.keys())}")
-                        for key, value in tracking_data.items():
-                            if value:
-                                logger.info(f"[META PURCHASE] Purchase - {key}: {str(value)[:50]}...")
-                            else:
-                                logger.warning(f"[META PURCHASE] Purchase - {key}: None/Empty")
-                    else:
-                        logger.warning(f"[META PURCHASE] Purchase - tracking_data VAZIO no Redis para token: {payment_tracking_token[:30]}...")
-                except Exception as e:
-                    logger.exception(f"[META PURCHASE] Purchase - Erro ao recuperar tracking_token do Redis: {e}")
-            else:
-                logger.warning(f"⚠️ [META PURCHASE] Purchase - payment.tracking_token tem formato inválido: {payment_tracking_token[:30]}... (len={len(payment_tracking_token)})")
-                # ✅ Continuar para próxima prioridade
         elif not payment_tracking_token:
             logger.warning(f"[META PURCHASE] Purchase - payment.tracking_token AUSENTE! Payment ID: {payment.payment_id}")
             logger.warning(f"[META PURCHASE] Purchase - Isso indica que o usuário NÃO veio do redirect ou token não foi salvo")
@@ -10898,13 +10877,26 @@ def send_meta_pixel_purchase_event(payment, pageview_event_id=None):
                 tracking_data['campaign_code'] = payment.campaign_code
                 tracking_data['grim'] = payment.campaign_code
                 logger.info(f"✅ Purchase - campaign_code adicionado do Payment: {payment.campaign_code}")
-        
-        # ✅ CRÍTICO: Se tracking_data não tem pageview_event_id mas Payment tem, usar do Payment
-        if not tracking_data.get("pageview_event_id") and getattr(payment, "pageview_event_id", None):
-            tracking_data["pageview_event_id"] = payment.pageview_event_id
+
+        # ✅ CRÍTICO: pageview_event_id NUNCA deve ser inventado.
+        # Ordem imutável: tracking_data_v4 -> bot_user -> payment
+        if not tracking_data.get('pageview_event_id') and bot_user and getattr(bot_user, 'pageview_event_id', None):
+            tracking_data['pageview_event_id'] = bot_user.pageview_event_id
+            logger.info(f"✅ pageview_event_id recuperado do BotUser (fallback): {bot_user.pageview_event_id}")
+
+        if not tracking_data.get('pageview_event_id') and getattr(payment, 'pageview_event_id', None):
+            tracking_data['pageview_event_id'] = payment.pageview_event_id
             logger.info(f"✅ pageview_event_id recuperado do Payment (fallback final): {payment.pageview_event_id}")
 
         if not tracking_data.get('pageview_event_id'):
+            logger.error(
+                "❌ PURCHASE SEM PAGEVIEW_EVENT_ID — ATRIBUIÇÃO IMPOSSÍVEL",
+                extra={
+                    "payment_id": getattr(payment, 'id', None),
+                    "is_remarketing": bool(getattr(payment, 'is_remarketing', False)),
+                    "tracking_token": getattr(payment, 'tracking_token', None)
+                }
+            )
             logger.error("❌ [META PURCHASE] pageview_event_id AUSENTE após todas as prioridades. NÃO será gerado pageview_event_id fake.")
             logger.error(f"   payment_id={getattr(payment, 'payment_id', None)} | payment.db_id={getattr(payment, 'id', None)} | is_remarketing={bool(getattr(payment, 'is_remarketing', False))}")
             logger.error(f"   bot_user.tracking_session_id={'✅' if (bot_user and getattr(bot_user, 'tracking_session_id', None)) else '❌'} | payment.tracking_token={'✅' if getattr(payment, 'tracking_token', None) else '❌'}")
@@ -11135,16 +11127,8 @@ def send_meta_pixel_purchase_event(payment, pageview_event_id=None):
             user_agent_value = bot_user.user_agent
             logger.info(f"[META PURCHASE] Purchase - User Agent recuperado do BotUser (fallback): {user_agent_value[:50]}...")
         
-        # ✅ CRÍTICO: Recuperar pageview_event_id para deduplicação (prioridade: tracking_data > payment)
-        if not event_id:
-            event_id = tracking_data.get('pageview_event_id')
-            if event_id:
-                logger.info(f"✅ Purchase - event_id recuperado do tracking_data (Redis): {event_id}")
-        
-        # ✅ FALLBACK: Se não encontrou no tracking_data, usar do Payment
-        if not event_id and getattr(payment, 'pageview_event_id', None):
-            event_id = payment.pageview_event_id
-            logger.info(f"✅ Purchase - event_id recuperado do Payment (fallback): {event_id}")
+        # ✅ REGRA DE OURO: Purchase NUNCA reutiliza pageview_event_id como event_id.
+        # O event_id do Purchase é definido mais abaixo como purchase_{payment.id}.
 
         # ✅ LOG: Rastrear origem do external_id
         external_id_source = None
