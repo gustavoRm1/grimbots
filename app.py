@@ -3925,16 +3925,255 @@ def general_remarketing():
             except Exception as e:
                 logger.error(f"❌ Erro ao processar scheduled_at: {e}")
                 return jsonify({'error': f'Data/hora inválida: {str(e)}'}), 400
-        
+
         # Contador de usuários impactados
         total_users = 0
         bots_affected = 0
-        
+
+        # ✅ ENTERPRISE: Atribuição determinística no remarketing geral (somente envio imediato)
+        if status != 'scheduled' and len(bots) > 1:
+            try:
+                import hashlib
+                from redis_manager import get_redis_connection
+                from models import BotUser, Payment, RemarketingBlacklist, RemarketingCampaign
+                from datetime import timedelta
+                from sqlalchemy.exc import OperationalError
+                import time as time_module
+
+                def _stable_bucket(value: str, modulo: int) -> int:
+                    if modulo <= 1:
+                        return 0
+                    digest = hashlib.md5(value.encode('utf-8')).hexdigest()
+                    return int(digest[:8], 16) % modulo
+
+                contact_limit = get_brazil_time() - timedelta(days=days_since_last_contact)
+                eligible_by_bot = {}
+
+                for bot in bots:
+                    q = db.session.query(BotUser.telegram_user_id).filter(
+                        BotUser.bot_id == bot.id,
+                        BotUser.archived == False
+                    )
+
+                    if days_since_last_contact > 0:
+                        q = q.filter(BotUser.last_interaction <= contact_limit)
+
+                    blacklist_ids = db.session.query(RemarketingBlacklist.telegram_user_id).filter_by(
+                        bot_id=bot.id
+                    ).all()
+                    blacklist_ids = [b[0] for b in blacklist_ids if b[0]]
+                    if blacklist_ids:
+                        q = q.filter(~BotUser.telegram_user_id.in_(blacklist_ids))
+
+                    if audience_segment == 'all_users':
+                        pass
+                    elif audience_segment == 'buyers':
+                        ids = db.session.query(Payment.customer_user_id).filter(
+                            Payment.bot_id == bot.id,
+                            Payment.status == 'paid'
+                        ).distinct().all()
+                        ids = [i[0] for i in ids if i and i[0]]
+                        if not ids:
+                            eligible_by_bot[bot.id] = set()
+                            continue
+                        q = q.filter(BotUser.telegram_user_id.in_(ids))
+                    elif audience_segment == 'pix_generated':
+                        ids = db.session.query(Payment.customer_user_id).filter(
+                            Payment.bot_id == bot.id,
+                            Payment.status == 'pending'
+                        ).distinct().all()
+                        ids = [i[0] for i in ids if i and i[0]]
+                        if not ids:
+                            eligible_by_bot[bot.id] = set()
+                            continue
+                        q = q.filter(BotUser.telegram_user_id.in_(ids))
+                    elif audience_segment == 'downsell_buyers':
+                        ids = db.session.query(Payment.customer_user_id).filter(
+                            Payment.bot_id == bot.id,
+                            Payment.status == 'paid',
+                            Payment.is_downsell == True
+                        ).distinct().all()
+                        ids = [i[0] for i in ids if i and i[0]]
+                        if not ids:
+                            eligible_by_bot[bot.id] = set()
+                            continue
+                        q = q.filter(BotUser.telegram_user_id.in_(ids))
+                    elif audience_segment == 'order_bump_buyers':
+                        ids = db.session.query(Payment.customer_user_id).filter(
+                            Payment.bot_id == bot.id,
+                            Payment.status == 'paid',
+                            Payment.order_bump_accepted == True
+                        ).distinct().all()
+                        ids = [i[0] for i in ids if i and i[0]]
+                        if not ids:
+                            eligible_by_bot[bot.id] = set()
+                            continue
+                        q = q.filter(BotUser.telegram_user_id.in_(ids))
+                    elif audience_segment == 'upsell_buyers':
+                        ids = db.session.query(Payment.customer_user_id).filter(
+                            Payment.bot_id == bot.id,
+                            Payment.status == 'paid',
+                            Payment.is_upsell == True
+                        ).distinct().all()
+                        ids = [i[0] for i in ids if i and i[0]]
+                        if not ids:
+                            eligible_by_bot[bot.id] = set()
+                            continue
+                        q = q.filter(BotUser.telegram_user_id.in_(ids))
+                    elif audience_segment == 'remarketing_buyers':
+                        ids = db.session.query(Payment.customer_user_id).filter(
+                            Payment.bot_id == bot.id,
+                            Payment.status == 'paid',
+                            Payment.is_remarketing == True
+                        ).distinct().all()
+                        ids = [i[0] for i in ids if i and i[0]]
+                        if not ids:
+                            eligible_by_bot[bot.id] = set()
+                            continue
+                        q = q.filter(BotUser.telegram_user_id.in_(ids))
+                    else:
+                        eligible_by_bot[bot.id] = set()
+                        continue
+
+                    eligible_ids = q.distinct().all()
+                    eligible_by_bot[bot.id] = set([str(x[0]) for x in eligible_ids if x and x[0]])
+
+                candidates_by_user = {}
+                for bot_id, user_ids in eligible_by_bot.items():
+                    for uid in user_ids:
+                        candidates_by_user.setdefault(uid, []).append(bot_id)
+
+                assigned_by_bot = {bot.id: set() for bot in bots}
+                for uid, candidate_bot_ids in candidates_by_user.items():
+                    candidate_bot_ids_sorted = sorted(candidate_bot_ids)
+                    chosen_bot_id = candidate_bot_ids_sorted[_stable_bucket(uid, len(candidate_bot_ids_sorted))]
+                    assigned_by_bot[chosen_bot_id].add(uid)
+
+                redis_conn = get_redis_connection()
+
+                target_audience_mapping = {
+                    'all_users': 'all',
+                    'buyers': 'buyers',
+                    'pix_generated': 'abandoned_cart',
+                    'downsell_buyers': 'downsell_buyers',
+                    'order_bump_buyers': 'order_bump_buyers',
+                    'upsell_buyers': 'upsell_buyers',
+                    'remarketing_buyers': 'remarketing_buyers'
+                }
+                target_audience = target_audience_mapping.get(audience_segment, 'all')
+
+                for bot in bots:
+                    assigned_ids = assigned_by_bot.get(bot.id) or set()
+                    if not assigned_ids:
+                        continue
+
+                    campaign = RemarketingCampaign(
+                        bot_id=bot.id,
+                        name=f"Remarketing Geral - {get_brazil_time().strftime('%d/%m/%Y %H:%M')}",
+                        message=message,
+                        media_url=media_url,
+                        media_type=media_type,
+                        audio_enabled=audio_enabled,
+                        audio_url=audio_url,
+                        buttons=buttons_json,
+                        target_audience=target_audience,
+                        days_since_last_contact=days_since_last_contact,
+                        exclude_buyers=exclude_buyers,
+                        cooldown_hours=6,
+                        scheduled_at=None,
+                        status='sending',
+                        started_at=get_brazil_time()
+                    )
+
+                    max_retries = 3
+                    retry_delay = 0.5
+                    for attempt in range(max_retries):
+                        try:
+                            db.session.add(campaign)
+                            db.session.commit()
+                            break
+                        except OperationalError as e:
+                            if 'database is locked' in str(e).lower() and attempt < max_retries - 1:
+                                db.session.rollback()
+                                time_module.sleep(retry_delay * (attempt + 1))
+                                continue
+                            db.session.rollback()
+                            raise
+
+                    queue_key = f"remarketing:queue:{bot.id}"
+
+                    remarketing_buttons_template = []
+                    try:
+                        for btn_idx, btn in enumerate(buttons or []):
+                            if btn.get('price') and btn.get('description'):
+                                remarketing_buttons_template.append({
+                                    'text': btn.get('text', 'Comprar'),
+                                    'callback_data': f"rmkt_{campaign.id}_{btn_idx}"
+                                })
+                            elif btn.get('url'):
+                                remarketing_buttons_template.append({
+                                    'text': btn.get('text', 'Link'),
+                                    'url': btn.get('url')
+                                })
+                    except Exception:
+                        remarketing_buttons_template = []
+
+                    assigned_list = list(assigned_ids)
+                    total_targets = 0
+                    chunk_size = 500
+                    for i in range(0, len(assigned_list), chunk_size):
+                        chunk = assigned_list[i:i + chunk_size]
+                        bot_users = BotUser.query.filter(
+                            BotUser.bot_id == bot.id,
+                            BotUser.archived == False,
+                            BotUser.telegram_user_id.in_(chunk)
+                        ).all()
+                        for bu in bot_users:
+                            if not getattr(bu, 'telegram_user_id', None):
+                                continue
+                            msg = message.replace('{nome}', bu.first_name or 'Cliente')
+                            msg = msg.replace('{primeiro_nome}', (bu.first_name or 'Cliente').split()[0])
+                            job = {
+                                'type': 'send',
+                                'campaign_id': campaign.id,
+                                'bot_id': bot.id,
+                                'telegram_user_id': str(bu.telegram_user_id),
+                                'message': msg,
+                                'media_url': media_url,
+                                'media_type': media_type,
+                                'buttons': remarketing_buttons_template,
+                                'audio_enabled': bool(audio_enabled),
+                                'audio_url': audio_url or '',
+                                'bot_token': bot.token
+                            }
+                            redis_conn.rpush(queue_key, json.dumps(job))
+                            total_targets += 1
+
+                    campaign.total_targets = total_targets
+                    db.session.commit()
+                    redis_conn.rpush(queue_key, json.dumps({'type': 'campaign_done', 'campaign_id': campaign.id}))
+                    bot_manager._start_remarketing_worker(bot_id=bot.id, bot_token=bot.token)
+
+                    total_users += total_targets
+                    bots_affected += 1
+
+                response_message = f'Remarketing enviado para {bots_affected} bot(s) com sucesso!'
+                return jsonify({
+                    'success': True,
+                    'total_users': total_users,
+                    'bots_affected': bots_affected,
+                    'message': response_message,
+                    'scheduled': False,
+                    'scheduled_at': None
+                })
+            except Exception as deterministic_error:
+                logger.error(f"❌ Falha no remarketing geral determinístico (fallback para modo legado): {deterministic_error}")
+
         # ✅ CORREÇÃO: Criar campanhas em batch para evitar database locked
         from models import RemarketingCampaign
         from sqlalchemy.exc import OperationalError
         import time as time_module
-        
+
         campaigns_to_create = []
         
         # Preparar todas as campanhas primeiro
