@@ -8859,6 +8859,12 @@ Seu pagamento ainda não foi confirmado.
         """
         try:
             base_url = f"https://api.telegram.org/bot{token}"
+
+            # ✅ Robustez: normalizar media_type (evita 'VIDEO'/'Video'/None quebrando envio de mídia)
+            if media_url and (media_type is None or (isinstance(media_type, str) and not media_type.strip())):
+                media_type = 'video'
+            if isinstance(media_type, str):
+                media_type = media_type.strip().lower()
             
             # Preparar teclado inline se houver botões
             reply_markup = None
@@ -9201,6 +9207,18 @@ Seu pagamento ainda não foi confirmado.
                         if reply_markup:
                             payload['reply_markup'] = reply_markup
                         response = requests.post(url, json=payload, timeout=3)
+                else:
+                    # Fallback defensivo: tipo desconhecido → enviar só texto
+                    logger.warning(f"⚠️ media_type desconhecido para chat {chat_id}: {media_type!r} (enviando só texto)")
+                    url = f"{base_url}/sendMessage"
+                    payload = {
+                        'chat_id': chat_id,
+                        'text': message,
+                        'parse_mode': 'HTML'
+                    }
+                    if reply_markup:
+                        payload['reply_markup'] = reply_markup
+                    response = requests.post(url, json=payload, timeout=3)
             else:
                 # Enviar apenas mensagem
                 url = f"{base_url}/sendMessage"
@@ -10687,6 +10705,12 @@ Seu pagamento ainda não foi confirmado.
                         remaining = total_leads - offset
                         batch_expected = min(batch_size, remaining)
                         logger.info(f"📦 [Batch {batch_number}/{((total_leads + batch_size - 1) // batch_size)}] Processando offset {offset}-{offset + batch_expected - 1} de {total_leads} leads")
+
+                        # ✅ Diagnóstico objetivo (1x por batch, sem spam por lead)
+                        logger.info(
+                            f"🧩 Remarketing campaign media: campaign_id={campaign.id} "
+                            f"media_type={campaign.media_type!r} media_url={campaign.media_url!r}"
+                        )
                         
                         # ✅ Buscar apenas o batch atual (paginação)
                         try:
