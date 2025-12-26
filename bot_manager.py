@@ -8200,12 +8200,18 @@ Seu pagamento ainda não foi confirmado.
                     # Re-enviar o MESMO PageView (mesmo event_id) com em/ph quando houver alta confiança.
                     # Meta fará merge por event_id (não duplica PageView).
                     try:
+                        resolved_pageview_event_id = (
+                            pageview_event_id
+                            or getattr(payment, 'pageview_event_id', None)
+                            or getattr(bot_user, 'pageview_event_id', None)
+                        )
                         logger.info(
                             "🔎 ENRICHMENT CHECK | PIX",
                             extra={
                                 "payment_db_id": getattr(payment, 'id', None),
                                 "payment_id": getattr(payment, 'payment_id', None),
                                 "pageview_event_id": pageview_event_id,
+                                "resolved_pageview_event_id": resolved_pageview_event_id,
                                 "tracking_token": tracking_token,
                                 "has_customer_email": bool(getattr(payment, 'customer_email', None)),
                                 "has_customer_phone": bool(getattr(payment, 'customer_phone', None)),
@@ -8214,7 +8220,7 @@ Seu pagamento ainda não foi confirmado.
                                 "meta_pageview_enabled": bool(pool_bot and pool_bot.pool and pool_bot.pool.meta_events_pageview)
                             }
                         )
-                        if pageview_event_id and pool_bot and pool_bot.pool and pool_bot.pool.meta_tracking_enabled and pool_bot.pool.meta_events_pageview:
+                        if resolved_pageview_event_id and pool_bot and pool_bot.pool and pool_bot.pool.meta_tracking_enabled and pool_bot.pool.meta_events_pageview:
                             pool_for_meta = pool_bot.pool
 
                             customer_email = getattr(payment, 'customer_email', None)
@@ -8244,7 +8250,20 @@ Seu pagamento ainda não foi confirmado.
 
                             should_enrich = _is_high_confidence_email(customer_email) or _is_high_confidence_phone(customer_phone)
                             if should_enrich:
-                                enrichment_lock_key = f"meta:pageview_enriched:{pageview_event_id}"
+                                if not resolved_pageview_event_id:
+                                    logger.warning(
+                                        "🚨 PAGEVIEW_EVENT_ID AUSENTE | Enrichment impossível",
+                                        extra={
+                                            "payment_db_id": getattr(payment, 'id', None),
+                                            "payment_id": getattr(payment, 'payment_id', None),
+                                            "tracking_token": tracking_token,
+                                            "bot_user_id": getattr(bot_user, 'id', None),
+                                            "is_remarketing": bool(is_remarketing)
+                                        }
+                                    )
+                                    return
+
+                                enrichment_lock_key = f"meta:pageview_enriched:{resolved_pageview_event_id}"
                                 lock_ttl_seconds = 60 * 60 * 24 * 30  # 30 dias
 
                                 lock_acquired = False
@@ -8313,7 +8332,7 @@ Seu pagamento ainda não foi confirmado.
                                         pageview_enriched_event = {
                                             'event_name': 'PageView',
                                             'event_time': int(time.time()),
-                                            'event_id': pageview_event_id,
+                                            'event_id': resolved_pageview_event_id,
                                             'action_source': 'website',
                                             'event_source_url': event_source_url_enrich,
                                             'user_data': user_data_enriched,
@@ -8333,11 +8352,11 @@ Seu pagamento ainda não foi confirmado.
                                         )
 
                                         logger.info(
-                                            f"✅ [META PAGEVIEW ENRICH] Enfileirado após PIX | event_id={pageview_event_id} | "
+                                            f"✅ [META PAGEVIEW ENRICH] Enfileirado após PIX | event_id={resolved_pageview_event_id} | "
                                             f"em={'✅' if user_data_enriched.get('em') else '❌'} | ph={'✅' if user_data_enriched.get('ph') else '❌'}"
                                         )
                                 else:
-                                    logger.info(f"ℹ️ [META PAGEVIEW ENRICH] Lock já existe (não reenviar) | key={enrichment_lock_key} | ttl={lock_ttl_seconds}s | event_id={pageview_event_id}")
+                                    logger.info(f"ℹ️ [META PAGEVIEW ENRICH] Lock já existe (não reenviar) | key={enrichment_lock_key} | ttl={lock_ttl_seconds}s | event_id={resolved_pageview_event_id}")
                     except Exception as enrich_error:
                         logger.warning(f"⚠️ [META PAGEVIEW ENRICH] Falha ao enriquecer PageView após PIX (não bloqueia PIX): {enrich_error}")
                     
