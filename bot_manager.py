@@ -399,9 +399,11 @@ PLATFORM_SPLIT_PERCENTAGE = 2  # 2% PADRÃO PARA TODOS OS GATEWAYS
 PUSHYN_SPLIT_ACCOUNT_ID = os.environ.get('PUSHYN_SPLIT_ACCOUNT_ID', None)
 PUSHYN_SPLIT_PERCENTAGE = 2  # 2% (quando habilitado)
 
-# Importar Gateway Factory (Arquitetura Enterprise)
 from gateway_factory import GatewayFactory
-
+from redis_manager import get_redis_connection
+import json
+import random
+import time
 
 class BotManager:
     """Gerenciador de bots Telegram"""
@@ -480,6 +482,9 @@ class BotManager:
         self.remarketing_queue = []  # Fila de campanhas aguardando (transparente para usuário)
         self.active_remarketing_campaigns = set()  # IDs de campanhas ativas
 
+        self._remarketing_workers_lock = threading.Lock()
+        self._remarketing_workers: Dict[int, Dict[str, Any]] = {}
+
         # ✅ PATCH: Session reutilizável + Retry/Backoff para envios pesados (sendVideo)
         # Regra: manter impacto ZERO em outros tipos de mensagem; Session será usada somente em send_video_safe.
         self._telegram_session = requests.Session()
@@ -506,6 +511,209 @@ class BotManager:
         self._telegram_last_send_ts: Dict[str, float] = {}
         self._telegram_min_interval_seconds = 1.2
         logger.info("BotManager inicializado")
+
+    def _start_remarketing_worker(self, *, bot_id: int, bot_token: str) -> None:
+        try:
+            if not bot_id or not bot_token:
+                return
+
+            with self._remarketing_workers_lock:
+                existing = self._remarketing_workers.get(bot_id)
+                if existing and existing.get('thread') and existing['thread'].is_alive():
+                    if existing.get('token') != bot_token:
+                        existing['token'] = bot_token
+                    return
+
+                stop_event = threading.Event()
+
+                def _worker():
+                    self._remarketing_worker_loop(bot_id=bot_id, stop_event=stop_event)
+
+                thread = threading.Thread(target=_worker, name=f"remarketing-worker-bot-{bot_id}")
+                thread.daemon = True
+                self._remarketing_workers[bot_id] = {
+                    'thread': thread,
+                    'stop_event': stop_event,
+                    'token': bot_token
+                }
+                thread.start()
+                logger.info(f"🧵 Remarketing worker por bot iniciado: bot_id={bot_id} thread_name={thread.name}")
+        except Exception as e:
+            logger.error(f"❌ Erro ao iniciar remarketing worker: bot_id={bot_id} err={e}", exc_info=True)
+
+    def _get_remarketing_worker_token(self, bot_id: int) -> Optional[str]:
+        try:
+            with self._remarketing_workers_lock:
+                info = self._remarketing_workers.get(bot_id) or {}
+                return info.get('token')
+        except Exception:
+            return None
+
+    def _remarketing_worker_loop(self, *, bot_id: int, stop_event: threading.Event) -> None:
+        from redis_manager import get_redis_connection
+        import json
+        import random
+        import time
+
+        queue_key = f"remarketing:queue:{bot_id}"
+        msg_counter = 0
+        next_long_pause_after = random.randint(15, 25)
+
+        while not stop_event.is_set():
+            try:
+                redis_conn = get_redis_connection()
+                item = redis_conn.blpop(queue_key, timeout=5)
+                if not item:
+                    continue
+
+                _, raw = item
+                try:
+                    job = json.loads(raw) if isinstance(raw, str) else json.loads(raw.decode('utf-8'))
+                except Exception:
+                    logger.warning(f"⚠️ Remarketing job inválido (JSON parse falhou): bot_id={bot_id}")
+                    continue
+
+                job_type = job.get('type')
+                if job_type == 'campaign_done':
+                    campaign_id = job.get('campaign_id')
+                    try:
+                        from app import app, db, socketio
+                        from models import RemarketingCampaign, get_brazil_time
+                        with app.app_context():
+                            campaign = db.session.get(RemarketingCampaign, int(campaign_id)) if campaign_id else None
+                            if campaign:
+                                db.session.refresh(campaign)
+                                campaign.status = 'completed'
+                                campaign.completed_at = get_brazil_time()
+                                db.session.commit()
+                                try:
+                                    socketio.emit('remarketing_completed', {
+                                        'campaign_id': campaign.id,
+                                        'total_sent': campaign.total_sent,
+                                        'total_failed': campaign.total_failed,
+                                        'total_blocked': campaign.total_blocked
+                                    })
+                                except Exception:
+                                    pass
+                                logger.info(f"✅ Remarketing campaign finalizada via sentinel: campaign_id={campaign.id}")
+                    except Exception as e:
+                        logger.error(f"❌ Erro ao finalizar campanha via sentinel: bot_id={bot_id} err={e}", exc_info=True)
+                    continue
+
+                campaign_id = job.get('campaign_id')
+                chat_id = job.get('telegram_user_id')
+                message = job.get('message')
+                media_url = job.get('media_url')
+                media_type = job.get('media_type')
+                buttons = job.get('buttons')
+                audio_enabled = bool(job.get('audio_enabled'))
+                audio_url = job.get('audio_url')
+
+                token = self._get_remarketing_worker_token(bot_id)
+                if not token:
+                    token = job.get('bot_token')
+                if not token:
+                    logger.error(f"❌ Remarketing worker sem token: bot_id={bot_id} campaign_id={campaign_id}")
+                    continue
+
+                send_result = None
+                try:
+                    send_result = self.send_telegram_message(
+                        token=token,
+                        chat_id=str(chat_id),
+                        message=message,
+                        media_url=media_url,
+                        media_type=media_type,
+                        buttons=buttons
+                    )
+                except Exception as send_error:
+                    send_result = {'error': True, 'error_code': 0, 'description': str(send_error)}
+
+                sent_inc = 0
+                failed_inc = 0
+                blocked_inc = 0
+
+                if isinstance(send_result, dict) and send_result.get('error'):
+                    error_code = int(send_result.get('error_code') or 0)
+                    desc = (send_result.get('description') or '').lower()
+                    if error_code == 403 and ('bot was blocked' in desc or 'forbidden: bot was blocked' in desc):
+                        blocked_inc = 1
+                        try:
+                            from app import app, db
+                            from models import RemarketingBlacklist
+                            with app.app_context():
+                                existing = db.session.query(RemarketingBlacklist).filter_by(
+                                    bot_id=bot_id,
+                                    telegram_user_id=str(chat_id)
+                                ).first()
+                                if not existing:
+                                    db.session.add(RemarketingBlacklist(bot_id=bot_id, telegram_user_id=str(chat_id), reason='bot_blocked'))
+                                    db.session.commit()
+                        except Exception:
+                            pass
+                    elif error_code == 401:
+                        failed_inc = 1
+                    else:
+                        failed_inc = 1
+                elif send_result:
+                    sent_inc = 1
+                    if audio_enabled and audio_url:
+                        try:
+                            self.send_telegram_message(
+                                token=token,
+                                chat_id=str(chat_id),
+                                message="",
+                                media_url=audio_url,
+                                media_type='audio',
+                                buttons=None
+                            )
+                        except Exception:
+                            pass
+                else:
+                    failed_inc = 1
+
+                try:
+                    if campaign_id:
+                        from app import app, db, socketio
+                        from models import RemarketingCampaign
+                        with app.app_context():
+                            campaign = db.session.get(RemarketingCampaign, int(campaign_id))
+                            if campaign:
+                                db.session.refresh(campaign)
+                                campaign.total_sent += sent_inc
+                                campaign.total_failed += failed_inc
+                                campaign.total_blocked += blocked_inc
+                                db.session.commit()
+                                try:
+                                    socketio.emit('remarketing_progress', {
+                                        'campaign_id': campaign.id,
+                                        'sent': campaign.total_sent,
+                                        'failed': campaign.total_failed,
+                                        'blocked': campaign.total_blocked,
+                                        'total': campaign.total_targets,
+                                        'percentage': round((campaign.total_sent / campaign.total_targets) * 100, 1) if campaign.total_targets > 0 else 0
+                                    })
+                                except Exception:
+                                    pass
+                except Exception as update_error:
+                    logger.debug(f"⚠️ Falha ao atualizar contadores do remarketing (não crítico): {update_error}")
+
+                msg_counter += 1
+                jitter = random.uniform(4.0, 9.0)
+                time.sleep(jitter)
+
+                if msg_counter >= next_long_pause_after:
+                    long_pause = random.uniform(600.0, 1800.0)
+                    logger.info(f"⏸️ Remarketing long pause: bot_id={bot_id} seconds={int(long_pause)} msgs={msg_counter}")
+                    time.sleep(long_pause)
+                    msg_counter = 0
+                    next_long_pause_after = random.randint(15, 25)
+            except Exception as e:
+                logger.error(f"❌ Erro no remarketing worker loop: bot_id={bot_id} err={e}", exc_info=True)
+                try:
+                    time.sleep(5)
+                except Exception:
+                    pass
 
     def _rate_limit_telegram_by_token(self, token: str) -> None:
         """Rate limit thread-safe por token. Não muda fluxo, apenas evita flood de conexões."""
@@ -10652,6 +10860,247 @@ Seu pagamento ainda não foi confirmado.
             campaign_id: ID da campanha
             bot_token: Token do bot
         """
+        try:
+            from redis_manager import get_redis_connection
+            import json
+            from app import app, db, socketio
+            from models import RemarketingCampaign, BotUser, Payment, RemarketingBlacklist, get_brazil_time
+            from datetime import timedelta
+
+            def enqueue_jobs():
+                with app.app_context():
+                    campaign = db.session.get(RemarketingCampaign, campaign_id)
+                    if not campaign:
+                        logger.warning(f"❌ Remarketing enqueue abortado: campaign_id={campaign_id} não encontrada")
+                        return
+
+                    campaign.status = 'sending'
+                    campaign.started_at = get_brazil_time()
+                    db.session.commit()
+
+                    redis_conn = get_redis_connection()
+                    queue_key = f"remarketing:queue:{campaign.bot_id}"
+
+                    contact_limit = get_brazil_time() - timedelta(days=campaign.days_since_last_contact)
+                    query = BotUser.query.filter_by(bot_id=campaign.bot_id, archived=False)
+                    if campaign.days_since_last_contact > 0:
+                        query = query.filter(BotUser.last_interaction <= contact_limit)
+
+                    blacklist_ids = db.session.query(RemarketingBlacklist.telegram_user_id).filter_by(
+                        bot_id=campaign.bot_id
+                    ).all()
+                    blacklist_ids = [b[0] for b in blacklist_ids if b[0]]
+                    if blacklist_ids:
+                        query = query.filter(~BotUser.telegram_user_id.in_(blacklist_ids))
+
+                    target_audience = campaign.target_audience
+                    if target_audience == 'all':
+                        pass
+                    elif target_audience == 'buyers':
+                        buyer_ids = db.session.query(Payment.customer_user_id).filter(
+                            Payment.bot_id == campaign.bot_id,
+                            Payment.status == 'paid'
+                        ).distinct().all()
+                        buyer_ids = [b[0] for b in buyer_ids if b[0]]
+                        if buyer_ids:
+                            query = query.filter(BotUser.telegram_user_id.in_(buyer_ids))
+                        else:
+                            campaign.total_targets = 0
+                            campaign.status = 'completed'
+                            campaign.completed_at = get_brazil_time()
+                            db.session.commit()
+                            return
+                    elif target_audience == 'downsell_buyers':
+                        downsell_ids = db.session.query(Payment.customer_user_id).filter(
+                            Payment.bot_id == campaign.bot_id,
+                            Payment.status == 'paid',
+                            Payment.is_downsell == True
+                        ).distinct().all()
+                        downsell_ids = [b[0] for b in downsell_ids if b[0]]
+                        if downsell_ids:
+                            query = query.filter(BotUser.telegram_user_id.in_(downsell_ids))
+                        else:
+                            campaign.total_targets = 0
+                            campaign.status = 'completed'
+                            campaign.completed_at = get_brazil_time()
+                            db.session.commit()
+                            return
+                    elif target_audience == 'order_bump_buyers':
+                        orderbump_ids = db.session.query(Payment.customer_user_id).filter(
+                            Payment.bot_id == campaign.bot_id,
+                            Payment.status == 'paid',
+                            Payment.order_bump_accepted == True
+                        ).distinct().all()
+                        orderbump_ids = [b[0] for b in orderbump_ids if b[0]]
+                        if orderbump_ids:
+                            query = query.filter(BotUser.telegram_user_id.in_(orderbump_ids))
+                        else:
+                            campaign.total_targets = 0
+                            campaign.status = 'completed'
+                            campaign.completed_at = get_brazil_time()
+                            db.session.commit()
+                            return
+                    elif target_audience == 'upsell_buyers':
+                        upsell_ids = db.session.query(Payment.customer_user_id).filter(
+                            Payment.bot_id == campaign.bot_id,
+                            Payment.status == 'paid',
+                            Payment.is_upsell == True
+                        ).distinct().all()
+                        upsell_ids = [b[0] for b in upsell_ids if b[0]]
+                        if upsell_ids:
+                            query = query.filter(BotUser.telegram_user_id.in_(upsell_ids))
+                        else:
+                            campaign.total_targets = 0
+                            campaign.status = 'completed'
+                            campaign.completed_at = get_brazil_time()
+                            db.session.commit()
+                            return
+                    elif target_audience == 'remarketing_buyers':
+                        remarketing_ids = db.session.query(Payment.customer_user_id).filter(
+                            Payment.bot_id == campaign.bot_id,
+                            Payment.status == 'paid',
+                            Payment.is_remarketing == True
+                        ).distinct().all()
+                        remarketing_ids = [b[0] for b in remarketing_ids if b[0]]
+                        if remarketing_ids:
+                            query = query.filter(BotUser.telegram_user_id.in_(remarketing_ids))
+                        else:
+                            campaign.total_targets = 0
+                            campaign.status = 'completed'
+                            campaign.completed_at = get_brazil_time()
+                            db.session.commit()
+                            return
+                    elif target_audience == 'abandoned_cart':
+                        abandoned_ids = db.session.query(Payment.customer_user_id).filter(
+                            Payment.bot_id == campaign.bot_id,
+                            Payment.status == 'pending'
+                        ).distinct().all()
+                        abandoned_ids = [b[0] for b in abandoned_ids if b[0]]
+                        if abandoned_ids:
+                            query = query.filter(BotUser.telegram_user_id.in_(abandoned_ids))
+                        else:
+                            campaign.total_targets = 0
+                            campaign.status = 'completed'
+                            campaign.completed_at = get_brazil_time()
+                            db.session.commit()
+                            return
+                    elif target_audience == 'inactive':
+                        inactive_limit = get_brazil_time() - timedelta(days=7)
+                        query = query.filter(BotUser.last_interaction <= inactive_limit)
+                    elif target_audience == 'non_buyers':
+                        buyer_ids = db.session.query(Payment.customer_user_id).filter(
+                            Payment.bot_id == campaign.bot_id,
+                            Payment.status == 'paid'
+                        ).distinct().all()
+                        buyer_ids = [b[0] for b in buyer_ids if b[0]]
+                        if buyer_ids:
+                            query = query.filter(~BotUser.telegram_user_id.in_(buyer_ids))
+                    else:
+                        if campaign.exclude_buyers:
+                            buyer_ids = db.session.query(Payment.customer_user_id).filter(
+                                Payment.bot_id == campaign.bot_id,
+                                Payment.status == 'paid'
+                            ).distinct().all()
+                            buyer_ids = [b[0] for b in buyer_ids if b[0]]
+                            if buyer_ids:
+                                query = query.filter(~BotUser.telegram_user_id.in_(buyer_ids))
+
+                    total_leads = query.count()
+                    if total_leads == 0:
+                        campaign.total_targets = 0
+                        campaign.status = 'completed'
+                        campaign.completed_at = get_brazil_time()
+                        db.session.commit()
+                        return
+
+                    enqueued = 0
+                    batch_size = 200
+                    offset = 0
+
+                    while offset < total_leads:
+                        batch = query.offset(offset).limit(batch_size).all()
+                        if not batch:
+                            break
+
+                        for lead in batch:
+                            if not getattr(lead, 'telegram_user_id', None):
+                                continue
+
+                            message = campaign.message.replace('{nome}', lead.first_name or 'Cliente')
+                            message = message.replace('{primeiro_nome}', (lead.first_name or 'Cliente').split()[0])
+
+                            remarketing_buttons = []
+                            if campaign.buttons:
+                                buttons_list = campaign.buttons
+                                if isinstance(campaign.buttons, str):
+                                    try:
+                                        buttons_list = json.loads(campaign.buttons)
+                                    except Exception:
+                                        buttons_list = []
+                                for btn_idx, btn in enumerate(buttons_list):
+                                    if btn.get('price') and btn.get('description'):
+                                        remarketing_buttons.append({
+                                            'text': btn.get('text', 'Comprar'),
+                                            'callback_data': f"rmkt_{campaign.id}_{btn_idx}"
+                                        })
+                                    elif btn.get('url'):
+                                        remarketing_buttons.append({
+                                            'text': btn.get('text', 'Link'),
+                                            'url': btn.get('url')
+                                        })
+
+                            job = {
+                                'type': 'send',
+                                'campaign_id': campaign.id,
+                                'bot_id': campaign.bot_id,
+                                'telegram_user_id': str(lead.telegram_user_id),
+                                'message': message,
+                                'media_url': campaign.media_url,
+                                'media_type': campaign.media_type,
+                                'buttons': remarketing_buttons,
+                                'audio_enabled': bool(campaign.audio_enabled),
+                                'audio_url': campaign.audio_url or '',
+                                'bot_token': bot_token
+                            }
+                            try:
+                                redis_conn.rpush(queue_key, json.dumps(job))
+                                enqueued += 1
+                            except Exception as enqueue_error:
+                                logger.warning(f"⚠️ Falha ao enfileirar job remarketing: campaign_id={campaign.id} chat_id={lead.telegram_user_id} err={enqueue_error}")
+
+                        offset += batch_size
+
+                    campaign.total_targets = enqueued
+                    db.session.commit()
+
+                    try:
+                        socketio.emit('remarketing_progress', {
+                            'campaign_id': campaign.id,
+                            'sent': campaign.total_sent,
+                            'failed': campaign.total_failed,
+                            'blocked': campaign.total_blocked,
+                            'total': campaign.total_targets,
+                            'percentage': 0
+                        })
+                    except Exception:
+                        pass
+
+                    try:
+                        redis_conn.rpush(queue_key, json.dumps({'type': 'campaign_done', 'campaign_id': campaign.id}))
+                    except Exception:
+                        pass
+
+                    self._start_remarketing_worker(bot_id=campaign.bot_id, bot_token=bot_token)
+                    logger.info(f"📦 Remarketing jobs enfileirados: campaign_id={campaign.id} bot_id={campaign.bot_id} total={enqueued} queue={queue_key}")
+
+            thread = threading.Thread(target=enqueue_jobs, name=f"remarketing-enqueue-{campaign_id}")
+            thread.daemon = True
+            thread.start()
+            logger.info(f"🚀 Remarketing enqueue thread disparada: campaign_id={campaign_id} thread_name={thread.name}")
+            return
+        except Exception as orchestration_error:
+            logger.error(f"❌ Falha no remarketing orchestration (fallback para modo legado): {orchestration_error}", exc_info=True)
+
         from app import app, db, socketio
         from models import RemarketingCampaign, BotUser, Payment, RemarketingBlacklist
         from datetime import datetime, timedelta
