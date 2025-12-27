@@ -629,12 +629,18 @@ class BotManager:
                         buttons=buttons
                     )
                 except Exception as send_error:
-                    send_result = {'error': True, 'error_code': 0, 'description': str(send_error)}
+                    logger.error(
+                        f"❌ ERRO REAL AO ENVIAR REMARKETING | bot_id={bot_id} "
+                        f"campaign_id={campaign_id} chat_id={chat_id} err={send_error}",
+                        exc_info=True
+                    )
+                    send_result = {'error': True, 'error_code': -1, 'description': str(send_error)}
 
                 sent_inc = 0
                 failed_inc = 0
                 blocked_inc = 0
 
+                error_code = None
                 if isinstance(send_result, dict) and send_result.get('error'):
                     error_code = int(send_result.get('error_code') or 0)
                     desc = (send_result.get('description') or '').lower()
@@ -673,6 +679,10 @@ class BotManager:
                             pass
                 else:
                     failed_inc = 1
+
+                if failed_inc and error_code in (0, -1):
+                    time.sleep(2)
+                    continue
 
                 try:
                     if campaign_id:
