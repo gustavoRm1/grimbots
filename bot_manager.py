@@ -482,6 +482,8 @@ class BotManager:
         self.remarketing_queue = []  # Fila de campanhas aguardando (transparente para usuário)
         self.active_remarketing_campaigns = set()  # IDs de campanhas ativas
 
+        self.telegram_http_semaphore = threading.BoundedSemaphore(10)
+
         self._remarketing_workers_lock = threading.Lock()
         self._remarketing_workers: Dict[int, Dict[str, Any]] = {}
 
@@ -797,7 +799,8 @@ class BotManager:
                     }
                     if reply_markup:
                         data['reply_markup'] = json.dumps(reply_markup)
-                    response = self._telegram_session.post(url, files=files, data=data, timeout=timeout)
+                    with self.telegram_http_semaphore:
+                        response = self._telegram_session.post(url, files=files, data=data, timeout=timeout)
             else:
                 payload = {
                     'chat_id': chat_id,
@@ -808,7 +811,8 @@ class BotManager:
                     payload['caption'] = caption
                 if reply_markup:
                     payload['reply_markup'] = reply_markup
-                response = self._telegram_session.post(url, json=payload, timeout=timeout)
+                with self.telegram_http_semaphore:
+                    response = self._telegram_session.post(url, json=payload, timeout=timeout)
 
             # ✅ Validar HTTP 5xx sem quebrar fluxo (retry já ocorreu no adapter)
             try:
@@ -850,7 +854,8 @@ class BotManager:
 
         for attempt in range(1, max_attempts + 1):
             try:
-                response = requests.get(url, timeout=15)
+                with self.telegram_http_semaphore:
+                    response = requests.get(url, timeout=15)
                 data = response.json()
 
                 if not data.get('ok'):
@@ -1101,7 +1106,8 @@ class BotManager:
                             if expected_base:
                                 expected_url = f"{expected_base}/webhook/telegram/{bot_id}"
                                 info_url = f"https://api.telegram.org/bot{token}/getWebhookInfo"
-                                resp = _rq.get(info_url, timeout=10)
+                                with self.telegram_http_semaphore:
+                                    resp = _rq.get(info_url, timeout=10)
                                 if resp.status_code == 200:
                                     info = resp.json().get('result', {})
                                     configured = info.get('url')
@@ -1113,7 +1119,8 @@ class BotManager:
                                         if last_error and '502 Bad Gateway' in str(last_error):
                                             try:
                                                 del_url = f"https://api.telegram.org/bot{token}/deleteWebhook"
-                                                _rq.post(del_url, timeout=10)
+                                                with self.telegram_http_semaphore:
+                                                    _rq.post(del_url, timeout=10)
                                             except Exception:
                                                 pass
                                             if self.scheduler:
@@ -1123,7 +1130,7 @@ class BotManager:
                                                     func=self._polling_cycle,
                                                     args=[bot_id, token],
                                                     trigger='interval',
-                                                    seconds=1,
+                                                    seconds=5,
                                                     max_instances=1,
                                                     replace_existing=True
                                                 )
@@ -1162,14 +1169,16 @@ class BotManager:
                 # Configurar webhook real
                 webhook_url = f"{webhook_base}/webhook/telegram/{bot_id}"
                 url = f"https://api.telegram.org/bot{token}/setWebhook"
-                response = requests.post(url, json={'url': webhook_url}, timeout=10)
+                with self.telegram_http_semaphore:
+                    response = requests.post(url, json={'url': webhook_url}, timeout=10)
                 
                 if response.status_code == 200:
                     logger.info(f"Webhook configurado: {webhook_url}")
                     # Verificar estado do webhook imediatamente
                     try:
                         info_url = f"https://api.telegram.org/bot{token}/getWebhookInfo"
-                        info_resp = requests.get(info_url, timeout=10)
+                        with self.telegram_http_semaphore:
+                            info_resp = requests.get(info_url, timeout=10)
                         if info_resp.status_code == 200:
                             info = info_resp.json()
                             url_cfg = (info.get('result') or {}).get('url')
@@ -1188,7 +1197,8 @@ class BotManager:
                                 try:
                                     # Remover webhook e habilitar polling para não perder vendas
                                     del_url = f"https://api.telegram.org/bot{token}/deleteWebhook"
-                                    del_resp = requests.post(del_url, timeout=10)
+                                    with self.telegram_http_semaphore:
+                                        del_resp = requests.post(del_url, timeout=10)
                                     logger.warning(f"🔁 Failover para polling (deleteWebhook status={del_resp.status_code}) para bot {bot_id}")
                                 except Exception as de:
                                     logger.warning(f"⚠️ Falha ao deletar webhook para failover: {de}")
@@ -1201,7 +1211,7 @@ class BotManager:
                                         func=self._polling_cycle,
                                         args=[bot_id, token],
                                         trigger='interval',
-                                        seconds=1,
+                                        seconds=5,
                                         max_instances=1,
                                         replace_existing=True
                                     )
@@ -1233,7 +1243,7 @@ class BotManager:
                         func=self._polling_cycle,
                         args=[bot_id, token],
                         trigger='interval',
-                        seconds=1,
+                        seconds=5,
                         max_instances=1,
                         replace_existing=True
                     )
@@ -1290,7 +1300,8 @@ class BotManager:
                 logger.info(f"✅ Bot {bot_id} online e aguardando mensagens...")
             
             url = f"https://api.telegram.org/bot{token}/getUpdates"
-            response = requests.get(url, params={'offset': offset, 'timeout': 0}, timeout=2)
+            with self.telegram_http_semaphore:
+                response = requests.get(url, params={'offset': offset, 'timeout': 25}, timeout=30)
             
             if response.status_code == 200:
                 data = response.json()
@@ -1339,7 +1350,8 @@ class BotManager:
                 if poll_count % 5 == 0:
                     logger.info(f"📡 Bot {bot_id} polling ativo (ciclo {poll_count}) - Thread: {threading.current_thread().name}")
                 
-                response = requests.get(url, params={'offset': offset, 'timeout': 30}, timeout=35)
+                with self.telegram_http_semaphore:
+                    response = requests.get(url, params={'offset': offset, 'timeout': 30}, timeout=35)
                 
                 if response.status_code == 200:
                     data = response.json()
@@ -9290,7 +9302,8 @@ Seu pagamento ainda não foi confirmado.
                         import json
                         data['reply_markup'] = json.dumps(reply_markup)
                     
-                    response = requests.post(url, files=files, data=data, timeout=30)
+                    with self.telegram_http_semaphore:
+                        response = requests.post(url, files=files, data=data, timeout=30)
             
             if response.status_code == 200:
                 result_data = response.json()
@@ -9395,43 +9408,35 @@ Seu pagamento ainda não foi confirmado.
         """
         try:
             base_url = f"https://api.telegram.org/bot{token}"
-            
+
             # Preparar teclado inline se houver botões
             reply_markup = None
             if buttons:
                 inline_keyboard = []
                 for button in buttons:
                     button_dict = {'text': button.get('text')}
-                    
+
                     # ✅ CORREÇÃO CRÍTICA: Botão com URL usa 'url', botão com callback usa 'callback_data'
                     # Na API do Telegram, são mutuamente exclusivos - não pode ter ambos!
                     if button.get('url'):
-                        # Botão de redirecionamento (link externo)
                         button_dict['url'] = button['url']
                         logger.debug(f"🔗 Botão de link: {button.get('text')} → {button['url'][:50]}...")
                     elif button.get('callback_data'):
-                        # Botão de callback (gera PIX, verifica pagamento, etc)
                         button_dict['callback_data'] = button['callback_data']
                         logger.debug(f"🔘 Botão de callback: {button.get('text')} → {button['callback_data']}")
                     else:
-                        # Fallback: se não tiver nenhum, usar callback padrão
                         button_dict['callback_data'] = 'button_pressed'
                         logger.warning(f"⚠️ Botão sem 'url' nem 'callback_data': {button.get('text')} - usando fallback")
-                    
+
                     inline_keyboard.append([button_dict])
                 reply_markup = {'inline_keyboard': inline_keyboard}
-            
-            # ✅ QI 200: Enviar mídia + mensagem com validações
+
             if media_url:
-                # ✅ QI 200: Validar tipo de mídia e limitar caption (max 900 chars)
                 caption_text = message[:1500] if len(message) > 1500 else message
-                
-                # ✅ QI 200: Validar extensão de arquivo para photos
+
                 if media_type == 'photo':
-                    # Telegram só aceita JPG, JPEG, PNG para photos
                     valid_extensions = ('.jpg', '.jpeg', '.png')
                     if not media_url.lower().endswith(valid_extensions):
-                        # Se não for formato válido, enviar só texto
                         logger.warning(f"⚠️ Formato de imagem inválido: {media_url[-10:]} - enviando só texto")
                         url = f"{base_url}/sendMessage"
                         payload = {
@@ -9441,11 +9446,10 @@ Seu pagamento ainda não foi confirmado.
                         }
                         if reply_markup:
                             payload['reply_markup'] = reply_markup
-                        response = requests.post(url, json=payload, timeout=3)
+                        with self.telegram_http_semaphore:
+                            response = requests.post(url, json=payload, timeout=3)
                     else:
-                        # ✅ QI 200: Se caption > 1500, enviar mídia sem caption e mensagem separada
                         if len(message) > 1500:
-                            # Enviar mídia sem caption
                             url = f"{base_url}/sendPhoto"
                             payload = {
                                 'chat_id': chat_id,
@@ -9454,9 +9458,9 @@ Seu pagamento ainda não foi confirmado.
                             }
                             if reply_markup:
                                 payload['reply_markup'] = reply_markup
-                            response = requests.post(url, json=payload, timeout=3)
-                            
-                            # Enviar mensagem completa separadamente
+                            with self.telegram_http_semaphore:
+                                response = requests.post(url, json=payload, timeout=3)
+
                             if response.status_code == 200:
                                 try:
                                     result_data = response.json()
@@ -9467,7 +9471,8 @@ Seu pagamento ainda não foi confirmado.
                                             'text': message,
                                             'parse_mode': 'HTML'
                                         }
-                                        msg_response = requests.post(url_msg, json=payload_msg, timeout=3)
+                                        with self.telegram_http_semaphore:
+                                            msg_response = requests.post(url_msg, json=payload_msg, timeout=3)
                                         if msg_response.status_code != 200:
                                             logger.warning(f"⚠️ Erro ao enviar mensagem separada para chat {chat_id}: {msg_response.text[:200]}")
                                 except Exception as e:
@@ -9482,18 +9487,11 @@ Seu pagamento ainda não foi confirmado.
                             }
                             if reply_markup:
                                 payload['reply_markup'] = reply_markup
-                            response = requests.post(url, json=payload, timeout=3)
+                            with self.telegram_http_semaphore:
+                                response = requests.post(url, json=payload, timeout=3)
+
                 elif media_type == 'video':
-                    # ✅ QI 200: Se caption > 1500, enviar vídeo sem caption e mensagem separada
                     if len(message) > 1500:
-                        url = f"{base_url}/sendVideo"
-                        payload = {
-                            'chat_id': chat_id,
-                            'video': media_url,
-                            'parse_mode': 'HTML'
-                        }
-                        if reply_markup:
-                            payload['reply_markup'] = reply_markup
                         response = self.send_video_safe(
                             token=token,
                             chat_id=chat_id,
@@ -9503,8 +9501,7 @@ Seu pagamento ainda não foi confirmado.
                         )
                         if response is None:
                             return False
-                        
-                        # Enviar mensagem completa separadamente
+
                         if response.status_code == 200:
                             try:
                                 result_data = response.json()
@@ -9515,21 +9512,13 @@ Seu pagamento ainda não foi confirmado.
                                         'text': message,
                                         'parse_mode': 'HTML'
                                     }
-                                    msg_response = requests.post(url_msg, json=payload_msg, timeout=3)
+                                    with self.telegram_http_semaphore:
+                                        msg_response = requests.post(url_msg, json=payload_msg, timeout=3)
                                     if msg_response.status_code != 200:
                                         logger.warning(f"⚠️ Erro ao enviar mensagem separada para chat {chat_id}: {msg_response.text[:200]}")
                             except Exception as e:
                                 logger.warning(f"⚠️ Erro ao processar resposta do vídeo para chat {chat_id}: {e}")
                     else:
-                        url = f"{base_url}/sendVideo"
-                        payload = {
-                            'chat_id': chat_id,
-                            'video': media_url,
-                            'caption': caption_text,
-                            'parse_mode': 'HTML'
-                        }
-                        if reply_markup:
-                            payload['reply_markup'] = reply_markup
                         response = self.send_video_safe(
                             token=token,
                             chat_id=chat_id,
@@ -9539,8 +9528,8 @@ Seu pagamento ainda não foi confirmado.
                         )
                         if response is None:
                             return False
+
                 elif media_type == 'audio':
-                    # ✅ QI 200: Se caption > 1500, enviar áudio sem caption e mensagem separada
                     if len(message) > 1500:
                         url = f"{base_url}/sendAudio"
                         payload = {
@@ -9550,9 +9539,9 @@ Seu pagamento ainda não foi confirmado.
                         }
                         if reply_markup:
                             payload['reply_markup'] = reply_markup
-                        response = requests.post(url, json=payload, timeout=3)
-                        
-                        # Enviar mensagem completa separadamente
+                        with self.telegram_http_semaphore:
+                            response = requests.post(url, json=payload, timeout=3)
+
                         if response.status_code == 200:
                             try:
                                 result_data = response.json()
@@ -9563,7 +9552,8 @@ Seu pagamento ainda não foi confirmado.
                                         'text': message,
                                         'parse_mode': 'HTML'
                                     }
-                                    msg_response = requests.post(url_msg, json=payload_msg, timeout=3)
+                                    with self.telegram_http_semaphore:
+                                        msg_response = requests.post(url_msg, json=payload_msg, timeout=3)
                                     if msg_response.status_code != 200:
                                         logger.warning(f"⚠️ Erro ao enviar mensagem separada para chat {chat_id}: {msg_response.text[:200]}")
                             except Exception as e:
@@ -9578,9 +9568,10 @@ Seu pagamento ainda não foi confirmado.
                         }
                         if reply_markup:
                             payload['reply_markup'] = reply_markup
-                        response = requests.post(url, json=payload, timeout=3)
+                        with self.telegram_http_semaphore:
+                            response = requests.post(url, json=payload, timeout=3)
+
                 else:
-                    # Fallback defensivo: tipo desconhecido → enviar só texto
                     logger.warning(f"⚠️ media_type desconhecido para chat {chat_id}: {media_type!r} (enviando só texto)")
                     url = f"{base_url}/sendMessage"
                     payload = {
@@ -9590,70 +9581,64 @@ Seu pagamento ainda não foi confirmado.
                     }
                     if reply_markup:
                         payload['reply_markup'] = reply_markup
-                    response = requests.post(url, json=payload, timeout=3)
+                    with self.telegram_http_semaphore:
+                        response = requests.post(url, json=payload, timeout=3)
             else:
-                # Enviar apenas mensagem
                 url = f"{base_url}/sendMessage"
                 payload = {
                     'chat_id': chat_id,
                     'text': message,
                     'parse_mode': 'HTML'
                 }
-                
                 if reply_markup:
                     payload['reply_markup'] = reply_markup
-                
-                response = requests.post(url, json=payload, timeout=3)
-            
-            # ✅ CRÍTICO: Verificar resposta da API do Telegram
+                with self.telegram_http_semaphore:
+                    response = requests.post(url, json=payload, timeout=3)
+
             result_data = None
             try:
                 if getattr(response, 'content', None):
                     result_data = response.json()
             except Exception:
-                # ⚠️ Telegram pode retornar 200 sem JSON parseável (especialmente sendVideo por URL)
                 logger.warning(
                     f"⚠️ Telegram retornou 200 sem JSON parseável (assumindo sucesso) | chat_id={chat_id}"
                 )
-            
-            # ✅ CRÍTICO: Verificar sucesso. Se 200, considerar sucesso mesmo sem JSON.
+
             if response.status_code == 200 and (not result_data or result_data.get('ok')):
                 logger.debug(f"✅ Mensagem enviada para chat {chat_id}")
-                
-                # ✅ CHAT: Salvar mensagem enviada pelo bot no banco
+
                 try:
                     from app import app, db
                     from models import BotUser, BotMessage, Bot
                     import json
                     import uuid as uuid_lib
-                    
+
                     with app.app_context():
-                        # Buscar bot pelo token para obter bot_id
                         bot_id = None
                         with self._bots_lock:
                             for bid, bot_info in self.active_bots.items():
                                 if bot_info.get('token') == token:
                                     bot_id = bid
                                     break
-                        
-                        # Se não encontrou pelos bots ativos, buscar no banco
+
                         if not bot_id:
                             bot = Bot.query.filter_by(token=token).first()
                             if bot:
                                 bot_id = bot.id
-                        
+
                         if bot_id:
-                            # Buscar bot_user pelo bot_id e telegram_user_id
                             bot_user = BotUser.query.filter_by(
                                 bot_id=bot_id,
                                 telegram_user_id=str(chat_id),
                                 archived=False
                             ).first()
-                            
+
                             if bot_user:
-                                telegram_msg_id = result_data.get('result', {}).get('message_id')
+                                telegram_msg_id = None
+                                if isinstance(result_data, dict):
+                                    telegram_msg_id = result_data.get('result', {}).get('message_id')
                                 message_id = str(telegram_msg_id) if telegram_msg_id else str(uuid_lib.uuid4().hex)
-                                
+
                                 bot_message = BotMessage(
                                     bot_id=bot_id,
                                     bot_user_id=bot_user.id,
@@ -9662,7 +9647,7 @@ Seu pagamento ainda não foi confirmado.
                                     message_text=message,
                                     message_type='text' if not media_url else media_type,
                                     direction='outgoing',
-                                    is_read=True,  # Mensagens do bot já são "lidas"
+                                    is_read=True,
                                     raw_data=json.dumps(result_data) if result_data else None
                                 )
                                 db.session.add(bot_message)
@@ -9674,24 +9659,19 @@ Seu pagamento ainda não foi confirmado.
                             logger.debug(f"⚠️ Bot não encontrado pelo token para salvar mensagem enviada")
                 except Exception as e:
                     logger.error(f"❌ Erro ao salvar mensagem enviada pelo bot: {e}")
-                    # Não interromper o fluxo se falhar ao salvar
-                
-                # Retornar dados completos se sucesso, senão True para compatibilidade
+
                 return result_data or True
             else:
-                # ✅ CRÍTICO: Log detalhado do erro
-                error_description = result_data.get('description', 'Erro desconhecido') if result_data else 'Resposta inválida'
-                error_code = result_data.get('error_code', response.status_code) if result_data else response.status_code
+                error_description = result_data.get('description', 'Erro desconhecido') if isinstance(result_data, dict) else 'Resposta inválida'
+                error_code = result_data.get('error_code', response.status_code) if isinstance(result_data, dict) else response.status_code
 
-                # ✅ DEFINITIVO: user is deactivated → blacklist e não tentar mais
                 if response.status_code == 403 and isinstance(error_description, str) and 'user is deactivated' in error_description.lower():
                     self._blacklist_user_deactivated(token, chat_id)
 
                 logger.error(f"❌ Erro ao enviar mensagem para chat {chat_id}: status={response.status_code}, error_code={error_code}, description={error_description}")
                 logger.error(f"❌ Resposta completa: {response.text[:500]}")
-                # ✅ Retornar dict com informações do erro para permitir detecção de 401
                 return {'error': True, 'error_code': error_code, 'description': error_description}
-                
+
         except requests.exceptions.Timeout:
             logger.error(f"⏱️ Timeout ao enviar mensagem para chat {chat_id}")
             return False
@@ -9725,7 +9705,8 @@ Seu pagamento ainda não foi confirmado.
         if verify_telegram and token:
             try:
                 url = f"https://api.telegram.org/bot{token}/getMe"
-                response = requests.get(url, timeout=5)
+                with self.telegram_http_semaphore:
+                    response = requests.get(url, timeout=5)
                 
                 if response.status_code == 200:
                     data = response.json()
