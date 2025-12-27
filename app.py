@@ -4119,6 +4119,7 @@ def general_remarketing():
                         remarketing_buttons_template = []
 
                     assigned_list = list(assigned_ids)
+                    random.shuffle(assigned_list)
                     total_targets = 0
                     chunk_size = 500
                     for i in range(0, len(assigned_list), chunk_size):

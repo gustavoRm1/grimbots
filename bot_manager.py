@@ -558,6 +558,7 @@ class BotManager:
         import time
 
         queue_key = f"remarketing:queue:{bot_id}"
+        logger.info(f"🚀 Remarketing worker ativo e drenando fila: {queue_key}")
         msg_counter = 0
         next_long_pause_after = random.randint(15, 25)
 
@@ -574,6 +575,7 @@ class BotManager:
                 except Exception:
                     logger.warning(f"⚠️ Remarketing job inválido (JSON parse falhou): bot_id={bot_id}")
                     continue
+                logger.debug(f"📥 Remarketing dequeue bot_id={bot_id} chat_id={job.get('telegram_user_id')}")
 
                 job_type = job.get('type')
                 if job_type == 'campaign_done':
@@ -588,6 +590,12 @@ class BotManager:
                                 campaign.status = 'completed'
                                 campaign.completed_at = get_brazil_time()
                                 db.session.commit()
+                                logger.info(
+                                    f"🏁 Campaign DONE bot_id={bot_id} "
+                                    f"sent={campaign.total_sent} "
+                                    f"failed={campaign.total_failed} "
+                                    f"blocked={campaign.total_blocked}"
+                                )
                                 try:
                                     socketio.emit('remarketing_completed', {
                                         'campaign_id': campaign.id,
@@ -711,15 +719,11 @@ class BotManager:
                     logger.debug(f"⚠️ Falha ao atualizar contadores do remarketing (não crítico): {update_error}")
 
                 msg_counter += 1
-                jitter = random.uniform(4.0, 9.0)
-                time.sleep(jitter)
+                time.sleep(random.uniform(1.2, 2.5))
 
-                if msg_counter >= next_long_pause_after:
-                    long_pause = random.uniform(600.0, 1800.0)
-                    logger.info(f"⏸️ Remarketing long pause: bot_id={bot_id} seconds={int(long_pause)} msgs={msg_counter}")
-                    time.sleep(long_pause)
-                    msg_counter = 0
-                    next_long_pause_after = random.randint(15, 25)
+                if msg_counter % 100 == 0:
+                    logger.info(f"⏸️ Micro pause remarketing bot_id={bot_id} msgs={msg_counter}")
+                    time.sleep(random.uniform(10, 20))
             except Exception as e:
                 logger.error(f"❌ Erro no remarketing worker loop: bot_id={bot_id} err={e}", exc_info=True)
                 try:
