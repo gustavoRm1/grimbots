@@ -121,23 +121,27 @@ nohup python3 start_rq_worker.py webhook > logs/rq-webhook.log 2>&1 &
 
 echo "🔥 Iniciando worker dedicado de REMARKETING V2.0..."
 
-if pgrep -f "remarketing_worker_v2.py" >/dev/null; then
-  echo "⚠️ Worker de remarketing já está rodando, encerrando..."
-  pgrep -f "remarketing_worker_v2.py" | xargs -r kill -9
-  sleep 1
-fi
+cd "$(dirname "$0")"
 
-nohup python3 workers/remarketing_worker_v2.py \
+source venv/bin/activate
+
+export PYTHONPATH="$(pwd)"
+
+nohup python -u workers/remarketing_worker_v2.py \
   >> logs/remarketing_worker.log 2>&1 &
+
+WORKER_PID=$!
 
 sleep 2
 
-if pgrep -f "remarketing_worker_v2.py" >/dev/null; then
-  echo "✅ Worker de remarketing V2.0 iniciado com sucesso"
+if ps -p $WORKER_PID > /dev/null 2>&1; then
+  echo "✅ Worker de remarketing V2.0 iniciado (PID: $WORKER_PID)"
 else
   echo "❌ ERRO: Worker de remarketing NÃO iniciou!"
   tail -50 logs/remarketing_worker.log
 fi
+
+deactivate
 
 deactivate
 
