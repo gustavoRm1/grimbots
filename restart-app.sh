@@ -143,7 +143,5 @@ fi
 
 deactivate
 
-deactivate
-
 echo "✅ Aplicação reiniciada com sucesso."
 

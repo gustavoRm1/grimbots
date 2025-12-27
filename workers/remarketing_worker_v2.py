@@ -62,7 +62,7 @@ def _rate_limit(token: str):
 # -------------------------------------------------
 def send_telegram_message(token: str, chat_id: str, message: str,
                           media_url: str = None, media_type: str = 'video',
-                          buttons: list = None, timeout_sec: int = 5):
+                          buttons: list = None, timeout_sec: int = 5, bot_id: int = None, redis_conn=None):
     base_url = f"https://api.telegram.org/bot{token}"
 
     # Inline keyboard
@@ -156,6 +156,15 @@ def send_telegram_message(token: str, chat_id: str, message: str,
         error_description = result_data.get('description', 'Erro desconhecido') if isinstance(result_data, dict) else 'Resposta inválida'
         error_code = result_data.get('error_code', response.status_code) if isinstance(result_data, dict) else response.status_code
 
+        if response.status_code == 403:
+            if bot_id is not None and redis_conn is not None:
+                try:
+                    redis_conn.sadd(f"remarketing:blacklist:{bot_id}", str(chat_id))
+                except Exception:
+                    pass
+            logger.warning(f"🚫 Bot bloqueado pelo usuário: bot_id={bot_id} chat_id={chat_id}")
+            return {'error': True, 'error_code': 403, 'description': error_description}
+
         if response.status_code == 403 and isinstance(error_description, str) and 'user is deactivated' in error_description.lower():
             return {'error': True, 'error_code': 403, 'description': error_description, 'deactivated': True}
 
@@ -219,7 +228,9 @@ def process_job(job: dict):
             message=message,
             media_url=media_url,
             media_type=media_type,
-            buttons=buttons
+            buttons=buttons,
+            bot_id=bot_id,
+            redis_conn=redis_conn
         )
     except Exception as send_error:
         logger.error(
@@ -283,7 +294,7 @@ def drain(bot_id: int):
         process_job(job)
 
         msg_counter += 1
-        time.sleep(random.uniform(1.2, 2.5))
+        time.sleep(random.uniform(0.8, 1.5))
         if msg_counter % 100 == 0:
             logger.info(f"⏸️ Micro pause remarketing bot_id={bot_id} msgs={msg_counter}")
             time.sleep(random.uniform(10, 20))
@@ -329,7 +340,7 @@ def main():
             else:
                 process_job(job)
                 msg_counter = 1
-                time.sleep(random.uniform(1.2, 2.5))
+                time.sleep(random.uniform(0.8, 1.5))
                 if msg_counter % 100 == 0:
                     logger.info(f"⏸️ Micro pause remarketing bot_id={bot_id} msgs={msg_counter}")
                     time.sleep(random.uniform(10, 20))
