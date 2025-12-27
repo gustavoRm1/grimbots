@@ -5,6 +5,11 @@ import signal
 import threading
 import logging
 
+# Garantir que o diretório raiz do projeto esteja no sys.path
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
+if BASE_DIR not in sys.path:
+    sys.path.insert(0, BASE_DIR)
+
 from redis_manager import get_redis_connection
 from bot_manager import BotManager
 
