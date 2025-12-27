@@ -4153,7 +4153,6 @@ def general_remarketing():
                     campaign.total_targets = total_targets
                     db.session.commit()
                     redis_conn.rpush(queue_key, json.dumps({'type': 'campaign_done', 'campaign_id': campaign.id}))
-                    bot_manager._start_remarketing_worker(bot_id=bot.id, bot_token=bot.token)
 
                     total_users += total_targets
                     bots_affected += 1

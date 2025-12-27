@@ -11085,7 +11085,6 @@ Seu pagamento ainda não foi confirmado.
                     except Exception:
                         pass
 
-                    self._start_remarketing_worker(bot_id=campaign.bot_id, bot_token=bot_token)
                     logger.info(f"📦 Remarketing jobs enfileirados: campaign_id={campaign.id} bot_id={campaign.bot_id} total={enqueued} queue={queue_key}")
 
             thread = threading.Thread(target=enqueue_jobs, name=f"remarketing-enqueue-{campaign_id}")
