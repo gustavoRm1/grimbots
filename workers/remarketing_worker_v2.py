@@ -212,6 +212,8 @@ def process_job(job: dict):
         return
 
     redis_conn = get_redis_connection()
+    stats_key = f"remarketing:stats:{campaign_id}" if campaign_id is not None else None
+    sent_set_key = f"remarketing:sent:{campaign_id}" if campaign_id is not None else None
 
     try:
         send_result = send_telegram_message(
@@ -236,16 +238,22 @@ def process_job(job: dict):
         error_code = int(send_result.get('error_code') or 0)
         desc = (send_result.get('description') or '').lower()
         definitive = False
+        error_field = None
         if error_code == 403:
             definitive = True
+            error_field = 'error_403'
         elif error_code == 400 and any(x in desc for x in ['chat not found', 'user not found']):
             definitive = True
+            error_field = 'error_400'
         elif error_code == 410:
             definitive = True
+            error_field = 'error_410'
 
         if definitive:
             try:
                 redis_conn.sadd(f"remarketing:blacklist:{bot_id}", str(chat_id))
+                if stats_key and error_field:
+                    redis_conn.hincrby(stats_key, error_field, 1)
                 logger.warning(f"🚫 Blacklist adicionada (definitivo): bot_id={bot_id} chat_id={chat_id} code={error_code}")
             except Exception:
                 pass
@@ -254,6 +262,12 @@ def process_job(job: dict):
         if error_code in (0, -1):
             time.sleep(2)
             return
+        # erros temporários não blacklistados podem ser contados genericamente
+        try:
+            if stats_key:
+                redis_conn.hincrby(stats_key, f"error_{error_code}", 1)
+        except Exception:
+            pass
     elif send_result and audio_enabled and audio_url:
         try:
             send_telegram_message(
@@ -266,9 +280,13 @@ def process_job(job: dict):
             )
         except Exception:
             pass
-    else:
+    elif send_result:
         try:
-            redis_conn.hincrby(f"remarketing:stats:{campaign_id}", f"error_{error_code}", 1 if error_code else 1)
+            if stats_key:
+                redis_conn.hincrby(stats_key, "sent_ok", 1)
+            if sent_set_key:
+                redis_conn.sadd(sent_set_key, str(chat_id))
+            logger.info(f"📤 Message sent OK bot_id={bot_id} chat_id={chat_id}")
         except Exception:
             pass
 
