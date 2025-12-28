@@ -119,26 +119,27 @@ nohup python3 start_rq_worker.py gateway > logs/rq-gateway.log 2>&1 &
 nohup python3 start_rq_worker.py tasks   > logs/rq-tasks.log   2>&1 &
 nohup python3 start_rq_worker.py webhook > logs/rq-webhook.log 2>&1 &
 
-echo "🔥 Iniciando worker dedicado de REMARKETING V2.0..."
+echo "� Encerrando workers de REMARKETING..."
+pkill -f "workers/remarketing_worker_v2.py" || true
+sleep 2
+
+echo "�🔥 Iniciando worker dedicado de REMARKETING V2.0..."
 
 cd "$(dirname "$0")"
 
 source venv/bin/activate
+export PYTHONPATH=$(pwd)
 
-export PYTHONPATH="$(pwd)"
-
-nohup python -u workers/remarketing_worker_v2.py \
-  >> logs/remarketing_worker.log 2>&1 &
-
-WORKER_PID=$!
+nohup python -u workers/remarketing_worker_v2.py >> logs/remarketing_worker.log 2>&1 &
 
 sleep 2
+COUNT=$(ps aux | grep -v grep | grep -c "workers/remarketing_worker_v2.py")
 
-if ps -p $WORKER_PID > /dev/null 2>&1; then
-  echo "✅ Worker de remarketing V2.0 iniciado (PID: $WORKER_PID)"
+if [ "$COUNT" -ne 1 ]; then
+  echo "❌ ERRO CRÍTICO: $COUNT workers de remarketing rodando!"
+  exit 1
 else
-  echo "❌ ERRO: Worker de remarketing NÃO iniciou!"
-  tail -50 logs/remarketing_worker.log
+  echo "✅ Worker de remarketing rodando corretamente (1 processo)"
 fi
 
 deactivate
