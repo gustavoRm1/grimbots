@@ -1,8 +1,17 @@
 """Idempotente: cria coluna click_context_url em payments/payment se não existir.
 Execute: python migrations/migrate_click_context_url.py
 """
+import sys
+from pathlib import Path
+
 from sqlalchemy import inspect, text
-from app import app, db
+
+# Garantir import de app/db mesmo fora do PYTHONPATH
+BASE_DIR = Path(__file__).resolve().parent.parent
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
+
+from app import app, db  # noqa: E402
 
 
 def run():
