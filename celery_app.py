@@ -227,18 +227,40 @@ def send_meta_event(self, pixel_id, access_token, event_data, test_code=None):
         
         if response.status_code == 200:
             result = response.json()
-            # ✅ LOGGING ESTRUTURADO - SUCESSO
+            events_received = result.get('events_received', 0)
+            # ✅ LOGGING ESTRUTURADO - SUCESSO (HTTP)
             logger.info(f"SUCCESS | Meta Event | {event_data.get('event_name')} | " +
                        f"ID: {event_data.get('event_id')} | " +
                        f"Pixel: {pixel_id} | " +
                        f"Latency: {latency}ms | " +
-                       f"EventsReceived: {result.get('events_received', 0)}")
+                       f"EventsReceived: {events_received}")
             
             # ✅ LOG CRÍTICO: Mostrar resposta completa (AUDITORIA)
             response_formatted = json.dumps(result, indent=2, ensure_ascii=False)
             logger.info(f"📥 META RESPONSE ({event_data.get('event_name')}):\n{response_formatted}")
-            
-            return result
+
+            # ✅ REGRA META: Só considerar sucesso real se events_received >= 1
+            if events_received and events_received >= 1:
+                try:
+                    if event_data.get('event_name') == 'Purchase':
+                        from models import db, Payment, get_brazil_time
+                        event_id_val = event_data.get('event_id')
+                        if event_id_val:
+                            payment = Payment.query.filter_by(meta_event_id=event_id_val).first()
+                            if payment and not payment.meta_purchase_sent:
+                                payment.meta_purchase_sent = True
+                                payment.meta_purchase_sent_at = get_brazil_time()
+                                db.session.commit()
+                                logger.info(f"✅ META PURCHASE CONFIRMADO | payment_id={payment.id} | event_id={event_id_val} | meta_purchase_sent=True")
+                except Exception as mark_err:
+                    # Não falhar task se marcação falhar; apenas logar
+                    logger.error(f"⚠️ Falha ao marcar meta_purchase_sent após SUCCESS: {mark_err}", exc_info=True)
+                
+                return result
+            else:
+                # events_received == 0: pedir retry para não marcar como enviado
+                logger.warning(f"RETRY | Meta Event | {event_data.get('event_name')} | events_received=0 | event_id={event_data.get('event_id')}")
+                raise self.retry(countdown=2 ** self.request.retries)
         
         elif response.status_code >= 500:
             # ✅ RETRY APENAS PARA ERROS 5xx (servidor)
@@ -285,6 +307,52 @@ def send_meta_event(self, pixel_id, access_token, event_data, test_code=None):
                    f"Pixel: {pixel_id} | " +
                    f"Error: {str(e)[:200]}")
         raise self.retry(countdown=2 ** self.request.retries)
+
+
+@celery_app.task
+def reconcile_meta_purchases(days: int = 7, limit: int = 200):
+    """
+    Reconciliador de purchases não marcados (backfill CAPI).
+    Seleciona pagamentos pagos nos últimos N dias com meta_purchase_sent=False
+    e reenfileira o Purchase com o MESMO event_id (Meta deduplica).
+    """
+    import logging
+    from datetime import datetime, timedelta, timezone
+    from models import db, Payment
+    from app import app, send_meta_pixel_purchase_event
+
+    logger = logging.getLogger(__name__)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+
+    with app.app_context():
+        payments = (
+            Payment.query.filter(
+                Payment.status == 'paid',
+                Payment.meta_purchase_sent == False,  # noqa: E712
+                Payment.paid_at >= cutoff
+            )
+            .order_by(Payment.paid_at.desc())
+            .limit(limit)
+            .all()
+        )
+
+        if not payments:
+            logger.info(f"🔁 Reconcile: nenhum payment pendente (window={days}d).")
+            return {'processed': 0, 'enqueued': 0}
+
+        enqueued = 0
+        for p in payments:
+            try:
+                logger.info(f"🔁 Reconcile enfileirando Purchase | payment_id={p.id} | event_id={p.meta_event_id or 'will_generate'}")
+                ok = send_meta_pixel_purchase_event(p)
+                if ok:
+                    enqueued += 1
+            except Exception as e:
+                logger.error(f"❌ Reconcile falhou para payment_id={p.id}: {e}", exc_info=True)
+                db.session.rollback()
+
+        logger.info(f"🔁 Reconcile finalizado | processed={len(payments)} | enqueued={enqueued}")
+        return {'processed': len(payments), 'enqueued': enqueued}
 
 
 @celery_app.task

@@ -12004,19 +12004,9 @@ def send_meta_pixel_purchase_event(payment):
             # Se task falhar, Celery vai retry automaticamente (max_retries=10)
             # Não fazer rollback aqui - deixar Celery processar em background
             
-            # ✅ CORREÇÃO CRÍTICA V3: Marcar meta_purchase_sent DEPOIS de enfileirar (lock pessimista)
-            # Isso previne duplicação mesmo que múltiplas requisições cheguem simultaneamente
-            # MAS só marca DEPOIS que task foi enfileirada para permitir client-side disparar primeiro
-            # ✅ IMPORTANTE: Só marcar se ainda não estiver marcado OU se meta_event_id não existe (permitir retry)
-            if not payment.meta_purchase_sent or not getattr(payment, 'meta_event_id', None):
-                payment.meta_purchase_sent = True
-                from models import get_brazil_time
-                payment.meta_purchase_sent_at = get_brazil_time()
-            
             # ✅ Salvar event_id para referência futura (mesmo sem aguardar resultado)
             payment.meta_event_id = event_id
             db.session.commit()
-            logger.info(f"[META PURCHASE] Purchase - meta_purchase_sent marcado como True (DEPOIS de enfileirar)")
             logger.info(f"[META PURCHASE] Purchase - Task enfileirada com sucesso: {task.id} | event_id: {event_id[:50]}...")
             logger.info(f"✅ Purchase enfileirado para processamento assíncrono via Celery (fire and forget)")
             logger.info(f"   💡 Celery vai processar em background e enviar para Meta automaticamente")
@@ -12024,19 +12014,6 @@ def send_meta_pixel_purchase_event(payment):
             logger.info(f"   💡 Client-side já disparou antes (template renderizado primeiro)")
             
             return True  # ✅ Retornar True indicando que task foi enfileirada com sucesso
-                
-        except Exception as celery_error:
-            logger.error(f"❌ ERRO CRÍTICO ao enfileirar Purchase no Celery: {celery_error}", exc_info=True)
-            logger.error(f"   Payment ID: {payment.payment_id} | Pool: {pool.name} | Pixel: {pool.meta_pixel_id}")
-            # ✅ Reverter meta_purchase_sent se falhou ao enfileirar
-            try:
-                payment.meta_purchase_sent = False
-                payment.meta_purchase_sent_at = None
-                db.session.commit()
-            except:
-                pass
-            db.session.rollback()
-            return False  # ✅ Retornar False indicando falha
     
     except Exception as e:
         logger.error(f"💥 Erro CRÍTICO ao enviar Meta Purchase para payment {payment.id if payment else 'None'}: {e}", exc_info=True)
