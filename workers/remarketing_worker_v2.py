@@ -266,6 +266,11 @@ def process_job(job: dict):
             )
         except Exception:
             pass
+    else:
+        try:
+            redis_conn.hincrby(f"remarketing:stats:{campaign_id}", f"error_{error_code}", 1 if error_code else 1)
+        except Exception:
+            pass
 
 
 def drain(bot_id: int):

@@ -10875,6 +10875,8 @@ Seu pagamento ainda não foi confirmado.
 
                     redis_conn = get_redis_connection()
                     queue_key = f"remarketing:queue:{campaign.bot_id}"
+                    sent_set_key = f"remarketing:sent:{campaign.id}"
+                    stats_key = f"remarketing:stats:{campaign.id}"
 
                     contact_limit = get_brazil_time() - timedelta(days=campaign.days_since_last_contact)
                     query = BotUser.query.filter_by(bot_id=campaign.bot_id, archived=False)
@@ -11009,6 +11011,21 @@ Seu pagamento ainda não foi confirmado.
                         return
 
                     enqueued = 0
+                    skipped_blacklist = 0
+                    skipped_sent = 0
+                    skipped_invalid = 0
+                    skipped_not_eligible = 0
+                    debug_logged = 0
+                    debug_mode = False
+
+                    def _is_valid_chat_id(chat_id):
+                        try:
+                            if chat_id is None:
+                                return False
+                            chat_int = int(str(chat_id))
+                            return chat_int != 0
+                        except Exception:
+                            return False
                     batch_size = 200
                     offset = 0
 
@@ -11019,6 +11036,38 @@ Seu pagamento ainda não foi confirmado.
 
                         for lead in batch:
                             if not getattr(lead, 'telegram_user_id', None):
+                                skipped_invalid += 1
+                                if debug_mode and debug_logged < 10:
+                                    logger.info(f"🚫 SKIP_ENQUEUE reason=invalid_chat_id campaign_id={campaign.id} bot_id={campaign.bot_id} chat_id={getattr(lead, 'telegram_user_id', None)}")
+                                    debug_logged += 1
+                                continue
+                            if not _is_valid_chat_id(lead.telegram_user_id):
+                                skipped_invalid += 1
+                                if debug_mode and debug_logged < 10:
+                                    logger.info(f"🚫 SKIP_ENQUEUE reason=invalid_chat_id campaign_id={campaign.id} bot_id={campaign.bot_id} chat_id={lead.telegram_user_id}")
+                                    debug_logged += 1
+                                continue
+
+                            blk_key = f"remarketing:blacklist:{campaign.bot_id}"
+                            if redis_conn.sismember(blk_key, str(lead.telegram_user_id)):
+                                skipped_blacklist += 1
+                                if debug_mode and debug_logged < 10:
+                                    logger.info(f"🚫 SKIP_ENQUEUE reason=blacklist campaign_id={campaign.id} bot_id={campaign.bot_id} chat_id={lead.telegram_user_id}")
+                                    debug_logged += 1
+                                continue
+
+                            if redis_conn.sismember(sent_set_key, str(lead.telegram_user_id)):
+                                skipped_sent += 1
+                                if debug_mode and debug_logged < 10:
+                                    logger.info(f"🚫 SKIP_ENQUEUE reason=already_received campaign_id={campaign.id} bot_id={campaign.bot_id} chat_id={lead.telegram_user_id}")
+                                    debug_logged += 1
+                                continue
+
+                            if getattr(lead, 'opt_out', False) or getattr(lead, 'unsubscribed', False) or getattr(lead, 'inactive', False):
+                                skipped_not_eligible += 1
+                                if debug_mode and debug_logged < 10:
+                                    logger.info(f"🚫 SKIP_ENQUEUE reason=not_eligible campaign_id={campaign.id} bot_id={campaign.bot_id} chat_id={lead.telegram_user_id}")
+                                    debug_logged += 1
                                 continue
 
                             message = campaign.message.replace('{nome}', lead.first_name or 'Cliente')
@@ -11059,11 +11108,24 @@ Seu pagamento ainda não foi confirmado.
                             }
                             try:
                                 redis_conn.rpush(queue_key, json.dumps(job))
+                                redis_conn.hincrby(stats_key, 'enqueued', 1)
+                                if debug_mode and debug_logged < 10:
+                                    logger.info(f"📦 ENQUEUE OK campaign_id={campaign.id} bot_id={campaign.bot_id} chat_id={lead.telegram_user_id}")
+                                    debug_logged += 1
                                 enqueued += 1
                             except Exception as enqueue_error:
                                 logger.warning(f"⚠️ Falha ao enfileirar job remarketing: campaign_id={campaign.id} chat_id={lead.telegram_user_id} err={enqueue_error}")
 
                         offset += batch_size
+
+                    if skipped_blacklist:
+                        redis_conn.hincrby(stats_key, 'skipped_blacklist', skipped_blacklist)
+                    if skipped_sent:
+                        redis_conn.hincrby(stats_key, 'skipped_already_received', skipped_sent)
+                    if skipped_invalid:
+                        redis_conn.hincrby(stats_key, 'skipped_invalid_chat', skipped_invalid)
+                    if skipped_not_eligible:
+                        redis_conn.hincrby(stats_key, 'skipped_not_eligible', skipped_not_eligible)
 
                     campaign.total_targets = enqueued
                     db.session.commit()

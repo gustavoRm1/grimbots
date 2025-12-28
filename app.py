@@ -4062,6 +4062,17 @@ def general_remarketing():
                 }
                 target_audience = target_audience_mapping.get(audience_segment, 'all')
 
+                debug_mode = bool(data.get('debug_mode'))
+
+                def _is_valid_chat_id(chat_id):
+                    try:
+                        if chat_id is None:
+                            return False
+                        chat_int = int(str(chat_id))
+                        return chat_int != 0
+                    except Exception:
+                        return False
+
                 for bot in bots:
                     assigned_ids = assigned_by_bot.get(bot.id) or set()
                     if not assigned_ids:
@@ -4101,6 +4112,8 @@ def general_remarketing():
                             raise
 
                     queue_key = f"remarketing:queue:{bot.id}"
+                    sent_set_key = f"remarketing:sent:{campaign.id}"
+                    stats_key = f"remarketing:stats:{campaign.id}"
 
                     remarketing_buttons_template = []
                     try:
@@ -4122,6 +4135,10 @@ def general_remarketing():
                     random.shuffle(assigned_list)
                     total_targets = 0
                     skipped_blacklist = 0
+                    skipped_sent = 0
+                    skipped_invalid = 0
+                    skipped_not_eligible = 0
+                    debug_logged = 0
                     chunk_size = 500
                     for i in range(0, len(assigned_list), chunk_size):
                         chunk = assigned_list[i:i + chunk_size]
@@ -4136,6 +4153,27 @@ def general_remarketing():
                             blk_key = f"remarketing:blacklist:{bot.id}"
                             if redis_conn.sismember(blk_key, str(bu.telegram_user_id)):
                                 skipped_blacklist += 1
+                                if debug_mode and debug_logged < 10:
+                                    logger.info(f"🚫 SKIP_ENQUEUE reason=blacklist campaign_id={campaign.id} bot_id={bot.id} chat_id={bu.telegram_user_id}")
+                                    debug_logged += 1
+                                continue
+                            if not _is_valid_chat_id(bu.telegram_user_id):
+                                skipped_invalid += 1
+                                if debug_mode and debug_logged < 10:
+                                    logger.info(f"🚫 SKIP_ENQUEUE reason=invalid_chat_id campaign_id={campaign.id} bot_id={bot.id} chat_id={bu.telegram_user_id}")
+                                    debug_logged += 1
+                                continue
+                            if redis_conn.sismember(sent_set_key, str(bu.telegram_user_id)):
+                                skipped_sent += 1
+                                if debug_mode and debug_logged < 10:
+                                    logger.info(f"🚫 SKIP_ENQUEUE reason=already_received campaign_id={campaign.id} bot_id={bot.id} chat_id={bu.telegram_user_id}")
+                                    debug_logged += 1
+                                continue
+                            if getattr(bu, 'opt_out', False) or getattr(bu, 'unsubscribed', False) or getattr(bu, 'inactive', False):
+                                skipped_not_eligible += 1
+                                if debug_mode and debug_logged < 10:
+                                    logger.info(f"🚫 SKIP_ENQUEUE reason=not_eligible campaign_id={campaign.id} bot_id={bot.id} chat_id={bu.telegram_user_id}")
+                                    debug_logged += 1
                                 continue
                             msg = message.replace('{nome}', bu.first_name or 'Cliente')
                             msg = msg.replace('{primeiro_nome}', (bu.first_name or 'Cliente').split()[0])
@@ -4153,7 +4191,22 @@ def general_remarketing():
                                 'bot_token': bot.token
                             }
                             redis_conn.rpush(queue_key, json.dumps(job))
+                            redis_conn.hincrby(stats_key, 'enqueued', 1)
+                            if debug_mode and debug_logged < 10:
+                                logger.info(f"📦 ENQUEUE OK campaign_id={campaign.id} bot_id={bot.id} chat_id={bu.telegram_user_id}")
+                                debug_logged += 1
                             total_targets += 1
+                    if skipped_blacklist:
+                        redis_conn.hincrby(stats_key, 'skipped_blacklist', skipped_blacklist)
+                    if skipped_sent:
+                        redis_conn.hincrby(stats_key, 'skipped_already_received', skipped_sent)
+                    if skipped_invalid:
+                        redis_conn.hincrby(stats_key, 'skipped_invalid_chat', skipped_invalid)
+                    if skipped_not_eligible:
+                        redis_conn.hincrby(stats_key, 'skipped_not_eligible', skipped_not_eligible)
+                    if debug_mode and total_targets == 0:
+                        logger.error(f"❌ Campaign aborted — no eligible leads found | campaign_id={campaign.id} bot_id={bot.id}")
+                        continue
 
                     campaign.total_targets = total_targets
                     db.session.commit()
