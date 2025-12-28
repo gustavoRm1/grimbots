@@ -1048,6 +1048,8 @@ class Payment(db.Model):
     utm_term = db.Column(db.String(255), nullable=True)
     fbclid = db.Column(db.String(255), nullable=True)
     campaign_code = db.Column(db.String(255), nullable=True)
+    # ✅ CONTEXTO ORIGINAL DO CLIQUE (persistente para remarketing / expiração do Redis)
+    click_context_url = db.Column(db.Text, nullable=True)
     
     # ✅ TRACKING V4 - Tracking Token Universal
     tracking_token = db.Column(db.String(200), nullable=True, index=True)  # Tracking V4 - QI 500 (aumentado para 200 para garantir compatibilidade)

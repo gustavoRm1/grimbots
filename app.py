@@ -11790,6 +11790,18 @@ def send_meta_pixel_purchase_event(payment):
         # ✅ LOG CRÍTICO: Mostrar custom_data completo
         logger.info(f"📊 Meta Purchase - Custom Data: {json.dumps(custom_data, ensure_ascii=False)}")
         
+        # ✅ Persistir contexto original do clique no Payment (apenas uma vez)
+        if not getattr(payment, "click_context_url", None):
+            click_ctx_candidate = tracking_data.get("event_source_url") or tracking_data.get("first_page")
+            if click_ctx_candidate:
+                try:
+                    payment.click_context_url = click_ctx_candidate
+                    db.session.commit()
+                    logger.info(f"✅ Purchase - click_context_url persistido no Payment {payment.id}: {click_ctx_candidate}")
+                except Exception as e:
+                    db.session.rollback()
+                    logger.warning(f"⚠️ Purchase - falha ao persistir click_context_url no Payment {payment.id}: {e}")
+        
         # ✅ CRÍTICO: Construir event_source_url com múltiplos fallbacks
         # PRIORIDADE 1: event_source_url do Redis (tracking_data) - MAIS CONFIÁVEL
         event_source_url = tracking_data.get('event_source_url')
@@ -11798,11 +11810,16 @@ def send_meta_pixel_purchase_event(payment):
         if not event_source_url:
             event_source_url = tracking_data.get('first_page')
         
-        # PRIORIDADE 3: landing_url do Redis (fallback legado)
+        # PRIORIDADE 3: click_context_url do Payment (persistido no primeiro clique)
+        if not event_source_url and getattr(payment, "click_context_url", None):
+            event_source_url = payment.click_context_url
+            logger.info(f"🎯 REMARKETING ATTRIBUTED USING STORED CLICK CONTEXT | payment_id={payment.id} | event_source_url={event_source_url}")
+        
+        # PRIORIDADE 4: landing_url do Redis (fallback legado)
         if not event_source_url:
             event_source_url = tracking_data.get('landing_url')
         
-        # PRIORIDADE 4: URL do pool (fallback final)
+        # PRIORIDADE 5: URL do pool (fallback final)
         if not event_source_url:
             if getattr(payment, 'pool', None) and getattr(payment.pool, 'slug', None):
                 event_source_url = f'https://app.grimbots.online/go/{payment.pool.slug}'
