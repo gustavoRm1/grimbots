@@ -4121,6 +4121,7 @@ def general_remarketing():
                     assigned_list = list(assigned_ids)
                     random.shuffle(assigned_list)
                     total_targets = 0
+                    skipped_blacklist = 0
                     chunk_size = 500
                     for i in range(0, len(assigned_list), chunk_size):
                         chunk = assigned_list[i:i + chunk_size]
@@ -4131,6 +4132,10 @@ def general_remarketing():
                         ).all()
                         for bu in bot_users:
                             if not getattr(bu, 'telegram_user_id', None):
+                                continue
+                            blk_key = f"remarketing:blacklist:{bot.id}"
+                            if redis_conn.sismember(blk_key, str(bu.telegram_user_id)):
+                                skipped_blacklist += 1
                                 continue
                             msg = message.replace('{nome}', bu.first_name or 'Cliente')
                             msg = msg.replace('{primeiro_nome}', (bu.first_name or 'Cliente').split()[0])

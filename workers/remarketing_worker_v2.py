@@ -211,15 +211,7 @@ def process_job(job: dict):
         logger.error(f"❌ Job sem token: bot_id={bot_id} campaign_id={campaign_id} chat_id={chat_id}")
         return
 
-    # Blacklist (Redis set opcional): remarketing:blacklist:{bot_id}
-    try:
-        redis_conn = get_redis_connection()
-        blk_key = f"remarketing:blacklist:{bot_id}"
-        if redis_conn.sismember(blk_key, str(chat_id)):
-            logger.info(f"🚫 Chat em blacklist, ignorando: bot_id={bot_id} chat_id={chat_id}")
-            return
-    except Exception:
-        pass
+    redis_conn = get_redis_connection()
 
     try:
         send_result = send_telegram_message(
@@ -243,12 +235,22 @@ def process_job(job: dict):
     if isinstance(send_result, dict) and send_result.get('error'):
         error_code = int(send_result.get('error_code') or 0)
         desc = (send_result.get('description') or '').lower()
-        if error_code == 403 and ('bot was blocked' in desc or 'forbidden: bot was blocked' in desc):
+        definitive = False
+        if error_code == 403:
+            definitive = True
+        elif error_code == 400 and any(x in desc for x in ['chat not found', 'user not found']):
+            definitive = True
+        elif error_code == 410:
+            definitive = True
+
+        if definitive:
             try:
-                redis_conn = get_redis_connection()
                 redis_conn.sadd(f"remarketing:blacklist:{bot_id}", str(chat_id))
+                logger.warning(f"🚫 Blacklist adicionada (definitivo): bot_id={bot_id} chat_id={chat_id} code={error_code}")
             except Exception:
                 pass
+            return
+
         if error_code in (0, -1):
             time.sleep(2)
             return
