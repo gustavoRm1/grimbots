@@ -262,10 +262,10 @@ def process_job(job: dict):
         if error_code in (0, -1):
             time.sleep(2)
             return
-        # erros temporários não blacklistados podem ser contados genericamente
+        # Erros não definitivos (exceto 0/-1 já tratados) contam como error_other
         try:
             if stats_key:
-                redis_conn.hincrby(stats_key, f"error_{error_code}", 1)
+                redis_conn.hincrby(stats_key, "error_other", 1)
         except Exception:
             pass
     elif send_result and audio_enabled and audio_url:
