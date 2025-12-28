@@ -12014,6 +12014,17 @@ def send_meta_pixel_purchase_event(payment):
             logger.info(f"   💡 Client-side já disparou antes (template renderizado primeiro)")
             
             return True  # ✅ Retornar True indicando que task foi enfileirada com sucesso
+        except Exception as celery_error:
+            logger.error(f"❌ ERRO CRÍTICO ao enfileirar Purchase no Celery: {celery_error}", exc_info=True)
+            logger.error(f"   Payment ID: {payment.payment_id} | Pool: {pool.name} | Pixel: {pool.meta_pixel_id}")
+            # ✅ Reverter meta_purchase_sent (deixar como False)
+            try:
+                payment.meta_purchase_sent = False
+                payment.meta_purchase_sent_at = None
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+            return False  # ✅ Retornar False indicando falha ao enfileirar
     
     except Exception as e:
         logger.error(f"💥 Erro CRÍTICO ao enviar Meta Purchase para payment {payment.id if payment else 'None'}: {e}", exc_info=True)
