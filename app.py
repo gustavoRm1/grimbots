@@ -3800,17 +3800,74 @@ def update_remarketing_campaign(bot_id, campaign_id):
 @csrf.exempt
 def send_remarketing_campaign(bot_id, campaign_id):
     """Envia campanha de remarketing"""
-    bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
     from models import RemarketingCampaign
-    
+    data = request.get_json(silent=True) or {}
+    selected_bot_ids = data.get('bot_ids')
+
+    # Caso multi-bot: fan-out de campanhas por bot (sem refatorar worker)
+    if isinstance(selected_bot_ids, list) and len(selected_bot_ids) > 0:
+        # Normalizar IDs e remover duplicados
+        try:
+            bot_ids = list({int(bid) for bid in selected_bot_ids})
+        except Exception:
+            return jsonify({'error': 'bot_ids inválidos'}), 400
+
+        # Verificar propriedade dos bots
+        bots = Bot.query.filter(Bot.id.in_(bot_ids), Bot.user_id == current_user.id).all()
+        if not bots or len(bots) != len(bot_ids):
+            return jsonify({'error': 'Um ou mais bots não pertencem ao usuário ou não existem'}), 404
+
+        # Buscar campanha base (do bot atual) apenas para copiar configuração
+        campaign_base = RemarketingCampaign.query.filter_by(id=campaign_id, bot_id=bot_id).first()
+        if not campaign_base:
+            return jsonify({'error': 'Campanha base não encontrada para cópia'}), 404
+
+        created_campaigns = []
+        for target_bot in bots:
+            # Clonar campanha para o bot de destino
+            clone = RemarketingCampaign(
+                bot_id=target_bot.id,
+                name=campaign_base.name,
+                message=campaign_base.message,
+                media_url=campaign_base.media_url,
+                media_type=campaign_base.media_type,
+                audio_enabled=campaign_base.audio_enabled,
+                audio_url=campaign_base.audio_url,
+                buttons=campaign_base.buttons,
+                target_audience=campaign_base.target_audience,
+                days_since_last_contact=campaign_base.days_since_last_contact,
+                exclude_buyers=campaign_base.exclude_buyers,
+                cooldown_hours=campaign_base.cooldown_hours,
+                status='draft',
+                total_targets=0,
+                total_sent=0,
+                total_failed=0,
+                total_blocked=0,
+                total_clicks=0,
+                total_sales=0,
+                revenue_generated=0.0,
+                scheduled_at=campaign_base.scheduled_at
+            )
+            db.session.add(clone)
+            db.session.commit()
+
+            # Disparar envio para o bot específico
+            bot_manager.send_remarketing_campaign(clone.id, target_bot.token)
+            created_campaigns.append(clone.to_dict())
+
+        return jsonify({
+            'message': 'Envio iniciado (fan-out multi-bot)',
+            'campaigns': created_campaigns
+        }), 200
+
+    # Modo legado: single-bot (bot_id da rota)
+    bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
     campaign = RemarketingCampaign.query.filter_by(id=campaign_id, bot_id=bot_id).first_or_404()
-    
+
     if campaign.status == 'sending':
         return jsonify({'error': 'Campanha já está sendo enviada'}), 400
-    
-    # Iniciar envio em background (usar instância global)
+
     bot_manager.send_remarketing_campaign(campaign_id, bot.token)
-    
     return jsonify({'message': 'Envio iniciado', 'campaign': campaign.to_dict()})
 
 @app.route('/api/bots/<int:bot_id>/remarketing/eligible-leads', methods=['POST'])
