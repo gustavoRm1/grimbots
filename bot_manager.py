@@ -10866,7 +10866,7 @@ Seu pagamento ainda não foi confirmado.
             from redis_manager import get_redis_connection
             import json
             from app import app, db, socketio
-            from models import RemarketingCampaign, BotUser, Payment, RemarketingBlacklist, get_brazil_time
+            from models import RemarketingCampaign, BotUser, Payment, RemarketingBlacklist, get_brazil_time, Bot
             from datetime import timedelta
 
             def enqueue_jobs():
@@ -11077,6 +11077,14 @@ Seu pagamento ainda não foi confirmado.
                                     debug_logged += 1
                                 continue
 
+                            # Bot token sempre resolvido por bot_id do clone (evita reuse de token inválido/None)
+                            bot_obj = Bot.query.get(campaign.bot_id)
+                            current_bot_token = bot_obj.telegram_token if bot_obj else None
+                            if not current_bot_token:
+                                logger.error(f"❌ Bot sem token no enqueue | bot_id={campaign.bot_id} campaign_id={campaign.id} chat_id={lead.telegram_user_id}")
+                                skipped_not_eligible += 1
+                                continue
+
                             message = campaign.message.replace('{nome}', lead.first_name or 'Cliente')
                             message = message.replace('{primeiro_nome}', (lead.first_name or 'Cliente').split()[0])
 
@@ -11111,7 +11119,7 @@ Seu pagamento ainda não foi confirmado.
                                 'buttons': remarketing_buttons,
                                 'audio_enabled': bool(campaign.audio_enabled),
                                 'audio_url': campaign.audio_url or '',
-                                'bot_token': bot_token
+                                'bot_token': current_bot_token
                             }
                             try:
                                 redis_conn.rpush(queue_key, json.dumps(job))
