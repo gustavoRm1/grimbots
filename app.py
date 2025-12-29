@@ -11803,28 +11803,29 @@ def send_meta_pixel_purchase_event(payment):
                     logger.warning(f"⚠️ Purchase - falha ao persistir click_context_url no Payment {payment.id}: {e}")
         
         # ✅ CRÍTICO: Construir event_source_url com múltiplos fallbacks
-        # PRIORIDADE 1: event_source_url do Redis (tracking_data) - MAIS CONFIÁVEL
-        event_source_url = tracking_data.get('event_source_url')
-        
-        # PRIORIDADE 2: first_page do Redis (fallback)
-        if not event_source_url:
-            event_source_url = tracking_data.get('first_page')
-        
-        # PRIORIDADE 3: click_context_url do Payment (persistido no primeiro clique)
-        if not event_source_url and getattr(payment, "click_context_url", None):
-            event_source_url = payment.click_context_url
-            logger.info(f"🎯 REMARKETING ATTRIBUTED USING STORED CLICK CONTEXT | payment_id={payment.id} | event_source_url={event_source_url}")
-        
-        # PRIORIDADE 4: landing_url do Redis (fallback legado)
-        if not event_source_url:
-            event_source_url = tracking_data.get('landing_url')
-        
-        # PRIORIDADE 5: URL do pool (fallback final)
-        if not event_source_url:
-            if getattr(payment, 'pool', None) and getattr(payment.pool, 'slug', None):
-                event_source_url = f'https://app.grimbots.online/go/{payment.pool.slug}'
+        event_source_url = None
+        if is_remarketing:
+            # Regra de ouro para remarketing: somente contexto original do clique
+            event_source_url = (
+                tracking_data.get('event_source_url')
+                or tracking_data.get('first_page')
+                or getattr(payment, "click_context_url", None)
+            )
+            if event_source_url:
+                logger.info(f"🎯 REMARKETING ATTRIBUTED USING STORED CLICK CONTEXT | payment_id={payment.id} | event_source_url={event_source_url}")
             else:
-                event_source_url = f'https://t.me/{payment.bot.username}'
+                logger.error(f"❌ REMARKETING SEM event_source_url | payment_id={payment.id} | tracking_token={payment.tracking_token} | fbclid={payment.fbclid}")
+                return False
+        else:
+            # Tráfego frio mantém fallback legado
+            event_source_url = tracking_data.get('event_source_url') or tracking_data.get('first_page')
+            if not event_source_url:
+                event_source_url = tracking_data.get('landing_url')
+            if not event_source_url:
+                if getattr(payment, 'pool', None) and getattr(payment.pool, 'slug', None):
+                    event_source_url = f'https://app.grimbots.online/go/{payment.pool.slug}'
+                else:
+                    event_source_url = f'https://t.me/{payment.bot.username}'
         
         logger.info(f"✅ Purchase - event_source_url recuperado: {event_source_url}")
 

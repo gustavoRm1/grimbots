@@ -8377,6 +8377,8 @@ Seu pagamento ainda não foi confirmado.
                         # ✅ CRÍTICO: fbp e fbc para fallback no Purchase se Redis expirar
                         fbp=fbp if fbp else None,
                         fbc=fbc if fbc else None,
+                        # ✅ CONTEXTO ORIGINAL DO CLIQUE (persistente para remarketing)
+                        click_context_url=tracking_data_v4.get('event_source_url') or tracking_data_v4.get('first_page') or None,
                         # ✅ SISTEMA DE ASSINATURAS - Campos de subscription
                         button_index=button_index,
                         button_config=json_module.dumps(button_data_for_subscription, ensure_ascii=False) if button_data_for_subscription else None,
