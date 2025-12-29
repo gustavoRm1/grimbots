@@ -262,6 +262,7 @@ def process_start_async(
             utm_data_from_start = {}  # ✅ CRÍTICO: Inicializar dict antes de usar
             pool_id_from_start = None
             external_id_from_start = None
+            tracking_data = {}  # ✅ Garantir escopo para clique/utm
             
             if start_param:
                 # ✅ NOVO FORMATO (V4): tracking_token direto (32 chars hex)
@@ -383,7 +384,16 @@ def process_start_async(
                     tracking_session_id=tracking_token_from_start,
                     # ✅ CRÍTICO: Salvar fbp e fbc do tracking_data (recuperado via tracking_token)
                     fbp=utm_data_from_start.get('_fbp_from_tracking'),
-                    fbc=utm_data_from_start.get('_fbc_from_tracking')
+                    fbc=utm_data_from_start.get('_fbc_from_tracking'),
+                    # ✅ CONTEXTO DO CLIQUE (capturado no entry do bot para remarketing)
+                    last_click_context_url=(
+                        tracking_data.get('event_source_url')
+                        or tracking_data.get('first_page')
+                        or None
+                    ),
+                    last_fbclid=utm_data_from_start.get('fbclid'),
+                    last_fbp=utm_data_from_start.get('_fbp_from_tracking'),
+                    last_fbc=utm_data_from_start.get('_fbc_from_tracking')
                 )
                 logger.info(f"✅ BotUser criado com tracking_session_id: {tracking_token_from_start[:20] if tracking_token_from_start else 'N/A'}... e fbclid: {fbclid_from_start[:50] if fbclid_from_start else 'N/A'}... (len={len(fbclid_from_start) if fbclid_from_start else 0})")
                 is_new_user = True

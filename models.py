@@ -1130,6 +1130,11 @@ class BotUser(db.Model):
     fbclid = db.Column(db.String(255), nullable=True)
     campaign_code = db.Column(db.String(255), nullable=True)
     external_id = db.Column(db.String(255), nullable=True)  # Para tracking de cliques
+    # ✅ CONTEXTO DO CLIQUE (capturado no entry do bot para remarketing)
+    last_click_context_url = db.Column(db.Text, nullable=True)
+    last_fbclid = db.Column(db.String(255), nullable=True)
+    last_fbp = db.Column(db.String(255), nullable=True)
+    last_fbc = db.Column(db.String(255), nullable=True)
     
     # ✅ META PIXEL COOKIES (para matching Purchase com PageView)
     fbp = db.Column(db.String(255), nullable=True)  # Facebook Browser ID (_fbp cookie)
