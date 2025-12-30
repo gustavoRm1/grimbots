@@ -6720,7 +6720,11 @@ def public_redirect(slug):
         logger.info(f" Redirect - Salvando fbclid completo no Redis: {fbclid_to_save[:50]}... (len={len(fbclid_to_save)})")
         if len(fbclid_to_save) > 255:
             logger.warning(f" Redirect - fbclid excede 255 chars ({len(fbclid_to_save)}), mas será salvo completo no Redis (sem truncar)")
-            logger.info(f"🤖 Crawler detectado - Tracking NÃO salvo (evita poluição do Redis)")
+        # Derivar campaign_code do próprio fbclid (garante contexto de campanha)
+        utms.setdefault('campaign_code', fbclid_to_save)
+    elif grim_param:
+        # Se não há fbclid, usar grim como campaign_code
+        utms.setdefault('campaign_code', grim_param)
     
     # ============================================================================
     # ✅ META PIXEL: PAGEVIEW TRACKING + UTM CAPTURE (NÍVEL DE POOL)
