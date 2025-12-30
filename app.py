@@ -6726,6 +6726,22 @@ def public_redirect(slug):
         # Se não há fbclid, usar grim como campaign_code
         utms.setdefault('campaign_code', grim_param)
     
+    # ✅ tracking_payload inicial (sempre definido) para merge com pageview_context
+    tracking_payload = {
+        'tracking_token': tracking_token,
+        'fbclid': fbclid_to_save,
+        'fbp': fbp_cookie,
+        'fbc': fbc_cookie,
+        'pageview_event_id': pageview_event_id,
+        'pageview_ts': pageview_ts,
+        'client_ip': user_ip if user_ip else None,
+        'client_user_agent': user_agent if user_agent and user_agent.strip() else None,
+        'grim': grim_param or None,
+        'event_source_url': request.url or f'https://{request.host}/go/{pool.slug}',
+        'first_page': request.url or f'https://{request.host}/go/{pool.slug}',
+        **{k: v for k, v in utms.items() if v}
+    }
+    
     # ============================================================================
     # ✅ META PIXEL: PAGEVIEW TRACKING + UTM CAPTURE (NÍVEL DE POOL)
     # ============================================================================
@@ -10089,8 +10105,11 @@ def delivery_page(delivery_token):
             if tracking_data:
                 logger.info(f"✅ Delivery - tracking_data recuperado via payment.tracking_token: {len(tracking_data)} campos")
         
-        # ✅ PREPARAR DADOS PARA PURCHASE
+        # ✅ PREPARAR DADOS PARA PURCHASE (root_event_id do clique)
         pageview_event_id = tracking_data.get('pageview_event_id') or payment.pageview_event_id
+        if pageview_event_id and not payment.pageview_event_id:
+            payment.pageview_event_id = pageview_event_id
+            db.session.commit()
         external_id = tracking_data.get('fbclid') or payment.fbclid
         fbp_value = tracking_data.get('fbp') or getattr(payment, 'fbp', None) or getattr(bot_user, 'fbp', None)
         fbc_value = tracking_data.get('fbc') or getattr(payment, 'fbc', None) or getattr(bot_user, 'fbc', None)
@@ -10121,14 +10140,13 @@ def delivery_page(delivery_token):
             from utils.meta_pixel import normalize_external_id
             external_id_normalized = normalize_external_id(external_id)
 
-        # ✅ PATCH 2: event_id FIXO E ÚNICO (server + client)
-        # Regra: SEMPRE usar purchase_{payment.id}, persistir em payment.meta_event_id e reutilizar.
-        event_id_final = getattr(payment, 'meta_event_id', None)
+        # ✅ event_id fim-a-fim: reutilizar SEMPRE o pageview_event_id do clique
+        event_id_final = pageview_event_id or getattr(payment, 'meta_event_id', None)
         if not event_id_final:
-            event_id_final = f"purchase_{payment.id}"
-            payment.meta_event_id = event_id_final
-            db.session.commit()
-            db.session.refresh(payment)
+            event_id_final = f"pageview_{uuid.uuid4().hex}"
+        payment.meta_event_id = event_id_final
+        db.session.commit()
+        db.session.refresh(payment)
 
         # ✅ Renderizar página com Purchase tracking (INCLUINDO FBP E FBC!)
         pixel_config = {
@@ -11165,9 +11183,31 @@ def send_meta_pixel_purchase_event(payment):
                 pageview_ts_int = int(float(pageview_ts_value))
             except (TypeError, ValueError):
                 pageview_ts_int = None
+        
+        # ✅ CRÍTICO: event_id fim-a-fim = pageview_event_id do redirect
+        root_event_id = tracking_data.get('pageview_event_id') or getattr(payment, 'pageview_event_id', None)
+        if not root_event_id:
+            logger.error("❌ PURCHASE BLOQUEADO: pageview_event_id ausente (não será gerado). Atribuição impossível.")
+            return False
+        # Persistir em payment.meta_event_id para reuso client/server
+        if getattr(payment, 'meta_event_id', None) != root_event_id:
+            payment.meta_event_id = root_event_id
+            payment.pageview_event_id = root_event_id
+            db.session.commit()
 
         # ✅ CRÍTICO: Recuperar fbclid completo (até 255 chars) - NUNCA truncar!
         external_id_value = tracking_data.get('fbclid')
+        
+        # ✅ CRÍTICO: UTMs / campaign_code obrigatórios
+        utm_source_value = tracking_data.get('utm_source') or payment.utm_source
+        campaign_code_value = tracking_data.get('campaign_code') or tracking_data.get('grim') or payment.campaign_code
+        if not utm_source_value and not campaign_code_value:
+            logger.error("❌ PURCHASE BLOQUEADO: sem utm_source e sem campaign_code (atribuição impossível).")
+            return False
+        if not tracking_data.get('utm_source') and utm_source_value:
+            tracking_data['utm_source'] = utm_source_value
+        if not tracking_data.get('campaign_code') and campaign_code_value:
+            tracking_data['campaign_code'] = campaign_code_value
         
         # ✅ SERVER-SIDE PARAMETER BUILDER: Processar dados do Redis/Payment/BotUser como se fossem cookies/request
         # Conforme Meta best practices para maximizar cobertura de fbc e melhorar match quality
