@@ -11394,6 +11394,27 @@ def send_meta_pixel_purchase_event(payment):
                 logger.info(f"[META PURCHASE] Purchase - client_ip limpo do sufixo Parameter Builder: {ip_value}")
         
         user_agent_value = tracking_data.get('client_user_agent') or tracking_data.get('ua') or tracking_data.get('client_ua')
+
+        # ✅ CRÍTICO: IP/UA obrigatórios – sem fallback genérico
+        def _is_valid_ip(ip_str: str) -> bool:
+            if not ip_str:
+                return False
+            if ip_str.strip() == '0.0.0.0':
+                return False
+            return True
+        
+        def _is_valid_ua(ua_str: str) -> bool:
+            if not ua_str:
+                return False
+            if not ua_str.strip():
+                return False
+            # UA extremamente curto ou genérico não serve para matching
+            return len(ua_str.strip()) >= 6
+        
+        if not _is_valid_ip(ip_value) or not _is_valid_ua(user_agent_value):
+            logger.error(f"❌ PURCHASE BLOQUEADO: IP/UA ausentes ou inválidos | ip_valid={_is_valid_ip(ip_value)} | ua_valid={_is_valid_ua(user_agent_value)}")
+            logger.error(f"   ip_value={ip_value} | ua_value={(user_agent_value or '')[:50]}...")
+            return False
         
         # ✅ LOG CRÍTICO: Mostrar campos do Payment e BotUser
         logger.info(f"[META PURCHASE] Purchase - Payment fields: fbp={bool(getattr(payment, 'fbp', None))}, fbc={bool(getattr(payment, 'fbc', None))}, fbclid={bool(getattr(payment, 'fbclid', None))}")
