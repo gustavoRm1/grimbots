@@ -6937,8 +6937,19 @@ def public_redirect(slug):
             logger.info(f"📊 Template params - has_utmify: {has_utmify}, utmify_pixel_id_to_template: {'✅' if utmify_pixel_id_to_template else '❌'} ({utmify_pixel_id_to_template[:20] + '...' if utmify_pixel_id_to_template else 'None'})")
             logger.info(f"📊 Template params - has_meta_pixel: {has_meta_pixel}, pixel_id_to_template: {'✅' if pixel_id_to_template else '❌'}")
             
-            # ✅ CRÍTICO: Passar pageview_event_id para deduplicação perfeita (client-side usa mesmo event_id)
-            pageview_event_id_safe = sanitize_js_value(pageview_event_id) if pageview_event_id else None
+            # ✅ CRÍTICO: Garantir escopo seguro para pageview_event_id
+            pageview_event_id = (
+                pageview_context.get("pageview_event_id")
+                if isinstance(pageview_context, dict)
+                else None
+            )
+            pageview_event_id_safe = (
+                sanitize_js_value(pageview_event_id)
+                if pageview_event_id
+                else None
+            )
+            if not pageview_event_id_safe:
+                logger.error("❌ PageView event_id ausente no redirect — HTML NÃO será renderizado com pixel")
             
             response = make_response(render_template('telegram_redirect.html',
                 bot_username=bot_username_safe,
