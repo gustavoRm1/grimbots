@@ -6690,6 +6690,7 @@ def public_redirect(slug):
     utm_data = {}
     fbp_cookie = None  # Inicializar para usar depois mesmo se Meta Pixel desabilitado
     fbc_cookie = None  # Inicializar para usar depois mesmo se Meta Pixel desabilitado
+    fbc_origin = None
     pageview_ts = int(time.time())
     TRACKING_TOKEN_TTL = TrackingServiceV4.TRACKING_TOKEN_TTL_SECONDS
     
@@ -6733,6 +6734,11 @@ def public_redirect(slug):
             logger.warning(f" Redirect - fbclid excede 255 chars ({len(fbclid_to_save)}), mas será salvo completo no Redis (sem truncar)")
         # Derivar campaign_code do próprio fbclid (garante contexto de campanha)
         utms.setdefault('campaign_code', fbclid_to_save)
+        # ✅ FBC CANÔNICO ÚNICO: gerar somente na 1ª vez (quando não há cookie)
+        if not fbc_cookie:
+            fbc_cookie = f"fb.1.{click_ts}.{fbclid_to_save}"
+            fbc_origin = "click"
+            logger.info(f"✅ FBC canônico gerado no redirect (origem click): {fbc_cookie[:64]}...")
     elif grim_param:
         # Se não há fbclid, usar grim como campaign_code
         utms.setdefault('campaign_code', grim_param)
@@ -6743,6 +6749,7 @@ def public_redirect(slug):
         'fbclid': fbclid_to_save,
         'fbp': fbp_cookie,
         'fbc': fbc_cookie,
+        'fbc_origin': fbc_origin,
         'pageview_event_id': root_event_id,
         'pageview_ts': pageview_ts,
         'client_ip': user_ip if user_ip else None,
@@ -6949,16 +6956,12 @@ def public_redirect(slug):
             logger.info(f"📊 Template params - has_meta_pixel: {has_meta_pixel}, pixel_id_to_template: {'✅' if pixel_id_to_template else '❌'}")
             
             # ✅ CRÍTICO: Garantir escopo seguro para pageview_event_id
-            pageview_event_id = (
-                pageview_context.get("pageview_event_id")
-                if isinstance(pageview_context, dict)
-                else None
-            )
-            pageview_event_id_safe = (
-                sanitize_js_value(pageview_event_id)
-                if pageview_event_id
-                else None
-            )
+            pageview_event_id = None
+            if isinstance(pageview_context, dict):
+                pageview_event_id = pageview_context.get("pageview_event_id")
+            if not pageview_event_id:
+                pageview_event_id = tracking_payload.get("pageview_event_id") or f"evt_{tracking_token}"
+            pageview_event_id_safe = sanitize_js_value(pageview_event_id) if pageview_event_id else None
             if not pageview_event_id_safe:
                 logger.error("❌ PageView event_id ausente no redirect — HTML NÃO será renderizado com pixel")
             
@@ -10622,8 +10625,12 @@ def send_meta_pixel_pageview_event(pool, request, pageview_event_id=None, tracki
         else:
             logger.warning(f"[META PAGEVIEW] PageView - fbp NÃO retornado pelo Parameter Builder (cookie _fbp ausente)")
         
-        if fbc_value:
+        if fbc_value and fbc_origin != 'generated_from_fbclid':
             logger.info(f"[META PAGEVIEW] PageView - fbc processado pelo Parameter Builder (origem: {fbc_origin}): {fbc_value[:50]}...")
+        elif fbc_origin == 'generated_from_fbclid':
+            logger.info("[META PAGEVIEW] PageView - fbc gerado do fbclid IGNORADO (regra canônica: não regenerar)")
+            fbc_value = None
+            fbc_origin = None
         else:
             # ✅ DEBUG: Verificar por que fbc não foi retornado
             fbclid_in_args = request.args.get('fbclid', '').strip()
@@ -10639,7 +10646,7 @@ def send_meta_pixel_pageview_event(pool, request, pageview_event_id=None, tracki
         else:
             logger.warning(f"[META PAGEVIEW] PageView - client_ip NÃO retornado pelo Parameter Builder (cookie _fbi ausente)")
         
-        # ✅ FALLBACK: Se Parameter Builder não retornou valores, tentar tracking_data (Redis)
+        # ✅ FALLBACK: Se Parameter Builder não retornou valores válidos, tentar tracking_data (Redis)
         from utils.tracking_service import TrackingService
         
         if not fbp_value and tracking_data:
@@ -10853,28 +10860,13 @@ def send_meta_pixel_pageview_event(pool, request, pageview_event_id=None, tracki
         if utm_data.get('utm_term'):
             custom_data['utm_term'] = utm_data['utm_term']
         if utm_data.get('fbclid'):
-            custom_data['fbclid'] = utm_data['fbclid']
+            custom_data['fbclid'] = utm_data.get('fbclid')
         if utm_data.get('campaign_code'):
-            custom_data['campaign_code'] = utm_data['campaign_code']
+            custom_data['campaign_code'] = utm_data.get('campaign_code')
         
-        # Canonical click timestamp (from redirect) to keep event_time consistent
-        now_ts = int(time.time())
-        click_ts = None
-        try:
-            if external_id:
-                click_ts_raw = tracking_service_v4.redis.get(f"meta:click_ts:{external_id}")
-                if click_ts_raw:
-                    click_ts = int(click_ts_raw)
-                elif external_id_raw and external_id_raw != external_id:
-                    click_ts_raw = tracking_service_v4.redis.get(f"meta:click_ts:{external_id_raw}")
-                    if click_ts_raw:
-                        click_ts = int(click_ts_raw)
-        except Exception as e:
-            logger.warning(f"⚠️ PageView - falha ao recuperar click_ts do Redis: {e}")
-        if click_ts is None:
-            click_ts = now_ts
-
-        event_time = max(click_ts, now_ts)
+        # ✅ CORREÇÃO META: event_time = timestamp real do PageView (pageview_ts)
+        pageview_ts = tracking_data.get('pageview_ts') if tracking_data else None
+        event_time = pageview_ts if pageview_ts else int(time.time())
 
         event_data = {
             'event_name': 'PageView',
