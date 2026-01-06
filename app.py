@@ -11164,14 +11164,13 @@ def send_meta_pixel_purchase_event(payment):
 
         if not tracking_data.get('pageview_event_id'):
             logger.error(
-                "❌ PURCHASE SEM PAGEVIEW_EVENT_ID — ATRIBUIÇÃO IMPOSSÍVEL",
+                "⚠️ PURCHASE SEM PAGEVIEW_EVENT_ID — seguindo com fallback de event_id para não perder envio",
                 extra={
                     "payment_id": getattr(payment, 'id', None),
                     "is_remarketing": bool(getattr(payment, 'is_remarketing', False)),
                     "tracking_token": getattr(payment, 'tracking_token', None)
                 }
             )
-            logger.error("❌ [META PURCHASE] pageview_event_id AUSENTE após todas as prioridades. NÃO será gerado pageview_event_id fake.")
             logger.error(f"   payment_id={getattr(payment, 'payment_id', None)} | payment.db_id={getattr(payment, 'id', None)} | is_remarketing={bool(getattr(payment, 'is_remarketing', False))}")
             logger.error(f"   bot_user.tracking_session_id={'✅' if (bot_user and getattr(bot_user, 'tracking_session_id', None)) else '❌'} | payment.tracking_token={'✅' if getattr(payment, 'tracking_token', None) else '❌'}")
             logger.error(f"   tracking_token_used={'✅' if tracking_token_used else '❌'}")
@@ -11185,15 +11184,20 @@ def send_meta_pixel_purchase_event(payment):
                 pageview_ts_int = None
         
         # ✅ CRÍTICO: event_id fim-a-fim = pageview_event_id do redirect
-        root_event_id = tracking_data.get('pageview_event_id') or getattr(payment, 'pageview_event_id', None)
+        root_event_id = None
+        if getattr(payment, 'pageview_event_id', None):
+            root_event_id = payment.pageview_event_id
+        elif getattr(payment, 'meta_event_id', None):
+            root_event_id = payment.meta_event_id
+        elif tracking_data.get('pageview_event_id'):
+            root_event_id = tracking_data.get('pageview_event_id')
         if not root_event_id:
-            logger.error("❌ PURCHASE BLOQUEADO: pageview_event_id ausente (não será gerado). Atribuição impossível.")
-            return False
-        # Persistir em payment.meta_event_id para reuso client/server
+            root_event_id = f"purchase_{payment.id}"
         if getattr(payment, 'meta_event_id', None) != root_event_id:
             payment.meta_event_id = root_event_id
+        if getattr(payment, 'pageview_event_id', None) != root_event_id:
             payment.pageview_event_id = root_event_id
-            db.session.commit()
+        db.session.commit()
 
         # ✅ CRÍTICO: Recuperar fbclid completo (até 255 chars) - NUNCA truncar!
         external_id_value = tracking_data.get('fbclid')
@@ -11201,9 +11205,6 @@ def send_meta_pixel_purchase_event(payment):
         # ✅ CRÍTICO: UTMs / campaign_code obrigatórios
         utm_source_value = tracking_data.get('utm_source') or payment.utm_source
         campaign_code_value = tracking_data.get('campaign_code') or tracking_data.get('grim') or payment.campaign_code
-        if not utm_source_value and not campaign_code_value:
-            logger.error("❌ PURCHASE BLOQUEADO: sem utm_source e sem campaign_code (atribuição impossível).")
-            return False
         if not tracking_data.get('utm_source') and utm_source_value:
             tracking_data['utm_source'] = utm_source_value
         if not tracking_data.get('campaign_code') and campaign_code_value:
@@ -11395,26 +11396,7 @@ def send_meta_pixel_purchase_event(payment):
         
         user_agent_value = tracking_data.get('client_user_agent') or tracking_data.get('ua') or tracking_data.get('client_ua')
 
-        # ✅ CRÍTICO: IP/UA obrigatórios – sem fallback genérico
-        def _is_valid_ip(ip_str: str) -> bool:
-            if not ip_str:
-                return False
-            if ip_str.strip() == '0.0.0.0':
-                return False
-            return True
-        
-        def _is_valid_ua(ua_str: str) -> bool:
-            if not ua_str:
-                return False
-            if not ua_str.strip():
-                return False
-            # UA extremamente curto ou genérico não serve para matching
-            return len(ua_str.strip()) >= 6
-        
-        if not _is_valid_ip(ip_value) or not _is_valid_ua(user_agent_value):
-            logger.error(f"❌ PURCHASE BLOQUEADO: IP/UA ausentes ou inválidos | ip_valid={_is_valid_ip(ip_value)} | ua_valid={_is_valid_ua(user_agent_value)}")
-            logger.error(f"   ip_value={ip_value} | ua_value={(user_agent_value or '')[:50]}...")
-            return False
+        # Remover bloqueio: usar fallbacks e seguir mesmo se ausente
         
         # ✅ LOG CRÍTICO: Mostrar campos do Payment e BotUser
         logger.info(f"[META PURCHASE] Purchase - Payment fields: fbp={bool(getattr(payment, 'fbp', None))}, fbc={bool(getattr(payment, 'fbc', None))}, fbclid={bool(getattr(payment, 'fbclid', None))}")
@@ -11537,23 +11519,9 @@ def send_meta_pixel_purchase_event(payment):
             logger.info(f"✅ Purchase - fbc salvo no payment para futuras referências: {fbc_value[:50]}...")
 
         import time as time_module  # ✅ CRÍTICO: Importar time_module para evitar conflito com variável local 'time'
-        event_time_source = payment.paid_at or payment.created_at
+        # Regra exigida: event_time = payment.created_at.timestamp()
+        event_time_source = payment.created_at
         event_time = int(event_time_source.timestamp()) if event_time_source else int(time_module.time())
-        now_ts = int(time_module.time())
-        three_day_window = 3 * 24 * 60 * 60
-        if event_time > now_ts:
-            event_time = now_ts
-        elif event_time < now_ts - three_day_window:
-            event_time = now_ts - three_day_window
-        if pageview_ts_int:
-            if pageview_ts_int > now_ts:
-                pageview_ts_int = now_ts
-            lower_bound = now_ts - three_day_window
-            if pageview_ts_int < lower_bound:
-                pageview_ts_int = lower_bound
-            if event_time < pageview_ts_int:
-                candidate_time = pageview_ts_int + 5
-                event_time = candidate_time if candidate_time <= now_ts else now_ts
 
 
         # ✅ PATCH 2: event_id FIXO E ÚNICO
