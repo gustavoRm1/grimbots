@@ -6714,8 +6714,19 @@ def public_redirect(slug):
             'utm_id': request.args.get('utm_id', '')
         }
 
-    # CRÍTICO: Garantir que fbclid completo (até 255 chars) seja salvo - NUNCA truncar antes de salvar no Redis!
+    # ✅ CRÍTICO: Garantir que fbclid completo (até 255 chars) seja salvo - NUNCA truncar antes de salvar no Redis!
     fbclid_to_save = fbclid or None
+    # === CANONICAL CLICK TIMESTAMP (META SAFE) ===
+    if fbclid_to_save:
+        try:
+            click_ts = int(time.time())
+            tracking_service_v4.redis.setex(
+                f"meta:click_ts:{fbclid_to_save}",
+                60 * 60 * 24 * 7,  # 7 dias
+                click_ts
+            )
+        except Exception as e:
+            logger.warning(f"⚠️ Falha ao salvar click_ts no Redis: {e}")
     if fbclid_to_save:
         logger.info(f" Redirect - Salvando fbclid completo no Redis: {fbclid_to_save[:50]}... (len={len(fbclid_to_save)})")
         if len(fbclid_to_save) > 255:
@@ -10846,9 +10857,28 @@ def send_meta_pixel_pageview_event(pool, request, pageview_event_id=None, tracki
         if utm_data.get('campaign_code'):
             custom_data['campaign_code'] = utm_data['campaign_code']
         
+        # Canonical click timestamp (from redirect) to keep event_time consistent
+        now_ts = int(time.time())
+        click_ts = None
+        try:
+            if external_id:
+                click_ts_raw = tracking_service_v4.redis.get(f"meta:click_ts:{external_id}")
+                if click_ts_raw:
+                    click_ts = int(click_ts_raw)
+                elif external_id_raw and external_id_raw != external_id:
+                    click_ts_raw = tracking_service_v4.redis.get(f"meta:click_ts:{external_id_raw}")
+                    if click_ts_raw:
+                        click_ts = int(click_ts_raw)
+        except Exception as e:
+            logger.warning(f"⚠️ PageView - falha ao recuperar click_ts do Redis: {e}")
+        if click_ts is None:
+            click_ts = now_ts
+
+        event_time = max(click_ts, now_ts)
+
         event_data = {
             'event_name': 'PageView',
-            'event_time': int(time.time()),
+            'event_time': event_time,
             'event_id': event_id,
             'action_source': 'website',
             'event_source_url': event_source_url,  # ✅ URL do redirecionador (consistente)
@@ -12229,17 +12259,24 @@ def send_meta_pixel_purchase_event(payment):
     if campaign_code:
         custom_data["campaign_code"] = campaign_code
     if utm_source:
-        custom_data["utm_source"] = utm_source
+        event_time = max(click_ts, now_ts)
 
-    event_data = {
-        "event_name": "Purchase",
-        "event_time": event_time,
-        "event_id": root_event_id,
-        "action_source": "website",
-        "event_source_url": event_source_url,
-        "user_data": user_data,
-        "custom_data": custom_data,
-    }
+        pageview_event = {
+            "event_name": "PageView",
+            "event_time": event_time,
+            "event_id": root_event_id,
+            "user_data": user_data,
+            "action_source": "website"
+        }
+        event_data = {
+            "event_name": "Purchase",
+            "event_time": event_time,
+            "event_id": root_event_id,
+            "action_source": "website",
+            "event_source_url": event_source_url,
+            "user_data": user_data,
+            "custom_data": custom_data,
+        }
 
     enqueued = False
     try:
