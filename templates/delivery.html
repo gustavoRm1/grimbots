@@ -17,48 +17,7 @@
         s.parentNode.insertBefore(t,s)}(window, document,'script',
         'https://connect.facebook.net/en_US/fbevents.js');
         fbq('init', '{{ pixel_config.pixel_id }}');
-        
-        // ✅ CORREÇÃO CRÍTICA: SEMPRE disparar Purchase client-side
-        // Meta deduplica automaticamente usando eventID, então não precisamos bloquear
-        // Mesmo que server-side já tenha enviado, client-side também deve enviar para melhor cobertura
-        // Meta mostra "Múltiplos" quando recebe tanto browser quanto server (melhor matching)
-        
-        // ✅ PURCHASE conforme documentação oficial Meta
-        // ✅ CRÍTICO: Meta Pixel JS captura _fbp e _fbc AUTOMATICAMENTE dos cookies do browser
-        // ✅ NÃO incluir _fbp/_fbc manualmente no objeto de parâmetros (pode causar duplicação)
-        // ✅ CRÍTICO: Enviar external_id TANTO no browser quanto no server para melhor matching e cobertura >= 75%
-        // Segundo Meta: "ID externo: 0% (browser) vs 100% (server)" causa baixa cobertura (36%)
-        const eventId = '{{ pixel_config.event_id }}';
-
-        // ✅ CORREÇÃO: Sempre enviar eventID e external_id (se disponível) para garantir deduplicação
-        var purchaseParams = {
-            value: {{ pixel_config.value }},
-            currency: '{{ pixel_config.currency }}',
-            content_ids: ['{{ pixel_config.content_id }}'],
-            content_name: '{{ pixel_config.content_name|replace("'", "\\'") }}',
-            content_type: 'product',
-            num_items: 1
-        };
-        
-        // ✅ CRÍTICO: Adicionar external_id APENAS se existir (não enviar string vazia)
-        {% if pixel_config.external_id %}
-        purchaseParams.external_id = '{{ pixel_config.external_id }}';  // ✅ CRÍTICO: Enviar fbclid normalizado no browser para matching perfeito
-        {% endif %}
-        
-        fbq(
-          'track',
-          'Purchase',
-          purchaseParams,
-          { eventID: eventId }
-        );
-        
-        console.log('[META PIXEL] Purchase disparado (client-side) com eventID: {{ pixel_config.event_id }}');
-        console.log('[META PIXEL] Meta deduplicará automaticamente se server-side também enviar (mesmo eventID)');
     </script>
-    <noscript>
-        <img height="1" width="1" style="display:none"
-        src="https://www.facebook.com/tr?id={{ pixel_config.pixel_id }}&ev=Purchase&noscript=1"/>
-    </noscript>
     {% endif %}
     
     <style>
@@ -149,34 +108,12 @@
     </div>
     
     <script>
-        // ✅ Marcar Purchase como enviado APENAS APÓS client-side disparar (anti-duplicação)
-        // ✅ CRÍTICO: Permitir que client-side e server-side sejam enviados em paralelo
-        // Meta deduplica automaticamente usando eventID, então não bloqueamos client-side mesmo se server-side já foi enviado
-        {% if has_meta_pixel %}
-        // ✅ Aguardar um pouco para garantir que Purchase client-side foi disparado
-        setTimeout(() => {
-            fetch('/api/tracking/mark-purchase-sent', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ payment_id: {{ payment.id }} })
-            }).then(response => {
-                if (response.ok) {
-                    console.log('[TRACKING] Purchase marcado como enviado (client-side disparado)');
-                }
-            }).catch(err => {
-                console.error('[TRACKING] Erro ao marcar Purchase:', err);
-            });
-        }, 500);  // Aguardar 500ms para garantir que Purchase client-side foi disparado
-        {% endif %}
-        
-        // ✅ Auto-redirect após Purchase ser disparado
         {% if redirect_url %}
         setTimeout(() => {
             document.getElementById('loading').style.display = 'block';
             window.location.href = '{{ redirect_url }}';
-        }, 1500);  // Aguardar 1.5s para garantir que Purchase foi disparado
+        }, 1500);
         {% endif %}
     </script>
 </body>
 </html>
-

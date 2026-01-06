@@ -6684,7 +6684,7 @@ def public_redirect(slug):
     # GERAR IDENTIFICADORES ANTES DE QUALQUER DEPENDÊNCIA DO CLIENTE
     tracking_service_v4 = TrackingServiceV4()
     tracking_token = uuid.uuid4().hex  # sempre existe para correlacionar PageView → Purchase
-    pageview_event_id = f"pageview_{uuid.uuid4().hex}"  # root_event_id único desde o clique
+    root_event_id = f"evt_{tracking_token}"  # ID canônico imutável por sessão/click
     pageview_context = {}
     external_id = None
     utm_data = {}
@@ -6732,13 +6732,14 @@ def public_redirect(slug):
         'fbclid': fbclid_to_save,
         'fbp': fbp_cookie,
         'fbc': fbc_cookie,
-        'pageview_event_id': pageview_event_id,
+        'pageview_event_id': root_event_id,
         'pageview_ts': pageview_ts,
         'client_ip': user_ip if user_ip else None,
         'client_user_agent': user_agent if user_agent and user_agent.strip() else None,
         'grim': grim_param or None,
         'event_source_url': request.url or f'https://{request.host}/go/{pool.slug}',
         'first_page': request.url or f'https://{request.host}/go/{pool.slug}',
+        'pageview_sent': False,
         **{k: v for k, v in utms.items() if v}
     }
     
@@ -6755,7 +6756,7 @@ def public_redirect(slug):
             external_id, utm_data, pageview_context = send_meta_pixel_pageview_event(
                 pool,
                 request,
-                pageview_event_id=pageview_event_id if not is_crawler_request else None,
+                pageview_event_id=root_event_id if not is_crawler_request else None,
                 tracking_token=tracking_token
             )
         except Exception as e:
@@ -6782,6 +6783,7 @@ def public_redirect(slug):
                         **tracking_payload,  # ✅ Dados iniciais (client_ip, client_user_agent, fbclid, fbp, etc.)
                         **pageview_context   # ✅ Dados do PageView (pageview_event_id, event_source_url, client_ip, client_user_agent, etc.) - SOBRESCREVE tracking_payload
                     }
+                    merged_context['pageview_sent'] = True
                     
                     # ✅ CRÍTICO: GARANTIR que client_ip e client_user_agent sejam preservados (prioridade: pageview_context > tracking_payload)
                     # Se pageview_context tem valores válidos, usar (são mais recentes e vêm do PageView)
@@ -6819,6 +6821,7 @@ def public_redirect(slug):
                 else:
                     # Se pageview_context está vazio, salvar apenas o tracking_payload inicial (já tem tudo)
                     logger.warning(f"⚠️ pageview_context vazio - preservando tracking_payload inicial completo")
+                    tracking_payload['pageview_sent'] = True
                     ok = tracking_service_v4.save_tracking_token(
                         tracking_token,
                         tracking_payload,  # ✅ Dados iniciais completos (client_ip, client_user_agent, pageview_event_id, etc.)
@@ -12048,6 +12051,216 @@ def send_meta_pixel_purchase_event(payment):
 # ============================================================================
 # ✅ SISTEMA DE ASSINATURAS - Criação de Subscription
 # ============================================================================
+
+def send_meta_pixel_purchase_event(payment):
+    """
+    Purchase server-side only (sem early-return antes do enqueue).
+    Regras:
+    - event_id: payment.pageview_event_id > payment.meta_event_id > tracking_data.pageview_event_id > evt_{tracking_token}
+    - event_time: int(payment.created_at.timestamp())
+    - Se pageview_sent ausente/False -> enqueue com countdown=1s; senão enqueue imediato
+    - meta_event_id persistido antes do enqueue; meta_purchase_sent somente após enqueue OK
+    - Não bloquear por ausência de UTMs/IP/UA; apenas logar
+    """
+    import json
+    import time
+    from utils.encryption import decrypt
+    from utils.meta_pixel import MetaPixelAPI, normalize_external_id
+    from utils.tracking_service import TrackingServiceV4
+    from celery_app import send_meta_event
+    from models import PoolBot, BotUser, get_brazil_time
+
+    logger.info(f"[META PURCHASE] Início (patch gold) payment_id={getattr(payment, 'id', None)}")
+
+    # Pool/pixel (não bloquear)
+    pool_bot = PoolBot.query.filter_by(bot_id=payment.bot_id).first()
+    pool = pool_bot.pool if pool_bot else None
+    pixel_id = pool.meta_pixel_id if pool and pool.meta_pixel_id else None
+    access_token = None
+    if pool and pool.meta_access_token:
+        try:
+            access_token = decrypt(pool.meta_access_token)
+        except Exception as e:
+            logger.warning(f"[META PURCHASE] Falha ao descriptografar access_token: {e}")
+
+    telegram_user_id = str(payment.customer_user_id).replace("user_", "") if payment.customer_user_id else None
+    bot_user = BotUser.query.filter_by(bot_id=payment.bot_id, telegram_user_id=str(telegram_user_id)).first() if telegram_user_id else None
+
+    # Tracking data (prioridade: bot_user.tracking_session_id -> payment.tracking_token -> tracking:payment -> fallback payment)
+    tracking_data = {}
+    tracking_token_used = None
+    tsv4 = TrackingServiceV4()
+    if bot_user and bot_user.tracking_session_id:
+        try:
+            tracking_data = tsv4.recover_tracking_data(bot_user.tracking_session_id) or {}
+            tracking_token_used = bot_user.tracking_session_id
+        except Exception as e:
+            logger.warning(f"[META PURCHASE] Erro recover tracking via bot_user.tracking_session_id: {e}")
+    if not tracking_data and getattr(payment, "tracking_token", None):
+        try:
+            tracking_data = tsv4.recover_tracking_data(payment.tracking_token) or {}
+            tracking_token_used = payment.tracking_token
+        except Exception as e:
+            logger.warning(f"[META PURCHASE] Erro recover tracking via payment.tracking_token: {e}")
+    if not tracking_data:
+        try:
+            raw = tsv4.redis.get(f"tracking:payment:{payment.payment_id}")
+            if raw:
+                tracking_data = json.loads(raw)
+        except Exception as e:
+            logger.warning(f"[META PURCHASE] Erro recover tracking:payment:{payment.payment_id}: {e}")
+    if not tracking_data:
+        tracking_data = {
+            "tracking_token": getattr(payment, "tracking_token", None),
+            "pageview_event_id": getattr(payment, "pageview_event_id", None),
+            "fbclid": getattr(payment, "fbclid", None),
+            "fbp": getattr(payment, "fbp", None),
+            "fbc": getattr(payment, "fbc", None),
+            "client_ip": getattr(payment, "client_ip", None),
+            "client_user_agent": getattr(payment, "client_user_agent", None),
+            "utm_source": getattr(payment, "utm_source", None),
+            "utm_campaign": getattr(payment, "utm_campaign", None),
+            "campaign_code": getattr(payment, "campaign_code", None),
+            "event_source_url": getattr(payment, "event_source_url", None),
+            "first_page": getattr(payment, "first_page", None),
+            "pageview_sent": False,
+        }
+    if not tracking_data.get("tracking_token") and getattr(payment, "tracking_token", None):
+        tracking_data["tracking_token"] = payment.tracking_token
+
+    # event_id canônico
+    root_event_id = (
+        getattr(payment, "pageview_event_id", None)
+        or getattr(payment, "meta_event_id", None)
+        or tracking_data.get("pageview_event_id")
+        or (f"evt_{tracking_data.get('tracking_token')}" if tracking_data.get("tracking_token") else None)
+    )
+    if not root_event_id:
+        root_event_id = f"evt_{payment.id}"
+
+    # Persistir IDs antes do enqueue
+    changed = False
+    if getattr(payment, "meta_event_id", None) != root_event_id:
+        payment.meta_event_id = root_event_id
+        changed = True
+    if getattr(payment, "pageview_event_id", None) != root_event_id:
+        payment.pageview_event_id = root_event_id
+        changed = True
+    if changed:
+        db.session.commit()
+
+    # event_time
+    event_time = int(payment.created_at.timestamp()) if getattr(payment, "created_at", None) else int(time.time())
+
+    # Matching data (fallbacks, sem bloqueio)
+    client_ip = (
+        tracking_data.get("client_ip")
+        or tracking_data.get("ip")
+        or getattr(payment, "client_ip", None)
+        or (bot_user.ip_address if bot_user else None)
+    )
+    client_user_agent = (
+        tracking_data.get("client_user_agent")
+        or tracking_data.get("ua")
+        or getattr(payment, "client_user_agent", None)
+        or (bot_user.user_agent if bot_user else None)
+    )
+    fbp_value = tracking_data.get("fbp") or getattr(payment, "fbp", None) or (bot_user.fbp if bot_user else None)
+    fbc_value = tracking_data.get("fbc") or getattr(payment, "fbc", None) or (bot_user.fbc if bot_user else None)
+    fbclid_raw = tracking_data.get("fbclid") or getattr(payment, "fbclid", None) or (bot_user.fbclid if bot_user else None)
+    external_id_normalized = normalize_external_id(fbclid_raw) if fbclid_raw else None
+
+    # Persist fbclid/UTMs para futuras tentativas
+    if fbclid_raw and fbclid_raw != getattr(payment, "fbclid", None):
+        payment.fbclid = fbclid_raw[:255]
+        db.session.commit()
+    if fbclid_raw and bot_user and fbclid_raw != getattr(bot_user, "fbclid", None):
+        bot_user.fbclid = fbclid_raw[:255]
+        db.session.commit()
+    utm_source = tracking_data.get("utm_source") or getattr(payment, "utm_source", None) or (bot_user.utm_source if bot_user else None)
+    campaign_code = tracking_data.get("campaign_code") or getattr(payment, "campaign_code", None) or (bot_user.campaign_code if bot_user else None)
+    if utm_source and not getattr(payment, "utm_source", None):
+        payment.utm_source = utm_source
+        db.session.commit()
+    if campaign_code and not getattr(payment, "campaign_code", None):
+        payment.campaign_code = campaign_code
+        db.session.commit()
+
+    user_data = MetaPixelAPI._build_user_data(
+        customer_user_id=str(payment.customer_user_id) if payment.customer_user_id else None,
+        external_id=external_id_normalized,
+        email=getattr(payment, "customer_email", None) or (bot_user.email if bot_user else None),
+        phone=("".join(filter(str.isdigit, str(getattr(payment, "customer_phone", None) or (bot_user.phone if bot_user else ""))))) or None,
+        client_ip=client_ip,
+        client_user_agent=client_user_agent,
+        fbp=fbp_value,
+        fbc=fbc_value,
+    )
+    if not user_data.get("external_id") and external_id_normalized:
+        user_data["external_id"] = [MetaPixelAPI._hash_data(external_id_normalized)]
+
+    event_source_url = (
+        tracking_data.get("event_source_url")
+        or tracking_data.get("page_url")
+        or tracking_data.get("first_page")
+        or getattr(payment, "click_context_url", None)
+    )
+    if not event_source_url:
+        if pool and getattr(pool, "slug", None):
+            event_source_url = f"https://app.grimbots.online/go/{pool.slug}"
+        else:
+            event_source_url = f"https://t.me/{payment.bot.username}"
+
+    custom_data = {
+        "value": float(payment.amount),
+        "currency": getattr(payment, "currency", None) or "BRL",
+    }
+    if campaign_code:
+        custom_data["campaign_code"] = campaign_code
+    if utm_source:
+        custom_data["utm_source"] = utm_source
+
+    event_data = {
+        "event_name": "Purchase",
+        "event_time": event_time,
+        "event_id": root_event_id,
+        "action_source": "website",
+        "event_source_url": event_source_url,
+        "user_data": user_data,
+        "custom_data": custom_data,
+    }
+
+    enqueued = False
+    try:
+        if pixel_id and access_token:
+            kwargs = {
+                "pixel_id": pixel_id,
+                "access_token": access_token,
+                "event_data": event_data,
+                "test_code": getattr(pool, "meta_test_event_code", None) if pool else None,
+            }
+            if not tracking_data.get("pageview_sent"):
+                task = send_meta_event.apply_async(kwargs=kwargs, countdown=1)
+                logger.info(f"[META PURCHASE] Enfileirado com delay=1s | event_id={root_event_id} | task={task.id}")
+            else:
+                task = send_meta_event.delay(**kwargs)
+                logger.info(f"[META PURCHASE] Enfileirado imediato | event_id={root_event_id} | task={task.id}")
+            enqueued = True
+        else:
+            logger.warning(f"[META PURCHASE] Pixel/AccessToken ausente - não foi possível enfileirar | event_id={root_event_id}")
+
+        if enqueued:
+            payment.meta_purchase_sent = True
+            payment.meta_purchase_sent_at = get_brazil_time()
+            db.session.commit()
+        return enqueued
+    except Exception as e:
+        logger.error(f"[META PURCHASE] Erro ao enfileirar Purchase: {e}", exc_info=True)
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        return False
 
 def create_subscription_for_payment(payment):
     """

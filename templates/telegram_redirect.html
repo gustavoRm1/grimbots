@@ -95,13 +95,7 @@
         // ✅ CRÍTICO: Usar event_id do servidor para deduplicação perfeita
         // Se servidor enviou pageview_event_id, usar (garante deduplicação PageView ↔ Purchase)
         // Caso contrário, Meta Pixel JS gerará automaticamente
-        {% if pageview_event_id %}
-        fbq('track', 'PageView', {
-            eventID: '{{ pageview_event_id }}'  // ✅ MESMO event_id usado no server-side (deduplicação perfeita!)
-        });
-        {% else %}
-        fbq('track', 'PageView');  // Meta Pixel JS gerará event_id automaticamente
-        {% endif %}
+        fbq('track', 'PageView', {}, { eventID: '{{ pageview_event_id }}' });
     </script>
     <noscript>
         <img height="1" width="1" style="display:none"
