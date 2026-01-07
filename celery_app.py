@@ -222,6 +222,24 @@ def send_meta_event(self, pixel_id, access_token, event_data, test_code=None):
         logger.info(f"👤 USER_DATA ({event_data.get('event_name')}):\n{user_data_formatted}")
         
         response = requests.post(url, json=payload, timeout=10)
+
+        try:
+            raw_body = response.json()
+        except Exception:
+            raw_body = response.text
+
+        try:
+            first_event = payload.get("data", [{}])[0] if isinstance(payload, dict) else {}
+            logger.error(
+                "[META RAW RESPONSE] status=%s event=%s event_id=%s body=%s fbtrace_id=%s",
+                getattr(response, "status_code", None),
+                first_event.get("event_name"),
+                first_event.get("event_id"),
+                raw_body,
+                raw_body.get("fbtrace_id") if isinstance(raw_body, dict) else None,
+            )
+        except Exception as log_exc:
+            logger.warning(f"[META RAW RESPONSE] Falha ao logar resposta Meta: {log_exc}")
         
         latency = int((time.time() - start) * 1000)
         

@@ -3493,6 +3493,7 @@ def get_remarketing_campaigns(bot_id):
     bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
     from models import RemarketingCampaign
     import json
+    import hashlib
     campaigns = RemarketingCampaign.query.filter_by(bot_id=bot_id).order_by(
         RemarketingCampaign.created_at.desc()
     ).all()
@@ -12161,20 +12162,23 @@ def send_meta_pixel_purchase_event(payment):
     if not tracking_data.get("tracking_token") and getattr(payment, "tracking_token", None):
         tracking_data["tracking_token"] = payment.tracking_token
 
-    # event_id canônico
+    # event_id canônico da PageView (se existir)
     root_event_id = (
         getattr(payment, "pageview_event_id", None)
-        or getattr(payment, "meta_event_id", None)
         or tracking_data.get("pageview_event_id")
+        or getattr(payment, "meta_event_id", None)
         or (f"evt_{tracking_data.get('tracking_token')}" if tracking_data.get("tracking_token") else None)
     )
     if not root_event_id:
         root_event_id = f"evt_{payment.id}"
 
+    # event_id exclusivo para Purchase (evita dedupe PageView x Purchase)
+    purchase_event_id = f"{root_event_id}_purchase_{payment.id}"
+
     # Persistir IDs antes do enqueue
     changed = False
-    if getattr(payment, "meta_event_id", None) != root_event_id:
-        payment.meta_event_id = root_event_id
+    if getattr(payment, "meta_event_id", None) != purchase_event_id:
+        payment.meta_event_id = purchase_event_id
         changed = True
     if getattr(payment, "pageview_event_id", None) != root_event_id:
         payment.pageview_event_id = root_event_id
@@ -12219,9 +12223,15 @@ def send_meta_pixel_purchase_event(payment):
         payment.campaign_code = campaign_code
         db.session.commit()
 
+    stable_external_id = None
+    if payment.customer_user_id:
+        stable_external_id = hashlib.sha256(str(payment.customer_user_id).encode("utf-8")).hexdigest()
+    elif bot_user and getattr(bot_user, "id", None):
+        stable_external_id = hashlib.sha256(str(bot_user.id).encode("utf-8")).hexdigest()
+
     user_data = MetaPixelAPI._build_user_data(
         customer_user_id=str(payment.customer_user_id) if payment.customer_user_id else None,
-        external_id=external_id_normalized,
+        external_id=stable_external_id,
         email=getattr(payment, "customer_email", None) or (bot_user.email if bot_user else None),
         phone=("".join(filter(str.isdigit, str(getattr(payment, "customer_phone", None) or (bot_user.phone if bot_user else ""))))) or None,
         client_ip=client_ip,
@@ -12229,8 +12239,9 @@ def send_meta_pixel_purchase_event(payment):
         fbp=fbp_value,
         fbc=fbc_value,
     )
-    if not user_data.get("external_id") and external_id_normalized:
-        user_data["external_id"] = [MetaPixelAPI._hash_data(external_id_normalized)]
+    if not user_data.get("external_id") and stable_external_id:
+        user_data["external_id"] = [MetaPixelAPI._hash_data(stable_external_id)]
+    # Não usar fbclid em external_id no Purchase; fbclid fica apenas em fbc/fbp.
 
     event_source_url = (
         tracking_data.get("event_source_url")
@@ -12263,7 +12274,7 @@ def send_meta_pixel_purchase_event(payment):
         event_data = {
             "event_name": "Purchase",
             "event_time": event_time,
-            "event_id": root_event_id,
+            "event_id": purchase_event_id,
             "action_source": "website",
             "event_source_url": event_source_url,
             "user_data": user_data,
@@ -12279,15 +12290,19 @@ def send_meta_pixel_purchase_event(payment):
                 "event_data": event_data,
                 "test_code": getattr(pool, "meta_test_event_code", None) if pool else None,
             }
+            # Garantia: só enviar Purchase se PageView já foi marcado como enviado
             if not tracking_data.get("pageview_sent"):
-                task = send_meta_event.apply_async(kwargs=kwargs, countdown=1)
-                logger.info(f"[META PURCHASE] Enfileirado com delay=1s | event_id={root_event_id} | task={task.id}")
-            else:
-                task = send_meta_event.delay(**kwargs)
-                logger.info(f"[META PURCHASE] Enfileirado imediato | event_id={root_event_id} | task={task.id}")
+                try:
+                    task = send_meta_event.apply_async(kwargs=kwargs, countdown=3)
+                    logger.warning(f"[META PURCHASE] PageView não marcado como enviado - reprogramando Purchase em 3s | event_id={purchase_event_id} | task={task.id}")
+                except Exception as e:
+                    logger.error(f"[META PURCHASE] Falha ao reprogramar Purchase sem pageview_sent: {e}")
+                return False
+            task = send_meta_event.delay(**kwargs)
+            logger.info(f"[META PURCHASE] Enfileirado imediato | event_id={purchase_event_id} | task={task.id}")
             enqueued = True
         else:
-            logger.warning(f"[META PURCHASE] Pixel/AccessToken ausente - não foi possível enfileirar | event_id={root_event_id}")
+            logger.warning(f"[META PURCHASE] Pixel/AccessToken ausente - não foi possível enfileirar | event_id={purchase_event_id}")
 
         if enqueued:
             payment.meta_purchase_sent = True
