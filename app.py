@@ -6791,6 +6791,10 @@ def public_redirect(slug):
     except Exception as e:
         # Proteção para ambientes onde a tabela ainda não existe (evita 500 e deixa o fluxo seguir)
         logger.error(f"[META TRACKING SESSION] Erro ao upsert meta_tracking_sessions (possível tabela ausente): {e}", exc_info=True)
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
     
     # ============================================================================
     # ✅ META PIXEL: PAGEVIEW TRACKING + UTM CAPTURE (NÍVEL DE POOL)
