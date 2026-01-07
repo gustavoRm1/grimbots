@@ -419,8 +419,26 @@ class MetaPixelAPI:
                         'User-Agent': 'GrimPay-MetaPixel/1.0'
                     }
                 )
-                
-                response_data = response.json()
+
+                try:
+                    response_data = response.json()
+                except Exception:
+                    response_data = response.text
+
+                try:
+                    payload_event_id = None
+                    if isinstance(payload, dict):
+                        payload_event_id = (
+                            payload.get("data", [{}])[0] if payload.get("data") else {}
+                        ).get("event_id")
+                    logger.error(
+                        "[META RAW RESPONSE] status=%s body=%s payload_event_id=%s",
+                        getattr(response, "status_code", None),
+                        response_data,
+                        payload_event_id,
+                    )
+                except Exception as log_exc:
+                    logger.warning(f"[META RAW RESPONSE] Falha ao logar resposta Meta: {log_exc}")
                 
                 if response.status_code == 200:
                     logger.info(f"✅ Meta API sucesso: {response_data}")
