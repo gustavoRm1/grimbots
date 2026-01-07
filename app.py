@@ -9,6 +9,7 @@ from flask_socketio import SocketIO, emit, join_room, leave_room
 from models import db, User, Bot, BotConfig, Gateway, Payment, AuditLog, Achievement, UserAchievement, BotUser, BotMessage, RedirectPool, PoolBot, RemarketingCampaign, RemarketingBlacklist, Commission, PushSubscription, NotificationSettings, get_brazil_time, Subscription
 from bot_manager import BotManager
 from datetime import datetime, timedelta
+import hashlib
 import random  # usado no remarketing determinístico
 from functools import wraps
 import os
