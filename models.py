@@ -8,6 +8,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta, date, timezone
 import json
 import logging
+from sqlalchemy import func
 
 # Logger
 logger = logging.getLogger(__name__)
@@ -20,6 +21,26 @@ def get_brazil_time():
     return datetime.utcnow() + BRAZIL_TZ_OFFSET
 
 db = SQLAlchemy()
+
+
+class MetaTrackingSession(db.Model):
+    __tablename__ = "meta_tracking_sessions"
+
+    id = db.Column(db.Integer, primary_key=True)
+    tracking_token = db.Column(db.Text, unique=True, nullable=False, index=True)
+
+    root_event_id = db.Column(db.Text, nullable=False)
+    pageview_sent = db.Column(db.Boolean, default=False)
+    pageview_sent_at = db.Column(db.DateTime)
+
+    fbclid = db.Column(db.Text)
+    fbc = db.Column(db.Text)
+    fbp = db.Column(db.Text)
+
+    user_external_id = db.Column(db.Text)
+
+    created_at = db.Column(db.DateTime, default=get_brazil_time, nullable=False)
+    updated_at = db.Column(db.DateTime, default=get_brazil_time, onupdate=get_brazil_time, nullable=False)
 
 class User(UserMixin, db.Model):
     """Modelo de Usuário"""
