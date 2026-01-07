@@ -6764,29 +6764,33 @@ def public_redirect(slug):
 
     # ✅ UPSERT CANÔNICO EM meta_tracking_sessions (PageView = nascimento da sessão)
     from models import MetaTrackingSession, get_brazil_time
-    session_row = MetaTrackingSession.query.filter_by(tracking_token=tracking_token).first()
-    now_ts = get_brazil_time()
-    if not session_row:
-        session_row = MetaTrackingSession(
-            tracking_token=tracking_token,
-            root_event_id=root_event_id,
-            pageview_sent=True,
-            pageview_sent_at=now_ts,
-            fbclid=fbclid_to_save,
-            fbc=fbc_cookie,
-            fbp=fbp_cookie,
-            user_external_id=None  # pode ser preenchido depois (telegram_user_id hash)
-        )
-        db.session.add(session_row)
-    else:
-        session_row.root_event_id = session_row.root_event_id or root_event_id
-        session_row.pageview_sent = True
-        session_row.pageview_sent_at = now_ts
-        session_row.fbclid = session_row.fbclid or fbclid_to_save
-        session_row.fbc = session_row.fbc or fbc_cookie
-        session_row.fbp = session_row.fbp or fbp_cookie
-    db.session.commit()
-    tracking_payload['pageview_sent'] = True
+    try:
+        session_row = MetaTrackingSession.query.filter_by(tracking_token=tracking_token).first()
+        now_ts = get_brazil_time()
+        if not session_row:
+            session_row = MetaTrackingSession(
+                tracking_token=tracking_token,
+                root_event_id=root_event_id,
+                pageview_sent=True,
+                pageview_sent_at=now_ts,
+                fbclid=fbclid_to_save,
+                fbc=fbc_cookie,
+                fbp=fbp_cookie,
+                user_external_id=None  # pode ser preenchido depois (telegram_user_id hash)
+            )
+            db.session.add(session_row)
+        else:
+            session_row.root_event_id = session_row.root_event_id or root_event_id
+            session_row.pageview_sent = True
+            session_row.pageview_sent_at = now_ts
+            session_row.fbclid = session_row.fbclid or fbclid_to_save
+            session_row.fbc = session_row.fbc or fbc_cookie
+            session_row.fbp = session_row.fbp or fbp_cookie
+        db.session.commit()
+        tracking_payload['pageview_sent'] = True
+    except Exception as e:
+        # Proteção para ambientes onde a tabela ainda não existe (evita 500 e deixa o fluxo seguir)
+        logger.error(f"[META TRACKING SESSION] Erro ao upsert meta_tracking_sessions (possível tabela ausente): {e}", exc_info=True)
     
     # ============================================================================
     # ✅ META PIXEL: PAGEVIEW TRACKING + UTM CAPTURE (NÍVEL DE POOL)
