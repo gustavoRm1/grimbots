@@ -10204,21 +10204,20 @@ def delivery_page(delivery_token):
             from utils.meta_pixel import normalize_external_id
             external_id_normalized = normalize_external_id(external_id)
 
-        # ✅ event_id fim-a-fim: reutilizar SEMPRE o pageview_event_id do clique
-        event_id_final = pageview_event_id or getattr(payment, 'meta_event_id', None)
-        if not event_id_final:
-            event_id_final = f"pageview_{uuid.uuid4().hex}"
-        payment.meta_event_id = event_id_final
+        # ✅ event_id para Purchase: usar ID exclusivo do pagamento (dedup client/server)
+        purchase_event_id = f"purchase_{payment.id}"
+        payment.meta_event_id = purchase_event_id
         db.session.commit()
         db.session.refresh(payment)
 
         # ✅ Renderizar página com Purchase tracking (INCLUINDO FBP E FBC!)
         pixel_config = {
             'pixel_id': pool.meta_pixel_id if has_meta_pixel else None,
-            'event_id': event_id_final,  # ✅ SEMPRE string, formato correto
+            'event_id': purchase_event_id,  # 🔑 Igual ao server-side (dedup)
             'external_id': external_id_normalized,  # ✅ None se não houver (não string vazia!)
             'fbp': fbp_value,
             'fbc': fbc_value,
+            'tracking_token': tracking_data.get('tracking_token') or payment.tracking_token,
             'value': float(payment.amount),
             'currency': 'BRL',
             'content_id': str(pool.id) if pool else str(payment.bot_id),
