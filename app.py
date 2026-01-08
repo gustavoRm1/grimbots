@@ -10243,26 +10243,10 @@ def delivery_page(delivery_token):
         # ✅ DEPOIS de renderizar template, enfileirar Purchase via Server (Conversions API)
         # Isso garante que Purchase seja enviado mesmo se client-side falhar
         # Meta deduplica automaticamente usando eventID/event_id
+        # 🔕 SERVER-SIDE PURCHASE DESATIVADO: política HTML-only
         if has_meta_pixel and not purchase_already_sent:
-            try:
-                # ✅ PATCH 2: SEMPRE reutilizar event_id persistido (purchase_{payment.id})
-                event_id_to_pass = getattr(payment, 'meta_event_id', None) or pixel_config.get('event_id')
-                logger.info(f"[META DELIVERY] Delivery - Enviando Purchase via Server (Conversions API) para payment {payment.id}")
-                logger.info(f"[META DELIVERY] Delivery - event_id que será usado (mesmo do client-side): {event_id_to_pass[:50]}...")
-                # ✅ CRÍTICO: Passar event_id garantido para garantir MESMO event_id no client-side e server-side
-                # Isso garante deduplicação automática pela Meta mesmo sem pageview_event_id original
-                # ✅ CORREÇÃO: Enfileirar server-side DEPOIS de renderizar template (client-side dispara primeiro)
-                purchase_was_sent = send_meta_pixel_purchase_event(payment)
-                
-                # ✅ VALIDAÇÃO: Verificar se Purchase foi realmente enfileirado
-                if purchase_was_sent:
-                    logger.info(f"[META DELIVERY] Delivery - Purchase via Server enfileirado com sucesso (event_id: {event_id_to_pass[:30]}...)")
-                else:
-                    logger.warning(f"⚠️ [META DELIVERY] Delivery - Purchase NÃO foi enfileirado (função retornou False/None)")
-            except Exception as e:
-                logger.error(f"❌ Erro ao enviar Purchase via Server: {e}", exc_info=True)
-                # Não bloquear resposta se server-side falhar
-        
+            logger.info(f"🔕 [META DELIVERY] Purchase server-side desativado (HTML-only) | payment {payment.id} | event_id {pixel_config.get('event_id')}")
+
         return response
         
     except Exception as e:
@@ -10550,9 +10534,9 @@ def send_meta_pixel_pageview_event(pool, request, pageview_event_id=None, tracki
             ]
             return any(pattern in ua_lower for pattern in crawler_patterns)
         
-        if is_crawler(user_agent):
-            logger.info(f"🤖 CRAWLER DETECTADO no PageView: {user_agent[:50]}... | PageView NÃO será enviado")
-            return None, {}, {}
+        # 🔕 SERVER-SIDE PAGEVIEW DESATIVADO: manter apenas HTML (fbq) conforme política atual
+        logger.info("🔕 PageView server-side desativado (HTML-only).")
+        return None, {}, {}
         
         # ✅ VERIFICAÇÃO 1: Pool tem Meta Pixel configurado?
         if not pool.meta_tracking_enabled:
@@ -12130,15 +12114,9 @@ def send_meta_pixel_purchase_event(payment):
     - meta_event_id persistido antes do enqueue; meta_purchase_sent somente após enqueue OK
     - Não bloquear por ausência de UTMs/IP/UA; apenas logar
     """
-    import json
-    import time
-    from utils.encryption import decrypt
-    from utils.meta_pixel import MetaPixelAPI, normalize_external_id
-    from utils.tracking_service import TrackingServiceV4
-    from celery_app import send_meta_event
-    from models import PoolBot, BotUser, get_brazil_time
-
-    logger.info(f"[META PURCHASE] Início (patch gold) payment_id={getattr(payment, 'id', None)}")
+    # 🔕 SERVER-SIDE PURCHASE DESATIVADO: política HTML-only
+    logger.info(f"🔕 [META PURCHASE] Server-side desativado (HTML-only) | payment_id={getattr(payment, 'id', None)}")
+    return False
 
     # Pool/pixel (não bloquear)
     pool_bot = PoolBot.query.filter_by(bot_id=payment.bot_id).first()

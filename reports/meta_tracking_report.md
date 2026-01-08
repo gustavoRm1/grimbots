@@ -1,6 +1,6 @@
-# Relatório Técnico do Sistema de Tracking (estado atual)
+# Relatório Técnico do Sistema de Tracking (estado atual, pós Purchase duplo na delivery)
 
-## 1) Fluxo end-to-end (Facebook → Redirect → Cloaker → HTML Pixel → Bot → Delivery)
+## 1) Fluxo end-to-end (Facebook → Redirect → Cloaker → HTML Pixel → Bot → Payment → Delivery)
 - Entrada: `GET /go/<slug>` em `public_redirect` (@app.py#6511-7054).
 - Cloaker: valida antes de qualquer tracking; se bloquear, retorna `cloaker_block.html` 403 (sem alterar headers/cookies) (@app.py#6545-6578).
 - Seleção de bot e métricas: incrementos atômicos em `PoolBot` e `RedirectPool` (@app.py#6598-6624).
@@ -11,6 +11,8 @@
 - Merge e persistência do tracking no Redis via `TrackingServiceV4.save_tracking_token` (@app.py#6815-6887).
 - Renderização do HTML bridge `templates/telegram_redirect.html` com `pageview_event_id = root_event_id`, `pixel_id`, `tracking_token` (@app.py#6911-7023).
 - Fallback: se renderização falhar ou bot inválido, redirect 302 direto para t.me/<bot>?start=<tracking_token>.
+- Pagamento confirmado → `send_payment_delivery` gera `delivery_token` e envia link `/delivery/<token>` quando Meta Pixel ativo (@app.py#348-497).
+- Delivery page dispara Purchase duplo: client-side `fbq('track','Purchase', eventID=purchase_<payment.id>)` + server-side `send_meta_pixel_purchase_event` com mesmo event_id (@app.py#9977-10267; @app.py#12118-12355; templates/delivery.html).
 
 ### Trecho-chave: public_redirect (captura, upsert e render)
 ```python
@@ -251,6 +253,121 @@ class MetaTrackingSession(db.Model):
 - Purchase client-side (fbq Purchase) foi removido; apenas server-side envia Purchase com `event_id = purchase_<payment.id>`.
 - `meta_tracking_sessions` hoje não bloqueia Purchase; serve como store canônica. Erros de permissão nessa tabela foram mitigados via GRANT.
 - Rollback adicionado no upsert de `meta_tracking_sessions` para evitar transações sujas e 500s (@app.py#6791-6797).
+
+## 10) Delivery Page com Purchase duplo (NOVO)
+- Rota: `/delivery/<delivery_token>` (@app.py#9977-10267).
+- Busca Payment por delivery_token; se status != paid, revalida no gateway e só segue se pago.
+- Recupera tracking_data prioritariamente via `BotUser.tracking_session_id` → `payment.tracking_token` → Redis.
+- Pool correto: tenta pool_id do tracking_data; senão primeiro PoolBot do bot.
+- Pixel habilitado se `meta_tracking_enabled` e `meta_events_purchase` e credenciais presentes.
+- `purchase_event_id = f"purchase_{payment.id}` persistido em `meta_event_id`; usado tanto no client quanto no server.
+- `pixel_config` enviado ao template inclui: pixel_id, event_id, external_id normalizado (fbclid), fbp/fbc, tracking_token, value/currency, content_id/content_name.
+- Renderiza antes de enfileirar server-side (client-side dispara primeiro para dedup automática).
+
+### Trecho-chave: delivery_page (injeção dos dados)
+```python
+# app.py (delivery_page) trechos-chave
+purchase_event_id = f"purchase_{payment.id}"
+payment.meta_event_id = purchase_event_id
+db.session.commit(); db.session.refresh(payment)
+
+pixel_config = {
+    'pixel_id': pool.meta_pixel_id if has_meta_pixel else None,
+    'event_id': purchase_event_id,           # dedup client/server
+    'external_id': external_id_normalized,
+    'fbp': fbp_value,
+    'fbc': fbc_value,
+    'tracking_token': tracking_data.get('tracking_token') or payment.tracking_token,
+    'value': float(payment.amount),
+    'currency': 'BRL',
+    'content_id': str(pool.id) if pool else str(payment.bot_id),
+    'content_name': payment.product_name or payment.bot.name,
+}
+response = render_template('delivery.html',
+    payment=payment,
+    pixel_config=pixel_config,
+    has_meta_pixel=has_meta_pixel,
+    redirect_url=redirect_url
+)
+# Após render, enfileira server-side Purchase (event_id igual)
+```
+
+### Trecho-chave: delivery.html (Purchase client-side + beacon)
+```html
+{% if has_meta_pixel and pixel_config.pixel_id %}
+<script>
+  !function(f,b,e,v,n,t,s){...}(window, document,'script',
+  'https://connect.facebook.net/en_US/fbevents.js');
+  fbq('init', '{{ pixel_config.pixel_id }}');
+</script>
+{% endif %}
+
+<script>
+// Purchase client-side deduplicado
+(function() {
+  {% if has_meta_pixel and pixel_config.pixel_id and pixel_config.event_id %}
+  if (typeof fbq === 'undefined') return;
+  fbq('track', 'Purchase', {
+    value: {{ pixel_config.value }},
+    currency: '{{ pixel_config.currency }}',
+    content_type: 'product',
+    content_name: '{{ pixel_config.content_name }}',
+    content_ids: ['{{ pixel_config.content_id }}']
+  }, {
+    eventID: '{{ pixel_config.event_id }}' // dedup
+  });
+  console.log('[META PIXEL] Purchase client-side disparado', {
+    eventID: '{{ pixel_config.event_id }}',
+    value: {{ pixel_config.value }},
+    currency: '{{ pixel_config.currency }}'
+  });
+  // Beacon opcional para cookies atualizados
+  {% if pixel_config.tracking_token %}
+  setTimeout(function() {
+    const getCookie = (name) => {
+      const value = `; ${document.cookie}`;
+      const parts = value.split(`; ${name}=`);
+      if (parts.length === 2) return parts.pop().split(';').shift();
+      return null;
+    };
+    const fbp = getCookie('_fbp');
+    const fbc = getCookie('_fbc');
+    const fbi = getCookie('_fbi');
+    if (fbp || fbc || fbi) {
+      const payload = {
+        tracking_token: '{{ pixel_config.tracking_token }}',
+        _fbp: fbp,
+        _fbc: fbc,
+        _fbi: fbi,
+        page_type: 'delivery'
+      };
+      navigator.sendBeacon('/api/tracking/cookies',
+        new Blob([JSON.stringify(payload)], { type: 'application/json' }));
+    }
+  }, 800);
+  {% endif %}
+  {% endif %}
+})();
+</script>
+```
+
+## 11) Critérios de deduplicação e alinhamento client/server
+- `event_id` único por Purchase: `purchase_<payment.id>` compartilhado entre browser e server.
+- Pixel_id sempre do pool correto; multi-tenant respeita `PoolBot`.
+- Client-side dispara primeiro; server-side enfileira após render, ambos deduplicam via event_id.
+- fbp/fbc e external_id normalizado (fbclid) propagados do tracking_data/Redis ao template.
+
+## 12) Riscos e pontos de atenção
+- Se pool.meta_events_purchase desativado, delivery renderiza sem pixel (não dispara client-side).
+- Se tracking_data ausente: fbp/fbc podem faltar; external_id pode cair para telegram_id hash (menor match quality).
+- Se gateway não confirmar “paid” em tempo real, delivery retorna página de erro sem disparar Purchase.
+- Se Celery parado, client-side ainda envia Purchase; dedup segura quando o worker voltar.
+
+## 13) Passos mínimos se algo falhar (atualizado)
+1) Garantir tabela/permissões `meta_tracking_sessions` (scripts acima).
+2) Confirmar Meta Pixel por pool: `meta_tracking_enabled`, `meta_pixel_id`, `meta_access_token`, `meta_events_purchase=True`.
+3) Verificar worker Celery ativo; checar logs `[META RAW RESPONSE]` para Purchase com `purchase_<payment.id>`.
+4) No browser (delivery): console deve mostrar `[META PIXEL] Purchase client-side disparado` com eventID `purchase_<payment.id>`.
 
 ## 9) Passos mínimos se algo falhar
 1) Garantir tabela e permissões:

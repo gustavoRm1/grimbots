@@ -124,6 +124,12 @@
                 return;
             }
 
+            const purchaseKey = 'purchase_sent_{{ payment.id if payment else "" }}';
+            if (localStorage.getItem(purchaseKey)) {
+                console.log('[META PIXEL] Purchase já enviado (localStorage flag presente)', { eventID: '{{ pixel_config.event_id }}' });
+                return;
+            }
+
             fbq('track', 'Purchase', {
                 value: {{ pixel_config.value }},
                 currency: '{{ pixel_config.currency }}',
@@ -133,6 +139,8 @@
             }, {
                 eventID: '{{ pixel_config.event_id }}' // 🔑 DEDUP
             });
+
+            localStorage.setItem(purchaseKey, '1');
 
             console.log('[META PIXEL] Purchase client-side disparado', {
                 eventID: '{{ pixel_config.event_id }}',
