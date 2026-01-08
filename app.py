@@ -3990,24 +3990,38 @@ def general_remarketing():
         total_users = 0
         bots_affected = 0
 
-        # ✅ ENTERPRISE: Atribuição determinística no remarketing geral (somente envio imediato)
-        if status != 'scheduled' and len(bots) > 1:
+        # Envio imediato (multi-bot independente, sem distribuição entre bots)
+        if status != 'scheduled':
             try:
-                import hashlib
                 from redis_manager import get_redis_connection
                 from models import BotUser, Payment, RemarketingBlacklist, RemarketingCampaign
                 from datetime import timedelta
                 from sqlalchemy.exc import OperationalError
                 import time as time_module
 
-                def _stable_bucket(value: str, modulo: int) -> int:
-                    if modulo <= 1:
-                        return 0
-                    digest = hashlib.md5(value.encode('utf-8')).hexdigest()
-                    return int(digest[:8], 16) % modulo
-
                 contact_limit = get_brazil_time() - timedelta(days=days_since_last_contact)
-                eligible_by_bot = {}
+                redis_conn = get_redis_connection()
+
+                target_audience_mapping = {
+                    'all_users': 'all',
+                    'buyers': 'buyers',
+                    'pix_generated': 'abandoned_cart',
+                    'downsell_buyers': 'downsell_buyers',
+                    'order_bump_buyers': 'order_bump_buyers',
+                    'upsell_buyers': 'upsell_buyers',
+                    'remarketing_buyers': 'remarketing_buyers'
+                }
+                target_audience = target_audience_mapping.get(audience_segment, 'all')
+                debug_mode = bool(data.get('debug_mode'))
+
+                def _is_valid_chat_id(chat_id):
+                    try:
+                        if chat_id is None:
+                            return False
+                        chat_int = int(str(chat_id))
+                        return chat_int != 0
+                    except Exception:
+                        return False
 
                 for bot in bots:
                     q = db.session.query(BotUser.telegram_user_id).filter(
@@ -4034,7 +4048,8 @@ def general_remarketing():
                         ).distinct().all()
                         ids = [i[0] for i in ids if i and i[0]]
                         if not ids:
-                            eligible_by_bot[bot.id] = set()
+                            assigned_ids = set()
+                            logger.warning(f"[REMARKETING] bot_id={bot.id} ignorado: 0 usuários elegíveis")
                             continue
                         q = q.filter(BotUser.telegram_user_id.in_(ids))
                     elif audience_segment == 'pix_generated':
@@ -4044,7 +4059,7 @@ def general_remarketing():
                         ).distinct().all()
                         ids = [i[0] for i in ids if i and i[0]]
                         if not ids:
-                            eligible_by_bot[bot.id] = set()
+                            logger.warning(f"[REMARKETING] bot_id={bot.id} ignorado: 0 usuários elegíveis")
                             continue
                         q = q.filter(BotUser.telegram_user_id.in_(ids))
                     elif audience_segment == 'downsell_buyers':
@@ -4055,7 +4070,7 @@ def general_remarketing():
                         ).distinct().all()
                         ids = [i[0] for i in ids if i and i[0]]
                         if not ids:
-                            eligible_by_bot[bot.id] = set()
+                            logger.warning(f"[REMARKETING] bot_id={bot.id} ignorado: 0 usuários elegíveis")
                             continue
                         q = q.filter(BotUser.telegram_user_id.in_(ids))
                     elif audience_segment == 'order_bump_buyers':
@@ -4066,7 +4081,7 @@ def general_remarketing():
                         ).distinct().all()
                         ids = [i[0] for i in ids if i and i[0]]
                         if not ids:
-                            eligible_by_bot[bot.id] = set()
+                            logger.warning(f"[REMARKETING] bot_id={bot.id} ignorado: 0 usuários elegíveis")
                             continue
                         q = q.filter(BotUser.telegram_user_id.in_(ids))
                     elif audience_segment == 'upsell_buyers':
@@ -4077,7 +4092,7 @@ def general_remarketing():
                         ).distinct().all()
                         ids = [i[0] for i in ids if i and i[0]]
                         if not ids:
-                            eligible_by_bot[bot.id] = set()
+                            logger.warning(f"[REMARKETING] bot_id={bot.id} ignorado: 0 usuários elegíveis")
                             continue
                         q = q.filter(BotUser.telegram_user_id.in_(ids))
                     elif audience_segment == 'remarketing_buyers':
@@ -4088,54 +4103,17 @@ def general_remarketing():
                         ).distinct().all()
                         ids = [i[0] for i in ids if i and i[0]]
                         if not ids:
-                            eligible_by_bot[bot.id] = set()
+                            logger.warning(f"[REMARKETING] bot_id={bot.id} ignorado: 0 usuários elegíveis")
                             continue
                         q = q.filter(BotUser.telegram_user_id.in_(ids))
                     else:
-                        eligible_by_bot[bot.id] = set()
+                        logger.warning(f"[REMARKETING] bot_id={bot.id} ignorado: segmento inválido ou sem elegíveis")
                         continue
 
                     eligible_ids = q.distinct().all()
-                    eligible_by_bot[bot.id] = set([str(x[0]) for x in eligible_ids if x and x[0]])
-
-                candidates_by_user = {}
-                for bot_id, user_ids in eligible_by_bot.items():
-                    for uid in user_ids:
-                        candidates_by_user.setdefault(uid, []).append(bot_id)
-
-                assigned_by_bot = {bot.id: set() for bot in bots}
-                for uid, candidate_bot_ids in candidates_by_user.items():
-                    candidate_bot_ids_sorted = sorted(candidate_bot_ids)
-                    chosen_bot_id = candidate_bot_ids_sorted[_stable_bucket(uid, len(candidate_bot_ids_sorted))]
-                    assigned_by_bot[chosen_bot_id].add(uid)
-
-                redis_conn = get_redis_connection()
-
-                target_audience_mapping = {
-                    'all_users': 'all',
-                    'buyers': 'buyers',
-                    'pix_generated': 'abandoned_cart',
-                    'downsell_buyers': 'downsell_buyers',
-                    'order_bump_buyers': 'order_bump_buyers',
-                    'upsell_buyers': 'upsell_buyers',
-                    'remarketing_buyers': 'remarketing_buyers'
-                }
-                target_audience = target_audience_mapping.get(audience_segment, 'all')
-
-                debug_mode = bool(data.get('debug_mode'))
-
-                def _is_valid_chat_id(chat_id):
-                    try:
-                        if chat_id is None:
-                            return False
-                        chat_int = int(str(chat_id))
-                        return chat_int != 0
-                    except Exception:
-                        return False
-
-                for bot in bots:
-                    assigned_ids = assigned_by_bot.get(bot.id) or set()
+                    assigned_ids = set([str(x[0]) for x in eligible_ids if x and x[0]])
                     if not assigned_ids:
+                        logger.warning(f"[REMARKETING] bot_id={bot.id} ignorado: 0 usuários elegíveis")
                         continue
 
                     campaign = RemarketingCampaign(
@@ -4170,6 +4148,8 @@ def general_remarketing():
                                 continue
                             db.session.rollback()
                             raise
+
+                    logger.info(f"[REMARKETING] bot_id={bot.id} users_elegiveis={len(assigned_ids)} campanha_criada={campaign.id}")
 
                     queue_key = f"remarketing:queue:{bot.id}"
                     sent_set_key = f"remarketing:sent:{campaign.id}"
@@ -4285,7 +4265,7 @@ def general_remarketing():
                     'scheduled_at': None
                 })
             except Exception as deterministic_error:
-                logger.error(f"❌ Falha no remarketing geral determinístico (fallback para modo legado): {deterministic_error}")
+                logger.error(f"❌ Falha no remarketing geral (modo por bot): {deterministic_error}")
 
         # ✅ CORREÇÃO: Criar campanhas em batch para evitar database locked
         from models import RemarketingCampaign
