@@ -1842,9 +1842,20 @@ def dashboard():
     
     # Estatísticas gerais (calculadas a partir dos bot_stats)
     total_users = sum(b.total_users for b in bot_stats)
-    total_sales = sum(b.total_sales for b in bot_stats)
-    total_revenue = sum(float(b.total_revenue) for b in bot_stats)
     running_bots = sum(1 for b in bot_stats if b.is_running)
+
+    # ✅ FONTE ÚNICA FINANCEIRA: payments (status='paid'), nunca bots.total_revenue
+    # ATENÇÃO: Ganhos Totais DEVEM vir exclusivamente de payments.
+    # Nunca usar bots.total_revenue como fonte global.
+    total_sales = db.session.query(func.count(Payment.id)).join(Bot).filter(
+        Bot.user_id == current_user.id,
+        Payment.status == 'paid'
+    ).scalar() or 0
+
+    total_revenue = db.session.query(func.sum(Payment.amount)).join(Bot).filter(
+        Bot.user_id == current_user.id,
+        Payment.status == 'paid'
+    ).scalar() or 0.0
     
     # ✅ VERSÃO 2.0: Calcular stats por período (Hoje e Mês)
     from datetime import datetime, timedelta
@@ -2472,9 +2483,8 @@ def update_bot_token(bot_id):
 @csrf.exempt
 def delete_bot(bot_id):
     """
-    Deleta um bot (HARD DELETE)
-    
-    ✅ CRÍTICO: Remove também pagamentos/comissões/assinaturas para manter integridade referencial.
+    Desativa um bot sem remover histórico financeiro (soft delete).
+    Mantém payments/comissões para não afetar ganhos totais/ranking.
     """
     bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
     
@@ -2486,7 +2496,7 @@ def delete_bot(bot_id):
     bot_identifier = f"{bot_name} (ID {bot.id})"
     
     try:
-        # ✅ OPERAÇÕES DE LIMPEZA (apenas dados operacionais)
+        # Limpar somente dados operacionais que podem travar o bot ativo
         cleanup_operations = [
             ("mensagens", delete(BotMessage).where(BotMessage.bot_id == bot.id)),
             ("usuários do bot", delete(BotUser).where(BotUser.bot_id == bot.id)),
@@ -2502,37 +2512,19 @@ def delete_bot(bot_id):
             if deleted_rows:
                 logger.info(f"🧹 Removidos {deleted_rows} registros de {label} do bot {bot_identifier}")
         
-        # ✅ HARD DELETE: deletar dependências que referenciam bot/payments (evita bot_id NULL)
-        subscriptions_deleted = db.session.execute(
-            delete(Subscription).where(Subscription.bot_id == bot.id)
-        ).rowcount or 0
-        if subscriptions_deleted:
-            logger.info(f"🧹 Removidos {subscriptions_deleted} registros de assinaturas do bot {bot_identifier}")
-
-        commissions_deleted = db.session.execute(
-            delete(Commission).where(Commission.bot_id == bot.id)
-        ).rowcount or 0
-        if commissions_deleted:
-            logger.info(f"🧹 Removidos {commissions_deleted} registros de comissões do bot {bot_identifier}")
-
-        payments_deleted = db.session.execute(
-            delete(Payment).where(Payment.bot_id == bot.id)
-        ).rowcount or 0
-        if payments_deleted:
-            logger.info(f"🧹 Removidos {payments_deleted} registros de pagamentos do bot {bot_identifier}")
-
-        # ✅ DELETAR O BOT (agora sem FKs pendentes)
-        db.session.delete(bot)
+        # Soft delete: manter bot e pagamentos; apenas desativar
+        bot.is_active = False
+        bot.is_running = False
         db.session.commit()
     
     except Exception as e:
         db.session.rollback()
-        logger.error(f"Erro ao deletar bot {bot_identifier}: {e}", exc_info=True)
-        return jsonify({'error': 'Erro interno ao deletar bot'}), 500
+        logger.error(f"Erro ao desativar bot {bot_identifier}: {e}", exc_info=True)
+        return jsonify({'error': 'Erro interno ao desativar bot'}), 500
     
-    logger.info(f"✅ Bot deletado: {bot_name} por {current_user.email}")
+    logger.info(f"✅ Bot desativado (soft delete): {bot_name} por {current_user.email} — histórico financeiro preservado")
     return jsonify({
-        'message': 'Bot deletado com sucesso',
+        'message': 'Bot desativado com sucesso (histórico preservado)',
         'deleted': True
     })
 @app.route('/api/bots/<int:bot_id>/duplicate', methods=['POST'])
