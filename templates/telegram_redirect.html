@@ -256,6 +256,8 @@
         let cookiesSent = false;
         let redirectTimer = null;
         let pixelCheckInterval = null;
+        const PAGELOAD_TS = Date.now();
+        const MIN_DWELL_MS = 1500; // ✅ Garantir pelo menos 1.5s de página aberta antes do redirect
         
         // ✅ Função para enviar cookies para servidor via Beacon API
         function sendCookiesToServer() {
@@ -372,14 +374,16 @@
             
             pixelLoaded = true;
             
-            // ✅ Pixel carregou, aguardar 800ms para Meta Pixel JS gerar cookies
-            // Meta Pixel JS precisa executar fbq('track', 'PageView') e fazer request para Meta
-            // Isso geralmente leva 500-1000ms
+            // ✅ Pixel carregou, aguardar tempo suficiente para gerar cookies E respeitar dwell mínimo
+            const elapsed = Date.now() - PAGELOAD_TS;
+            const baseDelay = 800; // para gerar cookies do Pixel
+            const remainingForDwell = Math.max(0, MIN_DWELL_MS - elapsed);
+            const waitMs = Math.max(baseDelay, remainingForDwell);
+
             setTimeout(() => {
-                // ✅ Verificar scripts Utmify antes de redirect (garante que UTMs foram capturados)
-                checkUtmifyAndRedirect();
-            }, 800); // ✅ 800ms é suficiente para 90% dos casos
-            
+                checkUtmifyAndRedirect(); // ✅ Verificar scripts Utmify antes de redirect
+            }, waitMs);
+
             return true;
         }
         
@@ -391,7 +395,7 @@
             }
         }, 100);
         
-        // ✅ Fallback: Se Pixel não carregou em 2s, enviar cookies (se existirem) e redirect
+        // ✅ Fallback: Se Pixel não carregou em 3s, enviar cookies (se existirem) e redirect
         redirectTimer = setTimeout(() => {
             clearInterval(pixelCheckInterval);
             
@@ -400,7 +404,7 @@
             
             // ✅ Verificar scripts Utmify antes de redirect (garante que UTMs foram capturados)
             checkUtmifyAndRedirect();
-        }, 2000);
+        }, Math.max(3000, MIN_DWELL_MS + 1200)); // garantia de dwell mínimo mesmo no fallback
         
         // Click no botão também faz redirect (enviar cookies antes)
         document.getElementById('start-bot-link').addEventListener('click', (e) => {
