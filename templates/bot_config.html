@@ -2890,6 +2890,21 @@ console.log('✅ botConfigApp temporário definido (será substituído pela vers
                                 min="0"
                             />
                         </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Posição do Preço</label>
+                            <div class="flex items-center gap-4 text-sm text-gray-300">
+                                <label class="flex items-center gap-2">
+                                    <input type="radio" value="before" x-model="button.price_position" />
+                                    <span>Antes do texto</span>
+                                </label>
+                                <label class="flex items-center gap-2">
+                                    <input type="radio" value="after" x-model="button.price_position" />
+                                    <span>Depois do texto</span>
+                                </label>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-1">Default: Depois do texto (compatível com bots existentes).</p>
+                        </div>
 
                         <div class="form-group">
                             <label class="form-label">Descrição</label>
@@ -2904,11 +2919,20 @@ console.log('✅ botConfigApp temporário definido (será substituído pela vers
                         <div class="mt-4 p-4 bg-gray-800 rounded-lg border border-gray-700">
                             <h4 class="text-sm font-semibold text-gray-300 mb-2">Preview do Botão</h4>
                             <div class="bg-gray-900 p-3 rounded border border-gray-600">
-                                <div class="text-white font-semibold mb-1" x-text="button.text || 'Texto do botão'"></div>
-                                <div class="text-gray-400 text-sm mb-2" x-text="button.description || 'Descrição do produto'"></div>
-                                <div class="text-yellow-400 font-bold" x-show="button.price">
-                                    R$ <span x-text="(typeof button.price === 'number' ? button.price.toFixed(2) : (parseFloat(button.price) || 0).toFixed(2))"></span>
+                                <div class="text-white font-semibold mb-1 flex items-center gap-1">
+                                    <template x-if="(button.price_position || 'after') === 'before' && button.price">
+                                        <span class="text-yellow-400 font-bold">
+                                            R$ <span x-text="(typeof button.price === 'number' ? button.price.toFixed(2) : (parseFloat(button.price) || 0).toFixed(2))"></span>
+                                        </span>
+                                    </template>
+                                    <span x-text="button.text || 'Texto do botão'"></span>
+                                    <template x-if="(button.price_position || 'after') === 'after' && button.price">
+                                        <span class="text-yellow-400 font-bold">
+                                            R$ <span x-text="(typeof button.price === 'number' ? button.price.toFixed(2) : (parseFloat(button.price) || 0).toFixed(2))"></span>
+                                        </span>
+                                    </template>
                                 </div>
+                                <div class="text-gray-400 text-sm mb-2" x-text="button.description || 'Descrição do produto'"></div>
                             </div>
                         </div>
 
