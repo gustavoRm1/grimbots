@@ -10127,16 +10127,16 @@ def delivery_page(delivery_token):
                 logger.info(f"✅ Delivery - tracking_data recuperado via payment.tracking_token: {len(tracking_data)} campos")
 
         # ✅ Pixel do redirect (fonte primária) — MESMO Pixel do PageView
-        pixel_id_from_tracking = tracking_data.get('pixel_id')
+        pixel_id_from_tracking = tracking_data.get('pixel_id') if tracking_data else None
 
-        # ✅ CRÍTICO: Verificar condições para HTML-only (não exigir access_token para renderizar)
-        has_meta_pixel = bool(pixel_id_from_tracking) and bool(pool and pool.meta_events_purchase)
+        # ✅ HTML-only: único gate é a existência do pixel_id no tracking
+        has_meta_pixel = bool(pixel_id_from_tracking)
 
         if not has_meta_pixel:
-            if not pixel_id_from_tracking:
-                logger.warning(f"⚠️ [META DELIVERY] Pixel ausente no tracking_data para payment {payment.id}; Purchase não será renderizado")
-            elif not (pool and pool.meta_events_purchase):
-                logger.warning(f"⚠️ [META DELIVERY] meta_events_purchase desabilitado para pool_id={pool.id if pool else 'N/A'}; Purchase não será renderizado")
+            logger.error(
+                "[META DELIVERY] Purchase NÃO disparado: pixel_id ausente no tracking_data | "
+                f"payment_id={payment.id} | tracking_token={payment.tracking_token}"
+            )
         
         # ✅ Link final para redirecionar (configurado pelo usuário)
         # ✅ Link final para redirecionar (configurado pelo usuário)
