@@ -108,12 +108,33 @@
     </div>
     
     <script>
-        // Redirect helper (mantido)
+        // Redirect helper com delay mínimo (≥4.5s) para permitir envio do Purchase
         {% if redirect_url %}
-        setTimeout(() => {
-            document.getElementById('loading').style.display = 'block';
-            window.location.href = '{{ redirect_url }}';
-        }, 1500);
+        const REDIRECT_DELAY_MS = 4500;
+        const redirectAllowedAt = Date.now() + REDIRECT_DELAY_MS;
+        const redirectUrl = '{{ redirect_url }}';
+        const loadingEl = document.getElementById('loading');
+        const linkEl = document.getElementById('redirect-link');
+
+        function safeRedirect() {
+            const now = Date.now();
+            if (now < redirectAllowedAt) {
+                return setTimeout(safeRedirect, redirectAllowedAt - now);
+            }
+            if (loadingEl) loadingEl.style.display = 'block';
+            window.location.href = redirectUrl;
+        }
+
+        // Auto redirect após delay mínimo
+        setTimeout(safeRedirect, REDIRECT_DELAY_MS);
+
+        // Intercepta clique antes do delay mínimo
+        if (linkEl) {
+            linkEl.addEventListener('click', function (e) {
+                e.preventDefault();
+                safeRedirect();
+            });
+        }
         {% endif %}
 
         // ✅ Purchase client-side deduplicado com server-side (eventID igual)
