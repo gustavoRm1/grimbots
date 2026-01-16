@@ -10112,19 +10112,19 @@ def delivery_page(delivery_token):
             return render_template('delivery_error.html', error="Configuração inválida"), 500
         
         pool = pool_bot.pool
-        # ✅ RECUPERAR tracking_data do Redis (para matching perfeito) — NÃO sobrescrever depois
+        # ✅ RECUPERAR tracking_data do Redis (fonte única: payment.tracking_token)
         tracking_data = {}
 
-        # Prioridade 1: bot_user.tracking_session_id (token do redirect)
-        if bot_user and bot_user.tracking_session_id:
-            tracking_data = tracking_service_v4.recover_tracking_data(bot_user.tracking_session_id) or {}
-            logger.info(f"✅ Delivery - tracking_data recuperado via bot_user.tracking_session_id: {len(tracking_data)} campos")
-        
-        # Prioridade 2: payment.tracking_token
-        if not tracking_data and payment.tracking_token:
+        if payment and payment.tracking_token:
             tracking_data = tracking_service_v4.recover_tracking_data(payment.tracking_token) or {}
             if tracking_data:
                 logger.info(f"✅ Delivery - tracking_data recuperado via payment.tracking_token: {len(tracking_data)} campos")
+
+        if not tracking_data:
+            logger.error(
+                "[META DELIVERY] tracking_data AUSENTE via payment.tracking_token | "
+                f"payment_id={payment.id} | tracking_token={payment.tracking_token}"
+            )
 
         # ✅ Pixel do redirect (fonte primária) — MESMO Pixel do PageView
         pixel_id_from_tracking = tracking_data.get('pixel_id') if tracking_data else None

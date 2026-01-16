@@ -137,67 +137,85 @@
         }
         {% endif %}
 
-        // ✅ Purchase client-side deduplicado com server-side (eventID igual)
-        (function() {
+        // ✅ Purchase client-side deduplicado com server-side (eventID igual) + espera por fbq
+        (function firePurchaseSafe() {
             {% if has_meta_pixel and pixel_config.pixel_id and pixel_config.event_id %}
-            if (typeof fbq === 'undefined') {
-                console.error('[META PIXEL] fbq não carregado na delivery page');
-                return;
-            }
-
             const purchaseKey = 'purchase_sent_{{ payment.id if payment else "" }}';
             if (localStorage.getItem(purchaseKey)) {
                 console.log('[META PIXEL] Purchase já enviado (localStorage flag presente)', { eventID: '{{ pixel_config.event_id }}' });
                 return;
             }
 
-            fbq('track', 'Purchase', {
-                value: {{ pixel_config.value }},
-                currency: '{{ pixel_config.currency }}',
-                content_type: 'product',
-                content_name: '{{ pixel_config.content_name }}',
-                content_ids: ['{{ pixel_config.content_id }}']
-            }, {
-                eventID: '{{ pixel_config.event_id }}' // 🔑 DEDUP
-            });
+            const MAX_RETRIES = 20; // ~5s
+            const INTERVAL_MS = 250;
+            let attempts = 0;
 
-            localStorage.setItem(purchaseKey, '1');
+            function tryFire() {
+                if (typeof window.fbq === 'function') {
+                    try {
+                        fbq('track', 'Purchase', {
+                            value: {{ pixel_config.value }},
+                            currency: '{{ pixel_config.currency }}',
+                            content_type: 'product',
+                            content_name: '{{ pixel_config.content_name }}',
+                            content_ids: ['{{ pixel_config.content_id }}']
+                        }, {
+                            eventID: '{{ pixel_config.event_id }}' // 🔑 DEDUP
+                        });
 
-            console.log('[META PIXEL] Purchase client-side disparado', {
-                eventID: '{{ pixel_config.event_id }}',
-                value: {{ pixel_config.value }},
-                currency: '{{ pixel_config.currency }}'
-            });
+                        localStorage.setItem(purchaseKey, '1');
 
-            // ✅ Opcional: enviar cookies atualizados para o backend
-            {% if pixel_config.tracking_token %}
-            setTimeout(function() {
-                const getCookie = (name) => {
-                    const value = `; ${document.cookie}`;
-                    const parts = value.split(`; ${name}=`);
-                    if (parts.length === 2) return parts.pop().split(';').shift();
-                    return null;
-                };
+                        console.log('[META] Purchase disparado com sucesso', {
+                            eventID: '{{ pixel_config.event_id }}',
+                            value: {{ pixel_config.value }},
+                            currency: '{{ pixel_config.currency }}'
+                        });
+                    } catch (e) {
+                        console.error('[META] Erro ao disparar Purchase', e);
+                    }
 
-                const fbp = getCookie('_fbp');
-                const fbc = getCookie('_fbc');
-                const fbi = getCookie('_fbi');
+                    // ✅ Opcional: enviar cookies atualizados para o backend
+                    {% if pixel_config.tracking_token %}
+                    setTimeout(function() {
+                        const getCookie = (name) => {
+                            const value = `; ${document.cookie}`;
+                            const parts = value.split(`; ${name}=`);
+                            if (parts.length === 2) return parts.pop().split(';').shift();
+                            return null;
+                        };
 
-                if (fbp || fbc || fbi) {
-                    const payload = {
-                        tracking_token: '{{ pixel_config.tracking_token }}',
-                        _fbp: fbp,
-                        _fbc: fbc,
-                        _fbi: fbi,
-                        page_type: 'delivery'
-                    };
+                        const fbp = getCookie('_fbp');
+                        const fbc = getCookie('_fbc');
+                        const fbi = getCookie('_fbi');
 
-                    navigator.sendBeacon('/api/tracking/cookies',
-                        new Blob([JSON.stringify(payload)], { type: 'application/json' })
-                    );
+                        if (fbp || fbc || fbi) {
+                            const payload = {
+                                tracking_token: '{{ pixel_config.tracking_token }}',
+                                _fbp: fbp,
+                                _fbc: fbc,
+                                _fbi: fbi,
+                                page_type: 'delivery'
+                            };
+
+                            navigator.sendBeacon('/api/tracking/cookies',
+                                new Blob([JSON.stringify(payload)], { type: 'application/json' })
+                            );
+                        }
+                    }, 800);
+                    {% endif %}
+
+                    return;
                 }
-            }, 800);
-            {% endif %}
+
+                attempts += 1;
+                if (attempts < MAX_RETRIES) {
+                    setTimeout(tryFire, INTERVAL_MS);
+                } else {
+                    console.error('[META] fbq não disponível após retries — Purchase NÃO enviado');
+                }
+            }
+
+            tryFire();
             {% endif %}
         })();
     </script>
