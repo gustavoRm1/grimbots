@@ -6732,6 +6732,7 @@ def public_redirect(slug):
         'event_source_url': request.url or f'https://{request.host}/go/{pool.slug}',
         'first_page': request.url or f'https://{request.host}/go/{pool.slug}',
         'pageview_sent': False,
+        'pixel_id': pool.meta_pixel_id if pool and pool.meta_pixel_id else None,  # ✅ Pixel do redirect (fonte primária para Purchase)
         **{k: v for k, v in utms.items() if v}
     }
 
@@ -10108,28 +10109,9 @@ def delivery_page(delivery_token):
             return render_template('delivery_error.html', error="Configuração inválida"), 500
         
         pool = pool_bot.pool
-        # ✅ CRÍTICO: Verificar TODAS as condições antes de renderizar pixel HTML
-        # Mesmo que client-side não precise de access_token, devemos verificar todas as condições
-        # para garantir consistência com server-side (CAPI) e evitar purchases apenas client-side
-        # Se meta_tracking_enabled = false ou meta_events_purchase = false, não renderizar pixel
-        has_meta_pixel = (
-            pool and 
-            pool.meta_tracking_enabled and 
-            pool.meta_pixel_id and 
-            pool.meta_access_token and 
-            pool.meta_events_purchase
-        )
-        
-        # ✅ Link final para redirecionar (configurado pelo usuário)
-        # ✅ Link final para redirecionar (configurado pelo usuário)
-        # ✅ IMPORTANTE: Mantemos access_link intacto para não afetar o Meta Pixel
-        # ✅ Para assinaturas: vip_chat_id e vip_group_link são usados apenas para controle interno
-        # ✅ O sistema detecta automaticamente quando o usuário entra no grupo VIP (via new_chat_member)
-        redirect_url = payment.bot.config.access_link if payment.bot.config and payment.bot.config.access_link else None
-        
-        # ✅ RECUPERAR tracking_data do Redis (para matching perfeito)
+        # ✅ RECUPERAR tracking_data do Redis (para matching perfeito) — NÃO sobrescrever depois
         tracking_data = {}
-        
+
         # Prioridade 1: bot_user.tracking_session_id (token do redirect)
         if bot_user and bot_user.tracking_session_id:
             tracking_data = tracking_service_v4.recover_tracking_data(bot_user.tracking_session_id) or {}
@@ -10140,6 +10122,25 @@ def delivery_page(delivery_token):
             tracking_data = tracking_service_v4.recover_tracking_data(payment.tracking_token) or {}
             if tracking_data:
                 logger.info(f"✅ Delivery - tracking_data recuperado via payment.tracking_token: {len(tracking_data)} campos")
+
+        # ✅ Pixel do redirect (fonte primária) — MESMO Pixel do PageView
+        pixel_id_from_tracking = tracking_data.get('pixel_id')
+
+        # ✅ CRÍTICO: Verificar condições para HTML-only (não exigir access_token para renderizar)
+        has_meta_pixel = bool(pixel_id_from_tracking) and bool(pool and pool.meta_events_purchase)
+
+        if not has_meta_pixel:
+            if not pixel_id_from_tracking:
+                logger.warning(f"⚠️ [META DELIVERY] Pixel ausente no tracking_data para payment {payment.id}; Purchase não será renderizado")
+            elif not (pool and pool.meta_events_purchase):
+                logger.warning(f"⚠️ [META DELIVERY] meta_events_purchase desabilitado para pool_id={pool.id if pool else 'N/A'}; Purchase não será renderizado")
+        
+        # ✅ Link final para redirecionar (configurado pelo usuário)
+        # ✅ Link final para redirecionar (configurado pelo usuário)
+        # ✅ IMPORTANTE: Mantemos access_link intacto para não afetar o Meta Pixel
+        # ✅ Para assinaturas: vip_chat_id e vip_group_link são usados apenas para controle interno
+        # ✅ O sistema detecta automaticamente quando o usuário entra no grupo VIP (via new_chat_member)
+        redirect_url = payment.bot.config.access_link if payment.bot.config and payment.bot.config.access_link else None
         
         # ✅ PREPARAR DADOS PARA PURCHASE (root_event_id do clique)
         pageview_event_id = tracking_data.get('pageview_event_id') or payment.pageview_event_id
@@ -10184,7 +10185,7 @@ def delivery_page(delivery_token):
 
         # ✅ Renderizar página com Purchase tracking (INCLUINDO FBP E FBC!)
         pixel_config = {
-            'pixel_id': pool.meta_pixel_id if has_meta_pixel else None,
+            'pixel_id': pixel_id_from_tracking if has_meta_pixel else None,
             'event_id': purchase_event_id,  # 🔑 Igual ao server-side (dedup)
             'external_id': external_id_normalized,  # ✅ None se não houver (não string vazia!)
             'fbp': fbp_value,
