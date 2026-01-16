@@ -1793,7 +1793,10 @@ def dashboard():
     
     # ✅ PERFORMANCE: Query simplificada - usar campos calculados do modelo Bot
     # Evitar JOINs pesados no carregamento inicial, calcular contagens depois se necessário
-    bots = Bot.query.filter(Bot.user_id == current_user.id).order_by(Bot.created_at.desc()).all()
+    bots = Bot.query.filter(
+        Bot.user_id == current_user.id,
+        Bot.is_active == True
+    ).order_by(Bot.created_at.desc()).all()
     
     # Calcular pending_sales e total_users de forma otimizada (queries separadas)
     bot_ids = [b.id for b in bots]
