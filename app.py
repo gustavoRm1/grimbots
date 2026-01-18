@@ -10149,6 +10149,8 @@ def delivery_page(delivery_token):
             )
         
         # ✅ Renderizar com pixel definitivo (do Payment ou do tracking)
+        # Recuperar pageview_event_id do tracking_data ou do payment
+        pageview_event_id = tracking_data.get('pageview_event_id') or getattr(payment, 'pageview_event_id', None)
         if pageview_event_id and not payment.pageview_event_id:
             payment.pageview_event_id = pageview_event_id
             db.session.commit()
@@ -10190,7 +10192,7 @@ def delivery_page(delivery_token):
 
         # ✅ Renderizar página com Purchase tracking (INCLUINDO FBP E FBC!)
         pixel_config = {
-            'pixel_id': pixel_id_from_tracking if has_meta_pixel else None,
+            'pixel_id': pixel_id_to_use if has_meta_pixel else None,  # ✅ Usar pixel do Payment
             'event_id': purchase_event_id,  # 🔑 Igual ao server-side (dedup)
             'external_id': external_id_normalized,  # ✅ None se não houver (não string vazia!)
             'fbp': fbp_value,
