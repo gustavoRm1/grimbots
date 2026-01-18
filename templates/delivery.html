@@ -140,9 +140,10 @@
         // ✅ Purchase client-side deduplicado com server-side (eventID igual) + espera por fbq
         (function firePurchaseSafe() {
             {% if has_meta_pixel and pixel_config.pixel_id and pixel_config.event_id %}
-            const purchaseKey = 'purchase_sent_{{ payment.id if payment else "" }}';
+            const EVENT_ID = "{{ pixel_config.event_id }}"; // 🔑 ÚNICO POR COMPRA (vem do backend)
+            const purchaseKey = `purchase_sent_${EVENT_ID}`; // 🔑 ÚNICO POR COMPRA
             if (localStorage.getItem(purchaseKey)) {
-                console.log('[META PIXEL] Purchase já enviado (localStorage flag presente)', { eventID: '{{ pixel_config.event_id }}' });
+                console.log('[META PIXEL] Purchase já enviado (localStorage flag presente)', { eventID: EVENT_ID });
                 return;
             }
 
@@ -160,13 +161,13 @@
                             content_name: '{{ pixel_config.content_name }}',
                             content_ids: ['{{ pixel_config.content_id }}']
                         }, {
-                            eventID: '{{ pixel_config.event_id }}' // 🔑 DEDUP
+                            eventID: EVENT_ID // 🔑 DEDUP ÚNICO
                         });
 
                         localStorage.setItem(purchaseKey, '1');
 
                         console.log('[META] Purchase disparado com sucesso', {
-                            eventID: '{{ pixel_config.event_id }}',
+                            eventID: EVENT_ID,
                             value: {{ pixel_config.value }},
                             currency: '{{ pixel_config.currency }}'
                         });
