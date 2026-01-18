@@ -91,11 +91,7 @@
         s.parentNode.insertBefore(t,s)}(window, document,'script',
         'https://connect.facebook.net/en_US/fbevents.js');
         fbq('init', '{{ pixel_id }}');
-        
-        // ✅ CRÍTICO: Usar event_id do servidor para deduplicação perfeita
-        // Se servidor enviou pageview_event_id, usar (garante deduplicação PageView ↔ Purchase)
-        // Caso contrário, Meta Pixel JS gerará automaticamente
-        fbq('track', 'PageView', {}, { eventID: '{{ pageview_event_id }}' });
+        fbq('track', 'PageView');
     </script>
     <noscript>
         <img height="1" width="1" style="display:none"

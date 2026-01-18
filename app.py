@@ -6967,22 +6967,11 @@ def public_redirect(slug):
             logger.info(f"📊 Template params - has_utmify: {has_utmify}, utmify_pixel_id_to_template: {'✅' if utmify_pixel_id_to_template else '❌'} ({utmify_pixel_id_to_template[:20] + '...' if utmify_pixel_id_to_template else 'None'})")
             logger.info(f"📊 Template params - has_meta_pixel: {has_meta_pixel}, pixel_id_to_template: {'✅' if pixel_id_to_template else '❌'}")
             
-            # ✅ CRÍTICO: Garantir escopo seguro para pageview_event_id
-            pageview_event_id = None
-            if isinstance(pageview_context, dict):
-                pageview_event_id = pageview_context.get("pageview_event_id")
-            if not pageview_event_id:
-                pageview_event_id = tracking_payload.get("pageview_event_id") or f"evt_{tracking_token}"
-            pageview_event_id_safe = sanitize_js_value(pageview_event_id) if pageview_event_id else None
-            if not pageview_event_id_safe:
-                logger.error("❌ PageView event_id ausente no redirect — HTML NÃO será renderizado com pixel")
-            
             response = make_response(render_template('telegram_redirect.html',
                 bot_username=bot_username_safe,
                 tracking_token=tracking_token_safe,
                 pixel_id=pixel_id_to_template,  # ✅ None se Meta Pixel desabilitado
                 utmify_pixel_id=utmify_pixel_id_to_template,  # ✅ Pixel ID da Utmify (pode estar sem Meta Pixel)
-                pageview_event_id=pageview_event_id_safe,  # ✅ CRÍTICO: Para deduplicação perfeita (client-side usa mesmo event_id)
                 fbclid=sanitize_js_value(fbclid) if fbclid else '',
                 utm_source=sanitize_js_value(request.args.get('utm_source', '')),
                 utm_campaign=sanitize_js_value(request.args.get('utm_campaign', '')),
