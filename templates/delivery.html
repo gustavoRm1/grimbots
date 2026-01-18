@@ -6,17 +6,20 @@
     <title>Entrega - Acesso Liberado</title>
     
     <!-- Meta Pixel Code -->
-    {% if has_meta_pixel and pixel_config.pixel_id %}
+    {% if payment.meta_pixel_id %}
     <script>
-        !function(f,b,e,v,n,t,s)
-        {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-        n.callMethod.apply(n,arguments):n.queue.push(arguments)};
-        if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
-        n.queue=[];t=b.createElement(e);t.async=!0;
-        t.src=v;s=b.getElementsByTagName(e)[0];
-        s.parentNode.insertBefore(t,s)}(window, document,'script',
-        'https://connect.facebook.net/en_US/fbevents.js');
-        fbq('init', '{{ pixel_config.pixel_id }}');
+    !function(f,b,e,v,n,t,s){
+    if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+    n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+    if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+    n.queue=[];t=b.createElement(e);t.async=!0;
+    t.src=v;s=b.getElementsByTagName(e)[0];
+    s.parentNode.insertBefore(t,s)
+    }(window, document,'script',
+    'https://connect.facebook.net/en_US/fbevents.js');
+
+    fbq('init', '{{ payment.meta_pixel_id }}');
+    fbq('track', 'PageView');
     </script>
     {% endif %}
     
@@ -94,8 +97,8 @@
     <div class="container">
         <div class="success-icon">✅</div>
         <h1>Acesso Liberado!</h1>
-        <div class="product-name">{{ pixel_config.content_name }}</div>
-        <div class="amount">R$ {{ "%.2f"|format(pixel_config.value) }}</div>
+        <div class="product-name">{{ payment.product_name or 'Acesso Imediato' }}</div>
+        <div class="amount">R$ {{ "%.2f"|format(payment.amount or 0) }}</div>
         
         {% if redirect_url %}
         <a href="{{ redirect_url }}" id="redirect-link" class="redirect-button">
@@ -137,87 +140,28 @@
         }
         {% endif %}
 
-        // ✅ Purchase client-side deduplicado com server-side (eventID igual) + espera por fbq
-        (function firePurchaseSafe() {
-            {% if has_meta_pixel and pixel_config.pixel_id and pixel_config.event_id %}
-            const EVENT_ID = "{{ pixel_config.event_id }}"; // 🔑 ÚNICO POR COMPRA (vem do backend)
-            const purchaseKey = `purchase_sent_${EVENT_ID}`; // 🔑 ÚNICO POR COMPRA
-            if (localStorage.getItem(purchaseKey)) {
-                console.log('[META PIXEL] Purchase já enviado (localStorage flag presente)', { eventID: EVENT_ID });
-                return;
+        (function firePurchase(){
+        {% if payment.meta_pixel_id %}
+          const EVENT_ID = "purchase_{{ payment.id }}";
+          const KEY = "purchase_sent_" + EVENT_ID;
+
+          if (localStorage.getItem(KEY)) return;
+
+          function send(){
+            if (typeof fbq === 'function'){
+              fbq('track','Purchase',{
+                value: {{ payment.amount }},
+                currency: 'BRL'
+              },{
+                eventID: EVENT_ID
+              });
+              localStorage.setItem(KEY,'1');
+              return;
             }
-
-            const MAX_RETRIES = 20; // ~5s
-            const INTERVAL_MS = 250;
-            let attempts = 0;
-
-            function tryFire() {
-                if (typeof window.fbq === 'function') {
-                    try {
-                        fbq('track', 'Purchase', {
-                            value: {{ pixel_config.value }},
-                            currency: '{{ pixel_config.currency }}',
-                            content_type: 'product',
-                            content_name: '{{ pixel_config.content_name }}',
-                            content_ids: ['{{ pixel_config.content_id }}']
-                        }, {
-                            eventID: EVENT_ID // 🔑 DEDUP ÚNICO
-                        });
-
-                        localStorage.setItem(purchaseKey, '1');
-
-                        console.log('[META] Purchase disparado com sucesso', {
-                            eventID: EVENT_ID,
-                            value: {{ pixel_config.value }},
-                            currency: '{{ pixel_config.currency }}'
-                        });
-                    } catch (e) {
-                        console.error('[META] Erro ao disparar Purchase', e);
-                    }
-
-                    // ✅ Opcional: enviar cookies atualizados para o backend
-                    {% if pixel_config.tracking_token %}
-                    setTimeout(function() {
-                        const getCookie = (name) => {
-                            const value = `; ${document.cookie}`;
-                            const parts = value.split(`; ${name}=`);
-                            if (parts.length === 2) return parts.pop().split(';').shift();
-                            return null;
-                        };
-
-                        const fbp = getCookie('_fbp');
-                        const fbc = getCookie('_fbc');
-                        const fbi = getCookie('_fbi');
-
-                        if (fbp || fbc || fbi) {
-                            const payload = {
-                                tracking_token: '{{ pixel_config.tracking_token }}',
-                                _fbp: fbp,
-                                _fbc: fbc,
-                                _fbi: fbi,
-                                page_type: 'delivery'
-                            };
-
-                            navigator.sendBeacon('/api/tracking/cookies',
-                                new Blob([JSON.stringify(payload)], { type: 'application/json' })
-                            );
-                        }
-                    }, 800);
-                    {% endif %}
-
-                    return;
-                }
-
-                attempts += 1;
-                if (attempts < MAX_RETRIES) {
-                    setTimeout(tryFire, INTERVAL_MS);
-                } else {
-                    console.error('[META] fbq não disponível após retries — Purchase NÃO enviado');
-                }
-            }
-
-            tryFire();
-            {% endif %}
+            setTimeout(send, 250);
+          }
+          send();
+        {% endif %}
         })();
     </script>
 </body>

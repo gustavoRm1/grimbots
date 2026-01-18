@@ -8346,6 +8346,8 @@ Seu pagamento ainda não foi confirmado.
                         upsell_index=upsell_index,  # ✅ NOVO - UPSELLS
                         is_remarketing=is_remarketing,  # ✅ NOVO - REMARKETING
                         remarketing_campaign_id=remarketing_campaign_id,  # ✅ NOVO - REMARKETING
+                        # ✅ CRÍTICO: Meta Pixel ID persistido (fonte definitiva para delivery)
+                        meta_pixel_id=meta_pixel_id,
                         # ✅ DEMOGRAPHIC DATA (Copiar de bot_user se disponível, com fallback seguro)
                         customer_age=getattr(bot_user, 'customer_age', None) if bot_user else None,
                         customer_city=getattr(bot_user, 'customer_city', None) if bot_user else None,
@@ -8359,31 +8361,33 @@ Seu pagamento ainda não foi confirmado.
                         device_model=getattr(bot_user, 'device_model', None) if bot_user else None,
                         # ✅ CRÍTICO: UTM TRACKING E CAMPAIGN CODE (grim) - PRIORIDADE: tracking_data_v4 > bot_user
                         # ✅ CORREÇÃO CRÍTICA: Usar UTMs do tracking_data_v4 (mais atualizados do redirect) ao invés de bot_user
-                        # Isso garante que UTMs sejam salvos corretamente mesmo se bot_user não tiver
                         utm_source=utm_source if utm_source else (getattr(bot_user, 'utm_source', None) if bot_user else None),
                         utm_campaign=utm_campaign if utm_campaign else (getattr(bot_user, 'utm_campaign', None) if bot_user else None),
                         utm_content=utm_content if utm_content else (getattr(bot_user, 'utm_content', None) if bot_user else None),
                         utm_medium=utm_medium if utm_medium else (getattr(bot_user, 'utm_medium', None) if bot_user else None),
                         utm_term=utm_term if utm_term else (getattr(bot_user, 'utm_term', None) if bot_user else None),
                         # ✅ CRÍTICO QI 600+: fbclid para external_id (matching Meta Pixel)
-                        fbclid=fbclid,  # ✅ Usar fbclid já extraído
+                        fbclid=fbclid,  # ✅ Usar fbclid já extraído do tracking_data_v4
                         # ✅ CRÍTICO QI 600+: campaign_code (grim) para atribuição de campanha
                         # PRIORIDADE: tracking_data_v4.grim > bot_user.campaign_code
                         campaign_code=tracking_data_v4.get('grim') if tracking_data_v4.get('grim') else (getattr(bot_user, 'campaign_code', None) if bot_user else None),
-                        # ✅ QI 500: TRACKING_TOKEN V4 (pode ser None se PIX foi gerado sem tracking_token)
+                        # ✅ CRÍTICO: TRACKING_TOKEN V4 (pode ser None se PIX gerado sem tracking)
                         tracking_token=tracking_token,  # ✅ Token válido (UUID do redirect) ou None se ausente
                         # ✅ CRÍTICO: pageview_event_id para deduplicação Meta Pixel (fallback se Redis expirar)
-                        pageview_event_id=pageview_event_id if pageview_event_id else None,
-                        # ✅ CRÍTICO: fbp e fbc para fallback no Purchase se Redis expirar
-                        fbp=fbp if fbp else None,
-                        fbc=fbc if fbc else None,
+                        # PRIORIDADE: tracking_data_v4.pageview_event_id > bot_user.pageview_event_id
+                        pageview_event_id=pageview_event_id if pageview_event_id else (getattr(bot_user, 'pageview_event_id', None) if bot_user else None),
+                        # ✅ CRÍTICO: fbp e fbc para fallback no Purchase (se Redis expirar)
+                        # PRIORIDADE: tracking_data_v4 > bot_user
+                        fbp=fbp if fbp else (getattr(bot_user, 'fbp', None) if bot_user else None),
+                        fbc=fbc if fbc else (getattr(bot_user, 'fbc', None) if bot_user else None),
                         # ✅ CONTEXTO ORIGINAL DO CLIQUE (persistente para remarketing)
                         click_context_url=(
                             tracking_data_v4.get('event_source_url')
-                            or tracking_data_v4.get('first_page')
                             or getattr(bot_user, 'last_click_context_url', None)
                             or None
                         ),
+                        # ✅ FBC ORIGEM (para validar se é sintético)
+                        last_fbclid=tracking_data_v4.get('fbclid'),  # ✅ fbclid completo do tracking_data_v4
                         # ✅ SISTEMA DE ASSINATURAS - Campos de subscription
                         button_index=button_index,
                         button_config=json_module.dumps(button_data_for_subscription, ensure_ascii=False) if button_data_for_subscription else None,

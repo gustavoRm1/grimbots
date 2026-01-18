@@ -10133,27 +10133,22 @@ def delivery_page(delivery_token):
                 f"payment_id={payment.id} | tracking_token={payment.tracking_token}"
             )
 
-        # ✅ Pixel do redirect (fonte primária) — MESMO Pixel do PageView
+        # ✅ Pixel do Payment (fonte definitiva - independente de Redis)
+        # Isso garante que Purchase SEMPRE use o mesmo pixel do PageView
+        pixel_id_from_payment = getattr(payment, 'meta_pixel_id', None)
+        
+        # ✅ HTML-only: Priorizar pixel do Payment (fallback para pool apenas se ausente)
         pixel_id_from_tracking = tracking_data.get('pixel_id') if tracking_data else None
-
-        # ✅ HTML-only: único gate é a existência do pixel_id no tracking
-        has_meta_pixel = bool(pixel_id_from_tracking)
-
+        pixel_id_to_use = pixel_id_from_payment or pixel_id_from_tracking
+        has_meta_pixel = bool(pixel_id_to_use)
+        
         if not has_meta_pixel:
             logger.error(
-                "[META DELIVERY] Purchase NÃO disparado: pixel_id ausente no tracking_data | "
-                f"payment_id={payment.id} | tracking_token={payment.tracking_token}"
+                "[META DELIVERY] Purchase NÃO disparado: pixel_id ausente no payment e tracking_data | "
+                f"payment_id={payment.id} | payment.meta_pixel_id={getattr(payment, 'meta_pixel_id', None)} | tracking_token={payment.tracking_token}"
             )
         
-        # ✅ Link final para redirecionar (configurado pelo usuário)
-        # ✅ Link final para redirecionar (configurado pelo usuário)
-        # ✅ IMPORTANTE: Mantemos access_link intacto para não afetar o Meta Pixel
-        # ✅ Para assinaturas: vip_chat_id e vip_group_link são usados apenas para controle interno
-        # ✅ O sistema detecta automaticamente quando o usuário entra no grupo VIP (via new_chat_member)
-        redirect_url = payment.bot.config.access_link if payment.bot.config and payment.bot.config.access_link else None
-        
-        # ✅ PREPARAR DADOS PARA PURCHASE (root_event_id do clique)
-        pageview_event_id = tracking_data.get('pageview_event_id') or payment.pageview_event_id
+        # ✅ Renderizar com pixel definitivo (do Payment ou do tracking)
         if pageview_event_id and not payment.pageview_event_id:
             payment.pageview_event_id = pageview_event_id
             db.session.commit()
