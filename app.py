@@ -9552,17 +9552,25 @@ def get_chat_conversations(bot_id):
 @login_required
 def get_chat_messages(bot_id, telegram_user_id):
     """✅ CHAT - Retorna mensagens de uma conversa específica"""
-    from models import Bot, BotUser, BotMessage
-    
-    # Verificar se bot pertence ao usuário
-    bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
-    
-    # Buscar bot_user
-    bot_user = BotUser.query.filter_by(
-        bot_id=bot_id,
-        telegram_user_id=telegram_user_id,
-        archived=False
-    ).first_or_404()
+    try:
+        from models import Bot, BotUser, BotMessage
+        
+        # Verificar se bot pertence ao usuário
+        bot = Bot.query.filter_by(id=bot_id, user_id=current_user.id).first_or_404()
+        
+        # Buscar bot_user
+        bot_user = BotUser.query.filter_by(
+            bot_id=bot_id,
+            telegram_user_id=telegram_user_id,
+            archived=False
+        ).first()
+        
+        if not bot_user:
+            return jsonify({
+                'success': False,
+                'error': 'Conversa não encontrada',
+                'messages': []
+            }), 404
     
     # ✅ OTIMIZAÇÃO QI 600+: Buscar mensagens novas usando timestamp (mais confiável que ID)
     since_timestamp = request.args.get('since_timestamp', type=str)
@@ -9656,6 +9664,16 @@ def get_chat_messages(bot_id, telegram_user_id):
         'messages': messages_data,
         'total': len(messages_data)
     })
+    
+    except Exception as e:
+        import traceback
+        logger.error(f"Erro ao carregar mensagens do chat: {e}")
+        logger.error(f"Stack trace: {traceback.format_exc()}")
+        return jsonify({
+            'success': False,
+            'error': 'Erro ao carregar mensagens',
+            'messages': []
+        }), 500
 
 @app.route('/api/chat/send-message/<int:bot_id>/<telegram_user_id>', methods=['POST'])
 @login_required
