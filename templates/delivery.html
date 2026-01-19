@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Entrega - Acesso Liberado</title>
+    
+    {% if pixel_id %}
+    <script>
+        !function(f,b,e,v,n,t,s)
+        {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+        n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+        if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+        n.queue=[];t=b.createElement(e);t.async=!0;
+        t.src=v;s=b.getElementsByTagName(e)[0];
+        s.parentNode.insertBefore(t,s)}(window, document,'script',
+        'https://connect.facebook.net/en_US/fbevents.js');
+        
+        fbq('init', '{{ pixel_id }}');
+        fbq('track', 'PageView');
+    </script>
+    <noscript><img height="1" width="1" style="display:none"
+        src="https://www.facebook.com/tr?id={{ pixel_id }}&ev=PageView&noscript=1"
+    /></noscript>
+    {% endif %}
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            margin: 0;
+            padding: 20px;
+            text-align: center;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+        .container {
+            max-width: 500px;
+            width: 100%;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        .success-icon {
+            font-size: 80px;
+            margin-bottom: 20px;
+        }
+        h1 {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+        .product-name {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 10px;
+            opacity: 0.9;
+        }
+        .amount {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 30px;
+            color: #4ade80;
+        }
+        .redirect-button {
+            background: white;
+            color: #667eea;
+            border: none;
+            padding: 16px 32px;
+            border-radius: 12px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin-top: 20px;
+        }
+        .redirect-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+        }
+        .loading {
+            display: none;
+            margin-top: 20px;
+            font-size: 14px;
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="success-icon">✅</div>
+        <h1>Acesso Liberado!</h1>
+        <div class="product-name">Seu Acesso Imediato</div>
+        
+        <div class="amount">R$ {{ payment.amount }}</div>
+        
+        <a href="{{ redirect_url }}" id="redirect-link" class="redirect-button">
+            Acessar Agora
+        </a>
+        <div class="loading" id="loading">Redirecionando...</div>
+        
+    </div>
+    
+    <script>
+        // Configurações
+        const REDIRECT_DELAY_MS = 4500; // Tempo para garantir o disparo do Pixel
+        const redirectAllowedAt = Date.now() + REDIRECT_DELAY_MS;
+        
+        // URL Dinâmica injetada pelo Flask/Jinja2
+        const redirectUrl = '{{ redirect_url }}'; 
+        
+        const loadingEl = document.getElementById('loading');
+        const linkEl = document.getElementById('redirect-link');
+
+        function safeRedirect() {
+            const now = Date.now();
+            if (now < redirectAllowedAt) {
+                return setTimeout(safeRedirect, redirectAllowedAt - now);
+            }
+            if (loadingEl) loadingEl.style.display = 'block';
+            
+            // Redireciona para a URL do bot configurada no sistema
+            window.location.href = redirectUrl;
+        }
+
+        // Auto redirect após delay mínimo
+        setTimeout(safeRedirect, REDIRECT_DELAY_MS);
+
+        // Intercepta clique antes do delay mínimo
+        if (linkEl) {
+            linkEl.addEventListener('click', function (e) {
+                e.preventDefault();
+                safeRedirect();
+            });
+        }
+        
+        // ✅ Disparo do Purchase
+        (function firePurchaseSafe() {
+            // Só executa se o pixel_id existir (controle via Jinja2)
+            {% if pixel_id %}
+                if (typeof fbq === 'function') {
+                    fbq('track', 'Purchase', {
+                        value: {{ payment.amount }},
+                        currency: 'BRL',
+                        content_name: 'Delivery'
+                        // Se você tiver o ID da transação no objeto payment, descomente a linha abaixo para deduplicação:
+                        // eventID: '{{ payment.id }}' 
+                    });
+                    console.log("Pixel Purchase Disparado: {{ pixel_id }} - Valor: {{ payment.amount }}");
+                }
+            {% endif %}
+        })();
+    </script>
+
+    <script defer src="https://static.cloudflareinsights.com/beacon.min.js/vcd15cbe7772f49c399c6a5babf22c1241717689176015" integrity="sha512-ZpsOmlRQV6y907TI0dKBHq9Md29nnaEIPlkf84rnaERnq6zvWvPUqr2ft8M1aS28oN72PdrCzSjY4U6VaAw1EQ==" data-cf-beacon='{"version":"2024.11.0","token":"cd8c351eac4d4775b8b97afeae6b047a","r":1,"server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
+</body>
+</html>
