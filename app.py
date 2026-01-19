@@ -10217,10 +10217,18 @@ def delivery_page(delivery_token):
         if pool_bot and pool_bot.bot and pool_bot.bot.username:
             redirect_url = f"https://t.me/{pool_bot.bot.username}?start=p{payment.id}"
         
-        # ✅ Renderizar template com pixel_id do tracking_data (mesmo do redirect)
+        # ✅ CORREÇÃO CRÍTICA: Buscar pixel_id do banco como fallback (Redis pode expirar)
+        # Prioridade: 1) tracking_data (Redis), 2) pool.meta_pixel_id (banco)
+        pixel_id_from_tracking = tracking_data.get('pixel_id') if tracking_data else None
+        pixel_id_from_pool = pool.meta_pixel_id if pool else None
+        pixel_id_to_use = pixel_id_from_tracking or pixel_id_from_pool
+        
+        logger.info(f"✅ Delivery - pixel_id: tracking={'✅' if pixel_id_from_tracking else '❌'} | pool={'✅' if pixel_id_from_pool else '❌'} | final={'✅' if pixel_id_to_use else '❌'}")
+        
+        # ✅ Renderizar template com pixel_id garantido (nunca vazio se existir no banco)
         response = render_template('delivery.html',
             payment=payment,
-            pixel_id=tracking_data.get('pixel_id'),  # o mesmo do redirect
+            pixel_id=pixel_id_to_use,  # ✅ Fallback para banco
             redirect_url=redirect_url
         )
         
