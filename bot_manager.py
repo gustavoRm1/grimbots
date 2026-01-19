@@ -8319,7 +8319,7 @@ Seu pagamento ainda não foi confirmado.
                     is_upsell_final = is_upsell or False
                     
                     payment = Payment(
-                        transaction_hash=gateway_hash,  # ✅ CRÍTICO: gateway_hash (campo 'hash' da resposta) para webhook matching
+                        gateway_transaction_hash=gateway_hash,  # ✅ CRÍTICO: gateway_hash (campo 'hash' da resposta) para webhook matching
                         payment_method=str(pix_result.get('payment_method') or pix_result.get('paymentMethod') or 'PIX')[:20] if pix_result else 'PIX',
                         amount=amount,
                         customer_name=customer_name,
