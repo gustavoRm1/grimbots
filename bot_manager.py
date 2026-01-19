@@ -8374,6 +8374,9 @@ Seu pagamento ainda não foi confirmado.
                         # ✅ CRÍTICO: pageview_event_id para deduplicação Meta Pixel (fallback se Redis expirar)
                         # PRIORIDADE: tracking_data_v4.pageview_event_id > bot_user.pageview_event_id
                         pageview_event_id=pageview_event_id if pageview_event_id else (getattr(bot_user, 'pageview_event_id', None) if bot_user else None),
+                        # ✅ CRÍTICO: fbclid para matching perfeito (persistente no banco)
+                        # PRIORIDADE: tracking_data_v4.fbclid > bot_user.fbclid
+                        fbclid=fbclid if fbclid else (getattr(bot_user, 'fbclid', None) if bot_user else None),
                         # ✅ CRÍTICO: fbp e fbc para fallback no Purchase (se Redis expirar)
                         # PRIORIDADE: tracking_data_v4 > bot_user
                         fbp=fbp if fbp else (getattr(bot_user, 'fbp', None) if bot_user else None),
