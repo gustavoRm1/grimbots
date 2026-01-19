@@ -1049,7 +1049,6 @@ class Payment(db.Model):
     status = db.Column(db.String(20), default='pending', index=True)  # pending, paid, failed, cancelled (indexado para queries frequentes)
     
     # ✅ META PIXEL INTEGRATION
-    meta_pixel_id = db.Column(db.String(50), nullable=True, index=True)  # ✅ Pixel ID persistido (fonte definitiva)
     meta_purchase_sent = db.Column(db.Boolean, default=False)
     meta_purchase_sent_at = db.Column(db.DateTime, nullable=True)
     meta_event_id = db.Column(db.String(100), nullable=True)

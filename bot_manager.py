@@ -8319,11 +8319,7 @@ Seu pagamento ainda não foi confirmado.
                     is_upsell_final = is_upsell or False
                     
                     payment = Payment(
-                        bot_id=bot_id,
-                        payment_id=payment_id,
-                        gateway_type=gateway.gateway_type,
-                        gateway_transaction_id=gateway_transaction_id,  # ✅ Salvar mesmo quando recusado
-                        gateway_transaction_hash=gateway_hash,  # ✅ CRÍTICO: gateway_hash (campo 'hash' da resposta) para webhook matching
+                        transaction_hash=gateway_hash,  # ✅ CRÍTICO: gateway_hash (campo 'hash' da resposta) para webhook matching
                         payment_method=str(pix_result.get('payment_method') or pix_result.get('paymentMethod') or 'PIX')[:20] if pix_result else 'PIX',
                         amount=amount,
                         customer_name=customer_name,
@@ -8346,8 +8342,6 @@ Seu pagamento ainda não foi confirmado.
                         upsell_index=upsell_index,  # ✅ NOVO - UPSELLS
                         is_remarketing=is_remarketing,  # ✅ NOVO - REMARKETING
                         remarketing_campaign_id=remarketing_campaign_id,  # ✅ NOVO - REMARKETING
-                        # ✅ CRÍTICO: Meta Pixel ID persistido (fonte definitiva para delivery)
-                        meta_pixel_id=meta_pixel_id,
                         # ✅ DEMOGRAPHIC DATA (Copiar de bot_user se disponível, com fallback seguro)
                         customer_age=getattr(bot_user, 'customer_age', None) if bot_user else None,
                         customer_city=getattr(bot_user, 'customer_city', None) if bot_user else None,
