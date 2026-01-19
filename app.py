@@ -10212,11 +10212,10 @@ def delivery_page(delivery_token):
         # ✅ CORREÇÃO: NÃO marcar meta_purchase_sent ANTES de renderizar - isso bloqueava client-side!
         logger.info(f"✅ Delivery - Renderizando página para payment {payment.id} | Pixel: {'✅' if has_meta_pixel else '❌'} | event_id: {pixel_config['event_id'][:30]}... | meta_purchase_sent: {payment.meta_purchase_sent}")
         
-        # ✅ Renderizar template ANTES de enviar server-side para garantir que client-side dispare primeiro
+        # ✅ Renderizar template com pixel_id do tracking_data (mesmo do redirect)
         response = render_template('delivery.html',
             payment=payment,
-            pixel_config=pixel_config,
-            has_meta_pixel=has_meta_pixel,
+            pixel_id=tracking_data.get('pixel_id'),  # o mesmo do redirect
             redirect_url=redirect_url
         )
         
