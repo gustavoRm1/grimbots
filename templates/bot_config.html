@@ -2374,6 +2374,7 @@ window.botConfigApp = function() {
                 text: '',
                 price: null,
                 description: '',
+                price_position: 'after',
                 order_bumps: [],
                 subscription: {
                     enabled: false,
@@ -2568,9 +2569,12 @@ window.botConfigApp = function() {
                     
                     this.config.main_buttons = (data.main_buttons || []).map(btn => ({
                         ...btn,
+                        price_position: btn.price_position || 'after',
                         subscription: btn.subscription && typeof btn.subscription === 'object' 
                             ? { ...defaultSubscription, ...btn.subscription }
-                            : defaultSubscription
+                            : { ...defaultSubscription },
+                        order_bumps: btn.order_bumps || [],
+                        validation_status: null
                     }));
                     
                     this.config.redirect_buttons = data.redirect_buttons || [];
@@ -2579,6 +2583,7 @@ window.botConfigApp = function() {
                         ...btn,
                         subscription: btn.subscription && typeof btn.subscription === 'object' 
                             ? { ...defaultSubscription, ...btn.subscription }
+                            : { ...defaultSubscription }
                             : defaultSubscription
                     }));
                     
