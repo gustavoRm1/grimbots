@@ -2581,10 +2581,9 @@ window.botConfigApp = function() {
                     this.config.downsells_enabled = data.downsells_enabled || false;
                     this.config.downsells = (data.downsells || []).map(btn => ({
                         ...btn,
-                        subscription: btn.subscription && typeof btn.subscription === 'object' 
+                        subscription: btn.subscription && typeof btn.subscription === 'object'
                             ? { ...defaultSubscription, ...btn.subscription }
                             : { ...defaultSubscription }
-                            : defaultSubscription
                     }));
                     
                     this.config.upsells_enabled = data.upsells_enabled || false;
@@ -2592,7 +2591,7 @@ window.botConfigApp = function() {
                         ...btn,
                         subscription: btn.subscription && typeof btn.subscription === 'object' 
                             ? { ...defaultSubscription, ...btn.subscription }
-                            : defaultSubscription
+                            : { ...defaultSubscription }
                     }));
                     
                     this.config.access_link = data.access_link || '';
