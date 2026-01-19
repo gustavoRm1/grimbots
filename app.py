@@ -10212,10 +10212,20 @@ def delivery_page(delivery_token):
         # ✅ CORREÇÃO: NÃO marcar meta_purchase_sent ANTES de renderizar - isso bloqueava client-side!
         logger.info(f"✅ Delivery - Renderizando página para payment {payment.id} | Pixel: {'✅' if has_meta_pixel else '❌'} | event_id: {pixel_config['event_id'][:30]}... | meta_purchase_sent: {payment.meta_purchase_sent}")
         
-        # ✅ Definir redirect_url (fallback para bot se não houver redirect configurado)
+        # ✅ CORREÇÃO CRÍTICA: Buscar access_link personalizado do Bot (não genérico)
+        # Prioridade: 1) bot.access_link (configurado no painel), 2) fallback para username
         redirect_url = None
-        if pool_bot and pool_bot.bot and pool_bot.bot.username:
+        
+        # Tentar usar access_link personalizado primeiro
+        if pool_bot and pool_bot.bot and pool_bot.bot.access_link:
+            redirect_url = pool_bot.bot.access_link
+            logger.info(f"✅ Delivery - Usando access_link personalizado: {redirect_url}")
+        # Fallback: link genérico do username do bot
+        elif pool_bot and pool_bot.bot and pool_bot.bot.username:
             redirect_url = f"https://t.me/{pool_bot.bot.username}?start=p{payment.id}"
+            logger.info(f"⚠️ Delivery - Usando fallback genérico (access_link não configurado): {redirect_url}")
+        else:
+            logger.error(f"❌ Delivery - Nenhum redirect_url disponível para payment {payment.id}")
         
         # ✅ CORREÇÃO CRÍTICA: Buscar pixel_id do banco como fallback (Redis pode expirar)
         # Prioridade: 1) tracking_data (Redis), 2) pool.meta_pixel_id (banco)
@@ -10229,7 +10239,7 @@ def delivery_page(delivery_token):
         response = render_template('delivery.html',
             payment=payment,
             pixel_id=pixel_id_to_use,  # ✅ Fallback para banco
-            redirect_url=redirect_url
+            redirect_url=redirect_url  # ✅ Access_link personalizado ou fallback
         )
         
         # ✅ DEPOIS de renderizar template, enfileirar Purchase via Server (Conversions API)
