@@ -4191,6 +4191,18 @@ class BotManager:
             
             logger.info(f"⭐ COMANDO /START recebido - Reiniciando funil FORÇADAMENTE (regra absoluta)")
 
+            # ✅ EXTRAÇÃO FORÇADA DO START PARAM (fallback se não veio pelo argumento)
+            if not start_param:
+                try:
+                    text_msg = message.get('text') if isinstance(message, dict) else None
+                    if text_msg and isinstance(text_msg, str):
+                        parts = text_msg.split()
+                        if len(parts) > 1:
+                            start_param = parts[1].strip()
+                            logger.info(f"🔧 start_param recuperado do texto: '{start_param}'")
+                except Exception as e:
+                    logger.warning(f"⚠️ Falha ao extrair start_param do texto: {e}")
+
             # ============================================================================
             # ✅ HIDRATAÇÃO DE TRACKING (PRIORIDADE MÁXIMA - ANTES DE QUALQUER RESET)
             # ============================================================================
