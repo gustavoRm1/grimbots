@@ -10212,6 +10212,11 @@ def delivery_page(delivery_token):
         # ✅ CORREÇÃO: NÃO marcar meta_purchase_sent ANTES de renderizar - isso bloqueava client-side!
         logger.info(f"✅ Delivery - Renderizando página para payment {payment.id} | Pixel: {'✅' if has_meta_pixel else '❌'} | event_id: {pixel_config['event_id'][:30]}... | meta_purchase_sent: {payment.meta_purchase_sent}")
         
+        # ✅ Definir redirect_url (fallback para bot se não houver redirect configurado)
+        redirect_url = None
+        if pool_bot and pool_bot.bot and pool_bot.bot.username:
+            redirect_url = f"https://t.me/{pool_bot.bot.username}?start=p{payment.id}"
+        
         # ✅ Renderizar template com pixel_id do tracking_data (mesmo do redirect)
         response = render_template('delivery.html',
             payment=payment,
