@@ -8380,8 +8380,6 @@ Seu pagamento ainda não foi confirmado.
                             or getattr(bot_user, 'last_click_context_url', None)
                             or None
                         ),
-                        # ✅ FBC ORIGEM (para validar se é sintético)
-                        last_fbclid=tracking_data_v4.get('fbclid'),  # ✅ fbclid completo do tracking_data_v4
                         # ✅ SISTEMA DE ASSINATURAS - Campos de subscription
                         button_index=button_index,
                         button_config=json_module.dumps(button_data_for_subscription, ensure_ascii=False) if button_data_for_subscription else None,
