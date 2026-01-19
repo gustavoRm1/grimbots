@@ -89,7 +89,7 @@ def checkActiveFlow(config: Dict[str, Any]) -> bool:
     if is_active:
         logger.info(f"✅ Flow Editor ATIVO: {len(flow_steps)} steps configurados")
     else:
-        logger.info(f"📝 Flow Editor INATIVO: flow_enabled={flow_enabled}, steps_count={len(flow_steps)}")
+        logger.info(f" Flow Editor INATIVO: flow_enabled={flow_enabled}, steps_count={len(flow_steps)}")
     
     return is_active
 
@@ -2131,7 +2131,7 @@ class BotManager:
                 for index, btn in enumerate(main_buttons):
                     if btn.get('text') and btn.get('price'):
                         price = float(btn.get('price', 0))
-                        button_text = f"{btn['text']} - R$ {price:.2f}"
+                        button_text = self._format_button_text(btn['text'], price, btn.get('price_position'))
                         buttons.append({
                             'text': button_text,
                             'callback_data': f"buy_{index}"
@@ -3277,7 +3277,7 @@ class BotManager:
                                 btn = main_buttons[btn_index]
                                 if btn.get('text') and btn.get('price'):
                                     price = float(btn.get('price', 0))
-                                    button_text = f"{btn['text']} - R$ {price:.2f}"
+                                    button_text = self._format_button_text(btn['text'], price, btn.get('price_position'))
                                     buttons.append({
                                         'text': button_text,
                                         'callback_data': f"buy_{btn_index}"
@@ -4444,7 +4444,7 @@ class BotManager:
                 for index, btn in enumerate(main_buttons):
                     if btn.get('text') and btn.get('price'):
                         price = float(btn.get('price', 0))
-                        button_text = f"{btn['text']} - R$ {price:.2f}"
+                        button_text = self._format_button_text(btn['text'], price, btn.get('price_position'))
                         buttons.append({
                             'text': button_text,
                             'callback_data': f"buy_{index}"  # ✅ CORREÇÃO: Usar apenas o índice (max 10 bytes)
