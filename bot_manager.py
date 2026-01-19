@@ -8319,6 +8319,10 @@ Seu pagamento ainda não foi confirmado.
                     is_upsell_final = is_upsell or False
                     
                     payment = Payment(
+                        bot_id=bot_id,  # ✅ OBRIGATÓRIO: ID do bot
+                        payment_id=payment_id,  # ✅ OBRIGATÓRIO: ID único do pagamento
+                        gateway_type=gateway.gateway_type if gateway else None,  # ✅ OBRIGATÓRIO: tipo do gateway
+                        gateway_transaction_id=gateway_transaction_id,  # ✅ OBRIGATÓRIO: ID da transação
                         gateway_transaction_hash=gateway_hash,  # ✅ CRÍTICO: gateway_hash (campo 'hash' da resposta) para webhook matching
                         payment_method=str(pix_result.get('payment_method') or pix_result.get('paymentMethod') or 'PIX')[:20] if pix_result else 'PIX',
                         amount=amount,
