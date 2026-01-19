@@ -8364,8 +8364,6 @@ Seu pagamento ainda não foi confirmado.
                         utm_content=utm_content if utm_content else (getattr(bot_user, 'utm_content', None) if bot_user else None),
                         utm_medium=utm_medium if utm_medium else (getattr(bot_user, 'utm_medium', None) if bot_user else None),
                         utm_term=utm_term if utm_term else (getattr(bot_user, 'utm_term', None) if bot_user else None),
-                        # ✅ CRÍTICO QI 600+: fbclid para external_id (matching Meta Pixel)
-                        fbclid=fbclid,  # ✅ Usar fbclid já extraído do tracking_data_v4
                         # ✅ CRÍTICO QI 600+: campaign_code (grim) para atribuição de campanha
                         # PRIORIDADE: tracking_data_v4.grim > bot_user.campaign_code
                         campaign_code=tracking_data_v4.get('grim') if tracking_data_v4.get('grim') else (getattr(bot_user, 'campaign_code', None) if bot_user else None),
