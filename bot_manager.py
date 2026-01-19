@@ -4259,6 +4259,36 @@ class BotManager:
                     telegram_user_id=telegram_user_id,
                     archived=False
                 ).first()
+
+                # ✅ HIDRATAÇÃO DE TRACKING VIA start_param (fbclid/fbp/fbc/utm/ip/ua)
+                if bot_user_check and start_param:
+                    try:
+                        import json as _json
+                        from utils.redis_utils import get_redis_connection
+                        tracking_key = f"tracking:{start_param}"
+                        redis_conn = get_redis_connection()
+                        raw_payload = redis_conn.get(tracking_key) if redis_conn else None
+                        if raw_payload:
+                            payload = _json.loads(raw_payload)
+                            # Mapear campos conhecidos
+                            bot_user_check.fbclid = payload.get('fbclid') or bot_user_check.fbclid
+                            bot_user_check.fbp = payload.get('fbp') or bot_user_check.fbp
+                            bot_user_check.fbc = payload.get('fbc') or bot_user_check.fbc
+                            bot_user_check.last_fbclid = payload.get('fbclid') or bot_user_check.last_fbclid
+                            bot_user_check.last_fbp = payload.get('fbp') or bot_user_check.last_fbp
+                            bot_user_check.last_fbc = payload.get('fbc') or bot_user_check.last_fbc
+                            bot_user_check.user_agent = payload.get('client_user_agent') or bot_user_check.user_agent
+                            bot_user_check.ip_address = payload.get('client_ip') or bot_user_check.ip_address
+                            bot_user_check.utm_source = payload.get('utm_source') or bot_user_check.utm_source
+                            bot_user_check.utm_campaign = payload.get('utm_campaign') or bot_user_check.utm_campaign
+                            bot_user_check.utm_content = payload.get('utm_content') or bot_user_check.utm_content
+                            bot_user_check.utm_medium = payload.get('utm_medium') or bot_user_check.utm_medium
+                            bot_user_check.utm_term = payload.get('utm_term') or bot_user_check.utm_term
+                            bot_user_check.click_timestamp = get_brazil_time()
+                            db.session.commit()
+                            logger.info(f"🔗 TRACKING LINKED: User {bot_user_check.id} -> FBCLID: {bot_user_check.fbclid}")
+                    except Exception as e:
+                        logger.warning(f"⚠️ Falha ao hidratar tracking via start_param={start_param}: {e}")
                 
                 if bot_user_check and bot_user_check.welcome_sent:
                     # Se ainda está True, forçar reset novamente (proteção extra)
