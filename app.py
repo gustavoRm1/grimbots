@@ -10212,13 +10212,13 @@ def delivery_page(delivery_token):
         # ✅ CORREÇÃO: NÃO marcar meta_purchase_sent ANTES de renderizar - isso bloqueava client-side!
         logger.info(f"✅ Delivery - Renderizando página para payment {payment.id} | Pixel: {'✅' if has_meta_pixel else '❌'} | event_id: {pixel_config['event_id'][:30]}... | meta_purchase_sent: {payment.meta_purchase_sent}")
         
-        # ✅ CORREÇÃO CRÍTICA: Buscar access_link personalizado do Bot (não genérico)
-        # Prioridade: 1) bot.access_link (configurado no painel), 2) fallback para username
+        # ✅ CORREÇÃO CRÍTICA: Buscar access_link personalizado do BotConfig (não do Bot)
+        # Prioridade: 1) bot.config.access_link (configurado no painel), 2) fallback para username
         redirect_url = None
         
-        # Tentar usar access_link personalizado primeiro
-        if pool_bot and pool_bot.bot and pool_bot.bot.access_link:
-            redirect_url = pool_bot.bot.access_link
+        # Tentar usar access_link personalizado primeiro (está em BotConfig, não em Bot)
+        if pool_bot and pool_bot.bot and pool_bot.bot.config and pool_bot.bot.config.access_link:
+            redirect_url = pool_bot.bot.config.access_link
             logger.info(f"✅ Delivery - Usando access_link personalizado: {redirect_url}")
         # Fallback: link genérico do username do bot
         elif pool_bot and pool_bot.bot and pool_bot.bot.username:
