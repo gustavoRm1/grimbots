@@ -27,6 +27,7 @@ def audit():
             fbclid_status = "✅ PRESENTE" if p.fbclid else "❌ NULO (MISSING)"
             user_fbclid = "N/A"
             bot_user = getattr(p, "bot_user", None)
+            bot_user_id = getattr(bot_user, "id", None)
             if bot_user:
                 user_fbclid = "✅ NO USER" if bot_user.fbclid else "❌ NULO NO USER"
 
@@ -36,7 +37,7 @@ def audit():
 
             print(
                 f"{p.id:<8} | {p.amount:<10} | {created_at_str:<20} | "
-                f"{fbclid_status:<20} | {p.bot_user_id} ({user_fbclid})"
+                f"{fbclid_status:<20} | {bot_user_id} ({user_fbclid})"
             )
 
             if p.fbclid:
