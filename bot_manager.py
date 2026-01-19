@@ -4264,7 +4264,6 @@ class BotManager:
                 if bot_user_check and start_param:
                     try:
                         import json as _json
-                        from utils.redis_utils import get_redis_connection
                         tracking_key = f"tracking:{start_param}"
                         redis_conn = get_redis_connection()
                         raw_payload = redis_conn.get(tracking_key) if redis_conn else None
