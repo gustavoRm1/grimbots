@@ -542,6 +542,16 @@ class BotManager:
         self._telegram_min_interval_seconds = 1.2
         logger.info("BotManager inicializado")
 
+    # =============================================================
+    # Helpers de formatação
+    # =============================================================
+    def _format_button_text(self, text: str, price: float, price_position: str = None) -> str:
+        """Formata texto do botão com preço antes ou depois."""
+        position = price_position or 'after'
+        if position == 'before':
+            return f"R$ {price:.2f} - {text}"
+        return f"{text} - R$ {price:.2f}"
+
     def _start_remarketing_worker(self, *, bot_id: int, bot_token: str) -> None:
         try:
             if not bot_id or not bot_token:
