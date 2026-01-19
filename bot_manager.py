@@ -16,6 +16,7 @@ from urllib3.util.retry import Retry
 import re
 from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta
+import pytz
 from redis_manager import get_redis_connection
 import hashlib
 import hmac
@@ -398,6 +399,33 @@ PLATFORM_SPLIT_PERCENTAGE = 2  # 2% PADRÃO PARA TODOS OS GATEWAYS
 # ⚠️ SPLIT DESABILITADO - Account ID fornecido não existe no PushynPay
 PUSHYN_SPLIT_ACCOUNT_ID = os.environ.get('PUSHYN_SPLIT_ACCOUNT_ID', None)
 PUSHYN_SPLIT_PERCENTAGE = 2  # 2% (quando habilitado)
+
+
+# ============================================================================
+# Helpers de tempo (horário do Brasil, mesmo em servidores fora do fuso)
+# ============================================================================
+try:
+    _pytz = pytz.timezone('America/Sao_Paulo') if pytz else None
+except Exception:
+    _pytz = None
+
+
+def get_brazil_time():
+    """Retorna datetime no fuso de São Paulo.
+
+    - Tenta usar pytz (mais preciso para DST).
+    - Fallback: UTC-3 manual.
+    - Último fallback: datetime.now() se algo der errado.
+    """
+    if _pytz:
+        try:
+            return datetime.now(_pytz)
+        except Exception:
+            pass
+    try:
+        return datetime.utcnow() - timedelta(hours=3)
+    except Exception:
+        return datetime.now()
 
 from gateway_factory import GatewayFactory
 from redis_manager import get_redis_connection
@@ -4237,7 +4265,7 @@ class BotManager:
                                 bot_user_track.utm_content = payload.get('utm_content') or bot_user_track.utm_content
                                 bot_user_track.utm_medium = payload.get('utm_medium') or bot_user_track.utm_medium
                                 bot_user_track.utm_term = payload.get('utm_term') or bot_user_track.utm_term
-                                bot_user_track.click_timestamp = get_brazil_time()
+                                bot_user_track.click_timestamp = datetime.now()
                                 db.session.commit()
                                 logger.info(f"🔗 TRACKING LINKED: User {bot_user_track.id} -> FBCLID: {bot_user_track.fbclid}")
             except Exception as e:
