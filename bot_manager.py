@@ -7475,6 +7475,14 @@ Seu pagamento ainda não foi confirmado.
             logger.error(f"   Isso quebra tracking Meta Pixel - Purchase não será atribuído à campanha!")
             logger.error(f"   customer_name: {customer_name}, customer_username: {customer_username}")
             return None
+        # ===== PATCH DEFENSIVO FINAL (OBRIGATÓRIO) =====
+        fbc = None
+        fbp = None
+        fbclid = None
+        pageview_event_id = None
+        redirect_id = None
+        meta_pixel_id = None
+        tracking_token = None
         try:
             # Importar models dentro da função para evitar circular import
             from models import Bot, Gateway, Payment, db
@@ -8042,40 +8050,46 @@ Seu pagamento ainda não foi confirmado.
 
                     tracking_data_v4: Dict[str, Any] = redis_tracking_payload if isinstance(redis_tracking_payload, dict) else {}
 
-                    # ✅ CRÍTICO: Recuperar payload completo do Redis ANTES de gerar valores sintéticos
+                    # HIDRATAR VARIÁVEIS A PARTIR DO REDIS (SE EXISTIR)
+                    if tracking_data_v4:
+                        fbc = tracking_data_v4.get("fbc")
+                        fbp = tracking_data_v4.get("fbp")
+                        fbclid = tracking_data_v4.get("fbclid")
+                        pageview_event_id = tracking_data_v4.get("pageview_event_id")
+                        redirect_id = tracking_data_v4.get("redirect_id")
+                        meta_pixel_id = tracking_data_v4.get("pixel_id")
+                        tracking_token = tracking_data_v4.get("tracking_token") or tracking_token
+
+                    # CRÍTICO: Recuperar payload completo do Redis ANTES de gerar valores sintéticos
                     if tracking_token:
                         recovered_payload = tracking_service.recover_tracking_data(tracking_token) or {}
                         if recovered_payload:
                             tracking_data_v4 = recovered_payload
-                            logger.info(f"✅ Tracking payload recuperado do Redis para token {tracking_token[:20]}... | fbp={'ok' if recovered_payload.get('fbp') else 'missing'} | fbc={'ok' if recovered_payload.get('fbc') else 'missing'} | pageview_event_id={'ok' if recovered_payload.get('pageview_event_id') else 'missing'}")
+                            fbc = tracking_data_v4.get("fbc")
+                            fbp = tracking_data_v4.get("fbp")
+                            fbclid = tracking_data_v4.get("fbclid")
+                            pageview_event_id = tracking_data_v4.get("pageview_event_id")
+                            redirect_id = tracking_data_v4.get("redirect_id")
+                            meta_pixel_id = tracking_data_v4.get("pixel_id")
+                            tracking_token = tracking_data_v4.get("tracking_token") or tracking_token
+                            logger.info(f" Tracking payload recuperado do Redis para token {tracking_token[:20]}... | fbp={'ok' if fbp else 'missing'} | fbc={'ok' if fbc else 'missing'} | pageview_event_id={'ok' if pageview_event_id else 'missing'}")
                         elif not tracking_data_v4:
-                            logger.warning("⚠️ Tracking token %s sem payload no Redis - tentando reconstruir via BotUser", tracking_token)
-                        # ✅ CORREÇÃO CRÍTICA V12: VALIDAR antes de atualizar bot_user.tracking_session_id
+                            logger.warning(" Tracking token %s sem payload no Redis - tentando reconstruir via BotUser", tracking_token)
+                        # CORREÇÃO CRÍTICA V12: VALIDAR antes de atualizar bot_user.tracking_session_id
                         # NUNCA atualizar com token gerado (deve ser UUID de 32 chars do redirect)
                         if bot_user and tracking_token:
-                            # ✅ VALIDAÇÃO: tracking_token deve ser UUID (32 ou 36 chars, com ou sem hífens)
                             is_generated_token = tracking_token.startswith('tracking_')
-                            # ✅ CORREÇÃO: Aceitar UUID com ou sem hífens
                             normalized_token_check = tracking_token.replace('-', '').lower()
                             is_uuid_token = len(normalized_token_check) == 32 and all(c in '0123456789abcdef' for c in normalized_token_check)
-                            
-                            if is_generated_token:
-                                logger.error(f"❌ [GENERATE PIX] Tentativa de atualizar bot_user.tracking_session_id com token GERADO: {tracking_token[:30]}...")
-                                logger.error(f"   Isso é um BUG - token gerado não deve ser salvo em bot_user.tracking_session_id")
-                                # ✅ NÃO atualizar - manter token original do redirect
-                            elif is_uuid_token:
-                                # ✅ Token é UUID (vem do redirect) - pode atualizar
-                                if bot_user.tracking_session_id != tracking_token:
-                                    bot_user.tracking_session_id = tracking_token
-                                    logger.info(f"✅ bot_user.tracking_session_id atualizado com token do redirect: {tracking_token[:20]}...")
-                            else:
-                                logger.warning(f"⚠️ [GENERATE PIX] tracking_token com formato inválido: {tracking_token[:30]}... (len={len(tracking_token)})")
-                                # ✅ NÃO atualizar - formato inválido
+                            if is_uuid_token and bot_user.tracking_session_id != tracking_token:
+                                bot_user.tracking_session_id = tracking_token
+                                logger.info(f" bot_user.tracking_session_id atualizado com token do redirect: {tracking_token[:20]}...")
 
-                    # ✅ NOTA: bot_user.tracking_session_id já foi verificado no início (prioridade máxima)
+                    # NOTA: bot_user.tracking_session_id já foi verificado no início (prioridade máxima)
                     # Não precisa verificar novamente aqui
                     
                     if not tracking_token:
+                        # ESTRATÉGIA 1: Tentar recuperar tracking_token do Redis usando fbclid do BotUser
                         # ✅ ESTRATÉGIA 1: Tentar recuperar tracking_token do Redis usando fbclid do BotUser
                         # Isso recupera o token original do redirect mesmo se bot_user.tracking_session_id estiver vazio
                         recovered_token_from_fbclid = None
@@ -8211,8 +8225,8 @@ Seu pagamento ainda não foi confirmado.
                     # ✅ CRÍTICO: NUNCA gerar fbc sintético em generate_pix_payment
                     # O fbc deve vir EXATAMENTE do redirect (cookie do browser)
                     # Gerar sintético aqui quebra a atribuição porque o timestamp não corresponde ao clique original
-                    if fbc:
-                        logger.info(f"✅ fbc recuperado do tracking_data_v4: {fbc[:30]}...")
+                    if fbc is not None:
+                        logger.info(f"✅ fbc recuperado do tracking_data_v4: {str(fbc)[:30]}...")
                     else:
                         logger.warning(f"⚠️ fbc não encontrado no tracking_data_v4 - NÃO gerando sintético (preservando atribuição)")
                         # ✅ NÃO gerar fbc sintético - deixar None e confiar no fallback do Purchase
@@ -8250,7 +8264,7 @@ Seu pagamento ainda não foi confirmado.
                         "fbp": fbp,
                         # ✅ CRÍTICO: Só incluir fbc se for válido (não None)
                         # Não sobrescrever fbc válido do Redis com None
-                        **({"fbc": fbc} if fbc else {}),
+                        **({"fbc": fbc} if fbc is not None else {}),
                         "pageview_event_id": pageview_event_id,
                         "pageview_ts": tracking_data_v4.get('pageview_ts'),
                         "grim": tracking_data_v4.get('grim'),
@@ -8447,29 +8461,29 @@ Seu pagamento ainda não foi confirmado.
                         device_model=getattr(bot_user, 'device_model', None) if bot_user else None,
                         # ✅ CRÍTICO: UTM TRACKING E CAMPAIGN CODE (grim) - PRIORIDADE: tracking_data_v4 > bot_user
                         # ✅ CORREÇÃO CRÍTICA: Usar UTMs do tracking_data_v4 (mais atualizados do redirect) ao invés de bot_user
-                        utm_source=utm_source if utm_source else (getattr(bot_user, 'utm_source', None) if bot_user else None),
-                        utm_campaign=utm_campaign if utm_campaign else (getattr(bot_user, 'utm_campaign', None) if bot_user else None),
-                        utm_content=utm_content if utm_content else (getattr(bot_user, 'utm_content', None) if bot_user else None),
-                        utm_medium=utm_medium if utm_medium else (getattr(bot_user, 'utm_medium', None) if bot_user else None),
-                        utm_term=utm_term if utm_term else (getattr(bot_user, 'utm_term', None) if bot_user else None),
+                        utm_source=utm_source if utm_source is not None else (getattr(bot_user, 'utm_source', None) if bot_user else None),
+                        utm_campaign=utm_campaign if utm_campaign is not None else (getattr(bot_user, 'utm_campaign', None) if bot_user else None),
+                        utm_content=utm_content if utm_content is not None else (getattr(bot_user, 'utm_content', None) if bot_user else None),
+                        utm_medium=utm_medium if utm_medium is not None else (getattr(bot_user, 'utm_medium', None) if bot_user else None),
+                        utm_term=utm_term if utm_term is not None else (getattr(bot_user, 'utm_term', None) if bot_user else None),
                         # ✅ CRÍTICO QI 600+: campaign_code (grim) para atribuição de campanha
                         # PRIORIDADE: tracking_data_v4.grim > bot_user.campaign_code
-                        campaign_code=tracking_data_v4.get('grim') if tracking_data_v4.get('grim') else (getattr(bot_user, 'campaign_code', None) if bot_user else None),
+                        campaign_code=tracking_data_v4.get('grim') if tracking_data_v4.get('grim') is not None else (getattr(bot_user, 'campaign_code', None) if bot_user else None),
                         # ✅ CRÍTICO: TRACKING_TOKEN V4 (pode ser None se PIX gerado sem tracking)
                         tracking_token=tracking_token,  # ✅ Token válido (UUID do redirect) ou None se ausente
                         # ✅ CRÍTICO: pageview_event_id para deduplicação Meta Pixel (fallback se Redis expirar)
                         # PRIORIDADE: tracking_data_v4.pageview_event_id > bot_user.pageview_event_id
-                        pageview_event_id=pageview_event_id if pageview_event_id else (getattr(bot_user, 'pageview_event_id', None) if bot_user else None),
+                        pageview_event_id=pageview_event_id if pageview_event_id is not None else (getattr(bot_user, 'pageview_event_id', None) if bot_user else None),
                         # ✅ CRÍTICO: fbclid para matching perfeito (persistente no banco)
                         # PRIORIDADE: tracking_data_v4.fbclid > bot_user.fbclid
-                        fbclid=fbclid if fbclid else (getattr(bot_user, 'fbclid', None) if bot_user else None),
+                        fbclid=fbclid if fbclid is not None else (getattr(bot_user, 'fbclid', None) if bot_user else None),
                         # ✅ CRÍTICO: fbp e fbc para fallback no Purchase (se Redis expirar)
                         # PRIORIDADE: tracking_data_v4 > bot_user
-                        fbp=fbp if fbp else (getattr(bot_user, 'fbp', None) if bot_user else None),
-                        fbc=fbc if fbc else (getattr(bot_user, 'fbc', None) if bot_user else None),
+                        fbp=fbp if fbp is not None else (getattr(bot_user, 'fbp', None) if bot_user else None),
+                        fbc=fbc if fbc is not None else (getattr(bot_user, 'fbc', None) if bot_user else None),
                         # ✅ CRÍTICO: IDs de redirect/pixel para manter vínculo de atribuição
-                        redirect_id=tracking_data_v4.get('redirect_id') or (getattr(bot_user, 'redirect_id', None) if bot_user else None),
-                        meta_pixel_id=tracking_data_v4.get('pixel_id') or (getattr(bot_user, 'meta_pixel_id', None) if bot_user else None),
+                        redirect_id=redirect_id if redirect_id is not None else (getattr(bot_user, 'redirect_id', None) if bot_user else None),
+                        meta_pixel_id=meta_pixel_id if meta_pixel_id is not None else (getattr(bot_user, 'meta_pixel_id', None) if bot_user else None),
                         # ✅ CONTEXTO ORIGINAL DO CLIQUE (persistente para remarketing)
                         click_context_url=(
                             tracking_data_v4.get('event_source_url')
