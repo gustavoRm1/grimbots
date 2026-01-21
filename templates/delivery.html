@@ -7,25 +7,16 @@
     
     {% if pixel_id %}
     <script>
-        !function(f,b,e,v,n,t,s)
-        {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-        n.callMethod.apply(n,arguments):n.queue.push(arguments)};
-        if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
-        n.queue=[];t=b.createElement(e);t.async=!0;
-        t.src=v;s=b.getElementsByTagName(e)[0];
-        s.parentNode.insertBefore(t,s)}(window, document,'script',
-        'https://connect.facebook.net/en_US/fbevents.js');
-        
-        // Inicializa o Pixel
+        !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+        n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
+        n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
+        t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
+
+        // Inicializa o Pixel apenas com o ID do payment/meta
         fbq('init', '{{ pixel_id }}');
-        
-        // Dispara PageView (Padrão para manter a saúde do pixel)
-        fbq('track', 'PageView');
     </script>
-    <noscript><img height="1" width="1" style="display:none"
-        src="https://www.facebook.com/tr?id={{ pixel_id }}&ev=PageView&noscript=1"
-    /></noscript>
     {% endif %}
+    
     <style>
         /* MANTIVE SEU CSS ORIGINAL INTACTO */
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; margin: 0; padding: 20px; text-align: center; min-height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; }
@@ -81,37 +72,40 @@
         
         // --- SISTEMA DE ATRIBUIÇÃO CERTEIRA (MATCHING) ---
         (function firePurchaseSafe() {
-            {% if pixel_id %}
-                if (typeof fbq === 'function') {
-                    
-                    // 1. Prepara os dados base do evento
-                    var purchaseData = {
-                        value: {{ payment.amount }},
-                        currency: 'BRL',
-                        content_name: 'Delivery',
-                        eventID: '{{ payment.id }}' // Deduplicação Server-Side obrigatória
-                    };
+            var pixelId = '{{ pixel_id if pixel_id else "" }}';
+            if (!pixelId) return;
+            if (typeof fbq !== 'function') return;
 
-                    // 2. A MÁGICA: Recuperação do FBCLID do Banco
-                    // O Jinja injeta o valor salvo no payment.fbclid
-                    var savedFbclid = '{{ payment.fbclid if payment.fbclid else "None" }}';
-                    
-                    if (savedFbclid && savedFbclid !== 'None' && savedFbclid !== '') {
-                        // Se temos o fbclid, montamos o parâmetro 'fbc' manualmente
-                        // Formato oficial Meta: fb.1.TIMESTAMP_MS.FBCLID
-                        // Como não temos o timestamp do clique exato, usamos o atual (aceitável para recovery)
-                        var currentTs = Date.now();
-                        purchaseData.fbc = 'fb.1.' + currentTs + '.' + savedFbclid;
-                        
-                        console.log("✅ Pixel: Modo Forced Matching Ativado com FBC:", purchaseData.fbc);
-                    } else {
-                        console.log("⚠️ Pixel: Modo Cookie Padrão (Sem fbclid no banco)");
-                    }
+            var amountValue = parseFloat('{{ payment.amount }}');
+            if (isNaN(amountValue)) { amountValue = 0; }
+            var purchaseData = {
+                value: amountValue,
+                currency: 'BRL',
+                content_name: 'Delivery'
+            };
 
-                    // 3. Dispara o evento
-                    fbq('track', 'Purchase', purchaseData);
-                }
-            {% endif %}
+            // Usar fbc/fbp/fbclid vindos do payment (Redis > BotUser > DB)
+            var savedFbclid = '{{ fbclid if fbclid else "" }}';
+            var savedFbc = '{{ fbc if fbc else "" }}';
+            var savedFbp = '{{ fbp if fbp else "" }}';
+
+            if (savedFbc) {
+                purchaseData.fbc = savedFbc;
+            } else if (savedFbclid) {
+                var currentTs = Date.now();
+                purchaseData.fbc = 'fb.1.' + currentTs + '.' + savedFbclid;
+            }
+
+            if (savedFbp) {
+                purchaseData.fbp = savedFbp;
+            }
+
+            var eventId = '{{ pageview_event_id if pageview_event_id else "" }}';
+            if (!eventId) {
+                console.warn('⚠️ pageview_event_id ausente - dedup pode falhar');
+            }
+
+            fbq('track', 'Purchase', purchaseData, { eventID: eventId });
         })();
     </script>
     

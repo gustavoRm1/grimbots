@@ -7898,12 +7898,22 @@ Seu pagamento ainda não foi confirmado.
                     else:
                         logger.info(f"✅ PIX gerado com sucesso pelo gateway!")
                     
-                    # ✅ BUSCAR BOT_USER PARA COPIAR DADOS DEMOGRÁFICOS
+                    # ✅ BUSCAR BOT_USER PARA COPIAR DADOS DEMOGRÁFICOS (robusto string/int)
                     from models import BotUser
                     bot_user = BotUser.query.filter_by(
                         bot_id=bot_id,
                         telegram_user_id=customer_user_id
                     ).first()
+                    if not bot_user:
+                        try:
+                            bot_user_int = int(customer_user_id)
+                        except (TypeError, ValueError):
+                            bot_user_int = None
+                        if bot_user_int is not None:
+                            bot_user = BotUser.query.filter_by(
+                                bot_id=bot_id,
+                                telegram_user_id=str(bot_user_int)
+                            ).first()
                     
                     # ✅ QI 500: GERAR/REUTILIZAR TRACKING_TOKEN V4 (mantém vínculo PageView → Purchase)
                     from utils.tracking_service import TrackingServiceV4
@@ -8196,19 +8206,6 @@ Seu pagamento ainda não foi confirmado.
                     if tracking_data_v4.get('utm_campaign'):
                         utm_campaign = tracking_data_v4['utm_campaign']
                     if tracking_data_v4.get('utm_content'):
-                        utm_content = tracking_data_v4['utm_content']
-                    if tracking_data_v4.get('utm_term'):
-                        utm_term = tracking_data_v4['utm_term']
-                    
-                    # ✅ CRÍTICO: Usar valores do Redis se disponíveis, só gerar sintéticos se faltar
-                    fbp = tracking_data_v4.get('fbp')
-                    fbc = tracking_data_v4.get('fbc')
-                    pageview_event_id = tracking_data_v4.get('pageview_event_id')
-                    
-                    if not fbp:
-                        fbp = tracking_service.generate_fbp(str(customer_user_id))
-                        logger.warning(f"⚠️ fbp não encontrado no tracking_data_v4 - gerado sintético: {fbp[:30]}...")
-                    else:
                         logger.info(f"✅ fbp recuperado do tracking_data_v4: {fbp[:30]}...")
                     
                     # ✅ CRÍTICO: NUNCA gerar fbc sintético em generate_pix_payment
@@ -8419,6 +8416,7 @@ Seu pagamento ainda não foi confirmado.
                         customer_name=customer_name,
                         customer_username=customer_username,
                         customer_user_id=customer_user_id,
+                        bot_user_id=getattr(bot_user, 'id', None),
                         # ✅ CRÍTICO: Salvar email, phone e document do customer_data (para Meta Pixel Purchase)
                         customer_email=customer_data.get('email'),
                         customer_phone=customer_data.get('phone'),
@@ -8469,6 +8467,9 @@ Seu pagamento ainda não foi confirmado.
                         # PRIORIDADE: tracking_data_v4 > bot_user
                         fbp=fbp if fbp else (getattr(bot_user, 'fbp', None) if bot_user else None),
                         fbc=fbc if fbc else (getattr(bot_user, 'fbc', None) if bot_user else None),
+                        # ✅ CRÍTICO: IDs de redirect/pixel para manter vínculo de atribuição
+                        redirect_id=tracking_data_v4.get('redirect_id') or (getattr(bot_user, 'redirect_id', None) if bot_user else None),
+                        meta_pixel_id=tracking_data_v4.get('pixel_id') or (getattr(bot_user, 'meta_pixel_id', None) if bot_user else None),
                         # ✅ CONTEXTO ORIGINAL DO CLIQUE (persistente para remarketing)
                         click_context_url=(
                             tracking_data_v4.get('event_source_url')

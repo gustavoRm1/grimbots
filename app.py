@@ -6662,6 +6662,8 @@ def public_redirect(slug):
     tracking_service_v4 = TrackingServiceV4()
     tracking_token = uuid.uuid4().hex  # sempre existe para correlacionar PageView → Purchase
     root_event_id = f"evt_{tracking_token}"  # ID canônico imutável por sessão/click
+    # ✅ PATCH: pageview_event_id dedicado (mesmo do PageView) para reutilizar no Purchase
+    pageview_event_id = root_event_id
     pageview_context = {}
     external_id = None
     utm_data = {}
@@ -6727,7 +6729,7 @@ def public_redirect(slug):
         'fbp': fbp_cookie,
         'fbc': fbc_cookie,
         'fbc_origin': fbc_origin,
-        'pageview_event_id': root_event_id,
+        'pageview_event_id': pageview_event_id,  # ✅ preservado para Purchase
         'pageview_ts': pageview_ts,
         'client_ip': user_ip if user_ip else None,
         'client_user_agent': user_agent if user_agent and user_agent.strip() else None,
@@ -6736,6 +6738,7 @@ def public_redirect(slug):
         'first_page': request.url or f'https://{request.host}/go/{pool.slug}',
         'pageview_sent': False,
         'pixel_id': pool.meta_pixel_id if pool and pool.meta_pixel_id else None,  # ✅ Pixel do redirect (fonte primária para Purchase)
+        'redirect_id': pool.id if pool else None,
         **{k: v for k, v in utms.items() if v}
     }
 
@@ -10229,17 +10232,22 @@ def delivery_page(delivery_token):
         
         # ✅ CORREÇÃO CRÍTICA: Buscar pixel_id do banco como fallback (Redis pode expirar)
         # Prioridade: 1) tracking_data (Redis), 2) pool.meta_pixel_id (banco)
+        pixel_id_from_payment = getattr(payment, 'meta_pixel_id', None)
         pixel_id_from_tracking = tracking_data.get('pixel_id') if tracking_data else None
         pixel_id_from_pool = pool.meta_pixel_id if pool else None
-        pixel_id_to_use = pixel_id_from_tracking or pixel_id_from_pool
+        pixel_id_to_use = pixel_id_from_payment or pixel_id_from_tracking or pixel_id_from_pool
         
-        logger.info(f"✅ Delivery - pixel_id: tracking={'✅' if pixel_id_from_tracking else '❌'} | pool={'✅' if pixel_id_from_pool else '❌'} | final={'✅' if pixel_id_to_use else '❌'}")
+        logger.info(f"✅ Delivery - pixel_id: payment={'✅' if pixel_id_from_payment else '❌'} | tracking={'✅' if pixel_id_from_tracking else '❌'} | pool={'✅' if pixel_id_from_pool else '❌'} | final={'✅' if pixel_id_to_use else '❌'}")
         
         # ✅ Renderizar template com pixel_id garantido (nunca vazio se existir no banco)
         response = render_template('delivery.html',
             payment=payment,
             pixel_id=pixel_id_to_use,  # ✅ Fallback para banco
-            redirect_url=redirect_url  # ✅ Access_link personalizado ou fallback
+            redirect_url=redirect_url,  # ✅ Access_link personalizado ou fallback
+            pageview_event_id=getattr(payment, 'pageview_event_id', None),
+            fbclid=getattr(payment, 'fbclid', None),
+            fbc=getattr(payment, 'fbc', None),
+            fbp=getattr(payment, 'fbp', None)
         )
         
         # ✅ DEPOIS de renderizar template, enfileirar Purchase via Server (Conversions API)
