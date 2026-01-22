@@ -10247,7 +10247,8 @@ def delivery_page(delivery_token):
             pageview_event_id=getattr(payment, 'pageview_event_id', None),
             fbclid=getattr(payment, 'fbclid', None),
             fbc=getattr(payment, 'fbc', None),
-            fbp=getattr(payment, 'fbp', None)
+            fbp=getattr(payment, 'fbp', None),
+            tracking_token=getattr(payment, 'tracking_token', None)
         )
         
         # ✅ DEPOIS de renderizar template, enfileirar Purchase via Server (Conversions API)
