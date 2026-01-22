@@ -50,19 +50,30 @@ else
   warn "Não foi possível derivar payment_id da referência (usando apenas gateway_transaction_id/pattern)."
 fi
 
-WHERE_SQL="WHERE gateway_transaction_id = '$GATEWAY_TRANSACTION_ID'"
+WHERE_CLAUSES=("gateway_transaction_id = '$GATEWAY_TRANSACTION_ID'")
 
 if [[ -n "$REFERENCE_PAYMENT_ID" ]]; then
-  WHERE_SQL+="\n   OR payment_id = '$REFERENCE_PAYMENT_ID'"
-  WHERE_SQL+="\n   OR payment_id LIKE '%${REFERENCE_PAYMENT_ID#*_}%'"
+  WHERE_CLAUSES+=("payment_id = '$REFERENCE_PAYMENT_ID'")
+  WHERE_CLAUSES+=("payment_id LIKE '%${REFERENCE_PAYMENT_ID#*_}%'")
 fi
 
-WHERE_SQL+="\n   OR payment_id = '$REFERENCE'"
-WHERE_SQL+="\n   OR payment_id LIKE '%$REFERENCE%'"
+WHERE_CLAUSES+=("payment_id = '$REFERENCE'")
+WHERE_CLAUSES+=("payment_id LIKE '%$REFERENCE%'")
 
 if [[ -n "$REFERENCE_HASH_SLICE" ]]; then
-  WHERE_SQL+="\n   OR payment_id LIKE '%${REFERENCE_HASH_SLICE}%'"
+  WHERE_CLAUSES+=("payment_id LIKE '%${REFERENCE_HASH_SLICE}%'")
 fi
+
+# Construir WHERE final (ex: WHERE (cond1) OR (cond2) ...)
+WHERE_SQL="WHERE "
+for idx in "${!WHERE_CLAUSES[@]}"; do
+  clause="(${WHERE_CLAUSES[$idx]})"
+  if [[ $idx -eq 0 ]]; then
+    WHERE_SQL+="$clause"
+  else
+    WHERE_SQL+=" OR $clause"
+  fi
+done
 
 info "PASSO 1 — Consultando Payment no Postgres (cadeia raiz)"
 
