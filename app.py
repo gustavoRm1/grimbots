@@ -10163,14 +10163,15 @@ def delivery_page(delivery_token):
         # Isso garante que Purchase SEMPRE use o mesmo pixel do PageView
         pixel_id_from_payment = getattr(payment, 'meta_pixel_id', None)
         
-        # ✅ HTML-only: preferir pixel_id do funil (query param px). Fallback defensivo para não quebrar entrega.
+        # ✅ HTML-only: preferir px; se não, usar pixel do Redis; por último, fallback do pool/payment
         pixel_id_from_request = request.args.get('px')
+        pixel_from_redis = (tracking_data.get('pixel_id') or tracking_data.get('meta_pixel_id')) if tracking_data else None
         pixel_id_fallback = pixel_id_from_payment or (pool.meta_pixel_id if pool else None)
-        pixel_id_to_use = pixel_id_from_request or pixel_id_fallback
+        pixel_id_to_use = pixel_id_from_request or pixel_from_redis or pixel_id_fallback
         has_meta_pixel = bool(pixel_id_to_use)
         if not has_meta_pixel:
             logger.warning(
-                "[META DELIVERY] pixel_id ausente (px/query e fallback). Purchase NÃO será disparado, mas entrega segue.")
+                "[META DELIVERY] pixel_id ausente (px/query, redis e fallback). Purchase NÃO será disparado, mas entrega segue.")
         # Recuperar pageview_event_id do tracking_data ou do payment
         pageview_event_id = tracking_data.get('pageview_event_id') or getattr(payment, 'pageview_event_id', None)
         if pageview_event_id and not payment.pageview_event_id:
