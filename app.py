@@ -10129,6 +10129,8 @@ def delivery_page(delivery_token):
             return render_template('delivery_error.html', error="Configuração inválida"), 500
         
         pool = pool_bot.pool
+        # 🔒 Inicialização defensiva para evitar UnboundLocalError em caminhos de retorno antecipado
+        redirect_url = None
         # ✅ RECUPERAR tracking_data do Redis (fonte única: payment.tracking_token)
         tracking_data = {}
 
