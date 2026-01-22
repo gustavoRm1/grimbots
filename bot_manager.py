@@ -8430,7 +8430,6 @@ Seu pagamento ainda não foi confirmado.
                         customer_name=customer_name,
                         customer_username=customer_username,
                         customer_user_id=customer_user_id,
-                        bot_user_id=getattr(bot_user, 'id', None),
                         # ✅ CRÍTICO: Salvar email, phone e document do customer_data (para Meta Pixel Purchase)
                         customer_email=customer_data.get('email'),
                         customer_phone=customer_data.get('phone'),
