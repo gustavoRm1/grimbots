@@ -8467,22 +8467,7 @@ Seu pagamento ainda não foi confirmado.
                         utm_term=utm_term if utm_term is not None else (getattr(bot_user, 'utm_term', None) if bot_user else None),
                         # ✅ CRÍTICO QI 600+: campaign_code (grim) para atribuição de campanha
                         # PRIORIDADE: tracking_data_v4.grim > bot_user.campaign_code
-                        campaign_code=tracking_data_v4.get('grim') if tracking_data_v4.get('grim') is not None else (getattr(bot_user, 'campaign_code', None) if bot_user else None),
-                        # ✅ CRÍTICO: TRACKING_TOKEN V4 (pode ser None se PIX gerado sem tracking)
-                        tracking_token=tracking_token,  # ✅ Token válido (UUID do redirect) ou None se ausente
-                        # ✅ CRÍTICO: pageview_event_id para deduplicação Meta Pixel (fallback se Redis expirar)
-                        # PRIORIDADE: tracking_data_v4.pageview_event_id > bot_user.pageview_event_id
-                        pageview_event_id=pageview_event_id if pageview_event_id is not None else (getattr(bot_user, 'pageview_event_id', None) if bot_user else None),
-                        # ✅ CRÍTICO: fbclid para matching perfeito (persistente no banco)
-                        # PRIORIDADE: tracking_data_v4.fbclid > bot_user.fbclid
-                        fbclid=fbclid if fbclid is not None else (getattr(bot_user, 'fbclid', None) if bot_user else None),
-                        # ✅ CRÍTICO: fbp e fbc para fallback no Purchase (se Redis expirar)
-                        # PRIORIDADE: tracking_data_v4 > bot_user
-                        fbp=fbp if fbp is not None else (getattr(bot_user, 'fbp', None) if bot_user else None),
-                        fbc=fbc if fbc is not None else (getattr(bot_user, 'fbc', None) if bot_user else None),
-                        # ✅ CRÍTICO: IDs de redirect/pixel para manter vínculo de atribuição
-                        redirect_id=redirect_id if redirect_id is not None else (getattr(bot_user, 'redirect_id', None) if bot_user else None),
-                        meta_pixel_id=meta_pixel_id if meta_pixel_id is not None else (getattr(bot_user, 'meta_pixel_id', None) if bot_user else None),
+                        campaign_code=tracking_data_v4.get('grim') if tracking_data_v4.get('grim') else (getattr(bot_user, 'campaign_code', None) if bot_user else None),
                         # ✅ CONTEXTO ORIGINAL DO CLIQUE (persistente para remarketing)
                         click_context_url=(
                             tracking_data_v4.get('event_source_url')
