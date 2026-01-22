@@ -81,12 +81,12 @@ PAYMENT_SQL=$(cat <<EOF
 SELECT
   id,
   payment_id,
+  bot_id,
   gateway_transaction_id,
   status,
   created_at,
   tracking_token,
   pageview_event_id,
-  meta_pixel_id,
   fbclid,
   fbc,
   fbp
@@ -109,22 +109,54 @@ if [[ -z "$PAYMENT_ROW" ]]; then
   exit 1
 fi
 
-IFS='|' read -r PAYMENT_DB_ID PAYMENT_ID PAYMENT_GATEWAY_ID PAYMENT_STATUS PAYMENT_CREATED_AT PAYMENT_TRACKING_TOKEN PAYMENT_PAGEVIEW EVENT_PIXEL_ID PAYMENT_FBCLID PAYMENT_FBC PAYMENT_FBP <<<"$PAYMENT_ROW"
+IFS='|' read -r PAYMENT_DB_ID PAYMENT_ID PAYMENT_BOT_ID PAYMENT_GATEWAY_ID PAYMENT_STATUS PAYMENT_CREATED_AT PAYMENT_TRACKING_TOKEN PAYMENT_PAGEVIEW PAYMENT_FBCLID PAYMENT_FBC PAYMENT_FBP <<<"$PAYMENT_ROW"
 
 bold "✅ PAYMENT ENCONTRADO"
 cat <<EOF
  - id.................: $PAYMENT_DB_ID
  - payment_id.........: $PAYMENT_ID
+ - bot_id.............: $PAYMENT_BOT_ID
  - gateway_tx_id......: ${PAYMENT_GATEWAY_ID:-"❌"}
  - status.............: $PAYMENT_STATUS
  - created_at.........: $PAYMENT_CREATED_AT
  - tracking_token.....: ${PAYMENT_TRACKING_TOKEN:-"❌"}
  - pageview_event_id..: ${PAYMENT_PAGEVIEW:-"❌"}
- - meta_pixel_id......: ${EVENT_PIXEL_ID:-"❌"}
  - fbclid.............: ${PAYMENT_FBCLID:-"❌"}
  - fbc................: ${PAYMENT_FBC:-"❌"}
  - fbp................: ${PAYMENT_FBP:-"❌"}
 EOF
+
+EVENT_PIXEL_ID=""
+if [[ -n "$PAYMENT_BOT_ID" ]]; then
+  info "PASSO 1B — Encontrando pixel configurado para o pool do bot"
+  PIXEL_SQL=$(cat <<EOF
+SELECT
+  rp.meta_pixel_id
+FROM pool_bots pb
+JOIN redirect_pools rp ON rp.id = pb.pool_id
+WHERE pb.bot_id = $PAYMENT_BOT_ID
+ORDER BY pb.id DESC
+LIMIT 1;
+EOF
+  )
+
+  EVENT_PIXEL_ID=$(psql \
+    -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" \
+    --set=sslmode=disable \
+    --no-align --tuples-only \
+    -c "$PIXEL_SQL" 2>/tmp/inspect_pixel.err || true)
+
+  EVENT_PIXEL_ID=$(echo "$EVENT_PIXEL_ID" | tr -d '\r')
+
+  if [[ -n "$EVENT_PIXEL_ID" ]]; then
+    info "Pixel recuperado via pool: $EVENT_PIXEL_ID"
+  else
+    warn "Pixel não encontrado para bot_id=$PAYMENT_BOT_ID (verifique pool_bots/redirect_pools)."
+    warn "Saída do psql (pixel):"; cat /tmp/inspect_pixel.err
+  fi
+else
+  warn "bot_id ausente no Payment ⇒ impossível resolver pixel automaticamente."
+fi
 
 echo
 info "PASSO 2 — Diagnóstico imediato"
@@ -141,9 +173,9 @@ else
 fi
 
 if [[ -z "$EVENT_PIXEL_ID" ]]; then
-  warn "meta_pixel_id ausente no Payment ⇒ Purchase seria disparado sem pixel válido."
+  warn "Pixel não localizado para este Payment ⇒ confirmar configuração do pool."
 else
-  info "Pixel registrado no Payment: $EVENT_PIXEL_ID"
+  info "Pixel associado (via pool): $EVENT_PIXEL_ID"
 fi
 
 if [[ -n "$PAYMENT_TRACKING_TOKEN" ]]; then
