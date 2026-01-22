@@ -10169,6 +10169,9 @@ def delivery_page(delivery_token):
         pixel_id_fallback = pixel_id_from_payment or (pool.meta_pixel_id if pool else None)
         pixel_id_to_use = pixel_id_from_request or pixel_from_redis or pixel_id_fallback
         has_meta_pixel = bool(pixel_id_to_use)
+        logger.info(
+            f"[META DEBUG] Pixel Final: {pixel_id_to_use} | Fonte Redis: {bool(pixel_from_redis)} | Fonte URL: {bool(pixel_id_from_request)}"
+        )
         if not has_meta_pixel:
             logger.warning(
                 "[META DELIVERY] pixel_id ausente (px/query, redis e fallback). Purchase NÃO será disparado, mas entrega segue.")
