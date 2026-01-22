@@ -33,13 +33,43 @@ info "Reference alvo: $REFERENCE"
 info "gateway_transaction_id alvo: $GATEWAY_TRANSACTION_ID"
 echo
 
+# Derivar possíveis payment_id a partir da referência real (formato BOT###-ts-hash-...)
+REFERENCE_PAYMENT_ID=""
+REFERENCE_HASH_SLICE=""
+if [[ "$REFERENCE" =~ ^([A-Za-z0-9]+)-([0-9]+)-([A-Za-z0-9]+) ]]; then
+  REF_PART1="${BASH_REMATCH[1]}"
+  REF_PART2="${BASH_REMATCH[2]}"
+  REF_PART3="${BASH_REMATCH[3]}"
+  REFERENCE_PAYMENT_ID="${REF_PART1}_${REF_PART2}_${REF_PART3}"
+  REFERENCE_HASH_SLICE="$REF_PART3"
+fi
+
+if [[ -n "$REFERENCE_PAYMENT_ID" ]]; then
+  info "payment_id derivado da referência: $REFERENCE_PAYMENT_ID"
+else
+  warn "Não foi possível derivar payment_id da referência (usando apenas gateway_transaction_id/pattern)."
+fi
+
+WHERE_SQL="WHERE gateway_transaction_id = '$GATEWAY_TRANSACTION_ID'"
+
+if [[ -n "$REFERENCE_PAYMENT_ID" ]]; then
+  WHERE_SQL+="\n   OR payment_id = '$REFERENCE_PAYMENT_ID'"
+  WHERE_SQL+="\n   OR payment_id LIKE '%${REFERENCE_PAYMENT_ID#*_}%'"
+fi
+
+WHERE_SQL+="\n   OR payment_id = '$REFERENCE'"
+WHERE_SQL+="\n   OR payment_id LIKE '%$REFERENCE%'"
+
+if [[ -n "$REFERENCE_HASH_SLICE" ]]; then
+  WHERE_SQL+="\n   OR payment_id LIKE '%${REFERENCE_HASH_SLICE}%'"
+fi
+
 info "PASSO 1 — Consultando Payment no Postgres (cadeia raiz)"
 
 PAYMENT_SQL=$(cat <<EOF
 SELECT
   id,
   payment_id,
-  reference,
   gateway_transaction_id,
   status,
   created_at,
@@ -50,8 +80,7 @@ SELECT
   fbc,
   fbp
 FROM payments
-WHERE reference = '$REFERENCE'
-   OR gateway_transaction_id = '$GATEWAY_TRANSACTION_ID'
+${WHERE_SQL}
 ORDER BY created_at DESC
 LIMIT 1;
 EOF
@@ -69,13 +98,12 @@ if [[ -z "$PAYMENT_ROW" ]]; then
   exit 1
 fi
 
-IFS='|' read -r PAYMENT_DB_ID PAYMENT_ID PAYMENT_REFERENCE PAYMENT_GATEWAY_ID PAYMENT_STATUS PAYMENT_CREATED_AT PAYMENT_TRACKING_TOKEN PAYMENT_PAGEVIEW EVENT_PIXEL_ID PAYMENT_FBCLID PAYMENT_FBC PAYMENT_FBP <<<"$PAYMENT_ROW"
+IFS='|' read -r PAYMENT_DB_ID PAYMENT_ID PAYMENT_GATEWAY_ID PAYMENT_STATUS PAYMENT_CREATED_AT PAYMENT_TRACKING_TOKEN PAYMENT_PAGEVIEW EVENT_PIXEL_ID PAYMENT_FBCLID PAYMENT_FBC PAYMENT_FBP <<<"$PAYMENT_ROW"
 
 bold "✅ PAYMENT ENCONTRADO"
 cat <<EOF
  - id.................: $PAYMENT_DB_ID
  - payment_id.........: $PAYMENT_ID
- - reference..........: ${PAYMENT_REFERENCE:-"❌"}
  - gateway_tx_id......: ${PAYMENT_GATEWAY_ID:-"❌"}
  - status.............: $PAYMENT_STATUS
  - created_at.........: $PAYMENT_CREATED_AT
