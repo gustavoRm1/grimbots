@@ -3333,6 +3333,7 @@ def start_bot(bot_id):
         logger.error(f"Erro ao iniciar bot: {e}")
         return jsonify({'error': str(e)}), 500
 
+
 @app.route('/api/bots/verify-status', methods=['POST'])
 @login_required
 @csrf.exempt
@@ -10134,6 +10135,16 @@ def delivery_page(delivery_token):
         pool = pool_bot.pool
         # 🔒 Inicialização defensiva para evitar UnboundLocalError em caminhos de retorno antecipado
         redirect_url = None
+        # ✅ LINK DE ACESSO: sempre definir antes de qualquer retorno, mesmo sem pixel
+        if pool_bot and pool_bot.bot and pool_bot.bot.config and pool_bot.bot.config.access_link:
+            redirect_url = pool_bot.bot.config.access_link
+            logger.info(f"✅ Delivery - Usando access_link personalizado: {redirect_url}")
+        elif pool_bot and pool_bot.bot and pool_bot.bot.username:
+            redirect_url = f"https://t.me/{pool_bot.bot.username}?start=p{payment.id}"
+            logger.info(f"⚠️ Delivery - Usando fallback genérico (access_link não configurado): {redirect_url}")
+        else:
+            logger.error(f"❌ Delivery - Nenhum redirect_url disponível para payment {payment.id}")
+
         # ✅ RECUPERAR tracking_data do Redis (fonte única: payment.tracking_token)
         tracking_data = {}
 
@@ -10160,7 +10171,6 @@ def delivery_page(delivery_token):
         if not has_meta_pixel:
             logger.warning(
                 "[META DELIVERY] pixel_id ausente (px/query e fallback). Purchase NÃO será disparado, mas entrega segue.")
-            return render_template('delivery.html', payment=payment, pixel_id=None, redirect_url=redirect_url)
         # Recuperar pageview_event_id do tracking_data ou do payment
         pageview_event_id = tracking_data.get('pageview_event_id') or getattr(payment, 'pageview_event_id', None)
         if pageview_event_id and not payment.pageview_event_id:
