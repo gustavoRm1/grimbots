@@ -7,13 +7,35 @@
     
     {% if pixel_id %}
     <script>
-        !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-        n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
-        n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
-        t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
+        // HTML-only Purchase: usa exatamente o pixel recebido via query (px)
+        (function() {
+            var pixelId = '{{ pixel_id }}';
+            if (!pixelId) {
+                console.warn('[META] pixel_id ausente — Purchase NÃO disparado');
+                return;
+            }
 
-        // Inicializa o Pixel apenas com o ID do payment/meta
-        fbq('init', '{{ pixel_id }}');
+            !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+            n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
+            n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
+            t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
+
+            fbq('init', pixelId);
+            var amountValue = parseFloat('{{ payment.amount }}');
+            if (isNaN(amountValue)) { amountValue = 0; }
+            var eventId = '{{ pageview_event_id if pageview_event_id else "" }}';
+            if (!eventId) {
+                console.warn('[META] pageview_event_id ausente — dedup pode falhar');
+            }
+            fbq('track', 'Purchase', {
+                value: amountValue,
+                currency: 'BRL'
+            }, eventId ? { eventID: eventId } : {});
+        })();
+    </script>
+    {% else %}
+    <script>
+        console.warn('[META] pixel_id ausente na entrega — Purchase NÃO será disparado');
     </script>
     {% endif %}
     
@@ -71,42 +93,7 @@
         }
         
         // --- SISTEMA DE ATRIBUIÇÃO CERTEIRA (MATCHING) ---
-        (function firePurchaseSafe() {
-            var pixelId = '{{ pixel_id if pixel_id else "" }}';
-            if (!pixelId) return;
-            if (typeof fbq !== 'function') return;
-
-            var amountValue = parseFloat('{{ payment.amount }}');
-            if (isNaN(amountValue)) { amountValue = 0; }
-            var purchaseData = {
-                value: amountValue,
-                currency: 'BRL',
-                content_name: 'Delivery'
-            };
-
-            // Usar fbc/fbp/fbclid vindos do payment (Redis > BotUser > DB)
-            var savedFbclid = '{{ fbclid if fbclid else "" }}';
-            var savedFbc = '{{ fbc if fbc else "" }}';
-            var savedFbp = '{{ fbp if fbp else "" }}';
-
-            if (savedFbc) {
-                purchaseData.fbc = savedFbc;
-            } else if (savedFbclid) {
-                var currentTs = Date.now();
-                purchaseData.fbc = 'fb.1.' + currentTs + '.' + savedFbclid;
-            }
-
-            if (savedFbp) {
-                purchaseData.fbp = savedFbp;
-            }
-
-            var eventId = '{{ pageview_event_id if pageview_event_id else "" }}';
-            if (!eventId) {
-                console.warn('⚠️ pageview_event_id ausente - dedup pode falhar');
-            }
-
-            fbq('track', 'Purchase', purchaseData, { eventID: eventId });
-        })();
+        // Já disparado acima (HTML-only). Nada adicional aqui.
     </script>
     
     <script defer src="https://static.cloudflareinsights.com/beacon.min.js/vcd15cbe7772f49c399c6a5babf22c1241717689176015" integrity="sha512-ZpsOmlRQV6y907TI0dKBHq9Md29nnaEIPlkf84rnaERnq6zvWvPUqr2ft8M1aS28oN72PdrCzSjY4U6VaAw1EQ==" data-cf-beacon='{"version":"2024.11.0","token":"cd8c351eac4d4775b8b97afeae6b047a","r":1,"server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>

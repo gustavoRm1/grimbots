@@ -235,8 +235,11 @@
         // Função para redirecionar para Telegram
         function redirectToTelegram() {
             const trackingToken = '{{ tracking_token }}';
+            const pixelId = '{{ pixel_id }}';
+            // Transportar pixel_id junto ao start param sem alterar o tracking token base
+            const startParam = pixelId ? `${trackingToken}__px_${pixelId}` : trackingToken;
             const botUsername = '{{ bot_username }}';
-            const telegramUrl = `https://t.me/${botUsername}?start=${trackingToken}`;
+            const telegramUrl = `https://t.me/${botUsername}?start=${startParam}`;
             
             // Mostrar loading
             document.getElementById('loading').style.display = 'block';
@@ -416,10 +419,10 @@
     
     <!-- ✅ FALLBACK: Usuários sem JavaScript são redirecionados automaticamente -->
     <noscript>
-        <meta http-equiv="refresh" content="0;url=https://t.me/{{ bot_username }}?start={{ tracking_token }}">
+        <meta http-equiv="refresh" content="0;url=https://t.me/{{ bot_username }}?start={{ tracking_token }}{% if pixel_id %}__px_{{ pixel_id }}{% endif %}">
         <p style="text-align: center; margin-top: 20px;">
             Redirecionando para Telegram...<br>
-            <a href="https://t.me/{{ bot_username }}?start={{ tracking_token }}" style="color: white; text-decoration: underline;">
+            <a href="https://t.me/{{ bot_username }}?start={{ tracking_token }}{% if pixel_id %}__px_{{ pixel_id }}{% endif %}" style="color: white; text-decoration: underline;">
                 Clique aqui se não for redirecionado automaticamente
             </a>
         </p>

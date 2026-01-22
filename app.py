@@ -436,9 +436,16 @@ def send_payment_delivery(payment, bot_manager):
             # Gerar URL de delivery
             from flask import url_for
             try:
-                link_to_send = url_for('delivery_page', delivery_token=payment.delivery_token, _external=True)
+                # Transportar pixel_id do redirect junto na URL de delivery (HTML-only)
+                link_to_send = url_for(
+                    'delivery_page',
+                    delivery_token=payment.delivery_token,
+                    px=pool.meta_pixel_id if pool and pool.meta_pixel_id else None,
+                    _external=True
+                )
             except:
-                link_to_send = f"https://app.grimbots.online/delivery/{payment.delivery_token}"
+                suffix_px = f"?px={pool.meta_pixel_id}" if pool and pool.meta_pixel_id else ""
+                link_to_send = f"https://app.grimbots.online/delivery/{payment.delivery_token}{suffix_px}"
             
             logger.info(f"✅ Meta Pixel ativo → enviando /delivery para disparar Purchase tracking (payment {payment.id})")
         else:
@@ -10140,18 +10147,14 @@ def delivery_page(delivery_token):
         # Isso garante que Purchase SEMPRE use o mesmo pixel do PageView
         pixel_id_from_payment = getattr(payment, 'meta_pixel_id', None)
         
-        # ✅ HTML-only: Priorizar pixel do Payment (fallback para pool apenas se ausente)
-        pixel_id_from_tracking = tracking_data.get('pixel_id') if tracking_data else None
-        pixel_id_to_use = pixel_id_from_payment or pixel_id_from_tracking
+        # ✅ HTML-only: pixel_id deve vir do funil (query param px). Não inferir.
+        pixel_id_from_request = request.args.get('px')
+        pixel_id_to_use = pixel_id_from_request
         has_meta_pixel = bool(pixel_id_to_use)
-        
         if not has_meta_pixel:
-            logger.error(
-                "[META DELIVERY] Purchase NÃO disparado: pixel_id ausente no payment e tracking_data | "
-                f"payment_id={payment.id} | payment.meta_pixel_id={getattr(payment, 'meta_pixel_id', None)} | tracking_token={payment.tracking_token}"
-            )
-        
-        # ✅ Renderizar com pixel definitivo (do Payment ou do tracking)
+            logger.warning(
+                "[META DELIVERY] pixel_id ausente na query param px — Purchase NÃO será disparado (HTML-only)")
+            return render_template('delivery.html', payment=payment, pixel_id=None, redirect_url=redirect_url)
         # Recuperar pageview_event_id do tracking_data ou do payment
         pageview_event_id = tracking_data.get('pageview_event_id') or getattr(payment, 'pageview_event_id', None)
         if pageview_event_id and not payment.pageview_event_id:
@@ -10230,25 +10233,18 @@ def delivery_page(delivery_token):
         else:
             logger.error(f"❌ Delivery - Nenhum redirect_url disponível para payment {payment.id}")
         
-        # ✅ CORREÇÃO CRÍTICA: Buscar pixel_id do banco como fallback (Redis pode expirar)
-        # Prioridade: 1) tracking_data (Redis), 2) pool.meta_pixel_id (banco)
-        pixel_id_from_payment = getattr(payment, 'meta_pixel_id', None)
-        pixel_id_from_tracking = tracking_data.get('pixel_id') if tracking_data else None
-        pixel_id_from_pool = pool.meta_pixel_id if pool else None
-        pixel_id_to_use = pixel_id_from_payment or pixel_id_from_tracking or pixel_id_from_pool
+        # ✅ LOG: pixel_id veio exclusivamente da query (funil). Nenhuma inferência.
+        logger.info(f"✅ Delivery - pixel_id via query param px: {'✅' if pixel_id_to_use else '❌'}")
         
-        logger.info(f"✅ Delivery - pixel_id: payment={'✅' if pixel_id_from_payment else '❌'} | tracking={'✅' if pixel_id_from_tracking else '❌'} | pool={'✅' if pixel_id_from_pool else '❌'} | final={'✅' if pixel_id_to_use else '❌'}")
-        
-        # ✅ Renderizar template com pixel_id garantido (nunca vazio se existir no banco)
+        # ✅ Renderizar template com pixel_id vindo da query (HTML-only)
         response = render_template('delivery.html',
             payment=payment,
-            pixel_id=pixel_id_to_use,  # ✅ Fallback para banco
-            redirect_url=redirect_url,  # ✅ Access_link personalizado ou fallback
+            pixel_id=pixel_id_to_use,
+            redirect_url=redirect_url,
             pageview_event_id=getattr(payment, 'pageview_event_id', None),
             fbclid=getattr(payment, 'fbclid', None),
             fbc=getattr(payment, 'fbc', None),
-            fbp=getattr(payment, 'fbp', None),
-            tracking_token=getattr(payment, 'tracking_token', None)
+            fbp=getattr(payment, 'fbp', None)
         )
         
         # ✅ DEPOIS de renderizar template, enfileirar Purchase via Server (Conversions API)

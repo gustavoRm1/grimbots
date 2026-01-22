@@ -4241,6 +4241,16 @@ class BotManager:
                 except Exception as e:
                     logger.warning(f"⚠️ Falha ao extrair start_param do texto: {e}")
 
+            # ✅ PATCH: extrair pixel_id transportado no start_param (formato token__px_<pixel>) sem sobrescrever tracking base
+            pixel_id_from_start = None
+            if start_param and '__px_' in start_param:
+                parts = start_param.split('__px_', 1)
+                if parts and parts[0]:
+                    start_param = parts[0]
+                if len(parts) > 1 and parts[1]:
+                    pixel_id_from_start = parts[1]
+                    logger.info(f"✅ Pixel transportado no start_param preservado: {pixel_id_from_start}")
+
             # ============================================================================
             # ✅ HIDRATAÇÃO DE TRACKING (PRIORIDADE MÁXIMA - ANTES DE QUALQUER RESET)
             # ============================================================================
@@ -4255,6 +4265,11 @@ class BotManager:
                             telegram_user_id=telegram_user_id,
                             archived=False
                         ).first()
+                        # ✅ Preservar pixel_id transportado sem sobrescrever associação existente
+                        if bot_user_track and pixel_id_from_start and not bot_user_track.campaign_code:
+                            bot_user_track.campaign_code = pixel_id_from_start
+                            db.session.commit()
+                            logger.info(f"✅ Pixel do funil associado ao BotUser {bot_user_track.id} via start_param (campanha não sobrescrita)")
                         if bot_user_track:
                             import json as _json
                             tracking_key = f"tracking:{start_param}"
