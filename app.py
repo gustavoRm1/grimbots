@@ -9997,7 +9997,10 @@ def delivery_page(delivery_token):
         # A rota deve tratar status pendente de forma controlada e nunca disparar Purchase.
         payment = Payment.query.filter_by(
             delivery_token=delivery_token
-        ).first_or_404()
+        ).first()
+        if not payment:
+            logger.error(f"❌ Delivery token inválido ou expirado: {delivery_token}")
+            return render_template('delivery_error.html', error='Link de entrega inválido ou expirado.'), 404
 
         # ✅ DEFENSIVO: Se status != paid, consultar gateway em tempo real.
         # Só prosseguir para Purchase/entrega se o gateway retornar explicitamente 'paid'.
@@ -10149,13 +10152,14 @@ def delivery_page(delivery_token):
         # Isso garante que Purchase SEMPRE use o mesmo pixel do PageView
         pixel_id_from_payment = getattr(payment, 'meta_pixel_id', None)
         
-        # ✅ HTML-only: pixel_id deve vir do funil (query param px). Não inferir.
+        # ✅ HTML-only: preferir pixel_id do funil (query param px). Fallback defensivo para não quebrar entrega.
         pixel_id_from_request = request.args.get('px')
-        pixel_id_to_use = pixel_id_from_request
+        pixel_id_fallback = pixel_id_from_payment or (pool.meta_pixel_id if pool else None)
+        pixel_id_to_use = pixel_id_from_request or pixel_id_fallback
         has_meta_pixel = bool(pixel_id_to_use)
         if not has_meta_pixel:
             logger.warning(
-                "[META DELIVERY] pixel_id ausente na query param px — Purchase NÃO será disparado (HTML-only)")
+                "[META DELIVERY] pixel_id ausente (px/query e fallback). Purchase NÃO será disparado, mas entrega segue.")
             return render_template('delivery.html', payment=payment, pixel_id=None, redirect_url=redirect_url)
         # Recuperar pageview_event_id do tracking_data ou do payment
         pageview_event_id = tracking_data.get('pageview_event_id') or getattr(payment, 'pageview_event_id', None)
