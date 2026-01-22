@@ -10258,6 +10258,7 @@ def delivery_page(delivery_token):
             pixel_id=pixel_id_to_use,
             redirect_url=redirect_url,
             pageview_event_id=getattr(payment, 'pageview_event_id', None),
+            purchase_event_id=purchase_event_id,
             fbclid=getattr(payment, 'fbclid', None),
             fbc=getattr(payment, 'fbc', None),
             fbp=getattr(payment, 'fbp', None)

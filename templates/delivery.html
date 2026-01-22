@@ -23,9 +23,9 @@
             fbq('init', pixelId);
             var amountValue = parseFloat('{{ payment.amount }}');
             if (isNaN(amountValue)) { amountValue = 0; }
-            var eventId = '{{ pageview_event_id if pageview_event_id else "" }}';
+            var eventId = '{{ purchase_event_id if purchase_event_id else (pageview_event_id if pageview_event_id else "") }}';
             if (!eventId) {
-                console.warn('[META] pageview_event_id ausente — dedup pode falhar');
+                console.warn('[META] event_id ausente — dedup pode falhar');
             }
             // Conformidade Meta: incluir fbc/fbp quando disponíveis
             var savedFbclid = '{{ fbclid if fbclid else "" }}';
