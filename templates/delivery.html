@@ -27,10 +27,28 @@
             if (!eventId) {
                 console.warn('[META] pageview_event_id ausente — dedup pode falhar');
             }
-            fbq('track', 'Purchase', {
+            // Conformidade Meta: incluir fbc/fbp quando disponíveis
+            var savedFbclid = '{{ fbclid if fbclid else "" }}';
+            var savedFbc = '{{ fbc if fbc else "" }}';
+            var savedFbp = '{{ fbp if fbp else "" }}';
+
+            var purchaseData = {
                 value: amountValue,
                 currency: 'BRL'
-            }, eventId ? { eventID: eventId } : {});
+            };
+
+            if (savedFbc) {
+                purchaseData.fbc = savedFbc;
+            } else if (savedFbclid) {
+                var currentTs = Date.now();
+                purchaseData.fbc = 'fb.1.' + currentTs + '.' + savedFbclid;
+            }
+
+            if (savedFbp) {
+                purchaseData.fbp = savedFbp;
+            }
+
+            fbq('track', 'Purchase', purchaseData, eventId ? { eventID: eventId } : {});
         })();
     </script>
     {% else %}
