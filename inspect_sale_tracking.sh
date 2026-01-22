@@ -1,7 +1,16 @@
 #!/bin/bash
 set -euo pipefail
 
-EMAIL="pixBOT13417692a2d25ca@bot.digital"
+REFERENCE="BOT134-1769086772-d52cd682-1769086772392-58c642af"
+GATEWAY_TRANSACTION_ID="3898629"
+
+# Database (ajuste se a VPS usar host diferente)
+DB_HOST="localhost"
+DB_PORT="5432"
+DB_NAME="grimbots"
+DB_USER="postgres"
+
+# Redis
 REDIS_DB=0
 REDIS_CLI=(redis-cli -n "$REDIS_DB")
 
@@ -17,59 +26,125 @@ warn() {
   printf '⚠️  %s\n' "$1"
 }
 
-bold "=== INSPEÇÃO DE TRACKING – GRIMBOTS ==="
+bold "=== INSPEÇÃO CIRÚRGICA – VENDA ESPECÍFICA ==="
 echo
 
-info "Redis DB selecionado: $REDIS_DB"
-info "Email alvo: $EMAIL"
-
+info "Reference alvo: $REFERENCE"
+info "gateway_transaction_id alvo: $GATEWAY_TRANSACTION_ID"
 echo
-info "Procurando tracking_token pelo email (pode demorar)..."
-TOKEN=$("${REDIS_CLI[@]}" KEYS "*${EMAIL}*" | head -n 1)
 
-if [[ -z "$TOKEN" ]]; then
-  warn "Nenhum tracking_token encontrado para este email"
-  exit 0
-fi
-
-bold "✅ Tracking token encontrado"
-printf '%s\n\n' "$TOKEN"
-
-info "Carregando payload completo..."
-RAW_PAYLOAD=$("${REDIS_CLI[@]}" GET "$TOKEN" || true)
-
-if [[ -z "$RAW_PAYLOAD" ]]; then
-  warn "Payload vazio ou chave expirada"
-  exit 0
-fi
-
-echo "📦 Conteúdo do tracking payload:"
-printf '%s' "$RAW_PAYLOAD" | jq .
-
-echo
-info "Campos críticos:" 
-printf '%s' "$RAW_PAYLOAD" | jq '{
-  pixel_id,
-  redirect_id,
-  fbclid,
-  fbp,
-  fbc,
+info "PASSO 1 — Consultando Payment no Postgres (cadeia raiz)"
+PAYMENT_SQL=$(cat <<'EOF'
+SELECT
+  id,
+  payment_id,
+  reference,
+  gateway_transaction_id,
+  status,
+  created_at,
+  tracking_token,
   pageview_event_id,
-  event_source_url,
-  tracking_token
-}'
+  meta_pixel_id,
+  fbclid,
+  fbc,
+  fbp
+FROM payments
+WHERE reference = :'REFERENCE'
+   OR gateway_transaction_id = :'GATEWAY_TRANSACTION_ID'
+ORDER BY created_at DESC
+LIMIT 1;
+EOF
+)
+
+PAYMENT_ROW=$(psql \
+  -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" \
+  --set=sslmode=disable \
+  --set=REFERENCE="$REFERENCE" \
+  --set=GATEWAY_TRANSACTION_ID="$GATEWAY_TRANSACTION_ID" \
+  --no-align --tuples-only --field-separator '|' \
+  -c "$PAYMENT_SQL" 2>/tmp/inspect_payment.err || true)
+
+if [[ -z "$PAYMENT_ROW" ]]; then
+  warn "Payment NÃO encontrado. Verifique reference/gateway_transaction_id ou lag de replicação."
+  warn "Saída do psql:"; cat /tmp/inspect_payment.err
+  exit 1
+fi
+
+IFS='|' read -r PAYMENT_DB_ID PAYMENT_ID PAYMENT_REFERENCE PAYMENT_GATEWAY_ID PAYMENT_STATUS PAYMENT_CREATED_AT PAYMENT_TRACKING_TOKEN PAYMENT_PAGEVIEW EVENT_PIXEL_ID PAYMENT_FBCLID PAYMENT_FBC PAYMENT_FBP <<<"$PAYMENT_ROW"
+
+bold "✅ PAYMENT ENCONTRADO"
+cat <<EOF
+ - id.................: $PAYMENT_DB_ID
+ - payment_id.........: $PAYMENT_ID
+ - reference..........: ${PAYMENT_REFERENCE:-"❌"}
+ - gateway_tx_id......: ${PAYMENT_GATEWAY_ID:-"❌"}
+ - status.............: $PAYMENT_STATUS
+ - created_at.........: $PAYMENT_CREATED_AT
+ - tracking_token.....: ${PAYMENT_TRACKING_TOKEN:-"❌"}
+ - pageview_event_id..: ${PAYMENT_PAGEVIEW:-"❌"}
+ - meta_pixel_id......: ${EVENT_PIXEL_ID:-"❌"}
+ - fbclid.............: ${PAYMENT_FBCLID:-"❌"}
+ - fbc................: ${PAYMENT_FBC:-"❌"}
+ - fbp................: ${PAYMENT_FBP:-"❌"}
+EOF
 
 echo
-info "Resumo matemático para atribuição:"
-{
-  echo "Token: $TOKEN"
-  echo "Pixel ID:"; printf '%s' "$RAW_PAYLOAD" | jq -r '.pixel_id // "❌ ausente"'
-  echo "PageView Event ID:"; printf '%s' "$RAW_PAYLOAD" | jq -r '.pageview_event_id // "❌ ausente"'
-  echo "fbclid:"; printf '%s' "$RAW_PAYLOAD" | jq -r '.fbclid // "❌ ausente"'
-  echo "fbp:"; printf '%s' "$RAW_PAYLOAD" | jq -r '.fbp // "❌ ausente"'
-  echo "fbc:"; printf '%s' "$RAW_PAYLOAD" | jq -r '.fbc // "❌ ausente"'
-} | sed 's/^/ - /'
+info "PASSO 2 — Diagnóstico imediato"
+if [[ -z "$PAYMENT_TRACKING_TOKEN" ]]; then
+  warn "tracking_token ausente ⇒ Purchase não está ligado a nenhum PageView (Meta não atribui)."
+else
+  info "tracking_token presente ⇒ recuperar payload do Redis para confirmar cadeia."
+fi
+
+if [[ -z "$PAYMENT_PAGEVIEW" ]]; then
+  warn "pageview_event_id ausente ⇒ mesmo com token, deduplicação client/server falha."
+else
+  info "pageview_event_id salvo ⇒ verificar se combina com delivery/event manager."
+fi
+
+if [[ -z "$EVENT_PIXEL_ID" ]]; then
+  warn "meta_pixel_id ausente no Payment ⇒ Purchase seria disparado sem pixel válido."
+else
+  info "Pixel registrado no Payment: $EVENT_PIXEL_ID"
+fi
+
+if [[ -n "$PAYMENT_TRACKING_TOKEN" ]]; then
+  echo
+  info "PASSO 3 — Auditoria Redis (tracking:$PAYMENT_TRACKING_TOKEN)"
+  TRACKING_KEY="tracking:$PAYMENT_TRACKING_TOKEN"
+  RAW_PAYLOAD=$("${REDIS_CLI[@]}" GET "$TRACKING_KEY" || true)
+
+  if [[ -z "$RAW_PAYLOAD" ]]; then
+    warn "Payload ausente/expirado no Redis para $TRACKING_KEY"
+  else
+    echo "📦 Payload completo:" | tee /dev/stderr
+    printf '%s' "$RAW_PAYLOAD" | jq .
+
+    echo
+    info "Campos críticos (pixel/pageview/fbclid/etc.):"
+    printf '%s' "$RAW_PAYLOAD" | jq '{
+      pixel_id,
+      redirect_id,
+      fbclid,
+      fbp,
+      fbc,
+      pageview_event_id,
+      event_source_url,
+      tracking_token
+    }'
+  fi
+
+  echo
+  info "Passo extra — Localizando todas as chaves relacionadas"
+  "${REDIS_CLI[@]}" --scan --pattern "*${PAYMENT_TRACKING_TOKEN}*"
+fi
 
 echo
-info "Para confirmar deduplicação, valide se eventID coincide com pageview_event_id informado acima."
-info "Para confirmar pixel, compare pixel_id com o Pixel do anúncio/campanha no Meta Event Manager."
+info "PASSO 4 — Checklist final"
+if [[ -z "$PAYMENT_TRACKING_TOKEN" ]]; then
+  warn "Causa raiz provável: Purchase disparado sem tracking_token ⇒ Meta recebe evento sem PageView correspondente."
+elif [[ -n "$PAYMENT_TRACKING_TOKEN" && -z "$PAYMENT_PAGEVIEW" ]]; then
+  warn "Token existe mas pageview_event_id não foi persistido ⇒ deduplicação impossibilitada."
+else
+  info "Token + pageview_event_id presentes. Validar no Meta se event_id coincide e se pixel "$EVENT_PIXEL_ID" pertence à campanha."
+fi
