@@ -34,7 +34,8 @@ info "gateway_transaction_id alvo: $GATEWAY_TRANSACTION_ID"
 echo
 
 info "PASSO 1 — Consultando Payment no Postgres (cadeia raiz)"
-PAYMENT_SQL=$(cat <<'EOF'
+
+PAYMENT_SQL=$(cat <<EOF
 SELECT
   id,
   payment_id,
@@ -49,8 +50,8 @@ SELECT
   fbc,
   fbp
 FROM payments
-WHERE reference = :'REFERENCE'
-   OR gateway_transaction_id = :'GATEWAY_TRANSACTION_ID'
+WHERE reference = '$REFERENCE'
+   OR gateway_transaction_id = '$GATEWAY_TRANSACTION_ID'
 ORDER BY created_at DESC
 LIMIT 1;
 EOF
@@ -59,8 +60,6 @@ EOF
 PAYMENT_ROW=$(psql \
   -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" \
   --set=sslmode=disable \
-  --set=REFERENCE="$REFERENCE" \
-  --set=GATEWAY_TRANSACTION_ID="$GATEWAY_TRANSACTION_ID" \
   --no-align --tuples-only --field-separator '|' \
   -c "$PAYMENT_SQL" 2>/tmp/inspect_payment.err || true)
 
