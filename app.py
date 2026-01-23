@@ -10183,10 +10183,13 @@ def delivery_page(delivery_token):
         if pageview_event_id and not payment.pageview_event_id:
             payment.pageview_event_id = pageview_event_id
             db.session.commit()
-        fbclid_to_use = (tracking_data.get('fbclid') if tracking_data else None) or (getattr(bot_user, 'fbclid', None) if bot_user else None)
-        fbp_value = (tracking_data.get('fbp') if tracking_data else None) or (getattr(bot_user, 'fbp', None) if bot_user else None)
-        fbc_value = (tracking_data.get('fbc') if tracking_data else None) or (getattr(bot_user, 'fbc', None) if bot_user else None)
-        external_id = fbclid_to_use
+        raw_fbclid = (tracking_data.get('fbclid') if tracking_data else None) or (getattr(bot_user, 'fbclid', None) if bot_user else None)
+        raw_fbp = (tracking_data.get('fbp') if tracking_data else None) or (getattr(bot_user, 'fbp', None) if bot_user else None)
+        raw_fbc = (tracking_data.get('fbc') if tracking_data else None) or (getattr(bot_user, 'fbc', None) if bot_user else None)
+        fbclid_to_use = raw_fbclid or ''
+        fbp_value = raw_fbp or ''
+        fbc_value = raw_fbc or ''
+        external_id = raw_fbclid
         fbc_origin = tracking_data.get('fbc_origin')
         
         # ✅ CRÍTICO: Validar fbc_origin (ignorar fbc sintético)
