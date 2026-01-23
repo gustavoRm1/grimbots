@@ -12,8 +12,10 @@ set -euo pipefail
 PAY_ID="${PAY_ID:-}"            # id (pk)
 PAYMENT_ID="${PAYMENT_ID:-}"    # payment_id string
 GATEWAY_ID="${GATEWAY_ID:-}"    # gateway_transaction_id
+# Status filter (default: paid or approved)
+STATUS_FILTER="${STATUS_FILTER:-status IN ('paid','approved')}"
 
-WHERE_CLAUSE="status = 'paid'"
+WHERE_CLAUSE="$STATUS_FILTER"
 if [[ -n "$PAY_ID" ]]; then
   WHERE_CLAUSE="id = ${PAY_ID}"
 elif [[ -n "$PAYMENT_ID" ]]; then
