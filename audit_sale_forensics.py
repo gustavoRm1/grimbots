@@ -36,13 +36,18 @@ def audit_payment(id_value: int | None, payment_id_value: str | None, gateway_id
     with app.app_context():
         payment = find_payment(id_value, payment_id_value, gateway_id_value)
         if not payment:
+            # Fallback: listar candidatos por prefix/substring para ajudar a achar
+            candidates = []
+            if payment_id_value:
+                candidates = [p.payment_id for p in Payment.query.filter(Payment.payment_id.ilike(f"%{payment_id_value}%")).limit(5).all()]
             print(json.dumps({
                 "error": "payment not found",
                 "searched": {
                     "id": id_value,
                     "payment_id": payment_id_value,
                     "gateway_transaction_id": gateway_id_value,
-                }
+                },
+                "candidates_payment_id_contains": candidates
             }, ensure_ascii=False, indent=2))
             return
 
