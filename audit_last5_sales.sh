@@ -12,8 +12,9 @@ set -euo pipefail
 PAY_ID="${PAY_ID:-}"            # id (pk)
 PAYMENT_ID="${PAYMENT_ID:-}"    # payment_id string
 GATEWAY_ID="${GATEWAY_ID:-}"    # gateway_transaction_id
-# Status filter (default: paid or approved)
+# Status filter (default: paid or approved). Set ANY_STATUS=1 to disable.
 STATUS_FILTER="${STATUS_FILTER:-status IN ('paid','approved')}"
+ANY_STATUS="${ANY_STATUS:-0}"
 
 WHERE_CLAUSE="$STATUS_FILTER"
 if [[ -n "$PAY_ID" ]]; then
@@ -22,6 +23,19 @@ elif [[ -n "$PAYMENT_ID" ]]; then
   WHERE_CLAUSE="payment_id = '${PAYMENT_ID}'"
 elif [[ -n "$GATEWAY_ID" ]]; then
   WHERE_CLAUSE="gateway_transaction_id = '${GATEWAY_ID}'"
+fi
+
+if [[ "$ANY_STATUS" == "1" ]]; then
+  # Remove filtro de status quando ANY_STATUS=1
+  if [[ -n "$PAY_ID" ]]; then
+    WHERE_CLAUSE="id = ${PAY_ID}"
+  elif [[ -n "$PAYMENT_ID" ]]; then
+    WHERE_CLAUSE="payment_id = '${PAYMENT_ID}'"
+  elif [[ -n "$GATEWAY_ID" ]]; then
+    WHERE_CLAUSE="gateway_transaction_id = '${GATEWAY_ID}'"
+  else
+    WHERE_CLAUSE="1=1"
+  fi
 fi
 
 LIMIT_CLAUSE="LIMIT 5"
@@ -45,7 +59,7 @@ psql "host=$PGHOST port=$PGPORT user=$PGUSER dbname=$PGDATABASE" -At -c "
 
 RESULT=$(cat "$TMP_JSON")
 if [[ "$RESULT" == "null" || -z "$RESULT" ]]; then
-  echo "Nenhuma venda encontrada."
+  echo "Nenhuma venda encontrada. WHERE=${WHERE_CLAUSE}" >&2
   exit 0
 fi
 
