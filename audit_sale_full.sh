@@ -15,15 +15,24 @@ GATEWAY_ID="${GATEWAY_ID:-}"       # gateway_transaction_id
 LIMIT_ROWS="${LIMIT_ROWS:-5}"
 STATUS_FILTER="${STATUS_FILTER:-status IN ('paid','approved','APPROVED','PAGO')}"
 ANY_STATUS="${ANY_STATUS:-1}"      # 1 = ignora filtro de status
+EXACT_MATCH="${EXACT_MATCH:-0}"    # 1 = usa igualdade ao invés de ILIKE
 
 build_where() {
   local where
   if [[ -n "$PAY_ID" ]]; then
     where="id = ${PAY_ID}"
   elif [[ -n "$PAYMENT_ID" ]]; then
-    where="payment_id = '${PAYMENT_ID}'"
+    if [[ "$EXACT_MATCH" == "1" ]]; then
+      where="payment_id = '${PAYMENT_ID}'"
+    else
+      where="payment_id ILIKE '%${PAYMENT_ID}%'"
+    fi
   elif [[ -n "$GATEWAY_ID" ]]; then
-    where="gateway_transaction_id = '${GATEWAY_ID}'"
+    if [[ "$EXACT_MATCH" == "1" ]]; then
+      where="gateway_transaction_id = '${GATEWAY_ID}'"
+    else
+      where="gateway_transaction_id ILIKE '%${GATEWAY_ID}%'"
+    fi
   else
     where="1=1"
   fi
