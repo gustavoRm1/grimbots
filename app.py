@@ -10166,7 +10166,9 @@ def delivery_page(delivery_token):
         # ✅ HTML-only: preferir px; se não, usar pixel do Redis; por último, fallback do pool/payment
         pixel_id_from_request = request.args.get('px')
         pixel_from_redis = (tracking_data.get('pixel_id') or tracking_data.get('meta_pixel_id')) if tracking_data else None
-        pixel_from_db = getattr(bot_user, 'meta_pixel_id', None) if bot_user else None
+        pixel_from_db = getattr(bot_user, 'campaign_code', None) if bot_user else None
+        if pixel_from_db and not str(pixel_from_db).isdigit():
+            pixel_from_db = None
         pixel_id_fallback = pixel_id_from_payment or (pool.meta_pixel_id if pool else None)
         pixel_id_to_use = pixel_id_from_request or pixel_from_redis or pixel_from_db or pixel_id_fallback
         has_meta_pixel = bool(pixel_id_to_use)
