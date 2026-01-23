@@ -12,6 +12,7 @@ set -euo pipefail
 PAY_ID="${PAY_ID:-}"               # id (pk)
 PAYMENT_ID="${PAYMENT_ID:-}"       # payment_id string
 GATEWAY_ID="${GATEWAY_ID:-}"       # gateway_transaction_id
+PAYMENT_ID_GW="${PAYMENT_ID_GW:-}" # campo payment_id_gw (se existir)
 LIMIT_ROWS="${LIMIT_ROWS:-5}"
 STATUS_FILTER="${STATUS_FILTER:-status IN ('paid','approved','APPROVED','PAGO')}"
 ANY_STATUS="${ANY_STATUS:-1}"      # 1 = ignora filtro de status
@@ -26,6 +27,12 @@ build_where() {
       where="payment_id = '${PAYMENT_ID}'"
     else
       where="payment_id ILIKE '%${PAYMENT_ID}%'"
+    fi
+  elif [[ -n "$PAYMENT_ID_GW" ]]; then
+    if [[ "$EXACT_MATCH" == "1" ]]; then
+      where="payment_id_gw = '${PAYMENT_ID_GW}'"
+    else
+      where="payment_id_gw ILIKE '%${PAYMENT_ID_GW}%'"
     fi
   elif [[ -n "$GATEWAY_ID" ]]; then
     if [[ "$EXACT_MATCH" == "1" ]]; then
@@ -48,7 +55,7 @@ TMP_JSON=$(mktemp)
 psql "host=$PGHOST port=$PGPORT user=$PGUSER dbname=$PGDATABASE" -At -c "
   SELECT json_agg(row_to_json(t)) FROM (
     SELECT id, payment_id, gateway_transaction_id, bot_id, amount, status,
-           tracking_token, pageview_event_id, fbp, fbc, fbclid,
+           payment_id_gw, tracking_token, pageview_event_id, fbp, fbc, fbclid,
            created_at, paid_at
     FROM payments
     WHERE ${WHERE_CLAUSE}
@@ -64,6 +71,14 @@ if [[ "$RESULT" == "null" || -z "$RESULT" ]]; then
     psql "host=$PGHOST port=$PGPORT user=$PGUSER dbname=$PGDATABASE" -At -c "
       SELECT payment_id FROM payments
       WHERE payment_id ILIKE '%${PAYMENT_ID}%'
+      ORDER BY id DESC
+      LIMIT 5;
+    " >&2 || true
+  fi
+  if [[ -n "$PAYMENT_ID_GW" ]]; then
+    psql "host=$PGHOST port=$PGPORT user=$PGUSER dbname=$PGDATABASE" -At -c "
+      SELECT payment_id_gw FROM payments
+      WHERE payment_id_gw ILIKE '%${PAYMENT_ID_GW}%'
       ORDER BY id DESC
       LIMIT 5;
     " >&2 || true
@@ -85,6 +100,17 @@ if [[ "$RESULT" == "null" || -z "$RESULT" ]]; then
       SELECT id, payment_id, gateway_transaction_id, status, amount, created_at
       FROM payments
       WHERE payment_id ILIKE '%${PREFIX}%'
+      ORDER BY id DESC
+      LIMIT 20;
+    " >&2 || true
+  fi
+  if [[ -n "$PAYMENT_ID_GW" ]]; then
+    PREFIX=${PAYMENT_ID_GW:0:12}
+    echo "-- Busca por prefixo payment_id_gw '${PREFIX}' --" >&2
+    psql "host=$PGHOST port=$PGPORT user=$PGUSER dbname=$PGDATABASE" -At -c "
+      SELECT id, payment_id_gw, payment_id, gateway_transaction_id, status, amount, created_at
+      FROM payments
+      WHERE payment_id_gw ILIKE '%${PREFIX}%'
       ORDER BY id DESC
       LIMIT 20;
     " >&2 || true
