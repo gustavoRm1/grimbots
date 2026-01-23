@@ -15,11 +15,35 @@ def fmt_dt(dt):
     return dt.isoformat()
 
 
-def audit_payment(payment_id: int):
+def find_payment(id_value: int | None, payment_id_value: str | None, gateway_id_value: str | None):
+    """Find payment by priority: id -> payment_id -> gateway_transaction_id."""
+    if id_value is not None:
+        payment = Payment.query.filter_by(id=id_value).first()
+        if payment:
+            return payment
+    if payment_id_value:
+        payment = Payment.query.filter_by(payment_id=payment_id_value).first()
+        if payment:
+            return payment
+    if gateway_id_value:
+        payment = Payment.query.filter_by(gateway_transaction_id=gateway_id_value).first()
+        if payment:
+            return payment
+    return None
+
+
+def audit_payment(id_value: int | None, payment_id_value: str | None, gateway_id_value: str | None):
     with app.app_context():
-        payment = Payment.query.filter_by(id=payment_id).first()
+        payment = find_payment(id_value, payment_id_value, gateway_id_value)
         if not payment:
-            print(json.dumps({"error": f"payment {payment_id} not found"}, ensure_ascii=False, indent=2))
+            print(json.dumps({
+                "error": "payment not found",
+                "searched": {
+                    "id": id_value,
+                    "payment_id": payment_id_value,
+                    "gateway_transaction_id": gateway_id_value,
+                }
+            }, ensure_ascii=False, indent=2))
             return
 
         tracking_token = getattr(payment, "tracking_token", None)
@@ -61,9 +85,19 @@ def audit_payment(payment_id: int):
 
 def main():
     parser = argparse.ArgumentParser(description="Audit sale tracking in DB + Redis")
-    parser.add_argument("payment_id", nargs="?", type=int, default=4015990, help="Payment ID to audit (default: 4015990)")
+    parser.add_argument("id", nargs="?", type=int, default=None, help="Payment primary key id (int).")
+    parser.add_argument("--payment-id", dest="payment_id_value", help="Payment.payment_id (string gateway reference)")
+    parser.add_argument("--gateway-id", dest="gateway_id_value", help="gateway_transaction_id (string)")
+    parser.add_argument("--default", action="store_true", help="Use defaults: id=4015990 if nothing passed")
     args = parser.parse_args()
-    audit_payment(args.payment_id)
+    id_value = args.id
+    payment_id_value = args.payment_id_value
+    gateway_id_value = args.gateway_id_value
+
+    if args.default and not any([id_value, payment_id_value, gateway_id_value]):
+        id_value = 4015990
+
+    audit_payment(id_value, payment_id_value, gateway_id_value)
 
 
 if __name__ == "__main__":
