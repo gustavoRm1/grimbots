@@ -8,7 +8,26 @@ set -euo pipefail
 : "${PGDATABASE:=grimbots}"
 : "${REDIS_URL:=redis://localhost:6379/0}"
 
-# Lista os últimos 5 payments pagos
+# Filtros opcionais
+PAY_ID="${PAY_ID:-}"            # id (pk)
+PAYMENT_ID="${PAYMENT_ID:-}"    # payment_id string
+GATEWAY_ID="${GATEWAY_ID:-}"    # gateway_transaction_id
+
+WHERE_CLAUSE="status = 'paid'"
+if [[ -n "$PAY_ID" ]]; then
+  WHERE_CLAUSE="id = ${PAY_ID}"
+elif [[ -n "$PAYMENT_ID" ]]; then
+  WHERE_CLAUSE="payment_id = '${PAYMENT_ID}'"
+elif [[ -n "$GATEWAY_ID" ]]; then
+  WHERE_CLAUSE="gateway_transaction_id = '${GATEWAY_ID}'"
+fi
+
+LIMIT_CLAUSE="LIMIT 5"
+if [[ -n "$PAY_ID" || -n "$PAYMENT_ID" || -n "$GATEWAY_ID" ]]; then
+  LIMIT_CLAUSE="LIMIT 20"
+fi
+
+# Lista pagamentos conforme filtro (default: últimos 5 pagos)
 TMP_JSON=$(mktemp)
 psql "host=$PGHOST port=$PGPORT user=$PGUSER dbname=$PGDATABASE" -At -c "
   SELECT json_agg(row_to_json(t)) FROM (
@@ -16,9 +35,9 @@ psql "host=$PGHOST port=$PGPORT user=$PGUSER dbname=$PGDATABASE" -At -c "
            tracking_token, pageview_event_id, fbp, fbc, fbclid,
            created_at, paid_at
     FROM payments
-    WHERE status = 'paid'
+    WHERE ${WHERE_CLAUSE}
     ORDER BY paid_at DESC NULLS LAST, created_at DESC
-    LIMIT 5
+    ${LIMIT_CLAUSE}
   ) t;
 " > "$TMP_JSON"
 
