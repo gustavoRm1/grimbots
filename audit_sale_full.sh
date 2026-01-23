@@ -68,6 +68,27 @@ if [[ "$RESULT" == "null" || -z "$RESULT" ]]; then
       LIMIT 5;
     " >&2 || true
   fi
+  # Fallback: mostrar últimas 50 vendas (qualquer status) para inspeção manual
+  echo "-- Últimas 50 vendas (qualquer status) --" >&2
+  psql "host=$PGHOST port=$PGPORT user=$PGUSER dbname=$PGDATABASE" -At -c "
+    SELECT id, payment_id, gateway_transaction_id, status, amount, created_at, paid_at
+    FROM payments
+    ORDER BY COALESCE(paid_at, created_at) DESC
+    LIMIT 50;
+  " >&2 || true
+
+  # Se houver PAYMENT_ID, fazer busca por prefixo de 12 chars (mais ampla)
+  if [[ -n "$PAYMENT_ID" ]]; then
+    PREFIX=${PAYMENT_ID:0:12}
+    echo "-- Busca por prefixo '${PREFIX}' --" >&2
+    psql "host=$PGHOST port=$PGPORT user=$PGUSER dbname=$PGDATABASE" -At -c "
+      SELECT id, payment_id, gateway_transaction_id, status, amount, created_at
+      FROM payments
+      WHERE payment_id ILIKE '%${PREFIX}%'
+      ORDER BY id DESC
+      LIMIT 20;
+    " >&2 || true
+  fi
   exit 0
 fi
 
