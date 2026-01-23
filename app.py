@@ -405,10 +405,17 @@ def send_payment_delivery(payment, bot_manager):
             logger.info(f"✅ delivery_token gerado para payment {payment.id}: {delivery_token[:20]}...")
         
         # ✅ Buscar pool para verificar Meta Pixel
-        from models import PoolBot
+        from models import PoolBot, BotUser
         pool_bot = PoolBot.query.filter_by(bot_id=payment.bot_id).first()
         pool = pool_bot.pool if pool_bot else None
-        has_meta_pixel = pool and pool.meta_tracking_enabled and pool.meta_pixel_id
+
+        # ✅ Sticky Pixel: priorizar pixel da origem do usuário (campaign_code) se for numérico
+        bot_user_for_pixel = BotUser.query.filter_by(bot_id=payment.bot_id, telegram_user_id=str(payment.customer_user_id)).first() if payment.customer_user_id else None
+        user_origin_pixel = getattr(bot_user_for_pixel, 'campaign_code', None) if bot_user_for_pixel else None
+        pixel_from_user = user_origin_pixel if user_origin_pixel and str(user_origin_pixel).isdigit() else None
+        pixel_id_to_use = pixel_from_user or (pool.meta_pixel_id if pool else None)
+
+        has_meta_pixel = bool(pool and pool.meta_tracking_enabled and pixel_id_to_use)
         
         # Verificar se bot tem config e access_link (link final configurado pelo usuário)
         has_access_link = payment.bot.config and payment.bot.config.access_link
@@ -440,11 +447,11 @@ def send_payment_delivery(payment, bot_manager):
                 link_to_send = url_for(
                     'delivery_page',
                     delivery_token=payment.delivery_token,
-                    px=pool.meta_pixel_id if pool and pool.meta_pixel_id else None,
+                    px=pixel_id_to_use,
                     _external=True
                 )
             except:
-                suffix_px = f"?px={pool.meta_pixel_id}" if pool and pool.meta_pixel_id else ""
+                suffix_px = f"?px={pixel_id_to_use}" if pixel_id_to_use else ""
                 link_to_send = f"https://app.grimbots.online/delivery/{payment.delivery_token}{suffix_px}"
             
             logger.info(f"✅ Meta Pixel ativo → enviando /delivery para disparar Purchase tracking (payment {payment.id})")
