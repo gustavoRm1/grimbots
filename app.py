@@ -10166,8 +10166,9 @@ def delivery_page(delivery_token):
         # ✅ HTML-only: preferir px; se não, usar pixel do Redis; por último, fallback do pool/payment
         pixel_id_from_request = request.args.get('px')
         pixel_from_redis = (tracking_data.get('pixel_id') or tracking_data.get('meta_pixel_id')) if tracking_data else None
+        pixel_from_db = getattr(bot_user, 'meta_pixel_id', None) if bot_user else None
         pixel_id_fallback = pixel_id_from_payment or (pool.meta_pixel_id if pool else None)
-        pixel_id_to_use = pixel_id_from_request or pixel_from_redis or pixel_id_fallback
+        pixel_id_to_use = pixel_id_from_request or pixel_from_redis or pixel_from_db or pixel_id_fallback
         has_meta_pixel = bool(pixel_id_to_use)
         logger.info(
             f"[META DEBUG] Pixel Final: {pixel_id_to_use} | Fonte Redis: {bool(pixel_from_redis)} | Fonte URL: {bool(pixel_id_from_request)}"
@@ -10180,9 +10181,9 @@ def delivery_page(delivery_token):
         if pageview_event_id and not payment.pageview_event_id:
             payment.pageview_event_id = pageview_event_id
             db.session.commit()
-        fbclid_to_use = (tracking_data.get('fbclid') if tracking_data else None) or payment.fbclid
-        fbp_value = (tracking_data.get('fbp') if tracking_data else None) or getattr(payment, 'fbp', None) or getattr(bot_user, 'fbp', None)
-        fbc_value = (tracking_data.get('fbc') if tracking_data else None) or getattr(payment, 'fbc', None) or getattr(bot_user, 'fbc', None)
+        fbclid_to_use = (tracking_data.get('fbclid') if tracking_data else None) or (getattr(bot_user, 'fbclid', None) if bot_user else None)
+        fbp_value = (tracking_data.get('fbp') if tracking_data else None) or (getattr(bot_user, 'fbp', None) if bot_user else None)
+        fbc_value = (tracking_data.get('fbc') if tracking_data else None) or (getattr(bot_user, 'fbc', None) if bot_user else None)
         external_id = fbclid_to_use
         fbc_origin = tracking_data.get('fbc_origin')
         
