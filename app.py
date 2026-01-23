@@ -10180,9 +10180,10 @@ def delivery_page(delivery_token):
         if pageview_event_id and not payment.pageview_event_id:
             payment.pageview_event_id = pageview_event_id
             db.session.commit()
-        external_id = tracking_data.get('fbclid') or payment.fbclid
-        fbp_value = tracking_data.get('fbp') or getattr(payment, 'fbp', None) or getattr(bot_user, 'fbp', None)
-        fbc_value = tracking_data.get('fbc') or getattr(payment, 'fbc', None) or getattr(bot_user, 'fbc', None)
+        fbclid_to_use = (tracking_data.get('fbclid') if tracking_data else None) or payment.fbclid
+        fbp_value = (tracking_data.get('fbp') if tracking_data else None) or getattr(payment, 'fbp', None) or getattr(bot_user, 'fbp', None)
+        fbc_value = (tracking_data.get('fbc') if tracking_data else None) or getattr(payment, 'fbc', None) or getattr(bot_user, 'fbc', None)
+        external_id = fbclid_to_use
         fbc_origin = tracking_data.get('fbc_origin')
         
         # ✅ CRÍTICO: Validar fbc_origin (ignorar fbc sintético)
@@ -10263,9 +10264,9 @@ def delivery_page(delivery_token):
             redirect_url=redirect_url,
             pageview_event_id=getattr(payment, 'pageview_event_id', None),
             purchase_event_id=purchase_event_id,
-            fbclid=getattr(payment, 'fbclid', None),
-            fbc=getattr(payment, 'fbc', None),
-            fbp=getattr(payment, 'fbp', None)
+            fbclid=fbclid_to_use,
+            fbc=fbc_value,
+            fbp=fbp_value
         )
         
         # ✅ DEPOIS de renderizar template, enfileirar Purchase via Server (Conversions API)
