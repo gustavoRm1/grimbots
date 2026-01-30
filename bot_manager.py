@@ -3822,7 +3822,7 @@ class BotManager:
                     wait_time_msg = pix_data.get('wait_time', 'alguns segundos')
                     self.send_telegram_message(
                         chat_id=chat_id,
-                        text=f"⏳ <b>Aguarde {wait_time_msg}...</b>\n\nVocê já gerou um PIX agora mesmo. Verifique se recebeu o QR Code acima antes de tentar novamente.",
+                        message=f"⏳ <b>Aguarde {wait_time_msg}...</b>\n\nVocê já gerou um PIX agora mesmo. Verifique se recebeu o QR Code acima antes de tentar novamente.",
                         token=token
                     )
                     return
@@ -4847,7 +4847,7 @@ class BotManager:
                     wait_time_msg = pix_data.get('wait_time', 'alguns segundos')
                     self.send_telegram_message(
                         chat_id=chat_id,
-                        text=f"⏳ <b>Aguarde {wait_time_msg}...</b>\n\nVocê já gerou um PIX agora mesmo. Verifique se recebeu o QR Code acima antes de tentar novamente.",
+                        message=f"⏳ <b>Aguarde {wait_time_msg}...</b>\n\nVocê já gerou um PIX agora mesmo. Verifique se recebeu o QR Code acima antes de tentar novamente.",
                         token=token
                     )
                     return
@@ -5752,7 +5752,7 @@ class BotManager:
                     wait_time_msg = pix_data.get('wait_time', 'alguns segundos')
                     self.send_telegram_message(
                         chat_id=chat_id,
-                        text=f"⏳ <b>Aguarde {wait_time_msg}...</b>\n\nVocê já gerou um PIX agora mesmo. Verifique se recebeu o QR Code acima antes de tentar novamente.",
+                        message=f"⏳ <b>Aguarde {wait_time_msg}...</b>\n\nVocê já gerou um PIX agora mesmo. Verifique se recebeu o QR Code acima antes de tentar novamente.",
                         token=token
                     )
                     return
@@ -5867,7 +5867,7 @@ class BotManager:
                     wait_time_msg = pix_data.get('wait_time', 'alguns segundos')
                     self.send_telegram_message(
                         chat_id=chat_id,
-                        text=f"⏳ <b>Aguarde {wait_time_msg}...</b>\n\nVocê já gerou um PIX agora mesmo. Verifique se recebeu o QR Code acima antes de tentar novamente.",
+                        message=f"⏳ <b>Aguarde {wait_time_msg}...</b>\n\nVocê já gerou um PIX agora mesmo. Verifique se recebeu o QR Code acima antes de tentar novamente.",
                         token=token
                     )
                     return
@@ -7241,7 +7241,7 @@ Seu pagamento ainda não foi confirmado.
                 wait_time_msg = pix_data.get('wait_time', 'alguns segundos')
                 self.send_telegram_message(
                     chat_id=chat_id,
-                    text=f"⏳ <b>Aguarde {wait_time_msg}...</b>\n\nVocê já gerou um PIX agora mesmo. Verifique se recebeu o QR Code acima antes de tentar novamente.",
+                    message=f"⏳ <b>Aguarde {wait_time_msg}...</b>\n\nVocê já gerou um PIX agora mesmo. Verifique se recebeu o QR Code acima antes de tentar novamente.",
                     token=token
                 )
                 return
