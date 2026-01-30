@@ -7502,11 +7502,6 @@ Seu pagamento ainda não foi confirmado.
             logger.warning(f"⚠️ Erro ao adquirir lock PIX: {lock_error} - seguindo mesmo assim (risco de duplicidade)")
         
         try:
-            # ✅ FIX: Re-hidratar o objeto Bot para evitar DetachedInstanceError ao acessar .owner
-            from models import Bot, db
-            if bot and getattr(bot, 'id', None):
-                bot = db.session.merge(bot)
-
             # ✅ VALIDAÇÃO CRÍTICA: customer_user_id não pode ser vazio (destrói tracking Meta Pixel)
             if not customer_user_id or customer_user_id.strip() == "":
                 logger.error(f"❌ ERRO CRÍTICO: customer_user_id vazio ao gerar PIX! Bot: {bot_id}, Valor: R$ {amount:.2f}")
@@ -7533,6 +7528,8 @@ Seu pagamento ainda não foi confirmado.
                     if not bot:
                         logger.error(f"Bot {bot_id} não encontrado")
                         return None
+                    # ✅ FIX: Re-hidratar o objeto Bot AGORA que ele foi definido
+                    bot = db.session.merge(bot)
                     
                     # Buscar gateway ativo e verificado do usuário
                     # ✅ CORREÇÃO: Filtrar também por gateway_type se necessário, mas permitir qualquer gateway ativo
