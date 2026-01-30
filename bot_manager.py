@@ -8034,18 +8034,21 @@ Seu pagamento ainda não foi confirmado.
                     if is_remarketing:
                         if bot_user and bot_user.tracking_session_id:
                             tracking_token = bot_user.tracking_session_id
-                            logger.info(f"✅ [REMARKETING] Forçando tracking_token do BotUser.tracking_session_id: {tracking_token[:20]}...")
+                            token_log = tracking_token[:20] if tracking_token and isinstance(tracking_token, str) else 'N/A'
+                            logger.info(f"✅ [REMARKETING] Forçando tracking_token do BotUser.tracking_session_id: {token_log}...")
                         else:
                             tracking_token = None
                             logger.error(f"❌ [REMARKETING] BotUser sem tracking_session_id - Payment será criado sem tracking_token (atribuição prejudicada)")
                     elif bot_user and bot_user.tracking_session_id and not is_remarketing:
                         tracking_token = bot_user.tracking_session_id
-                        logger.info(f"✅ Tracking token recuperado de bot_user.tracking_session_id (PRIORIDADE MÁXIMA): {tracking_token[:20]}...")
+                        token_log = tracking_token[:20] if tracking_token and isinstance(tracking_token, str) else 'N/A'
+                        logger.info(f"✅ Tracking token recuperado de bot_user.tracking_session_id (PRIORIDADE MÁXIMA): {token_log}...")
                         
                         # ✅ CORREÇÃO CRÍTICA V15: Validar se token é gerado e tentar recuperar token UUID correto
                         is_generated_token = tracking_token.startswith('tracking_')
                         if is_generated_token:
-                            logger.error(f"❌ [GENERATE PIX] bot_user.tracking_session_id contém token GERADO: {tracking_token[:30]}...")
+                            token_log_30 = tracking_token[:30] if tracking_token and isinstance(tracking_token, str) else 'N/A'
+                            logger.error(f"❌ [GENERATE PIX] bot_user.tracking_session_id contém token GERADO: {token_log_30}...")
                             logger.error(f"   Token gerado não tem dados do redirect (client_ip, client_user_agent, pageview_event_id)")
                             logger.error(f"   Tentando recuperar token UUID correto via fbclid...")
                             
@@ -8062,7 +8065,8 @@ Seu pagamento ainda não foi confirmado.
                                         is_recovered_uuid = len(normalized_recovered) == 32 and all(c in '0123456789abcdef' for c in normalized_recovered)
                                         if is_recovered_uuid:
                                             tracking_token = recovered_token_from_fbclid
-                                            logger.info(f"✅ [GENERATE PIX] Token UUID correto recuperado via fbclid: {tracking_token[:20]}...")
+                                            token_log = tracking_token[:20] if tracking_token and isinstance(tracking_token, str) else 'N/A'
+                                            logger.info(f"✅ [GENERATE PIX] Token UUID correto recuperado via fbclid: {token_log}...")
                                             logger.info(f"   Atualizando bot_user.tracking_session_id com token UUID correto")
                                             bot_user.tracking_session_id = tracking_token
                                         else:
@@ -8101,7 +8105,8 @@ Seu pagamento ainda não foi confirmado.
                                     # ✅ NÃO usar token gerado
                                 elif is_uuid_token:
                                     tracking_token = cached_token
-                                    logger.info(f"✅ Tracking token recuperado de tracking:last_token:user:{customer_user_id}: {tracking_token[:20]}...")
+                                    token_log = tracking_token[:20] if tracking_token and isinstance(tracking_token, str) else 'N/A'
+                                    logger.info(f"✅ Tracking token recuperado de tracking:last_token:user:{customer_user_id}: {token_log}...")
                                 else:
                                     logger.warning(f"⚠️ [GENERATE PIX] Token recuperado de tracking:last_token tem formato inválido: {cached_token[:30]}... (len={len(cached_token)}) - IGNORANDO")
                         except Exception:
@@ -8129,7 +8134,8 @@ Seu pagamento ainda não foi confirmado.
                                         # ✅ NÃO usar token gerado
                                     elif is_uuid_token:
                                         tracking_token = recovered_token_from_chat
-                                        logger.info(f"✅ Tracking token recuperado de tracking:chat:{customer_user_id}: {tracking_token[:20]}...")
+                                        token_log = tracking_token[:20] if tracking_token and isinstance(tracking_token, str) else 'N/A'
+                                        logger.info(f"✅ Tracking token recuperado de tracking:chat:{customer_user_id}: {token_log}...")
                                     else:
                                         logger.warning(f"⚠️ [GENERATE PIX] Token recuperado de tracking:chat tem formato inválido: {recovered_token_from_chat[:30]}... (len={len(recovered_token_from_chat)}) - IGNORANDO")
                         except Exception:
@@ -8159,7 +8165,8 @@ Seu pagamento ainda não foi confirmado.
                             redirect_id = tracking_data_v4.get("redirect_id")
                             meta_pixel_id = tracking_data_v4.get("pixel_id")
                             tracking_token = tracking_data_v4.get("tracking_token") or tracking_token
-                            logger.info(f" Tracking payload recuperado do Redis para token {tracking_token[:20]}... | fbp={'ok' if fbp else 'missing'} | fbc={'ok' if fbc else 'missing'} | pageview_event_id={'ok' if pageview_event_id else 'missing'}")
+                            token_log = tracking_token[:20] if tracking_token and isinstance(tracking_token, str) else 'N/A'
+                            logger.info(f" Tracking payload recuperado do Redis para token {token_log}... | fbp={'ok' if fbp else 'missing'} | fbc={'ok' if fbc else 'missing'} | pageview_event_id={'ok' if pageview_event_id else 'missing'}")
                         elif not tracking_data_v4:
                             logger.warning(" Tracking token %s sem payload no Redis - tentando reconstruir via BotUser", tracking_token)
                         # CORREÇÃO CRÍTICA V12: VALIDAR antes de atualizar bot_user.tracking_session_id
@@ -8170,7 +8177,8 @@ Seu pagamento ainda não foi confirmado.
                             is_uuid_token = len(normalized_token_check) == 32 and all(c in '0123456789abcdef' for c in normalized_token_check)
                             if is_uuid_token and bot_user.tracking_session_id != tracking_token:
                                 bot_user.tracking_session_id = tracking_token
-                                logger.info(f" bot_user.tracking_session_id atualizado com token do redirect: {tracking_token[:20]}...")
+                                token_log = tracking_token[:20] if tracking_token and isinstance(tracking_token, str) else 'N/A'
+                                logger.info(f" bot_user.tracking_session_id atualizado com token do redirect: {token_log}...")
 
                     # NOTA: bot_user.tracking_session_id já foi verificado no início (prioridade máxima)
                     # Não precisa verificar novamente aqui
@@ -8189,7 +8197,8 @@ Seu pagamento ainda não foi confirmado.
                                 if recovered_token_from_fbclid:
                                     # ✅ Token encontrado via fbclid - recuperar payload completo
                                     tracking_token = recovered_token_from_fbclid
-                                    logger.info(f"✅ Tracking token recuperado do Redis via fbclid do BotUser: {tracking_token[:20]}...")
+                                    token_log = tracking_token[:20] if tracking_token and isinstance(tracking_token, str) else 'N/A'
+                                    logger.info(f"✅ Tracking token recuperado do Redis via fbclid do BotUser: {token_log}...")
                                     recovered_payload_from_fbclid = tracking_service.recover_tracking_data(tracking_token) or {}
                                     if recovered_payload_from_fbclid:
                                         tracking_data_v4 = recovered_payload_from_fbclid
@@ -8203,13 +8212,17 @@ Seu pagamento ainda não foi confirmado.
                                             is_uuid_token = len(normalized_token_check2) == 32 and all(c in '0123456789abcdef' for c in normalized_token_check2)
                                             
                                             if is_generated_token:
-                                                logger.error(f"❌ [GENERATE PIX] Token recuperado via fbclid é GERADO: {tracking_token[:30]}... - NÃO atualizar bot_user.tracking_session_id")
+                                                token_log_30 = tracking_token[:30] if tracking_token and isinstance(tracking_token, str) else 'N/A'
+                                                logger.error(f"❌ [GENERATE PIX] Token recuperado via fbclid é GERADO: {token_log_30}... - NÃO atualizar bot_user.tracking_session_id")
                                             elif is_uuid_token:
                                                 if bot_user.tracking_session_id != tracking_token:
                                                     bot_user.tracking_session_id = tracking_token
-                                                    logger.info(f"✅ bot_user.tracking_session_id atualizado com token recuperado via fbclid: {tracking_token[:20]}...")
+                                                    token_log = tracking_token[:20] if tracking_token and isinstance(tracking_token, str) else 'N/A'
+                                                    logger.info(f"✅ bot_user.tracking_session_id atualizado com token recuperado via fbclid: {token_log}...")
                                             else:
-                                                logger.warning(f"⚠️ [GENERATE PIX] Token recuperado via fbclid tem formato inválido: {tracking_token[:30]}... (len={len(tracking_token)})")
+                                                token_log_30 = tracking_token[:30] if tracking_token and isinstance(tracking_token, str) else 'N/A'
+                                                len_log = len(tracking_token) if tracking_token else 'N/A'
+                                                logger.warning(f"⚠️ [GENERATE PIX] Token recuperado via fbclid tem formato inválido: {token_log_30}... (len={len_log})")
                             except Exception as e:
                                 logger.warning(f"⚠️ Erro ao recuperar tracking_token via fbclid do BotUser: {e}")
                         
@@ -8224,7 +8237,8 @@ Seu pagamento ainda não foi confirmado.
                                         recovered_token_from_chat = chat_payload.get('tracking_token')
                                         if recovered_token_from_chat:
                                             tracking_token = recovered_token_from_chat
-                                            logger.info(f"✅ Tracking token recuperado de tracking:chat:{customer_user_id}: {tracking_token[:20]}...")
+                                            token_log = tracking_token[:20] if tracking_token and isinstance(tracking_token, str) else 'N/A'
+                                            logger.info(f"✅ Tracking token recuperado de tracking:chat:{customer_user_id}: {token_log}...")
                                             recovered_payload_from_chat = tracking_service.recover_tracking_data(tracking_token) or {}
                                             if recovered_payload_from_chat:
                                                 tracking_data_v4 = recovered_payload_from_chat
@@ -8238,13 +8252,17 @@ Seu pagamento ainda não foi confirmado.
                                                     is_uuid_token = len(normalized_token_check3) == 32 and all(c in '0123456789abcdef' for c in normalized_token_check3)
                                                     
                                                     if is_generated_token:
-                                                        logger.error(f"❌ [GENERATE PIX] Token recuperado via chat é GERADO: {tracking_token[:30]}... - NÃO atualizar bot_user.tracking_session_id")
+                                                        token_log_30 = tracking_token[:30] if tracking_token and isinstance(tracking_token, str) else 'N/A'
+                                                        logger.error(f"❌ [GENERATE PIX] Token recuperado via chat é GERADO: {token_log_30}... - NÃO atualizar bot_user.tracking_session_id")
                                                     elif is_uuid_token:
                                                         if bot_user.tracking_session_id != tracking_token:
                                                             bot_user.tracking_session_id = tracking_token
-                                                            logger.info(f"✅ bot_user.tracking_session_id atualizado com token recuperado via chat: {tracking_token[:20]}...")
+                                                            token_log = tracking_token[:20] if tracking_token and isinstance(tracking_token, str) else 'N/A'
+                                                            logger.info(f"✅ bot_user.tracking_session_id atualizado com token recuperado via chat: {token_log}...")
                                                     else:
-                                                        logger.warning(f"⚠️ [GENERATE PIX] Token recuperado via chat tem formato inválido: {tracking_token[:30]}... (len={len(tracking_token)})")
+                                                        token_log_30 = tracking_token[:30] if tracking_token and isinstance(tracking_token, str) else 'N/A'
+                                                        len_log = len(tracking_token) if tracking_token else 'N/A'
+                                                        logger.warning(f"⚠️ [GENERATE PIX] Token recuperado via chat tem formato inválido: {token_log_30}... (len={len_log})")
                                     except Exception as e:
                                         logger.warning(f"⚠️ Erro ao parsear chat_payload: {e}")
                             except Exception as e:
@@ -8307,13 +8325,15 @@ Seu pagamento ainda não foi confirmado.
                     if tracking_data_v4.get('utm_campaign'):
                         utm_campaign = tracking_data_v4['utm_campaign']
                     if tracking_data_v4.get('utm_content'):
-                        logger.info(f"✅ fbp recuperado do tracking_data_v4: {fbp[:30]}...")
+                        fbp_log = fbp[:30] if fbp and isinstance(fbp, str) else 'N/A'
+                        logger.info(f"✅ fbp recuperado do tracking_data_v4: {fbp_log}...")
                     
                     # ✅ CRÍTICO: NUNCA gerar fbc sintético em generate_pix_payment
                     # O fbc deve vir EXATAMENTE do redirect (cookie do browser)
                     # Gerar sintético aqui quebra a atribuição porque o timestamp não corresponde ao clique original
                     if fbc is not None:
-                        logger.info(f"✅ fbc recuperado do tracking_data_v4: {str(fbc)[:30]}...")
+                        fbc_log = fbc[:30] if fbc and isinstance(fbc, str) else 'N/A'
+                        logger.info(f"✅ fbc recuperado do tracking_data_v4: {fbc_log}...")
                     else:
                         logger.warning(f"⚠️ fbc não encontrado no tracking_data_v4 - NÃO gerando sintético (preservando atribuição)")
                         # ✅ NÃO gerar fbc sintético - deixar None e confiar no fallback do Purchase
