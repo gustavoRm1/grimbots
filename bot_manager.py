@@ -7633,9 +7633,15 @@ Seu pagamento ainda não foi confirmado.
                 
                 # ✅ PREPARAR CREDENCIAIS ESPECÍFICAS PARA CADA GATEWAY
                 # ✅ RANKING V2.0: Usar commission_percentage do USUÁRIO diretamente
-                # Isso garante que taxas premium do Top 3 sejam aplicadas em tempo real
-                # Prioridade: user.commission_percentage > gateway.split_percentage > 2.0 (padrão)
-                user_commission = bot.owner.commission_percentage or gateway.split_percentage or 2.0
+                # Prioridade: owner_commission (fresh) > gateway.split_percentage > 2.0 (padrão)
+                # ✅ FIX SÊNIOR: Bypass Lazy Load (DetachedInstance)
+                from models import User
+                owner_commission = None
+                if bot and getattr(bot, 'user_id', None):
+                    current_owner = db.session.get(User, bot.user_id)
+                    if current_owner:
+                        owner_commission = current_owner.commission_percentage
+                user_commission = owner_commission or gateway.split_percentage or 2.0
                 
                 # ✅ CRÍTICO: Extrair credenciais e validar ANTES de criar gateway
                 # Se descriptografia falhar, properties retornam None
@@ -7835,8 +7841,9 @@ Seu pagamento ainda não foi confirmado.
                         return None
                 
                 # Log para auditoria (apenas se for premium)
+                # ✅ FIX: Usar bot.user_id direto (evita DetachedInstanceError em bot.owner)
                 if user_commission < 2.0:
-                    logger.info(f"🏆 TAXA PREMIUM aplicada: {user_commission}% (User {bot.owner.id})")
+                    logger.info(f"🏆 TAXA PREMIUM aplicada: {user_commission}% (User ID {bot.user_id})")
                 
                 # ✅ PATCH 2 QI 200: Garantir que product_hash existe antes de usar
                 # Se gateway não tem product_hash, será criado dinamicamente no generate_pix
