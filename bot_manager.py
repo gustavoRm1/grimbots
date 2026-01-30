@@ -3817,6 +3817,15 @@ class BotManager:
                     order_bump_accepted=False,
                     order_bump_value=0.0
                 )
+                # ✅ UX FIX: Tratamento Amigável de Rate Limit
+                if pix_data and pix_data.get('rate_limit'):
+                    wait_time_msg = pix_data.get('wait_time', 'alguns segundos')
+                    self.send_telegram_message(
+                        chat_id=chat_id,
+                        text=f"⏳ <b>Aguarde {wait_time_msg}...</b>\n\nVocê já gerou um PIX agora mesmo. Verifique se recebeu o QR Code acima antes de tentar novamente.",
+                        token=token
+                    )
+                    return
                 
                 if pix_data and pix_data.get('pix_code'):
                     # ✅ NOVO: Salvar flow_step_id atomicamente
@@ -4833,6 +4842,15 @@ class BotManager:
                     is_remarketing=True,  # ✅ CORREÇÃO CRÍTICA: Marcar como remarketing
                     remarketing_campaign_id=campaign_id  # ✅ Salvar ID da campanha
                 )
+                # ✅ UX FIX: Tratamento Amigável de Rate Limit
+                if pix_data and pix_data.get('rate_limit'):
+                    wait_time_msg = pix_data.get('wait_time', 'alguns segundos')
+                    self.send_telegram_message(
+                        chat_id=chat_id,
+                        text=f"⏳ <b>Aguarde {wait_time_msg}...</b>\n\nVocê já gerou um PIX agora mesmo. Verifique se recebeu o QR Code acima antes de tentar novamente.",
+                        token=token
+                    )
+                    return
                 
                 if pix_data and pix_data.get('pix_code'):
                     # ✅ PIX em linha única dentro de <code> para copiar com um toque
@@ -5729,6 +5747,15 @@ class BotManager:
                     is_upsell=True,  # ✅ Marcar como upsell
                     upsell_index=upsell_idx  # ✅ Passar índice do upsell
                 )
+                # ✅ UX FIX: Tratamento Amigável de Rate Limit
+                if pix_data and pix_data.get('rate_limit'):
+                    wait_time_msg = pix_data.get('wait_time', 'alguns segundos')
+                    self.send_telegram_message(
+                        chat_id=chat_id,
+                        text=f"⏳ <b>Aguarde {wait_time_msg}...</b>\n\nVocê já gerou um PIX agora mesmo. Verifique se recebeu o QR Code acima antes de tentar novamente.",
+                        token=token
+                    )
+                    return
                 
                 if pix_data and pix_data.get('pix_code'):
                     # ✅ PIX em linha única dentro de <code> para copiar com um toque
@@ -5835,6 +5862,15 @@ class BotManager:
                     button_index=button_index,  # ✅ SISTEMA DE ASSINATURAS
                     button_config=button_data   # ✅ SISTEMA DE ASSINATURAS
                 )
+                # ✅ UX FIX: Tratamento Amigável de Rate Limit
+                if pix_data and pix_data.get('rate_limit'):
+                    wait_time_msg = pix_data.get('wait_time', 'alguns segundos')
+                    self.send_telegram_message(
+                        chat_id=chat_id,
+                        text=f"⏳ <b>Aguarde {wait_time_msg}...</b>\n\nVocê já gerou um PIX agora mesmo. Verifique se recebeu o QR Code acima antes de tentar novamente.",
+                        token=token
+                    )
+                    return
                 
                 if pix_data and pix_data.get('pix_code'):
                     # Enviar PIX para o cliente
@@ -7200,6 +7236,15 @@ Seu pagamento ainda não foi confirmado.
                 order_bump_accepted=len(accepted_bumps) > 0,
                 order_bump_value=total_bump_value
             )
+            # ✅ UX FIX: Tratamento Amigável de Rate Limit
+            if pix_data and pix_data.get('rate_limit'):
+                wait_time_msg = pix_data.get('wait_time', 'alguns segundos')
+                self.send_telegram_message(
+                    chat_id=chat_id,
+                    text=f"⏳ <b>Aguarde {wait_time_msg}...</b>\n\nVocê já gerou um PIX agora mesmo. Verifique se recebeu o QR Code acima antes de tentar novamente.",
+                    token=token
+                )
+                return
             
             if pix_data and pix_data.get('pix_code'):
                 # Criar descrição detalhada
