@@ -8724,37 +8724,6 @@ Seu pagamento ainda não foi confirmado.
                     except Exception as enrich_error:
                         logger.warning(f"⚠️ [META PAGEVIEW ENRICH] Falha ao enriquecer PageView após PIX (não bloqueia PIX): {enrich_error}")
                     
-                    logger.info(f"✅ Pagamento registrado | Nosso ID: {payment_id} | SyncPay ID: {pix_result.get('transaction_id')}")
-                    
-                    # NOTIFICAR VIA WEBSOCKET (tempo real - BROADCAST para todos do usuário)
-                    try:
-                        from app import socketio, app, send_sale_notification
-                        from models import Bot
-                        
-                        with app.app_context():
-                            bot = db.session.get(Bot, bot_id)
-                            if bot:
-                                # ✅ CORREÇÃO CRÍTICA: Emitir evento 'new_sale' APENAS para o usuário dono do bot
-                                socketio.emit('new_sale', {
-                                    'id': payment.id,
-                                    'customer_name': customer_name,
-                                    'product_name': description,
-                                    'amount': float(amount),
-                                    'status': 'pending',
-                                    'created_at': payment.created_at.isoformat(),
-                                    'bot_id': bot_id
-                                }, room=f'user_{bot.user_id}')
-                                logger.info(f"📡 Evento 'new_sale' emitido para user_{bot.user_id} - R$ {amount}")
-                                
-                                # ✅ NOTIFICAR VENDA PENDENTE (Push Notification - respeita configurações)
-                                send_sale_notification(
-                                    user_id=bot.user_id,
-                                    payment=payment,
-                                    status='pending'
-                                )
-                    except Exception as ws_error:
-                        logger.warning(f"⚠️ Erro ao emitir WebSocket: {ws_error}")
-                    
                     return {
                         'payment_id': payment_id,
                         'pix_code': pix_result.get('pix_code'),
@@ -8766,94 +8735,32 @@ Seu pagamento ainda não foi confirmado.
                     logger.error(f"   Gateway Type: {gateway.gateway_type}")
                     logger.error(f"   Valor: R$ {amount:.2f}")
                     logger.error(f"   Descrição: {description}")
-                    logger.error(f"   API Key presente: {bool(gateway.api_key)}")
                     
-                    # ✅ VALIDAÇÃO ESPECÍFICA WIINPAY
                     if gateway.gateway_type == 'wiinpay' and amount < 3.0:
                         logger.error(f"⚠️ WIINPAY: Valor mínimo é R$ 3,00! Valor enviado: R$ {amount:.2f}")
-                        logger.error(f"   SOLUÇÃO: Use outro gateway (Paradise, Pushyn ou SyncPay) para valores < R$ 3,00")
                     
                     return None
-                    
-        except requests.exceptions.Timeout as timeout_error:
-            # ✅ CORREÇÃO ROBUSTA: Gateway timeout - verificar se PIX foi gerado
-            logger.warning(f"⚠️ [GATEWAY TIMEOUT] Gateway timeout ao gerar PIX")
-            logger.warning(f"   Bot: {bot_id}, Valor: R$ {amount:.2f}")
             
-            # ✅ Tentar encontrar Payment criado antes do timeout
-            try:
-                from models import db, Payment
-                from app import app
-                with app.app_context():
-                    payment = Payment.query.filter_by(
-                        bot_id=bot_id,
-                        customer_user_id=customer_user_id,
-                        amount=amount,
-                        status='pending'
-                    ).order_by(Payment.id.desc()).first()
-                    
-                    if payment:
-                        payment.status = 'pending_verification'
-                        payment.gateway_transaction_id = None
-                        db.session.commit()
-                        logger.warning(f"⚠️ Payment {payment.id} marcado como 'pending_verification' (timeout)")
-                        return {'status': 'pending_verification', 'payment_id': payment.payment_id, 'error': 'Gateway timeout'}
-            except Exception as commit_error:
-                logger.error(f"❌ Erro ao processar timeout: {commit_error}", exc_info=True)
-            
-            logger.error(f"❌ Payment não foi criado antes do timeout - venda não iniciada")
-            return None
-
-        except Exception as e:
-            # ✅ CORREÇÃO ROBUSTA: Verificar se gateway gerou PIX antes de fazer rollback
-            logger.error(f"❌ [ERRO GATEWAY] Erro ao gerar PIX: {e}", exc_info=True)
-            import traceback
-            traceback.print_exc()
-            
-            # ✅ Verificar se gateway gerou PIX (pode estar em exception ou response)
-            gateway_may_have_generated_pix = False
-            transaction_id_from_error = None
-            
-            # ✅ ESTRATÉGIA 1: Verificar se exception tem transaction_id
-            if hasattr(e, 'transaction_id') and e.transaction_id:
-                gateway_may_have_generated_pix = True
-                transaction_id_from_error = e.transaction_id
-                logger.warning(f"⚠️ Exception contém transaction_id: {transaction_id_from_error}")
-            
-            # ✅ ESTRATÉGIA 2: Verificar se mensagem de erro contém transaction_id
-            error_message = str(e).lower()
-            if 'transaction_id' in error_message or 'transaction' in error_message:
-                # Tentar extrair transaction_id da mensagem
-                import re
-                tx_match = re.search(r'transaction[_\s]?id[:\s]+([a-z0-9\-]+)', error_message, re.IGNORECASE)
-                if tx_match:
-                    gateway_may_have_generated_pix = True
-                    transaction_id_from_error = tx_match.group(1)
-                    logger.warning(f"⚠️ transaction_id extraído da mensagem de erro: {transaction_id_from_error}")
-            
-            # ✅ Se gateway pode ter gerado PIX, tentar encontrar Payment e marcar como 'pending_verification'
-            if gateway_may_have_generated_pix:
+            except requests.exceptions.Timeout as timeout_error:
+                logger.warning(f"⚠️ [GATEWAY TIMEOUT] Gateway timeout ao gerar PIX: {timeout_error}")
+                # Tentar encontrar Payment criado antes do timeout para marcar como pendente de verificação
                 try:
                     from models import db, Payment
-                    from app import app
                     with app.app_context():
                         payment = Payment.query.filter_by(
                             bot_id=bot_id,
                             customer_user_id=customer_user_id,
-                            amount=amount
+                            amount=amount,
+                            status='pending'
                         ).order_by(Payment.id.desc()).first()
                         
                         if payment:
                             payment.status = 'pending_verification'
-                            if transaction_id_from_error:
-                                payment.gateway_transaction_id = transaction_id_from_error
                             db.session.commit()
-                            logger.warning(f"⚠️ Payment {payment.id} marcado como 'pending_verification' (gateway pode ter gerado PIX)")
-                            return {'status': 'pending_verification', 'payment_id': payment.payment_id, 'error': str(e)}
-                except Exception as commit_error:
-                    logger.error(f"❌ Erro ao processar erro do gateway: {commit_error}", exc_info=True)
-            
-            return None
+                            return {'status': 'pending_verification', 'payment_id': payment.payment_id, 'error': 'Gateway timeout'}
+                except Exception as db_err:
+                    logger.error(f"Erro ao tratar timeout no DB: {db_err}")
+                return None
 
         finally:
             # Liberar lock distribuído
