@@ -7471,8 +7471,7 @@ Seu pagamento ainda não foi confirmado.
                              remarketing_campaign_id: int = None,  # ✅ NOVO - REMARKETING
                              button_index: int = None,  # ✅ NOVO - SISTEMA DE ASSINATURAS
                              button_config: dict = None) -> Optional[Dict[str, Any]]:  # ✅ NOVO - SISTEMA DE ASSINATURAS
-        """
-        Gera pagamento PIX via gateway configurado
+        """Gera pagamento PIX via gateway configurado
         
         Args:
             bot_id: ID do bot
@@ -7484,128 +7483,147 @@ Seu pagamento ainda não foi confirmado.
             
         ✅ VALIDAÇÃO CRÍTICA: customer_user_id não pode ser vazio (destrói tracking Meta Pixel)
         """
-        # ✅ VALIDAÇÃO CRÍTICA: customer_user_id obrigatório para tracking
-        if not customer_user_id or customer_user_id.strip() == "":
-            logger.error(f"❌ ERRO CRÍTICO: customer_user_id vazio ao gerar PIX! Bot: {bot_id}, Valor: R$ {amount:.2f}")
-            logger.error(f"   Isso quebra tracking Meta Pixel - Purchase não será atribuído à campanha!")
-            logger.error(f"   customer_name: {customer_name}, customer_username: {customer_username}")
-            return None
-        # ===== PATCH DEFENSIVO FINAL (OBRIGATÓRIO) =====
-        fbc = None
-        fbp = None
-        fbclid = None
-        pageview_event_id = None
-        redirect_id = None
-        meta_pixel_id = None
-        tracking_token = None
+        # 🔒 LOCK DISTRIBUÍDO PARA EVITAR REQUISIÇÕES SIMULTÂNEAS DO MESMO USUÁRIO/BOT
+        lock_key = None
+        lock_acquired = False
+        redis_conn = None
         try:
-            # Importar models dentro da função para evitar circular import
-            from models import Bot, Gateway, Payment, db
-            from app import app
-            from sqlalchemy.exc import IntegrityError
-            
-            with app.app_context():
-                # Buscar bot e gateway
-                bot = db.session.get(Bot, bot_id)
-                if not bot:
-                    logger.error(f"Bot {bot_id} não encontrado")
+            from utils.tracking_service import get_redis_connection
+            redis_conn = get_redis_connection()
+            if redis_conn:
+                lock_key = f"lock:pix:{bot_id}:{customer_user_id}"
+                lock_acquired = bool(redis_conn.set(lock_key, "1", nx=True, ex=10))
+                if not lock_acquired:
+                    logger.warning(f"⚠️ Lock PIX ativo para bot_id={bot_id}, user={customer_user_id} - aguardando liberação")
                     return None
+            else:
+                logger.warning("⚠️ Redis indisponível para lock PIX - seguindo sem lock (risco de duplicidade)")
+        except Exception as lock_error:
+            logger.warning(f"⚠️ Erro ao adquirir lock PIX: {lock_error} - seguindo mesmo assim (risco de duplicidade)")
+        
+        try:
+            # ✅ VALIDAÇÃO CRÍTICA: customer_user_id não pode ser vazio (destrói tracking Meta Pixel)
+            if not customer_user_id or customer_user_id.strip() == "":
+                logger.error(f"❌ ERRO CRÍTICO: customer_user_id vazio ao gerar PIX! Bot: {bot_id}, Valor: R$ {amount:.2f}")
+                logger.error(f"   Isso quebra tracking Meta Pixel - Purchase não será atribuído à campanha!")
+                logger.error(f"   customer_name: {customer_name}, customer_username: {customer_username}")
+                return None
+            # ===== PATCH DEFENSIVO FINAL (OBRIGATÓRIO) =====
+            fbc = None
+            fbp = None
+            fbclid = None
+            pageview_event_id = None
+            redirect_id = None
+            meta_pixel_id = None
+            tracking_token = None
+            try:
+                # Importar models dentro da função para evitar circular import
+                from models import Bot, Gateway, Payment, db
+                from app import app
+                from sqlalchemy.exc import IntegrityError
                 
-                # Buscar gateway ativo e verificado do usuário
-                # ✅ CORREÇÃO: Filtrar também por gateway_type se necessário, mas permitir qualquer gateway ativo
-                gateway = Gateway.query.filter_by(
-                    user_id=bot.user_id,
-                    is_active=True,
-                    is_verified=True
-                ).first()
-                
-                if not gateway:
-                    logger.error(f"❌ Nenhum gateway ativo encontrado para usuário {bot.user_id} | Bot: {bot_id}")
-                    logger.error(f"   Verifique se há um gateway configurado e ativo em /settings")
-                    return None
-                
-                logger.info(f"💳 Gateway: {gateway.gateway_type.upper()} | Gateway ID: {gateway.id} | User ID: {bot.user_id}")
-                
-                # ✅ PROTEÇÃO CONTRA MÚLTIPLOS PIX (SOLUÇÃO HÍBRIDA - SENIOR QI 500 + QI 502)
-                
-                # 1. Verificar se cliente tem PIX pendente para MESMO PRODUTO
-                # ✅ CORREÇÃO: Normalizar descrição para comparação precisa
-                def normalize_product_name(name):
-                    """Remove emojis e normaliza para comparação"""
-                    if not name:
-                        return ''
-                    import re
-                    # Remove emojis e caracteres especiais
-                    normalized = re.sub(r'[^\w\s]', '', name)
-                    return normalized.lower().strip()
-                
-                normalized_description = normalize_product_name(description)
-                
-                # Buscar todos os PIX pendentes do cliente
-                all_pending = Payment.query.filter_by(
-                    bot_id=bot_id,
-                    customer_user_id=customer_user_id,
-                    status='pending'
-                ).all()
-                
-                pending_same_product = None
-                for p in all_pending:
-                    if normalize_product_name(p.product_name) == normalized_description:
-                        pending_same_product = p
-                        break
-                
-                # ✅ REGRA DE NEGÓCIO: Reutilizar APENAS se foi gerado há <= 5 minutos E o valor bater exatamente
-                if pending_same_product:
-                    try:
+                with app.app_context():
+                    # Buscar bot e gateway
+                    bot = db.session.get(Bot, bot_id)
+                    if not bot:
+                        logger.error(f"Bot {bot_id} não encontrado")
+                        return None
+                    
+                    # Buscar gateway ativo e verificado do usuário
+                    # ✅ CORREÇÃO: Filtrar também por gateway_type se necessário, mas permitir qualquer gateway ativo
+                    gateway = Gateway.query.filter_by(
+                        user_id=bot.user_id,
+                        is_active=True,
+                        is_verified=True
+                    ).first()
+                    
+                    if not gateway:
+                        logger.error(f"❌ Nenhum gateway ativo encontrado para usuário {bot.user_id} | Bot: {bot_id}")
+                        logger.error(f"   Verifique se há um gateway configurado e ativo em /settings")
+                        return None
+                    
+                    logger.info(f"💳 Gateway: {gateway.gateway_type.upper()} | Gateway ID: {gateway.id} | User ID: {bot.user_id}")
+                    
+                    # ✅ PROTEÇÃO CONTRA MÚLTIPLOS PIX (SOLUÇÃO HÍBRIDA - SENIOR QI 500 + QI 502)
+                    
+                    # 1. Verificar se cliente tem PIX pendente para MESMO PRODUTO
+                    # ✅ CORREÇÃO: Normalizar descrição para comparação precisa
+                    def normalize_product_name(name):
+                        """Remove emojis e normaliza para comparação"""
+                        if not name:
+                            return ''
+                        import re
+                        # Remove emojis e caracteres especiais
+                        normalized = re.sub(r'[^\w\s]', '', name)
+                        return normalized.lower().strip()
+                    
+                    normalized_description = normalize_product_name(description)
+                    
+                    # Buscar todos os PIX pendentes do cliente
+                    all_pending = Payment.query.filter_by(
+                        bot_id=bot_id,
+                        customer_user_id=customer_user_id,
+                        status='pending'
+                    ).all()
+                    
+                    pending_same_product = None
+                    for p in all_pending:
+                        if normalize_product_name(p.product_name) == normalized_description:
+                            pending_same_product = p
+                            break
+                    
+                    # ✅ REGRA DE NEGÓCIO: Reutilizar APENAS se foi gerado há <= 5 minutos E o valor bater exatamente
+                    if pending_same_product:
+                        try:
+                            from models import get_brazil_time
+                            age_seconds = (get_brazil_time() - pending_same_product.created_at).total_seconds() if pending_same_product.created_at else 999999
+                        except Exception:
+                            age_seconds = 999999
+                        amount_matches = abs(float(pending_same_product.amount) - float(amount)) < 0.01
+                        if pending_same_product.status == 'pending' and age_seconds <= 300 and amount_matches:
+                            # ✅ CORREÇÃO CRÍTICA: Paradise NÃO REUTILIZA PIX (evita duplicação de IDs)
+                            # Paradise gera IDs únicos e não aceita reutilização
+                            if gateway.gateway_type == 'paradise':
+                                logger.warning(f"⚠️ Paradise não permite reutilizar PIX - gerando NOVO para evitar IDs duplicados.")
+                            else:
+                                logger.warning(f"⚠️ Já existe PIX pendente (<=5min) e valor igual para {description}. Reutilizando.")
+                                pix_result = {
+                                    'pix_code': pending_same_product.product_description,
+                                    'pix_code_base64': None,
+                                    'qr_code_url': None,
+                                    'transaction_id': pending_same_product.gateway_transaction_id,
+                                    'transaction_hash': pending_same_product.gateway_transaction_hash,  # ✅ Incluir hash também
+                                    'payment_id': pending_same_product.payment_id,
+                                    'expires_at': None
+                                }
+                                logger.info(f"✅ PIX reutilizado: {pending_same_product.payment_id} | idade={int(age_seconds)}s | valor_ok={amount_matches}")
+                                return pix_result
+                        else:
+                            logger.info(
+                                f"♻️ NÃO reutilizar PIX existente: status={pending_same_product.status}, idade={int(age_seconds)}s, valor_ok={amount_matches}. Gerando NOVO PIX."
+                            )
+                    
+                    # 2. Verificar rate limiting para OUTRO PRODUTO (2 minutos)
+                    last_pix = Payment.query.filter_by(
+                        bot_id=bot_id,
+                        customer_user_id=customer_user_id
+                    ).order_by(Payment.id.desc()).first()
+                    
+                    if last_pix and last_pix.status == 'pending':
                         from models import get_brazil_time
-                        age_seconds = (get_brazil_time() - pending_same_product.created_at).total_seconds() if pending_same_product.created_at else 999999
-                    except Exception:
-                        age_seconds = 999999
-                    amount_matches = abs(float(pending_same_product.amount) - float(amount)) < 0.01
-                    if pending_same_product.status == 'pending' and age_seconds <= 300 and amount_matches:
-                        # ✅ CORREÇÃO CRÍTICA: Paradise NÃO REUTILIZA PIX (evita duplicação de IDs)
-                        # Paradise gera IDs únicos e não aceita reutilização
-                        if gateway.gateway_type == 'paradise':
-                            logger.warning(f"⚠️ Paradise não permite reutilizar PIX - gerando NOVO para evitar IDs duplicados.")
-                        else:
-                            logger.warning(f"⚠️ Já existe PIX pendente (<=5min) e valor igual para {description}. Reutilizando.")
-                            pix_result = {
-                                'pix_code': pending_same_product.product_description,
-                                'pix_code_base64': None,
-                                'qr_code_url': None,
-                                'transaction_id': pending_same_product.gateway_transaction_id,
-                                'transaction_hash': pending_same_product.gateway_transaction_hash,  # ✅ Incluir hash também
-                                'payment_id': pending_same_product.payment_id,
-                                'expires_at': None
-                            }
-                            logger.info(f"✅ PIX reutilizado: {pending_same_product.payment_id} | idade={int(age_seconds)}s | valor_ok={amount_matches}")
-                            return pix_result
-                    else:
-                        logger.info(
-                            f"♻️ NÃO reutilizar PIX existente: status={pending_same_product.status}, idade={int(age_seconds)}s, valor_ok={amount_matches}. Gerando NOVO PIX."
-                        )
-                
-                # 2. Verificar rate limiting para OUTRO PRODUTO (2 minutos)
-                last_pix = Payment.query.filter_by(
-                    bot_id=bot_id,
-                    customer_user_id=customer_user_id
-                ).order_by(Payment.id.desc()).first()
-                
-                if last_pix and last_pix.status == 'pending':
-                    from models import get_brazil_time
-                    time_since = (get_brazil_time() - last_pix.created_at).total_seconds()
-                    if time_since < 120:  # 2 minutos
-                        wait_time = 120 - int(time_since)
-                        wait_minutes = wait_time // 60
-                        wait_seconds = wait_time % 60
-                        
-                        if wait_minutes > 0:
-                            time_msg = f"{wait_minutes} minuto{'s' if wait_minutes > 1 else ''} e {wait_seconds} segundo{'s' if wait_seconds > 1 else ''}"
-                        else:
-                            time_msg = f"{wait_seconds} segundo{'s' if wait_seconds > 1 else ''}"
-                        
-                        logger.warning(f"⚠️ Rate limit: cliente deve aguardar {time_msg} para gerar novo PIX")
-                        return {'rate_limit': True, 'wait_time': time_msg}  # Retorna tempo para frontend
+                        time_since = (get_brazil_time() - last_pix.created_at).total_seconds()
+                        if time_since < 120:  # 2 minutos
+                            wait_time = 120 - int(time_since)
+                            wait_minutes = wait_time // 60
+                            wait_seconds = wait_time % 60
+                            
+                            if wait_minutes > 0:
+                                time_msg = f"{wait_minutes} minuto{'s' if wait_minutes > 1 else ''} e {wait_seconds} segundo{'s' if wait_seconds > 1 else ''}"
+                            else:
+                                time_msg = f"{wait_seconds} segundo{'s' if wait_seconds > 1 else ''}"
+                            
+                            logger.warning(f"⚠️ Rate limit: cliente deve aguardar {time_msg} para gerar novo PIX")
+                            return {'rate_limit': True, 'wait_time': time_msg}  # Retorna tempo para frontend
                 
                 # Gerar ID único do pagamento (só se não houver PIX pendente)
                 import uuid
@@ -8541,6 +8559,14 @@ Seu pagamento ainda não foi confirmado.
                         logger.error(f"❌ [ERRO AO COMMITAR] Erro ao commitar Payment: {commit_error}", exc_info=True)
                         logger.error(f"   Payment ID: {payment.id}, payment_id: {payment.payment_id}")
                         return None
+
+        finally:
+            # Liberar lock distribuído
+            try:
+                if lock_acquired and lock_key and redis_conn:
+                    redis_conn.delete(lock_key)
+            except Exception as unlock_error:
+                logger.warning(f"⚠️ Erro ao liberar lock PIX: {unlock_error}")
 
                     # ✅ QI 500: PAGEVIEW ENRICHMENT NO MOMENTO DO PIX (FONTE DE VERDADE = PAYMENT)
                     # Re-enviar o MESMO PageView (mesmo event_id) com em/ph quando houver alta confiança.
