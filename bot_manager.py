@@ -8560,14 +8560,6 @@ Seu pagamento ainda não foi confirmado.
                         logger.error(f"   Payment ID: {payment.id}, payment_id: {payment.payment_id}")
                         return None
 
-        finally:
-            # Liberar lock distribuído
-            try:
-                if lock_acquired and lock_key and redis_conn:
-                    redis_conn.delete(lock_key)
-            except Exception as unlock_error:
-                logger.warning(f"⚠️ Erro ao liberar lock PIX: {unlock_error}")
-
                     # ✅ QI 500: PAGEVIEW ENRICHMENT NO MOMENTO DO PIX (FONTE DE VERDADE = PAYMENT)
                     # Re-enviar o MESMO PageView (mesmo event_id) com em/ph quando houver alta confiança.
                     # Meta fará merge por event_id (não duplica PageView).
@@ -8864,6 +8856,14 @@ Seu pagamento ainda não foi confirmado.
                     logger.error(f"❌ Erro ao processar erro do gateway: {commit_error}", exc_info=True)
             
             return None
+
+        finally:
+            # Liberar lock distribuído
+            try:
+                if lock_acquired and lock_key and redis_conn:
+                    redis_conn.delete(lock_key)
+            except Exception as unlock_error:
+                logger.warning(f"⚠️ Erro ao liberar lock PIX: {unlock_error}")
     
     def _generate_syncpay_bearer_token(self, client_id: str, client_secret: str) -> Optional[str]:
         """
