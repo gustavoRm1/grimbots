@@ -8785,7 +8785,6 @@ Seu pagamento ainda não foi confirmado.
                 from models import db, Payment
                 from app import app
                 with app.app_context():
-                    # Tentar encontrar Payment criado antes do timeout
                     payment = Payment.query.filter_by(
                         bot_id=bot_id,
                         customer_user_id=customer_user_id,
@@ -8804,7 +8803,7 @@ Seu pagamento ainda não foi confirmado.
             
             logger.error(f"❌ Payment não foi criado antes do timeout - venda não iniciada")
             return None
-                
+
         except Exception as e:
             # ✅ CORREÇÃO ROBUSTA: Verificar se gateway gerou PIX antes de fazer rollback
             logger.error(f"❌ [ERRO GATEWAY] Erro ao gerar PIX: {e}", exc_info=True)
@@ -8838,7 +8837,6 @@ Seu pagamento ainda não foi confirmado.
                     from models import db, Payment
                     from app import app
                     with app.app_context():
-                        # Tentar encontrar Payment criado antes do erro
                         payment = Payment.query.filter_by(
                             bot_id=bot_id,
                             customer_user_id=customer_user_id,
