@@ -37,13 +37,16 @@ def sync_umbrellapay_payments():
             logger.info("🔄 [SYNC UMBRELLAPAY] Iniciando sincronização periódica")
             logger.info("=" * 80)
             
-            # ✅ Buscar payments PENDING há > 10 minutos
+            # ✅ Buscar payments PENDING (Entre 10 minutos e 24 horas atrás)
+            # FIX: Previne requisições infinitas para PIX antigos (zumbis)
             dez_minutos_atras = get_brazil_time() - timedelta(minutes=10)
+            vinte_quatro_horas_atras = get_brazil_time() - timedelta(hours=24)
             
             payments_pendentes = Payment.query.filter(
                 Payment.gateway_type == 'umbrellapag',
                 Payment.status == 'pending',
-                Payment.created_at <= dez_minutos_atras
+                Payment.created_at <= dez_minutos_atras,
+                Payment.created_at >= vinte_quatro_horas_atras  # A TESOURA: Ignora PIX mais velhos que 24h
             ).all()
             
             # ✅ DEBOUNCE: Filtrar payments atualizados recentemente (<5 minutos)
