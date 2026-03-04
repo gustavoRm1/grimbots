@@ -3326,7 +3326,7 @@ console.log('✅ botConfigApp temporário definido (será substituído pela vers
                                 <div class="form-group">
                                     <label class="form-label">Usar Order Bump Existente</label>
                                     <select 
-                                        @change="if ($event.target.value) { const [btnIdx, bumpIdx] = $event.target.value.split('_').map(Number); useOrderBumpFromButtons(downsell, btnIdx, bumpIdx); }"
+                                        @change="if ($event.target.value) { const [btnIdx, bumpIdx] = $event.target.value.split('_').map(Number); useOrderBumpFromButtons(downsell, btnIdx, bumpIdx); } else { resetOrderBumpFields(downsell); }"
                                         class="form-select"
                                     >
                                         <option value="">Criar novo Order Bump</option>
@@ -4476,19 +4476,31 @@ if (typeof botConfigApp !== 'undefined' && !window.botConfigAppComplete) {
         },
 
         useOrderBumpFromButtons(downsell, buttonIndex, bumpIndex) {
-            if (!this.config.main_buttons || !this.config.main_buttons[buttonIndex]) return;
+            console.log('🔄 useOrderBumpFromButtons chamado:', { buttonIndex, bumpIndex });
+            
+            if (!this.config.main_buttons || !this.config.main_buttons[buttonIndex]) {
+                console.error('❌ Botão não encontrado:', buttonIndex);
+                return;
+            }
+            
             const button = this.config.main_buttons[buttonIndex];
-            if (!button.order_bumps || !button.order_bumps[bumpIndex]) return;
+            if (!button.order_bumps || !button.order_bumps[bumpIndex]) {
+                console.error('❌ Order Bump não encontrado:', { buttonIndex, bumpIndex });
+                return;
+            }
             
             const orderBump = button.order_bumps[bumpIndex];
+            console.log('📦 Order Bump encontrado:', orderBump);
             
+            // Garantir que o objeto order_bump exista
             if (!downsell.order_bump) {
                 downsell.order_bump = {};
             }
             
+            // ✅ PREENCHIMENTO COMPLETO E SEGURO
             downsell.order_bump.enabled = true;
             downsell.order_bump.message = orderBump.message || '';
-            downsell.order_bump.price = orderBump.price || null;
+            downsell.order_bump.price = orderBump.price || 0;
             downsell.order_bump.description = orderBump.description || '';
             downsell.order_bump.media_url = orderBump.media_url || '';
             downsell.order_bump.media_type = orderBump.media_type || 'video';
@@ -4496,6 +4508,44 @@ if (typeof botConfigApp !== 'undefined' && !window.botConfigAppComplete) {
             downsell.order_bump.decline_text = orderBump.decline_text || 'Não, obrigado';
             downsell.order_bump.button_index = buttonIndex;
             downsell.order_bump.bump_index = bumpIndex;
+            
+            // ✅ FORÇAR REATIVIDADE DO ALPINEJS
+            // Garantir que o Alpine.js detecte as mudanças
+            this.$nextTick(() => {
+                console.log('✅ Order Bump preenchido com sucesso:', downsell.order_bump);
+                
+                // Log para verificação dos campos preenchidos
+                console.log('📋 Campos preenchidos:', {
+                    message: downsell.order_bump.message,
+                    price: downsell.order_bump.price,
+                    description: downsell.order_bump.description,
+                    media_url: downsell.order_bump.media_url
+                });
+            });
+        },
+
+        resetOrderBumpFields(downsell) {
+            console.log('🔄 resetOrderBumpFields chamado - limpando campos');
+            
+            if (!downsell.order_bump) {
+                downsell.order_bump = {};
+            }
+            
+            // Resetar campos para valores padrão vazios
+            downsell.order_bump.message = '';
+            downsell.order_bump.price = 0;
+            downsell.order_bump.description = '';
+            downsell.order_bump.media_url = '';
+            downsell.order_bump.media_type = 'video';
+            downsell.order_bump.accept_text = 'Sim, eu quero!';
+            downsell.order_bump.decline_text = 'Não, obrigado';
+            downsell.order_bump.button_index = null;
+            downsell.order_bump.bump_index = null;
+            
+            // Forçar reatividade do Alpine.js
+            this.$nextTick(() => {
+                console.log('✅ Campos do Order Bump resetados com sucesso');
+            });
         },
 
         onFlowToggle() {
