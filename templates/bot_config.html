@@ -2376,10 +2376,6 @@ window.botConfigApp = function() {
                             throw new Error(`A mensagem do Downsell #${i+1} não pode estar vazia.`);
                         }
                         
-                        if (!downsell.description || !downsell.description.trim()) {
-                            throw new Error(`A descrição do Downsell #${i+1} não pode estar vazia.`);
-                        }
-                        
                         if (downsell.price !== null && downsell.price !== '' && downsell.price !== undefined) {
                             if (isNaN(parseFloat(downsell.price)) || parseFloat(downsell.price) < 0) {
                                 throw new Error(`O preço do Downsell #${i+1} deve ser um número válido e não negativo.`);
@@ -2392,9 +2388,12 @@ window.botConfigApp = function() {
                                 throw new Error(`A mensagem do Order Bump do Downsell #${i+1} não pode estar vazia.`);
                             }
                             
+                            // Relaxar validação - injetar fallbacks silenciosos
                             if (!downsell.order_bump.description || !downsell.order_bump.description.trim()) {
-                                throw new Error(`A descrição do Order Bump do Downsell #${i+1} não pode estar vazia.`);
+                                downsell.order_bump.description = "Oferta Exclusiva"; // Fallback silencioso
                             }
+                            if (!downsell.order_bump.accept_text) downsell.order_bump.accept_text = "Sim, eu quero!";
+                            if (!downsell.order_bump.decline_text) downsell.order_bump.decline_text = "Não, obrigado";
                             
                             if (downsell.order_bump.price !== null && downsell.order_bump.price !== '' && downsell.order_bump.price !== undefined) {
                                 if (isNaN(parseFloat(downsell.order_bump.price)) || parseFloat(downsell.order_bump.price) < 0) {
@@ -2689,6 +2688,28 @@ window.botConfigApp = function() {
                 this.loading = false;
             }
         },
+
+        applyExistingOrderBump(downsell, selectElement) {
+            const opt = selectElement.selectedOptions[0];
+            if (!opt || opt.value === 'novo' || opt.value === '') {
+                downsell.order_bump.message = '';
+                downsell.order_bump.price = 0;
+                downsell.order_bump.description = '';
+                downsell.order_bump.media_type = 'video';
+                downsell.order_bump.media_url = '';
+                downsell.order_bump.accept_text = 'Sim, eu quero!';
+                downsell.order_bump.decline_text = 'Não, obrigado';
+                return;
+            }
+            downsell.order_bump.message = opt.getAttribute('data-message') || '';
+            downsell.order_bump.price = parseFloat(opt.getAttribute('data-price')) || 0;
+            downsell.order_bump.description = opt.getAttribute('data-description') || '';
+            downsell.order_bump.media_type = opt.getAttribute('data-media-type') || 'video';
+            downsell.order_bump.media_url = opt.getAttribute('data-media-url') || '';
+            downsell.order_bump.accept_text = opt.getAttribute('data-accept-text') || 'Sim, eu quero!';
+            downsell.order_bump.decline_text = opt.getAttribute('data-decline-text') || 'Não, obrigado';
+        },
+        
         initVisualFlowEditor() {}
     };
 };
