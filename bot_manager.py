@@ -8815,26 +8815,26 @@ Seu pagamento ainda não foi confirmado.
                     
                         return None
             
-                except requests.exceptions.Timeout as timeout_error:
-                    logger.warning(f"⚠️ [GATEWAY TIMEOUT] Gateway timeout ao gerar PIX: {timeout_error}")
-                    # Tentar encontrar Payment criado antes do timeout para marcar como pendente de verificação
-                    try:
-                        from models import db, Payment
-                        with app.app_context():
-                            payment = Payment.query.filter_by(
-                                bot_id=bot_id,
-                                customer_user_id=customer_user_id,
-                                amount=amount,
-                                status='pending'
-                            ).order_by(Payment.id.desc()).first()
-                        
-                            if payment:
-                                payment.status = 'pending_verification'
-                                db.session.commit()
-                                return {'status': 'pending_verification', 'payment_id': payment.payment_id, 'error': 'Gateway timeout'}
-                    except Exception as db_err:
-                        logger.error(f"Erro ao tratar timeout no DB: {db_err}")
-                    return None
+            except requests.exceptions.Timeout as timeout_error:
+                logger.warning(f"⚠️ [GATEWAY TIMEOUT] Gateway timeout ao gerar PIX: {timeout_error}")
+                # Tentar encontrar Payment criado antes do timeout para marcar como pendente de verificação
+                try:
+                    from models import db, Payment
+                    with app.app_context():
+                        payment = Payment.query.filter_by(
+                            bot_id=bot_id,
+                            customer_user_id=customer_user_id,
+                            amount=amount,
+                            status='pending'
+                        ).order_by(Payment.id.desc()).first()
+                    
+                        if payment:
+                            payment.status = 'pending_verification'
+                            db.session.commit()
+                            return {'status': 'pending_verification', 'payment_id': payment.payment_id, 'error': 'Gateway timeout'}
+                except Exception as db_err:
+                    logger.error(f"Erro ao tratar timeout no DB: {db_err}")
+                return None
 
         finally:
             # Liberar lock distribuído
