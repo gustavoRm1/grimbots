@@ -4130,6 +4130,89 @@ if (typeof botConfigApp !== 'undefined' && !window.botConfigAppComplete) {
                         buttons_count: this.config.main_buttons?.length || 0
                     });
                     
+                    // 🔥 BULLETPROOF: FORÇAR LEITURA DO DOM ANTES DE VALIDAR (AÇÃO 2)
+                    if (this.config && this.config.downsells) {
+                        console.log('🔄 Bypass: Lendo DOM como fonte da verdade para downsells...');
+                        this.config.downsells.forEach((ds, idx) => {
+                            if (ds.order_bump && ds.order_bump.enabled) {
+                                console.log(`🔍 Verificando downsell #${idx} order_bump via DOM...`);
+                                
+                                // Forçar a leitura do DOM (Bypass Alpine Sync)
+                                const allMsgFields = document.querySelectorAll('.ob-msg');
+                                const allPriceFields = document.querySelectorAll('.ob-price');
+                                const allDescFields = document.querySelectorAll('.ob-desc');
+                                const allMediaUrlFields = document.querySelectorAll('.ob-media-url');
+                                const allMediaTypeFields = document.querySelectorAll('.ob-media-type');
+                                const allAcceptFields = document.querySelectorAll('.ob-accept-text');
+                                const allDeclineFields = document.querySelectorAll('.ob-decline-text');
+                                
+                                // Encontrar o campo correspondente a este downsell
+                                // Como não temos data-index, vamos usar o container mais próximo
+                                const downsellContainers = document.querySelectorAll('.space-y-4');
+                                if (downsellContainers[idx]) {
+                                    const container = downsellContainers[idx];
+                                    
+                                    // Ler mensagem
+                                    const domMessage = container.querySelector('.ob-msg');
+                                    if (domMessage && domMessage.value) {
+                                        const oldValue = ds.order_bump.message;
+                                        ds.order_bump.message = domMessage.value;
+                                        console.log(`✅ Mensagem lida do DOM: "${oldValue}" -> "${ds.order_bump.message}"`);
+                                    }
+                                    
+                                    // Ler preço
+                                    const domPrice = container.querySelector('.ob-price');
+                                    if (domPrice && domPrice.value) {
+                                        const oldValue = ds.order_bump.price;
+                                        ds.order_bump.price = parseFloat(domPrice.value) || 0;
+                                        console.log(`✅ Preço lido do DOM: ${oldValue} -> ${ds.order_bump.price}`);
+                                    }
+                                    
+                                    // Ler descrição
+                                    const domDesc = container.querySelector('.ob-desc');
+                                    if (domDesc && domDesc.value) {
+                                        const oldValue = ds.order_bump.description;
+                                        ds.order_bump.description = domDesc.value;
+                                        console.log(`✅ Descrição lida do DOM: "${oldValue}" -> "${ds.order_bump.description}"`);
+                                    }
+                                    
+                                    // Ler media URL
+                                    const domMediaUrl = container.querySelector('.ob-media-url');
+                                    if (domMediaUrl && domMediaUrl.value) {
+                                        const oldValue = ds.order_bump.media_url;
+                                        ds.order_bump.media_url = domMediaUrl.value;
+                                        console.log(`✅ Media URL lida do DOM: "${oldValue}" -> "${ds.order_bump.media_url}"`);
+                                    }
+                                    
+                                    // Ler media type
+                                    const domMediaType = container.querySelector('.ob-media-type');
+                                    if (domMediaType && domMediaType.value) {
+                                        const oldValue = ds.order_bump.media_type;
+                                        ds.order_bump.media_type = domMediaType.value;
+                                        console.log(`✅ Media Type lido do DOM: "${oldValue}" -> "${ds.order_bump.media_type}"`);
+                                    }
+                                    
+                                    // Ler accept text
+                                    const domAccept = container.querySelector('.ob-accept-text');
+                                    if (domAccept && domAccept.value) {
+                                        const oldValue = ds.order_bump.accept_text;
+                                        ds.order_bump.accept_text = domAccept.value;
+                                        console.log(`✅ Accept text lido do DOM: "${oldValue}" -> "${ds.order_bump.accept_text}"`);
+                                    }
+                                    
+                                    // Ler decline text
+                                    const domDecline = container.querySelector('.ob-decline-text');
+                                    if (domDecline && domDecline.value) {
+                                        const oldValue = ds.order_bump.decline_text;
+                                        ds.order_bump.decline_text = domDecline.value;
+                                        console.log(`✅ Decline text lido do DOM: "${oldValue}" -> "${ds.order_bump.decline_text}"`);
+                                    }
+                                }
+                            }
+                        });
+                        console.log('✅ Bypass DOM concluído - Config atualizado com valores reais');
+                    }
+                    
                     const response = await fetch(`/api/bots/${this.bot_id}/config`, {
                         method: 'PUT',
                         headers: {
@@ -5178,802 +5261,8 @@ if (typeof botConfigApp !== 'undefined' && !window.botConfigAppComplete) {
 window.botConfigApp = botConfigApp;
 window.botConfigAppComplete = true; // Marcar como completo
 console.log('✅ botConfigApp definido e disponível globalmente (versão completa)');
-
-// 🔥 FLOW BUILDER FINAL - Engine Completa (100% Compatível com Backend)
-function FlowBuilderFinal() {
-    return {
-        nodes: [],
-        selected: new Set(),
-        jsplumb: null,
-        pan: {x: 0, y: 0},
-        zoom: 1,
-        status: 'pronto',
-        startStepId: null,
-
-        // ------------------------------
-        // INIT
-        // ------------------------------
-        init() {
-            console.log('🚀 FlowBuilderFinal.init() chamado');
-            
-            // Carregar nodes do config se existirem
-            if (window.botConfigApp && window.botConfigApp.config && window.botConfigApp.config.flow_steps) {
-                console.log('📦 Carregando steps existentes do config...');
-                try {
-                    const flowSteps = typeof window.botConfigApp.config.flow_steps === 'string' 
-                        ? JSON.parse(window.botConfigApp.config.flow_steps)
-                        : window.botConfigApp.config.flow_steps;
-                    
-                    if (Array.isArray(flowSteps)) {
-                        // Converter steps do backend para nodes do front-end
-                        this.nodes = flowSteps.map((step, index) => ({
-                            id: step.id || 'node-' + crypto.randomUUID(),
-                            type: step.type || 'message',
-                            title: step.title || step.type.toUpperCase(),
-                            x: step.position?.x || 100 + (index * 200),
-                            y: step.position?.y || 100 + (index * 150),
-                            config: step.config || {},
-                            buttons: step.type === 'button' ? (step.config?.custom_buttons || []) : [],
-                            connections: step.connections || {},
-                            conditions: step.conditions || [],
-                            delay_seconds: step.delay_seconds || 0,
-                            order: step.order || (index + 1)
-                        }));
-                        
-                        // Carregar step inicial
-                        this.startStepId = window.botConfigApp.config.flow_start_step_id || this.nodes[0]?.id || null;
-                        console.log('✅ Steps carregados:', this.nodes.length);
-                    }
-                } catch (e) {
-                    console.error('❌ Erro ao carregar steps:', e);
-                    this.status = 'erro ao carregar';
-                }
-            }
-
-            // Inicializar jsPlumb
-            if (typeof jsPlumb === 'undefined') {
-                console.error('❌ jsPlumb não carregado');
-                this.status = 'erro: jsPlumb';
-                return;
-            }
-            
-            jsPlumb.ready(() => {
-                console.log('✅ jsPlumb pronto');
-                const content = this.$refs.content;
-                if (!content) {
-                    console.error('❌ Content ref não encontrado');
-                    this.status = 'erro: content ref';
-                    return;
-                }
-                
-                this.jsplumb = jsPlumb.getInstance({
-                    Container: content,
-                    Connector: ['Bezier', {curviness: 50}],
-                    Endpoint: ['Dot', {radius: 6}],
-                    PaintStyle: { stroke: '#10b981', strokeWidth: 3 },
-                    HoverPaintStyle: { stroke: '#3b82f6', strokeWidth: 4 },
-                    Anchors: ['Right', 'Left'],
-                    MaxConnections: -1
-                });
-                console.log('✅ Instância jsPlumb criada');
-
-                // bind events
-                this.jsplumb.bind('connection', info => {
-                    console.log('✅ Conexão criada:', info);
-                    this.onConnection(info);
-                });
-                
-                this.jsplumb.bind('connectionDetached', info => {
-                    console.log('❌ Conexão removida:', info);
-                    this.onConnectionDetached(info);
-                });
-
-                // Renderizar nodes existentes
-                setTimeout(() => {
-                    this.nodes.forEach(node => this.mountNode(node));
-                    setTimeout(() => {
-                        this.restoreConnections();
-                    }, 100);
-                }, 100);
-                
-                this.status = 'pronto';
-            });
-        },
-
-        // ------------------------------
-        // STYLES REACTIVE
-        // ------------------------------
-        get contentStyle() { 
-            return `transform: translate(${this.pan.x}px, ${this.pan.y}px) scale(${this.zoom}); transform-origin: 0 0;`; 
-        },
-        
-        get gridStyle() { 
-            return `transform: translate(${this.pan.x}px, ${this.pan.y}px) scale(${this.zoom}); transform-origin: 0 0; opacity: 0.6`; 
-        },
-
-        // ------------------------------
-        // ADD NODE
-        // ------------------------------
-        addNode(type, opts = {}) {
-            try {
-                console.log('🔘 Botão clicado: addNode', type);
-                
-                const id = opts.id || 'node-' + crypto.randomUUID();
-                
-                // Configuração inicial baseada no tipo
-                let initialConfig = opts.config || {};
-                let initialTitle = opts.title || type.toUpperCase();
-                
-                if (type === "payment" && !opts.config) {
-                    initialConfig = { price: 0, product_name: "", amount: 0 };
-                    initialTitle = "Pagamento PIX";
-                } else if (type === "message" && !opts.config) {
-                    initialConfig = { message: "" };
-                    initialTitle = "Mensagem";
-                } else if (type === "button" && !opts.config) {
-                    initialConfig = { custom_buttons: [] };
-                    initialTitle = "Botões";
-                } else if (type === "condition" && !opts.config) {
-                    initialConfig = { conditions: [] };
-                    initialTitle = "Condição";
-                } else if (type === "delay" && !opts.config) {
-                    initialConfig = {};
-                    initialTitle = "Delay";
-                } else if (type === "end" && !opts.config) {
-                    initialConfig = {};
-                    initialTitle = "Fim";
-                } else if (type === "access" && !opts.config) {
-                    initialConfig = { link: "", message: "Acesso liberado!" };
-                    initialTitle = "Link de Acesso";
-                }
-
-                const node = {
-                    id,
-                    type: type || 'message',
-                    title: initialTitle,
-                    x: opts.x || (100 + Math.random() * 200),
-                    y: opts.y || (100 + Math.random() * 150),
-                    config: initialConfig,
-                    buttons: opts.buttons || (type === "button" ? [{ id: 'btn-' + crypto.randomUUID(), label: 'Opção' }] : []),
-                    connections: opts.connections || {},
-                    conditions: opts.conditions || [],
-                    delay_seconds: opts.delay_seconds || 0,
-                    order: this.nodes.length + 1
-                };
-
-                this.nodes.push(node);
-                
-                // Se é o primeiro node, definir como step inicial
-                if (this.nodes.length === 1) {
-                    this.startStepId = node.id;
-                    console.log('⭐ Primeiro node definido como step inicial:', node.id);
-                }
-                
-                // Renderizar node após um pequeno delay
-                this.$nextTick(() => {
-                    if (this.jsplumb) {
-                        this.mountNode(node);
-                    } else {
-                        // Se jsPlumb ainda não está pronto, aguardar
-                        setTimeout(() => {
-                            if (this.jsplumb) {
-                                this.mountNode(node);
-                            }
-                        }, 200);
-                    }
-                });
-                
-                console.log('✅ Node adicionado com sucesso:', { id: node.id, type: node.type, total: this.nodes.length });
-                this.status = `${this.nodes.length} nodes`;
-            } catch (e) {
-                console.error('❌ Erro ao adicionar node:', e);
-                alert('Erro ao adicionar node: ' + e.message);
-            }
-        },
-
-        // ------------------------------
-        // MOUNT NODE (jsPlumb integration)
-        // ------------------------------
-        mountNode(node) {
-            setTimeout(() => {
-                const el = document.getElementById(node.id);
-                if (!el) { 
-                    console.warn('mountNode: el missing', node.id); 
-                    return; 
-                }
-
-                // remove existing endpoints to avoid duplicates
-                try { 
-                    this.jsplumb.deleteEndpoints(el); 
-                } catch(e) {
-                    console.warn('Erro ao deletar endpoints:', e);
-                }
-
-                // make source using the .ep-out as filter
-                this.jsplumb.makeSource(el, {
-                    filter: '.ep-out, .btns button',
-                    anchor: 'Right',
-                    endpoint: ['Dot', {radius: 6}],
-                    connector: ['Bezier', {curviness: 50}],
-                    maxConnections: -1
-                });
-
-                // make target for left
-                this.jsplumb.makeTarget(el, {
-                    filter: '.ep-in',
-                    anchor: 'Left',
-                    endpoint: ['Dot', {radius: 6}],
-                    dropOptions: {hoverClass: 'node-drop'}
-                });
-
-                // draggable
-                this.jsplumb.draggable(el, {
-                    containment: this.$refs.content,
-                    grid: [20, 20],
-                    drag: (params) => {
-                        // live update position (for smoothness)
-                    },
-                    stop: (params) => {
-                        const rect = el.getBoundingClientRect();
-                        const canvasRect = this.$el.querySelector('.canvas').getBoundingClientRect();
-                        // compute coordinates relative to content transform
-                        const x = parseFloat(el.style.left);
-                        const y = parseFloat(el.style.top);
-                        node.x = x;
-                        node.y = y;
-                    }
-                });
-            }, 50);
-        },
-
-        makeEndpoint(node) {
-            // convenience - ensure endpoints exist/mounted
-            this.mountNode(node);
-        },
-
-        addButtonToNode(node) {
-            node.buttons = node.buttons || [];
-            node.buttons.push({id: 'btn-' + crypto.randomUUID(), label: 'Opção'});
-            this.$nextTick(() => this.mountNode(node));
-        },
-
-        selectNode(id, ev) {
-            if (!ev.shiftKey) this.selected.clear();
-            this.selected.add(id);
-        },
-
-        deleteNode(id) {
-            if (!confirm('Tem certeza que deseja deletar este node?')) return;
-            
-            // remove jsPlumb endpoints & element
-            const el = document.getElementById(id);
-            if (el) {
-                try { 
-                    this.jsplumb.remove(el); 
-                } catch(e) {
-                    console.warn('Erro ao remover node:', e);
-                }
-            }
-            this.nodes = this.nodes.filter(n => n.id !== id);
-            this.selected.delete(id);
-            
-            // Se era o step inicial, definir outro
-            if (this.startStepId === id) {
-                this.startStepId = this.nodes[0]?.id || null;
-            }
-            
-            this.status = `${this.nodes.length} nodes`;
-        },
-
-        openEdit(node) {
-            // modal simples com prompt para evitar UI pesada
-            const newTitle = prompt("Título do node:", node.title);
-            if (newTitle !== null) node.title = newTitle;
-            
-            if (node.type === 'message') {
-                const content = prompt("Conteúdo da mensagem:", node.config?.message || '');
-                if (content !== null) node.config = {...node.config, message: content};
-            } else if (node.type === 'payment') {
-                const price = prompt("Preço (R$):", node.config?.price || '0');
-                if (price !== null) node.config = {...node.config, price: parseFloat(price) || 0};
-                const product = prompt("Nome do produto:", node.config?.product_name || '');
-                if (product !== null) node.config = {...node.config, product_name: product};
-            }
-        },
-
-        nodePreview(n) {
-            if (n.type === 'message') return n.config?.message ? n.config.message.slice(0, 80) : 'Mensagem...';
-            if (n.type === 'payment') return 'Pagamento R$' + (n.config?.price || '0.00');
-            if (n.type === 'button') return 'Botões: ' + (n.buttons?.length || 0);
-            return n.type;
-        },
-
-        // ------------------------------
-        // CONNECTION HANDLERS
-        // ------------------------------
-        onConnection(info) {
-            const sId = info.source.id || info.sourceId;
-            const tId = info.target.id || info.targetId;
-            
-            // Extrair IDs dos nodes (remover sufixos -in, -out)
-            const sourceNodeId = String(sId).replace(/-in$|-out$|-btn-\d+$/, '');
-            const targetNodeId = String(tId).replace(/-in$|-out$|-btn-\d+$/, '');
-            
-            // persist connection into nodes data (formato backend)
-            const sNode = this.nodes.find(n => n.id === sourceNodeId);
-            if (!sNode) return;
-            
-            // Converter connections array para objeto (formato backend)
-            if (!sNode.connections || !sNode.connections.next) {
-                sNode.connections = sNode.connections || {};
-                // Se é payment step, pode ter conexão 'pending'
-                if (sNode.type === 'payment' && !sNode.connections.next) {
-                    sNode.connections.next = targetNodeId;
-                } else if (sNode.type === 'payment' && sNode.connections.next && !sNode.connections.pending) {
-                    sNode.connections.pending = targetNodeId;
-                } else {
-                    // Conexão normal (next)
-                    sNode.connections.next = targetNodeId;
-                }
-            }
-            
-            console.log(`✅ Conexão criada: ${sourceNodeId} → ${targetNodeId}`, sNode.connections);
-        },
-        
-        onConnectionDetached(info) {
-            const sId = info.source.id || info.sourceId;
-            const sourceNodeId = String(sId).replace(/-in$|-out$|-btn-\d+$/, '');
-            
-            const sNode = this.nodes.find(n => n.id === sourceNodeId);
-            if (!sNode || !sNode.connections) return;
-            
-            // Remover conexão do formato backend
-            if (sNode.connections.next) {
-                delete sNode.connections.next;
-            }
-            if (sNode.connections.pending) {
-                delete sNode.connections.pending;
-            }
-        },
-
-        restoreConnections() {
-            if (!this.jsplumb) return;
-            
-            this.nodes.forEach(node => {
-                if (!node.connections) return;
-                
-                // Restaurar conexão 'next'
-                if (node.connections.next) {
-                    const targetEl = document.getElementById(node.connections.next);
-                    if (targetEl) {
-                        try {
-                            this.jsplumb.connect({
-                                source: node.id,
-                                target: node.connections.next,
-                                anchors: ['Right', 'Left']
-                            });
-                        } catch (e) {
-                            console.warn(`⚠️ Erro ao restaurar conexão: ${e}`);
-                        }
-                    }
-                }
-                
-                // Restaurar conexão 'pending' (apenas para payment)
-                if (node.type === 'payment' && node.connections.pending) {
-                    const targetEl = document.getElementById(node.connections.pending);
-                    if (targetEl) {
-                        try {
-                            this.jsplumb.connect({
-                                source: node.id,
-                                target: node.connections.pending,
-                                anchors: ['Right', 'Left']
-                            });
-                        } catch (e) {
-                            console.warn(`⚠️ Erro ao restaurar conexão pending: ${e}`);
-                        }
-                    }
-                }
-            });
-            
-            this.jsplumb.repaintEverything();
-        },
-
-
-        // ------------------------------
-        // SAVE / IMPORT / EXPORT
-        // ------------------------------
-        saveFlow() {
-            try {
-                console.log('💾 Botão Salvar clicado');
-                
-                if (this.nodes.length === 0) {
-                    alert('⚠️ Adicione pelo menos um node antes de salvar!');
-                    return;
-                }
-                
-                console.log('📊 Nodes para salvar:', this.nodes.length);
-
-                // 🔥 CRÍTICO: Converter nodes para formato EXATO do backend
-                const steps = this.nodes.map((node, index) => {
-                    // Converter connections array para objeto (formato backend)
-                    let connectionsObj = {};
-                    if (node.connections && typeof node.connections === 'object') {
-                        connectionsObj = node.connections;
-                    } else if (Array.isArray(node.connections)) {
-                        // Converter array para objeto
-                        node.connections.forEach(conn => {
-                            if (conn.target) {
-                                if (!connectionsObj.next) {
-                                    connectionsObj.next = conn.target;
-                                } else if (node.type === 'payment' && !connectionsObj.pending) {
-                                    connectionsObj.pending = conn.target;
-                                }
-                            }
-                        });
-                    }
-                    
-                    const step = {
-                        id: node.id,
-                        type: node.type,
-                        order: node.order || (index + 1),
-                        position: { x: node.x, y: node.y },
-                        title: node.title || node.type.toUpperCase(),
-                        config: node.config || {},
-                        connections: connectionsObj,
-                        conditions: node.conditions || [],
-                        delay_seconds: node.delay_seconds || 0
-                    };
-                    
-                    // 🔥 CRÍTICO: Garantir que custom_buttons tem formato correto
-                    if (node.type === 'button' && node.buttons) {
-                        step.config.custom_buttons = node.buttons.map(btn => ({
-                            text: btn.label || btn.text || '',
-                            target_step: btn.target_step || ''
-                        }));
-                    }
-                    
-                    return step;
-                });
-
-                // 🔥 VALIDAÇÃO: Verificar estrutura antes de salvar
-                const validation = this.validateFlow(steps);
-                if (!validation.valid) {
-                    alert(`❌ Erro de validação:\n${validation.errors.join('\n')}`);
-                    return;
-                }
-
-                // Salvar via botConfigApp
-                if (window.botConfigApp && typeof window.botConfigApp.saveConfig === 'function') {
-                    // Atualizar config
-                    window.botConfigApp.config.flow_steps = JSON.stringify(steps);
-                    window.botConfigApp.config.flow_start_step_id = this.startStepId;
-                    window.botConfigApp.config.flow_enabled = true;
-                    
-                    // Salvar
-                    window.botConfigApp.saveConfig();
-                    
-                    console.log('✅ Fluxo salvo via botConfigApp:', {
-                        steps_count: steps.length,
-                        start_step_id: this.startStepId,
-                        steps: steps
-                    });
-                    
-                    alert('✅ Fluxo salvo com sucesso!');
-                } else {
-                    // Fallback: chamada direta ao backend
-                    const botId = window.botConfigApp?.bot_id || window.botId || document.querySelector('[data-bot-id]')?.dataset.botId || '';
-                    
-                    if (!botId) {
-                        alert('❌ ID do bot não encontrado. Tente recarregar a página.');
-                        return;
-                    }
-                    
-                    fetch(`/api/bots/${botId}/config`, {
-                        method: "PUT",
-                        headers: { 
-                            "Content-Type": "application/json",
-                            "X-CSRFToken": document.querySelector('[name=csrf_token]')?.value || ''
-                        },
-                        body: JSON.stringify({ 
-                            flow_steps: steps,
-                            flow_start_step_id: this.startStepId,
-                            flow_enabled: true
-                        })
-                    }).then(r => {
-                        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-                        return r.json();
-                    }).then(data => {
-                        console.log('✅ Fluxo salvo:', data);
-                        alert('✅ Fluxo salvo com sucesso!');
-                    }).catch(e => {
-                        console.error('❌ Erro ao salvar fluxo:', e);
-                        alert('❌ Erro ao salvar fluxo. Verifique o console.');
-                    });
-                }
-            } catch (e) {
-                console.error('❌ Erro ao salvar fluxo:', e);
-                alert('❌ Erro ao salvar fluxo. Verifique o console.');
-            }
-        },
-
-        validateFlow(steps) {
-            const errors = [];
-            const stepIds = new Set();
-            
-            steps.forEach((step, index) => {
-                // Validar campos obrigatórios
-                if (!step.id || !step.type) {
-                    errors.push(`Step ${index}: deve ter 'id' e 'type'`);
-                }
-                
-                // Validar IDs únicos
-                if (stepIds.has(step.id)) {
-                    errors.push(`Step ${index}: ID duplicado '${step.id}'`);
-                }
-                stepIds.add(step.id);
-                
-                // Validar payment steps têm conexões
-                if (step.type === 'payment') {
-                    const conn = step.connections || {};
-                    if (!conn.next && !conn.pending) {
-                        errors.push(`Step ${step.id} (payment): deve ter conexão 'next' ou 'pending'`);
-                    }
-                }
-                
-                // Validar connections apontam para steps existentes
-                if (step.connections) {
-                    ['next', 'pending', 'retry'].forEach(connType => {
-                        const targetId = step.connections[connType];
-                        if (targetId && !stepIds.has(targetId)) {
-                            // Aviso, não erro (step pode ser criado depois)
-                            console.warn(`⚠️ Step ${step.id}: conexão '${connType}' aponta para step inexistente: ${targetId}`);
-                        }
-                    });
-                }
-            });
-            
-            return {
-                valid: errors.length === 0,
-                errors: errors
-            };
-        },
-
-        exportFlow() {
-            try {
-                console.log('⬆ Botão Exportar clicado');
-                
-                if (this.nodes.length === 0) {
-                    alert('⚠️ Não há nodes para exportar!');
-                    return;
-                }
-                
-                console.log('📊 Nodes para exportar:', this.nodes.length);
-                
-                const steps = this.nodes.map((node, index) => {
-                    // Converter connections para formato backend
-                    let connectionsObj = {};
-                    if (node.connections && typeof node.connections === 'object') {
-                        connectionsObj = node.connections;
-                    } else if (Array.isArray(node.connections)) {
-                        node.connections.forEach(conn => {
-                            if (conn.target) {
-                                if (!connectionsObj.next) {
-                                    connectionsObj.next = conn.target;
-                                } else if (node.type === 'payment' && !connectionsObj.pending) {
-                                    connectionsObj.pending = conn.target;
-                                }
-                            }
-                        });
-                    }
-                    
-                    return {
-                        id: node.id,
-                        type: node.type,
-                        order: node.order || (index + 1),
-                        position: { x: node.x, y: node.y },
-                        title: node.title || node.type.toUpperCase(),
-                        config: node.config || {},
-                        connections: connectionsObj,
-                        conditions: node.conditions || [],
-                        delay_seconds: node.delay_seconds || 0
-                    };
-                });
-                
-                const data = {
-                    flow_enabled: true,
-                    flow_start_step_id: this.startStepId,
-                    flow_steps: steps
-                };
-                
-                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement("a");
-                a.href = url;
-                a.download = `flow_${Date.now()}.json`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-                
-                console.log('✅ Fluxo exportado:', data);
-                alert('✅ Fluxo exportado com sucesso!');
-            } catch (e) {
-                console.error('❌ Erro ao exportar fluxo:', e);
-                alert('❌ Erro ao exportar fluxo. Verifique o console.');
-            }
-        },
-
-        clearFlow() {
-            if (!confirm('⚠️ Tem certeza que deseja limpar todo o fluxo? Esta ação não pode ser desfeita!')) {
-                return;
-            }
-            
-            try {
-                // Limpar jsPlumb
-                if (this.jsplumb) {
-                    this.jsplumb.deleteEveryConnection();
-                    this.jsplumb.deleteEveryEndpoint();
-                }
-                
-                // Limpar nodes
-                this.nodes.forEach(node => {
-                    const nodeEl = document.getElementById(node.id);
-                    if (nodeEl) {
-                        nodeEl.remove();
-                    }
-                });
-                
-                this.nodes = [];
-                this.startStepId = null;
-                this.status = 'pronto';
-                
-                console.log('✅ Fluxo limpo');
-                alert('✅ Fluxo limpo com sucesso!');
-            } catch (e) {
-                console.error('❌ Erro ao limpar fluxo:', e);
-                alert('❌ Erro ao limpar fluxo. Verifique o console.');
-            }
-        },
-
-        importFlow(e) {
-            try {
-                console.log('⬇ Botão Importar - arquivo selecionado');
-                
-                const file = e.target.files[0];
-                if (!file) {
-                    console.warn('⚠️ Nenhum arquivo selecionado');
-                    return;
-                }
-                
-                console.log('📁 Arquivo selecionado:', file.name, file.size, 'bytes');
-                
-                const reader = new FileReader();
-                reader.onload = ev => {
-                    try {
-                        const data = JSON.parse(ev.target.result);
-                        
-                        if (data.flow_steps && Array.isArray(data.flow_steps)) {
-                            // Limpar nodes existentes
-                            if (this.jsplumb) {
-                                try {
-                                    this.jsplumb.reset();
-                                } catch(e) {
-                                    console.warn('Erro ao reset jsPlumb:', e);
-                                }
-                            }
-                            
-                            // Converter steps para nodes
-                            this.nodes = data.flow_steps.map(step => ({
-                                id: step.id,
-                                type: step.type,
-                                title: step.title || step.type.toUpperCase(),
-                                x: step.position?.x || 300,
-                                y: step.position?.y || 180,
-                                buttons: step.type === 'button' ? (step.config?.custom_buttons || []) : [],
-                                config: step.config || {},
-                                connections: step.connections || {},
-                                conditions: step.conditions || [],
-                                delay_seconds: step.delay_seconds || 0,
-                                order: step.order || 1
-                            }));
-                            
-                            this.startStepId = data.flow_start_step_id || this.nodes[0]?.id || null;
-                            
-                            // Renderizar nodes após um delay
-                            this.$nextTick(() => {
-                                // destroy existing endpoints and re-mount
-                                try { 
-                                    this.jsplumb.reset(); 
-                                } catch(e) {
-                                    console.warn('Erro ao reset jsPlumb:', e);
-                                }
-                                this.nodes.forEach(n => this.mountNode(n));
-                                setTimeout(() => {
-                                    this.restoreConnections();
-                                }, 200);
-                            });
-                            
-                            alert('✅ Fluxo importado com sucesso!');
-                        } else {
-                            alert('❌ Formato de arquivo inválido. O arquivo deve conter flow_steps.');
-                        }
-                    } catch (e) {
-                        console.error('❌ Erro ao importar fluxo:', e);
-                        alert('❌ Erro ao importar fluxo. Verifique o formato do arquivo.');
-                    }
-                };
-                reader.readAsText(file);
-            } catch (e) {
-                console.error('❌ Erro ao processar arquivo:', e);
-                alert('❌ Erro ao processar arquivo.');
-            }
-        },
-
-        // ------------------------------
-        // ZOOM/PAN HELPERS
-        // ------------------------------
-        zoomIn() { 
-            this.zoom = Math.min(3, this.zoom * 1.15); 
-            if (this.jsplumb) this.jsplumb.repaintEverything();
-        },
-        
-        zoomOut() { 
-            this.zoom = Math.max(0.3, this.zoom / 1.15); 
-            if (this.jsplumb) this.jsplumb.repaintEverything();
-        },
-        
-        zoomReset() { 
-            this.zoom = 1; 
-            this.pan = {x: 0, y: 0}; 
-            if (this.jsplumb) this.jsplumb.repaintEverything();
-        },
-        
-        zoomToFit() {
-            if (!this.nodes.length) return;
-            // naive bounding box center & scale
-            let minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9;
-            this.nodes.forEach(n => {
-                minX = Math.min(minX, n.x); 
-                minY = Math.min(minY, n.y);
-                maxX = Math.max(maxX, n.x + 260); 
-                maxY = Math.max(maxY, n.y + 120);
-            });
-            const canvas = this.$el.querySelector('.canvas');
-            if (!canvas) return;
-            const width = maxX - minX, height = maxY - minY;
-            const scale = Math.min((canvas.clientWidth - 80) / width, (canvas.clientHeight - 80) / height);
-            this.zoom = Math.max(0.4, Math.min(2.5, scale));
-            this.pan.x = -minX * this.zoom + (canvas.clientWidth - width * this.zoom) / 2;
-            this.pan.y = -minY * this.zoom + (canvas.clientHeight - height * this.zoom) / 2;
-            if (this.jsplumb) this.jsplumb.repaintEverything();
-        },
-
-        // mouse for pan (Alt + drag)
-        canvasMouseDown(e) {
-            if (!(e.altKey || e.button === 1)) return;
-            e.preventDefault();
-            const start = {x: e.clientX - this.pan.x, y: e.clientY - this.pan.y};
-            const move = (ev) => { 
-                this.pan.x = ev.clientX - start.x; 
-                this.pan.y = ev.clientY - start.y; 
-                if (this.jsplumb) this.jsplumb.repaintEverything();
-            };
-            const up = () => { 
-                window.removeEventListener('mousemove', move); 
-                window.removeEventListener('mouseup', up); 
-            };
-            window.addEventListener('mousemove', move); 
-            window.addEventListener('mouseup', up);
-        }
-    };
-}
-
-// Permite edição externa
-window.__editNode = function(id) {
-    try {
-        const root = document.querySelector("#flow-builder");
-        if (root && root.__x && root.__x.$data) {
-            const node = root.__x.$data.nodes.find(n => n.id === id);
+</script>
+{% endblock %}
             if (node) {
                 root.__x.$data.openEdit(node);
             }
