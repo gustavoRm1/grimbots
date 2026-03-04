@@ -2334,6 +2334,79 @@ window.botConfigApp = function() {
                     buttons_count: this.config.main_buttons?.length || 0
                 });
                 
+                // ✅ POKA-YOKE: Validação frontend antes de enviar
+                if (this.config.main_buttons) {
+                    for (let i = 0; i < this.config.main_buttons.length; i++) {
+                        const button = this.config.main_buttons[i];
+                        
+                        // Validar Order Bumps do botão principal
+                        if (button.order_bumps) {
+                            for (let j = 0; j < button.order_bumps.length; j++) {
+                                const bump = button.order_bumps[j];
+                                
+                                if (!bump.message || !bump.message.trim()) {
+                                    throw new Error(`A mensagem do Order Bump #${j+1} do botão #${i+1} não pode estar vazia.`);
+                                }
+                                
+                                if (!bump.description || !bump.description.trim()) {
+                                    throw new Error(`A descrição do Order Bump #${j+1} do botão #${i+1} não pode estar vazia.`);
+                                }
+                                
+                                if (bump.price !== null && bump.price !== '' && bump.price !== undefined) {
+                                    if (isNaN(parseFloat(bump.price)) || parseFloat(bump.price) < 0) {
+                                        throw new Error(`O preço do Order Bump #${j+1} do botão #${i+1} deve ser um número válido e não negativo.`);
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Validar descrição do botão principal se tiver preço
+                        if (button.price && (!button.description || !button.description.trim())) {
+                            throw new Error(`A descrição do botão #${i+1} não pode estar vazia quando há preço definido.`);
+                        }
+                    }
+                }
+                
+                // Validar Downsells
+                if (this.config.downsells) {
+                    for (let i = 0; i < this.config.downsells.length; i++) {
+                        const downsell = this.config.downsells[i];
+                        
+                        if (!downsell.message || !downsell.message.trim()) {
+                            throw new Error(`A mensagem do Downsell #${i+1} não pode estar vazia.`);
+                        }
+                        
+                        if (!downsell.description || !downsell.description.trim()) {
+                            throw new Error(`A descrição do Downsell #${i+1} não pode estar vazia.`);
+                        }
+                        
+                        if (downsell.price !== null && downsell.price !== '' && downsell.price !== undefined) {
+                            if (isNaN(parseFloat(downsell.price)) || parseFloat(downsell.price) < 0) {
+                                throw new Error(`O preço do Downsell #${i+1} deve ser um número válido e não negativo.`);
+                            }
+                        }
+                        
+                        // Validar Order Bump do Downsell
+                        if (downsell.order_bump && downsell.order_bump.enabled) {
+                            if (!downsell.order_bump.message || !downsell.order_bump.message.trim()) {
+                                throw new Error(`A mensagem do Order Bump do Downsell #${i+1} não pode estar vazia.`);
+                            }
+                            
+                            if (!downsell.order_bump.description || !downsell.order_bump.description.trim()) {
+                                throw new Error(`A descrição do Order Bump do Downsell #${i+1} não pode estar vazia.`);
+                            }
+                            
+                            if (downsell.order_bump.price !== null && downsell.order_bump.price !== '' && downsell.order_bump.price !== undefined) {
+                                if (isNaN(parseFloat(downsell.order_bump.price)) || parseFloat(downsell.order_bump.price) < 0) {
+                                    throw new Error(`O preço do Order Bump do Downsell #${i+1} deve ser um número válido e não negativo.`);
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                console.log('✅ Validação frontend passou, enviando para servidor...');
+                
                 const response = await fetch(`/api/bots/${this.bot_id}/config`, {
                     method: 'PUT',
                     headers: {
@@ -2911,11 +2984,12 @@ console.log('✅ botConfigApp temporário definido (será substituído pela vers
                         </div>
 
                         <div class="form-group">
-                            <label class="form-label">Descrição</label>
+                            <label class="form-label">Descrição *</label>
                             <textarea 
                                 x-model="button.description" 
                                 class="form-textarea"
                                 placeholder="Descrição do produto..."
+                                required
                             ></textarea>
                         </div>
 
@@ -2966,18 +3040,18 @@ console.log('✅ botConfigApp temporário definido (será substituído pela vers
                                     </div>
 
                                     <div class="form-group">
-                                        <label class="form-label">Mensagem</label>
-                                        <textarea x-model="bump.message" class="form-textarea"></textarea>
+                                        <label class="form-label">Mensagem *</label>
+                                        <textarea x-model="bump.message" class="form-textarea" required></textarea>
                                     </div>
 
                                     <div class="form-group">
-                                        <label class="form-label">Preço (R$)</label>
-                                        <input type="number" x-model.number="bump.price" class="form-input" step="0.01" min="0" />
+                                        <label class="form-label">Preço (R$) *</label>
+                                        <input type="number" x-model.number="bump.price" class="form-input" step="0.01" min="0" required />
                                     </div>
 
                                     <div class="form-group">
-                                        <label class="form-label">Descrição</label>
-                                        <textarea x-model="bump.description" class="form-textarea"></textarea>
+                                        <label class="form-label">Descrição *</label>
+                                        <textarea x-model="bump.description" class="form-textarea" required></textarea>
                                     </div>
 
                                     <div class="form-group">
@@ -3184,8 +3258,8 @@ console.log('✅ botConfigApp temporário definido (será substituído pela vers
                         </div>
 
                         <div class="form-group">
-                            <label class="form-label">Mensagem</label>
-                            <textarea x-model="downsell.message" class="form-textarea"></textarea>
+                            <label class="form-label">Mensagem *</label>
+                            <textarea x-model="downsell.message" class="form-textarea" required></textarea>
                         </div>
 
                         <div class="form-group">
@@ -3265,18 +3339,18 @@ console.log('✅ botConfigApp temporário definido (será substituído pela vers
                                 </div>
 
                                 <div class="form-group">
-                                    <label class="form-label">Mensagem do Order Bump</label>
-                                    <textarea x-model="downsell.order_bump.message" class="form-textarea"></textarea>
+                                    <label class="form-label">Mensagem do Order Bump *</label>
+                                    <textarea x-model="downsell.order_bump.message" class="form-textarea" required></textarea>
                                 </div>
 
                                 <div class="form-group">
-                                    <label class="form-label">Preço do Order Bump (R$)</label>
-                                    <input type="number" x-model.number="downsell.order_bump.price" class="form-input" step="0.01" min="0" />
+                                    <label class="form-label">Preço do Order Bump (R$) *</label>
+                                    <input type="number" x-model.number="downsell.order_bump.price" class="form-input" step="0.01" min="0" required />
                                 </div>
 
                                 <div class="form-group">
-                                    <label class="form-label">Descrição</label>
-                                    <textarea x-model="downsell.order_bump.description" class="form-textarea"></textarea>
+                                    <label class="form-label">Descrição *</label>
+                                    <textarea x-model="downsell.order_bump.description" class="form-textarea" required></textarea>
                                 </div>
 
                                 <div class="form-group">

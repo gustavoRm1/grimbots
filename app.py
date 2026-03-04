@@ -6239,23 +6239,90 @@ def update_bot_config(bot_id):
         if 'redirect_buttons' in data:
             config.set_redirect_buttons(data['redirect_buttons'])
         
-        # Order bump
+        # Order bump - ✅ VALIDAÇÃO ESTRITA POKA-YOKE
         if 'order_bump_enabled' in data:
             config.order_bump_enabled = data['order_bump_enabled']
+        
         if 'order_bump_message' in data:
-            config.order_bump_message = data['order_bump_message']
+            order_bump_message = data['order_bump_message']
+            if not isinstance(order_bump_message, str) or not order_bump_message.strip():
+                return jsonify({
+                    'error': 'A mensagem do Order Bump não pode estar vazia.'
+                }), 400
+            config.order_bump_message = order_bump_message.strip()
+            
         if 'order_bump_media_url' in data:
             config.order_bump_media_url = data['order_bump_media_url']
+            
         if 'order_bump_price' in data:
-            config.order_bump_price = data['order_bump_price']
+            order_bump_price = data['order_bump_price']
+            if order_bump_price is not None and order_bump_price != '':
+                try:
+                    price_float = float(order_bump_price)
+                    if price_float < 0:
+                        return jsonify({
+                            'error': 'O preço do Order Bump não pode ser negativo.'
+                        }), 400
+                    config.order_bump_price = price_float
+                except (ValueError, TypeError):
+                    return jsonify({
+                        'error': 'O preço do Order Bump deve ser um número válido.'
+                    }), 400
+            else:
+                config.order_bump_price = None
+                
         if 'order_bump_description' in data:
-            config.order_bump_description = data['order_bump_description']
+            order_bump_description = data['order_bump_description']
+            if not isinstance(order_bump_description, str) or not order_bump_description.strip():
+                return jsonify({
+                    'error': 'A descrição do Order Bump não pode estar vazia.'
+                }), 400
+            config.order_bump_description = order_bump_description.strip()
         
-        # Downsells
+        # Downsells - ✅ VALIDAÇÃO ESTRITA POKA-YOKE
         if 'downsells_enabled' in data:
             config.downsells_enabled = data['downsells_enabled']
+            
         if 'downsells' in data:
-            config.set_downsells(data['downsells'])
+            downsells = data['downsells']
+            if not isinstance(downsells, list):
+                return jsonify({
+                    'error': 'Downsells deve ser uma lista.'
+                }), 400
+                
+            for i, downsell in enumerate(downsells):
+                if not isinstance(downsell, dict):
+                    return jsonify({
+                        'error': f'Downsell #{i+1} deve ser um objeto.'
+                    }), 400
+                    
+                # Validar campos obrigatórios
+                if not downsell.get('message') or not str(downsell['message']).strip():
+                    return jsonify({
+                        'error': f'A mensagem do Downsell #{i+1} não pode estar vazia.'
+                    }), 400
+                    
+                if not downsell.get('description') or not str(downsell['description']).strip():
+                    return jsonify({
+                        'error': f'A descrição do Downsell #{i+1} não pode estar vazia.'
+                    }), 400
+                    
+                # Validar preço
+                price = downsell.get('price')
+                if price is not None and price != '':
+                    try:
+                        price_float = float(price)
+                        if price_float < 0:
+                            return jsonify({
+                                'error': f'O preço do Downsell #{i+1} não pode ser negativo.'
+                            }), 400
+                        downsell['price'] = price_float
+                    except (ValueError, TypeError):
+                        return jsonify({
+                            'error': f'O preço do Downsell #{i+1} deve ser um número válido.'
+                        }), 400
+                        
+            config.set_downsells(downsells)
         
         # ✅ UPSELLS
         if 'upsells_enabled' in data:
