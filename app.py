@@ -6245,11 +6245,12 @@ def update_bot_config(bot_id):
         
         if 'order_bump_message' in data:
             order_bump_message = data['order_bump_message']
-            if not isinstance(order_bump_message, str) or not order_bump_message.strip():
+            # Apenas validar se não estiver vazio (permitir desabilitar)
+            if order_bump_message and not str(order_bump_message).strip():
                 return jsonify({
                     'error': 'A mensagem do Order Bump não pode estar vazia.'
                 }), 400
-            config.order_bump_message = order_bump_message.strip()
+            config.order_bump_message = order_bump_message.strip() if order_bump_message else None
             
         if 'order_bump_media_url' in data:
             config.order_bump_media_url = data['order_bump_media_url']
@@ -6273,11 +6274,12 @@ def update_bot_config(bot_id):
                 
         if 'order_bump_description' in data:
             order_bump_description = data['order_bump_description']
-            if not isinstance(order_bump_description, str) or not order_bump_description.strip():
+            # Apenas validar se não estiver vazio (permitir desabilitar)
+            if order_bump_description and not str(order_bump_description).strip():
                 return jsonify({
                     'error': 'A descrição do Order Bump não pode estar vazia.'
                 }), 400
-            config.order_bump_description = order_bump_description.strip()
+            config.order_bump_description = order_bump_description.strip() if order_bump_description else None
         
         # Downsells - ✅ VALIDAÇÃO ESTRITA POKA-YOKE
         if 'downsells_enabled' in data:
@@ -6296,13 +6298,18 @@ def update_bot_config(bot_id):
                         'error': f'Downsell #{i+1} deve ser um objeto.'
                     }), 400
                     
-                # Validar campos obrigatórios
-                if not downsell.get('message') or not str(downsell['message']).strip():
+                # Validar campos obrigatórios (apenas se não for um downsell vazio/desabilitado)
+                # Permitir downsells vazios para compatibilidade com frontend
+                message = downsell.get('message', '')
+                description = downsell.get('description', '')
+                
+                # Apenas validar se não estiver vazio (evitar validação dupla)
+                if message and not str(message).strip():
                     return jsonify({
                         'error': f'A mensagem do Downsell #{i+1} não pode estar vazia.'
                     }), 400
-                    
-                if not downsell.get('description') or not str(downsell['description']).strip():
+                        
+                if description and not str(description).strip():
                     return jsonify({
                         'error': f'A descrição do Downsell #{i+1} não pode estar vazia.'
                     }), 400
