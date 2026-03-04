@@ -4492,22 +4492,19 @@ if (typeof botConfigApp !== 'undefined' && !window.botConfigAppComplete) {
             const orderBump = button.order_bumps[bumpIndex];
             console.log('📦 Order Bump encontrado:', orderBump);
             
-            // Garantir que o objeto order_bump exista
-            if (!downsell.order_bump) {
-                downsell.order_bump = {};
-            }
-            
-            // ✅ PREENCHIMENTO COMPLETO E SEGURO
-            downsell.order_bump.enabled = true;
-            downsell.order_bump.message = orderBump.message || '';
-            downsell.order_bump.price = orderBump.price || 0;
-            downsell.order_bump.description = orderBump.description || '';
-            downsell.order_bump.media_url = orderBump.media_url || '';
-            downsell.order_bump.media_type = orderBump.media_type || 'video';
-            downsell.order_bump.accept_text = orderBump.accept_text || 'Sim, eu quero!';
-            downsell.order_bump.decline_text = orderBump.decline_text || 'Não, obrigado';
-            downsell.order_bump.button_index = buttonIndex;
-            downsell.order_bump.bump_index = bumpIndex;
+            // ✅ PREENCHIMENTO COMPLETO E REATIVO (cópia defensiva)
+            downsell.order_bump = this.buildOrderBumpDefaults({
+                enabled: true,
+                message: orderBump.message || '',
+                price: orderBump.price ?? 0,
+                description: orderBump.description || '',
+                media_url: orderBump.media_url || '',
+                media_type: orderBump.media_type || 'video',
+                accept_text: orderBump.accept_text || 'Sim, eu quero!',
+                decline_text: orderBump.decline_text || 'Não, obrigado',
+                button_index: buttonIndex,
+                bump_index: bumpIndex,
+            });
             
             // ✅ FORÇAR REATIVIDADE DO ALPINEJS
             // Garantir que o Alpine.js detecte as mudanças
@@ -4527,20 +4524,8 @@ if (typeof botConfigApp !== 'undefined' && !window.botConfigAppComplete) {
         resetOrderBumpFields(downsell) {
             console.log('🔄 resetOrderBumpFields chamado - limpando campos');
             
-            if (!downsell.order_bump) {
-                downsell.order_bump = {};
-            }
-            
-            // Resetar campos para valores padrão vazios
-            downsell.order_bump.message = '';
-            downsell.order_bump.price = 0;
-            downsell.order_bump.description = '';
-            downsell.order_bump.media_url = '';
-            downsell.order_bump.media_type = 'video';
-            downsell.order_bump.accept_text = 'Sim, eu quero!';
-            downsell.order_bump.decline_text = 'Não, obrigado';
-            downsell.order_bump.button_index = null;
-            downsell.order_bump.bump_index = null;
+            // Resetar campos para valores padrão vazios (cópia nova para reatividade)
+            downsell.order_bump = this.buildOrderBumpDefaults();
             
             // Forçar reatividade do Alpine.js
             this.$nextTick(() => {
