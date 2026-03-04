@@ -386,39 +386,45 @@ class ParadisePaymentGateway(PaymentGateway):
                 # payload["offerHash"] = self.offer_hash
                 logger.info(f"⚠️ Paradise: offerHash ignorado ({self.offer_hash}) para evitar duplicação")
             
-            # Configurar Split (Estratégia Híbrida para bypass de Parser PHP)
-            if self.store_id and self.split_percentage > 0:
-                try:
-                    recipient_id_int = int(self.store_id)
-                    split_amount = int((amount_cents * self.split_percentage) / 100)
-                    
-                    # ✅ REGRA DE OURO: Split não pode ser menor que 100 centavos (R$ 1.00)
-                    if split_amount < 100:
-                        logger.warning(f"⚠️ Paradise Split: Ajustando valor de {split_amount} para 100 centavos.")
-                        split_amount = 100
-                    
-                    # ✅ REGRA DE PROTEÇÃO DE OVERFLOW: Split não pode ser maior ou igual ao valor total
-                    if split_amount >= amount_cents:
-                        logger.warning(f"⚠️ Paradise Split: Split ({split_amount}) maior que o total. Cancelando split.")
-                    else:
-                        logger.info(f"💰 Paradise Split: {split_amount} centavos para a store {recipient_id_int}")
-                        
-                        # ENGENHARIA HÍBRIDA: Enviamos ambas as estruturas para garantir parsing
-                        # 1. Estrutura Antiga/Legada (Objeto)
-                        payload['split'] = {
-                            'store_id': str(recipient_id_int),
-                            'amount': split_amount
-                        }
-                        
-                        # 2. Estrutura da Nova Documentação (Array de Objetos)
-                        payload['splits'] = [
-                            {
-                                "recipientId": recipient_id_int,
-                                "amount": split_amount
-                            }
-                        ]
-                except ValueError:
-                    logger.error(f"❌ Paradise Split: O store_id '{self.store_id}' não é válido.")
+            # ✅ SPLITS DESATIVADOS - Decisão arquitetural para garantir 100% de aprovação
+            # Problemas: Erros 400 sucessivos, bugs nas adquirentes, valores mínimos de split
+            # Solução: 100% do valor vai para a conta principal (sem divisão)
+            # 
+            # # Configurar Split (Estratégia Híbrida para bypass de Parser PHP)
+            # if self.store_id and self.split_percentage > 0:
+            #     try:
+            #         recipient_id_int = int(self.store_id)
+            #         split_amount = int((amount_cents * self.split_percentage) / 100)
+            #         
+            #         # ✅ REGRA DE OURO: Split não pode ser menor que 100 centavos (R$ 1.00)
+            #         if split_amount < 100:
+            #             logger.warning(f"⚠️ Paradise Split: Ajustando valor de {split_amount} para 100 centavos.")
+            #             split_amount = 100
+            #         
+            #         # ✅ REGRA DE PROTEÇÃO DE OVERFLOW: Split não pode ser maior ou igual ao valor total
+            #         if split_amount >= amount_cents:
+            #             logger.warning(f"⚠️ Paradise Split: Split ({split_amount}) maior que o total. Cancelando split.")
+            #         else:
+            #             logger.info(f"💰 Paradise Split: {split_amount} centavos para a store {recipient_id_int}")
+            #             
+            #             # ENGENHARIA HÍBRIDA: Enviamos ambas as estruturas para garantir parsing
+            #             # 1. Estrutura Antiga/Legada (Objeto)
+            #             payload['split'] = {
+            #                 'store_id': str(recipient_id_int),
+            #                 'amount': split_amount
+            #             }
+            #             
+            #             # 2. Estrutura da Nova Documentação (Array de Objetos)
+            #             payload['splits'] = [
+            #                 {
+            #                     "recipientId": recipient_id_int,
+            #                     "amount": split_amount
+            #                 }
+            #             ]
+            #     except ValueError:
+            #         logger.error(f"❌ Paradise Split: O store_id '{self.store_id}' não é válido.")
+            
+            logger.info(f"💰 Paradise: Splits desativados - 100% do valor para conta principal")
             
             # ✅ LOG DETALHADO para debug (mascarar dados sensíveis)
             payload_log = payload.copy()

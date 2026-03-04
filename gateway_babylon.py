@@ -213,25 +213,31 @@ class BabylonGateway(PaymentGateway):
             if not payload['items'][0]['externalRef']:
                 del payload['items'][0]['externalRef']
             
-            # Configurar Split Babylon
-            if self.split_user_id and self.split_percentage > 0:
-                split_amount = int((amount_cents * self.split_percentage) / 100)
-                
-                # ✅ REGRA DE OURO: Split mínimo de 100 cêntimos (R$ 1,00)
-                if split_amount < 100:
-                    logger.warning(f"⚠️ Babylon Split: Valor ({split_amount}) muito baixo. Forçando mínimo de 100 cêntimos.")
-                    split_amount = 100
-                    
-                # ✅ PREVENÇÃO OVERFLOW
-                if split_amount < amount_cents:
-                    payload['splits'] = [
-                        {
-                            "recipientId": str(self.split_user_id),
-                            "amount": split_amount
-                            # Remova o envio de 'netAmount' para evitar conflitos de cálculo na adquirente.
-                            # Deixe que a Babylon calcule o líquido com base no 'amount'.
-                        }
-                    ]
+            # ✅ SPLITS DESATIVADOS - Decisão arquitetural para garantir 100% de aprovação
+            # Problemas: Erros 400 sucessivos, bugs nas adquirentes, valores mínimos de split
+            # Solução: 100% do valor vai para a conta principal (sem divisão)
+            #
+            # # Configurar Split Babylon
+            # if self.split_user_id and self.split_percentage > 0:
+            #     split_amount = int((amount_cents * self.split_percentage) / 100)
+            #     
+            #     # ✅ REGRA DE OURO: Split mínimo de 100 cêntimos (R$ 1,00)
+            #     if split_amount < 100:
+            #         logger.warning(f"⚠️ Babylon Split: Valor ({split_amount}) muito baixo. Forçando mínimo de 100 cêntimos.")
+            #         split_amount = 100
+            #         
+            #     # ✅ PREVENÇÃO OVERFLOW
+            #     if split_amount < amount_cents:
+            #         payload['splits'] = [
+            #             {
+            #                 "recipientId": str(self.split_user_id),
+            #                 "amount": split_amount
+            #                 # Remova o envio de 'netAmount' para evitar conflitos de cálculo na adquirente.
+            #                 # Deixe que a Babylon calcule o líquido com base no 'amount'.
+            #             }
+            #         ]
+            
+            logger.info(f"💰 Babylon: Splits desativados - 100% do valor para conta principal")
             
             # ✅ Ajustar tipo de documento se for CNPJ (14 dígitos)
             if len(customer_document) == 14:
