@@ -3329,7 +3329,6 @@ console.log('✅ botConfigApp temporário definido (será substituído pela vers
                                     <select 
                                         class="form-select ob-select"
                                         x-show="config.main_buttons && config.main_buttons.length > 0"
-                                        data-downsell-index="<template x-for=\"(downsell, dsIdx) in config.downsells\" :key=\"dsIdx\">${dsIdx}</template>"
                                     >
                                         <option value="">Criar novo Order Bump</option>
                                         <template x-for="(button, btnIdx) in config.main_buttons" :key="btnIdx">
@@ -3356,7 +3355,6 @@ console.log('✅ botConfigApp temporário definido (será substituído pela vers
                                         class="form-textarea ob-msg"
                                         x-model="downsell.order_bump.message" 
                                         required
-                                        data-downsell-index="<template x-for=\"(downsell, dsIdx) in config.downsells\" :key=\"dsIdx\">${dsIdx}</template>"
                                     ></textarea>
                                 </div>
 
@@ -3369,7 +3367,6 @@ console.log('✅ botConfigApp temporário definido (será substituído pela vers
                                         step="0.01" 
                                         min="0" 
                                         required 
-                                        data-downsell-index="<template x-for=\"(downsell, dsIdx) in config.downsells\" :key=\"dsIdx\">${dsIdx}</template>"
                                     />
                                 </div>
 
@@ -3379,7 +3376,6 @@ console.log('✅ botConfigApp temporário definido (será substituído pela vers
                                         class="form-textarea ob-desc"
                                         x-model="downsell.order_bump.description" 
                                         required
-                                        data-downsell-index="<template x-for=\"(downsell, dsIdx) in config.downsells\" :key=\"dsIdx\">${dsIdx}</template>"
                                     ></textarea>
                                 </div>
 
@@ -3388,7 +3384,6 @@ console.log('✅ botConfigApp temporário definido (será substituído pela vers
                                     <select 
                                         class="form-select ob-media-type"
                                         x-model="downsell.order_bump.media_type" 
-                                        data-downsell-index="<template x-for=\"(downsell, dsIdx) in config.downsells\" :key=\"dsIdx\">${dsIdx}</template>"
                                     >
                                         <option value="video">Vídeo</option>
                                         <option value="photo">Foto</option>
@@ -3402,7 +3397,6 @@ console.log('✅ botConfigApp temporário definido (será substituído pela vers
                                         type="text" 
                                         x-model="downsell.order_bump.media_url" 
                                         placeholder="https://..." 
-                                        data-downsell-index="<template x-for=\"(downsell, dsIdx) in config.downsells\" :key=\"dsIdx\">${dsIdx}</template>"
                                     />
                                 </div>
 
@@ -3413,7 +3407,6 @@ console.log('✅ botConfigApp temporário definido (será substituído pela vers
                                         type="text" 
                                         x-model="downsell.order_bump.accept_text" 
                                         placeholder="Sim, eu quero!" 
-                                        data-downsell-index="<template x-for=\"(downsell, dsIdx) in config.downsells\" :key=\"dsIdx\">${dsIdx}</template>"
                                     />
                                 </div>
 
@@ -3424,7 +3417,6 @@ console.log('✅ botConfigApp temporário definido (será substituído pela vers
                                         type="text" 
                                         x-model="downsell.order_bump.decline_text" 
                                         placeholder="Não, obrigado" 
-                                        data-downsell-index="<template x-for=\"(downsell, dsIdx) in config.downsells\" :key=\"dsIdx\">${dsIdx}</template>"
                                     />
                                 </div>
                             </div>
@@ -6030,22 +6022,20 @@ document.addEventListener('DOMContentLoaded', function() {
             // Add change event listener
             selectElement.addEventListener('change', function(e) {
                 const selectedOption = e.target.options[e.target.selectedIndex];
-                const downsellIndex = e.target.getAttribute('data-downsell-index');
                 
                 console.log('🔄 Select mudou:', {
                     value: e.target.value,
-                    downsellIndex: downsellIndex,
                     hasData: selectedOption.hasAttribute('data-message')
                 });
                 
                 if (e.target.value && selectedOption.hasAttribute('data-message')) {
                     // Fill fields with data from selected option
-                    fillOrderBumpFields(downsellIndex, selectedOption);
-                    setFieldsReadonly(downsellIndex, true);
+                    fillOrderBumpFields(selectElement, selectedOption);
+                    setFieldsReadonly(selectElement, true);
                 } else {
                     // Reset fields to empty
-                    resetOrderBumpFields(downsellIndex);
-                    setFieldsReadonly(downsellIndex, false);
+                    resetOrderBumpFields(selectElement);
+                    setFieldsReadonly(selectElement, false);
                 }
             });
             
@@ -6054,8 +6044,8 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    function fillOrderBumpFields(downsellIndex, optionElement) {
-        console.log('✅ Preenchendo campos do Order Bump para downsell:', downsellIndex);
+    function fillOrderBumpFields(selectElement, optionElement) {
+        console.log('✅ Preenchendo campos do Order Bump');
         
         const fields = {
             message: optionElement.getAttribute('data-message') || '',
@@ -6069,10 +6059,10 @@ document.addEventListener('DOMContentLoaded', function() {
         
         console.log('📦 Dados do Order Bump:', fields);
         
-        // Find and fill all fields for this downsell
-        const container = findDownsellContainer(downsellIndex);
+        // Find the container for this downsell
+        const container = selectElement.closest('.space-y-4');
         if (!container) {
-            console.error('❌ Container do downsell não encontrado:', downsellIndex);
+            console.error('❌ Container do downsell não encontrado');
             return;
         }
         
@@ -6124,12 +6114,12 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('✅ Campos preenchidos com sucesso');
     }
     
-    function resetOrderBumpFields(downsellIndex) {
-        console.log('🔄 Resetando campos do Order Bump para downsell:', downsellIndex);
+    function resetOrderBumpFields(selectElement) {
+        console.log('🔄 Resetando campos do Order Bump');
         
-        const container = findDownsellContainer(downsellIndex);
+        const container = selectElement.closest('.space-y-4');
         if (!container) {
-            console.error('❌ Container do downsell não encontrado:', downsellIndex);
+            console.error('❌ Container do downsell não encontrado');
             return;
         }
         
@@ -6153,12 +6143,12 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('✅ Campos resetados com sucesso');
     }
     
-    function setFieldsReadonly(downsellIndex, readonly) {
-        console.log('🔒 Configurando campos como readonly:', readonly, 'para downsell:', downsellIndex);
+    function setFieldsReadonly(selectElement, readonly) {
+        console.log('🔒 Configurando campos como readonly:', readonly);
         
-        const container = findDownsellContainer(downsellIndex);
+        const container = selectElement.closest('.space-y-4');
         if (!container) {
-            console.error('❌ Container do downsell não encontrado:', downsellIndex);
+            console.error('❌ Container do downsell não encontrado');
             return;
         }
         
@@ -6193,17 +6183,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         
         console.log('✅ Campos configurados como readonly:', readonly);
-    }
-    
-    function findDownsellContainer(downsellIndex) {
-        // Find the container for this specific downsell
-        const allSelects = document.querySelectorAll('.ob-select');
-        for (let i = 0; i < allSelects.length; i++) {
-            if (allSelects[i].getAttribute('data-downsell-index') === downsellIndex) {
-                return allSelects[i].closest('.space-y-4');
-            }
-        }
-        return null;
     }
     
     // Re-initialize when new elements are added (Alpine reactivity)
