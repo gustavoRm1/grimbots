@@ -2131,7 +2131,7 @@ body {
 // Função temporária com todas as propriedades necessárias para evitar erros do Alpine
 window.botConfigApp = function() {
     return {
-        bot_id: {{ bot.id }},
+        bot_id: {{ bot.id | tojson }},
         loading: true,
         activeTab: 'welcome',
         config: {
@@ -3865,7 +3865,7 @@ if (typeof botConfigApp !== 'undefined' && !window.botConfigAppComplete) {
     // Se não foi definida no extra_head, definir aqui (fallback)
     function botConfigApp() {
     return {
-        bot_id: {{ bot.id }},
+        bot_id: {{ bot.id | tojson }},
         loading: false,
         activeTab: 'welcome',
         config: {
@@ -6007,6 +6007,25 @@ document.addEventListener('DOMContentLoaded', function() {
         initializeOrderBumpAutofill();
     }, 500);
     
+    // ✅ FUNÇÃO SÊNIOR: Sincronizar com Alpine.js (x-model)
+    const setVal = (id, val, ro=false) => {
+        const el = document.getElementById(id);
+        if (el) { 
+            el.value = val || ''; 
+            // 1. Desativar edição (mantendo capacidade de submissão do form)
+            if (el.tagName.toLowerCase() === 'select') {
+                el.style.pointerEvents = ro ? 'none' : 'auto';
+                el.style.opacity = ro ? '0.7' : '1';
+            } else {
+                el.readOnly = ro; 
+            }
+            
+            // ✅ 2. FIX SÊNIOR: Sincronizar com o Alpine.js (x-model)
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+    };
+    
     function initializeOrderBumpAutofill() {
         // Find all order bump select elements
         const selectElements = document.querySelectorAll('.ob-select');
@@ -6070,44 +6089,58 @@ document.addEventListener('DOMContentLoaded', function() {
         const msgField = container.querySelector('.ob-msg');
         if (msgField) {
             msgField.value = fields.message;
+            // ✅ Sincronizar com Alpine.js
             msgField.dispatchEvent(new Event('input', { bubbles: true }));
+            msgField.dispatchEvent(new Event('change', { bubbles: true }));
         }
         
         const descField = container.querySelector('.ob-desc');
         if (descField) {
             descField.value = fields.description;
+            // ✅ Sincronizar com Alpine.js
             descField.dispatchEvent(new Event('input', { bubbles: true }));
+            descField.dispatchEvent(new Event('change', { bubbles: true }));
         }
         
         // Fill input fields
         const priceField = container.querySelector('.ob-price');
         if (priceField) {
             priceField.value = fields.price;
+            // ✅ Sincronizar com Alpine.js
             priceField.dispatchEvent(new Event('input', { bubbles: true }));
+            priceField.dispatchEvent(new Event('change', { bubbles: true }));
         }
         
         const mediaUrlField = container.querySelector('.ob-media-url');
         if (mediaUrlField) {
             mediaUrlField.value = fields.mediaUrl;
+            // ✅ Sincronizar com Alpine.js
             mediaUrlField.dispatchEvent(new Event('input', { bubbles: true }));
+            mediaUrlField.dispatchEvent(new Event('change', { bubbles: true }));
         }
         
         const acceptField = container.querySelector('.ob-accept-text');
         if (acceptField) {
             acceptField.value = fields.acceptText;
+            // ✅ Sincronizar com Alpine.js
             acceptField.dispatchEvent(new Event('input', { bubbles: true }));
+            acceptField.dispatchEvent(new Event('change', { bubbles: true }));
         }
         
         const declineField = container.querySelector('.ob-decline-text');
         if (declineField) {
             declineField.value = fields.declineText;
+            // ✅ Sincronizar com Alpine.js
             declineField.dispatchEvent(new Event('input', { bubbles: true }));
+            declineField.dispatchEvent(new Event('change', { bubbles: true }));
         }
         
         // Fill select field
         const mediaTypeField = container.querySelector('.ob-media-type');
         if (mediaTypeField) {
             mediaTypeField.value = fields.mediaType;
+            // ✅ Sincronizar com Alpine.js
+            mediaTypeField.dispatchEvent(new Event('input', { bubbles: true }));
             mediaTypeField.dispatchEvent(new Event('change', { bubbles: true }));
         }
         
@@ -6131,12 +6164,16 @@ document.addEventListener('DOMContentLoaded', function() {
             } else {
                 field.value = '';
             }
+            // ✅ Sincronizar com Alpine.js
             field.dispatchEvent(new Event('input', { bubbles: true }));
+            field.dispatchEvent(new Event('change', { bubbles: true }));
         });
         
         const mediaTypeField = container.querySelector('.ob-media-type');
         if (mediaTypeField) {
             mediaTypeField.value = 'video';
+            // ✅ Sincronizar com Alpine.js
+            mediaTypeField.dispatchEvent(new Event('input', { bubbles: true }));
             mediaTypeField.dispatchEvent(new Event('change', { bubbles: true }));
         }
         
