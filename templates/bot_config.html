@@ -4493,20 +4493,35 @@ if (typeof botConfigApp !== 'undefined' && !window.botConfigAppComplete) {
 
         useOrderBumpFromButtons(downsell, buttonIndex, bumpIndex) {
             console.log('🔄 useOrderBumpFromButtons chamado:', { buttonIndex, bumpIndex });
+            console.log('🔍 main_buttons disponíveis:', this.config.main_buttons?.length || 0);
             
             if (!this.config.main_buttons || !this.config.main_buttons[buttonIndex]) {
                 console.error('❌ Botão não encontrado:', buttonIndex);
+                console.error('❌ Botões disponíveis:', this.config.main_buttons?.map((b, i) => `${i}: ${b.text}`));
                 return;
             }
             
             const button = this.config.main_buttons[buttonIndex];
+            console.log('🔍 Botão selecionado:', { buttonIndex, buttonText: button.text });
+            console.log('🔍 Order Bumps do botão:', button.order_bumps?.length || 0);
+            
             if (!button.order_bumps || !button.order_bumps[bumpIndex]) {
                 console.error('❌ Order Bump não encontrado:', { buttonIndex, bumpIndex });
+                console.error('❌ Order Bumps disponíveis:', button.order_bumps?.map((b, i) => `${i}: ${b.message || '(sem mensagem)'}`));
                 return;
             }
             
             const orderBump = button.order_bumps[bumpIndex];
             console.log('📦 Order Bump encontrado:', orderBump);
+            console.log('📦 Campos do Order Bump original:', {
+                message: orderBump.message,
+                price: orderBump.price,
+                description: orderBump.description,
+                media_url: orderBump.media_url,
+                media_type: orderBump.media_type,
+                accept_text: orderBump.accept_text,
+                decline_text: orderBump.decline_text
+            });
             
             // ✅ PREENCHIMENTO COMPLETO E REATIVO (cópia defensiva)
             downsell.order_bump = this.buildOrderBumpDefaults({
@@ -4522,6 +4537,8 @@ if (typeof botConfigApp !== 'undefined' && !window.botConfigAppComplete) {
                 bump_index: bumpIndex,
             });
             
+            console.log('🔍 Objeto downsell.order_bump após atribuição:', downsell.order_bump);
+            
             // ✅ FORÇAR REATIVIDADE DO ALPINEJS
             // Garantir que o Alpine.js detecte as mudanças
             this.$nextTick(() => {
@@ -4532,7 +4549,22 @@ if (typeof botConfigApp !== 'undefined' && !window.botConfigAppComplete) {
                     message: downsell.order_bump.message,
                     price: downsell.order_bump.price,
                     description: downsell.order_bump.description,
-                    media_url: downsell.order_bump.media_url
+                    media_url: downsell.order_bump.media_url,
+                    media_type: downsell.order_bump.media_type,
+                    accept_text: downsell.order_bump.accept_text,
+                    decline_text: downsell.order_bump.decline_text
+                });
+                
+                // Verificar se os campos estão visíveis no DOM
+                console.log('🔍 Verificando DOM...');
+                const messageField = document.querySelector('textarea[x-model*="order_bump.message"]');
+                const priceField = document.querySelector('input[x-model*="order_bump.price"]');
+                const descField = document.querySelector('textarea[x-model*="order_bump.description"]');
+                
+                console.log('🔍 Campos no DOM:', {
+                    messageField: messageField?.value,
+                    priceField: priceField?.value,
+                    descField: descField?.value
                 });
             });
         },
