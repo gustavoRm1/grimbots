@@ -213,38 +213,23 @@ class BabylonGateway(PaymentGateway):
             if not payload['items'][0]['externalRef']:
                 del payload['items'][0]['externalRef']
             
-            # ✅ Adicionar split se configurado (formato Babylon: recipientId + amount em centavos)
+            # Configurar Split (apenas se tiver split_user_id)
             if self.split_user_id and self.split_percentage > 0:
-                split_amount_cents = int(amount_cents * (self.split_percentage / 100))
+                split_amount = int(amount_cents * self.split_percentage / 100)
                 
-                # ✅ CRÍTICO: Validar split_amount antes de adicionar
-                # Se split_amount for 0, pode causar recusa da transação
-                if split_amount_cents < 1:
-                    logger.warning(f"⚠️ [{self.get_gateway_name()}] Split calculado é 0 centavos - ajustando para mínimo de 1 centavo")
-                    split_amount_cents = 1
-                
-                # ✅ CRÍTICO: Garantir que sobra pelo menos 1 centavo para o vendedor
-                if split_amount_cents >= amount_cents:
-                    logger.warning(f"⚠️ [{self.get_gateway_name()}] Split ({split_amount_cents}) >= valor total ({amount_cents}) - ajustando")
-                    split_amount_cents = max(1, amount_cents - 1)
-                
-                # ✅ CRÍTICO: Validar que split não é zero antes de adicionar ao payload
-                if split_amount_cents > 0 and split_amount_cents < amount_cents:
+                # ✅ REGRA DE SEGURANÇA FINANCEIRA: Bloqueio de Split Zerado
+                # Adquirentes recusam payloads com amount igual a 0.
+                if split_amount > 0:
                     payload['split'] = [
                         {
                             'recipientId': self.split_user_id,
-                            'amount': split_amount_cents
+                            'amount': split_amount
                         }
                     ]
-                    logger.info(f"💰 [{self.get_gateway_name()}] Split configurado: {split_amount_cents} centavos ({self.split_percentage}%) para recipientId {self.split_user_id}")
-                    logger.debug(f"   Valor original: {amount_cents} centavos")
-                    logger.debug(f"   Split: {split_amount_cents} centavos")
-                    logger.debug(f"   Restante para vendedor: {amount_cents - split_amount_cents} centavos")
+                    logger.info(f"💰 [{self.get_gateway_name()}] Split configurado: {split_amount} centavos ({self.split_percentage}%) para recipientId {self.split_user_id}")
                 else:
-                    logger.error(f"❌ [{self.get_gateway_name()}] Split inválido calculado: {split_amount_cents} centavos (valor total: {amount_cents})")
-                    logger.error(f"   ⚠️ NÃO ADICIONANDO SPLIT AO PAYLOAD - pode causar recusa se split é obrigatório")
-                    logger.error(f"   💡 Verificar configuração de split_percentage ({self.split_percentage}%)")
-                    # Não adicionar split inválido ao payload
+                    logger.warning(f"⚠️ [{self.get_gateway_name()}] Split anulado: O valor da comissão calculada é nulo ({split_amount} centavos). O PIX será gerado na conta primária sem divisão.")
+                    # Não adicionar a chave 'split' ao payload
             
             # ✅ Ajustar tipo de documento se for CNPJ (14 dígitos)
             if len(customer_document) == 14:

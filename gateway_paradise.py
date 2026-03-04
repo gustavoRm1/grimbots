@@ -386,39 +386,21 @@ class ParadisePaymentGateway(PaymentGateway):
                 # payload["offerHash"] = self.offer_hash
                 logger.info(f"⚠️ Paradise: offerHash ignorado ({self.offer_hash}) para evitar duplicação")
             
-            # ✅ CORREÇÃO CRÍTICA: ADICIONAR SPLIT PAYMENT
-            if self.store_id and self.split_percentage and self.split_percentage > 0:
-                # Validar split_percentage
-                if not isinstance(self.split_percentage, (int, float)) or self.split_percentage <= 0:
-                    logger.error(f"❌ Paradise: split_percentage inválido: {self.split_percentage}")
-                    return None
+            # Configurar Split (apenas se tiver store_id)
+            if self.store_id and self.split_percentage > 0:
+                split_amount = int((amount_cents * self.split_percentage) / 100)
                 
-                # Log do split para debug
-                logger.info(f"💰 Paradise Split: {self.split_percentage}% configurado")
-                
-                # ✅ CORREÇÃO CRÍTICA: Para valores muito pequenos, não aplicar split
-                if amount_cents < 10:  # Menos de R$ 0,10
-                    logger.warning(f"⚠️ Paradise: Valor muito pequeno (R$ {amount:.2f}), não aplicando split")
-                    # Não adiciona split para valores muito pequenos
-                else:
-                    split_amount_cents = int(amount_cents * (self.split_percentage / 100))
-                    
-                    # Validar mínimo de 1 centavo para split
-                    if split_amount_cents < 1:
-                        split_amount_cents = 1
-                    
-                    # Garantir que sobra pelo menos 1 centavo para o vendedor
-                    seller_amount_cents = amount_cents - split_amount_cents
-                    if seller_amount_cents < 1:
-                        logger.warning(f"⚠️ Paradise: Split deixaria menos de 1 centavo para vendedor. Ajustando...")
-                        split_amount_cents = amount_cents - 1
-                    
-                    payload["split"] = {
-                        "store_id": self.store_id,
-                        "amount": split_amount_cents
+                # ✅ REGRA DE SEGURANÇA FINANCEIRA
+                # Gateways rejeitam PIX se a transferência de split for menor que as tarifas operacionais.
+                # Se o split for menor que R$ 1.00 (100 centavos), abortamos a divisão.
+                if split_amount >= 100:
+                    logger.info(f"💰 Paradise Split: {split_amount} centavos ({self.split_percentage}%) para store {self.store_id}")
+                    payload['split'] = {
+                        'store_id': str(self.store_id),
+                        'amount': split_amount
                     }
-                    
-                    logger.info(f"💰 Paradise Split: {split_amount_cents} centavos ({self.split_percentage}%) para store {self.store_id}")
+                else:
+                    logger.warning(f"⚠️ Split anulado preventivamente: O valor calculado ({split_amount} centavos) é inferior ao mínimo permitido pelas adquirentes (100 centavos). PIX será gerado sem split.")
             
             # ✅ LOG DETALHADO para debug (mascarar dados sensíveis)
             payload_log = payload.copy()
