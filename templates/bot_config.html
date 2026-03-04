@@ -3327,23 +3327,24 @@ console.log('✅ botConfigApp temporário definido (será substituído pela vers
                                 <div class="form-group">
                                     <label class="form-label">Usar Order Bump Existente</label>
                                     <select 
-                                        @change="if ($event.target.value) { 
-                                            const [btnIdx, bumpIdx] = $event.target.value.split('_').map(Number); 
-                                            if (!isNaN(btnIdx) && !isNaN(bumpIdx)) { 
-                                                useOrderBumpFromButtons(downsell, btnIdx, bumpIdx); 
-                                            } else { 
-                                                console.error('❌ Índices inválidos:', $event.target.value); 
-                                            }
-                                        } else { 
-                                            resetOrderBumpFields(downsell); 
-                                        }"
-                                        class="form-select"
+                                        class="form-select ob-select"
                                         x-show="config.main_buttons && config.main_buttons.length > 0"
+                                        data-downsell-index="<template x-for=\"(downsell, dsIdx) in config.downsells\" :key=\"dsIdx\">${dsIdx}</template>"
                                     >
                                         <option value="">Criar novo Order Bump</option>
                                         <template x-for="(button, btnIdx) in config.main_buttons" :key="btnIdx">
                                             <template x-for="(bump, bumpIdx) in (button.order_bumps || [])" :key="bumpIdx">
-                                                <option :value="`${btnIdx}_${bumpIdx}`" x-text="button.text + ' - Order Bump ' + (bumpIdx + 1)"></option>
+                                                <option 
+                                                    :value="`${btnIdx}_${bumpIdx}`" 
+                                                    :data-message="bump.message || ''"
+                                                    :data-price="bump.price || 0"
+                                                    :data-description="bump.description || ''"
+                                                    :data-media-url="bump.media_url || ''"
+                                                    :data-media-type="bump.media_type || 'video'"
+                                                    :data-accept-text="bump.accept_text || 'Sim, eu quero!'"
+                                                    :data-decline-text="bump.decline_text || 'Não, obrigado'"
+                                                    x-text="button.text + ' - Order Bump ' + (bumpIdx + 1)"
+                                                ></option>
                                             </template>
                                         </template>
                                     </select>
@@ -3351,22 +3352,44 @@ console.log('✅ botConfigApp temporário definido (será substituído pela vers
 
                                 <div class="form-group">
                                     <label class="form-label">Mensagem do Order Bump *</label>
-                                    <textarea x-model="downsell.order_bump.message" class="form-textarea" required></textarea>
+                                    <textarea 
+                                        class="form-textarea ob-msg"
+                                        x-model="downsell.order_bump.message" 
+                                        required
+                                        data-downsell-index="<template x-for=\"(downsell, dsIdx) in config.downsells\" :key=\"dsIdx\">${dsIdx}</template>"
+                                    ></textarea>
                                 </div>
 
                                 <div class="form-group">
                                     <label class="form-label">Preço do Order Bump (R$) *</label>
-                                    <input type="number" x-model.number="downsell.order_bump.price" class="form-input" step="0.01" min="0" required />
+                                    <input 
+                                        class="form-input ob-price"
+                                        type="number" 
+                                        x-model.number="downsell.order_bump.price" 
+                                        step="0.01" 
+                                        min="0" 
+                                        required 
+                                        data-downsell-index="<template x-for=\"(downsell, dsIdx) in config.downsells\" :key=\"dsIdx\">${dsIdx}</template>"
+                                    />
                                 </div>
 
                                 <div class="form-group">
                                     <label class="form-label">Descrição *</label>
-                                    <textarea x-model="downsell.order_bump.description" class="form-textarea" required></textarea>
+                                    <textarea 
+                                        class="form-textarea ob-desc"
+                                        x-model="downsell.order_bump.description" 
+                                        required
+                                        data-downsell-index="<template x-for=\"(downsell, dsIdx) in config.downsells\" :key=\"dsIdx\">${dsIdx}</template>"
+                                    ></textarea>
                                 </div>
 
                                 <div class="form-group">
                                     <label class="form-label">Tipo de Mídia</label>
-                                    <select x-model="downsell.order_bump.media_type" class="form-select">
+                                    <select 
+                                        class="form-select ob-media-type"
+                                        x-model="downsell.order_bump.media_type" 
+                                        data-downsell-index="<template x-for=\"(downsell, dsIdx) in config.downsells\" :key=\"dsIdx\">${dsIdx}</template>"
+                                    >
                                         <option value="video">Vídeo</option>
                                         <option value="photo">Foto</option>
                                     </select>
@@ -3374,17 +3397,35 @@ console.log('✅ botConfigApp temporário definido (será substituído pela vers
 
                                 <div class="form-group">
                                     <label class="form-label">URL da Mídia</label>
-                                    <input type="text" x-model="downsell.order_bump.media_url" class="form-input" placeholder="https://..." />
+                                    <input 
+                                        class="form-input ob-media-url"
+                                        type="text" 
+                                        x-model="downsell.order_bump.media_url" 
+                                        placeholder="https://..." 
+                                        data-downsell-index="<template x-for=\"(downsell, dsIdx) in config.downsells\" :key=\"dsIdx\">${dsIdx}</template>"
+                                    />
                                 </div>
 
                                 <div class="form-group">
                                     <label class="form-label">Texto do Botão Aceitar</label>
-                                    <input type="text" x-model="downsell.order_bump.accept_text" class="form-input" placeholder="Sim, eu quero!" />
+                                    <input 
+                                        class="form-input ob-accept-text"
+                                        type="text" 
+                                        x-model="downsell.order_bump.accept_text" 
+                                        placeholder="Sim, eu quero!" 
+                                        data-downsell-index="<template x-for=\"(downsell, dsIdx) in config.downsells\" :key=\"dsIdx\">${dsIdx}</template>"
+                                    />
                                 </div>
 
                                 <div class="form-group">
                                     <label class="form-label">Texto do Botão Recusar</label>
-                                    <input type="text" x-model="downsell.order_bump.decline_text" class="form-input" placeholder="Não, obrigado" />
+                                    <input 
+                                        class="form-input ob-decline-text"
+                                        type="text" 
+                                        x-model="downsell.order_bump.decline_text" 
+                                        placeholder="Não, obrigado" 
+                                        data-downsell-index="<template x-for=\"(downsell, dsIdx) in config.downsells\" :key=\"dsIdx\">${dsIdx}</template>"
+                                    />
                                 </div>
                             </div>
                         </div>
@@ -5964,5 +6005,222 @@ setTimeout(function() {
     console.log('🔍 Verificando jsPlumb:', typeof jsPlumb);
     console.log('🔍 Verificando FlowEditor:', typeof window.FlowEditor);
 }, 1000);
+
+// ✅ VANILLA JS AUTOFILL FOR ORDER BUMP (Independent of Alpine.js)
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🚀 Inicializando autofill de Order Bump com Vanilla JS');
+    
+    // Wait for Alpine to render the elements
+    setTimeout(function() {
+        initializeOrderBumpAutofill();
+    }, 500);
+    
+    function initializeOrderBumpAutofill() {
+        // Find all order bump select elements
+        const selectElements = document.querySelectorAll('.ob-select');
+        
+        selectElements.forEach(function(selectElement) {
+            // Skip if already has event listener
+            if (selectElement.hasAttribute('data-autofill-initialized')) {
+                return;
+            }
+            
+            console.log('📋 Configurando autofill para select:', selectElement);
+            
+            // Add change event listener
+            selectElement.addEventListener('change', function(e) {
+                const selectedOption = e.target.options[e.target.selectedIndex];
+                const downsellIndex = e.target.getAttribute('data-downsell-index');
+                
+                console.log('🔄 Select mudou:', {
+                    value: e.target.value,
+                    downsellIndex: downsellIndex,
+                    hasData: selectedOption.hasAttribute('data-message')
+                });
+                
+                if (e.target.value && selectedOption.hasAttribute('data-message')) {
+                    // Fill fields with data from selected option
+                    fillOrderBumpFields(downsellIndex, selectedOption);
+                    setFieldsReadonly(downsellIndex, true);
+                } else {
+                    // Reset fields to empty
+                    resetOrderBumpFields(downsellIndex);
+                    setFieldsReadonly(downsellIndex, false);
+                }
+            });
+            
+            // Mark as initialized
+            selectElement.setAttribute('data-autofill-initialized', 'true');
+        });
+    }
+    
+    function fillOrderBumpFields(downsellIndex, optionElement) {
+        console.log('✅ Preenchendo campos do Order Bump para downsell:', downsellIndex);
+        
+        const fields = {
+            message: optionElement.getAttribute('data-message') || '',
+            price: optionElement.getAttribute('data-price') || 0,
+            description: optionElement.getAttribute('data-description') || '',
+            mediaUrl: optionElement.getAttribute('data-media-url') || '',
+            mediaType: optionElement.getAttribute('data-media-type') || 'video',
+            acceptText: optionElement.getAttribute('data-accept-text') || 'Sim, eu quero!',
+            declineText: optionElement.getAttribute('data-decline-text') || 'Não, obrigado'
+        };
+        
+        console.log('📦 Dados do Order Bump:', fields);
+        
+        // Find and fill all fields for this downsell
+        const container = findDownsellContainer(downsellIndex);
+        if (!container) {
+            console.error('❌ Container do downsell não encontrado:', downsellIndex);
+            return;
+        }
+        
+        // Fill textarea fields
+        const msgField = container.querySelector('.ob-msg');
+        if (msgField) {
+            msgField.value = fields.message;
+            msgField.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        
+        const descField = container.querySelector('.ob-desc');
+        if (descField) {
+            descField.value = fields.description;
+            descField.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        
+        // Fill input fields
+        const priceField = container.querySelector('.ob-price');
+        if (priceField) {
+            priceField.value = fields.price;
+            priceField.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        
+        const mediaUrlField = container.querySelector('.ob-media-url');
+        if (mediaUrlField) {
+            mediaUrlField.value = fields.mediaUrl;
+            mediaUrlField.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        
+        const acceptField = container.querySelector('.ob-accept-text');
+        if (acceptField) {
+            acceptField.value = fields.acceptText;
+            acceptField.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        
+        const declineField = container.querySelector('.ob-decline-text');
+        if (declineField) {
+            declineField.value = fields.declineText;
+            declineField.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        
+        // Fill select field
+        const mediaTypeField = container.querySelector('.ob-media-type');
+        if (mediaTypeField) {
+            mediaTypeField.value = fields.mediaType;
+            mediaTypeField.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        
+        console.log('✅ Campos preenchidos com sucesso');
+    }
+    
+    function resetOrderBumpFields(downsellIndex) {
+        console.log('🔄 Resetando campos do Order Bump para downsell:', downsellIndex);
+        
+        const container = findDownsellContainer(downsellIndex);
+        if (!container) {
+            console.error('❌ Container do downsell não encontrado:', downsellIndex);
+            return;
+        }
+        
+        // Reset all fields to empty/default values
+        const fields = container.querySelectorAll('.ob-msg, .ob-desc, .ob-price, .ob-media-url, .ob-accept-text, .ob-decline-text');
+        fields.forEach(function(field) {
+            if (field.type === 'number') {
+                field.value = 0;
+            } else {
+                field.value = '';
+            }
+            field.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+        
+        const mediaTypeField = container.querySelector('.ob-media-type');
+        if (mediaTypeField) {
+            mediaTypeField.value = 'video';
+            mediaTypeField.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        
+        console.log('✅ Campos resetados com sucesso');
+    }
+    
+    function setFieldsReadonly(downsellIndex, readonly) {
+        console.log('🔒 Configurando campos como readonly:', readonly, 'para downsell:', downsellIndex);
+        
+        const container = findDownsellContainer(downsellIndex);
+        if (!container) {
+            console.error('❌ Container do downsell não encontrado:', downsellIndex);
+            return;
+        }
+        
+        // Set readonly on input and textarea fields
+        const inputFields = container.querySelectorAll('.ob-msg, .ob-desc, .ob-price, .ob-media-url, .ob-accept-text, .ob-decline-text');
+        inputFields.forEach(function(field) {
+            if (readonly) {
+                field.setAttribute('readonly', true);
+                field.style.backgroundColor = '#f5f5f5';
+                field.style.cursor = 'not-allowed';
+            } else {
+                field.removeAttribute('readonly');
+                field.style.backgroundColor = '';
+                field.style.cursor = '';
+            }
+        });
+        
+        // For select fields, use CSS to disable (not disabled attribute)
+        const selectFields = container.querySelectorAll('.ob-media-type');
+        selectFields.forEach(function(field) {
+            if (readonly) {
+                field.style.pointerEvents = 'none';
+                field.style.opacity = '0.6';
+                field.style.backgroundColor = '#f5f5f5';
+                field.style.cursor = 'not-allowed';
+            } else {
+                field.style.pointerEvents = '';
+                field.style.opacity = '';
+                field.style.backgroundColor = '';
+                field.style.cursor = '';
+            }
+        });
+        
+        console.log('✅ Campos configurados como readonly:', readonly);
+    }
+    
+    function findDownsellContainer(downsellIndex) {
+        // Find the container for this specific downsell
+        const allSelects = document.querySelectorAll('.ob-select');
+        for (let i = 0; i < allSelects.length; i++) {
+            if (allSelects[i].getAttribute('data-downsell-index') === downsellIndex) {
+                return allSelects[i].closest('.space-y-4');
+            }
+        }
+        return null;
+    }
+    
+    // Re-initialize when new elements are added (Alpine reactivity)
+    const observer = new MutationObserver(function(mutations) {
+        mutations.forEach(function(mutation) {
+            if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+                setTimeout(function() {
+                    initializeOrderBumpAutofill();
+                }, 100);
+            }
+        });
+    });
+    
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true
+    });
+});
 </script>
 {% endblock %}
