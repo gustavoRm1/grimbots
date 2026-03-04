@@ -7336,7 +7336,18 @@ Seu pagamento ainda não foi confirmado.
         """
         try:
             bump_message = order_bump.get('message', '')
-            bump_price = float(order_bump.get('price', 0))
+            
+            # ✅ FIX SÊNIOR: Blindagem contra valores nulos e strings vazias no banco de dados
+            raw_price = order_bump.get('price')
+            try:
+                if raw_price is None or str(raw_price).strip() == '':
+                    bump_price = 0.0
+                else:
+                    bump_price = float(raw_price)
+            except (ValueError, TypeError):
+                logger.warning(f"⚠️ Valor de Order Bump inválido detectado ('{raw_price}'). Assumindo 0.0 para não interromper a venda.")
+                bump_price = 0.0
+                
             bump_description = order_bump.get('description', 'Bônus')
             bump_media_url = order_bump.get('media_url')
             bump_media_type = order_bump.get('media_type', 'video')
@@ -7423,7 +7434,18 @@ Seu pagamento ainda não foi confirmado.
         """
         try:
             bump_message = order_bump.get('message', '')
-            bump_price = float(order_bump.get('price', 0))
+            
+            # ✅ FIX SÊNIOR: Blindagem contra valores nulos e strings vazias no banco de dados
+            raw_price = order_bump.get('price')
+            try:
+                if raw_price is None or str(raw_price).strip() == '':
+                    bump_price = 0.0
+                else:
+                    bump_price = float(raw_price)
+            except (ValueError, TypeError):
+                logger.warning(f"⚠️ Valor de Order Bump inválido detectado ('{raw_price}'). Assumindo 0.0 para não interromper a venda.")
+                bump_price = 0.0
+                
             bump_description = order_bump.get('description', 'Bônus')
             bump_media_url = order_bump.get('media_url')
             bump_media_type = order_bump.get('media_type', 'video')
