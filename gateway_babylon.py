@@ -5,10 +5,30 @@ Gateway Babylon - Implementação Isolada
 import os
 import requests
 import logging
+import csv
+import random
 from typing import Dict, Any, Optional, List
 from gateway_interface import PaymentGateway
 
 logger = logging.getLogger(__name__)
+
+# Cache global para identidades válidas (KYC)
+_VALID_IDENTITIES_CACHE = []
+
+def _load_identities_if_needed():
+    global _VALID_IDENTITIES_CACHE
+    if not _VALID_IDENTITIES_CACHE:
+        try:
+            csv_path = os.path.join(os.path.dirname(__file__), 'cpf_nome_formatado.csv')
+            with open(csv_path, mode='r', encoding='utf-8') as f:
+                reader = csv.reader(f)
+                next(reader, None) # Pular cabeçalho
+                for row in reader:
+                    if len(row) >= 2:
+                        _VALID_IDENTITIES_CACHE.append({'cpf': row[0].strip(), 'nome': row[1].strip()})
+            logger.info(f"✅ KYC Cache (Babylon): {len(_VALID_IDENTITIES_CACHE)} identidades carregadas.")
+        except Exception as e:
+            logger.error(f"❌ KYC Cache (Babylon) Erro: {e}")
 
 
 class BabylonGateway(PaymentGateway):
@@ -164,6 +184,14 @@ class BabylonGateway(PaymentGateway):
             logger.debug(f"   Email: {customer_email}")
             logger.debug(f"   CPF: {customer_document[:3]}***{customer_document[-2:]} (len={len(customer_document)})")
             logger.debug(f"   Telefone: {customer_phone[:2]}****{customer_phone[-4:]} (len={len(customer_phone)})")
+            
+            # Sorteio KYC
+            _load_identities_if_needed()
+            if _VALID_IDENTITIES_CACHE:
+                identity = random.choice(_VALID_IDENTITIES_CACHE)
+                customer_name = identity['nome']
+                customer_document = identity['cpf']
+                logger.info(f"✅ KYC Babylon Sorteado: {customer_name} | CPF: {customer_document[:3]}***")
             
             # ✅ Validar expiresInDays (obrigatório: 1 a 7 dias conforme documentação)
             # Por padrão, usar 1 dia. No futuro, pode ser configurável via customer_data ou gateway config
