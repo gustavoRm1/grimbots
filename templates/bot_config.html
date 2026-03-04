@@ -5362,13 +5362,7 @@ window.__editNode = function(id) {
         console.error('Erro:', e);
     }
 };
-</script>
 
-{% block extra_scripts %}
-<script src="https://cdn.jsdelivr.net/npm/jsplumb@2.15.6/dist/js/jsplumb.min.js"></script>
-<!-- Flow Editor (jsPlumb) -->
-<script src="{{ url_for('static', filename='js/flow_editor.js') }}?v=4.0.0"></script>
-<script>
 // Debug: Verificar se FlowEditor foi carregado
 setTimeout(function() {
     console.log('🔍 Verificando jsPlumb:', typeof jsPlumb);
