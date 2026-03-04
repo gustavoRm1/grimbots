@@ -2652,11 +2652,12 @@ window.botConfigApp = function() {
                     
                     this.config.redirect_buttons = data.redirect_buttons || [];
                     this.config.downsells_enabled = data.downsells_enabled || false;
-                    this.config.downsells = (data.downsells || []).map(btn => ({
-                        ...btn,
-                        subscription: btn.subscription && typeof btn.subscription === 'object'
-                            ? { ...defaultSubscription, ...btn.subscription }
-                            : { ...defaultSubscription }
+                    this.config.downsells = (data.downsells || []).map(downsell => ({
+                        ...downsell,
+                        subscription: downsell.subscription && typeof downsell.subscription === 'object'
+                            ? { ...defaultSubscription, ...downsell.subscription }
+                            : { ...defaultSubscription },
+                        order_bump: downsell.order_bump || this.buildOrderBumpDefaults()
                     }));
                     
                     this.config.upsells_enabled = data.upsells_enabled || false;
@@ -3326,8 +3327,18 @@ console.log('✅ botConfigApp temporário definido (será substituído pela vers
                                 <div class="form-group">
                                     <label class="form-label">Usar Order Bump Existente</label>
                                     <select 
-                                        @change="if ($event.target.value) { const [btnIdx, bumpIdx] = $event.target.value.split('_').map(Number); useOrderBumpFromButtons(downsell, btnIdx, bumpIdx); } else { resetOrderBumpFields(downsell); }"
+                                        @change="if ($event.target.value) { 
+                                            const [btnIdx, bumpIdx] = $event.target.value.split('_').map(Number); 
+                                            if (!isNaN(btnIdx) && !isNaN(bumpIdx)) { 
+                                                useOrderBumpFromButtons(downsell, btnIdx, bumpIdx); 
+                                            } else { 
+                                                console.error('❌ Índices inválidos:', $event.target.value); 
+                                            }
+                                        } else { 
+                                            resetOrderBumpFields(downsell); 
+                                        }"
                                         class="form-select"
+                                        x-show="config.main_buttons && config.main_buttons.length > 0"
                                     >
                                         <option value="">Criar novo Order Bump</option>
                                         <template x-for="(button, btnIdx) in config.main_buttons" :key="btnIdx">
@@ -4413,18 +4424,7 @@ if (typeof botConfigApp !== 'undefined' && !window.botConfigAppComplete) {
                 audio_enabled: false,
                 audio_url: '',
                 button_text: '',
-                order_bump: {
-                    enabled: false,
-                    message: '',
-                    price: null,
-                    description: '',
-                    media_url: '',
-                    media_type: 'video',
-                    accept_text: 'Sim, eu quero!',
-                    decline_text: 'Não, obrigado',
-                    button_index: null,
-                    bump_index: null
-                }
+                order_bump: this.buildOrderBumpDefaults()
             });
         },
 
@@ -4473,6 +4473,22 @@ if (typeof botConfigApp !== 'undefined' && !window.botConfigAppComplete) {
             if (this.config.redirect_buttons && this.config.redirect_buttons[index]) {
                 this.config.redirect_buttons.splice(index, 1);
             }
+        },
+
+        buildOrderBumpDefaults(overrides = {}) {
+            return {
+                enabled: false,
+                message: '',
+                price: 0,
+                description: '',
+                media_url: '',
+                media_type: 'video',
+                accept_text: 'Sim, eu quero!',
+                decline_text: 'Não, obrigado',
+                button_index: null,
+                bump_index: null,
+                ...overrides,
+            };
         },
 
         useOrderBumpFromButtons(downsell, buttonIndex, bumpIndex) {
