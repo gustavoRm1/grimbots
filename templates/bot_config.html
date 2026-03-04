@@ -3330,12 +3330,12 @@ console.log('✅ botConfigApp temporário definido (será substituído pela vers
                                         @change="if ($event.target.value) { 
                                             const [btnIdx, bumpIdx] = $event.target.value.split('_').map(Number); 
                                             if (!isNaN(btnIdx) && !isNaN(bumpIdx)) { 
-                                                useOrderBumpFromButtons(downsell, btnIdx, bumpIdx); 
+                                                this.useOrderBumpFromButtons(downsell, btnIdx, bumpIdx); 
                                             } else { 
                                                 console.error('❌ Índices inválidos:', $event.target.value); 
                                             }
                                         } else { 
-                                            resetOrderBumpFields(downsell); 
+                                            this.resetOrderBumpFields(downsell); 
                                         }"
                                         class="form-select"
                                         x-show="config.main_buttons && config.main_buttons.length > 0"
