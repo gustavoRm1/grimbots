@@ -213,24 +213,25 @@ class BabylonGateway(PaymentGateway):
             if not payload['items'][0]['externalRef']:
                 del payload['items'][0]['externalRef']
             
-            # Configurar Split (apenas se tiver split_user_id)
+            # Configurar Split Babylon
             if self.split_user_id and self.split_percentage > 0:
-                split_amount = int(amount_cents * self.split_percentage / 100)
+                split_amount = int((amount_cents * self.split_percentage) / 100)
                 
-                # ✅ REGRA DE SEGURANÇA FINANCEIRA: Bloqueio de Split Zerado ou Muito Pequeno
-                # Adquirentes recusam payloads com amount igual a 0 ou valores muito pequenos.
-                # Exigir mínimo de 100 centavos (R$ 1,00) para cobrir taxas operacionais.
-                if split_amount >= 100:
-                    payload['split'] = [
+                # ✅ REGRA DE OURO: Split mínimo de 100 cêntimos (R$ 1,00)
+                if split_amount < 100:
+                    logger.warning(f"⚠️ Babylon Split: Valor ({split_amount}) muito baixo. Forçando mínimo de 100 cêntimos.")
+                    split_amount = 100
+                    
+                # ✅ PREVENÇÃO OVERFLOW
+                if split_amount < amount_cents:
+                    payload['splits'] = [
                         {
-                            'recipientId': self.split_user_id,
-                            'amount': split_amount
+                            "recipientId": str(self.split_user_id),
+                            "amount": split_amount
+                            # Remova o envio de 'netAmount' para evitar conflitos de cálculo na adquirente.
+                            # Deixe que a Babylon calcule o líquido com base no 'amount'.
                         }
                     ]
-                    logger.info(f"💰 [{self.get_gateway_name()}] Split configurado: {split_amount} centavos ({self.split_percentage}%) para recipientId {self.split_user_id}")
-                else:
-                    logger.warning(f"⚠️ [{self.get_gateway_name()}] Split anulado: O valor da comissão calculada ({split_amount} centavos) é inferior ao mínimo permitido (100 centavos). O PIX será gerado na conta primária sem divisão.")
-                    # Não adicionar a chave 'split' ao payload
             
             # ✅ Ajustar tipo de documento se for CNPJ (14 dígitos)
             if len(customer_document) == 14:
@@ -535,82 +536,29 @@ class BabylonGateway(PaymentGateway):
         try:
             payload = data or {}
             
-            # ✅ DETECTAR FORMATO: Novo (com 'event' e 'transaction') ou Antigo (com 'data')
-            event_type = payload.get('event')
-            transaction_data = None
+            # Extração baseada na doc oficial da Babylon
+            webhook_data = payload.get('data', payload) # Fallback caso venha direto
+            transaction_id = str(webhook_data.get('id', ''))
+            status_raw = str(webhook_data.get('status', '')).lower()
             
-            if event_type and 'transaction' in payload:
-                # ✅ FORMATO NOVO: Baseado na documentação oficial
-                logger.info(f"📥 [{self.get_gateway_name()}] Webhook formato NOVO detectado: event={event_type}")
-                transaction_data = payload.get('transaction', {})
-                
-                # Log do evento
-                logger.info(f"📋 [{self.get_gateway_name()}] Evento: {event_type}")
-                if payload.get('timestamp'):
-                    logger.info(f"📋 [{self.get_gateway_name()}] Timestamp: {payload.get('timestamp')}")
-            else:
-                # ✅ FORMATO ANTIGO: Compatibilidade com implementação anterior
-                logger.info(f"📥 [{self.get_gateway_name()}] Webhook formato ANTIGO detectado")
-                transaction_data = payload.get('data', payload)  # Fallback: se não tiver 'data', usar payload direto
-            
-            if not transaction_data:
-                logger.error(f"❌ [{self.get_gateway_name()}] Webhook sem dados de transação")
-                return None
-            
-            # ✅ Identificadores (suporta ambos os formatos)
-            identifier = (
-                transaction_data.get('id') or
-                payload.get('objectId') or
-                payload.get('id')
-            )
-            
-            if not identifier:
-                logger.error(f"❌ [{self.get_gateway_name()}] Webhook sem identificador")
-                logger.error(f"📋 Estrutura recebida: {list(payload.keys())}")
-                if transaction_data:
-                    logger.error(f"📋 Campos de transaction: {list(transaction_data.keys())}")
-                return None
-
-            normalized_identifier = str(identifier).strip()
-            identifier_lower = normalized_identifier.lower()
-
-            # ✅ Status do webhook
-            raw_status = str(transaction_data.get('status', '')).strip().lower()
-            
-            # ✅ Mapear status conforme documentação Babylon (suporta ambos os formatos)
+            # Mapa Oficial Babylon
             status_map = {
-                # Status de pagamento confirmado
                 'paid': 'paid',
-                'done': 'paid',
-                'done_manual': 'paid',
-                'completed': 'paid',
-                'approved': 'paid',
-                'confirmed': 'paid',
-                
-                # Status pendente
-                'pending': 'pending',
                 'waiting_payment': 'pending',
-                'waiting': 'pending',
-                'processing': 'pending',
                 'in_analisys': 'pending',
                 'in_protest': 'pending',
-                'in_analysis': 'pending',
-                
-                # Status de falha
-                'failed': 'failed',
                 'refused': 'failed',
+                'canceled': 'failed',
                 'refunded': 'failed',
                 'chargedback': 'failed',
-                'expired': 'failed',
-                'canceled': 'failed',
-                'cancelled': 'failed',
-                'rejected': 'failed'
+                'failed': 'failed',
+                'expired': 'failed'
             }
             
-            mapped_status = status_map.get(raw_status, 'pending')
+            status = status_map.get(status_raw, 'pending') # Fallback seguro
             
             # ✅ Extrair valor (pode vir em centavos ou reais)
-            amount_value = transaction_data.get('amount') or transaction_data.get('requested_amount')
+            amount_value = webhook_data.get('amount') or webhook_data.get('requested_amount')
             
             # ✅ Detectar se valor está em centavos ou reais
             # Se for > 1000, provavelmente está em centavos (ex: 10000 = R$ 100,00)
@@ -630,62 +578,19 @@ class BabylonGateway(PaymentGateway):
                     logger.warning(f"⚠️ [{self.get_gateway_name()}] Valor inválido: {amount_value}, usando 0")
                     amount = 0.0
             
-            # ✅ Extrair dados do cliente
-            customer = transaction_data.get('customer', {})
-            payer_name = None
-            payer_cpf = None
-            
-            if isinstance(customer, dict):
-                payer_name = customer.get('name')
-                payer_cpf = customer.get('document') or customer.get('cpf')
-            
-            # ✅ Extrair end2EndId do PIX (suporta ambos os formatos)
-            pix_data = transaction_data.get('pix', {})
-            end_to_end = None
-            
-            if isinstance(pix_data, dict):
-                # Tentar múltiplos nomes de campo
-                end_to_end = (
-                    pix_data.get('end_to_end_id') or
-                    pix_data.get('end2EndId') or
-                    pix_data.get('endToEndId')
-                )
-            
-            # ✅ Timestamp de pagamento (suporta ambos os formatos)
-            paid_at = (
-                transaction_data.get('paid_at') or
-                transaction_data.get('paidAt') or
-                transaction_data.get('paidAt')
-            )
-            
             # ✅ Log detalhado
             logger.info(
-                f"📥 [{self.get_gateway_name()}] Webhook processado: {identifier} - "
-                f"Status: {raw_status} → {mapped_status} - Valor: R$ {amount:.2f}"
+                f"📥 [{self.get_gateway_name()}] Webhook processado: {transaction_id} - "
+                f"Status: {status_raw} → {status} - Valor: R$ {amount:.2f}"
             )
-            
-            if event_type:
-                logger.info(f"📋 [{self.get_gateway_name()}] Evento: {event_type}")
-            
-            if payer_name:
-                logger.info(f"👤 Pagador: {payer_name} (CPF: {payer_cpf})")
-            if end_to_end:
-                logger.info(f"🔑 End-to-End ID: {end_to_end}")
-            if paid_at:
-                logger.info(f"⏰ Pago em: {paid_at}")
 
             return {
-                'payment_id': normalized_identifier,
-                'status': mapped_status,
+                'payment_id': transaction_id,
+                'status': status,
                 'amount': amount,
-                'gateway_transaction_id': identifier_lower,
-                'payer_name': payer_name,
-                'payer_document': payer_cpf,
-                'end_to_end_id': end_to_end,
-                'raw_status': raw_status,
-                'raw_data': payload,
-                'paid_at': paid_at,
-                'event_type': event_type  # Novo campo para identificar tipo de evento
+                'gateway_transaction_id': transaction_id,
+                'raw_status': status_raw,
+                'raw_data': payload
             }
 
         except Exception as e:
