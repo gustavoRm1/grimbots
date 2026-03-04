@@ -386,21 +386,30 @@ class ParadisePaymentGateway(PaymentGateway):
                 # payload["offerHash"] = self.offer_hash
                 logger.info(f"⚠️ Paradise: offerHash ignorado ({self.offer_hash}) para evitar duplicação")
             
-            # Configurar Split (apenas se tiver store_id)
+            # Configurar Splits (Apenas se houver store_id numérico e percentagem válida)
             if self.store_id and self.split_percentage > 0:
-                split_amount = int((amount_cents * self.split_percentage) / 100)
-                
-                # ✅ REGRA DE SEGURANÇA FINANCEIRA
-                # Gateways rejeitam PIX se a transferência de split for menor que as tarifas operacionais.
-                # Se o split for menor que R$ 1.00 (100 centavos), abortamos a divisão.
-                if split_amount >= 100:
-                    logger.info(f"💰 Paradise Split: {split_amount} centavos ({self.split_percentage}%) para store {self.store_id}")
-                    payload['split'] = {
-                        'store_id': str(self.store_id),
-                        'amount': split_amount
-                    }
-                else:
-                    logger.warning(f"⚠️ Split anulado preventivamente: O valor calculado ({split_amount} centavos) é inferior ao mínimo permitido pelas adquirentes (100 centavos). PIX será gerado sem split.")
+                try:
+                    # O recipientId DEVE ser Integer segundo a doc
+                    recipient_id_int = int(self.store_id)
+                    split_amount = int((amount_cents * self.split_percentage) / 100)
+                    
+                    # ✅ REGRA DE SEGURANÇA: Mínimo tarifário
+                    # Adquirentes recusam transferências ínfimas. Forçamos R$ 1.00 se o cálculo for menor.
+                    if split_amount < 100:
+                        logger.warning(f"⚠️ Paradise Split: Ajustando valor de {split_amount} para o mínimo viável de 100 centavos.")
+                        split_amount = 100
+                    
+                    logger.info(f"💰 Paradise Split: {split_amount} centavos para o recipientId {recipient_id_int}")
+                    
+                    # A chave DEVE ser 'splits' e DEVE ser uma lista (Array) contendo 'recipientId' e 'amount'.
+                    payload['splits'] = [
+                        {
+                            "recipientId": recipient_id_int,
+                            "amount": split_amount
+                        }
+                    ]
+                except ValueError:
+                    logger.error(f"❌ Paradise Split abortado: O store_id '{self.store_id}' não é um Integer válido.")
             
             # ✅ LOG DETALHADO para debug (mascarar dados sensíveis)
             payload_log = payload.copy()

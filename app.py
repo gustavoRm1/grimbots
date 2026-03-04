@@ -12755,19 +12755,6 @@ def payment_webhook(gateway_type):
                     logger.error(f"   📋 Últimos 10 pagamentos pending de {gateway_type}:")
                     for p in recent_payments:
                         logger.error(f"      - {p.payment_id} | gateway_transaction_id: {p.gateway_transaction_id} | Amount: R$ {p.amount:.2f} | Created: {p.created_at}")
-                    
-                    # ✅ ÚLTIMA TENTATIVA: Buscar por amount exato (se houver apenas 1 match)
-                    webhook_amount = result.get('amount')
-                    if webhook_amount:
-                        matching_amount = [p for p in recent_payments if abs(p.amount - float(webhook_amount)) < 0.01]
-                        if len(matching_amount) == 1:
-                            payment = matching_amount[0]
-                            logger.info(f"✅ Payment encontrado por amount exato: {payment.payment_id} | Amount: R$ {payment.amount:.2f}")
-                        elif len(matching_amount) > 1:
-                            logger.warning(f"⚠️ Múltiplos pagamentos com mesmo amount: {len(matching_amount)} encontrados")
-                            # Usar o mais recente
-                            payment = matching_amount[0]
-                            logger.info(f"✅ Payment encontrado por amount (mais recente): {payment.payment_id}")
                 
                 if not payment:
                     logger.error(f"   ================================================")
