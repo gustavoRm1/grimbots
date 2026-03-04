@@ -217,9 +217,10 @@ class BabylonGateway(PaymentGateway):
             if self.split_user_id and self.split_percentage > 0:
                 split_amount = int(amount_cents * self.split_percentage / 100)
                 
-                # ✅ REGRA DE SEGURANÇA FINANCEIRA: Bloqueio de Split Zerado
-                # Adquirentes recusam payloads com amount igual a 0.
-                if split_amount > 0:
+                # ✅ REGRA DE SEGURANÇA FINANCEIRA: Bloqueio de Split Zerado ou Muito Pequeno
+                # Adquirentes recusam payloads com amount igual a 0 ou valores muito pequenos.
+                # Exigir mínimo de 100 centavos (R$ 1,00) para cobrir taxas operacionais.
+                if split_amount >= 100:
                     payload['split'] = [
                         {
                             'recipientId': self.split_user_id,
@@ -228,7 +229,7 @@ class BabylonGateway(PaymentGateway):
                     ]
                     logger.info(f"💰 [{self.get_gateway_name()}] Split configurado: {split_amount} centavos ({self.split_percentage}%) para recipientId {self.split_user_id}")
                 else:
-                    logger.warning(f"⚠️ [{self.get_gateway_name()}] Split anulado: O valor da comissão calculada é nulo ({split_amount} centavos). O PIX será gerado na conta primária sem divisão.")
+                    logger.warning(f"⚠️ [{self.get_gateway_name()}] Split anulado: O valor da comissão calculada ({split_amount} centavos) é inferior ao mínimo permitido (100 centavos). O PIX será gerado na conta primária sem divisão.")
                     # Não adicionar a chave 'split' ao payload
             
             # ✅ Ajustar tipo de documento se for CNPJ (14 dígitos)
