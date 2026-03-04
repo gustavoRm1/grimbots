@@ -3329,7 +3329,7 @@ console.log('✅ botConfigApp temporário definido (será substituído pela vers
                                     <select 
                                         class="form-select ob-select"
                                         x-show="config.main_buttons && config.main_buttons.length > 0"
-                                        @change="window.applyExistingOrderBump(downsell, $el)"
+                                        @change="applyExistingOrderBump(downsell, $el)"
                                     >
                                         <option value="">Criar novo Order Bump</option>
                                         <template x-for="(button, btnIdx) in config.main_buttons" :key="btnIdx">
@@ -4131,87 +4131,37 @@ if (typeof botConfigApp !== 'undefined' && !window.botConfigAppComplete) {
                         buttons_count: this.config.main_buttons?.length || 0
                     });
                     
-                    // 🔥 BULLETPROOF: FORÇAR LEITURA DO DOM ANTES DE VALIDAR (AÇÃO 2)
+                    // ✅ ALPINE WAY: Validar apenas dados críticos do Order Bump (confiar 100% no estado)
                     if (this.config && this.config.downsells) {
-                        console.log('🔄 Bypass: Lendo DOM como fonte da verdade para downsells...');
+                        console.log('🔍 Validando downsells com estado Alpine...');
                         this.config.downsells.forEach((ds, idx) => {
+                            // Validação Segura do Order Bump no Downsell
                             if (ds.order_bump && ds.order_bump.enabled) {
-                                console.log(`🔍 Verificando downsell #${idx} order_bump via DOM...`);
+                                // 1. Validar Mensagem (Obrigatório para o Telegram)
+                                if (!ds.order_bump.message || ds.order_bump.message.trim() === '') {
+                                    throw new Error(`A mensagem do Order Bump no Downsell #${idx + 1} não pode estar vazia.`);
+                                }
                                 
-                                // Forçar a leitura do DOM (Bypass Alpine Sync)
-                                const allMsgFields = document.querySelectorAll('.ob-msg');
-                                const allPriceFields = document.querySelectorAll('.ob-price');
-                                const allDescFields = document.querySelectorAll('.ob-desc');
-                                const allMediaUrlFields = document.querySelectorAll('.ob-media-url');
-                                const allMediaTypeFields = document.querySelectorAll('.ob-media-type');
-                                const allAcceptFields = document.querySelectorAll('.ob-accept-text');
-                                const allDeclineFields = document.querySelectorAll('.ob-decline-text');
+                                // 2. Validar Preço (Obrigatório)
+                                if (ds.order_bump.price === undefined || ds.order_bump.price === null || ds.order_bump.price < 0) {
+                                    throw new Error(`Preço inválido no Order Bump do Downsell #${idx + 1}.`);
+                                }
+
+                                // 3. Relaxar a Descrição (Se estiver vazia, injetamos um fallback silencioso)
+                                if (!ds.order_bump.description || ds.order_bump.description.trim() === '') {
+                                    ds.order_bump.description = "Oferta Especial"; // Fallback seguro, não bloqueia o save
+                                }
                                 
-                                // Encontrar o campo correspondente a este downsell
-                                // Como não temos data-index, vamos usar o container mais próximo
-                                const downsellContainers = document.querySelectorAll('.space-y-4');
-                                if (downsellContainers[idx]) {
-                                    const container = downsellContainers[idx];
-                                    
-                                    // Ler mensagem
-                                    const domMessage = container.querySelector('.ob-msg');
-                                    if (domMessage && domMessage.value) {
-                                        const oldValue = ds.order_bump.message;
-                                        ds.order_bump.message = domMessage.value;
-                                        console.log(`✅ Mensagem lida do DOM: "${oldValue}" -> "${ds.order_bump.message}"`);
-                                    }
-                                    
-                                    // Ler preço
-                                    const domPrice = container.querySelector('.ob-price');
-                                    if (domPrice && domPrice.value) {
-                                        const oldValue = ds.order_bump.price;
-                                        ds.order_bump.price = parseFloat(domPrice.value) || 0;
-                                        console.log(`✅ Preço lido do DOM: ${oldValue} -> ${ds.order_bump.price}`);
-                                    }
-                                    
-                                    // Ler descrição
-                                    const domDesc = container.querySelector('.ob-desc');
-                                    if (domDesc && domDesc.value) {
-                                        const oldValue = ds.order_bump.description;
-                                        ds.order_bump.description = domDesc.value;
-                                        console.log(`✅ Descrição lida do DOM: "${oldValue}" -> "${ds.order_bump.description}"`);
-                                    }
-                                    
-                                    // Ler media URL
-                                    const domMediaUrl = container.querySelector('.ob-media-url');
-                                    if (domMediaUrl && domMediaUrl.value) {
-                                        const oldValue = ds.order_bump.media_url;
-                                        ds.order_bump.media_url = domMediaUrl.value;
-                                        console.log(`✅ Media URL lida do DOM: "${oldValue}" -> "${ds.order_bump.media_url}"`);
-                                    }
-                                    
-                                    // Ler media type
-                                    const domMediaType = container.querySelector('.ob-media-type');
-                                    if (domMediaType && domMediaType.value) {
-                                        const oldValue = ds.order_bump.media_type;
-                                        ds.order_bump.media_type = domMediaType.value;
-                                        console.log(`✅ Media Type lido do DOM: "${oldValue}" -> "${ds.order_bump.media_type}"`);
-                                    }
-                                    
-                                    // Ler accept text
-                                    const domAccept = container.querySelector('.ob-accept-text');
-                                    if (domAccept && domAccept.value) {
-                                        const oldValue = ds.order_bump.accept_text;
-                                        ds.order_bump.accept_text = domAccept.value;
-                                        console.log(`✅ Accept text lido do DOM: "${oldValue}" -> "${ds.order_bump.accept_text}"`);
-                                    }
-                                    
-                                    // Ler decline text
-                                    const domDecline = container.querySelector('.ob-decline-text');
-                                    if (domDecline && domDecline.value) {
-                                        const oldValue = ds.order_bump.decline_text;
-                                        ds.order_bump.decline_text = domDecline.value;
-                                        console.log(`✅ Decline text lido do DOM: "${oldValue}" -> "${ds.order_bump.decline_text}"`);
-                                    }
+                                // 4. Fallbacks de Botões (Garantir que não vão vazios para o Telegram)
+                                if (!ds.order_bump.accept_text || ds.order_bump.accept_text.trim() === '') {
+                                    ds.order_bump.accept_text = "Sim, eu quero!";
+                                }
+                                if (!ds.order_bump.decline_text || ds.order_bump.decline_text.trim() === '') {
+                                    ds.order_bump.decline_text = "Não, obrigado";
                                 }
                             }
                         });
-                        console.log('✅ Bypass DOM concluído - Config atualizado com valores reais');
+                        console.log('✅ Validação concluída - Estado Alpine pronto para salvar');
                     }
                     
                     const response = await fetch(`/api/bots/${this.bot_id}/config`, {
@@ -5254,6 +5204,30 @@ if (typeof botConfigApp !== 'undefined' && !window.botConfigAppComplete) {
 
         validateWelcomeMessage() {
             // Validação já feita via getWelcomeMessageLength()
+        },
+
+        // ✅ THE ALPINE WAY: Método interno para Order Bump autofill
+        applyExistingOrderBump(downsell, selectElement) {
+            const opt = selectElement.selectedOptions[0];
+            if (!opt || opt.value === 'novo' || opt.value === '') {
+                downsell.order_bump.message = '';
+                downsell.order_bump.price = 0;
+                downsell.order_bump.description = '';
+                downsell.order_bump.media_type = 'video';
+                downsell.order_bump.media_url = '';
+                downsell.order_bump.accept_text = 'Sim, eu quero!';
+                downsell.order_bump.decline_text = 'Não, obrigado';
+                return;
+            }
+            
+            // Mutação reativa interna usando getAttribute (Case-insensitive proof)
+            downsell.order_bump.message = opt.getAttribute('data-message') || '';
+            downsell.order_bump.price = parseFloat(opt.getAttribute('data-price')) || 0;
+            downsell.order_bump.description = opt.getAttribute('data-description') || '';
+            downsell.order_bump.media_type = opt.getAttribute('data-media-type') || 'video';
+            downsell.order_bump.media_url = opt.getAttribute('data-media-url') || '';
+            downsell.order_bump.accept_text = opt.getAttribute('data-accept-text') || 'Sim, eu quero!';
+            downsell.order_bump.decline_text = opt.getAttribute('data-decline-text') || 'Não, obrigado';
         }
     };
 }
@@ -5369,30 +5343,5 @@ setTimeout(function() {
     console.log('🔍 Verificando jsPlumb:', typeof jsPlumb);
     console.log('🔍 Verificando FlowEditor:', typeof window.FlowEditor);
 }, 1000);
-
-// ✅ THE ALPINE WAY: Função Global de Mutação de Estado para Order Bump
-window.applyExistingOrderBump = function(downsell, selectElement) {
-    const opt = selectElement.selectedOptions[0];
-    if (!opt || !opt.value || opt.value === 'novo') {
-        // Limpar o estado do Alpine para criar um novo
-        downsell.order_bump.message = '';
-        downsell.order_bump.price = 0;
-        downsell.order_bump.description = '';
-        downsell.order_bump.media_type = 'video';
-        downsell.order_bump.media_url = '';
-        downsell.order_bump.accept_text = 'Sim, eu quero!';
-        downsell.order_bump.decline_text = 'Não, obrigado';
-        return;
-    }
-    
-    // Mutar o estado do Alpine diretamente lendo os data-attributes da option
-    downsell.order_bump.message = opt.dataset.message || '';
-    downsell.order_bump.price = parseFloat(opt.dataset.price) || 0;
-    downsell.order_bump.description = opt.dataset.description || '';
-    downsell.order_bump.media_type = opt.dataset.mediaType || 'video';
-    downsell.order_bump.media_url = opt.dataset.mediaUrl || '';
-    downsell.order_bump.accept_text = opt.dataset.acceptText || 'Sim, eu quero!';
-    downsell.order_bump.decline_text = opt.dataset.declineText || 'Não, obrigado';
-};
 </script>
 {% endblock %}
