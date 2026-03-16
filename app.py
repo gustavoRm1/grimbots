@@ -7995,7 +7995,7 @@ def create_gateway():
         gateway_type = data.get('gateway_type')
     
         # ✅ Validar tipo de gateway
-        if gateway_type not in ['syncpay', 'pushynpay', 'paradise', 'wiinpay', 'atomopay', 'umbrellapag', 'orionpay', 'babylon', 'bolt']:
+        if gateway_type not in ['syncpay', 'pushynpay', 'paradise', 'wiinpay', 'atomopay', 'umbrellapag', 'orionpay', 'babylon', 'bolt', 'aguia']:
             logger.error(f"❌ Tipo de gateway inválido: {gateway_type}")
             return jsonify({'error': 'Tipo de gateway inválido'}), 400
         
@@ -8579,6 +8579,11 @@ def update_gateway(gateway_id):
                 gateway.api_key = data['api_key']
             if data.get('split_user_id'):
                 gateway.split_user_id = data['split_user_id']
+        
+        elif gateway_type == 'aguia':
+            # ✅ ÁGUIAPAGS - Apenas API Key (webhook stateless)
+            if data.get('api_key'):
+                gateway.api_key = data['api_key']
         
         elif gateway_type == 'atomopay':
             if data.get('api_token') or data.get('api_key'):
