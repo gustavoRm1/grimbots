@@ -15,7 +15,7 @@ from gateway_umbrellapag import UmbrellaPagGateway
 from gateway_orionpay import OrionPayGateway
 from gateway_babylon import BabylonGateway
 from gateway_bolt import BoltGateway
-from gateway_aguia import AguiaGateway
+from gateways.gateway_aguia import AguiaGateway
 
 logger = logging.getLogger(__name__)
 
