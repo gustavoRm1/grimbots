@@ -2237,7 +2237,8 @@ function settingsApp() {
             atomopay: { api_token: '', product_hash: '' },
             umbrellapag: { api_key: '', product_hash: '' },
             babylon: { api_key: '', company_id: '' },
-            bolt: { api_key: '', company_id: '' }
+            bolt: { api_key: '', company_id: '' },
+            aguia: { api_key: '' }  // ✅ ÁGUIAPAGS adicionado
         },
         editGateway: {},
         gatewaysList: [],
@@ -2393,6 +2394,8 @@ function settingsApp() {
                         this.gateways[type] = { api_key: '', company_id: '' };
                     } else if (type === 'bolt') {
                         this.gateways[type] = { api_key: '', company_id: '' };
+                    } else if (type === 'aguia') {
+                        this.gateways[type] = { api_key: '' };  // ✅ ÁGUIAPAGS reset
                     } else {
                         this.gateways[type] = { api_key: '' };
                     }

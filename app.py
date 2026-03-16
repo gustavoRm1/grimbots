@@ -7991,6 +7991,7 @@ def create_gateway():
         logger.info(f"📡 Recebendo requisição para salvar gateway...")
         data = request.json
         logger.info(f"📦 Dados recebidos: gateway_type={data.get('gateway_type')}")
+        logger.info(f"🔍 DEBUG: Request JSON completo: {data}")  # ✅ DEBUG LOG
         
         gateway_type = data.get('gateway_type')
     

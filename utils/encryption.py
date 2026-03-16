@@ -93,10 +93,10 @@ def decrypt(value: str) -> str:
         value: String criptografada em base64
         
     Returns:
-        String descriptografada
+        String descriptografada ou None em caso de erro (resiliência)
         
     Raises:
-        RuntimeError: Se a descriptografia falhar (ENCRYPTION_KEY incorreta)
+        RuntimeError: Apenas em casos críticos (não para InvalidToken)
     """
     if not value:
         return None
@@ -105,21 +105,31 @@ def decrypt(value: str) -> str:
         decrypted_bytes = fernet.decrypt(value.encode('utf-8'))
         return decrypted_bytes.decode('utf-8')
     except Exception as e:
-        # ✅ CRÍTICO: Log detalhado do erro para diagnóstico
+        # ✅ CRÍTICO: Tratamento resiliente para InvalidToken
         import logging
         logger = logging.getLogger(__name__)
-        logger.error(f"❌ ERRO AO DESCRIPTOGRAFAR: {type(e).__name__}: {e}")
+        
+        # ✅ VERIFICAR TIPO ESPECÍFICO DE ERRO
+        error_type = type(e).__name__
+        
+        if 'InvalidToken' in error_type or 'cryptography.fernet.InvalidToken' in str(type(e)):
+            # ✅ RESILIÊNCIA: InvalidToken significa ENCRYPTION_KEY mudou
+            # NÃO deve crashar o sistema, apenas retornar None
+            logger.warning(f"⚠️ ERRO DE DESCRIPTOGRAFIA (InvalidToken): ENCRYPTION_KEY foi alterada")
+            logger.warning(f"   Valor (primeiros 50 chars): {value[:50] if value else 'None'}...")
+            logger.warning(f"   SOLUÇÃO: Reconfigure as credenciais do gateway")
+            return None  # ✅ RESILIÊNCIA: Retorna None em vez de crashar
+        
+        # ✅ OUTROS ERROS: Log detalhado para diagnóstico
+        logger.error(f"❌ ERRO AO DESCRIPTOGRAFAR: {error_type}: {e}")
         logger.error(f"   Valor (primeiros 50 chars): {value[:50] if value else 'None'}...")
         logger.error(f"   ENCRYPTION_KEY está configurada: {bool(ENCRYPTION_KEY)}")
         logger.error(f"   ENCRYPTION_KEY (primeiros 20 chars): {ENCRYPTION_KEY[:20] if ENCRYPTION_KEY else 'None'}...")
         logger.error(f"   POSSÍVEL CAUSA: ENCRYPTION_KEY foi alterada após armazenar dados")
         logger.error(f"   SOLUÇÃO: Restaure a ENCRYPTION_KEY original ou reconfigure os gateways")
         
-        raise RuntimeError(
-            f"Erro ao descriptografar: {e}\n"
-            "POSSÍVEL CAUSA: ENCRYPTION_KEY foi alterada após armazenar dados.\n"
-            "SOLUÇÃO: Restaure a ENCRYPTION_KEY original ou reconfigure os gateways."
-        )
+        # ✅ RESILIÊNCIA: Retornar None em vez de crashar
+        return None
 
 
 # ============================================================================
