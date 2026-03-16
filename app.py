@@ -8158,6 +8158,27 @@ def create_gateway():
             else:
                 logger.warning(f"⚠️ [Bolt] company_id (Company ID) não fornecido")
         
+        elif gateway_type == 'aguia':
+            # ✅ ÁGUIAPAGS - Requer API Key + Webhook Secret
+            api_key_value = data.get('api_key')
+            webhook_secret_value = data.get('webhook_secret')
+            
+            logger.info(f"🦅 [ÁguiaPags] Dados recebidos:")
+            logger.info(f"   api_key: {'SIM' if api_key_value else 'NÃO'} ({len(api_key_value) if api_key_value else 0} chars)")
+            logger.info(f"   webhook_secret: {'SIM' if webhook_secret_value else 'NÃO'} ({len(webhook_secret_value) if webhook_secret_value else 0} chars)")
+            
+            if api_key_value:
+                gateway.api_key = api_key_value  # Criptografia automática via setter
+                logger.info(f"✅ [ÁguiaPags] api_key salvo (criptografado)")
+            else:
+                logger.warning(f"⚠️ [ÁguiaPags] api_key não fornecido")
+            
+            if webhook_secret_value:
+                gateway.webhook_secret = webhook_secret_value  # Criptografia automática via setter
+                logger.info(f"✅ [ÁguiaPags] webhook_secret salvo (criptografado)")
+            else:
+                logger.warning(f"⚠️ [ÁguiaPags] webhook_secret não fornecido")
+        
         # ✅ Split percentage (comum a todos)
         gateway.split_percentage = float(data.get('split_percentage', 2.0))  # 2% PADRÃO
         
@@ -8189,7 +8210,8 @@ def create_gateway():
                 'store_id': gateway.store_id,          # Paradise
                 'organization_id': gateway.organization_id,  # HooPay
                 'split_user_id': gateway.split_user_id,  # WiinPay / Babylon
-                'split_percentage': gateway.split_percentage  # Babylon
+                'split_percentage': gateway.split_percentage,  # Babylon
+                'webhook_secret': gateway.webhook_secret,  # ÁguiaPags
             }
             
             # ✅ ÁTOMO PAY: Verificar se tem api_token (obrigatório)
@@ -8200,10 +8222,19 @@ def create_gateway():
                     gateway.last_error = 'API Token não configurado'
                     db.session.commit()
                     return jsonify(gateway.to_dict())
+            
+            # ✅ ÁGUIAPAGS: Verificar se tem webhook_secret (obrigatório)
+            if gateway_type == 'aguia':
+                if not credentials.get('webhook_secret'):
+                    logger.error(f"❌ [ÁguiaPags] webhook_secret não configurado - não será verificado")
+                    gateway.is_verified = False
+                    gateway.last_error = 'Webhook Secret não configurado'
+                    db.session.commit()
+                    return jsonify(gateway.to_dict())
                 else:
-                    logger.info(f"🔍 [Átomo Pay] Verificando credenciais...")
-                    logger.info(f"   api_token: {'SIM' if credentials.get('api_token') else 'NÃO'} ({len(credentials.get('api_token', ''))} chars)")
-                    logger.info(f"   product_hash: {'SIM' if credentials.get('product_hash') else 'NÃO'} ({len(credentials.get('product_hash', ''))} chars)")
+                    logger.info(f"🔍 [ÁguiaPags] Verificando credenciais...")
+                    logger.info(f"   api_key: {'SIM' if credentials.get('api_key') else 'NÃO'} ({len(credentials.get('api_key', ''))} chars)")
+                    logger.info(f"   webhook_secret: {'SIM' if credentials.get('webhook_secret') else 'NÃO'} ({len(credentials.get('webhook_secret', ''))} chars)")
             
             # ✅ ORIONPAY: Verificar se tem api_key (obrigatório)
             if gateway_type == 'orionpay':
@@ -10141,6 +10172,11 @@ def delivery_page(delivery_token):
                     credentials = {
                         'api_key': gateway_row.api_key,
                         'company_id': gateway_row.client_id,
+                    }
+                elif gateway_type == 'aguia':
+                    credentials = {
+                        'api_key': gateway_row.api_key,
+                        'webhook_secret': gateway_row.webhook_secret,
                     }
                 else:
                     # pushynpay/orionpay e demais baseados em api_key
@@ -12590,6 +12626,111 @@ def get_bot_webhook_info(bot_id):
     except Exception as e:
         logger.error(f"Erro ao obter webhook-info do bot {bot_id}: {e}")
         return jsonify({'error': str(e)}), 500
+@app.route('/webhook/payment/aguia', methods=['POST'])
+@limiter.limit("500 per minute")  # ✅ PROTEÇÃO: Webhooks de pagamento
+@csrf.exempt  # ✅ Webhooks externos não enviam CSRF token
+def aguia_webhook():
+    """
+    Webhook ÁguiaPags - Processamento seguro com validação de secret
+    """
+    try:
+        # ✅ SEGURANÇA CRÍTICA: Validar header x-webhook-secret
+        webhook_secret = request.headers.get('x-webhook-secret') or request.headers.get('Authorization')
+        if not webhook_secret:
+            logger.error("🚨 ÁGUIA WEBHOOK: Tentativa de acesso sem header de segurança")
+            return jsonify({'error': 'Forbidden'}), 403
+        
+        # Buscar secret no banco de dados para gateway ativo
+        from models import GatewayConfig
+        gateway_config = GatewayConfig.query.filter_by(
+            gateway_type='aguia',
+            is_active=True
+        ).first()
+        
+        if not gateway_config or gateway_config.webhook_secret != webhook_secret:
+            logger.error(f"🚨 ÁGUIA WEBHOOK: Fraude - Secret: {str(webhook_secret)[:10] if webhook_secret else 'Nulo'}")
+            return jsonify({'error': 'Forbidden'}), 403
+        
+        # Parse do payload conforme documentação
+        raw_body = request.get_data(cache=True, as_text=True)
+        data = request.get_json(silent=True)
+        
+        if data is None:
+            try:
+                data = json.loads(raw_body)
+            except (ValueError, TypeError):
+                logger.error("🚨 ÁGUIA WEBHOOK: Payload JSON inválido")
+                return jsonify({'error': 'Invalid payload'}), 400
+        
+        logger.info(f"📡 ÁGUIA WEBHOOK: Recebido - Event: {data.get('event')}")
+        
+        # Extrair dados do payload
+        webhook_data = data.get('data', {})
+        payment_id = webhook_data.get('externalRef')
+        status_raw = webhook_data.get('status')
+        transaction_id = webhook_data.get('transactionId')
+        
+        if not payment_id or not status_raw:
+            logger.error(f"🚨 ÁGUIA WEBHOOK: Payload incompleto - payment_id: {payment_id}, status: {status_raw}")
+            return jsonify({'error': 'Incomplete payload'}), 400
+        
+        logger.info(f"🔍 ÁGUIA WEBHOOK: Processando - PaymentID: {payment_id}, Status: {status_raw}")
+        
+        # Buscar pagamento no nosso banco
+        from models import Payment
+        payment = Payment.query.filter_by(payment_id=payment_id).first()
+        
+        if not payment:
+            logger.warning(f"⚠️ ÁGUIA WEBHOOK: Pagamento não encontrado - PaymentID: {payment_id}")
+            # Retornar 200 para parar retries da ÁguiaPags
+            return jsonify({'status': 'ok'}), 200
+        
+        # ✅ MAPEAMENTO DE STATUS E PROCESSAMENTO
+        if status_raw.upper() == "PAID":
+            # Marcar como pago e acionar liberação
+            if payment.status != 'paid':
+                payment.status = 'paid'
+                payment.gateway_transaction_id = transaction_id
+                payment.paid_at = datetime.utcnow()
+                
+                from bot_manager import process_successful_payment
+                process_successful_payment(payment)
+                
+                logger.info(f"✅ ÁGUIA WEBHOOK: Pagamento confirmado - PaymentID: {payment_id}")
+        
+        elif status_raw.upper() == "WAITING_PAYMENT":
+            # Apenas log - pagamento em processamento
+            logger.info(f"⏳ ÁGUIA WEBHOOK: Pagamento em processamento - PaymentID: {payment_id}")
+        
+        elif status_raw.upper() in ["REFUSED", "CANCELED", "REFUNDED"]:
+            # Marcar como falha/reembolsado
+            if status_raw.upper() == "REFUNDED":
+                payment.status = 'refunded'
+            else:
+                payment.status = 'failed'
+            
+            payment.gateway_transaction_id = transaction_id
+            
+            logger.info(f"❌ ÁGUIA WEBHOOK: Pagamento falha/reembolsado - PaymentID: {payment_id}, Status: {status_raw}")
+        
+        else:
+            # Status desconhecido - apenas log
+            logger.warning(f"⚠️ ÁGUIA WEBHOOK: Status desconhecido - PaymentID: {payment_id}, Status: {status_raw}")
+        
+        # Salvar alterações no banco
+        from app import db
+        db.session.commit()
+        
+        # ✅ RETORNO IDEMPOTENTE: Sempre 200 para parar retries
+        logger.info(f"✅ ÁGUIA WEBHOOK: Processado com sucesso - PaymentID: {payment_id}")
+        return jsonify({'status': 'ok'}), 200
+        
+    except Exception as e:
+        logger.error(f"❌ ÁGUIA WEBHOOK: Erro crítico: {str(e)}", exc_info=True)
+        # Retornar 200 mesmo em erro para evitar retries da ÁguiaPags
+        return jsonify({'status': 'error_logged'}), 200
+
+
 @app.route('/webhook/payment/<string:gateway_type>', methods=['POST'])
 @limiter.limit("500 per minute")  # ✅ PROTEÇÃO: Webhooks de pagamento
 @csrf.exempt  # ✅ Webhooks externos não enviam CSRF token

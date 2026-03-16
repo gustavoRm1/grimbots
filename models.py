@@ -754,6 +754,9 @@ class Gateway(db.Model):
     # Campos específicos WiinPay (criptografado)
     _split_user_id = db.Column('split_user_id', db.String(1000))  # Criptografado
     
+    # ✅ Campos específicos ÁguiaPags (criptografado)
+    _webhook_secret = db.Column('webhook_secret', db.String(1000))  # Criptografado
+    
     # ✅ Campos específicos Átomo Pay (não criptografado - apenas identificador)
     producer_hash = db.Column(db.String(100), nullable=True, index=True)  # Hash do producer (identifica conta do usuário)
     
@@ -910,6 +913,43 @@ class Gateway(db.Model):
             self._offer_hash = encrypt(value)
     
     @property
+    def webhook_secret(self):
+        """Descriptografa webhook_secret ao acessar"""
+        if not self._webhook_secret:
+            return None
+        try:
+            from utils.encryption import decrypt
+            decrypted = decrypt(self._webhook_secret)
+            # ✅ VALIDAÇÃO: Verificar se descriptografia retornou None (indica erro)
+            if decrypted is None:
+                logger.error(f"❌ Erro ao descriptografar webhook_secret gateway {self.id}: decrypt retornou None")
+                logger.error(f"   Campo interno existe mas descriptografia falhou!")
+                logger.error(f"   POSSÍVEL CAUSA: ENCRYPTION_KEY foi alterada após salvar credenciais")
+                logger.error(f"   SOLUÇÃO: Reconfigure o gateway {self.gateway_type} (ID: {self.id}) em /settings")
+            return decrypted
+        except RuntimeError as e:
+            # ✅ RuntimeError indica erro de descriptografia (ENCRYPTION_KEY incorreta)
+            logger.error(f"❌ ERRO CRÍTICO ao descriptografar webhook_secret gateway {self.id}: {e}")
+            logger.error(f"   Campo interno existe: {self._webhook_secret[:30] if self._webhook_secret else 'None'}...")
+            logger.error(f"   POSSÍVEL CAUSA: ENCRYPTION_KEY foi alterada após salvar credenciais")
+            logger.error(f"   SOLUÇÃO: Reconfigure o gateway {self.gateway_type} (ID: {self.id}) em /settings")
+            return None
+        except Exception as e:
+            # ✅ Outros erros (ex: encoding, formato inválido)
+            logger.error(f"❌ Erro inesperado ao descriptografar webhook_secret gateway {self.id}: {type(e).__name__}: {e}")
+            logger.error(f"   Campo interno existe: {self._webhook_secret[:30] if self._webhook_secret else 'None'}...")
+            return None
+    
+    @webhook_secret.setter
+    def webhook_secret(self, value):
+        """Criptografa webhook_secret ao armazenar"""
+        if not value:
+            self._webhook_secret = None
+        else:
+            from utils.encryption import encrypt
+            self._webhook_secret = encrypt(value)
+    
+    @property
     def organization_id(self):
         """Descriptografa organization_id ao acessar"""
         if not self._organization_id:
@@ -990,6 +1030,9 @@ class Gateway(db.Model):
         elif self.gateway_type == 'bolt':
             result['api_key'] = self.api_key  # Secret Key (criptografada)
             result['company_id'] = self.client_id  # Company ID (armazenado em client_id)
+        elif self.gateway_type == 'aguia':
+            result['api_key'] = self.api_key  # API Key (criptografada)
+            result['webhook_secret'] = self.webhook_secret  # Webhook Secret (criptografado)
         
         return result
 

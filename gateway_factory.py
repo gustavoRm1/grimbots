@@ -15,6 +15,7 @@ from gateway_umbrellapag import UmbrellaPagGateway
 from gateway_orionpay import OrionPayGateway
 from gateway_babylon import BabylonGateway
 from gateway_bolt import BoltGateway
+from gateway_aguia import AguiaGateway
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,7 @@ class GatewayFactory:
         'orionpay': OrionPayGateway,  # OrionPay
         'babylon': BabylonGateway,  # Babylon
         'bolt': BoltGateway,  # Bolt Pagamentos
+        'aguia': AguiaGateway,  # ÁguiaPags
     }
     
     @classmethod
@@ -250,6 +252,18 @@ class GatewayFactory:
                     company_id=company_id
                 )
             
+            elif gateway_type == 'aguia':  # ou 'aguiapags'
+                # ✅ ÁguiaPags requer: api_key
+                api_key = credentials.get('api_key')
+                
+                if not api_key:
+                    logger.error(f"❌ [Factory] ÁguiaPags requer api_key")
+                    return None
+                
+                gateway = gateway_class(
+                    api_key=api_key
+                )
+            
             else:
                 # Gateway registrado mas sem construtor definido
                 logger.error(f"❌ [Factory] Construtor não implementado para: {gateway_type}")
@@ -266,6 +280,7 @@ class GatewayFactory:
                     # Continuar sem adapter (não quebrar)
                 except Exception as e:
                     logger.error(f"❌ [Factory] Erro ao envolver com adapter: {e}")
+                    # Continuar sem adapter (não quebrar)
                     # Continuar sem adapter (não quebrar)
             
             logger.info(f"✅ [Factory] Gateway {gateway.get_gateway_name()} criado com sucesso")
