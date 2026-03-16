@@ -713,18 +713,6 @@
                                             </button>
                                         </div>
                                     </div>
-                                    <div x-data="{ show: false }">
-                                        <label class="text-xs font-bold text-gray-400 block mb-1">Webhook Secret</label>
-                                        <div class="relative">
-                                            <input :type="show ? 'text' : 'password'" 
-                                                   x-model="editGateway.webhook_secret" 
-                                                   class="form-input pr-10"
-                                                   placeholder="Chave de segurança do webhook">
-                                            <button type="button" @click="show = !show" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">
-                                                <i class="fas" :class="show ? 'fa-eye-slash' : 'fa-eye'"></i>
-                                            </button>
-                                        </div>
-                                    </div>
                                     <button type="submit" :disabled="loading" class="btn-action btn-action-primary w-full">
                                         <i class="fas fa-save mr-2"></i>
                                         <span x-text="loading ? 'Salvando...' : 'Atualizar'"></span>
@@ -2013,19 +2001,6 @@
                                        x-model="gateways.aguia.api_key" 
                                        class="form-input pr-10"
                                        placeholder="Token do lojista"
-                                       required>
-                                <button type="button" @click="show = !show" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">
-                                    <i class="fas" :class="show ? 'fa-eye-slash' : 'fa-eye'"></i>
-                                </button>
-                            </div>
-                        </div>
-                        <div x-data="{ show: false }">
-                            <label class="text-xs font-bold text-gray-400 block mb-1">Webhook Secret <span class="text-red-400">*</span></label>
-                            <div class="relative">
-                                <input :type="show ? 'text' : 'password'" 
-                                       x-model="gateways.aguia.webhook_secret" 
-                                       class="form-input pr-10"
-                                       placeholder="Chave de segurança do webhook"
                                        required>
                                 <button type="button" @click="show = !show" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">
                                     <i class="fas" :class="show ? 'fa-eye-slash' : 'fa-eye'"></i>

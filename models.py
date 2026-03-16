@@ -1032,7 +1032,7 @@ class Gateway(db.Model):
             result['company_id'] = self.client_id  # Company ID (armazenado em client_id)
         elif self.gateway_type == 'aguia':
             result['api_key'] = self.api_key  # API Key (criptografada)
-            result['webhook_secret'] = self.webhook_secret  # Webhook Secret (criptografado)
+            # ÁguiaPags não usa webhook_secret (webhook stateless)
         
         return result
 
