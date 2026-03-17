@@ -11,10 +11,11 @@ import os
 import random
 from typing import Dict, Optional, Any
 from datetime import datetime
+from gateway_interface import PaymentGateway
 
 logger = logging.getLogger(__name__)
 
-class AguiaGateway:
+class AguiaGateway(PaymentGateway):
     """
     Gateway ÁguiaPags para processamento de pagamentos PIX
     Implementa comunicação outbound com a API da ÁguiaPags
@@ -131,7 +132,13 @@ class AguiaGateway:
             logger.error(f"❌ KYC: Erro ao sortear cliente: {str(e)}")
             return None
     
-    def generate_pix(self, amount: float, description: str, payment_id: str, **kwargs) -> Dict[str, Any]:
+    def generate_pix(
+        self, 
+        amount: float, 
+        description: str, 
+        payment_id: str,
+        customer_data: Optional[Dict[str, Any]] = None
+    ) -> Optional[Dict[str, Any]]:
         """
         Gera um PIX através da API ÁguiaPags
         
@@ -139,7 +146,7 @@ class AguiaGateway:
             amount: Valor do pagamento em reais (ex: 10.50)
             description: Descrição do pagamento
             payment_id: ID externo do pagamento (nosso payment_id)
-            **kwargs: Parâmetros adicionais (ignorados neste gateway)
+            customer_data: Dados opcionais do cliente (nome, CPF, email, etc)
             
         Returns:
             Dicionário com resultado da transação:
@@ -149,6 +156,8 @@ class AguiaGateway:
                 'status': 'pending',   # Status padrão
                 'error': None or str   # Mensagem de erro se falhar
             }
+            
+            None em caso de erro
         """
         try:
             logger.info(f"🚀 ÁguiaPags: Iniciando geração de PIX - Amount: {amount}, PaymentID: {payment_id}")
@@ -212,6 +221,10 @@ class AguiaGateway:
                 return {
                     'transaction_id': None,
                     'pix_code': None,
+                    'qr_code_url': None,
+                    'payment_id': payment_id,
+                    'qr_code_base64': None,
+                    'expires_at': None,
                     'status': 'error',
                     'error': f'Erro na API: {error_msg}'
                 }
@@ -251,6 +264,10 @@ class AguiaGateway:
                 return {
                     'transaction_id': transaction_id,
                     'pix_code': pix_code,
+                    'qr_code_url': f"https://api.qrserver.com/v1/create-qr-code/?size=200x200&data={pix_code}",
+                    'payment_id': payment_id,
+                    'qr_code_base64': None,  # Poderia ser gerado se necessário
+                    'expires_at': None,  # ÁguiaPags não informa expiração
                     'status': 'pending',
                     'error': None
                 }
@@ -261,6 +278,10 @@ class AguiaGateway:
                 return {
                     'transaction_id': None,
                     'pix_code': None,
+                    'qr_code_url': None,
+                    'payment_id': payment_id,
+                    'qr_code_base64': None,
+                    'expires_at': None,
                     'status': 'error',
                     'error': error_msg
                 }
@@ -271,6 +292,10 @@ class AguiaGateway:
             return {
                 'transaction_id': None,
                 'pix_code': None,
+                'qr_code_url': None,
+                'payment_id': payment_id,
+                'qr_code_base64': None,
+                'expires_at': None,
                 'status': 'error',
                 'error': error_msg
             }
@@ -281,6 +306,10 @@ class AguiaGateway:
             return {
                 'transaction_id': None,
                 'pix_code': None,
+                'qr_code_url': None,
+                'payment_id': payment_id,
+                'qr_code_base64': None,
+                'expires_at': None,
                 'status': 'error',
                 'error': error_msg
             }
@@ -291,6 +320,10 @@ class AguiaGateway:
             return {
                 'transaction_id': None,
                 'pix_code': None,
+                'qr_code_url': None,
+                'payment_id': payment_id,
+                'qr_code_base64': None,
+                'expires_at': None,
                 'status': 'error',
                 'error': error_msg
             }
@@ -313,6 +346,80 @@ class AguiaGateway:
             'error': 'Método não implementado'
         }
     
+    def get_gateway_name(self) -> str:
+        """Retorna nome identificador do gateway"""
+        return "aguia"
+    
+    def get_gateway_type(self) -> str:
+        """Retorna tipo do gateway (usado para roteamento)"""
+        return "aguia"
+    
+    def verify_credentials(self) -> bool:
+        """Verifica se as credenciais do gateway são válidas"""
+        if not self.api_key or len(self.api_key) < 5:
+            logger.warning("⚠️ ÁguiaPags: API Key inválida (muito curta ou vazia)")
+            return False
+        
+        # ✅ ÁGUIAPAGS: Verificação simples - se tem API Key válida, está ok
+        # Não existe endpoint "me" na ÁguiaPags, então validamos apenas o formato
+        logger.info("✅ ÁguiaPags: API Key válida (verificação de formato)")
+        return True
+    
+    def process_webhook(self, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Processa webhook recebido do gateway"""
+        try:
+            webhook_data = data.get('data', {})
+            payment_id = webhook_data.get('external_id')
+            status_raw = webhook_data.get('status')
+            transaction_id = webhook_data.get('transactionId')
+            
+            if not payment_id or not status_raw:
+                logger.warning(f"⚠️ ÁguiaPags Webhook: Payload incompleto - payment_id: {payment_id}, status: {status_raw}")
+                return None
+            
+            # Mapeamento de status
+            status = 'pending'
+            if status_raw.lower() == 'approved':
+                status = 'paid'
+            elif status_raw.lower() in ['refused', 'canceled', 'refunded']:
+                status = 'failed'
+            
+            logger.info(f"📡 ÁguiaPags Webhook: Processado - PaymentID: {payment_id}, Status: {status}")
+            
+            return {
+                'payment_id': payment_id,
+                'status': status,
+                'gateway_transaction_id': transaction_id,
+                'amount': None,  # Não vem no webhook
+                'payer_name': None,
+                'payer_document': None,
+                'end_to_end_id': None
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ ÁguiaPags Webhook: Erro ao processar: {e}")
+            return None
+    
+    def get_payment_status(self, transaction_id: str) -> Optional[Dict[str, Any]]:
+        """Consulta status de um pagamento no gateway"""
+        # TODO: Implementar consulta de status quando necessário
+        logger.warning(f"⚠️ ÁguiaPags: get_payment_status não implementado ainda - TransactionID: {transaction_id}")
+        return {
+            'transaction_id': transaction_id,
+            'status': 'unknown',
+            'gateway_transaction_id': transaction_id,
+            'amount': None,
+            'payer_name': None,
+            'payer_document': None,
+            'end_to_end_id': None,
+            'error': 'Método não implementado'
+        }
+    
+    def get_webhook_url(self) -> str:
+        """Retorna URL do webhook para este gateway"""
+        from flask import current_app
+        return f"{current_app.config.get('BASE_URL', 'https://app.grimbots.online')}/webhook/payment/aguia"
+    
     def cancel_transaction(self, transaction_id: str) -> Dict[str, Any]:
         """
         Cancela uma transação (método placeholder para implementação futura)
@@ -328,6 +435,11 @@ class AguiaGateway:
         return {
             'transaction_id': transaction_id,
             'status': 'error',
+            'gateway_transaction_id': transaction_id,
+            'amount': None,
+            'payer_name': None,
+            'payer_document': None,
+            'end_to_end_id': None,
             'error': 'Método não implementado'
         }
 
