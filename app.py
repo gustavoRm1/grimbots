@@ -7979,8 +7979,33 @@ def bolt_webhook():
 @login_required
 def get_gateways():
     """Lista gateways do usuário"""
-    gateways = current_user.gateways.all()
-    return jsonify([g.to_dict() for g in gateways])
+    try:
+        gateways = current_user.gateways.all()
+        result = []
+        for g in gateways:
+            try:
+                result.append(g.to_dict())
+            except Exception as e:
+                # ✅ RESILIÊNCIA: Se um gateway tiver erro de descriptografia, 
+                # incluir na lista com status de erro em vez de crashar toda a API
+                logger.warning(f"⚠️ Erro ao processar gateway {g.id} ({g.gateway_type}): {e}")
+                result.append({
+                    'id': g.id,
+                    'gateway_type': g.gateway_type,
+                    'is_active': g.is_active,
+                    'is_verified': False,  # ✅ Forçar como não verificado
+                    'last_error': 'Erro de descriptografia - reconfigure as credenciais',
+                    'total_transactions': g.total_transactions or 0,
+                    'successful_transactions': g.successful_transactions or 0,
+                    'revenue': float(g.revenue or 0),
+                    'created_at': g.created_at.isoformat() if g.created_at else None,
+                    'updated_at': g.updated_at.isoformat() if g.updated_at else None
+                })
+        
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"❌ Erro crítico ao listar gateways: {e}")
+        return jsonify({'error': 'Erro ao listar gateways'}), 500
 
 @app.route('/api/gateways', methods=['POST'])
 @login_required
@@ -7990,10 +8015,10 @@ def create_gateway():
     try:
         logger.info(f"📡 Recebendo requisição para salvar gateway...")
         data = request.json
-        logger.info(f"📦 Dados recebidos: gateway_type={data.get('gateway_type')}")
         logger.info(f"🔍 DEBUG: Request JSON completo: {data}")  # ✅ DEBUG LOG
         
         gateway_type = data.get('gateway_type')
+        logger.info(f"📦 Dados recebidos: gateway_type={gateway_type}")
     
         # ✅ Validar tipo de gateway
         if gateway_type not in ['syncpay', 'pushynpay', 'paradise', 'wiinpay', 'atomopay', 'umbrellapag', 'orionpay', 'babylon', 'bolt', 'aguia']:
@@ -8168,7 +8193,9 @@ def create_gateway():
             
             if api_key_value:
                 gateway.api_key = api_key_value  # Criptografia automática via setter
+                gateway.is_verified = True  # ✅ ÁguiaPags não exige validação complexa
                 logger.info(f"✅ [ÁguiaPags] api_key salvo (criptografado)")
+                logger.info(f"✅ [ÁguiaPags] gateway marcado como verificado")
             else:
                 logger.warning(f"⚠️ [ÁguiaPags] api_key não fornecido")
         
@@ -8585,6 +8612,8 @@ def update_gateway(gateway_id):
             # ✅ ÁGUIAPAGS - Apenas API Key (webhook stateless)
             if data.get('api_key'):
                 gateway.api_key = data['api_key']
+                gateway.is_verified = True  # ✅ ÁguiaPags não exige validação complexa
+                logger.info(f"✅ [ÁguiaPags] gateway atualizado e marcado como verificado")
         
         elif gateway_type == 'atomopay':
             if data.get('api_token') or data.get('api_key'):
@@ -8658,6 +8687,8 @@ def clear_gateway_credentials(gateway_id):
         elif gateway_type == 'bolt':
             gateway.api_key = None
             gateway.client_id = None
+        elif gateway_type == 'aguia':
+            gateway.api_key = None  # ✅ ÁGUIAPAGS clear credentials
         
         # Desativar e desmarcar como verificado
         gateway.is_active = False
