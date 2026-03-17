@@ -32,13 +32,9 @@ class AguiaGateway(PaymentGateway):
         self.api_key = api_key
         self.sandbox = sandbox
         
-        # URLs da API
-        if sandbox:
-            self.base_url = "https://sandbox-aguiapags.com/api/v1"
-            logger.info("🔧 ÁguiaPags: Modo Sandbox ativado")
-        else:
-            self.base_url = "https://aguiapags.com/api/v1"
-            logger.info("🏭 ÁguiaPags: Modo Produção ativado")
+        # ✅ FORÇAR URL DE PRODUÇÃO - ÁGUIAPAGS NÃO TEM SANDBOX
+        self.base_url = "https://aguiapags.com/api/v1"
+        logger.info("🏭 ÁguiaPags: Modo Produção FORÇADO (sandbox não disponível)")
         
         # Headers padrão para requisições
         self.headers = {
@@ -251,7 +247,8 @@ class AguiaGateway(PaymentGateway):
             
             # Fazer requisição para API
             url = f"{self.base_url}/transactions"
-            logger.debug(f"🌐 Enviando requisição para: {url}")
+            logger.info(f"🌐 [AUDITORIA] Fazendo POST para: {url}")
+            logger.debug(f"📦 Payload: {payload}")
             
             response = requests.post(
                 url,
@@ -334,8 +331,8 @@ class AguiaGateway(PaymentGateway):
                     'error': error_msg
                 }
                 
-        except requests.exceptions.Timeout:
-            error_msg = "Timeout na requisição à API ÁguiaPags"
+        except requests.exceptions.Timeout as e:
+            error_msg = f"Timeout na requisição à API ÁguiaPags: {str(e)}"
             logger.error(f"❌ ÁguiaPags: {error_msg}")
             return {
                 'transaction_id': None,
@@ -348,8 +345,8 @@ class AguiaGateway(PaymentGateway):
                 'error': error_msg
             }
             
-        except requests.exceptions.ConnectionError:
-            error_msg = "Erro de conexão com a API ÁguiaPags"
+        except requests.exceptions.ConnectionError as e:
+            error_msg = f"Erro de conexão com a API ÁguiaPags: {str(e)}"
             logger.error(f"❌ ÁguiaPags: {error_msg}")
             return {
                 'transaction_id': None,
@@ -363,7 +360,7 @@ class AguiaGateway(PaymentGateway):
             }
             
         except Exception as e:
-            error_msg = f"Erro inesperado: {str(e)}"
+            error_msg = f"Erro inesperado na API ÁguiaPags: {str(e)}"
             logger.error(f"❌ ÁguiaPags: {error_msg}")
             return {
                 'transaction_id': None,
