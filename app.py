@@ -12675,10 +12675,10 @@ def aguia_webhook():
         
         logger.info(f"📡 ÁGUIA WEBHOOK: Recebido - Event: {data.get('event')}")
         
-        # Extrair dados do payload (formato atualizado)
+        # ✅ EXTRAÇÃO DO PAYLOAD CONFORME DOCUMENTAÇÃO OFICIAL
         webhook_data = data.get('data', {})
-        payment_id = webhook_data.get('external_id')  # Mudou de externalRef para external_id
-        status_raw = webhook_data.get('status')      # Mudou de PAID para approved
+        payment_id = webhook_data.get('externalReference')  # ✅ CHAVE EXATA DA DOCUMENTAÇÃO
+        status_raw = webhook_data.get('status')           # ✅ CHAVE EXATA DA DOCUMENTAÇÃO
         transaction_id = webhook_data.get('transactionId')
         
         if not payment_id or not status_raw:
@@ -12696,8 +12696,8 @@ def aguia_webhook():
             # Retornar 200 para parar retries da ÁguiaPags
             return jsonify({'status': 'ok'}), 200
         
-        # ✅ MAPEAMENTO DE STATUS E PROCESSAMENTO
-        if status_raw.lower() == "approved":  # Mudou de PAID para approved
+        # ✅ MAPEAMENTO DE STATUS CONFORME DOCUMENTAÇÃO OFICIAL
+        if status_raw == 'CAPTURED':  # ✅ STATUS EXATO DE SUCESSO
             # Marcar como pago e acionar liberação
             if payment.status != 'paid':
                 payment.status = 'paid'
@@ -12707,11 +12707,11 @@ def aguia_webhook():
                 from bot_manager import process_successful_payment
                 process_successful_payment(payment)
                 
-                logger.info(f"✅ ÁGUIA WEBHOOK: Pagamento confirmado - PaymentID: {payment_id}")
+                logger.info(f"✅ ÁGUIA WEBHOOK: Pagamento CAPTURED e confirmado - PaymentID: {payment_id}")
         
-        elif status_raw.upper() == "WAITING_PAYMENT":
+        elif status_raw == 'PENDING':  # ✅ STATUS PENDENTE - IGNORAR MAS RETORNAR 200
             # Apenas log - pagamento em processamento
-            logger.info(f"⏳ ÁGUIA WEBHOOK: Pagamento em processamento - PaymentID: {payment_id}")
+            logger.info(f"⏳ ÁGUIA WEBHOOK: Pagamento PENDING - ignorando, aguardando CAPTURED - PaymentID: {payment_id}")
         
         elif status_raw.upper() in ["REFUSED", "CANCELED", "REFUNDED"]:
             # Marcar como falha/reembolsado
