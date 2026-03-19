@@ -12675,43 +12675,43 @@ def aguia_webhook():
         
         logger.info(f"📡 ÁGUIA WEBHOOK: Recebido - Event: {data.get('event')}")
         
-        # ✅ EXTRAÇÃO DO PAYLOAD CONFORME DOCUMENTAÇÃO OFICIAL
+        # ✅ EXTRAÇÃO DO PAYLOAD REAL (SEM externalReference)
         webhook_data = data.get('data', {})
-        payment_id = webhook_data.get('externalReference')  # ✅ CHAVE EXATA DA DOCUMENTAÇÃO
-        status_raw = webhook_data.get('status')           # ✅ CHAVE EXATA DA DOCUMENTAÇÃO
-        transaction_id = webhook_data.get('transactionId')
+        status_raw = webhook_data.get('status')           # ✅ STATUS DO PAGAMENTO
+        transaction_id = webhook_data.get('transactionId') # ✅ ID DA TRANSAÇÃO ÁGUIAPAGS
         
-        if not payment_id or not status_raw:
-            logger.error(f"🚨 ÁGUIA WEBHOOK: Payload incompleto - payment_id: {payment_id}, status: {status_raw}")
-            return jsonify({'error': 'Incomplete payload'}), 400
+        if not transaction_id or not status_raw:
+            logger.error(f"🚨 ÁGUIA WEBHOOK: Payload incompleto - transaction_id: {transaction_id}, status: {status_raw}")
+            # ✅ NÃO RETORNAR 400 - SEMPRE 200 PARA PARAR RETRIES
+            return jsonify({'status': 'ok'}), 200
         
-        logger.info(f"🔍 ÁGUIA WEBHOOK: Processando - PaymentID: {payment_id}, Status: {status_raw}")
+        logger.info(f"🔍 ÁGUIA WEBHOOK: Processando - TransactionID: {transaction_id}, Status: {status_raw}")
         
-        # Buscar pagamento no nosso banco
+        # ✅ BUSCAR PELO transactionId (NÃO PELO payment_id)
         from models import Payment
-        payment = Payment.query.filter_by(payment_id=payment_id).first()
+        payment = Payment.query.filter_by(gateway_transaction_id=transaction_id).first()
         
         if not payment:
-            logger.warning(f"⚠️ ÁGUIA WEBHOOK: Pagamento não encontrado - PaymentID: {payment_id}")
+            logger.warning(f"⚠️ ÁGUIA WEBHOOK: Pagamento não encontrado pelo TransactionID: {transaction_id}")
             # Retornar 200 para parar retries da ÁguiaPags
             return jsonify({'status': 'ok'}), 200
         
-        # ✅ MAPEAMENTO DE STATUS CONFORME DOCUMENTAÇÃO OFICIAL
+        # ✅ MAPEAMENTO DE STATUS CONFORME PAYLOAD REAL
         if status_raw == 'CAPTURED':  # ✅ STATUS EXATO DE SUCESSO
             # Marcar como pago e acionar liberação
             if payment.status != 'paid':
                 payment.status = 'paid'
-                payment.gateway_transaction_id = transaction_id
+                # ✅ gateway_transaction_id JÁ FOI SALVO NA CRIAÇÃO DO PIX
                 payment.paid_at = datetime.utcnow()
                 
                 from bot_manager import process_successful_payment
                 process_successful_payment(payment)
                 
-                logger.info(f"✅ ÁGUIA WEBHOOK: Pagamento CAPTURED e confirmado - PaymentID: {payment_id}")
+                logger.info(f"✅ ÁGUIA WEBHOOK: Pagamento CAPTURED e entregue - PaymentID: {payment.payment_id}, TransactionID: {transaction_id}")
         
         elif status_raw == 'PENDING':  # ✅ STATUS PENDENTE - IGNORAR MAS RETORNAR 200
             # Apenas log - pagamento em processamento
-            logger.info(f"⏳ ÁGUIA WEBHOOK: Pagamento PENDING - ignorando, aguardando CAPTURED - PaymentID: {payment_id}")
+            logger.info(f"⏳ ÁGUIA WEBHOOK: Pagamento PENDING - ignorando, aguardando CAPTURED - PaymentID: {payment.payment_id}, TransactionID: {transaction_id}")
         
         elif status_raw.upper() in ["REFUSED", "CANCELED", "REFUNDED"]:
             # Marcar como falha/reembolsado
@@ -12720,20 +12720,18 @@ def aguia_webhook():
             else:
                 payment.status = 'failed'
             
-            payment.gateway_transaction_id = transaction_id
-            
-            logger.info(f"❌ ÁGUIA WEBHOOK: Pagamento falha/reembolsado - PaymentID: {payment_id}, Status: {status_raw}")
+            logger.info(f"❌ ÁGUIA WEBHOOK: Pagamento falha/reembolsado - PaymentID: {payment.payment_id}, TransactionID: {transaction_id}, Status: {status_raw}")
         
         else:
             # Status desconhecido - apenas log
-            logger.warning(f"⚠️ ÁGUIA WEBHOOK: Status desconhecido - PaymentID: {payment_id}, Status: {status_raw}")
+            logger.warning(f"⚠️ ÁGUIA WEBHOOK: Status desconhecido - PaymentID: {payment.payment_id}, TransactionID: {transaction_id}, Status: {status_raw}")
         
         # Salvar alterações no banco
         from app import db
         db.session.commit()
         
         # ✅ RETORNO IDEMPOTENTE: Sempre 200 para parar retries
-        logger.info(f"✅ ÁGUIA WEBHOOK: Processado com sucesso - PaymentID: {payment_id}")
+        logger.info(f"✅ ÁGUIA WEBHOOK: Processado com sucesso - TransactionID: {transaction_id}")
         return jsonify({'status': 'ok'}), 200
         
     except Exception as e:
