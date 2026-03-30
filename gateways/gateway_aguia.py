@@ -446,19 +446,77 @@ class AguiaGateway(PaymentGateway):
             return None
     
     def get_payment_status(self, transaction_id: str) -> Optional[Dict[str, Any]]:
-        """Consulta status de um pagamento no gateway"""
-        # TODO: Implementar consulta de status quando necessário
-        logger.warning(f"⚠️ ÁguiaPags: get_payment_status não implementado ainda - TransactionID: {transaction_id}")
-        return {
-            'transaction_id': transaction_id,
-            'status': 'unknown',
-            'gateway_transaction_id': transaction_id,
-            'amount': None,
-            'payer_name': None,
-            'payer_document': None,
-            'end_to_end_id': None,
-            'error': 'Método não implementado'
-        }
+        """Consulta status de um pagamento na ÁguiaPags via API"""
+        try:
+            if not transaction_id:
+                logger.error("❌ ÁguiaPags: transaction_id vazio na consulta de status")
+                return None
+            
+            # ✅ ÁGUIAPAGS: GET para API de consulta de transação
+            url = f"{self.base_url}/transactions/{transaction_id}"
+            headers = {
+                'Accept': 'application/json',
+                'x-api-key': self.api_key
+            }
+            
+            logger.info(f"🔍 ÁguiaPags: Consultando status - TransactionID: {transaction_id}")
+            logger.debug(f"   URL: {url}")
+            
+            resp = requests.get(url, headers=headers, timeout=15)
+            
+            if resp.status_code != 200:
+                logger.warning(f"⚠️ ÁguiaPags CHECK {resp.status_code}: {resp.text[:200]}")
+                return None
+            
+            try:
+                data = resp.json()
+            except ValueError:
+                logger.warning(f"⚠️ ÁguiaPags: Resposta não é JSON válido: {resp.text[:200]}")
+                return None
+            
+            # ✅ VALIDAÇÃO: Verificar se resposta contém erro
+            if data.get('error'):
+                logger.error(f"❌ ÁguiaPags: Erro retornado pela API: {data.get('error')}")
+                return None
+            
+            # ✅ EXTRAÇÃO DO STATUS REAL DA ÁGUIAPAGS
+            status_raw = data.get('status', '').upper()
+            amount = data.get('amount')
+            
+            logger.info(f"🔍 ÁguiaPags: Status bruto da API: {status_raw} | Amount: {amount}")
+            
+            # ✅ MAPEAMENTO DE STATUS ÁGUIAPAGS PARA PADRÃO DO SISTEMA
+            status = None
+            if status_raw == 'CAPTURED':
+                status = 'paid'
+            elif status_raw == 'PENDING':
+                status = 'pending'
+            elif status_raw in ['REFUSED', 'CANCELED', 'REFUNDED']:
+                status = 'failed' if status_raw != 'REFUNDED' else 'refunded'
+            else:
+                status = 'failed'  # Status desconhecido = falha
+            
+            logger.info(f"✅ ÁguiaPags: Status mapeado: {status_raw} → {status}")
+            
+            return {
+                'transaction_id': transaction_id,
+                'status': status,
+                'gateway_transaction_id': transaction_id,
+                'amount': amount,
+                'payer_name': data.get('customerName'),
+                'payer_document': data.get('customerDocument'),
+                'end_to_end_id': data.get('endToEndId')
+            }
+            
+        except requests.exceptions.Timeout:
+            logger.error(f"❌ ÁguiaPags: Timeout na consulta de status - TransactionID: {transaction_id}")
+            return None
+        except requests.exceptions.ConnectionError:
+            logger.error(f"❌ ÁguiaPags: Erro de conexão na consulta de status - TransactionID: {transaction_id}")
+            return None
+        except Exception as e:
+            logger.error(f"❌ ÁguiaPags: Erro na consulta de status: {e} - TransactionID: {transaction_id}")
+            return None
     
     def get_webhook_url(self) -> str:
         """Retorna URL do webhook para este gateway"""

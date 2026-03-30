@@ -1129,6 +1129,229 @@ def reconcile_atomopay_payments():
         logger.error(f"❌ Reconciliador Atomopay: erro: {e}", exc_info=True)
 
 
+# ==================== RECONCILIADOR DE PAGAMENTOS ÁGUIAPAGS (POLLING) ====================
+def reconcile_aguia_payments():
+    """Consulta periodicamente pagamentos pendentes da ÁguiaPags (BATCH LIMITADO para evitar spam)."""
+    try:
+        with app.app_context():
+            from models import Payment, Gateway, db, Bot
+            # ✅ BATCH LIMITADO: apenas 5 por execução para evitar spam
+            # ✅ CORREÇÃO CRÍTICA: Buscar MAIS RECENTES primeiro (created_at DESC) para priorizar novos PIX
+            pending = Payment.query.filter_by(status='pending', gateway_type='aguia').order_by(Payment.created_at.desc()).limit(5).all()
+            if not pending:
+                logger.debug("🔍 Reconciliador ÁguiaPags: Nenhum payment pendente encontrado")
+                return
+            
+            logger.info(f"🔍 Reconciliador ÁguiaPags: Consultando {len(pending)} payment(s) mais recente(s)")
+            
+            # Agrupar por user_id para reusar instância do gateway
+            gateways_by_user = {}
+            
+            for p in pending:
+                try:
+                    # Buscar gateway do dono do bot
+                    user_id = p.bot.user_id if p.bot else None
+                    if not user_id:
+                        continue
+                    
+                    if user_id not in gateways_by_user:
+                        gw = Gateway.query.filter_by(user_id=user_id, gateway_type='aguia', is_active=True, is_verified=True).first()
+                        if not gw:
+                            continue
+                        from gateway_factory import GatewayFactory
+                        creds = {'api_key': gw.api_key}
+                        g = GatewayFactory.create_gateway('aguia', creds)
+                        if not g:
+                            continue
+                        gateways_by_user[user_id] = g
+                    
+                    gateway = gateways_by_user[user_id]
+                    
+                    # ✅ Para ÁguiaPags, usar transaction_id para consulta
+                    transaction_id = p.gateway_transaction_id
+                    if not transaction_id:
+                        logger.warning(f"⚠️ ÁguiaPags Payment {p.id} ({p.payment_id}): sem transaction_id para consulta")
+                        continue
+                    
+                    logger.info(f"🔍 ÁguiaPags: Consultando payment {p.id} ({p.payment_id})")
+                    logger.info(f"   Valor: R$ {p.amount:.2f} | Transaction ID: {transaction_id}")
+                    
+                    # ✅ Consultar status via API
+                    result = gateway.get_payment_status(str(transaction_id))
+                    
+                    if result:
+                        status = result.get('status')
+                        amount = result.get('amount')
+                        # ✅ CORREÇÃO: Garantir que amount seja numérico antes de formatar
+                        amount_str = f"R$ {amount:.2f}" if amount is not None else "N/A"
+                        if status == 'paid':
+                            logger.info(f"   ✅ Status: PAID | Amount: {amount_str}")
+                        elif status == 'pending':
+                            logger.info(f"   ⏳ Status: PENDING | Amount: {amount_str}")
+                        else:
+                            logger.info(f"   📊 Status: {status.upper()} | Amount: {amount_str}")
+                    else:
+                        logger.warning(f"   ⚠️ ÁguiaPags não retornou status para {transaction_id}")
+                        logger.warning(f"      Possíveis causas: transação não existe na API, ainda está sendo processada, ou transaction_id incorreto")
+                    
+                    if result and result.get('status') == 'paid':
+                        # Atualizar pagamento e estatísticas
+                        p.status = 'paid'
+                        p.paid_at = get_brazil_time()
+                        if p.bot:
+                            p.bot.total_sales += 1
+                            p.bot.total_revenue += p.amount
+                            if p.bot.user_id:
+                                from models import User
+                                user = User.query.get(p.bot.user_id)
+                                if user:
+                                    user.total_sales += 1
+                                    user.total_revenue += p.amount
+                        
+                        # ✅ ATUALIZAR ESTATÍSTICAS DE REMARKETING
+                        if p.is_remarketing and p.remarketing_campaign_id:
+                            from models import RemarketingCampaign
+                            campaign = RemarketingCampaign.query.get(p.remarketing_campaign_id)
+                            if campaign:
+                                campaign.total_sales += 1
+                                campaign.revenue_generated += float(p.amount)
+                                logger.info(f"✅ Estatísticas de remarketing atualizadas (ÁguiaPags): Campanha {campaign.id} | Vendas: {campaign.total_sales} | Receita: R$ {campaign.revenue_generated:.2f}")
+                        
+                        db.session.commit()
+                        logger.info(f"✅ ÁguiaPags: Payment {p.id} atualizado para paid via reconciliação")
+                        
+                        # ✅ REFRESH payment após commit para garantir que está atualizado
+                        db.session.refresh(p)
+                        
+                        # ✅ NOVA ARQUITETURA: Purchase NÃO é disparado quando pagamento é confirmado
+                        # ✅ Purchase é disparado APENAS quando lead acessa link de entrega (/delivery/<token>)
+                        logger.info(f"✅ Purchase será disparado apenas quando lead acessar link de entrega: /delivery/<token>")
+                        
+                        # ✅ ENVIAR ENTREGÁVEL AO CLIENTE (CORREÇÃO CRÍTICA)
+                        try:
+                            from models import Payment
+                            payment_obj = Payment.query.get(p.id)
+                            if payment_obj:
+                                # ✅ CRÍTICO: Refresh antes de validar status
+                                db.session.refresh(payment_obj)
+                                
+                                # ✅ CRÍTICO: Validar status ANTES de chamar send_payment_delivery
+                                if payment_obj.status == 'paid':
+                                    send_payment_delivery(payment_obj, bot_manager)
+                                else:
+                                    logger.error(
+                                        f"❌ ERRO GRAVE: send_payment_delivery chamado com payment.status != 'paid' "
+                                        f"(status atual: {payment_obj.status}, payment_id: {payment_obj.payment_id})"
+                                    )
+                        except Exception as e:
+                            logger.error(f"❌ Erro ao enviar entregável via reconciliação ÁguiaPags: {e}")
+                        
+                        # ✅ Emitir evento em tempo real APENAS para o dono do bot
+                        try:
+                            # ✅ CRÍTICO: Validar user_id antes de emitir (já validado acima, mas garantir)
+                            if p.bot and p.bot.user_id:
+                                socketio.emit('payment_update', {
+                                    'payment_id': p.id,
+                                    'status': 'paid',
+                                    'amount': float(p.amount),
+                                    'bot_id': p.bot_id,
+                                }, room=f'user_{p.bot.user_id}')
+                            else:
+                                logger.warning(f"⚠️ Payment {p.id} não tem bot.user_id - não enviando notificação WebSocket")
+                        except Exception as e:
+                            logger.error(f"❌ Erro ao emitir notificação WebSocket para payment {p.id}: {e}")
+                        
+                        # ============================================================================
+                        # ✅ UPSELLS AUTOMÁTICOS - APÓS RECONCILIAÇÃO ÁGUIAPAGS
+                        # ============================================================================
+                        logger.info(f"🔍 [UPSELLS RECONCILE ÁGUIAPAGS] Verificando condições: status='paid', has_config={p.bot.config is not None if p.bot else False}, upsells_enabled={p.bot.config.upsells_enabled if (p.bot and p.bot.config) else 'N/A'}")
+                        
+                        if p.bot.config and p.bot.config.upsells_enabled:
+                            logger.info(f"✅ [UPSELLS RECONCILE ÁGUIAPAGS] Condições atendidas! Processando upsells para payment {p.payment_id}")
+                            try:
+                                # ✅ ANTI-DUPLICAÇÃO: Verificar se upsells já foram agendados para este payment
+                                if not bot_manager.scheduler:
+                                    logger.error(f"❌ CRÍTICO: Scheduler não está disponível! Upsells NÃO serão agendados!")
+                                    logger.error(f"   Payment ID: {p.payment_id}")
+                                    logger.error(f"   Verificar se APScheduler foi inicializado corretamente")
+                                else:
+                                    # ✅ DIAGNÓSTICO: Verificar se scheduler está rodando
+                                    try:
+                                        scheduler_running = bot_manager.scheduler.running
+                                        if not scheduler_running:
+                                            logger.error(f"❌ CRÍTICO: Scheduler existe mas NÃO está rodando!")
+                                            logger.error(f"   Payment ID: {p.payment_id}")
+                                            logger.error(f"   Upsells NÃO serão executados se scheduler não estiver rodando!")
+                                    except Exception as scheduler_check_error:
+                                        logger.warning(f"⚠️ Não foi possível verificar se scheduler está rodando: {scheduler_check_error}")
+                                    
+                                    # ✅ ANTI-DUPLICAÇÃO: Verificar se upsells já foram agendados para este payment
+                                    upsells_already_scheduled = False
+                                    try:
+                                        # Verificar se já existe job de upsell para este payment
+                                        for i in range(10):  # Verificar até 10 upsells possíveis
+                                            job_id = f"upsell_{p.bot_id}_{p.payment_id}_{i}"
+                                            existing_job = bot_manager.scheduler.get_job(job_id)
+                                            if existing_job:
+                                                upsells_already_scheduled = True
+                                                logger.info(f"ℹ️ Upsells já foram agendados para payment {p.payment_id} (job {job_id} existe)")
+                                                logger.info(f"   Job encontrado: {job_id}, próxima execução: {existing_job.next_run_time}")
+                                                break
+                                    except Exception as check_error:
+                                        logger.error(f"❌ ERRO ao verificar jobs existentes: {check_error}", exc_info=True)
+                                        logger.warning(f"⚠️ Continuando mesmo com erro na verificação (pode causar duplicação)")
+                                        # ✅ Não bloquear se houver erro na verificação - deixar tentar agendar
+                                    
+                                    if bot_manager.scheduler and not upsells_already_scheduled:
+                                        upsells = p.bot.config.get_upsells()
+                                        
+                                        if upsells:
+                                            logger.info(f"🎯 [UPSELLS RECONCILE ÁGUIAPAGS] Verificando upsells para produto: {p.product_name}")
+                                            
+                                            # Filtrar upsells que fazem match com o produto comprado
+                                            matched_upsells = []
+                                            for upsell in upsells:
+                                                trigger_product = upsell.get('trigger_product', '')
+                                                
+                                                # Match: trigger vazio (todas compras) OU produto específico
+                                                if not trigger_product or trigger_product == p.product_name:
+                                                    matched_upsells.append(upsell)
+                                            
+                                            if matched_upsells:
+                                                logger.info(f"✅ [UPSELLS RECONCILE ÁGUIAPAGS] {len(matched_upsells)} upsell(s) encontrado(s) para '{p.product_name}'")
+                                                
+                                                # ✅ CORREÇÃO: Usar função específica para upsells (não downsells)
+                                                bot_manager.schedule_upsells(
+                                                    bot_id=p.bot_id,
+                                                    payment_id=p.payment_id,
+                                                    chat_id=int(p.customer_user_id),
+                                                    upsells=matched_upsells,
+                                                    original_price=p.amount,
+                                                    original_button_index=-1
+                                                )
+                                                
+                                                logger.info(f"📅 [UPSELLS RECONCILE ÁGUIAPAGS] Upsells agendados com sucesso para payment {p.payment_id}!")
+                                            else:
+                                                logger.info(f"ℹ️ [UPSELLS RECONCILE ÁGUIAPAGS] Nenhum upsell configurado para '{p.product_name}' (trigger_product não faz match)")
+                                        else:
+                                            logger.info(f"ℹ️ [UPSELLS RECONCILE ÁGUIAPAGS] Lista de upsells vazia no config do bot")
+                                    else:
+                                        if not bot_manager.scheduler:
+                                            logger.error(f"❌ [UPSELLS RECONCILE ÁGUIAPAGS] Scheduler não disponível - upsells não serão agendados")
+                                        else:
+                                            logger.info(f"ℹ️ [UPSELLS RECONCILE ÁGUIAPAGS] Upsells já foram agendados anteriormente para payment {p.payment_id} (evitando duplicação)")
+                                        
+                            except Exception as e:
+                                logger.error(f"❌ [UPSELLS RECONCILE ÁGUIAPAGS] Erro ao processar upsells: {e}", exc_info=True)
+                                import traceback
+                                traceback.print_exc()
+                except Exception as e:
+                    logger.error(f"❌ Erro ao reconciliar payment ÁguiaPags {p.id} ({p.payment_id}): {e}", exc_info=True)
+                    continue
+    except Exception as e:
+        logger.error(f"❌ Reconciliador ÁguiaPags: erro: {e}", exc_info=True)
+
+
 # ==================== RECONCILIADOR DE PAGAMENTOS BOLT (POLLING) ====================
 def reconcile_bolt_payments():
     """Consulta periodicamente pagamentos não pagos do Bolt (BATCH LIMITADO para evitar spam)."""
@@ -1235,6 +1458,15 @@ def enqueue_reconcile_atomopay():
     except Exception as e:
         logger.warning(f"Erro ao enfileirar reconciliação Atomopay: {e}")
 
+def enqueue_reconcile_aguia():
+    """Enfileira reconciliação ÁguiaPags na fila gateway"""
+    try:
+        from tasks_async import gateway_queue
+        if gateway_queue:
+            gateway_queue.enqueue(reconcile_aguia_payments)
+    except Exception as e:
+        logger.warning(f"Erro ao enfileirar reconciliação ÁguiaPags: {e}")
+
 
 def enqueue_reconcile_bolt():
     """Enfileira reconciliação Bolt na fila gateway"""
@@ -1259,6 +1491,11 @@ if _scheduler_owner:
     scheduler.add_job(id='reconcile_atomopay', func=enqueue_reconcile_atomopay,
                       trigger='interval', seconds=60, replace_existing=True, max_instances=1)
     logger.info("✅ Job de reconciliação Atomopay agendado (60s, fila async)")
+
+if _scheduler_owner:
+    scheduler.add_job(id='reconcile_aguia', func=enqueue_reconcile_aguia,
+                      trigger='interval', seconds=60, replace_existing=True, max_instances=1)
+    logger.info("✅ Job de reconciliação ÁguiaPags agendado (60s, fila async)")
 
 if _scheduler_owner:
     scheduler.add_job(id='reconcile_bolt', func=enqueue_reconcile_bolt,
