@@ -850,6 +850,8 @@ def process_webhook_async(gateway_type: str, data: Dict[str, Any]):
                 dummy_credentials = {'api_key': 'dummy'}
             elif gateway_type == 'bolt':
                 dummy_credentials = {'api_key': 'dummy', 'company_id': 'dummy'}
+            elif gateway_type == 'aguia':
+                dummy_credentials = {'api_key': 'dummy'}
             
             gateway_instance = GatewayFactory.create_gateway(gateway_type, dummy_credentials, use_adapter=True)
             
@@ -938,6 +940,28 @@ def process_webhook_async(gateway_type: str, data: Dict[str, Any]):
                 event_hash = str(result.get('gateway_hash') or data.get('transaction_hash') or data.get('hash') or '').strip()
                 event_ref = str(result.get('external_reference') or data.get('reference') or '').strip()
                 producer = str(result.get('producer_hash') or data.get('producer_hash') or '').strip()
+                
+                # ✅ EXTRAÇÃO ESPECÍFICA ÁGUIAPAGS (PAYLOAD REAL)
+                if gateway_type == 'aguia':
+                    data_obj = data.get('data', {})
+                    event_id = str(data_obj.get('transactionId', '')).strip()
+                    event_ref = str(data_obj.get('providerReference', '')).strip() 
+                    status_raw = str(data_obj.get('status', '')).strip()
+                    
+                    # ✅ TRADUÇÃO DE STATUS ÁGUIAPAGS PARA PADRÃO DO SISTEMA
+                    if status_raw == 'CAPTURED':
+                        status = 'paid'
+                    elif status_raw == 'PENDING':
+                        status = 'pending'
+                    elif status_raw.upper() in ['REFUSED', 'CANCELED', 'REFUNDED']:
+                        status = 'failed' if status_raw.upper() != 'REFUNDED' else 'refunded'
+                    else:
+                        status = 'failed'
+                    
+                    logger.info(f"🔍 [ÁGUIAPAGS] Parse específico - TransactionID: {event_id}, Status: {status_raw} → {status}")
+                else:
+                    # ✅ FLUXO PADRÃO PARA OUTROS GATEWAYS
+                    status = result.get('status')
 
                 payment = None
 
