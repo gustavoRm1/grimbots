@@ -1828,6 +1828,7 @@ def task_process_broadcast_campaign(campaign_data: Dict[str, Any], bot_ids: list
                     sent_count = 0
                     failed_count = 0
                     skipped_count = 0
+                    bot_is_dead = False  # 🚨 CIRCUIT BREAKER: Flag de controle para bot com token inválido
                     
                     while offset < total_leads:
                         batch = q.offset(offset).limit(batch_size).all()
@@ -1951,6 +1952,16 @@ def task_process_broadcast_campaign(campaign_data: Dict[str, Any], bot_ids: list
                                                 logger.error(f"❌ [REMARKETING] Esgotadas 3 tentativas para {lead.telegram_user_id} (429)")
                                             continue  # Tentar novamente
                                         
+                                        # 🚨 CIRCUIT BREAKER: Erros 401/404 (Token revogado/Bot morto)
+                                        elif any(keyword in error_str for keyword in ['unauthorized', '401', 'not found', '404']):
+                                            logger.error(f"🚨 [CIRCUIT BREAKER] Bot {bot_id} morto ou revogado (Erro 401/404). Desarmando disjuntor.")
+                                            bot_is_dead = True
+                                            # Desativar bot imediatamente no banco de dados
+                                            bot.is_active = False
+                                            bot.last_error = f"Desativado automaticamente pelo sistema: {send_error}"
+                                            db.session.commit()
+                                            break  # Sai do loop de retries imediatamente
+                                        
                                         else:
                                             # Outro erro, logar e continuar para próxima tentativa
                                             logger.warning(f"⚠️ [REMARKETING] Erro na tentativa {attempt + 1}/3 para {lead.telegram_user_id}: {send_error}")
@@ -1965,6 +1976,10 @@ def task_process_broadcast_campaign(campaign_data: Dict[str, Any], bot_ids: list
                                 if not lead_sent:
                                     failed_count += 1
                                 
+                                # 🚨 CIRCUIT BREAKER: Abortar processamento deste bot se detectado como morto
+                                if bot_is_dead:
+                                    break  # Sai do loop do batch (for lead in batch)
+                                
                                 # ✅ Rate limit padrão entre leads
                                 time.sleep(rate_limit_delay)
                                 
@@ -1972,6 +1987,11 @@ def task_process_broadcast_campaign(campaign_data: Dict[str, Any], bot_ids: list
                                 failed_count += 1
                                 logger.error(f"❌ [REMARKETING] Erro processando lead {lead.id}: {lead_error}")
                                 continue
+                        
+                        # 🚨 CIRCUIT BREAKER: Abortar paginação se bot detectado como morto
+                        if bot_is_dead:
+                            logger.warning(f"🚨 [CIRCUIT BREAKER] Abortando campanha do bot {bot_id} após detectar token inválido.")
+                            break  # Sai do loop de paginação (while offset < total_leads)
                         
                         offset += batch_size
                         
