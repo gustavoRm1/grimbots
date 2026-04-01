@@ -1898,18 +1898,22 @@ def task_process_broadcast_campaign(campaign_data: Dict[str, Any], bot_ids: list
                                             buttons=remarketing_buttons if remarketing_buttons else None
                                         )
                                         
-                                        if result:
-                                            sent_count += 1
-                                            redis_conn.sadd(sent_set_key, str(lead.telegram_user_id))
-                                            lead_sent = True
-                                            
-                                            # Log progresso a cada 100 envios
-                                            if sent_count % 100 == 0:
-                                                logger.info(f"📤 [REMARKETING WORKER] Bot {bot_id} | Progresso: {sent_count}/{total_leads} | Campaign: {campaign.id}")
-                                            break  # ✅ Sucesso, sair do loop de retry
-                                        else:
-                                            # Falha sem exceção, tentar novamente
-                                            logger.warning(f"⚠️ [REMARKETING] Tentativa {attempt + 1}/3 falhou (sem exceção) para {lead.telegram_user_id}")
+                                        # 🚨 VALIDAÇÃO STRICT: Rejeitar dicionários de erro e falsos positivos
+                                        if isinstance(result, dict) and result.get('error'):
+                                            # Força a exceção para acionar o Circuit Breaker no bloco except abaixo
+                                            raise Exception(f"status={result.get('error_code', 'unknown')}, desc={result.get('description', '')}")
+                                        elif not result:
+                                            raise Exception("Falha silenciosa: Função retornou False ou None")
+                                        
+                                        # ✅ SUCESSO REAL
+                                        sent_count += 1
+                                        redis_conn.sadd(sent_set_key, str(lead.telegram_user_id))
+                                        lead_sent = True
+                                        
+                                        # Log progresso a cada 100 envios
+                                        if sent_count % 100 == 0:
+                                            logger.info(f"📤 [REMARKETING WORKER] Bot {bot_id} | Progresso: {sent_count}/{total_leads} | Campaign: {campaign.id}")
+                                        break  # ✅ Sucesso, sair do loop de retry
                                             
                                     except Exception as send_error:
                                         error_str = str(send_error).lower()
