@@ -1822,6 +1822,10 @@ def task_process_broadcast_campaign(campaign_data: Dict[str, Any], bot_ids: list
                     
                     logger.info(f"🎯 [REMARKETING WORKER] Bot {bot_id}: {total_leads} leads para enviar")
                     
+                    # ✅ EXTRAÇÃO DE VARIÁVEIS PRIMITIVAS (antes do loop para evitar DetachedInstanceError)
+                    bot_token_str = str(bot.telegram_token)
+                    campaign_id_int = int(campaign.id)
+                    
                     # ✅ LOOP DE ENVIO COM RATE LIMIT
                     batch_size = 200
                     offset = 0
@@ -1877,7 +1881,7 @@ def task_process_broadcast_campaign(campaign_data: Dict[str, Any], bot_ids: list
                                         if btn.get('price') and btn.get('description'):
                                             remarketing_buttons.append({
                                                 'text': btn.get('text', 'Comprar'),
-                                                'callback_data': f"rmkt_{campaign.id}_{btn_idx}"
+                                                'callback_data': f"rmkt_{campaign_id_int}_{btn_idx}"
                                             })
                                         elif btn.get('url'):
                                             remarketing_buttons.append({
@@ -1890,7 +1894,7 @@ def task_process_broadcast_campaign(campaign_data: Dict[str, Any], bot_ids: list
                                 for attempt in range(3):
                                     try:
                                         result = bot_manager.send_telegram_message(
-                                            token=bot.telegram_token,
+                                            token=bot_token_str,
                                             chat_id=str(lead.telegram_user_id),
                                             message=personalized_message,
                                             media_url=media_url,
@@ -1912,7 +1916,7 @@ def task_process_broadcast_campaign(campaign_data: Dict[str, Any], bot_ids: list
                                         
                                         # Log progresso a cada 100 envios
                                         if sent_count % 100 == 0:
-                                            logger.info(f"📤 [REMARKETING WORKER] Bot {bot_id} | Progresso: {sent_count}/{total_leads} | Campaign: {campaign.id}")
+                                            logger.info(f"📤 [REMARKETING WORKER] Bot {bot_id} | Progresso: {sent_count}/{total_leads} | Campaign: {campaign_id_int}")
                                         break  # ✅ Sucesso, sair do loop de retry
                                             
                                     except Exception as send_error:
@@ -1960,9 +1964,11 @@ def task_process_broadcast_campaign(campaign_data: Dict[str, Any], bot_ids: list
                                         elif any(keyword in error_str for keyword in ['unauthorized', '401', 'not found', '404']):
                                             logger.error(f"🚨 [CIRCUIT BREAKER] Bot {bot_id} morto ou revogado (Erro 401/404). Desarmando disjuntor.")
                                             bot_is_dead = True
-                                            # Desativar bot imediatamente no banco de dados
-                                            bot.is_active = False
-                                            bot.last_error = f"Desativado automaticamente pelo sistema: {send_error}"
+                                            # ✅ UPDATE DIRETO IGNORANDO ESTADO ORM (evita DetachedInstanceError)
+                                            db.session.query(Bot).filter(Bot.id == bot_id).update({
+                                                'is_active': False,
+                                                'last_error': f"Desativado automaticamente pelo sistema: {send_error}"
+                                            })
                                             db.session.commit()
                                             break  # Sai do loop de retries imediatamente
                                         
@@ -1999,20 +2005,24 @@ def task_process_broadcast_campaign(campaign_data: Dict[str, Any], bot_ids: list
                         
                         offset += batch_size
                         
-                        # Atualizar estatísticas no banco a cada batch
-                        campaign.total_sent = sent_count
-                        campaign.total_failed = failed_count
+                        # ✅ UPDATE DIRETO IGNORANDO ESTADO ORM (evita DetachedInstanceError)
+                        db.session.query(RemarketingCampaign).filter(RemarketingCampaign.id == campaign_id_int).update({
+                            'total_sent': sent_count,
+                            'total_failed': failed_count
+                        })
                         db.session.commit()
                         
                         # ✅ CORREÇÃO MEMORY BLOAT: Limpar cache da sessão SQLAlchemy
                         db.session.expunge_all()
                         logger.debug(f"🧹 [REMARKETING WORKER] Batch concluído | Memory cache limpo | Offset: {offset}")
                     
-                    # ✅ FINALIZAR CAMPANHA DO BOT
-                    campaign.status = 'completed'
-                    campaign.completed_at = get_brazil_time()
-                    campaign.total_sent = sent_count
-                    campaign.total_failed = failed_count
+                    # ✅ FINALIZAR CAMPANHA DO BOT - UPDATE DIRETO IGNORANDO ESTADO ORM
+                    db.session.query(RemarketingCampaign).filter(RemarketingCampaign.id == campaign_id_int).update({
+                        'status': 'completed',
+                        'completed_at': get_brazil_time(),
+                        'total_sent': sent_count,
+                        'total_failed': failed_count
+                    })
                     db.session.commit()
                     
                     # Atualizar estatísticas globais
