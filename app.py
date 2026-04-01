@@ -4143,8 +4143,9 @@ def count_eligible_leads(bot_id):
 @csrf.exempt
 def general_remarketing():
     """
-    API: Remarketing Geral (Multi-Bot)
-    Envia uma campanha de remarketing para múltiplos bots simultaneamente
+    ✅ API: Remarketing Geral (Multi-Bot) - VERSÃO ASYNC
+    Envia uma campanha de remarketing para múltiplos bots em background via RQ
+    Retorna imediatamente com job_id para acompanhamento
     """
     try:
         data = request.json
@@ -4161,27 +4162,19 @@ def general_remarketing():
         
         # ✅ CORREÇÃO: Decodificar Unicode escape sequences (ex: \ud835\udeXX)
         try:
-            # Verificar se a mensagem contém escape sequences Unicode
             if '\\u' in message or '\\U' in message:
-                # Decodificar escape sequences Unicode
-                # Usar codecs.decode para processar \uXXXX e \UXXXXXXXX
                 import codecs
-                # Primeiro, tentar decodificar como raw string (r'...')
                 try:
-                    # Se a mensagem contém escape sequences, decodificar
                     message = message.encode('utf-8').decode('unicode_escape')
                     logger.info(f"✅ Mensagem decodificada: {len(message)} caracteres")
                 except (UnicodeDecodeError, UnicodeEncodeError):
-                    # Se falhar, tentar usando codecs
                     try:
                         message = codecs.decode(message, 'unicode_escape')
                         logger.info(f"✅ Mensagem decodificada via codecs: {len(message)} caracteres")
                     except Exception:
-                        # Se ainda falhar, manter original
                         logger.warning(f"⚠️ Não foi possível decodificar Unicode, mantendo original")
         except Exception as e:
             logger.warning(f"⚠️ Erro ao decodificar Unicode: {e}, usando mensagem original")
-            # Manter mensagem original se decodificação falhar
         
         # Verificar se todos os bots pertencem ao usuário
         bots = Bot.query.filter(
@@ -4192,177 +4185,68 @@ def general_remarketing():
         if len(bots) != len(bot_ids):
             return jsonify({'error': 'Um ou mais bots não pertencem a você'}), 403
         
-        # Parâmetros da campanha
+        # ✅ Extrair parâmetros da campanha
         media_url = data.get('media_url')
         media_type = data.get('media_type', 'video')
         audio_enabled = data.get('audio_enabled', False)
         audio_url = data.get('audio_url', '')
         buttons = data.get('buttons', [])
         days_since_last_contact = int(data.get('days_since_last_contact', 7))
-        exclude_buyers = data.get('exclude_buyers', False)  # Mantido para compatibilidade
-        audience_segment = data.get('audience_segment', 'all_users')  # ✅ V2.0: Nova segmentação avançada
+        audience_segment = data.get('audience_segment', 'all_users')
+        scheduled_at = data.get('scheduled_at')
         
-        # Validar botões (se fornecidos)
+        # Validar botões
         if buttons:
             for btn in buttons:
                 if not btn.get('text') or not btn.get('price'):
                     return jsonify({'error': 'Todos os botões precisam ter texto e preço'}), 400
         
-        # Converter botões para JSON
-        buttons_json = json.dumps(buttons) if buttons else None
-        
-        # ✅ V2.0: Processar scheduled_at se fornecido
-        scheduled_at = None
-        status = 'draft'  # Padrão: rascunho (será enviado imediatamente)
-        
-        if data.get('scheduled_at'):
+        # ✅ Processar agendamento se fornecido
+        status = 'draft'
+        if scheduled_at:
             try:
-                # Converter string ISO para datetime
-                scheduled_at_str = data.get('scheduled_at')
-                scheduled_at = datetime.fromisoformat(scheduled_at_str.replace('Z', '+00:00'))
-                
-                # Validar se data está no futuro
+                from datetime import datetime
+                scheduled_dt = datetime.fromisoformat(scheduled_at.replace('Z', '+00:00'))
                 now = get_brazil_time()
-                if scheduled_at <= now:
+                if scheduled_dt <= now:
                     return jsonify({'error': 'A data e hora devem ser no futuro'}), 400
-                
-                # Se agendado, status será 'scheduled'
                 status = 'scheduled'
                 logger.info(f"📅 Remarketing geral agendado para: {scheduled_at}")
             except Exception as e:
                 logger.error(f"❌ Erro ao processar scheduled_at: {e}")
                 return jsonify({'error': f'Data/hora inválida: {str(e)}'}), 400
-
-        # Contador de usuários impactados
-        total_users = 0
-        bots_affected = 0
-
-        # Envio imediato (multi-bot independente, sem distribuição entre bots)
-        if status != 'scheduled':
-            try:
-                from redis_manager import get_redis_connection
-                from models import BotUser, Payment, RemarketingBlacklist, RemarketingCampaign
-                from datetime import timedelta
-                from sqlalchemy.exc import OperationalError
-                import time as time_module
-
-                contact_limit = get_brazil_time() - timedelta(days=days_since_last_contact)
-                redis_conn = get_redis_connection()
-
-                target_audience_mapping = {
-                    'all_users': 'all',
-                    'buyers': 'buyers',
-                    'pix_generated': 'abandoned_cart',
-                    'downsell_buyers': 'downsell_buyers',
-                    'order_bump_buyers': 'order_bump_buyers',
-                    'upsell_buyers': 'upsell_buyers',
-                    'remarketing_buyers': 'remarketing_buyers'
-                }
-                target_audience = target_audience_mapping.get(audience_segment, 'all')
-                debug_mode = bool(data.get('debug_mode'))
-
-                def _is_valid_chat_id(chat_id):
-                    try:
-                        if chat_id is None:
-                            return False
-                        chat_int = int(str(chat_id))
-                        return chat_int != 0
-                    except Exception:
-                        return False
-
-                for bot in bots:
-                    q = db.session.query(BotUser.telegram_user_id).filter(
-                        BotUser.bot_id == bot.id,
-                        BotUser.archived == False
-                    )
-
-                    if days_since_last_contact > 0:
-                        q = q.filter(BotUser.last_interaction <= contact_limit)
-
-                    blacklist_ids = db.session.query(RemarketingBlacklist.telegram_user_id).filter_by(
-                        bot_id=bot.id
-                    ).all()
-                    blacklist_ids = [b[0] for b in blacklist_ids if b[0]]
-                    if blacklist_ids:
-                        q = q.filter(~BotUser.telegram_user_id.in_(blacklist_ids))
-
-                    if audience_segment == 'all_users':
-                        pass
-                    elif audience_segment == 'buyers':
-                        ids = db.session.query(Payment.customer_user_id).filter(
-                            Payment.bot_id == bot.id,
-                            Payment.status == 'paid'
-                        ).distinct().all()
-                        ids = [i[0] for i in ids if i and i[0]]
-                        if not ids:
-                            assigned_ids = set()
-                            logger.warning(f"[REMARKETING] bot_id={bot.id} ignorado: 0 usuários elegíveis")
-                            continue
-                        q = q.filter(BotUser.telegram_user_id.in_(ids))
-                    elif audience_segment == 'pix_generated':
-                        ids = db.session.query(Payment.customer_user_id).filter(
-                            Payment.bot_id == bot.id,
-                            Payment.status == 'pending'
-                        ).distinct().all()
-                        ids = [i[0] for i in ids if i and i[0]]
-                        if not ids:
-                            logger.warning(f"[REMARKETING] bot_id={bot.id} ignorado: 0 usuários elegíveis")
-                            continue
-                        q = q.filter(BotUser.telegram_user_id.in_(ids))
-                    elif audience_segment == 'downsell_buyers':
-                        ids = db.session.query(Payment.customer_user_id).filter(
-                            Payment.bot_id == bot.id,
-                            Payment.status == 'paid',
-                            Payment.is_downsell == True
-                        ).distinct().all()
-                        ids = [i[0] for i in ids if i and i[0]]
-                        if not ids:
-                            logger.warning(f"[REMARKETING] bot_id={bot.id} ignorado: 0 usuários elegíveis")
-                            continue
-                        q = q.filter(BotUser.telegram_user_id.in_(ids))
-                    elif audience_segment == 'order_bump_buyers':
-                        ids = db.session.query(Payment.customer_user_id).filter(
-                            Payment.bot_id == bot.id,
-                            Payment.status == 'paid',
-                            Payment.order_bump_accepted == True
-                        ).distinct().all()
-                        ids = [i[0] for i in ids if i and i[0]]
-                        if not ids:
-                            logger.warning(f"[REMARKETING] bot_id={bot.id} ignorado: 0 usuários elegíveis")
-                            continue
-                        q = q.filter(BotUser.telegram_user_id.in_(ids))
-                    elif audience_segment == 'upsell_buyers':
-                        ids = db.session.query(Payment.customer_user_id).filter(
-                            Payment.bot_id == bot.id,
-                            Payment.status == 'paid',
-                            Payment.is_upsell == True
-                        ).distinct().all()
-                        ids = [i[0] for i in ids if i and i[0]]
-                        if not ids:
-                            logger.warning(f"[REMARKETING] bot_id={bot.id} ignorado: 0 usuários elegíveis")
-                            continue
-                        q = q.filter(BotUser.telegram_user_id.in_(ids))
-                    elif audience_segment == 'remarketing_buyers':
-                        ids = db.session.query(Payment.customer_user_id).filter(
-                            Payment.bot_id == bot.id,
-                            Payment.status == 'paid',
-                            Payment.is_remarketing == True
-                        ).distinct().all()
-                        ids = [i[0] for i in ids if i and i[0]]
-                        if not ids:
-                            logger.warning(f"[REMARKETING] bot_id={bot.id} ignorado: 0 usuários elegíveis")
-                            continue
-                        q = q.filter(BotUser.telegram_user_id.in_(ids))
-                    else:
-                        logger.warning(f"[REMARKETING] bot_id={bot.id} ignorado: segmento inválido ou sem elegíveis")
-                        continue
-
-                    eligible_ids = q.distinct().all()
-                    assigned_ids = set([str(x[0]) for x in eligible_ids if x and x[0]])
-                    if not assigned_ids:
-                        logger.warning(f"[REMARKETING] bot_id={bot.id} ignorado: 0 usuários elegíveis")
-                        continue
-
+        
+        # ✅ Se for agendado, criar campanhas no banco (mas não enfileirar ainda)
+        if status == 'scheduled':
+            from models import RemarketingCampaign
+            from sqlalchemy.exc import OperationalError
+            import time as time_module
+            
+            campaigns_to_create = []
+            total_users = 0
+            bots_affected = 0
+            
+            for bot in bots:
+                eligible_count = bot_manager.count_eligible_leads(
+                    bot_id=bot.id,
+                    target_audience='non_buyers' if data.get('exclude_buyers') else 'all',
+                    days_since_last_contact=days_since_last_contact,
+                    exclude_buyers=data.get('exclude_buyers', False),
+                    audience_segment=audience_segment
+                )
+                
+                if eligible_count > 0:
+                    target_audience_mapping = {
+                        'all_users': 'all',
+                        'buyers': 'buyers',
+                        'pix_generated': 'abandoned_cart',
+                        'downsell_buyers': 'downsell_buyers',
+                        'order_bump_buyers': 'order_bump_buyers',
+                        'upsell_buyers': 'upsell_buyers',
+                        'remarketing_buyers': 'remarketing_buyers'
+                    }
+                    target_audience = target_audience_mapping.get(audience_segment, 'all')
+                    
                     campaign = RemarketingCampaign(
                         bot_id=bot.id,
                         name=f"Remarketing Geral - {get_brazil_time().strftime('%d/%m/%Y %H:%M')}",
@@ -4371,273 +4255,96 @@ def general_remarketing():
                         media_type=media_type,
                         audio_enabled=audio_enabled,
                         audio_url=audio_url,
-                        buttons=buttons_json,
+                        buttons=json.dumps(buttons) if buttons else None,
                         target_audience=target_audience,
                         days_since_last_contact=days_since_last_contact,
-                        exclude_buyers=exclude_buyers,
+                        exclude_buyers=data.get('exclude_buyers', False),
                         cooldown_hours=6,
-                        scheduled_at=None,
-                        status='sending',
-                        started_at=get_brazil_time()
+                        scheduled_at=scheduled_dt,
+                        status='scheduled'
                     )
-
-                    max_retries = 3
-                    retry_delay = 0.5
-                    for attempt in range(max_retries):
-                        try:
-                            db.session.add(campaign)
-                            db.session.commit()
-                            break
-                        except OperationalError as e:
-                            if 'database is locked' in str(e).lower() and attempt < max_retries - 1:
-                                db.session.rollback()
-                                time_module.sleep(retry_delay * (attempt + 1))
-                                continue
-                            db.session.rollback()
-                            raise
-
-                    logger.info(f"[REMARKETING] bot_id={bot.id} users_elegiveis={len(assigned_ids)} campanha_criada={campaign.id}")
-
-                    queue_key = f"remarketing:queue:{bot.id}"
-                    sent_set_key = f"remarketing:sent:{campaign.id}"
-                    stats_key = f"remarketing:stats:{campaign.id}"
-
-                    remarketing_buttons_template = []
+                    campaigns_to_create.append((campaign, bot, eligible_count))
+            
+            # Salvar campanhas agendadas
+            for campaign, bot, eligible_count in campaigns_to_create:
+                max_retries = 3
+                for attempt in range(max_retries):
                     try:
-                        for btn_idx, btn in enumerate(buttons or []):
-                            if btn.get('price') and btn.get('description'):
-                                remarketing_buttons_template.append({
-                                    'text': btn.get('text', 'Comprar'),
-                                    'callback_data': f"rmkt_{campaign.id}_{btn_idx}"
-                                })
-                            elif btn.get('url'):
-                                remarketing_buttons_template.append({
-                                    'text': btn.get('text', 'Link'),
-                                    'url': btn.get('url')
-                                })
-                    except Exception:
-                        remarketing_buttons_template = []
-
-                    assigned_list = list(assigned_ids)
-                    random.shuffle(assigned_list)
-                    total_targets = 0
-                    skipped_blacklist = 0
-                    skipped_sent = 0
-                    skipped_invalid = 0
-                    skipped_not_eligible = 0
-                    debug_logged = 0
-                    chunk_size = 500
-                    for i in range(0, len(assigned_list), chunk_size):
-                        chunk = assigned_list[i:i + chunk_size]
-                        bot_users = BotUser.query.filter(
-                            BotUser.bot_id == bot.id,
-                            BotUser.archived == False,
-                            BotUser.telegram_user_id.in_(chunk)
-                        ).all()
-                        for bu in bot_users:
-                            if not getattr(bu, 'telegram_user_id', None):
-                                continue
-                            blk_key = f"remarketing:blacklist:{bot.id}"
-                            if redis_conn.sismember(blk_key, str(bu.telegram_user_id)):
-                                skipped_blacklist += 1
-                                if debug_mode and debug_logged < 10:
-                                    logger.info(f"🚫 SKIP_ENQUEUE reason=blacklist campaign_id={campaign.id} bot_id={bot.id} chat_id={bu.telegram_user_id}")
-                                    debug_logged += 1
-                                continue
-                            if not _is_valid_chat_id(bu.telegram_user_id):
-                                skipped_invalid += 1
-                                if debug_mode and debug_logged < 10:
-                                    logger.info(f"🚫 SKIP_ENQUEUE reason=invalid_chat_id campaign_id={campaign.id} bot_id={bot.id} chat_id={bu.telegram_user_id}")
-                                    debug_logged += 1
-                                continue
-                            if redis_conn.sismember(sent_set_key, str(bu.telegram_user_id)):
-                                skipped_sent += 1
-                                if debug_mode and debug_logged < 10:
-                                    logger.info(f"🚫 SKIP_ENQUEUE reason=already_received campaign_id={campaign.id} bot_id={bot.id} chat_id={bu.telegram_user_id}")
-                                    debug_logged += 1
-                                continue
-                            if getattr(bu, 'opt_out', False) or getattr(bu, 'unsubscribed', False) or getattr(bu, 'inactive', False):
-                                skipped_not_eligible += 1
-                                if debug_mode and debug_logged < 10:
-                                    logger.info(f"🚫 SKIP_ENQUEUE reason=not_eligible campaign_id={campaign.id} bot_id={bot.id} chat_id={bu.telegram_user_id}")
-                                    debug_logged += 1
-                                continue
-                            msg = message.replace('{nome}', bu.first_name or 'Cliente')
-                            msg = msg.replace('{primeiro_nome}', (bu.first_name or 'Cliente').split()[0])
-                            job = {
-                                'type': 'send',
-                                'campaign_id': campaign.id,
-                                'bot_id': bot.id,
-                                'telegram_user_id': str(bu.telegram_user_id),
-                                'message': msg,
-                                'media_url': media_url,
-                                'media_type': media_type,
-                                'buttons': remarketing_buttons_template,
-                                'audio_enabled': bool(audio_enabled),
-                                'audio_url': audio_url or '',
-                                'bot_token': bot.token
-                            }
-                            redis_conn.rpush(queue_key, json.dumps(job))
-                            redis_conn.hincrby(stats_key, 'enqueued', 1)
-                            if debug_mode and debug_logged < 10:
-                                logger.info(f"📦 ENQUEUE OK campaign_id={campaign.id} bot_id={bot.id} chat_id={bu.telegram_user_id}")
-                                debug_logged += 1
-                            total_targets += 1
-                    if skipped_blacklist:
-                        redis_conn.hincrby(stats_key, 'skipped_blacklist', skipped_blacklist)
-                    if skipped_sent:
-                        redis_conn.hincrby(stats_key, 'skipped_already_received', skipped_sent)
-                    if skipped_invalid:
-                        redis_conn.hincrby(stats_key, 'skipped_invalid_chat', skipped_invalid)
-                    if skipped_not_eligible:
-                        redis_conn.hincrby(stats_key, 'skipped_not_eligible', skipped_not_eligible)
-                    if debug_mode and total_targets == 0:
-                        logger.error(f"❌ Campaign aborted — no eligible leads found | campaign_id={campaign.id} bot_id={bot.id}")
-                        continue
-
-                    campaign.total_targets = total_targets
-                    db.session.commit()
-                    redis_conn.rpush(queue_key, json.dumps({'type': 'campaign_done', 'campaign_id': campaign.id}))
-
-                    total_users += total_targets
-                    bots_affected += 1
-
-                response_message = f'Remarketing enviado para {bots_affected} bot(s) com sucesso!'
-                return jsonify({
-                    'success': True,
-                    'total_users': total_users,
-                    'bots_affected': bots_affected,
-                    'message': response_message,
-                    'scheduled': False,
-                    'scheduled_at': None
-                })
-            except Exception as deterministic_error:
-                logger.error(f"❌ Falha no remarketing geral (modo por bot): {deterministic_error}")
-
-        # ✅ CORREÇÃO: Criar campanhas em batch para evitar database locked
-        from models import RemarketingCampaign
-        from sqlalchemy.exc import OperationalError
-        import time as time_module
-
-        campaigns_to_create = []
-        
-        # Preparar todas as campanhas primeiro
-        for bot in bots:
-            # ✅ V2.0: Contar usuários elegíveis usando nova segmentação
-            # ✅ MELHORIA: A contagem já exclui automaticamente usuários na blacklist deste bot específico
-            eligible_count = bot_manager.count_eligible_leads(
-                bot_id=bot.id,
-                target_audience='non_buyers' if exclude_buyers else 'all',  # Mantido para compatibilidade
-                days_since_last_contact=days_since_last_contact,
-                exclude_buyers=exclude_buyers,  # Mantido para compatibilidade
-                audience_segment=audience_segment  # ✅ V2.0: Nova segmentação avançada
-            )
-            
-            # ✅ MELHORIA: Log informativo sobre blacklist
-            from models import RemarketingBlacklist
-            blacklist_count = RemarketingBlacklist.query.filter_by(bot_id=bot.id).count()
-            if blacklist_count > 0:
-                logger.info(f"📊 Bot {bot.name} (ID: {bot.id}): {eligible_count} leads elegíveis | {blacklist_count} usuários na blacklist (excluídos)")
-            else:
-                logger.info(f"📊 Bot {bot.name} (ID: {bot.id}): {eligible_count} leads elegíveis | 0 usuários na blacklist")
-            
-            if eligible_count > 0:
-                # ✅ V2.0: Converter audience_segment para target_audience (compatibilidade)
-                # O campo target_audience será usado internamente, mas audience_segment é o novo padrão
-                target_audience_mapping = {
-                    'all_users': 'all',
-                    'buyers': 'buyers',
-                    'pix_generated': 'abandoned_cart',
-                    'downsell_buyers': 'downsell_buyers',
-                    'order_bump_buyers': 'order_bump_buyers',
-                    'upsell_buyers': 'upsell_buyers',
-                    'remarketing_buyers': 'remarketing_buyers'
-                }
-                target_audience = target_audience_mapping.get(audience_segment, 'all')
-                
-                campaign = RemarketingCampaign(
-                    bot_id=bot.id,
-                    name=f"Remarketing Geral - {get_brazil_time().strftime('%d/%m/%Y %H:%M')}",
-                    message=message,
-                    media_url=media_url,
-                    media_type=media_type,
-                    audio_enabled=audio_enabled,
-                    audio_url=audio_url,
-                    buttons=buttons_json,
-                    target_audience=target_audience,  # ✅ V2.0: Mapeado de audience_segment
-                    days_since_last_contact=days_since_last_contact,
-                    exclude_buyers=exclude_buyers,  # Mantido para compatibilidade
-                    cooldown_hours=6,  # Fixo em 6 horas
-                    scheduled_at=scheduled_at,  # ✅ V2.0
-                    status=status  # ✅ V2.0: 'draft' ou 'scheduled'
-                )
-                
-                # ✅ V2.0: Armazenar audience_segment como metadata (usando campo existente ou JSON)
-                # Nota: Se houver campo específico para isso no futuro, usar aqui
-                logger.info(f"📊 Campanha criada com segmentação: {audience_segment} → {target_audience}")
-                campaigns_to_create.append((campaign, bot, eligible_count))
-        
-        # ✅ CORREÇÃO: Salvar todas as campanhas com retry logic para database locked
-        for campaign, bot, eligible_count in campaigns_to_create:
-            max_retries = 3
-            retry_delay = 0.5  # 500ms
-            
-            for attempt in range(max_retries):
-                try:
-                    db.session.add(campaign)
-                    db.session.commit()
-                    logger.info(f"✅ Campanha criada para bot {bot.id} (@{bot.username})")
-                    
-                    # ✅ V2.0: Enviar campanha apenas se não estiver agendada
-                    if status != 'scheduled':
-                        try:
-                            bot_manager.send_remarketing_campaign(
-                                campaign_id=campaign.id,
-                                bot_token=bot.token
-                            )
-                            
-                            total_users += eligible_count
-                            bots_affected += 1
-                            
-                            logger.info(f"✅ Remarketing geral enviado para bot {bot.name} ({eligible_count} usuários)")
-                        except Exception as e:
-                            logger.error(f"❌ Erro ao enviar remarketing para bot {bot.id}: {e}")
-                    else:
-                        # Campanha agendada - não enviar agora, será processada pelo scheduler
+                        db.session.add(campaign)
+                        db.session.commit()
                         total_users += eligible_count
                         bots_affected += 1
-                        logger.info(f"📅 Remarketing geral agendado para bot {bot.name} ({eligible_count} usuários) - será enviado em {scheduled_at}")
-                    
-                    break  # Sucesso, sair do loop de retry
-                except OperationalError as e:
-                    if 'database is locked' in str(e).lower() and attempt < max_retries - 1:
-                        logger.warning(f"⚠️ Database locked ao criar campanha para bot {bot.id}, tentativa {attempt + 1}/{max_retries}")
-                        db.session.rollback()
-                        time_module.sleep(retry_delay * (attempt + 1))  # Backoff exponencial
-                        continue
-                    else:
-                        # Última tentativa ou erro diferente
-                        logger.error(f"❌ Erro ao criar campanha para bot {bot.id}: {e}")
-                        db.session.rollback()
+                        logger.info(f"📅 Campanha agendada criada para bot {bot.name} ({eligible_count} usuários)")
+                        break
+                    except OperationalError as e:
+                        if 'database is locked' in str(e).lower() and attempt < max_retries - 1:
+                            db.session.rollback()
+                            time_module.sleep(0.5 * (attempt + 1))
+                            continue
                         raise
-                except Exception as e:
-                    logger.error(f"❌ Erro inesperado ao criar campanha para bot {bot.id}: {e}")
-                    db.session.rollback()
-                    raise
+            
+            return jsonify({
+                'status': 'success',
+                'message': f'Remarketing agendado para {bots_affected} bot(s) com sucesso!',
+                'total_users': total_users,
+                'bots_affected': bots_affected,
+                'scheduled': True,
+                'scheduled_at': scheduled_at
+            }), 202
         
-        response_message = f'Remarketing agendado para {bots_affected} bot(s) com sucesso!' if status == 'scheduled' else f'Remarketing enviado para {bots_affected} bot(s) com sucesso!'
+        # ✅ ENVIO IMEDIATO: Enfileirar na fila RQ para processamento async
+        from tasks_async import task_queue, task_process_broadcast_campaign
         
+        # Preparar dados da campanha
+        campaign_data = {
+            'name': f"Remarketing Geral - {get_brazil_time().strftime('%d/%m/%Y %H:%M')}",
+            'message': message,
+            'media_url': media_url,
+            'media_type': media_type,
+            'audio_enabled': audio_enabled,
+            'audio_url': audio_url,
+            'buttons': buttons,
+            'days_since_last_contact': days_since_last_contact,
+            'audience_segment': audience_segment,
+            'user_id': current_user.id,
+            'exclude_buyers': data.get('exclude_buyers', False)
+        }
+        
+        # Enfileirar job na fila de tasks (urgente)
+        job = task_queue.enqueue(
+            task_process_broadcast_campaign,
+            campaign_data=campaign_data,
+            bot_ids=[bot.id for bot in bots],
+            job_timeout='2h',  # Timeout de 2 horas para campanhas grandes
+            job_id=f"remarketing_{current_user.id}_{int(get_brazil_time().timestamp())}"  # ID único
+        )
+        
+        # Contar usuários elegíveis para retornar na resposta
+        total_users = 0
+        for bot in bots:
+            eligible_count = bot_manager.count_eligible_leads(
+                bot_id=bot.id,
+                target_audience='non_buyers' if data.get('exclude_buyers') else 'all',
+                days_since_last_contact=days_since_last_contact,
+                exclude_buyers=data.get('exclude_buyers', False),
+                audience_segment=audience_segment
+            )
+            total_users += eligible_count
+        
+        logger.info(f"🚀 [REMARKETING API] Campanha enfileirada | Job ID: {job.get_id()} | Bots: {len(bots)} | Users estimados: {total_users}")
+        
+        # ✅ Retornar imediatamente com 202 Accepted
         return jsonify({
-            'success': True,
+            'status': 'success',
+            'message': 'Campanha enviada para a fila de processamento. Você pode acompanhar o progresso nos logs.',
+            'job_id': job.get_id(),
             'total_users': total_users,
-            'bots_affected': bots_affected,
-            'message': response_message,
-            'scheduled': status == 'scheduled',
-            'scheduled_at': scheduled_at.isoformat() if scheduled_at else None
-        })
+            'bots_affected': len(bots),
+            'scheduled': False
+        }), 202
         
     except Exception as e:
-        logger.error(f"❌ Erro no remarketing geral: {e}")
+        logger.error(f"❌ Erro no remarketing geral: {e}", exc_info=True)
         return jsonify({'error': str(e)}), 500
 def get_remarketing_stats(bot_id):
     """

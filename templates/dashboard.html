@@ -3649,7 +3649,8 @@ function dashboardApp() {
                 
                 console.log(`📊 Response status: ${response.status}`);
                 
-                if (!response.ok) {
+                // ✅ Tratar erro 4xx/5xx (exceto 202 Accepted)
+                if (!response.ok && response.status !== 202) {
                     const text = await response.text();
                     console.error('❌ Erro ao enviar remarketing:', text);
                     alert('Erro ao enviar remarketing: ' + text);
@@ -3657,7 +3658,7 @@ function dashboardApp() {
                 }
                 
                 const data = await response.json();
-                console.log('✅ Remarketing enviado:', data);
+                console.log('✅ Remarketing response:', data);
                 
                 // Resetar form e fechar modal
                 this.generalRemarketing = {
@@ -3668,21 +3669,27 @@ function dashboardApp() {
                     audio_enabled: false,
                     audio_url: '',
                     buttons: [],
-                    days_since_last_contact: 0,  // Padrão: Sem filtro
-                    exclude_buyers: false,  // Mantido para compatibilidade
-                    audience_segment: 'all_users',  // ✅ V2.0: Nova segmentação
-                    send_mode: 'immediate',  // ✅ V2.0
-                    scheduled_date: '',      // ✅ V2.0
-                    scheduled_time: ''      // ✅ V2.0
+                    days_since_last_contact: 0,
+                    exclude_buyers: false,
+                    audience_segment: 'all_users',
+                    send_mode: 'immediate',
+                    scheduled_date: '',
+                    scheduled_time: ''
                 };
                 
                 this.showGeneralRemarketingModal = false;
                 
-                // Mensagem de sucesso
-                if (sendMode === 'scheduled') {
-                    alert('📅 Campanha agendada com sucesso!');
+                // ✅ Mensagem de sucesso async (202) ou síncrono (200)
+                if (response.status === 202 || data.status === 'success') {
+                    if (sendMode === 'scheduled') {
+                        alert('📅 Campanha agendada com sucesso!');
+                    } else {
+                        // ✅ Mensagem para processamento async em background
+                        const jobInfo = data.job_id ? `\n\nJob ID: ${data.job_id}` : '';
+                        alert(`✅ ${data.message || 'Campanha enviada para a fila de processamento.'}${jobInfo}\n\n💡 Você pode acompanhar o progresso nos logs ou nas estatísticas de remarketing.`);
+                    }
                 } else {
-                    alert('✅ Remarketing enviado com sucesso!');
+                    alert('⚠️ Resposta inesperada do servidor');
                 }
                 
                 // Recarregar página para atualizar estatísticas
