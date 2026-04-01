@@ -1823,7 +1823,7 @@ def task_process_broadcast_campaign(campaign_data: Dict[str, Any], bot_ids: list
                     logger.info(f"🎯 [REMARKETING WORKER] Bot {bot_id}: {total_leads} leads para enviar")
                     
                     # ✅ EXTRAÇÃO DE VARIÁVEIS PRIMITIVAS (antes do loop para evitar DetachedInstanceError)
-                    bot_token_str = str(bot.telegram_token)
+                    bot_token_str = str(bot.token)
                     campaign_id_int = int(campaign.id)
                     
                     # ✅ LOOP DE ENVIO COM RATE LIMIT
