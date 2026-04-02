@@ -4147,8 +4147,14 @@ def general_remarketing():
     Envia uma campanha de remarketing para múltiplos bots em background via RQ
     Retorna imediatamente com job_id para acompanhamento
     """
+    import uuid
+    
     try:
         data = request.json
+        
+        # ✅ GERAR UUID DE AGRUPAMENTO (para vincular campanhas multi-bot)
+        campaign_group_id = str(uuid.uuid4())
+        logger.info(f"🔗 [REMARKETING GROUP] Novo group_id gerado: {campaign_group_id}")
         
         # Validações
         bot_ids = data.get('bot_ids', [])
@@ -4249,6 +4255,7 @@ def general_remarketing():
                     
                     campaign = RemarketingCampaign(
                         bot_id=bot.id,
+                        group_id=campaign_group_id,  # ✅ Vincular ao grupo
                         name=f"Remarketing Geral - {get_brazil_time().strftime('%d/%m/%Y %H:%M')}",
                         message=message,
                         media_url=media_url,
@@ -4289,13 +4296,14 @@ def general_remarketing():
                 'total_users': total_users,
                 'bots_affected': bots_affected,
                 'scheduled': True,
-                'scheduled_at': scheduled_at
+                'scheduled_at': scheduled_at,
+                'group_id': campaign_group_id  # ✅ Retornar group_id para tracking
             }), 202
         
         # ✅ ENVIO IMEDIATO: Enfileirar na fila RQ para processamento async
         from tasks_async import task_queue, task_process_broadcast_campaign
         
-        # Preparar dados da campanha
+        # Preparar dados da campanha (incluir group_id)
         campaign_data = {
             'name': f"Remarketing Geral - {get_brazil_time().strftime('%d/%m/%Y %H:%M')}",
             'message': message,
@@ -4307,7 +4315,8 @@ def general_remarketing():
             'days_since_last_contact': days_since_last_contact,
             'audience_segment': audience_segment,
             'user_id': current_user.id,
-            'exclude_buyers': data.get('exclude_buyers', False)
+            'exclude_buyers': data.get('exclude_buyers', False),
+            'group_id': campaign_group_id  # ✅ Passar group_id para o worker
         }
         
         # Enfileirar job na fila de tasks (urgente)
@@ -4315,6 +4324,7 @@ def general_remarketing():
             task_process_broadcast_campaign,
             campaign_data=campaign_data,
             bot_ids=[bot.id for bot in bots],
+            group_id=campaign_group_id,  # ✅ Passar group_id explicitamente
             job_timeout='2h',  # Timeout de 2 horas para campanhas grandes
             job_id=f"remarketing_{current_user.id}_{int(get_brazil_time().timestamp())}"  # ID único
         )
@@ -4331,13 +4341,14 @@ def general_remarketing():
             )
             total_users += eligible_count
         
-        logger.info(f"🚀 [REMARKETING API] Campanha enfileirada | Job ID: {job.get_id()} | Bots: {len(bots)} | Users estimados: {total_users}")
+        logger.info(f"🚀 [REMARKETING API] Campanha enfileirada | Job ID: {job.get_id()} | Group ID: {campaign_group_id} | Bots: {len(bots)} | Users estimados: {total_users}")
         
         # ✅ Retornar imediatamente com 202 Accepted
         return jsonify({
             'status': 'success',
             'message': 'Campanha enviada para a fila de processamento. Você pode acompanhar o progresso nos logs.',
             'job_id': job.get_id(),
+            'group_id': campaign_group_id,  # ✅ Retornar group_id para tracking
             'total_users': total_users,
             'bots_affected': len(bots),
             'scheduled': False

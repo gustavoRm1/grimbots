@@ -1674,7 +1674,7 @@ def generate_pix_async(
         logger.error(f"❌ Erro em generate_pix_async: {e}", exc_info=True)
 
 
-def task_process_broadcast_campaign(campaign_data: Dict[str, Any], bot_ids: list):
+def task_process_broadcast_campaign(campaign_data: Dict[str, Any], bot_ids: list, group_id: str = None):
     """
     ✅ Worker RQ para processar campanhas de remarketing em background.
     
@@ -1684,6 +1684,7 @@ def task_process_broadcast_campaign(campaign_data: Dict[str, Any], bot_ids: list
     Args:
         campaign_data: Dicionário com dados da campanha (message, media_url, etc.)
         bot_ids: Lista de IDs dos bots alvo
+        group_id: UUID opcional para agrupar campanhas multi-bot
     """
     from app import app, db
     from models import Bot, BotUser, Payment, RemarketingBlacklist, RemarketingCampaign, get_brazil_time
@@ -1746,9 +1747,10 @@ def task_process_broadcast_campaign(campaign_data: Dict[str, Any], bot_ids: list
                         logger.warning(f"⚠️ [REMARKETING] Bot {bot_id} não encontrado ou não pertence ao usuário {user_id}")
                         continue
                     
-                    # Criar campanha no banco para este bot
+                    # Criar campanha no banco para este bot (com group_id se for multi-bot)
                     campaign = RemarketingCampaign(
                         bot_id=bot_id,
+                        group_id=group_id,  # ✅ Vincular ao grupo (None se for campanha individual)
                         name=campaign_data.get('name', f'Campanha Remarketing'),
                         message=message_template,
                         media_url=media_url,

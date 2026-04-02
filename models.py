@@ -1296,6 +1296,9 @@ class RemarketingCampaign(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     bot_id = db.Column(db.Integer, db.ForeignKey('bots.id'), nullable=False, index=True)
     
+    # ✅ Agrupamento de campanhas multi-bot (Remarketing Geral)
+    group_id = db.Column(db.String(50), index=True, nullable=True)
+    
     # Configuração
     name = db.Column(db.String(200), nullable=False)
     message = db.Column(db.Text, nullable=False)
