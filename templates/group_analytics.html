@@ -405,6 +405,29 @@ async function fetchGroupStats() {
                 stopPolling();
                 return;
             }
+            
+            // ✅ BACKOFF INTELIGENTE: Rate Limit (429)
+            if (response.status === 429) {
+                console.warn('⏳ Rate limit atingido (429). Aplicando backoff de 30s...');
+                
+                // Limpar timer atual
+                stopPolling();
+                
+                // Alterar badge visual
+                const pollingBadge = document.getElementById('polling-badge');
+                if (pollingBadge) {
+                    pollingBadge.innerHTML = '<span class="text-yellow-400">⏳ Conexão lenta. Aguardando...</span>';
+                }
+                
+                // Backoff de 30 segundos antes de retomar
+                setTimeout(() => {
+                    console.log('🔄 Retomando polling após backoff...');
+                    startPolling();
+                }, 30000);
+                
+                return; // Interromper sem lançar erro
+            }
+            
             throw new Error(`HTTP ${response.status}`);
         }
         

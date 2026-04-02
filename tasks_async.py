@@ -1674,17 +1674,20 @@ def generate_pix_async(
         logger.error(f"❌ Erro em generate_pix_async: {e}", exc_info=True)
 
 
-def task_process_broadcast_campaign(campaign_data: Dict[str, Any], bot_ids: list, group_id: str = None):
+def task_process_broadcast_campaign(campaign_id: int):
     """
-    ✅ Worker RQ para processar campanhas de remarketing em background.
+    ✅ Worker RQ para processar campanha de remarketing (Marathon Engine).
     
-    Processa o envio de mensagens para leads elegíveis de forma assíncrona,
-    respeitando rate limits do Telegram (30 msgs/segundo).
+    🏗️ REFATORADO: Arquitetura Master Pre-Allocation + Marathon Engine
+    - A campanha JÁ EXISTE no banco (criada pela API) - recebemos apenas o ID
+    - Marathon Engine: Resiliência para 50k+ leads com:
+      * FloodWait handling (obedece retry_after do Telegram)
+      * Network Timeout recovery (10s backoff)
+      * Macro-Batching (resfriamento a cada 800 envios)
+      * Job timeout estendido para 12h
     
     Args:
-        campaign_data: Dicionário com dados da campanha (message, media_url, etc.)
-        bot_ids: Lista de IDs dos bots alvo
-        group_id: UUID opcional para agrupar campanhas multi-bot
+        campaign_id: ID da campanha RemarketingCampaign já existente no banco
     """
     from app import app, db
     from models import Bot, BotUser, Payment, RemarketingBlacklist, RemarketingCampaign, get_brazil_time
@@ -1693,19 +1696,27 @@ def task_process_broadcast_campaign(campaign_data: Dict[str, Any], bot_ids: list
     from redis_manager import get_redis_connection
     import json
     import time
+    import requests
     
     with app.app_context():
         try:
-            # ✅ EXTRAIR DADOS DA CAMPANHA
-            message_template = campaign_data.get('message', '')
-            media_url = campaign_data.get('media_url')
-            media_type = campaign_data.get('media_type', 'video')
-            audio_enabled = campaign_data.get('audio_enabled', False)
-            audio_url = campaign_data.get('audio_url', '')
-            buttons = campaign_data.get('buttons', [])
-            days_since_last_contact = campaign_data.get('days_since_last_contact', 7)
-            audience_segment = campaign_data.get('audience_segment', 'all_users')
-            user_id = campaign_data.get('user_id')
+            # ✅ BUSCAR CAMPANHA EXISTENTE NO BANCO
+            campaign = db.session.query(RemarketingCampaign).get(campaign_id)
+            if not campaign:
+                logger.error(f"🚨 [MARATHON] Campanha {campaign_id} não encontrada no banco!")
+                return
+            
+            # Extrair todos os dados da campanha
+            bot_id = campaign.bot_id
+            group_id = campaign.group_id
+            message_template = campaign.message or ''
+            media_url = campaign.media_url
+            media_type = campaign.media_type or 'video'
+            audio_enabled = campaign.audio_enabled or False
+            audio_url = campaign.audio_url or ''
+            buttons = json.loads(campaign.buttons) if campaign.buttons else []
+            days_since_last_contact = campaign.days_since_last_contact or 7
+            audience_segment = campaign.target_audience or 'all_users'
             
             # Mapeamento de segmento
             target_audience_mapping = {
@@ -1725,323 +1736,329 @@ def task_process_broadcast_campaign(campaign_data: Dict[str, Any], bot_ids: list
             bot_manager = BotManager(None, None)
             contact_limit = get_brazil_time() - timedelta(days=days_since_last_contact)
             
-            # Taxa limit: Telegram permite 30 mensagens/segundo
+            # ==========================================
+            # 🎯 FASE DE CONTAGEM DE LEADS (Worker Setup)
+            # ==========================================
+            logger.info(f"🔍 [MARATHON SETUP] Contando leads elegíveis para campanha {campaign_id} | Bot: {bot_id}")
+            
+            # Buscar leads elegíveis usando o mesmo método da API
+            eligible_leads = bot_manager.get_eligible_leads(
+                bot_id=bot_id,
+                target_audience=target_audience,
+                days_since_last_contact=days_since_last_contact,
+                exclude_buyers=False,  # Já filtrado pelo target_audience
+                audience_segment=audience_segment
+            )
+            
+            # Obter tamanho exato
+            total_targets = len(eligible_leads)
+            
+            logger.info(f"📊 [MARATHON SETUP] Campanha {campaign_id} | Leads elegíveis encontrados: {total_targets}")
+            
+            # Se 0 leads, finalizar imediatamente
+            if total_targets == 0:
+                logger.info(f"ℹ️ [MARATHON SETUP] Campanha {campaign_id}: 0 leads elegíveis, finalizando")
+                campaign.status = 'completed'
+                campaign.completed_at = get_brazil_time()
+                campaign.total_targets = 0
+                campaign.total_sent = 0
+                campaign.total_failed = 0
+                db.session.commit()
+                return
+            
+            # Atualizar campanha com o total real de targets
+            campaign.total_targets = total_targets
+            db.session.commit()
+            
+            logger.info(f"✅ [MARATHON SETUP] Campanha {campaign_id} | total_targets atualizado: {total_targets}")
+            
+            # Taxa limit base: Telegram permite 30 mensagens/segundo
             RATE_LIMIT_MSGS_PER_SEC = 30
             rate_limit_delay = 1.0 / RATE_LIMIT_MSGS_PER_SEC
             
-            logger.info(f"🚀 [REMARKETING WORKER] Iniciando campanha | bots={len(bot_ids)} | segment={audience_segment}")
+            # 🏃 MARATHON ENGINE: Contadores para Macro-Batching
+            consecutive_sent = 0
+            MACRO_BATCH_SIZE = 800
+            MACRO_BATCH_COOLDOWN = 45  # segundos
             
-            total_stats = {
-                'total_targets': 0,
-                'total_sent': 0,
-                'total_failed': 0,
-                'total_blocked': 0,
-                'total_skipped': 0
-            }
+            logger.info(f"🚀 [MARATHON ENGINE] Iniciando campanha | campaign_id={campaign_id} | bot_id={bot_id} | leads={total_targets}")
             
-            # ✅ PROCESSAR CADA BOT
-            for bot_id in bot_ids:
-                try:
-                    bot = Bot.query.get(bot_id)
-                    if not bot or bot.user_id != user_id:
-                        logger.warning(f"⚠️ [REMARKETING] Bot {bot_id} não encontrado ou não pertence ao usuário {user_id}")
-                        continue
-                    
-                    # Criar campanha no banco para este bot (com group_id se for multi-bot)
-                    campaign = RemarketingCampaign(
-                        bot_id=bot_id,
-                        group_id=group_id,  # ✅ Vincular ao grupo (None se for campanha individual)
-                        name=campaign_data.get('name', f'Campanha Remarketing'),
-                        message=message_template,
-                        media_url=media_url,
-                        media_type=media_type,
-                        audio_enabled=audio_enabled,
-                        audio_url=audio_url,
-                        buttons=json.dumps(buttons) if buttons else None,
-                        target_audience=target_audience,
-                        days_since_last_contact=days_since_last_contact,
-                        status='sending',
-                        started_at=get_brazil_time()
-                    )
-                    db.session.add(campaign)
-                    db.session.commit()
-                    
-                    # Chaves Redis
-                    sent_set_key = f"remarketing:sent:{campaign.id}"
-                    stats_key = f"remarketing:stats:{campaign.id}"
-                    blacklist_key = f"remarketing:blacklist:{bot_id}"
-                    
-                    logger.info(f"📊 [REMARKETING WORKER] Processando bot {bot.name} (ID: {bot_id}) | Campaign: {campaign.id}")
-                    
-                    # ✅ QUERY DE LEADS ELEGÍVEIS
-                    q = db.session.query(BotUser).filter(
-                        BotUser.bot_id == bot_id,
-                        BotUser.archived == False
-                    )
-                    
-                    if days_since_last_contact > 0:
-                        q = q.filter(BotUser.last_interaction <= contact_limit)
-                    
-                    # Filtrar blacklist
-                    blacklist_ids = db.session.query(RemarketingBlacklist.telegram_user_id).filter_by(
-                        bot_id=bot_id
-                    ).all()
-                    blacklist_ids = [b[0] for b in blacklist_ids if b[0]]
-                    if blacklist_ids:
-                        q = q.filter(~BotUser.telegram_user_id.in_(blacklist_ids))
-                    
-                    # Filtros de segmento
-                    if target_audience == 'buyers':
-                        buyer_ids = db.session.query(Payment.customer_user_id).filter(
-                            Payment.bot_id == bot_id,
-                            Payment.status == 'paid'
-                        ).distinct().all()
-                        buyer_ids = [b[0] for b in buyer_ids if b[0]]
-                        if buyer_ids:
-                            q = q.filter(BotUser.telegram_user_id.in_(buyer_ids))
-                        else:
-                            logger.info(f"ℹ️ [REMARKETING] Bot {bot_id}: 0 compradores encontrados")
+            # ==========================================
+            # 🚀 INICIAR PROCESSAMENTO (Campanha já existe)
+            # ==========================================
+            
+            # Buscar bot e validar
+            bot = Bot.query.get(bot_id)
+            if not bot:
+                logger.error(f"⚠️ [MARATHON] Bot {bot_id} não encontrado")
+                campaign.status = 'failed'
+                campaign.completed_at = get_brazil_time()
+                db.session.commit()
+                return
+            
+            # Atualizar status para 'sending'
+            campaign.status = 'sending'
+            campaign.started_at = get_brazil_time()
+            db.session.commit()
+            
+            logger.info(f"📊 [MARATHON] Processando bot {bot.name} (ID: {bot_id}) | Campaign: {campaign_id}")
+            
+            # ==========================================
+            # 🚀 MARATHON PROCESSING LOOP
+            # ==========================================
+            logger.info(f"🏃 [MARATHON] Iniciando envio para {total_targets} leads | Bot: {bot.name}")
+            
+            # Chaves Redis
+            sent_set_key = f"remarketing:sent:{campaign_id}"
+            blacklist_key = f"remarketing:blacklist:{bot_id}"
+            
+            # Variáveis de controle
+            bot_token_str = str(bot.token)
+            campaign_id_int = int(campaign_id)
+            batch_size = 200
+            offset = 0
+            sent_count = 0
+            failed_count = 0
+            skipped_count = 0
+            bot_is_dead = False
+            
+            # Query de leads elegíveis
+            q = db.session.query(BotUser).filter(
+                BotUser.bot_id == bot_id,
+                BotUser.archived == False
+            )
+            
+            if days_since_last_contact > 0:
+                q = q.filter(BotUser.last_interaction <= contact_limit)
+            
+            # Filtrar blacklist
+            blacklist_ids = db.session.query(RemarketingBlacklist.telegram_user_id).filter_by(
+                bot_id=bot_id
+            ).all()
+            blacklist_ids = [b[0] for b in blacklist_ids if b[0]]
+            if blacklist_ids:
+                q = q.filter(~BotUser.telegram_user_id.in_(blacklist_ids))
+            
+            # Filtros de segmento
+            if target_audience == 'buyers':
+                buyer_ids = db.session.query(Payment.customer_user_id).filter(
+                    Payment.bot_id == bot_id,
+                    Payment.status == 'paid'
+                ).distinct().all()
+                buyer_ids = [b[0] for b in buyer_ids if b[0]]
+                if buyer_ids:
+                    q = q.filter(BotUser.telegram_user_id.in_(buyer_ids))
+            elif target_audience == 'non_buyers':
+                buyer_ids = db.session.query(Payment.customer_user_id).filter(
+                    Payment.bot_id == bot_id,
+                    Payment.status == 'paid'
+                ).distinct().all()
+                buyer_ids = [b[0] for b in buyer_ids if b[0]]
+                if buyer_ids:
+                    q = q.filter(~BotUser.telegram_user_id.in_(buyer_ids))
+            
+            # Loop principal de envio
+            while offset < total_targets and not bot_is_dead:
+                batch = q.offset(offset).limit(batch_size).all()
+                if not batch:
+                    break
+                
+                for lead in batch:
+                    try:
+                        # Validar chat_id
+                        if not lead.telegram_user_id:
+                            skipped_count += 1
                             continue
-                    elif target_audience == 'non_buyers':
-                        buyer_ids = db.session.query(Payment.customer_user_id).filter(
-                            Payment.bot_id == bot_id,
-                            Payment.status == 'paid'
-                        ).distinct().all()
-                        buyer_ids = [b[0] for b in buyer_ids if b[0]]
-                        if buyer_ids:
-                            q = q.filter(~BotUser.telegram_user_id.in_(buyer_ids))
-                    
-                    total_leads = q.count()
-                    if total_leads == 0:
-                        logger.info(f"ℹ️ [REMARKETING] Bot {bot_id}: 0 leads elegíveis")
-                        campaign.status = 'completed'
-                        campaign.completed_at = get_brazil_time()
-                        db.session.commit()
-                        continue
-                    
-                    campaign.total_targets = total_leads
-                    db.session.commit()
-                    
-                    logger.info(f"🎯 [REMARKETING WORKER] Bot {bot_id}: {total_leads} leads para enviar")
-                    
-                    # ✅ EXTRAÇÃO DE VARIÁVEIS PRIMITIVAS (antes do loop para evitar DetachedInstanceError)
-                    bot_token_str = str(bot.token)
-                    campaign_id_int = int(campaign.id)
-                    
-                    # ✅ LOOP DE ENVIO COM RATE LIMIT
-                    batch_size = 200
-                    offset = 0
-                    sent_count = 0
-                    failed_count = 0
-                    skipped_count = 0
-                    bot_is_dead = False  # 🚨 CIRCUIT BREAKER: Flag de controle para bot com token inválido
-                    
-                    while offset < total_leads:
-                        batch = q.offset(offset).limit(batch_size).all()
-                        if not batch:
+                        
+                        try:
+                            chat_int = int(str(lead.telegram_user_id))
+                            if chat_int == 0:
+                                skipped_count += 1
+                                continue
+                        except:
+                            skipped_count += 1
+                            continue
+                        
+                        # Verificar se já enviou (Redis)
+                        if redis_conn.sismember(sent_set_key, str(lead.telegram_user_id)):
+                            skipped_count += 1
+                            continue
+                        
+                        # Verificar blacklist (Redis)
+                        if redis_conn.sismember(blacklist_key, str(lead.telegram_user_id)):
+                            skipped_count += 1
+                            continue
+                        
+                        # Verificar opt-out
+                        if getattr(lead, 'opt_out', False) or getattr(lead, 'unsubscribed', False):
+                            skipped_count += 1
+                            continue
+                        
+                        # ✅ MONTAR MENSAGEM PERSONALIZADA
+                        personalized_message = message_template.replace('{nome}', lead.first_name or 'Cliente')
+                        personalized_message = personalized_message.replace('{primeiro_nome}', (lead.first_name or 'Cliente').split()[0])
+                        
+                        # ✅ MONTAR BOTÕES
+                        remarketing_buttons = []
+                        if buttons:
+                            for btn_idx, btn in enumerate(buttons):
+                                if btn.get('price') and btn.get('description'):
+                                    remarketing_buttons.append({
+                                        'text': btn.get('text', 'Comprar'),
+                                        'callback_data': f"rmkt_{campaign_id_int}_{btn_idx}"
+                                    })
+                                elif btn.get('url'):
+                                    remarketing_buttons.append({
+                                        'text': btn.get('text', 'Link'),
+                                        'url': btn.get('url')
+                                    })
+                        
+                        # ✅ MARATHON LOOP DE RETRY (com FloodWait e Network handling)
+                        lead_sent = False
+                        flood_wait_happened = False
+                        
+                        for attempt in range(3):
+                            try:
+                                result = bot_manager.send_telegram_message(
+                                    token=bot_token_str,
+                                    chat_id=str(lead.telegram_user_id),
+                                    message=personalized_message,
+                                    media_url=media_url,
+                                    media_type=media_type if media_url else None,
+                                    buttons=remarketing_buttons if remarketing_buttons else None
+                                )
+                                
+                                # 🚨 VALIDAÇÃO STRICT
+                                if isinstance(result, dict) and result.get('error'):
+                                    error_code = result.get('error_code')
+                                    
+                                    # 🌊 FLOODWAIT HANDLING: Erro 429 com retry_after explícito
+                                    if error_code == 429:
+                                        retry_after = result.get('retry_after')
+                                        if retry_after:
+                                            logger.warning(f"⏸️ [FLOODWAIT] Telegram pediu espera de {retry_after}s (tentativa {attempt + 1}/3)")
+                                            time.sleep(retry_after)
+                                            flood_wait_happened = True
+                                            # NÃO contar como tentativa usada - tentar mesmo lead novamente
+                                            continue
+                                        else:
+                                            # Fallback: retry_after não fornecido, aguardar 30s
+                                            logger.warning(f"⏸️ [FLOODWAIT] 429 sem retry_after, aguardando 30s")
+                                            time.sleep(30)
+                                            continue
+                                    
+                                    # Outros erros: lançar exceção para tratamento downstream
+                                    raise Exception(f"status={error_code}, desc={result.get('description', '')}")
+                                
+                                elif not result:
+                                    raise Exception("Falha silenciosa: Função retornou False ou None")
+                                
+                                # ✅ SUCESSO REAL
+                                sent_count += 1
+                                consecutive_sent += 1
+                                redis_conn.sadd(sent_set_key, str(lead.telegram_user_id))
+                                lead_sent = True
+                                flood_wait_happened = False
+                                
+                                # 🎯 MACRO-BATCHING: Resfriamento a cada 800 envios consecutivos
+                                if consecutive_sent >= MACRO_BATCH_SIZE:
+                                    logger.info(f"⏸️ [MACRO-BATCH] Resfriando API por {MACRO_BATCH_COOLDOWN}s após {consecutive_sent} envios")
+                                    time.sleep(MACRO_BATCH_COOLDOWN)
+                                    consecutive_sent = 0
+                                
+                                if sent_count % 100 == 0:
+                                    logger.info(f"📤 [MARATHON] Bot {bot_id} | Progresso: {sent_count}/{total_targets} | Campaign: {campaign_id_int}")
+                                
+                                break  # Sucesso, sair do loop de retry
+                                
+                            except requests.exceptions.Timeout as timeout_err:
+                                # 🌐 NETWORK TIMEOUT HANDLING: Aguardar 10s e tentar novamente
+                                logger.warning(f"⏱️ [NETWORK TIMEOUT] Timeout na tentativa {attempt + 1}/3. Aguardando 10s...")
+                                time.sleep(10)
+                                if attempt == 2:
+                                    logger.error(f"❌ [NETWORK TIMEOUT] Esgotadas 3 tentativas para {lead.telegram_user_id}")
+                                continue
+                                
+                            except Exception as send_error:
+                                error_str = str(send_error).lower()
+                                
+                                # ✅ SMART BLACKLIST
+                                blocked_keywords = [
+                                    'bot was blocked by the user', 'forbidden', 'user is deactivated',
+                                    'chat not found', 'user not found', 'bot was kicked', 'bot was stopped',
+                                    'chat not accessible', 'user blocked'
+                                ]
+                                
+                                is_blocked = any(keyword in error_str for keyword in blocked_keywords)
+                                
+                                if is_blocked:
+                                    redis_conn.sadd(blacklist_key, str(lead.telegram_user_id))
+                                    lead.unsubscribed = True
+                                    lead.inactive = True
+                                    logger.info(f"🚫 [MARATHON] Lead {lead.telegram_user_id} bloqueado/desativado")
+                                    break
+                                
+                                # 🚨 CIRCUIT BREAKER: Erros 401/404
+                                elif any(keyword in error_str for keyword in ['unauthorized', '401', 'not found', '404']):
+                                    logger.error(f"🚨 [CIRCUIT BREAKER] Bot {bot_id} morto ou revogado (Erro 401/404)")
+                                    bot_is_dead = True
+                                    db.session.query(Bot).filter(Bot.id == bot_id).update({
+                                        'is_active': False,
+                                        'last_error': f"Desativado automaticamente: {send_error}"
+                                    })
+                                    db.session.commit()
+                                    break
+                                
+                                else:
+                                    logger.warning(f"⚠️ [MARATHON] Erro na tentativa {attempt + 1}/3 para {lead.telegram_user_id}: {send_error}")
+                                    if attempt == 2:
+                                        logger.error(f"❌ [MARATHON] Esgotadas 3 tentativas para {lead.telegram_user_id}")
+                        
+                        # Delay entre leads (se não houve FloodWait)
+                        if not lead_sent and not bot_is_dead:
+                            failed_count += 1
+                        
+                        if bot_is_dead:
                             break
                         
-                        for lead in batch:
-                            try:
-                                # Validar chat_id
-                                if not lead.telegram_user_id:
-                                    skipped_count += 1
-                                    continue
-                                
-                                try:
-                                    chat_int = int(str(lead.telegram_user_id))
-                                    if chat_int == 0:
-                                        skipped_count += 1
-                                        continue
-                                except:
-                                    skipped_count += 1
-                                    continue
-                                
-                                # Verificar se já enviou (Redis)
-                                if redis_conn.sismember(sent_set_key, str(lead.telegram_user_id)):
-                                    skipped_count += 1
-                                    continue
-                                
-                                # Verificar blacklist (Redis)
-                                if redis_conn.sismember(blacklist_key, str(lead.telegram_user_id)):
-                                    skipped_count += 1
-                                    continue
-                                
-                                # Verificar opt-out
-                                if getattr(lead, 'opt_out', False) or getattr(lead, 'unsubscribed', False):
-                                    skipped_count += 1
-                                    continue
-                                
-                                # ✅ MONTAR MENSAGEM PERSONALIZADA
-                                personalized_message = message_template.replace('{nome}', lead.first_name or 'Cliente')
-                                personalized_message = personalized_message.replace('{primeiro_nome}', (lead.first_name or 'Cliente').split()[0])
-                                
-                                # ✅ MONTAR BOTÕES
-                                remarketing_buttons = []
-                                if buttons:
-                                    for btn_idx, btn in enumerate(buttons):
-                                        if btn.get('price') and btn.get('description'):
-                                            remarketing_buttons.append({
-                                                'text': btn.get('text', 'Comprar'),
-                                                'callback_data': f"rmkt_{campaign_id_int}_{btn_idx}"
-                                            })
-                                        elif btn.get('url'):
-                                            remarketing_buttons.append({
-                                                'text': btn.get('text', 'Link'),
-                                                'url': btn.get('url')
-                                            })
-                                
-                                # ✅ LOOP DE RETRY (máximo 3 tentativas por lead)
-                                lead_sent = False
-                                for attempt in range(3):
-                                    try:
-                                        result = bot_manager.send_telegram_message(
-                                            token=bot_token_str,
-                                            chat_id=str(lead.telegram_user_id),
-                                            message=personalized_message,
-                                            media_url=media_url,
-                                            media_type=media_type if media_url else None,
-                                            buttons=remarketing_buttons if remarketing_buttons else None
-                                        )
-                                        
-                                        # 🚨 VALIDAÇÃO STRICT: Rejeitar dicionários de erro e falsos positivos
-                                        if isinstance(result, dict) and result.get('error'):
-                                            # Força a exceção para acionar o Circuit Breaker no bloco except abaixo
-                                            raise Exception(f"status={result.get('error_code', 'unknown')}, desc={result.get('description', '')}")
-                                        elif not result:
-                                            raise Exception("Falha silenciosa: Função retornou False ou None")
-                                        
-                                        # ✅ SUCESSO REAL
-                                        sent_count += 1
-                                        redis_conn.sadd(sent_set_key, str(lead.telegram_user_id))
-                                        lead_sent = True
-                                        
-                                        # Log progresso a cada 100 envios
-                                        if sent_count % 100 == 0:
-                                            logger.info(f"📤 [REMARKETING WORKER] Bot {bot_id} | Progresso: {sent_count}/{total_leads} | Campaign: {campaign_id_int}")
-                                        break  # ✅ Sucesso, sair do loop de retry
-                                            
-                                    except Exception as send_error:
-                                        error_str = str(send_error).lower()
-                                        
-                                        # ✅ SMART BLACKLIST: Erros 403 (bot bloqueado, usuário desativado)
-                                        blocked_keywords = [
-                                            'bot was blocked by the user', 'forbidden', 'user is deactivated',
-                                            'chat not found', 'user not found', 'bot was kicked', 'bot was stopped',
-                                            'chat not accessible', 'user blocked'
-                                        ]
-                                        
-                                        is_blocked = any(keyword in error_str for keyword in blocked_keywords)
-                                        
-                                        if is_blocked:
-                                            # Adicionar à blacklist do Redis
-                                            redis_conn.sadd(blacklist_key, str(lead.telegram_user_id))
-                                            # Modificar estado do objeto em memória (será persistido no commit do batch)
-                                            lead.unsubscribed = True
-                                            lead.inactive = True
-                                            logger.info(f"🚫 [REMARKETING] Lead {lead.telegram_user_id} bloqueado/desativado. Adicionado à blacklist.")
-                                            break  # Não retry usuários bloqueados
-                                        
-                                        # ✅ EXPONENTIAL BACKOFF: Erros 429 (Too Many Requests)
-                                        elif 'too many requests' in error_str or 'retry after' in error_str:
-                                            import re
-                                            retry_seconds = 5
-                                            try:
-                                                match = re.search(r'retry\s+after\s*(?::)?\s*(\d+)', error_str)
-                                                if match:
-                                                    retry_seconds = int(match.group(1))
-                                                    retry_seconds = max(retry_seconds, 5)
-                                            except:
-                                                retry_seconds = 5
-                                            
-                                            logger.warning(f"⏸️ [REMARKETING] Rate limit (429) na tentativa {attempt + 1}/3. Aguardando {retry_seconds}s...")
-                                            time.sleep(retry_seconds)
-                                            
-                                            # Se for última tentativa, logar falha
-                                            if attempt == 2:
-                                                logger.error(f"❌ [REMARKETING] Esgotadas 3 tentativas para {lead.telegram_user_id} (429)")
-                                            continue  # Tentar novamente
-                                        
-                                        # 🚨 CIRCUIT BREAKER: Erros 401/404 (Token revogado/Bot morto)
-                                        elif any(keyword in error_str for keyword in ['unauthorized', '401', 'not found', '404']):
-                                            logger.error(f"🚨 [CIRCUIT BREAKER] Bot {bot_id} morto ou revogado (Erro 401/404). Desarmando disjuntor.")
-                                            bot_is_dead = True
-                                            # ✅ UPDATE DIRETO IGNORANDO ESTADO ORM (evita DetachedInstanceError)
-                                            db.session.query(Bot).filter(Bot.id == bot_id).update({
-                                                'is_active': False,
-                                                'last_error': f"Desativado automaticamente pelo sistema: {send_error}"
-                                            })
-                                            db.session.commit()
-                                            break  # Sai do loop de retries imediatamente
-                                        
-                                        else:
-                                            # Outro erro, logar e continuar para próxima tentativa
-                                            logger.warning(f"⚠️ [REMARKETING] Erro na tentativa {attempt + 1}/3 para {lead.telegram_user_id}: {send_error}")
-                                            if attempt == 2:
-                                                logger.error(f"❌ [REMARKETING] Esgotadas 3 tentativas para {lead.telegram_user_id}")
-                                    
-                                    # ✅ Rate limit entre tentativas (exceto após última)
-                                    if not lead_sent and attempt < 2:
-                                        time.sleep(rate_limit_delay)
-                                
-                                # Se esgotou todas as tentativas sem sucesso
-                                if not lead_sent:
-                                    failed_count += 1
-                                
-                                # 🚨 CIRCUIT BREAKER: Abortar processamento deste bot se detectado como morto
-                                if bot_is_dead:
-                                    break  # Sai do loop do batch (for lead in batch)
-                                
-                                # ✅ Rate limit padrão entre leads
-                                time.sleep(rate_limit_delay)
-                                
-                            except Exception as lead_error:
-                                failed_count += 1
-                                logger.error(f"❌ [REMARKETING] Erro processando lead {lead.id}: {lead_error}")
-                                continue
+                        # Rate limit apenas se não houve FloodWait já
+                        if not flood_wait_happened:
+                            time.sleep(rate_limit_delay)
                         
-                        # 🚨 CIRCUIT BREAKER: Abortar paginação se bot detectado como morto
-                        if bot_is_dead:
-                            logger.warning(f"🚨 [CIRCUIT BREAKER] Abortando campanha do bot {bot_id} após detectar token inválido.")
-                            break  # Sai do loop de paginação (while offset < total_leads)
-                        
-                        offset += batch_size
-                        
-                        # ✅ UPDATE DIRETO IGNORANDO ESTADO ORM (evita DetachedInstanceError)
-                        db.session.query(RemarketingCampaign).filter(RemarketingCampaign.id == campaign_id_int).update({
-                            'total_sent': sent_count,
-                            'total_failed': failed_count
-                        })
-                        db.session.commit()
-                        
-                        # ✅ CORREÇÃO MEMORY BLOAT: Limpar cache da sessão SQLAlchemy
-                        db.session.expunge_all()
-                        logger.debug(f"🧹 [REMARKETING WORKER] Batch concluído | Memory cache limpo | Offset: {offset}")
-                    
-                    # ✅ FINALIZAR CAMPANHA DO BOT - UPDATE DIRETO IGNORANDO ESTADO ORM
-                    db.session.query(RemarketingCampaign).filter(RemarketingCampaign.id == campaign_id_int).update({
-                        'status': 'completed',
-                        'completed_at': get_brazil_time(),
-                        'total_sent': sent_count,
-                        'total_failed': failed_count
-                    })
-                    db.session.commit()
-                    
-                    # Atualizar estatísticas globais
-                    total_stats['total_targets'] += total_leads
-                    total_stats['total_sent'] += sent_count
-                    total_stats['total_failed'] += failed_count
-                    total_stats['total_skipped'] += skipped_count
-                    
-                    logger.info(f"✅ [REMARKETING WORKER] Bot {bot_id} concluído | Enviados: {sent_count} | Falhas: {failed_count} | Pulados: {skipped_count}")
-                    
-                except Exception as bot_error:
-                    logger.error(f"❌ [REMARKETING WORKER] Erro processando bot {bot_id}: {bot_error}", exc_info=True)
-                    continue
+                    except Exception as lead_error:
+                        failed_count += 1
+                        logger.error(f"❌ [MARATHON] Erro processando lead {lead.id}: {lead_error}")
+                        continue
+                
+                # Checkpoint a cada batch - atualizar campanha diretamente
+                offset += batch_size
+                
+                campaign.total_sent = sent_count
+                campaign.total_failed = failed_count
+                db.session.commit()
+                
+                # Limpeza de memória
+                db.session.expunge_all()
             
-            logger.info(f"🎉 [REMARKETING WORKER] Campanha concluída | Total enviados: {total_stats['total_sent']} | Total falhas: {total_stats['total_failed']}")
+            # ✅ FINALIZAR CAMPANHA
+            campaign.status = 'completed' if not bot_is_dead else 'failed'
+            campaign.completed_at = get_brazil_time()
+            campaign.total_sent = sent_count
+            campaign.total_failed = failed_count
+            db.session.commit()
+            
+            logger.info(f"🏁 [MARATHON ENGINE] Campaign {campaign_id} finalizada | Bot {bot_id} | Enviados: {sent_count} | Falhas: {failed_count} | Bot morto: {bot_is_dead}")
             
         except Exception as e:
-            logger.error(f"❌ [REMARKETING WORKER] Erro fatal na campanha: {e}", exc_info=True)
+            logger.error(f"❌ [MARATHON ENGINE] Erro fatal na campanha {campaign_id}: {e}", exc_info=True)
+            # Tentar marcar como failed
+            try:
+                if 'campaign' in locals() and campaign:
+                    campaign.status = 'failed'
+                    campaign.completed_at = get_brazil_time()
+                    db.session.commit()
+            except:
+                pass
             raise
+
 

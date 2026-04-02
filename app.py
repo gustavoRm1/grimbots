@@ -4300,57 +4300,95 @@ def general_remarketing():
                 'group_id': campaign_group_id  # ✅ Retornar group_id para tracking
             }), 202
         
-        # ✅ ENVIO IMEDIATO: Enfileirar na fila RQ para processamento async
+        # ✅ ENVIO IMEDIATO: Master Pre-Allocation + Fan-Out
         from tasks_async import task_queue, task_process_broadcast_campaign
+        from models import RemarketingCampaign
+        import json
         
-        # Preparar dados da campanha (incluir group_id)
-        campaign_data = {
-            'name': f"Remarketing Geral - {get_brazil_time().strftime('%d/%m/%Y %H:%M')}",
-            'message': message,
-            'media_url': media_url,
-            'media_type': media_type,
-            'audio_enabled': audio_enabled,
-            'audio_url': audio_url,
-            'buttons': buttons,
-            'days_since_last_contact': days_since_last_contact,
-            'audience_segment': audience_segment,
-            'user_id': current_user.id,
-            'exclude_buyers': data.get('exclude_buyers', False),
-            'group_id': campaign_group_id  # ✅ Passar group_id para o worker
-        }
+        # 🏗️ FASE 1: MASTER PRE-ALLOCATION (na API - ACID)
+        # Criar TODAS as campanhas no banco ANTES de enfileirar jobs
+        # Isso garante que o Master Analytics veja 100% dos bots imediatamente
+        logger.info(f"📦 [MASTER PRE-ALLOCATION] Criando {len(bots)} campanha(s) no banco...")
         
-        # Enfileirar job na fila de tasks (urgente)
-        job = task_queue.enqueue(
-            task_process_broadcast_campaign,
-            campaign_data=campaign_data,
-            bot_ids=[bot.id for bot in bots],
-            group_id=campaign_group_id,  # ✅ Passar group_id explicitamente
-            job_timeout='2h',  # Timeout de 2 horas para campanhas grandes
-            job_id=f"remarketing_{current_user.id}_{int(get_brazil_time().timestamp())}"  # ID único
-        )
-        
-        # Contar usuários elegíveis para retornar na resposta
+        campaigns_created = []
         total_users = 0
-        for bot in bots:
-            eligible_count = bot_manager.count_eligible_leads(
-                bot_id=bot.id,
-                target_audience='non_buyers' if data.get('exclude_buyers') else 'all',
-                days_since_last_contact=days_since_last_contact,
-                exclude_buyers=data.get('exclude_buyers', False),
-                audience_segment=audience_segment
-            )
-            total_users += eligible_count
         
-        logger.info(f"🚀 [REMARKETING API] Campanha enfileirada | Job ID: {job.get_id()} | Group ID: {campaign_group_id} | Bots: {len(bots)} | Users estimados: {total_users}")
+        for bot in bots:
+            try:
+                # ✅ ZERO-TIMEOUT: Não calcular leads na API - o worker fará isso
+                # Criar campanha no banco com status 'queued' e total_targets=0
+                campaign = RemarketingCampaign(
+                    bot_id=bot.id,
+                    group_id=campaign_group_id,
+                    name=f"Remarketing Geral - {get_brazil_time().strftime('%d/%m/%Y %H:%M')}",
+                    message=message,
+                    media_url=media_url,
+                    media_type=media_type,
+                    audio_enabled=audio_enabled,
+                    audio_url=audio_url,
+                    buttons=json.dumps(buttons) if buttons else None,
+                    target_audience=audience_segment,
+                    days_since_last_contact=days_since_last_contact,
+                    status='queued',  # ✅ Já existe no DB, visível para Analytics
+                    total_targets=0,  # ✅ ZERO-TIMEOUT: Worker calculará depois
+                    total_sent=0,
+                    total_failed=0,
+                    started_at=get_brazil_time()
+                )
+                db.session.add(campaign)
+                campaigns_created.append((bot, campaign, 0))  # ✅ count será 0 por enquanto
+                
+                logger.info(f"✅ [PRE-ALLOC] Bot {bot.name} (ID: {bot.id}) | Campaign criada | Leads: calculando no worker...")
+                
+            except Exception as prealloc_error:
+                logger.error(f"❌ [PRE-ALLOC] Erro criando campanha para bot {bot.id}: {prealloc_error}")
+                continue
+        
+        # Commit único de todas as campanhas (ACID)
+        if campaigns_created:
+            try:
+                db.session.commit()
+                logger.info(f"🎉 [MASTER PRE-ALLOCATION] Concluído! {len(campaigns_created)} campanha(s) persistida(s) no banco")
+            except Exception as commit_error:
+                logger.error(f"🚨 [MASTER PRE-ALLOCATION] Erro no commit: {commit_error}")
+                db.session.rollback()
+                return jsonify({'error': 'Falha ao criar campanhas no banco de dados'}), 500
+        else:
+            logger.warning("⚠️ [MASTER PRE-ALLOCATION] Nenhuma campanha criada")
+            return jsonify({'error': 'Nenhum bot elegível para remarketing'}), 400
+        
+        # 🚀 FASE 2: FAN-OUT - Enfileirar jobs passando campaign_id
+        job_ids = []
+        for bot, campaign, eligible_count in campaigns_created:
+            try:
+                job = task_queue.enqueue(
+                    task_process_broadcast_campaign,
+                    campaign_id=campaign.id,  # ✅ Passar ID da campanha já criada
+                    job_timeout='12h',  # ✅ Timeout estendido para campanhas massivas
+                    job_id=f"remarketing_fanout_{bot.id}_{campaign_group_id}_{int(get_brazil_time().timestamp())}"
+                )
+                job_ids.append(job.get_id())
+                logger.info(f"🚀 [FAN-OUT] Job enfileirado | Bot: {bot.name} | Campaign: {campaign.id} | Job ID: {job.get_id()}")
+            except Exception as enqueue_error:
+                logger.error(f"❌ [FAN-OUT] Erro enfileirando job para bot {bot.id}: {enqueue_error}")
+                # Marcar campanha como failed se não conseguir enfileirar
+                try:
+                    campaign.status = 'failed'
+                    db.session.commit()
+                except:
+                    pass
+                continue
+        
+        logger.info(f"🚀 [REMARKETING API] Fan-Out concluído | Group ID: {campaign_group_id} | Jobs: {len(job_ids)}/{len(campaigns_created)} | Leads: calculando nos workers...")
         
         # ✅ Retornar imediatamente com 202 Accepted
         return jsonify({
             'status': 'success',
-            'message': 'Campanha enviada para a fila de processamento. Você pode acompanhar o progresso nos logs.',
-            'job_id': job.get_id(),
-            'group_id': campaign_group_id,  # ✅ Retornar group_id para tracking
-            'total_users': total_users,
-            'bots_affected': len(bots),
+            'message': f'Campanha criada com {len(campaigns_created)} bots e distribuída em {len(job_ids)} jobs. Acompanhe no Master Analytics.',
+            'job_ids': job_ids,
+            'group_id': campaign_group_id,
+            'total_users': 0,  # ✅ ZERO-TIMEOUT: Calculado pelos workers
+            'bots_affected': len(campaigns_created),
             'scheduled': False
         }), 202
         
@@ -6026,6 +6064,7 @@ def api_remarketing_timeline(bot_id):
 # ==================== REMARKETING GLOBAL (MASTER ANALYTICS) ====================
 
 @app.route('/api/remarketing/group/<group_id>/stats', methods=['GET'])
+@limiter.limit("30 per minute; 1500 per hour")  # ✅ Folga para Smart Polling (5s interval)
 @login_required
 def get_group_remarketing_stats(group_id):
     """

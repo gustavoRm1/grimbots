@@ -9817,13 +9817,25 @@ Seu pagamento ainda não foi confirmado.
             else:
                 error_description = result_data.get('description', 'Erro desconhecido') if isinstance(result_data, dict) else 'Resposta inválida'
                 error_code = result_data.get('error_code', response.status_code) if isinstance(result_data, dict) else response.status_code
+                
+                # ✅ EXTRAIR retry_after do Telegram (crítico para FloodWait 429)
+                retry_after = None
+                if isinstance(result_data, dict):
+                    retry_after = result_data.get('parameters', {}).get('retry_after')
+                    if not retry_after and 'retry_after' in result_data:
+                        retry_after = result_data.get('retry_after')
 
                 if response.status_code == 403 and isinstance(error_description, str) and 'user is deactivated' in error_description.lower():
                     self._blacklist_user_deactivated(token, chat_id)
 
                 logger.error(f"❌ Erro ao enviar mensagem para chat {chat_id}: status={response.status_code}, error_code={error_code}, description={error_description}")
                 logger.error(f"❌ Resposta completa: {response.text[:500]}")
-                return {'error': True, 'error_code': error_code, 'description': error_description}
+                return {
+                    'error': True,
+                    'error_code': error_code,
+                    'description': error_description,
+                    'retry_after': retry_after  # ✅ Incluir retry_after para tratamento upstream
+                }
 
         except requests.exceptions.Timeout:
             logger.error(f"⏱️ Timeout ao enviar mensagem para chat {chat_id}")
