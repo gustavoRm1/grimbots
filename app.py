@@ -6150,6 +6150,44 @@ def group_remarketing_analytics(group_id):
         logger.error(f"❌ Erro ao acessar grupo {group_id}: {e}", exc_info=True)
         abort(500)
 
+@app.route('/remarketing/history')
+@login_required
+def remarketing_history():
+    """
+    ✅ View: Histórico de Remarketing Multi-Bot (Agrupado por group_id)
+    Lista todas as campanhas multi-bot do usuário, agrupadas por group_id
+    """
+    try:
+        from sqlalchemy import func, desc
+        from models import RemarketingCampaign, Bot
+        
+        # Query de agrupamento: group_id, data mais recente, quantidade de bots, total enviado
+        history = db.session.query(
+            RemarketingCampaign.group_id,
+            func.max(RemarketingCampaign.created_at).label('last_activity'),
+            func.count(RemarketingCampaign.id).label('bot_count'),
+            func.sum(RemarketingCampaign.total_sent).label('total_sent'),
+            func.sum(RemarketingCampaign.total_targets).label('total_targets')
+        ).join(
+            Bot, RemarketingCampaign.bot_id == Bot.id
+        ).filter(
+            Bot.user_id == current_user.id,
+            RemarketingCampaign.group_id.isnot(None)
+        ).group_by(
+            RemarketingCampaign.group_id
+        ).order_by(
+            desc('last_activity')
+        ).all()
+        
+        logger.info(f"📊 [HISTORY] Usuário {current_user.id} consultou histórico: {len(history)} grupos encontrados")
+        
+        return render_template('remarketing_history.html', history=history)
+        
+    except Exception as e:
+        logger.error(f"❌ Erro ao buscar histórico de remarketing: {e}", exc_info=True)
+        flash('Erro ao carregar histórico de campanhas.', 'error')
+        return render_template('remarketing_history.html', history=[])
+
 
 @app.route('/api/bots/<int:bot_id>/config', methods=['GET'])
 @login_required

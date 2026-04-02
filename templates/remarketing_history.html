@@ -1,0 +1,264 @@
+{% extends "base.html" %}
+{% block title %}Histórico de Remarketing Multi-Bot{% endblock %}
+
+{% block extra_head %}
+<style>
+/* History Page Styles */
+.history-header {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.01) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 24px;
+}
+
+.history-title {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: #FFFFFF;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.history-subtitle {
+    font-size: 0.875rem;
+    color: #9CA3AF;
+    margin-top: 4px;
+}
+
+.history-table-container {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.02) 0%, rgba(255, 255, 255, 0.01) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    overflow: hidden;
+}
+
+.history-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.history-table thead {
+    background: rgba(255, 255, 255, 0.03);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.history-table th {
+    padding: 16px 20px;
+    text-align: left;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #9CA3AF;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.history-table td {
+    padding: 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    color: #FFFFFF;
+}
+
+.history-table tr:last-child td {
+    border-bottom: none;
+}
+
+.history-table tr:hover {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.group-id-cell {
+    font-family: monospace;
+    font-size: 0.875rem;
+    color: #10B981;
+}
+
+.date-cell {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #D1D5DB;
+}
+
+.stats-cell {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.stat-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.stat-badge.bots {
+    background: rgba(59, 130, 246, 0.15);
+    color: #3B82F6;
+}
+
+.stat-badge.leads {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10B981;
+}
+
+.action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+    color: white;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.2s ease;
+}
+
+.action-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: #6B7280;
+}
+
+.empty-state-icon {
+    width: 80px;
+    height: 80px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 20px;
+}
+
+.empty-state-icon i {
+    font-size: 2.5rem;
+    color: #9CA3AF;
+}
+
+.empty-state h3 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #D1D5DB;
+    margin-bottom: 8px;
+}
+
+.empty-state p {
+    font-size: 0.875rem;
+    max-width: 400px;
+    margin: 0 auto;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .history-table th:nth-child(1),
+    .history-table td:nth-child(1) {
+        display: none;
+    }
+    
+    .history-table th,
+    .history-table td {
+        padding: 12px;
+    }
+    
+    .stats-cell {
+        flex-direction: column;
+        gap: 6px;
+        align-items: flex-start;
+    }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    
+    <!-- Header -->
+    <div class="history-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+            <h1 class="history-title">
+                <i class="fas fa-history text-yellow-500"></i>
+                Histórico de Remarketing Multi-Bot
+            </h1>
+            <p class="history-subtitle">Visualize e analise suas campanhas de disparo geral</p>
+        </div>
+        <a href="/" class="btn-action flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg font-semibold text-sm"
+           style="background: rgba(255, 255, 255, 0.05); color: #D1D5DB; border: 1px solid rgba(255, 255, 255, 0.1);">
+            <i class="fas fa-arrow-left"></i>
+            Voltar ao Dashboard
+        </a>
+    </div>
+    
+    <!-- Table -->
+    <div class="history-table-container">
+        {% if history %}
+        <table class="history-table">
+            <thead>
+                <tr>
+                    <th>ID do Grupo</th>
+                    <th>Data do Disparo</th>
+                    <th>Estatísticas</th>
+                    <th>Ação</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in history %}
+                <tr>
+                    <td>
+                        <span class="group-id-cell">{{ item.group_id[:8] }}...</span>
+                    </td>
+                    <td>
+                        <div class="date-cell">
+                            <i class="far fa-calendar-alt text-gray-500"></i>
+                            {{ item.last_activity.strftime('%d/%m/%Y %H:%M') }}
+                        </div>
+                    </td>
+                    <td>
+                        <div class="stats-cell">
+                            <span class="stat-badge bots">
+                                <i class="fas fa-robot"></i>
+                                {{ item.bot_count }} bot{{ 's' if item.bot_count > 1 else '' }}
+                            </span>
+                            <span class="stat-badge leads">
+                                <i class="fas fa-paper-plane"></i>
+                                {{ "{:,}".format(item.total_sent or 0).replace(',', '.') }} enviados
+                            </span>
+                        </div>
+                    </td>
+                    <td>
+                        <a href="/remarketing/group/{{ item.group_id }}" class="action-btn">
+                            <i class="fas fa-chart-line"></i>
+                            Ver Analytics
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <!-- Empty State -->
+        <div class="empty-state">
+            <div class="empty-state-icon">
+                <i class="fas fa-broadcast-tower"></i>
+            </div>
+            <h3>Nenhuma campanha multi-bot encontrada</h3>
+            <p>Você ainda não realizou nenhum disparo geral de remarketing. Vá até o Dashboard e clique em "Remarketing Geral" para começar.</p>
+        </div>
+        {% endif %}
+    </div>
+    
+</div>
+{% endblock %}
