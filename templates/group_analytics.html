@@ -1,0 +1,646 @@
+{% extends "base.html" %}
+{% block title %}Analytics Global - Remarketing Multi-Bot{% endblock %}
+
+{% block extra_head %}
+<style>
+/* Master Analytics - Global Dashboard Styles */
+.master-card {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.01) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    padding: 28px;
+    margin-bottom: 24px;
+}
+
+.master-card-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 24px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.master-card-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #FFFFFF;
+}
+
+.master-card-subtitle {
+    font-size: 0.875rem;
+    color: #9CA3AF;
+    margin-top: 4px;
+}
+
+.progress-container {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    height: 32px;
+    overflow: hidden;
+    position: relative;
+    margin: 20px 0;
+}
+
+.progress-bar {
+    background: linear-gradient(90deg, #10B981 0%, #34D399 50%, #6EE7B7 100%);
+    height: 100%;
+    border-radius: 12px;
+    transition: width 0.5s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.progress-bar::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.2) 50%, transparent 100%);
+    animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+
+.progress-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-weight: 700;
+    font-size: 0.875rem;
+    color: #FFFFFF;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+    z-index: 10;
+}
+
+.stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 16px;
+    margin-top: 20px;
+}
+
+.stat-item {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 12px;
+    padding: 16px;
+    text-align: center;
+    transition: all 0.2s ease;
+}
+
+.stat-item:hover {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 184, 0, 0.2);
+}
+
+.stat-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: #FFFFFF;
+    margin-bottom: 4px;
+}
+
+.stat-value.success { color: #10B981; }
+.stat-value.error { color: #EF4444; }
+.stat-value.warning { color: #F59E0B; }
+.stat-value.info { color: #3B82F6; }
+
+.stat-label {
+    font-size: 0.75rem;
+    color: #9CA3AF;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+/* Bot Race Grid */
+.bot-race-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 20px;
+}
+
+.bot-card {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.02) 0%, rgba(255, 255, 255, 0.01) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 20px;
+    transition: all 0.2s ease;
+}
+
+.bot-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    border-color: rgba(255, 184, 0, 0.2);
+}
+
+.bot-card-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.bot-avatar {
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(135deg, #FFB800 0%, #FF8C00 100%);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 1rem;
+    color: #000;
+}
+
+.bot-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.bot-name {
+    font-weight: 600;
+    color: #FFFFFF;
+    font-size: 0.9375rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.bot-token {
+    font-size: 0.75rem;
+    color: #6B7280;
+    font-family: monospace;
+}
+
+.bot-status {
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.status-sending { background: rgba(59, 130, 246, 0.2); color: #3B82F6; }
+.status-completed { background: rgba(16, 185, 129, 0.2); color: #10B981; }
+.status-failed { background: rgba(239, 68, 68, 0.2); color: #EF4444; }
+.status-draft { background: rgba(156, 163, 175, 0.2); color: #9CA3AF; }
+.status-scheduled { background: rgba(245, 158, 11, 0.2); color: #F59E0B; }
+
+.bot-progress {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    height: 8px;
+    overflow: hidden;
+    margin: 12px 0;
+}
+
+.bot-progress-bar {
+    background: linear-gradient(90deg, #10B981, #34D399);
+    height: 100%;
+    border-radius: 8px;
+    transition: width 0.3s ease;
+}
+
+.bot-stats {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8125rem;
+    color: #9CA3AF;
+    margin-top: 8px;
+}
+
+.bot-stat { display: flex; align-items: center; gap: 4px; }
+.bot-stat-value { font-weight: 600; color: #FFFFFF; }
+
+/* Polling Indicator */
+.polling-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.75rem;
+    color: #6B7280;
+    padding: 8px 12px;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 20px;
+}
+
+.polling-dot {
+    width: 8px;
+    height: 8px;
+    background: #10B981;
+    border-radius: 50%;
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(1.2); }
+}
+
+/* Live Badge */
+.live-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #EF4444;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.live-dot {
+    width: 6px;
+    height: 6px;
+    background: #EF4444;
+    border-radius: 50%;
+    animation: blink 1s infinite;
+}
+
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    
+    <!-- Header -->
+    <div class="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+            <div class="flex items-center gap-3 mb-2">
+                <h1 class="text-3xl font-bold text-white flex items-center gap-3">
+                    <i class="fas fa-rocket text-yellow-500"></i>
+                    Master Analytics
+                </h1>
+                <span class="live-badge">
+                    <span class="live-dot"></span>
+                    Ao Vivo
+                </span>
+            </div>
+            <p class="text-gray-400">Remarketing Multi-Bot • Progresso em tempo real</p>
+        </div>
+        <div class="flex items-center gap-3">
+            <span class="polling-indicator">
+                <span class="polling-dot"></span>
+                Atualizando
+            </span>
+            <a href="/" class="btn-secondary">
+                <i class="fas fa-arrow-left mr-2"></i> Voltar
+            </a>
+        </div>
+    </div>
+    
+    <!-- Global Progress Master Card -->
+    <div class="master-card">
+        <div class="master-card-header">
+            <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center">
+                <i class="fas fa-chart-pie text-white text-xl"></i>
+            </div>
+            <div>
+                <div class="master-card-title">Progresso Global</div>
+                <div class="master-card-subtitle">Agregado de todas as campanhas do grupo</div>
+            </div>
+        </div>
+        
+        <!-- Main Progress Bar -->
+        <div class="progress-container">
+            <div class="progress-bar" id="globalProgressBar" style="width: 0%"></div>
+            <div class="progress-text" id="globalProgressText">0%</div>
+        </div>
+        
+        <!-- Global Stats Grid -->
+        <div class="stat-grid">
+            <div class="stat-item">
+                <div class="stat-value info" id="statTotalTargets">0</div>
+                <div class="stat-label">Total Leads</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value success" id="statTotalSent">0</div>
+                <div class="stat-label">Enviados</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value error" id="statTotalFailed">0</div>
+                <div class="stat-label">Falhas</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value warning" id="statTotalBlocked">0</div>
+                <div class="stat-label">Bloqueados</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="statSuccessRate">0%</div>
+                <div class="stat-label">Taxa de Sucesso</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="statCampaigns">0/0</div>
+                <div class="stat-label">Campanhas</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Bot Race Section -->
+    <div class="mb-6 flex items-center justify-between">
+        <h2 class="text-xl font-bold text-white flex items-center gap-2">
+            <i class="fas fa-flag-checkered text-yellow-500"></i>
+            Corrida Individual
+        </h2>
+        <span class="text-sm text-gray-400" id="lastUpdated">Última atualização: --</span>
+    </div>
+    
+    <!-- Bot Cards Grid -->
+    <div class="bot-race-grid" id="botRaceGrid">
+        <!-- Cards serão injetados via JavaScript -->
+        <div class="text-center py-12 text-gray-500">
+            <i class="fas fa-spinner fa-spin text-3xl mb-4"></i>
+            <p>Carregando dados...</p>
+        </div>
+    </div>
+    
+</div>
+
+<!-- Smart Polling JavaScript -->
+<script>
+// ✅ CONFIGURAÇÃO DO SMART POLLING
+const CONFIG = {
+    groupId: '{{ group_id }}',
+    apiUrl: '/api/remarketing/group/{{ group_id }}/stats',
+    pollInterval: 5000, // 5 segundos
+    retryDelay: 3000,   // 3 segundos em caso de erro
+    maxRetries: 3
+};
+
+// Estado global
+let pollTimer = null;
+let retryCount = 0;
+let isPolling = true;
+let isComplete = false;  // ✅ Flag de completude (freio lógico)
+
+// ✅ FUNÇÃO PRINCIPAL: Buscar dados da API
+async function fetchGroupStats() {
+    try {
+        const response = await fetch(CONFIG.apiUrl, {
+            method: 'GET',
+            headers: { 'Accept': 'application/json' },
+            credentials: 'same-origin'
+        });
+        
+        if (!response.ok) {
+            if (response.status === 403) {
+                console.error('🚫 Acesso negado (IDOR)');
+                showError('Acesso negado. Este grupo não pertence a você.');
+                stopPolling();
+                return;
+            }
+            throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const data = await response.json();
+        updateDashboard(data);
+        updateLastUpdateTime();
+        retryCount = 0; // Reset retry counter on success
+        
+    } catch (error) {
+        console.error('❌ Erro no polling:', error);
+        retryCount++;
+        
+        if (retryCount >= CONFIG.maxRetries) {
+            showError('Falha ao carregar dados. Recarregue a página.');
+            stopPolling();
+        }
+    }
+}
+
+// ✅ ATUALIZAR DASHBOARD COM NOVOS DADOS
+function updateDashboard(data) {
+    const stats = data.global_stats;
+    const campaigns = data.campaigns;
+    
+    // Atualizar barra de progresso global
+    const progressBar = document.getElementById('globalProgressBar');
+    const progressText = document.getElementById('globalProgressText');
+    progressBar.style.width = stats.progress_percent + '%';
+    progressText.textContent = stats.progress_percent + '%';
+    
+    // Atualizar estatísticas globais
+    document.getElementById('statTotalTargets').textContent = formatNumber(stats.total_targets);
+    document.getElementById('statTotalSent').textContent = formatNumber(stats.total_sent);
+    document.getElementById('statTotalFailed').textContent = formatNumber(stats.total_failed);
+    document.getElementById('statTotalBlocked').textContent = formatNumber(stats.total_blocked);
+    document.getElementById('statSuccessRate').textContent = stats.success_rate + '%';
+    document.getElementById('statCampaigns').textContent = `${stats.completed_campaigns}/${stats.total_campaigns}`;
+    
+    // Atualizar grid de bots (corrida individual)
+    updateBotRaceGrid(campaigns);
+    
+    // ✅ FREIO LÓGICO: Verificar se campanha atingiu 100% ou todas concluídas/falharam
+    const allProcessed = stats.total_sent + stats.total_failed >= stats.total_targets;
+    const allCompleted = stats.completed_campaigns >= stats.total_campaigns;
+    
+    if (!isComplete && (stats.progress_percent >= 100 || allProcessed || allCompleted)) {
+        isComplete = true;
+        stopPolling();
+        console.log('✅ Campanha 100% completa. Polling encerrado automaticamente.');
+        
+        // Atualizar badge para indicar conclusão
+        const liveBadge = document.querySelector('.live-badge');
+        if (liveBadge) {
+            liveBadge.innerHTML = '<span style="color: #10B981;">✅ Concluído</span>';
+            liveBadge.style.background = 'rgba(16, 185, 129, 0.15)';
+            liveBadge.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+        }
+        
+        // Remover indicador de polling
+        const pollingIndicator = document.querySelector('.polling-indicator');
+        if (pollingIndicator) {
+            pollingIndicator.style.display = 'none';
+        }
+    }
+}
+
+// ✅ ATUALIZAR GRID DE BOTS
+function updateBotRaceGrid(campaigns) {
+    const grid = document.getElementById('botRaceGrid');
+    
+    // Se não houver campanhas
+    if (!campaigns || campaigns.length === 0) {
+        grid.innerHTML = `
+            <div class="text-center py-12 text-gray-500 col-span-full">
+                <i class="fas fa-inbox text-3xl mb-4"></i>
+                <p>Nenhuma campanha encontrada neste grupo.</p>
+            </div>
+        `;
+        return;
+    }
+    
+    // Gerar cards de cada bot
+    grid.innerHTML = campaigns.map(bot => {
+        const statusClass = getStatusClass(bot.status);
+        const statusText = getStatusText(bot.status);
+        
+        return `
+            <div class="bot-card" data-bot-id="${bot.bot_id}">
+                <div class="bot-card-header">
+                    <div class="bot-avatar">${bot.bot_name.charAt(0).toUpperCase()}</div>
+                    <div class="bot-info">
+                        <div class="bot-name" title="${bot.bot_name}">${bot.bot_name}</div>
+                        <div class="bot-token">${bot.bot_token_preview}</div>
+                    </div>
+                    <span class="bot-status ${statusClass}">${statusText}</span>
+                </div>
+                
+                <div class="bot-progress">
+                    <div class="bot-progress-bar" style="width: ${bot.progress}%"></div>
+                </div>
+                
+                <div class="bot-stats">
+                    <div class="bot-stat">
+                        <i class="fas fa-paper-plane text-green-400 text-xs"></i>
+                        <span class="bot-stat-value">${formatNumber(bot.total_sent)}</span>
+                    </div>
+                    <div class="bot-stat">
+                        <i class="fas fa-mouse-pointer text-blue-400 text-xs"></i>
+                        <span class="bot-stat-value">${formatNumber(bot.total_clicks)}</span>
+                    </div>
+                    <div class="bot-stat">
+                        <i class="fas fa-times-circle text-red-400 text-xs"></i>
+                        <span class="bot-stat-value">${formatNumber(bot.total_failed)}</span>
+                    </div>
+                    <div class="bot-stat">
+                        <span class="text-gray-500">${bot.progress}%</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// ✅ FUNÇÕES AUXILIARES
+function formatNumber(num) {
+    if (num === null || num === undefined) return '0';
+    return num.toLocaleString('pt-BR');
+}
+
+function getStatusClass(status) {
+    const classes = {
+        'sending': 'status-sending',
+        'completed': 'status-completed',
+        'failed': 'status-failed',
+        'draft': 'status-draft',
+        'scheduled': 'status-scheduled',
+        'paused': 'status-draft'
+    };
+    return classes[status] || 'status-draft';
+}
+
+function getStatusText(status) {
+    const texts = {
+        'sending': 'Enviando',
+        'completed': 'Concluído',
+        'failed': 'Falhou',
+        'draft': 'Rascunho',
+        'scheduled': 'Agendado',
+        'paused': 'Pausado'
+    };
+    return texts[status] || status;
+}
+
+function updateLastUpdateTime() {
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString('pt-BR', { 
+        hour: '2-digit', 
+        minute: '2-digit', 
+        second: '2-digit' 
+    });
+    document.getElementById('lastUpdated').textContent = `Última atualização: ${timeStr}`;
+}
+
+function showError(message) {
+    const grid = document.getElementById('botRaceGrid');
+    grid.innerHTML = `
+        <div class="text-center py-12 text-red-400 col-span-full">
+            <i class="fas fa-exclamation-triangle text-3xl mb-4"></i>
+            <p>${message}</p>
+        </div>
+    `;
+}
+
+// ✅ CONTROLE DE POLLING
+function startPolling() {
+    if (!isPolling || isComplete) return;  // ✅ Não inicia se já completou
+    
+    // Limpar timer anterior se existir
+    if (pollTimer) clearInterval(pollTimer);
+    
+    // Buscar imediatamente
+    fetchGroupStats();
+    
+    // Configurar intervalo
+    pollTimer = setInterval(fetchGroupStats, CONFIG.pollInterval);
+    
+    // Atualizar indicador visual
+    const pollingIndicator = document.querySelector('.polling-indicator');
+    if (pollingIndicator) pollingIndicator.style.opacity = '1';
+}
+
+function stopPolling() {
+    isPolling = false;
+    if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+    }
+    const pollingIndicator = document.querySelector('.polling-indicator');
+    if (pollingIndicator) pollingIndicator.style.opacity = '0.5';
+}
+
+function pausePolling() {
+    // Pausa sem alterar flag isPolling (para retomar depois)
+    if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+    }
+    const pollingIndicator = document.querySelector('.polling-indicator');
+    if (pollingIndicator) pollingIndicator.style.opacity = '0.3';
+}
+
+// ✅ INICIALIZAÇÃO
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('🚀 Master Analytics iniciado para grupo:', CONFIG.groupId);
+    startPolling();
+    
+    // ✅ VISIBILITY API: Pausar quando aba está em background
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            // Aba ficou invisível - pausar polling
+            console.log('👁️ Aba em background - pausando polling');
+            pausePolling();
+        } else {
+            // Aba voltou ao foco - retomar se ainda não completou
+            if (!isComplete) {
+                console.log('👁️ Aba em foco - retomando polling');
+                isPolling = true;  // Reativar flag
+                startPolling();
+            }
+        }
+    });
+});
+
+// ✅ LIMPAR AO SAIR DA PÁGINA
+window.addEventListener('beforeunload', () => {
+    stopPolling();
+});
+</script>
+{% endblock %}

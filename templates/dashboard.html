@@ -3686,11 +3686,10 @@ function dashboardApp() {
                     if (sendMode === 'scheduled') {
                         showCampaignNotification('Campanha agendada com sucesso! Será enviada na data/hora programada.', null);
                     } else {
-                        // ✅ NOTIFICAÇÃO MODERNA COM REDIRECIONAMENTO
-                        const firstBotId = this.generalRemarketing.selectedBots[0]?.id || null;
+                        // ✅ NOTIFICAÇÃO MODERNA COM REDIRECIONAMENTO PARA MASTER ANALYTICS
                         showCampaignNotification(
                             'O disparo está sendo processado em background. Seus leads estão recebendo as mensagens.',
-                            firstBotId
+                            data.group_id  // ✅ Usar group_id do payload da API
                         );
                     }
                 } else {
@@ -4519,8 +4518,8 @@ window.openFallbackModalJS = function() {
         return div.innerHTML;
     }
     
-    // ✅ NOTIFICAÇÃO MODERNA COM REDIRECIONAMENTO
-    function showCampaignNotification(message, botId) {
+    // ✅ NOTIFICAÇÃO MODERNA COM REDIRECIONAMENTO PARA MASTER ANALYTICS
+    function showCampaignNotification(message, groupId) {
         // Remover notificação anterior se existir
         const existing = document.querySelector('.campaign-notification');
         if (existing) existing.remove();
@@ -4536,12 +4535,12 @@ window.openFallbackModalJS = function() {
                     <div class="flex-1">
                         <h3 class="font-bold text-lg mb-1">Campanha Iniciada! 🚀</h3>
                         <p class="text-white text-opacity-90 text-sm mb-4">${message}</p>
-                        ${botId ? `
+                        ${groupId ? `
                         <div class="flex gap-2">
-                            <button onclick="window.location.href='/bots/${botId}/remarketing/analytics'" 
+                            <button onclick="window.location.href='/remarketing/group/${groupId}'" 
                                     class="bg-white text-green-600 px-4 py-2 rounded-lg font-semibold text-sm hover:bg-opacity-90 transition-all flex items-center gap-2">
                                 <i class="fas fa-chart-line"></i>
-                                Ver Relatório
+                                Ver Master Analytics
                             </button>
                             <button onclick="this.closest('.campaign-notification').remove()" 
                                     class="bg-white bg-opacity-20 text-white px-4 py-2 rounded-lg font-semibold text-sm hover:bg-opacity-30 transition-all">

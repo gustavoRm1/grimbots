@@ -6023,6 +6023,134 @@ def api_remarketing_timeline(bot_id):
     
     return jsonify(result)
 
+# ==================== REMARKETING GLOBAL (MASTER ANALYTICS) ====================
+
+@app.route('/api/remarketing/group/<group_id>/stats', methods=['GET'])
+@login_required
+def get_group_remarketing_stats(group_id):
+    """
+    ✅ API: Estatísticas agregadas de um grupo de campanhas (Multi-Bot)
+    Segurança: Verifica IDOR - todas as campanhas do grupo devem pertencer ao usuário logado
+    Performance: Usa agregações SQL (func.sum) para alto volume
+    """
+    try:
+        from sqlalchemy import func
+        from models import RemarketingCampaign, Bot
+        
+        # Buscar todas as campanhas do grupo com JOIN em Bot para verificação de propriedade
+        campaigns_query = db.session.query(
+            RemarketingCampaign,
+            Bot
+        ).join(
+            Bot, RemarketingCampaign.bot_id == Bot.id
+        ).filter(
+            RemarketingCampaign.group_id == group_id
+        ).all()
+        
+        if not campaigns_query:
+            return jsonify({'error': 'Grupo não encontrado'}), 404
+        
+        # ✅ SEGURANÇA IDOR: Verificar se todas as campanhas pertencem ao usuário logado
+        for campaign, bot in campaigns_query:
+            if bot.user_id != current_user.id:
+                logger.warning(f"🚫 [IDOR BLOCK] Usuário {current_user.id} tentou acessar grupo {group_id} com campanha do bot {bot.id} (user {bot.user_id})")
+                return jsonify({'error': 'Acesso negado'}), 403
+        
+        # ✅ Agregações SQL para performance (não carregar todos os dados em memória)
+        global_stats = db.session.query(
+            func.sum(RemarketingCampaign.total_targets).label('total_targets'),
+            func.sum(RemarketingCampaign.total_sent).label('total_sent'),
+            func.sum(RemarketingCampaign.total_failed).label('total_failed'),
+            func.sum(RemarketingCampaign.total_blocked).label('total_blocked'),
+            func.sum(RemarketingCampaign.total_clicks).label('total_clicks'),
+            func.count(RemarketingCampaign.id).label('total_campaigns'),
+            func.sum(
+                db.case(
+                    (RemarketingCampaign.status == 'completed', 1),
+                    else_=0
+                )
+            ).label('completed_campaigns')
+        ).join(
+            Bot, RemarketingCampaign.bot_id == Bot.id
+        ).filter(
+            RemarketingCampaign.group_id == group_id,
+            Bot.user_id == current_user.id
+        ).first()
+        
+        # Calcular progresso global
+        total_targets = int(global_stats.total_targets or 0)
+        total_sent = int(global_stats.total_sent or 0)
+        total_failed = int(global_stats.total_failed or 0)
+        progress_percent = min(100, round((total_sent / total_targets * 100), 1)) if total_targets > 0 else 0
+        
+        # Detalhes individuais por bot (para a "Corrida Individual")
+        campaigns_detail = []
+        for campaign, bot in campaigns_query:
+            campaigns_detail.append({
+                'bot_id': bot.id,
+                'bot_name': bot.name,
+                'bot_token_preview': bot.token[:20] + '...' if bot.token else 'N/A',
+                'campaign_id': campaign.id,
+                'status': campaign.status,
+                'total_targets': campaign.total_targets,
+                'total_sent': campaign.total_sent,
+                'total_failed': campaign.total_failed,
+                'total_blocked': campaign.total_blocked,
+                'total_clicks': campaign.total_clicks,
+                'progress': min(100, round((campaign.total_sent / campaign.total_targets * 100), 1)) if campaign.total_targets > 0 else 0
+            })
+        
+        return jsonify({
+            'group_id': group_id,
+            'global_stats': {
+                'total_campaigns': int(global_stats.total_campaigns or 0),
+                'completed_campaigns': int(global_stats.completed_campaigns or 0),
+                'total_targets': total_targets,
+                'total_sent': total_sent,
+                'total_failed': total_failed,
+                'total_blocked': int(global_stats.total_blocked or 0),
+                'total_clicks': int(global_stats.total_clicks or 0),
+                'progress_percent': progress_percent,
+                'success_rate': round((total_sent / (total_sent + total_failed) * 100), 1) if (total_sent + total_failed) > 0 else 0
+            },
+            'campaigns': campaigns_detail
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Erro ao buscar stats do grupo {group_id}: {e}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/remarketing/group/<group_id>')
+@login_required
+def group_remarketing_analytics(group_id):
+    """
+    ✅ View: Dashboard Master de Analytics Global (Multi-Bot)
+    Renderiza o template com o group_id para o Smart Polling
+    """
+    # ✅ SEGURANÇA IDOR: Verificar se o grupo pertence ao usuário antes de renderizar
+    try:
+        from models import RemarketingCampaign, Bot
+        
+        # Verificar se existe pelo menos uma campanha no grupo e se pertence ao usuário
+        campaign_check = db.session.query(RemarketingCampaign, Bot).join(
+            Bot, RemarketingCampaign.bot_id == Bot.id
+        ).filter(
+            RemarketingCampaign.group_id == group_id,
+            Bot.user_id == current_user.id
+        ).first()
+        
+        if not campaign_check:
+            # Tentativa de acesso a grupo inexistente ou não autorizado
+            logger.warning(f"🚫 [IDOR BLOCK] Tentativa de acesso a grupo {group_id} por usuário {current_user.id}")
+            abort(403)
+        
+        return render_template('group_analytics.html', group_id=group_id)
+        
+    except Exception as e:
+        logger.error(f"❌ Erro ao acessar grupo {group_id}: {e}", exc_info=True)
+        abort(500)
+
+
 @app.route('/api/bots/<int:bot_id>/config', methods=['GET'])
 @login_required
 def get_bot_config(bot_id):
