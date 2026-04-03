@@ -1741,17 +1741,14 @@ def task_process_broadcast_campaign(campaign_id: int):
             # ==========================================
             logger.info(f"🔍 [MARATHON SETUP] Contando leads elegíveis para campanha {campaign_id} | Bot: {bot_id}")
             
-            # Buscar leads elegíveis usando o mesmo método da API
-            eligible_leads = bot_manager.get_eligible_leads(
+            # Contar leads elegíveis usando o método correto (count_eligible_leads)
+            total_targets = bot_manager.count_eligible_leads(
                 bot_id=bot_id,
                 target_audience=target_audience,
                 days_since_last_contact=days_since_last_contact,
                 exclude_buyers=False,  # Já filtrado pelo target_audience
                 audience_segment=audience_segment
             )
-            
-            # Obter tamanho exato
-            total_targets = len(eligible_leads)
             
             logger.info(f"📊 [MARATHON SETUP] Campanha {campaign_id} | Leads elegíveis encontrados: {total_targets}")
             
@@ -1839,23 +1836,63 @@ def task_process_broadcast_campaign(campaign_id: int):
             if blacklist_ids:
                 q = q.filter(~BotUser.telegram_user_id.in_(blacklist_ids))
             
-            # Filtros de segmento
-            if target_audience == 'buyers':
-                buyer_ids = db.session.query(Payment.customer_user_id).filter(
+            # Filtros de segmento (usando subqueries para performance em escala)
+            if target_audience == 'all_users':
+                # Todos os usuários - sem filtro adicional
+                pass
+            elif target_audience == 'buyers':
+                # Todos que compraram (status = 'paid') - usando subquery
+                buyer_subquery = db.session.query(Payment.customer_user_id).filter(
                     Payment.bot_id == bot_id,
                     Payment.status == 'paid'
-                ).distinct().all()
-                buyer_ids = [b[0] for b in buyer_ids if b[0]]
-                if buyer_ids:
-                    q = q.filter(BotUser.telegram_user_id.in_(buyer_ids))
+                ).distinct()
+                q = q.filter(BotUser.telegram_user_id.in_(buyer_subquery))
             elif target_audience == 'non_buyers':
-                buyer_ids = db.session.query(Payment.customer_user_id).filter(
+                # Excluir compradores - usando subquery com ~in_
+                buyer_subquery = db.session.query(Payment.customer_user_id).filter(
                     Payment.bot_id == bot_id,
                     Payment.status == 'paid'
-                ).distinct().all()
-                buyer_ids = [b[0] for b in buyer_ids if b[0]]
-                if buyer_ids:
-                    q = q.filter(~BotUser.telegram_user_id.in_(buyer_ids))
+                ).distinct()
+                q = q.filter(~BotUser.telegram_user_id.in_(buyer_subquery))
+            elif target_audience == 'abandoned_cart' or target_audience == 'pix_generated':
+                # Usuários que geraram PIX mas não pagaram (status = 'pending') - subquery
+                pending_subquery = db.session.query(Payment.customer_user_id).filter(
+                    Payment.bot_id == bot_id,
+                    Payment.status == 'pending'
+                ).distinct()
+                q = q.filter(BotUser.telegram_user_id.in_(pending_subquery))
+            elif target_audience == 'downsell_buyers':
+                # Todos que compraram via downsell - subquery
+                downsell_subquery = db.session.query(Payment.customer_user_id).filter(
+                    Payment.bot_id == bot_id,
+                    Payment.status == 'paid',
+                    Payment.is_downsell == True
+                ).distinct()
+                q = q.filter(BotUser.telegram_user_id.in_(downsell_subquery))
+            elif target_audience == 'order_bump_buyers':
+                # Todos que compraram com order bump - subquery
+                orderbump_subquery = db.session.query(Payment.customer_user_id).filter(
+                    Payment.bot_id == bot_id,
+                    Payment.status == 'paid',
+                    Payment.order_bump_accepted == True
+                ).distinct()
+                q = q.filter(BotUser.telegram_user_id.in_(orderbump_subquery))
+            elif target_audience == 'upsell_buyers':
+                # Todos que compraram via upsell - subquery
+                upsell_subquery = db.session.query(Payment.customer_user_id).filter(
+                    Payment.bot_id == bot_id,
+                    Payment.status == 'paid',
+                    Payment.is_upsell == True
+                ).distinct()
+                q = q.filter(BotUser.telegram_user_id.in_(upsell_subquery))
+            elif target_audience == 'remarketing_buyers':
+                # Todos que compraram via remarketing - subquery
+                remarketing_subquery = db.session.query(Payment.customer_user_id).filter(
+                    Payment.bot_id == bot_id,
+                    Payment.status == 'paid',
+                    Payment.is_remarketing == True
+                ).distinct()
+                q = q.filter(BotUser.telegram_user_id.in_(remarketing_subquery))
             
             # Loop principal de envio
             while offset < total_targets and not bot_is_dead:
