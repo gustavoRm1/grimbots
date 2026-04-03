@@ -2229,10 +2229,14 @@ def task_process_broadcast_campaign(campaign_id: int):
                         if not flood_wait_happened:
                             time.sleep(rate_limit_delay)
                         
-                        # ✅ Commit incremental a cada 20 leads ou último do batch
+                        # ✅ Commit incremental a cada 20 leads ou último do batch (Stateless SQL Update)
                         if processed_in_batch >= CHECKPOINT_INTERVAL or lead == batch[-1]:
-                            campaign.total_sent = sent_count
-                            campaign.total_failed = failed_count
+                            db.session.query(RemarketingCampaign).filter(
+                                RemarketingCampaign.id == campaign_id
+                            ).update({
+                                'total_sent': sent_count,
+                                'total_failed': failed_count
+                            }, synchronize_session=False)
                             db.session.commit()
                             processed_in_batch = 0  # Reset contador
                             
@@ -2242,21 +2246,30 @@ def task_process_broadcast_campaign(campaign_id: int):
                         logger.error(f"❌ [MARATHON] Erro processando lead {lead.id}: {lead_error}")
                         continue
                 
-                # Checkpoint a cada batch - atualizar campanha diretamente
+                # Checkpoint a cada batch - atualizar campanha via SQL direto (Stateless)
                 offset += batch_size
                 
-                campaign.total_sent = sent_count
-                campaign.total_failed = failed_count
+                db.session.query(RemarketingCampaign).filter(
+                    RemarketingCampaign.id == campaign_id
+                ).update({
+                    'total_sent': sent_count,
+                    'total_failed': failed_count
+                }, synchronize_session=False)
                 db.session.commit()
                 
                 # Limpeza de memória
                 db.session.expunge_all()
             
-            # ✅ FINALIZAR CAMPANHA
-            campaign.status = 'completed' if not bot_is_dead else 'failed'
-            campaign.completed_at = get_brazil_time()
-            campaign.total_sent = sent_count
-            campaign.total_failed = failed_count
+            # ✅ FINALIZAR CAMPANHA (Stateless SQL Update - evita DetachedInstanceError)
+            final_status = 'failed' if bot_is_dead else 'completed'
+            db.session.query(RemarketingCampaign).filter(
+                RemarketingCampaign.id == campaign_id
+            ).update({
+                'status': final_status,
+                'completed_at': get_brazil_time(),
+                'total_sent': sent_count,
+                'total_failed': failed_count
+            }, synchronize_session=False)
             db.session.commit()
             
             logger.info(f"🏁 [MARATHON ENGINE] Campaign {campaign_id} finalizada | Bot {bot_id} | Enviados: {sent_count} | Falhas: {failed_count} | Bot morto: {bot_is_dead}")
